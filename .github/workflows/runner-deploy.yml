@@ -61,4 +61,5 @@ jobs:
     if: github.ref == 'refs/heads/main' && vars.JARVIS_INFRA_DEPLOYMENT_NAME == ''
     runs-on: ubuntu-latest
     steps:
-      - run: echo 'Runner deployment and Key Vault acceptance are pending issue #11. Set JARVIS_INFRA_DEPLOYMENT_NAME to its successful infrastructure deployment, then run this workflow from main.' >> "$GITHUB_STEP_SUMMARY"
+      - run: |
+          echo 'Runner deployment and Key Vault acceptance are pending issue #11. Set JARVIS_INFRA_DEPLOYMENT_NAME to its successful infrastructure deployment, then run this workflow from main.' >> "$GITHUB_STEP_SUMMARY"
