@@ -203,7 +203,7 @@ class GitHub:
         result = self.graphql("""
             mutation($input:AddAssigneesToAssignableInput!) {
               addAssigneesToAssignable(input:$input) {
-                assignable { ... on Issue { id assignees(first:100) { nodes { login } } } }
+                assignable { ... on Issue { id assignees(first:100) { nodes { id login } } } }
               }
             }
             """, {"input": {
@@ -216,8 +216,11 @@ class GitHub:
         assignable = assignment.get("assignable") if isinstance(assignment, dict) else None
         assignees = assignable.get("assignees") if isinstance(assignable, dict) else None
         nodes = assignees.get("nodes") if isinstance(assignees, dict) else None
+        # GitHub's assignment preview returns the same Bot as "Copilot" here,
+        # although suggestedActors uses "copilot-swe-agent". Confirm identity
+        # with the selected immutable actor id, rather than its display login.
         if not isinstance(nodes, list) or not any(
-            isinstance(node, dict) and node.get("login") in {"copilot-swe-agent", "copilot-swe-agent[bot]"}
+            isinstance(node, dict) and node.get("id") == bot["id"]
             for node in nodes
         ):
             raise APIError("Copilot assignment not confirmed")

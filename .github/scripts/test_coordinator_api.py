@@ -163,7 +163,7 @@ class GitHubTests(unittest.TestCase):
     def test_copilot_assignment_uses_user_token_and_exact_model_structured_variables(self):
         self.opener.open.side_effect = [
             response({"data": {"repository": {"id": "REPO", "issue": {"id": "ISSUE", "state": "OPEN", "assignees": {"totalCount": 0, "nodes": []}, "labels": {"totalCount": 1, "nodes": [{"name": "Copilot"}]}}, "suggestedActors": {"nodes": [{"id": "BOT", "login": "copilot-swe-agent"}]}}}}),
-            response({"data": {"addAssigneesToAssignable": {"assignable": {"id": "ISSUE", "assignees": {"nodes": [{"login": "copilot-swe-agent"}]}}}}}),
+            response({"data": {"addAssigneesToAssignable": {"assignable": {"id": "ISSUE", "assignees": {"nodes": [{"id": "BOT", "login": "copilot-swe-agent"}]}}}}}),
         ]
         instructions = 'Read PLAN.md. Preserve literal quotes " and backticks `.'
         self.api.assign_copilot(12, "main", instructions)
@@ -192,6 +192,33 @@ class GitHubTests(unittest.TestCase):
         with self.assertRaisesRegex(APIError, "assignment not confirmed"):
             self.api.assign_copilot(12, "main", "instructions")
         self.assertEqual(self.opener.open.call_count, 2)
+
+    def test_assignment_confirms_actor_id_when_github_returns_copilot_display_login(self):
+        for actor_id, login, accepted in [
+            ("BOT", "Copilot", True),
+            ("DIFFERENT-BOT", "Copilot", False),
+            ("DIFFERENT-BOT", "copilot-swe-agent", False),
+            (None, "copilot-swe-agent", False),
+        ]:
+            with self.subTest(actor_id=actor_id, login=login):
+                self.opener.open.side_effect = [
+                    response({"data": {"repository": {
+                        "id": "REPO", "issue": {"id": "ISSUE", "state": "OPEN",
+                            "assignees": {"totalCount": 0, "nodes": []},
+                            "labels": {"totalCount": 1, "nodes": [{"name": "Copilot"}]}},
+                        "suggestedActors": {"nodes": [{"id": "BOT", "login": "copilot-swe-agent"}]},
+                    }}}),
+                    response({"data": {"addAssigneesToAssignable": {"assignable": {
+                        "id": "ISSUE", "assignees": {"nodes": [{"id": actor_id, "login": login}]},
+                    }}}}),
+                ]
+                if accepted:
+                    self.api.assign_copilot(12, "main", "instructions")
+                else:
+                    with self.assertRaisesRegex(APIError, "assignment not confirmed"):
+                        self.api.assign_copilot(12, "main", "instructions")
+                payload = json.loads(self.opener.open.call_args.args[0].data)
+                self.assertIn("nodes { id login }", payload["query"])
 
     def test_assignment_rechecks_open_issue_and_worker_ownership_before_mutation(self):
         for change in [
