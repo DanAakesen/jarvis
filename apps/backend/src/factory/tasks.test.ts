@@ -34,6 +34,7 @@ const detail: TaskDetail = {
     type: 'created',
     summary: 'Task created from the board',
     payload: { state: 'Ready' },
+    payloadTruncated: false,
     source: 'backend',
     at: '2026-10-03T12:00:00.000Z',
   }],
@@ -103,6 +104,16 @@ describe('factory tasks API', () => {
     });
   });
 
+  it('rejects serialized task pages larger than the response limit', async () => {
+    const manyTasks = Array.from({ length: 30 }, (_value, index) => ({
+      ...task, id: String(index + 1), request: 'x'.repeat(50_000),
+    }));
+    const { app } = fixture({ list: vi.fn(async () => manyTasks) });
+    const response = await app.inject({ url: '/factory/tasks', headers });
+    expect(response.statusCode).toBe(413);
+    expect(response.json()).toEqual({ error: 'Response too large' });
+  });
+
   it('rejects invalid filters and reversed time ranges', async () => {
     const { app, store } = fixture();
     expect((await app.inject({ url: '/factory/tasks?state=running', headers })).statusCode).toBe(400);
@@ -129,27 +140,12 @@ describe('factory tasks API', () => {
     expect((await missing.app.inject({ url: '/factory/tasks/0', headers })).statusCode).toBe(400);
   });
 
-  it('rejects illegal lifecycle transitions and returns not-found consistently', async () => {
-    const invalid = fixture({ transition: vi.fn(async () => ({ kind: 'invalid-transition' as const })) });
-    const conflict = await invalid.app.inject({
-      method: 'PATCH', url: '/factory/tasks/42/state', headers, payload: { state: 'Done' },
-    });
-    expect(conflict.statusCode).toBe(409);
-    expect(conflict.json()).toEqual({ error: 'Invalid task transition' });
-
-    const missing = fixture({ transition: vi.fn(async () => ({ kind: 'not-found' as const })) });
-    expect((await missing.app.inject({
-      method: 'PATCH', url: '/factory/tasks/42/state', headers, payload: { state: 'Running' },
-    })).statusCode).toBe(404);
-  });
-
-  it('allows a valid transition and requires authentication', async () => {
+  it('does not allow clients to mutate task state directly', async () => {
     const { app, store } = fixture();
-    const changed = await app.inject({
-      method: 'PATCH', url: '/factory/tasks/42/state', headers, payload: { state: 'Running' },
-    });
-    expect(changed.statusCode).toBe(200);
-    expect(store.transition).toHaveBeenCalledWith('42', 'Running');
+    expect((await app.inject({
+      method: 'PATCH', url: '/factory/tasks/42/state', headers, payload: { state: 'Done' },
+    })).statusCode).toBe(404);
+    expect(store.transition).not.toHaveBeenCalled();
     expect((await app.inject({ url: '/factory/tasks' })).statusCode).toBe(401);
   });
 });

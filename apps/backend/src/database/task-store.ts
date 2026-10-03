@@ -142,7 +142,10 @@ export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
         .input('taskId', sql.BigInt, BigInt(id))
         .input('eventLimit', sql.Int, eventLimit)
         .input('eventOffset', sql.Int, eventOffset)
-        .query<EventRow>(`SELECT CAST(id AS varchar(19)) AS id, type, summary, payload, source, at
+        .query<EventRow>(`SELECT CAST(id AS varchar(19)) AS id, type, summary,
+          CASE WHEN DATALENGTH(payload) > 4096 THEN NULL ELSE payload END AS payload,
+          CAST(CASE WHEN DATALENGTH(payload) > 4096 THEN 1 ELSE 0 END AS bit) AS payloadTruncated,
+          source, at
           FROM dbo.task_events WHERE task_id = @taskId
           ORDER BY at ASC, id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
       return {

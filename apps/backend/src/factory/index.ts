@@ -1,8 +1,10 @@
+import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
 import type { CreateTaskInput, TaskListFilters } from './task-store.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
+const maxResponseBytes = 1024 * 1024;
 const taskStateSchema = { type: 'string', enum: taskStates };
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
 
@@ -24,6 +26,14 @@ interface TaskDetailQuery {
 
 function isSqlBigInt(value: string): boolean {
   return BigInt(value) <= maxSqlBigInt;
+}
+
+function sendBounded(reply: FastifyReply, value: unknown) {
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined || Buffer.byteLength(serialized) > maxResponseBytes) {
+    return reply.code(413).send({ error: 'Response too large' });
+  }
+  return reply.send(value);
 }
 
 export const factoryModule: BackendModule = {
@@ -53,6 +63,10 @@ export const factoryModule: BackendModule = {
       if (!isSqlBigInt(request.body.projectId)) return reply.code(400).send({ error: 'Invalid project ID' });
       const task = await store.create(request.body);
       if (!task) return reply.code(404).send({ error: 'Active project not found' });
+      const serialized = JSON.stringify(task);
+      if (serialized === undefined || Buffer.byteLength(serialized) > maxResponseBytes) {
+        return reply.code(413).send({ error: 'Response too large' });
+      }
       return reply.code(201).send(task);
     });
 
@@ -94,7 +108,7 @@ export const factoryModule: BackendModule = {
         limit: query.limit ?? 50,
         offset: query.offset ?? 0,
       };
-      return { tasks: await store.list(filters), limit: filters.limit, offset: filters.offset };
+      return sendBounded(reply, { tasks: await store.list(filters), limit: filters.limit, offset: filters.offset });
     });
 
     app.get<{ Params: { id: string }; Querystring: TaskDetailQuery }>('/factory/tasks/:id', {
@@ -115,27 +129,8 @@ export const factoryModule: BackendModule = {
       if (!isSqlBigInt(request.params.id)) return reply.code(400).send({ error: 'Invalid task ID' });
       const detail = await store.get(request.params.id, request.query.eventLimit ?? 100, request.query.eventOffset ?? 0);
       if (!detail) return reply.code(404).send({ error: 'Task not found' });
-      return detail;
+      return sendBounded(reply, detail);
     });
 
-    app.patch<{ Params: { id: string }; Body: { state: TaskState } }>('/factory/tasks/:id/state', {
-      schema: {
-        params: { type: 'object', properties: { id: idSchema }, required: ['id'], additionalProperties: false },
-        body: {
-          type: 'object',
-          properties: { state: taskStateSchema },
-          required: ['state'],
-          additionalProperties: false,
-        },
-      },
-    }, async (request, reply) => {
-      const store = app.taskStore;
-      if (!store) return reply.code(503).send({ error: 'Task service unavailable' });
-      if (!isSqlBigInt(request.params.id)) return reply.code(400).send({ error: 'Invalid task ID' });
-      const result = await store.transition(request.params.id, request.body.state);
-      if (result.kind === 'not-found') return reply.code(404).send({ error: 'Task not found' });
-      if (result.kind === 'invalid-transition') return reply.code(409).send({ error: 'Invalid task transition' });
-      return result.task;
-    });
   },
 };

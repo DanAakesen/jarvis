@@ -26,6 +26,7 @@ export interface TaskEventRecord {
   type: string;
   summary: string | null;
   payload: unknown;
+  payloadTruncated: boolean;
   source: 'runner' | 'backend' | 'github' | 'dan';
   at: string;
 }

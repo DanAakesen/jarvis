@@ -195,6 +195,8 @@ erDiagram
 - **Retries:** `attempt_count` and `next_attempt_at`; after the limit the task moves to `NeedsAttention`.
 - `task_events` stores **every** runner event (Dan's choice: maximum freedom for the UI). It is append-only, drives the card's live updates (via SSE) and the task's history, and is the only fast-growing table; archive by age.
 - `origin_message_id` links a task to the message in Jarvis's conversation that created it.
+- P1-04 creates a board task only for an active project, using the project's default agent unless the request selects one. Task creation and its `created` event share a transaction. Backend state transitions lock the task row, enforce the product lifecycle, and write a `state_changed` event in that transaction; `Done` requires a trusted, verified-completion call. There is no client state-update route.
+- `GET /factory/tasks` filters by project, agent, state, creation period and search, with bounded offset pagination. `GET /factory/tasks/:id` returns the task and a bounded, pageable event slice. Responses are capped at 1 MiB; event payloads over 4 KiB are omitted and marked truncated. The event/activity/SSE fan-out remains P1-05; these writes do not claim live publication.
 
 ## 4 · Sandbox
 
