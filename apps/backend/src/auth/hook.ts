@@ -11,9 +11,10 @@ declare module 'fastify' {
 
 const VOICE_PROTOCOL = 'jarvis.voice.v1';
 const VOICE_AUTH_PREFIX = 'jarvis.auth.';
+const VOICE_ROUTES = new Set(['/voice', '/voice/da']);
 
 function voiceWebsocketToken(request: FastifyRequest): string | undefined {
-  if (request.method !== 'GET' || request.routeOptions.url !== '/voice' ||
+  if (request.method !== 'GET' || !VOICE_ROUTES.has(request.routeOptions.url ?? '') ||
       request.headers.upgrade?.toLowerCase() !== 'websocket') return undefined;
   const rawHeaders = request.raw.rawHeaders;
   const duplicates = rawHeaders.filter((_value, index) =>
