@@ -72,7 +72,7 @@ Dan follows the work on the [Project Jarvis board](https://github.com/users/DanA
 1. **Claim the issue before anything else: set your worker label.** Find the issue by task ID, then:
    - If it already has a worker label that isn't yours, or an open PR with `Fixes #<issue>` that isn't yours, the task is taken: stop and say so.
   - **Codex:** add the `Codex` label and a comment, using `GH_TOKEN` from the environment: `gh issue edit <n> --repo DanAakesen/jarvis --add-label Codex` and `gh issue comment <n> --repo DanAakesen/jarvis --body "Claimed by Codex at <UTC time>."`. Don't assign the issue. Without `gh`, call the REST API with `curl` (`POST /repos/DanAakesen/jarvis/issues/<n>/labels` with `{"labels":["Codex"]}`, and `/comments`). If the claim fails, stop and report it; never work on an unclaimed task.
-  - **Copilot cloud agent:** Copilot can't edit labels, so the [Worker label](../.github/workflows/worker-label.yml) workflow adds `Copilot` when the issue is assigned to Copilot or Copilot opens a PR with `Fixes #<issue>`. Started outside the issue, open the draft PR with `Fixes #<issue>` in its body first.
+  - **Copilot cloud agent:** Copilot can't edit labels, so the [Worker label](../.github/workflows/worker-label.yml) workflow keeps `Copilot` on an open issue exactly while an open Copilot PR links it (`Fixes`/`Closes`/`Resolves #<issue>`), or while the issue is assigned to Copilot and no Copilot PR for it was closed unmerged. Each run recomputes all open issues ([rules](../.github/scripts/worker_label.py)). Started outside the issue, open the draft PR with `Fixes #<issue>` in its body first.
   - **Dan** adds `Dan` himself. **Jarvis** (from P2) adds `Jarvis` when its dispatcher starts a task.
   - **Releasing a task:** a worker that stops without delivering removes its label and says why in a comment. The Worker label workflow removes `Copilot` when Copilot's PR closes unmerged.
 2. Read the current `main`: the Issue and Status columns and Current focus in `PLAN.md`, the relevant [decisions](decisions.md), and the files the `AGENTS.md` context map names for your area.
@@ -410,6 +410,7 @@ Python checks use each package's `.venv`. For the runner, from `runner/`:
 
 - Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge deploys infrastructure, backend, and web; the backend applies migrations at startup.
 - No manual portal changes.
+- Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.
 
 ## Documentation rules
 
