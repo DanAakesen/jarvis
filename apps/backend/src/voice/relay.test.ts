@@ -245,7 +245,12 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(toolOutput).toMatchObject({
       type: 'function_call_output',
       call_id: 'call_1',
-      output: JSON.stringify({ outcome: 'ok', result: { message: 'Very good, Dan.' } }),
+      output: JSON.stringify({
+        tool: 'greet',
+        outcome: 'ok',
+        result: { message: 'Very good, Dan.' },
+        confirmation: 'Done: greet succeeded.',
+      }),
     });
     expect(browserEvents.some((event) => event.type === 'response.function_call_arguments.done')).toBe(false);
     expect(browserEvents).toContainEqual({ type: 'response.done', event_id: 'response-done', response: {} });

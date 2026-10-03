@@ -150,7 +150,8 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
 
         const runToolCall = (call: RealtimeFunctionCall) => {
           if (!/^[A-Za-z0-9_-]{1,128}$/u.test(call.call_id) ||
-              typeof call.name !== 'string' || typeof call.arguments !== 'string' ||
+              typeof call.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(call.name) ||
+              typeof call.arguments !== 'string' ||
               seenCallIds.has(call.call_id) || seenCallIds.size >= 1_000 ||
               pendingToolCalls >= 10) {
             close(1008, 'Invalid voice tool call');

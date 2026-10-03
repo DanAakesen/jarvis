@@ -1,5 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
+import { ToolRefusal } from '../core/tool-registry.js';
 import type { RegisteredTool, ToolRegistry } from '../core/tool-registry.js';
 import {
   createEnglishSessionUpdate,
@@ -53,7 +54,12 @@ describe('English realtime session', () => {
     const signal = new AbortController().signal;
 
     await expect(executeRealtimeToolCall(call(), registry, request, signal)).resolves.toBe(
-      JSON.stringify({ outcome: 'ok', result: { text: 'hello' } }),
+      JSON.stringify({
+        tool: 'echo',
+        outcome: 'ok',
+        result: { text: 'hello' },
+        confirmation: 'Done: echo succeeded.',
+      }),
     );
     expect(request.validateInput).toHaveBeenCalledWith({ text: 'hello' }, tool.inputSchema, 'body');
     expect(tool.execute).toHaveBeenCalledWith({ text: 'hello' }, request, signal);
@@ -69,7 +75,46 @@ describe('English realtime session', () => {
     execute.mockClear();
 
     await expect(executeRealtimeToolCall(functionCall, registry, request, new AbortController().signal))
-      .resolves.toBe(JSON.stringify({ outcome: 'error', result: { error: 'Tool execution failed' } }));
+      .resolves.toBe(JSON.stringify({
+        tool: functionCall.name,
+        outcome: 'error',
+        result: { error: 'Tool execution failed' },
+        confirmation: `Not done: ${functionCall.name} failed.`,
+      }));
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['non-string tool name', call({ name: undefined as unknown as string }), 'unknown_tool'],
+    ['non-string arguments', call({ arguments: undefined as unknown as string }), 'echo'],
+  ])('rejects a %s before execution', async (_label, functionCall, safeName) => {
+    const request = { validateInput: vi.fn(() => true) } as unknown as FastifyRequest;
+    const execute = vi.mocked(tool.execute);
+    execute.mockClear();
+
+    await expect(executeRealtimeToolCall(functionCall, registry, request, new AbortController().signal))
+      .resolves.toBe(JSON.stringify({
+        tool: safeName,
+        outcome: 'error',
+        result: { error: 'Tool execution failed' },
+        confirmation: `Not done: ${safeName} failed.`,
+      }));
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('preserves safe tool refusals and builds the confirmation from the result', async () => {
+    const execute = vi.mocked(tool.execute);
+    execute.mockClear();
+    execute.mockRejectedValue(new ToolRefusal('Task T-101 is not running.'));
+    const request = { validateInput: vi.fn(() => true) } as unknown as FastifyRequest;
+
+    await expect(executeRealtimeToolCall(call(), registry, request, new AbortController().signal)).resolves.toBe(
+      JSON.stringify({
+        tool: 'echo',
+        outcome: 'refused',
+        result: { refused: 'Task T-101 is not running.' },
+        confirmation: 'Not done: echo was refused. Task T-101 is not running.',
+      }),
+    );
   });
 });

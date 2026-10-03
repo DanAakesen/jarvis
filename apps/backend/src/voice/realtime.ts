@@ -1,5 +1,6 @@
 import type { FastifyRequest } from 'fastify';
-import type { ToolRegistry } from '../core/tool-registry.js';
+import { confirmToolCall, type ToolCallOutcome } from '../core/tool-calls.js';
+import { ToolRefusal, type ToolRegistry } from '../core/tool-registry.js';
 
 export const ENGLISH_REALTIME_MODEL = 'gpt-realtime-2.1';
 export const ENGLISH_REALTIME_VOICE = 'en-GB-Ryan:DragonHDLatestNeural';
@@ -11,7 +12,8 @@ marks and filler enthusiasm. Sound like a real person talking: short spoken sent
 no lists or markdown, and at most two or three sentences. Never quote films.
 
 Use the available tools for task and project data; never invent projects, tasks, status or actions.
-Only say an action succeeded when its tool result reports success. If a tool fails, say so plainly.
+Only say an action succeeded when its tool result reports success. Relay its backend-built confirmation;
+if a tool fails or refuses, say so plainly and do not claim the action was done.
 For new work, use create_task with Dan's request and codex unless he names another agent. Use
 steer_task for corrections to running tasks, pause_task for pause/hold/stop, cancel_task only for
 cancel/abort/drop, and resume_task for continue/resume. If an action needs a task ID, look it up
@@ -61,8 +63,17 @@ export interface RealtimeFunctionCall {
   readonly arguments: string;
 }
 
-function toolFailure(): string {
-  return JSON.stringify({ outcome: 'error', result: { error: 'Tool execution failed' } });
+function toolOutput(name: string, outcome: ToolCallOutcome, result: unknown): string {
+  return JSON.stringify({
+    tool: name,
+    outcome,
+    result,
+    confirmation: confirmToolCall(name, outcome, result),
+  });
+}
+
+function toolFailure(name: string): string {
+  return toolOutput(name, 'error', { error: 'Tool execution failed' });
 }
 
 export async function executeRealtimeToolCall(
@@ -71,18 +82,38 @@ export async function executeRealtimeToolCall(
   request: FastifyRequest,
   signal: AbortSignal,
 ): Promise<string> {
+  if (typeof call.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(call.name)) {
+    return toolFailure('unknown_tool');
+  }
+  if (typeof call.arguments !== 'string') return toolFailure(call.name);
   const tool = tools.get(call.name);
-  if (!tool || Buffer.byteLength(call.arguments) > MAX_TOOL_ARGUMENT_BYTES) return toolFailure();
+  if (!tool || Buffer.byteLength(call.arguments) > MAX_TOOL_ARGUMENT_BYTES) return toolFailure(call.name);
 
+  let outcome: ToolCallOutcome = 'ok';
+  let result: unknown;
   try {
     const input: unknown = JSON.parse(call.arguments);
-    if (!request.validateInput(input, tool.inputSchema, 'body')) return toolFailure();
-    const result = await tool.execute(input, request, signal);
-    const serialized = JSON.stringify({ outcome: 'ok', result });
-    if (serialized === undefined || Buffer.byteLength(serialized) > MAX_TOOL_RESULT_BYTES) return toolFailure();
-    return serialized;
+    if (!request.validateInput(input, tool.inputSchema, 'body')) return toolFailure(call.name);
+    result = await tool.execute(input, request, signal);
+    const serializedResult = JSON.stringify(result);
+    if (serializedResult === undefined || Buffer.byteLength(serializedResult) > MAX_TOOL_RESULT_BYTES) {
+      throw new Error('Invalid tool result');
+    }
+  } catch (error) {
+    if (error instanceof ToolRefusal && !signal.aborted) {
+      outcome = 'refused';
+      result = { refused: error.message };
+    } else {
+      outcome = 'error';
+      result = { error: 'Tool execution failed' };
+    }
+  }
+
+  try {
+    const serialized = toolOutput(call.name, outcome, result);
+    return Buffer.byteLength(serialized) <= MAX_TOOL_RESULT_BYTES ? serialized : toolFailure(call.name);
   } catch {
-    return toolFailure();
+    return toolFailure(call.name);
   }
 }
 
