@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import { createAuthClient, restoreProfile, signIn, type UserProfile } from './auth';
 
@@ -10,6 +11,7 @@ export interface SignInSession {
   message: string;
   signIn: () => Promise<void>;
   getAccessToken: () => Promise<string>;
+  client: PublicClientApplication;
 }
 
 /** Owns the browser session for the whole shell, so moving between pages never repeats sign-in. */
@@ -64,5 +66,5 @@ export function useSignIn(config: PublicConfig): SignInSession {
     throw new Error('Microsoft sign-in did not return an API token.');
   }, [client, config]);
 
-  return { state, profile, message, signIn: handleSignIn, getAccessToken };
+  return { state, profile, message, signIn: handleSignIn, getAccessToken, client };
 }
