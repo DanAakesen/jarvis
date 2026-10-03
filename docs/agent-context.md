@@ -18,7 +18,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 | Stack, runtime, sandbox, voice, dispatch, cost | [architecture.md](architecture.md) |
 | Tables, relationships, and groups | [data-model.md](data-model.md) |
 | Step-by-step flows with evidence status | [architecture-flows.html](architecture-flows.html) (open in a browser) |
-| Decisions and learnings L1–L35 | [decisions.md](decisions.md) |
+| Decisions and learnings L1–L36 | [decisions.md](decisions.md) |
 | Prototype code and reports to port in P2 and P4 | [reference/](reference/) |
 | Open-source research | [open-source.md](open-source.md) |
 
@@ -220,6 +220,15 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
 - Add a new component workflow as `on: workflow_call`, call it from `ci.yml`, and add it to `CI result`'s `needs`, so it runs once per PR and the gate covers it.
 - Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then P0-12 must read the `CI` run result itself.
+
+### Backend modules
+
+Backend modules are composed through the optional third `buildApp` argument;
+defaults are `core` and `factory`. Module plugins inherit root security hooks and
+contribute internal Jarvis tools without exposing a dispatcher. See the
+[module guide](../apps/backend/src/modules.README.md). Register lifecycle hooks
+before `ready()`/`listen()`; module startup failures must prevent listening.
+The existing backend test/lint/build commands cover the module extension contract.
 
 Future commands (unimplemented until their tasks):
 
