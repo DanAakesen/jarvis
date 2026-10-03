@@ -15,6 +15,7 @@ from urllib.parse import quote
 
 from coordinator_api import APIError, GitHub
 from coordinator_policy import (
+    closing_issue_numbers,
     decide_merge,
     docs_only,
     issue_task_id,
@@ -309,6 +310,7 @@ class Coordinator:
             if remaining <= 0:
                 break
             number = issue["number"]
+            claimed = False
             try:
                 blockers = self.api.pages(f"{self.prefix}/issues/{number}/dependencies/blocked_by")
                 if any(blocker["state"].casefold() != "closed" for blocker in blockers):
@@ -338,6 +340,7 @@ class Coordinator:
                         self.report("Main changed before assignment; deferred.")
                         return
                     self.api.request("POST", f"{self.prefix}/issues/{number}/labels", {"labels": ["Copilot"]})
+                    claimed = True
                     instructions = ("Follow AGENTS.md and docs/agent-context.md on current main. "
                                     "Work only this issue in its own branch/PR, coordinate shared files with "
                                     "other active tasks, and preserve their documentation. Keep the PR draft "
@@ -348,9 +351,28 @@ class Coordinator:
                     self.report(f"Issue #{number}: assigned Copilot on {MODEL}.")
                 remaining -= 1
             except APIError as error:
-                # An ambiguous failed POST may have started work. Retain the
-                # claim so the next run cannot create a duplicate paid task.
-                self.report(f"Issue #{number}: {error}; retained any claim for inspection.")
+                # A server rejection is recoverable if fresh issue state proves
+                # no worker took it. Lost/ambiguous responses keep ownership:
+                # the job may already have started and must not be duplicated.
+                ambiguous = error.category in {"network request failed", "invalid JSON response",
+                                               "response size limit exceeded"}
+                ambiguous = ambiguous or error.status == 408 or (error.status is not None and error.status >= 500)
+                released = False
+                if claimed and not ambiguous:
+                    try:
+                        current = self.api.request("GET", f"{self.prefix}/issues/{number}")
+                        labels = label_names(current)
+                        linked = self.api.pages(f"{self.prefix}/pulls?state=open")
+                        if (not current.get("assignees") and "copilot" in labels
+                                and not labels.intersection({"codex", "jarvis", "dan"})
+                                and not any(number in closing_issue_numbers(pr.get("body") or "") for pr in linked)):
+                            self.api.request("DELETE", f"{self.prefix}/issues/{number}/labels/Copilot")
+                            released = True
+                    except APIError:
+                        pass
+                result = "released its unused claim" if released else "retained any claim for inspection"
+                self.report(f"Issue #{number}: {error}; {result}. Further assignments deferred.")
+                return
 
     def run(self):
         try:

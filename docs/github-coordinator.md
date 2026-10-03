@@ -91,8 +91,11 @@ new task assignments.
 It rechecks ownership and dependencies, adds its Copilot worker claim and assigns
 the existing issue through GitHub's supported API. It never removes other workers'
 labels, replaces their assignees, removes dependency links or creates a duplicate
-task PR. Ambiguous assignment failures retain the claim for inspection because a
-request may already have started work; inspect the issue before releasing it.
+task PR. Explicit assignment rejections release the coordinator's unused claim
+only after fresh issue/PR reads show no assignee, other worker or linked PR.
+Ambiguous assignment failures retain the claim for inspection because a request
+may already have started work; inspect the issue before releasing it. Either
+failure pauses further assignments in that run while future runs continue.
 Missing issue mappings, incomplete PLAN dependencies and access denials remain
 blocked. GitHub search alone is not trusted to determine readiness.
 

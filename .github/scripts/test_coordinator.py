@@ -8,6 +8,7 @@ from contextlib import redirect_stdout
 from urllib.parse import parse_qs, urlsplit
 
 from coordinator import MARKER, Coordinator
+from coordinator_api import APIError
 
 PLAN = """
 | ID | Task | Acceptance | Depends on | Status |
@@ -59,6 +60,8 @@ class FakeGitHub:
         self.reads = []
         self.writes = []
         self.reviews_unresolved = False
+        self.assignment_error = None
+        self.assign_before_error = False
 
     def add_pull(self, value, integrated=True, ci=True):
         self.pulls.append(copy.deepcopy(value))
@@ -77,7 +80,17 @@ class FakeGitHub:
                 return {"merged": True}
             if path.endswith("/update-branch"):
                 return {"message": "Updating pull request branch", "url": "ignored"}
-            if path.endswith(("/labels", "/dispatches")):
+            if path.endswith("/labels"):
+                number = int(path.rsplit("/", 2)[1])
+                current = next(value for value in self.issues if value["number"] == number)
+                current["labels"].extend({"name": name} for name in body["labels"])
+                return None
+            if method == "DELETE" and path.endswith("/labels/Copilot"):
+                number = int(path.rsplit("/", 3)[1])
+                current = next(value for value in self.issues if value["number"] == number)
+                current["labels"] = [label for label in current["labels"] if label["name"] != "Copilot"]
+                return None
+            if path.endswith("/dispatches"):
                 return None
             raise AssertionError(f"Unexpected mutation: {method} {path}")
         self.reads.append((method, path))
@@ -149,6 +162,11 @@ class FakeGitHub:
 
     def assign_copilot(self, number, ref, instructions, model):
         self.writes.append(("ASSIGN", number, {"ref": ref, "instructions": instructions, "model": model}, True))
+        if self.assign_before_error:
+            current = next(value for value in self.issues if value["number"] == number)
+            current["assignees"] = [{"login": "copilot-swe-agent[bot]"}]
+        if self.assignment_error:
+            raise self.assignment_error
 
 
 class CoordinatorTests(unittest.TestCase):
@@ -317,6 +335,37 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual([write[0] for write in api.writes], ["POST", "ASSIGN"])
         self.assertEqual(api.writes[0][2], {"labels": ["Copilot"]})
         self.assertEqual(api.writes[1][2]["model"], "claude-opus-5.5")
+
+    def test_rejected_assignment_releases_only_its_unused_claim_and_pauses_more_jobs(self):
+        api = FakeGitHub()
+        api.issues[1]["labels"] = [{"name": "P0"}]
+        api.assignment_error = APIError("GraphQL request rejected")
+        coordinator = self.execute(api)
+        self.assertEqual([write[0] for write in api.writes], ["POST", "ASSIGN", "DELETE"])
+        self.assertTrue(api.writes[2][1].endswith("/issues/3/labels/Copilot"))
+        self.assertEqual(api.issues[1]["labels"], [{"name": "P0"}])
+        self.assertFalse(any(write[0] == "ASSIGN" and write[1] == 4 for write in api.writes))
+        self.assertTrue(any("released its unused claim" in line for line in coordinator.lines))
+
+    def test_ambiguous_assignment_response_retains_claim_to_prevent_duplicate_jobs(self):
+        for category in ["network request failed", "invalid JSON response", "response size limit exceeded"]:
+            with self.subTest(category=category):
+                api = FakeGitHub()
+                api.assignment_error = APIError(category)
+                coordinator = self.execute(api)
+                self.assertEqual([write[0] for write in api.writes], ["POST", "ASSIGN"])
+                self.assertIn({"name": "Copilot"}, api.issues[1]["labels"])
+                self.assertTrue(any("retained any claim" in line for line in coordinator.lines))
+
+    def test_copilot_assignment_accepted_before_error_keeps_its_claim(self):
+        api = FakeGitHub()
+        api.assignment_error = APIError("Copilot assignment not confirmed")
+        api.assign_before_error = True
+        coordinator = self.execute(api)
+        self.assertEqual([write[0] for write in api.writes], ["POST", "ASSIGN"])
+        self.assertEqual(api.issues[1]["assignees"], [{"login": "copilot-swe-agent[bot]"}])
+        self.assertIn({"name": "Copilot"}, api.issues[1]["labels"])
+        self.assertTrue(any("retained any claim" in line for line in coordinator.lines))
 
     def test_active_copilot_claims_respect_concurrency_limit(self):
         api = FakeGitHub()
