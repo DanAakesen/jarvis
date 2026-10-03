@@ -418,7 +418,7 @@ in the P4-01 Copilot session (Docker was available there):
 
 | Purpose | Command |
 | --- | --- |
-| Lint and tests, from `agents/jarvis/` | `.venv/bin/python -m ruff check .`; `.venv/bin/python -m pytest -q` (95 passed) |
+| Lint and tests, from `agents/jarvis/` | `.venv/bin/python -m ruff check .`; `.venv/bin/python -m pytest -q` (100 passed) |
 | Same check as CI, from the root | `bash .github/scripts/python-ci.sh agents/jarvis` |
 | Image, from the root | `docker build --tag jarvis-agent:local agents/jarvis` |
 | Model-free voice turn | Run the image with the variables below, then `agents/jarvis/.venv/bin/python agents/jarvis/scripts/smoke_test.py` (default `ws://127.0.0.1:8088/invocations_ws`, text `/help`) |

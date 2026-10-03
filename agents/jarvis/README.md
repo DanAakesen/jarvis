@@ -22,8 +22,8 @@ the model unchanged. The agent authenticates with its platform identity
 that token only with the `Jarvis.Tools` role and only on the tool routes.
 
 Only `outcome: "ok"` counts as done. Every failure becomes `outcome: "error"` and
-says whether nothing was done or, after a timeout, whether the action may have
-happened. These failures cover unknown tools, bad arguments, refused identity,
+says whether nothing was done (the request never left the agent) or, after a
+timeout or a connection lost after sending, that the action may have happened. These failures cover unknown tools, bad arguments, refused identity,
 unavailable persistence and an unreachable backend. If the catalogue cannot be
 loaded, the turn fails before the model is asked.
 

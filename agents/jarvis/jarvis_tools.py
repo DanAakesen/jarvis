@@ -290,6 +290,9 @@ class BackendToolClient:
             ) as response:
                 status = response.status_code
                 body = await _read_bounded(response)
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
+            # The request never left the agent.
+            return _error(name, "The backend could not be reached; nothing was done.")
         except httpx.TimeoutException:
             return _error(
                 name,
@@ -297,9 +300,18 @@ class BackendToolClient:
                 "Check its status before trying again.",
             )
         except httpx.HTTPError:
-            return _error(name, "The backend could not be reached; nothing was done.")
+            # Sent, but the answer was lost: the backend may already have run the tool.
+            return _error(
+                name,
+                "The connection to the backend broke; the action may or may not have happened. "
+                "Check its status before trying again.",
+            )
         except ValueError:
-            return _error(name, "The backend answer was too large to read.")
+            return _error(
+                name,
+                "The backend answer was too large to read; the action may or may not have "
+                "happened. Check its status before trying again.",
+            )
         if status != 200:
             return _error(name, _status_message(status))
         try:

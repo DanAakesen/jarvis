@@ -263,7 +263,12 @@ async def test_backend_refusals_are_reported_as_errors(status: int, expected: st
     ("failure", "expected"),
     [
         (httpx.ReadTimeout("slow"), "may or may not have happened"),
-        (httpx.ConnectError("down"), "could not be reached"),
+        (httpx.WriteTimeout("slow"), "may or may not have happened"),
+        (httpx.RemoteProtocolError("disconnected"), "may or may not have happened"),
+        (httpx.ReadError("reset"), "may or may not have happened"),
+        (httpx.ConnectError("down"), "could not be reached; nothing was done"),
+        (httpx.ConnectTimeout("down"), "could not be reached; nothing was done"),
+        (httpx.PoolTimeout("busy"), "could not be reached; nothing was done"),
     ],
 )
 async def test_transport_failures_are_reported_honestly(
@@ -298,6 +303,7 @@ async def test_unreadable_success_responses_are_not_reported_as_success(
     result = await client.call("create_task", "{}", "42")
 
     assert result["outcome"] == "error"
+    assert "nothing was done" not in result["error"]
 
 
 async def test_identity_failure_during_a_call_sends_nothing() -> None:

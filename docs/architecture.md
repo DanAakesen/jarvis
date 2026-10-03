@@ -420,7 +420,8 @@ reaches the model when no API key is set. The backend result is passed back to t
 model unchanged. Only `outcome: "ok"` counts as done.
 
 Failures come back to the model as `outcome: "error"`. They say whether nothing was
-done, or whether a timeout means the action may have happened. They cover unknown tools, invalid JSON,
+done (the request never left the agent), or whether a timeout or broken
+connection after sending means the action may have happened. They cover unknown tools, invalid JSON,
 rejected arguments, refused identity, unavailable persistence and an unreachable
 backend. An unavailable catalogue fails the turn before the model is called.
 Responses are capped at 1 MiB, catalogues at 128 tools.
