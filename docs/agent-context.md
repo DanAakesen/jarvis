@@ -236,9 +236,10 @@ returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
 P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised,
 with no horizontal overflow, all controls at least 44 px high, and no browser
-console errors. P1-12's sleep control can be checked with mock sleep-status,
-scale, and refusal responses; the mock does not verify live Entra, Azure SQL,
-managed identity, or ARM scaling.
+console errors. P1-12 was inspected at 390 and 1440 px with mocked sleep-status,
+scale, refusal, and failure responses; sleep/wake, refusal, retry, and the
+Settings link worked without horizontal overflow or browser errors. Mocked
+responses do not verify live Entra, Azure SQL, managed identity, or ARM scaling.
 Never commit the stub or weaken sign-in in the app.
 
 Backend commands:
