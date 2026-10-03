@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readDownMigration, readMigrations, revertMigration, type Migration } from './migrations.js';
 import { createTaskStore } from './task-store.js';
+import { createCredentialStatusStore } from './credential-status-store.js';
 import { createSettingsStore } from './settings-store.js';
 import { createProjectStore } from './project-store.js';
 import { ProjectConflictError } from '../factory/projects.js';
@@ -98,11 +99,55 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
       VALUES (N'delivery-1', N'push');
       UPDATE dbo.webhook_deliveries SET outcome = N'ok', processed_at = SYSUTCDATETIME()
       WHERE delivery_id = N'delivery-1';
-      INSERT dbo.credential_status (name, expires_at, last_renewed_at, status)
-      VALUES (N'codex-login', SYSUTCDATETIME(), SYSUTCDATETIME(), N'ok');`);
+      UPDATE dbo.credential_status SET expires_at = SYSUTCDATETIME(),
+        last_renewed_at = SYSUTCDATETIME(), status = N'ok' WHERE name = N'codex-login';`);
     const row = await pool.request().query<{ state: string; priority: number; attempt_count: number }>(
       `SELECT state, priority, attempt_count FROM dbo.tasks WHERE id = ${String(task)}`);
     expect(row.recordset).toEqual([{ state: 'Running', priority: 0, attempt_count: 0 }]);
+    await pool.request().query(`UPDATE dbo.tasks SET state = N'Cancelled', finished_at = SYSUTCDATETIME()
+      WHERE id = ${String(task)};`);
+  });
+
+  it('serializes Codex starts against renewal acquisition and recovers expired leases', async () => {
+    const project = await pool.request()
+      .input('repo', sql.NVarChar(140), `DanAakesen/credentials-${randomUUID().slice(0, 8)}`)
+      .query<{ id: string }>(`INSERT dbo.projects (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+        OUTPUT CAST(inserted.id AS varchar(19)) AS id
+        VALUES (N'Credential lease fixture', @repo, N'main', N'codex', N'deliver_pr', N'1x2', N'node');`);
+    const projectId = project.recordset[0]?.id;
+    if (!projectId) throw new Error('Credential lease project was not created');
+
+    const tasks = createTaskStore(pool);
+    const credentials = createCredentialStatusStore(pool);
+    const runningCodex = await tasks.create({ projectId, title: 'Codex active', request: 'Run', agent: 'codex' });
+    if (!runningCodex) throw new Error('Codex task was not created');
+    expect((await tasks.transition(runningCodex.id, 'Running')).kind).toBe('ok');
+
+    const owner = randomUUID();
+    expect(await credentials.acquireCodexRenewalLease(owner, 900)).toBe(false);
+    expect((await tasks.transition(runningCodex.id, 'PauseRequested')).kind).toBe('ok');
+    expect((await tasks.transition(runningCodex.id, 'Paused')).kind).toBe('ok');
+    expect(await credentials.acquireCodexRenewalLease(owner, 900)).toBe(true);
+
+    const blockedCodex = await tasks.create({ projectId, title: 'Codex blocked', request: 'Wait', agent: 'codex' });
+    if (!blockedCodex) throw new Error('Blocked Codex task was not created');
+    expect((await tasks.transition(blockedCodex.id, 'Running')).kind).toBe('renewal-active');
+    const allowedCopilot = await tasks.create({ projectId, title: 'Copilot allowed', request: 'Run', agent: 'copilot' });
+    if (!allowedCopilot) throw new Error('Copilot task was not created');
+    expect((await tasks.transition(allowedCopilot.id, 'Running')).kind).toBe('ok');
+
+    await credentials.completeCodexRenewal(
+      owner, 'ok', '2030-01-01T00:00:00.000Z', '2026-10-03T00:00:00.000Z',
+    );
+    expect((await tasks.transition(blockedCodex.id, 'Running')).kind).toBe('ok');
+
+    await pool.request()
+      .input('owner', sql.UniqueIdentifier, owner)
+      .query(`UPDATE dbo.credential_status SET renewal_lease_owner = @owner,
+        renewal_lease_until = DATEADD(minute, -1, SYSUTCDATETIME()) WHERE name = N'codex-login';`);
+    const recoveredOwner = randomUUID();
+    expect(await credentials.acquireCodexRenewalLease(recoveredOwner, 900)).toBe(true);
+    await credentials.completeCodexRenewal(recoveredOwner, 'ok', null, null);
   });
 
   it('creates, filters, reads and transitions tasks with transactional history', async () => {

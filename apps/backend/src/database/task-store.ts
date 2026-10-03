@@ -162,6 +162,21 @@ export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
+        if (state === 'Running') {
+          const agentResult = await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(id))
+            .query<{ agent: 'codex' | 'copilot' }>('SELECT agent FROM dbo.tasks WHERE id = @taskId;');
+          if (agentResult.recordset[0]?.agent === 'codex') {
+            const credential = await new sql.Request(transaction)
+              .query<{ renewalActive: boolean }>(`SELECT CAST(CASE WHEN renewal_lease_until > SYSUTCDATETIME()
+                THEN 1 ELSE 0 END AS bit) AS renewalActive
+                FROM dbo.credential_status WITH (UPDLOCK, HOLDLOCK) WHERE name = N'codex-login';`);
+            if (credential.recordset[0]?.renewalActive !== false) {
+              await transaction.rollback();
+              return { kind: 'renewal-active' };
+            }
+          }
+        }
         const currentResult = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, BigInt(id))
           .query<{ state: TaskState }>('SELECT state FROM dbo.tasks WITH (UPDLOCK, ROWLOCK) WHERE id = @taskId;');

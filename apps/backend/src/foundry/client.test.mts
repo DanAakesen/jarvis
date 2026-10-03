@@ -37,6 +37,13 @@ describe("Foundry runner wire contract", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("starts a Codex renewal invocation with the three-day threshold", async () => {
+    const { client, fetch } = setup({ ...(fixtures["task_start"] as object), agent: "codex", mode: "renew-codex" });
+    const accepted = await client.startCodexRenewal();
+    expect(accepted.agent).toBe("codex");
+    expect(request(fetch).body).toEqual({ agent: "codex", mode: "renew-codex", min_days_left: 3 });
+  });
+
   it("steers the existing session through runner mode=steer", async () => {
     const { client, fetch } = setup(fixtures["steer"]);
     const accepted = await client.steer("capture-session", "copilot", "Change the requirement");

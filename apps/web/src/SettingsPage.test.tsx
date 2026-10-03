@@ -38,8 +38,13 @@ function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-function settingsResponse(current = settings) {
-  return { settings: current, options };
+function settingsResponse(current = settings, credentials: {
+  name: 'codex-login' | 'copilot-token';
+  expiresAt: string | null;
+  lastRenewedAt: string | null;
+  status: 'ok' | 'renew_soon' | 'failed' | 'unknown';
+}[] = []) {
+  return { settings: current, options, credentials };
 }
 
 function renderSettingsPage(url: string | null = backendUrl) {
@@ -96,8 +101,30 @@ describe('SettingsPage', () => {
     })).toHaveProperty('disabled', true);
     expect(screen.getByRole('button', {
       name: 'Trigger Codex renewal',
-      description: /Secret values are never shown/,
+      description: /Manual renewal and re-seed instructions are unavailable/,
     })).toHaveProperty('disabled', true);
+  });
+
+  it('shows credential dates and status without exposing values', async () => {
+    fetchMock.mockResolvedValueOnce(response(settingsResponse(settings, [{
+      name: 'codex-login',
+      expiresAt: '2026-10-05T12:00:00.000Z',
+      lastRenewedAt: '2026-09-25T12:00:00.000Z',
+      status: 'renew_soon',
+    }, {
+      name: 'copilot-token',
+      expiresAt: null,
+      lastRenewedAt: null,
+      status: 'unknown',
+    }])));
+    renderSettingsPage();
+
+    expect(await screen.findByText('Status: Renew soon')).not.toBeNull();
+    expect(screen.getByText(/Expires: Oct 5, 2026/)).not.toBeNull();
+    expect(screen.getByText(/Last renewed: Sep 25, 2026/)).not.toBeNull();
+    expect(screen.getByText('Copilot token')).not.toBeNull();
+    expect(screen.getByText('Expires: Not recorded')).not.toBeNull();
+    expect(document.body.textContent).not.toContain('SECRET');
   });
 
   it('offers retry when settings cannot be loaded', async () => {

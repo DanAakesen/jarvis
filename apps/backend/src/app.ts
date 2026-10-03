@@ -15,6 +15,7 @@ import type { TaskStore } from './factory/task-store.js';
 import type { ProjectStore } from './factory/projects.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
+import type { CredentialStatusStore } from './credentials/credential-status.js';
 
 export interface BuildAppOptions {
   readonly auth?: TokenVerifier;
@@ -23,6 +24,7 @@ export interface BuildAppOptions {
   readonly toolCallStore?: ToolCallStore;
   readonly taskStore?: TaskStore;
   readonly settingsStore?: SettingsStore;
+  readonly credentialStatusStore?: CredentialStatusStore;
   readonly conversationStore?: ConversationStore;
 }
 
@@ -32,6 +34,7 @@ declare module 'fastify' {
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
     settingsStore: SettingsStore | null;
+    credentialStatusStore: CredentialStatusStore | null;
     conversationStore: ConversationStore | null;
   }
 }
@@ -84,6 +87,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);
   app.decorate('settingsStore', options.settingsStore ?? null);
+  app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
   registerModules(app, options.modules ?? [coreModule, conversationModule, factoryModule]);
   return app;

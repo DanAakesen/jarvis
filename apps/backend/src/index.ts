@@ -10,11 +10,14 @@ import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
+import { createCredentialStatusStore } from './database/credential-status-store.js';
 import { coreModule } from './core/index.js';
 import { conversationModule } from './core/conversation.js';
 import { factoryModule } from './factory/index.js';
 import type { BackendModule } from './modules.js';
 import { createVoiceLiveConnector, createVoiceRelayModule } from './voice/relay.js';
+import { FoundryClient } from './foundry/client.js';
+import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
 
 try {
   const config = loadConfig();
@@ -23,11 +26,13 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const modules: BackendModule[] = [coreModule, conversationModule, factoryModule];
+  const azureCredential = config.voiceLiveEndpoint || config.foundryRuntimeEndpoint
+    ? new DefaultAzureCredential()
+    : undefined;
   if (config.voiceLiveEndpoint) {
-    const credential = new DefaultAzureCredential();
     modules.push(createVoiceRelayModule({
       getToken: async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
+        const token = await azureCredential!.getToken(scope, { abortSignal: signal });
         if (!token) throw new Error('Voice identity unavailable');
         return token.token;
       },
@@ -42,10 +47,36 @@ try {
       settingsStore: createSettingsStore(database.pool),
       conversationStore: createConversationStore(database.pool),
       taskStore: createTaskStore(database.pool),
+      credentialStatusStore: createCredentialStatusStore(database.pool),
     } : {}),
   });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
+  let stopCodexRenewal: (() => void) | undefined;
+  if (database && azureCredential && config.foundryRuntimeEndpoint && config.foundryAdminEndpoint &&
+      config.foundryRunnerAgentName) {
+    const client = new FoundryClient({
+      runtimeEndpoint: config.foundryRuntimeEndpoint,
+      adminEndpoint: config.foundryAdminEndpoint,
+      agentName: config.foundryRunnerAgentName,
+      getToken: async (scope, signal) => {
+        const token = await azureCredential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry identity unavailable');
+        return token.token;
+      },
+    });
+    stopCodexRenewal = () => {};
+    app.addHook('onClose', async () => {
+      stopCodexRenewal?.();
+    });
+    app.addHook('onReady', async () => {
+      stopCodexRenewal = startDailyCodexRenewalJob(
+        app.credentialStatusStore!,
+        client,
+        (outcome) => logger.info({ outcome }, 'credentials.codex_renewal'),
+      );
+    });
+  }
   if (!telemetry) logger.info('telemetry.stdout_only');
 
   let stopping = false;

@@ -12,6 +12,7 @@ import asyncio
 import base64
 import json
 import logging
+import math
 import os
 import re
 import shutil
@@ -70,6 +71,7 @@ class TaskState:
     session_id: str
     agent: str
     task: str
+    mode: str = "task"
     status: str = "queued"
     started_at: float = field(default_factory=time.time)
     finished_at: float | None = None
@@ -140,17 +142,30 @@ def _capacity_snapshot() -> dict[str, Any]:
 
 
 def _persist_task(state: TaskState) -> None:
-    """Persist per-invocation metadata without prompts, results, or credentials."""
+    """Persist safe invocation metadata and only allowlisted Codex renewal results."""
+    saved: dict[str, Any] = {
+        "invocation_id": state.invocation_id,
+        "session_id": state.session_id,
+        "agent": state.agent,
+        "status": state.status,
+        "started_at": state.started_at,
+        "finished_at": state.finished_at,
+    }
+    if state.mode == "renew-codex":
+        saved["mode"] = state.mode
+        if isinstance(state.result, dict):
+            for key in ("renewed", "stored", "reply_ok"):
+                if isinstance(state.result.get(key), bool):
+                    saved.setdefault("result", {})[key] = state.result[key]
+            for key in ("last_refresh_before", "last_refresh_after", "expires_before", "expires_after", "expires"):
+                value = state.result.get(key)
+                if isinstance(value, str) and _LAST_REFRESH.match(value):
+                    saved.setdefault("result", {})[key] = value
+            if state.result.get("reason") == "fresh":
+                saved.setdefault("result", {})["reason"] = "fresh"
     _write_json(
         _task_state_path(state.session_id, state.invocation_id),
-        {
-            "invocation_id": state.invocation_id,
-            "session_id": state.session_id,
-            "agent": state.agent,
-            "status": state.status,
-            "started_at": state.started_at,
-            "finished_at": state.finished_at,
-        },
+        saved,
     )
 
 
@@ -172,10 +187,13 @@ def _load_task(invocation_id: str) -> TaskState | None:
             session_id=str(saved["session_id"]),
             agent=str(saved["agent"]),
             task="",
+            mode=str(saved.get("mode", "task")),
             status=str(saved.get("status", "unknown")),
             started_at=float(saved.get("started_at", time.time())),
             finished_at=saved.get("finished_at"),
         )
+        if state.mode == "renew-codex" and isinstance(saved.get("result"), dict):
+            state.result = saved["result"]
         return state
     return None
 
@@ -792,6 +810,34 @@ async def _steer_then_run(state: TaskState) -> None:
     await _run_task(state)
 
 
+async def _run_codex_renewal(state: TaskState, min_days_left: float, force: bool) -> None:
+    session_lock = session_locks.setdefault(state.session_id, asyncio.Lock())
+    lock_acquired = False
+    try:
+        await session_lock.acquire()
+        lock_acquired = True
+        if state.cancel_requested:
+            return
+        state.status = "running"
+        state.event("started", agent="codex", mode="renew-codex")
+        state.result = await _renew_codex_login(state.session_id, min_days_left, force)
+        state.status = "completed"
+        state.event("completed", result=state.result)
+    except asyncio.CancelledError:
+        state.status = "cancelled"
+        state.event("cancelled")
+        raise
+    except Exception as exc:  # sanitized: exception text never includes credentials
+        state.status = "failed"
+        state.error = f"Codex renewal failed: {type(exc).__name__}"
+        state.event("failed", error=state.error)
+    finally:
+        state.finished_at = time.time()
+        _persist_task(state)
+        if lock_acquired:
+            session_lock.release()
+
+
 def _steering_prompt(message: str) -> str:
     return (
         "Correction from the user while you were working:\n"
@@ -824,15 +870,6 @@ async def invoke(request: Request) -> Response:
             {"error": "mode must be 'task', 'steer', 'pause', or 'renew-codex'"},
             status_code=400,
         )
-    if mode == "renew-codex":
-        try:
-            min_days_left = float(payload.get("min_days_left", CODEX_RENEW_MIN_DAYS_LEFT))
-            result = await _renew_codex_login(
-                request.state.session_id, min_days_left, force=payload.get("force") is True
-            )
-        except Exception as exc:  # sanitized: never includes the login document
-            return JSONResponse({"renewed": False, "error": type(exc).__name__}, status_code=500)
-        return JSONResponse({"session_id": request.state.session_id, **result})
     if mode == "pause":
         session_id = request.state.session_id
         running = next(
@@ -857,6 +894,30 @@ async def invoke(request: Request) -> Response:
 
     invocation_id = request.state.invocation_id
     session_id = request.state.session_id
+    if mode == "renew-codex":
+        if agent != "codex":
+            return JSONResponse({"error": "Codex renewal requires the codex agent"}, status_code=400)
+        try:
+            min_days_left = float(payload.get("min_days_left", CODEX_RENEW_MIN_DAYS_LEFT))
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "min_days_left must be between 0 and 30"}, status_code=400)
+        if not math.isfinite(min_days_left) or not 0 <= min_days_left <= 30:
+            return JSONResponse({"error": "min_days_left must be between 0 and 30"}, status_code=400)
+        state = TaskState(
+            invocation_id=invocation_id, session_id=session_id, agent=agent, task="", mode=mode,
+        )
+        async with tasks_lock:
+            tasks[invocation_id] = state
+        state.worker = asyncio.create_task(
+            _run_codex_renewal(state, min_days_left, force=payload.get("force") is True)
+        )
+        return JSONResponse({
+            "invocation_id": invocation_id,
+            "session_id": session_id,
+            "status": state.status,
+            "agent": agent,
+            "mode": mode,
+        })
     if payload.get("probe") == "key-vault":
         credentials: dict[str, str] = {}
         try:

@@ -8,8 +8,16 @@ describe('backend configuration', () => {
   });
   it('accepts a configured HTTPS origin and backend-only telemetry string', () => {
     const connectionString = 'InstrumentationKey=00000000-0000-0000-0000-000000000001;IngestionEndpoint=https://swedencentral-0.in.applicationinsights.azure.com/';
-    expect(loadConfig({ NODE_ENV: 'production', PORT: '4000', STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net', APPLICATIONINSIGHTS_CONNECTION_STRING: connectionString, LOG_LEVEL: 'debug' })).toEqual({
+    const foundryRuntimeEndpoint = 'https://fixture.cognitiveservices.azure.com/api/projects/jarvis';
+    const foundryAdminEndpoint = 'https://fixture.services.ai.azure.com/api/projects/jarvis';
+    expect(loadConfig({
+      NODE_ENV: 'production', PORT: '4000', STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net',
+      APPLICATIONINSIGHTS_CONNECTION_STRING: connectionString, LOG_LEVEL: 'debug',
+      FOUNDRY_RUNTIME_ENDPOINT: foundryRuntimeEndpoint, FOUNDRY_ADMIN_ENDPOINT: foundryAdminEndpoint,
+      FOUNDRY_RUNNER_AGENT_NAME: 'jarvis-runner-node-1x2',
+    })).toEqual({
       auth: loadAuthConfig({}), port: 4000, logLevel: 'debug', staticWebAppOrigin: 'https://fixture.azurestaticapps.net', applicationInsightsConnectionString: connectionString,
+      foundryRuntimeEndpoint, foundryAdminEndpoint, foundryRunnerAgentName: 'jarvis-runner-node-1x2',
     });
   });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {
@@ -20,6 +28,10 @@ describe('backend configuration', () => {
   });
   it('requires the static origin in production', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow('STATIC_WEB_APP_ORIGIN');
+  });
+  it('requires the Foundry runner endpoints to be configured together', () => {
+    expect(() => loadConfig({ FOUNDRY_RUNTIME_ENDPOINT: 'https://fixture.cognitiveservices.azure.com/api/projects/jarvis' }))
+      .toThrow('FOUNDRY_RUNTIME_ENDPOINT, FOUNDRY_ADMIN_ENDPOINT and FOUNDRY_RUNNER_AGENT_NAME');
   });
   it('pins the English realtime model on the configured Voice Live endpoint', () => {
     expect(loadConfig({

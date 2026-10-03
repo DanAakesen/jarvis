@@ -459,6 +459,18 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               name: 'SQL_MANAGED_IDENTITY_CLIENT_ID'
               value: backendIdentity.properties.clientId
             }
+            {
+              name: 'FOUNDRY_RUNTIME_ENDPOINT'
+              value: 'https://${foundryAccount.name}.cognitiveservices.azure.com/api/projects/${foundryProject.name}'
+            }
+            {
+              name: 'FOUNDRY_ADMIN_ENDPOINT'
+              value: 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
+            }
+            {
+              name: 'FOUNDRY_RUNNER_AGENT_NAME'
+              value: 'jarvis-runner-node-1x2'
+            }
           ]
           // Startup applies migrations before listening and may wait for the serverless database to resume (300-second deadline).
           probes: [

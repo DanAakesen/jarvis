@@ -59,6 +59,7 @@ export interface TaskListFilters {
 export type TaskTransitionResult =
   | { kind: 'ok'; task: TaskRecord }
   | { kind: 'not-found' }
+  | { kind: 'renewal-active' }
   | { kind: 'invalid-transition' };
 
 export interface TaskStore {

@@ -142,6 +142,13 @@ export class FoundryClient {
     return this.accepted(body, "start", undefined, request.agent);
   }
 
+  async startCodexRenewal(options: RequestOptions = {}): Promise<InvocationAccepted> {
+    const body = await this.runtimeRequest("renew-codex", "protocols/invocations", "POST", {
+      agent: "codex", mode: "renew-codex", min_days_left: 3,
+    }, undefined, options);
+    return this.accepted(body, "renew-codex", undefined, "codex");
+  }
+
   async steer(sessionId: string, codingAgent: CodingAgent, message: string, options: RequestOptions = {}): Promise<InvocationAccepted> {
     const body = await this.runtimeRequest("steer", "protocols/invocations", "POST", {
       agent: agent(codingAgent), mode: "steer", message: text(message, "message"),

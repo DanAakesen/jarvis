@@ -10,6 +10,9 @@ export interface BackendConfig {
   logLevel: Level;
   applicationInsightsConnectionString?: string;
   voiceLiveEndpoint?: string;
+  foundryRuntimeEndpoint?: string;
+  foundryAdminEndpoint?: string;
+  foundryRunnerAgentName?: string;
   auth: AuthConfig;
 }
 
@@ -64,6 +67,37 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     }
   }
 
+  const foundryRuntimeEndpoint = env.FOUNDRY_RUNTIME_ENDPOINT;
+  const foundryAdminEndpoint = env.FOUNDRY_ADMIN_ENDPOINT;
+  const foundryRunnerAgentName = env.FOUNDRY_RUNNER_AGENT_NAME;
+  const foundryConfigured = [foundryRuntimeEndpoint, foundryAdminEndpoint, foundryRunnerAgentName]
+    .some((value) => value !== undefined);
+  if (foundryConfigured && (!foundryRuntimeEndpoint || !foundryAdminEndpoint || !foundryRunnerAgentName)) {
+    throw new ConfigurationError('FOUNDRY_RUNTIME_ENDPOINT, FOUNDRY_ADMIN_ENDPOINT and FOUNDRY_RUNNER_AGENT_NAME must be configured together');
+  }
+  if (env.NODE_ENV === 'production' && !foundryConfigured) {
+    throw new ConfigurationError('Foundry runner configuration is required in production');
+  }
+  if (foundryConfigured) {
+    const validEndpoint = (value: string, hostSuffix: string) => {
+      try {
+        const url = new URL(value);
+        return url.protocol === 'https:' && url.hostname.endsWith(hostSuffix) && !url.port &&
+          !url.username && !url.password && !url.search && !url.hash &&
+          /^\/api\/projects\/[^/]+\/?$/u.test(url.pathname);
+      } catch { return false; }
+    };
+    if (!validEndpoint(foundryRuntimeEndpoint as string, '.cognitiveservices.azure.com')) {
+      throw new ConfigurationError('FOUNDRY_RUNTIME_ENDPOINT must be an HTTPS Foundry project endpoint');
+    }
+    if (!validEndpoint(foundryAdminEndpoint as string, '.services.ai.azure.com')) {
+      throw new ConfigurationError('FOUNDRY_ADMIN_ENDPOINT must be an HTTPS Foundry project endpoint');
+    }
+    if (!/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName as string)) {
+      throw new ConfigurationError('FOUNDRY_RUNNER_AGENT_NAME must be a valid agent name');
+    }
+  }
+
   return {
     auth: loadAuthConfig(env),
     port: Number(port),
@@ -71,5 +105,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),
     ...(connectionString === undefined ? {} : { applicationInsightsConnectionString: connectionString }),
     ...(voiceLiveEndpoint === undefined ? {} : { voiceLiveEndpoint }),
+    ...(foundryConfigured ? {
+      foundryRuntimeEndpoint: foundryRuntimeEndpoint as string,
+      foundryAdminEndpoint: foundryAdminEndpoint as string,
+      foundryRunnerAgentName: foundryRunnerAgentName as string,
+    } : {}),
   };
 }
