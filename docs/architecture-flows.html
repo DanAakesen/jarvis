@@ -254,7 +254,7 @@ const FLOWS = [
       { id: "ctx", lane: "backend", col: 1, s: "context", from: [[3, "queue"]], t: "From 3: task leaves the queue" },
       { id: "start", lane: "backend", col: 2, s: "proven", t: "Start the task", d: "Invocations call with agent and task; creates a session.", ev: "Prototype: every task started this way (PRs #1–#11)." },
       { id: "session", lane: "foundry", col: 3, s: "proven", t: "Create the session sandbox", d: "VM-isolated, 1 vCPU / 2 GiB, persistent /files.", ev: "Prototype: dozens of sessions. VM isolation per Microsoft Learn.", href: DOC.sessions },
-      { id: "creds", lane: "runner", col: 4, s: "proven", t: "Read credentials", d: "Agent identity reads Key Vault at task start.", ev: "Prototype: Key Vault check passed on every deploy; tasks used the tokens." },
+      { id: "creds", lane: "runner", col: 4, s: "proven", t: "Read credentials", d: "Agent identity reads Key Vault at task start.", ev: "Prototype: Key Vault check passed on every deploy; tasks used the tokens. Issue #28 ports this handler and tests its Boolean-only response locally; production identity probes remain pending issue #11." },
       { id: "secrets", lane: "vault", col: 4, s: "proven", t: "Copilot token · Codex login · GitHub token", d: "Read-only, except the Codex login.", ev: "Prototype: role scoped to the codex-login secret for write-back." },
       { id: "prep", lane: "runner", col: 5, s: "proven", t: "Prepare the session", d: "Writable home, Codex login, Git credential helper." },
       { id: "mint", lane: "backend", col: 6, s: "docs", t: "Mint a GitHub App token", d: "1-hour token for one repository.", ev: "GitHub Docs: installation access tokens. The prototype used a fine-grained token instead.", href: DOC.ghApp },
@@ -271,7 +271,7 @@ const FLOWS = [
     summary: "The coding agent runs inside the sandbox and delivers a branch and a pull request.",
     nodes: [
       { id: "ctx", lane: "runner", col: 1, s: "context", from: [[4, "prep"]], t: "From 4: session ready" },
-      { id: "acp", lane: "runner", col: 2, s: "proven", t: "Start the agent over ACP", d: "copilot --acp, or codex-acp.", ev: "Prototype: both agents. Copilot's ACP mode is a public preview.", href: DOC.acp },
+      { id: "acp", lane: "runner", col: 2, s: "proven", t: "Start the agent over ACP", d: "copilot --acp, or codex-acp.", ev: "Prototype: both agents. Copilot's ACP mode is a public preview. Issue #28 ports the adapter with local ACP subprocess tests and pinned CLIs; live production deployment remains pending issue #11.", href: DOC.acp },
       { id: "par", lane: "runner", col: 4, s: "proven", t: "Parallel tasks", d: "One sandbox each; two Codex tasks shared one login.", ev: "Prototype: parallel Codex check." },
       { id: "new", lane: "agent", col: 3, s: "proven", t: "New conversation and prompt", d: "ACP session/new and session/prompt." },
       { id: "work", lane: "agent", col: 4, s: "proven", t: "Clone, edit, run tests", d: "742-file TypeScript repository; 2.1 GB disk." },

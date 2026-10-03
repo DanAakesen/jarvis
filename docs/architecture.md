@@ -167,6 +167,30 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | Endpoints | Administration (connections, versions): `*.services.ai.azure.com`. Sessions and Invocations: `*.cognitiveservices.azure.com` (L10). |
 | Settings | Model and reasoning per task: `codex-acp` (`model`, `model_reasoning_effort`) and Copilot `--model`; **verify** in P2. |
 
+### Production runner implementation
+
+Issue #28 ports the adapter to `runner/` with task, steer, pause, resume, cancel,
+credential probe, and Codex renewal handlers. Prototype crash-test mode is removed.
+Local Python tests exercise ACP subprocess fixtures; production Azure acceptance
+remains pending #11 and the main-branch runner workflow.
+
+- Node/Python use the small base image; a separate .NET image adds SDK 8.0.419.
+  Both expose 1 vCPU / 2 GiB and 2 vCPU / 4 GiB variants. The default stays 1×2;
+  .NET normally uses 2×4. Full builds stay in GitHub Actions (L23).
+- Python 3.12.14 and Node 22.23.3 are pinned. CLI pins: Copilot 1.0.91, Codex
+  0.157.0, Codex ACP 2.1.1, GitHub CLI 2.98.0. Python hashes and npm integrity
+  locks are committed. Container build and packaged runtime checks run in Runner CI.
+- Runner deploy builds in ACR and deploys manifest digests through OIDC on `main`.
+  It uses the successful infrastructure deployment's admin/runtime endpoints and
+  records each variant only after both Key Vault provider probes pass. Probe
+  sessions are explicitly deleted, including failed probes (L14).
+- Each dedicated agent identity reads only the three credential secret scopes;
+  write access covers only `codex-login`. The port retains `github-token` from the
+  prototype until #40 adds task-scoped GitHub App installation tokens; CLI seat
+  authentication is separate. No workflow seeds credentials.
+- Live event push (#29), coordinated renewal scheduling (#34), and frequent Git
+  pushes (#35) remain later work. See [runner instructions](../runner/README.md).
+
 ### Sandbox credentials
 
 The agent can read everything in its sandbox, including environment variables, so each token is limited to what the task needs.

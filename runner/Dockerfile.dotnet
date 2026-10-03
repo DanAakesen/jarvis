@@ -1,0 +1,14 @@
+ARG RUNNER_BASE_IMAGE=jarvis-runner:local
+FROM mcr.microsoft.com/dotnet/sdk:8.0.419-bookworm-slim AS sdk
+FROM ${RUNNER_BASE_IMAGE}
+USER root
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1 \
+    DOTNET_ROOT=/usr/share/dotnet
+COPY --from=sdk /usr/share/dotnet /usr/share/dotnet
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y libicu72 libssl3 libgssapi-krb5-2 zlib1g \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
+    && dotnet --version
+USER runner
