@@ -1,0 +1,30 @@
+name: Foundry contract CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  foundry:
+    name: Foundry offline contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Pin npm
+        run: npm install --global npm@10.9.9
+      - run: npm ci
+      - name: Lint Foundry client
+        run: npx --no-install eslint --config apps/backend/src/foundry/lint.config.mjs apps/backend/src/foundry --max-warnings 0
+      - name: Build backend client
+        run: npm run build --workspace @jarvis/backend
+      - name: Offline Foundry contracts
+        run: npx --no-install vitest run --config apps/backend/src/foundry/vitest.config.mts
