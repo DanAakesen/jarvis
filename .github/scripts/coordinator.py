@@ -23,6 +23,7 @@ from coordinator_policy import (
     parse_plan,
     ready_issue,
 )
+from coordinator_project import ProjectBoard
 
 MODEL = "claude-opus-5.5"
 HOLD_LABEL = "automation:hold"
@@ -54,8 +55,9 @@ def copilot_activity(timeline, author):
 
 
 class Coordinator:
-    def __init__(self, api, dry_run=False, max_copilot=3, summary=None):
+    def __init__(self, api, dry_run=False, max_copilot=3, summary=None, board=None):
         self.api = api
+        self.board = board if board is not None else ProjectBoard(api)
         self.prefix = f"/repos/{api.repo}"
         self.dry_run = dry_run
         self.max_copilot = max_copilot
@@ -296,21 +298,50 @@ class Coordinator:
     def assign_ready(self, issues, pulls, plan, sha, green):
         mapping = self.issues_by_task(issues)
         bodies = [pr.get("body") or "" for pr in pulls]
-        candidates = [issue for issue in issues if ready_issue(issue, plan, mapping, bodies)[0]]
-        self.report("Ready issue candidates from PLAN: " + (", ".join(f"#{issue['number']}" for issue in candidates) or "none") + ".")
+        try:
+            ready_items = self.board.ready_items()
+            # Recover a prior successful assignment whose board write failed.
+            # Existing ownership prevents another paid agent job from starting.
+            for issue in issues:
+                number = issue["number"]
+                if number not in ready_items:
+                    continue
+                current = self.api.request("GET", f"{self.prefix}/issues/{number}")
+                assignees = current.get("assignees") or []
+                copilot_owned = (assignees and all(actor.get("login", "").casefold() in
+                                 {"copilot", "copilot-swe-agent", "copilot-swe-agent[bot]"}
+                                 for actor in assignees))
+                if (current["state"] == "open" and copilot_owned
+                        and not label_names(current).intersection({"codex", "jarvis", "dan"})):
+                    if self.dry_run:
+                        self.report(f"Issue #{number}: would move its existing Copilot assignment to In progress.")
+                    elif self.board.move_in_progress(ready_items[number], number):
+                        self.report(f"Issue #{number}: existing Copilot assignment moved to In progress.")
+                    else:
+                        self.report(f"Issue #{number}: project status changed; left untouched.")
+            candidates = [issue for issue in issues if issue["number"] in ready_items
+                          and ready_issue(issue, plan, mapping, bodies)[0]]
+        except APIError as error:
+            self.report(f"Assignments paused: project Ready queue unavailable ({error}). PR processing continues.")
+            return
+        self.report("Ready project issues eligible under PLAN: " + (", ".join(f"#{issue['number']}" for issue in candidates) or "none") + ".")
         if not green:
             self.report("New assignments paused until main checks pass.")
             return
         if not self.api.copilot_token:
             self.report("Assignments paused: add the repository secret COPILOT_ASSIGNMENT_TOKEN.")
             return
-        active = sum("copilot" in label_names(issue) and issue["state"] == "open" for issue in issues)
+        active = sum(issue["state"] == "open" and
+                     ("copilot" in label_names(issue) or any(actor.get("login", "").casefold() in
+                      {"copilot", "copilot-swe-agent", "copilot-swe-agent[bot]"}
+                      for actor in issue.get("assignees", []))) for issue in issues)
         remaining = max(0, self.max_copilot - active)
         for issue in sorted(candidates, key=lambda issue: issue["number"]):
             if remaining <= 0:
                 break
             number = issue["number"]
             claimed = False
+            assigned = False
             try:
                 blockers = self.api.pages(f"{self.prefix}/issues/{number}/dependencies/blocked_by")
                 if any(blocker["state"].casefold() != "closed" for blocker in blockers):
@@ -333,12 +364,18 @@ class Coordinator:
                 if not ready_issue(fresh, plan, fresh_mapping, [pr.get("body") or "" for pr in fresh_pulls])[0]:
                     self.report(f"Issue #{number}: another worker took it; skipped.")
                     continue
+                if not self.board.is_ready(ready_items[number], number):
+                    self.report(f"Issue #{number}: no longer in project Ready; skipped.")
+                    continue
                 if self.dry_run:
-                    self.report(f"Issue #{number}: would assign Copilot on {MODEL}.")
+                    self.report(f"Issue #{number}: would assign Copilot on {MODEL} and move to In progress.")
                 else:
                     if not self.main_green(sha, plan) or self.main_sha() != sha:
                         self.report("Main changed before assignment; deferred.")
                         return
+                    if not self.board.is_ready(ready_items[number], number):
+                        self.report(f"Issue #{number}: left Ready before claim; skipped.")
+                        continue
                     self.api.request("POST", f"{self.prefix}/issues/{number}/labels", {"labels": ["Copilot"]})
                     claimed = True
                     instructions = ("Follow AGENTS.md and docs/agent-context.md on current main. "
@@ -347,18 +384,24 @@ class Coordinator:
                                     "while working. Commit and push meaningful progress without force. "
                                     "Run required checks against current main, update affected docs, and request "
                                     "review when finished. Do not merge; the coordinator handles eligible PRs.")
-                    self.api.assign_copilot(number, "main", instructions, MODEL)
+                    self.api.assign_copilot(number, "main", instructions, MODEL,
+                                            ready_check=lambda number=number: self.board.is_ready(ready_items[number], number))
+                    assigned = True
                     self.report(f"Issue #{number}: assigned Copilot on {MODEL}.")
+                    if self.board.move_in_progress(ready_items[number], number):
+                        self.report(f"Issue #{number}: moved to project In progress.")
+                    else:
+                        self.report(f"Issue #{number}: project status changed; left untouched.")
                 remaining -= 1
             except APIError as error:
                 # A server rejection is recoverable if fresh issue state proves
                 # no worker took it. Lost/ambiguous responses keep ownership:
                 # the job may already have started and must not be duplicated.
-                ambiguous = error.category in {"network request failed", "invalid JSON response",
-                                               "response size limit exceeded"}
+                ambiguous = error.write_outcome_unknown or error.category in {
+                    "network request failed", "invalid JSON response", "response size limit exceeded"}
                 ambiguous = ambiguous or error.status == 408 or (error.status is not None and error.status >= 500)
                 released = False
-                if claimed and not ambiguous:
+                if claimed and not assigned and not ambiguous:
                     try:
                         current = self.api.request("GET", f"{self.prefix}/issues/{number}")
                         labels = label_names(current)
@@ -406,7 +449,8 @@ def main():
     limit = os.environ.get("COORDINATOR_MAX_COPILOT", "3") or "3"
     if not re.fullmatch(r"[1-9][0-9]?", limit):
         raise APIError("COORDINATOR_MAX_COPILOT must be 1 to 99")
-    api = GitHub(repo, os.environ.get("GITHUB_TOKEN", ""), os.environ.get("COPILOT_ASSIGNMENT_TOKEN", ""))
+    api = GitHub(repo, os.environ.get("GITHUB_TOKEN", ""), os.environ.get("COPILOT_ASSIGNMENT_TOKEN", ""),
+                 os.environ.get("PROJECTS_TOKEN", ""))
     Coordinator(api, args.dry_run, int(limit), os.environ.get("GITHUB_STEP_SUMMARY")).run()
 
 

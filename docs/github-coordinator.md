@@ -13,6 +13,24 @@ acceptance criteria are verified. It does not close either issue early.
 
 ## Credentials and controls
 
+The queue is Dan's [Jarvis project 2](https://github.com/users/DanAakesen/projects/2/views/1).
+Its single-select **Status** field must have unique **Ready** and **In progress**
+options (capitalization may vary). Only open issues from `DanAakesen/jarvis` in
+Ready are candidates; archived cards, draft items, PR cards and other repositories
+are ignored. Move a card out of Ready to prevent a new assignment.
+
+Repository Actions secret `PROJECTS_TOKEN` holds a separate **classic** personal
+access token with the **`project`** and **`repo`** scopes, so private issue content
+is visible. Create it under GitHub **Settings → Developer settings → Personal
+access tokens → Tokens (classic) → Generate new token**, then save its value in the repository's **Settings → Secrets and variables
+→ Actions → New repository secret**. Keep it separate from the Copilot token.
+GitHub [does not support personal-account Projects with fine-grained PATs](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#fine-grained-personal-access-tokens-limitations).
+The workflow uses the project token only for project reads/status changes;
+repo and Copilot requests use their own credentials. Replace both secrets before
+expiry. Missing/denied project access pauses new assignments while PR processing
+continues. If GitHub returns redacted issue content, verify the token's access to
+those private issues; the coordinator never treats hidden content as a candidate.
+
 Repository Actions secret `COPILOT_ASSIGNMENT_TOKEN` holds a fine-grained
 personal access token for `DanAakesen/jarvis`. Repository permissions:
 **Actions, Contents, Issues, Pull requests and Workflows: read and write**;
@@ -35,8 +53,8 @@ select a replacement model. See [Copilot on GitHub](https://docs.github.com/en/c
   to enable mutations. Scheduled runs are active.
 - Repository variable `COORDINATOR_ENABLED=false` pauses the job. Disabling the
   workflow in Actions also stops it.
-- `COORDINATOR_MAX_COPILOT` defaults to `3` open Copilot-labelled issues; values
-  1–99 are supported. Existing work uses capacity before new assignments.
+- `COORDINATOR_MAX_COPILOT` defaults to `3` open Copilot-owned issues
+  (worker label or assignee); values 1–99 are supported. Existing work uses capacity before new assignments.
 - Add PR label `automation:hold` to prevent that PR's merge, branch update or
   conflict repair. Agents keep their PR draft while actively working.
 
@@ -79,21 +97,33 @@ new task assignments.
 
 ## Issue loop
 
-`PLAN.md` on current main is the authority. The coordinator requires all of:
+The project's Ready column selects the queue; `PLAN.md` on current main and
+GitHub dependencies remain eligibility checks. The coordinator requires all of:
 
-- An open issue whose exact task ID matches a Not started PLAN row.
+- A non-archived project item in **Ready**, referencing an open Jarvis issue
+  whose exact task ID matches a Not started PLAN row.
 - Every PLAN prerequisite Complete and its corresponding GitHub issue closed.
 - No open GitHub "Blocked by" prerequisite.
 - No `Codex`, `Jarvis`, `Dan` or `Copilot` worker label, checked without regard
   to case; no existing assignee; no open PR with a closing reference to the issue.
 - Green main and available Copilot capacity.
 
-It rechecks ownership and dependencies, adds its Copilot worker claim and assigns
-the existing issue through GitHub's supported API. It never removes other workers'
+It rechecks Ready status, ownership and dependencies, adds its Copilot worker
+claim and assigns the existing issue through GitHub's supported API. Only after
+GitHub confirms the Copilot assignment does it move that item to **In progress**.
+The final Ready check runs immediately before the assignment mutation;
+removed cards and changed statuses observed by those reads are left untouched.
+GitHub offers no atomic transaction spanning assignment and project status, so
+an external move racing the final API request cannot be completely excluded.
+If assignment succeeds but the project write fails, the next run reconciles the existing Copilot-owned
+Ready card without starting another job. Human or mixed assignees are untouched.
+It never removes other workers'
 labels, replaces their assignees, removes dependency links or creates a duplicate
-task PR. Explicit assignment rejections release the coordinator's unused claim
+task PR. Definitive preflight or HTTP assignment rejections release the
+coordinator's unused claim
 only after fresh issue/PR reads show no assignee, other worker or linked PR.
-Ambiguous assignment failures retain the claim for inspection because a request
+Partial GraphQL mutation failures, unconfirmed mutations and other ambiguous
+assignment failures retain the claim for inspection because a request
 may already have started work; inspect the issue before releasing it. Either
 failure pauses further assignments in that run while future runs continue.
 Missing issue mappings, incomplete PLAN dependencies and access denials remain

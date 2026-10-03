@@ -25,9 +25,10 @@ TIMEOUT_SECONDS = 30
 class APIError(RuntimeError):
     """A sanitized failure; callers may branch on status and category."""
 
-    def __init__(self, category: str, status: int | None = None):
+    def __init__(self, category: str, status: int | None = None, write_outcome_unknown: bool = False):
         self.category = category
         self.status = status
+        self.write_outcome_unknown = write_outcome_unknown
         suffix = f" (HTTP {status})" if status is not None else ""
         super().__init__(f"GitHub API: {category}{suffix}")
 
@@ -39,7 +40,7 @@ class _NoRedirect(HTTPRedirectHandler):
 
 
 class GitHub:
-    def __init__(self, repo: str, token: str, copilot_token: str = ""):
+    def __init__(self, repo: str, token: str, copilot_token: str = "", projects_token: str = ""):
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
             raise APIError("invalid repository")
         if any(not isinstance(value, str) or any(ord(c) < 33 for c in value)
@@ -48,6 +49,7 @@ class GitHub:
         self.repo = repo
         self.token = token
         self.copilot_token = copilot_token
+        self.projects_token = projects_token
         self._opener = build_opener(_NoRedirect())
 
     @staticmethod
@@ -153,8 +155,17 @@ class GitHub:
             raise APIError("GraphQL request rejected")
         return response["data"]
 
+    def project_graphql(self, query: str, variables: dict):
+        # Personal Projects are unsupported by fine-grained PATs. Keep the
+        # classic project-scope credential separate from repo/Copilot writes.
+        if not self.projects_token:
+            raise APIError("PROJECTS_TOKEN not configured")
+        project_api = GitHub(self.repo, self.projects_token)
+        project_api._opener = self._opener
+        return project_api.graphql(query, variables)
+
     def assign_copilot(self, issue_number: int, base_ref: str, instructions: str,
-                       model: str = "claude-opus-5.5"):
+                       model: str = "claude-opus-5.5", ready_check=None):
         """Assign one pre-checked issue, preserving any concurrent assignees."""
         if model != "claude-opus-5.5":
             raise APIError("unsupported coordinator Copilot model")
@@ -200,18 +211,27 @@ class GitHub:
                 raise APIError("issue labels unavailable")
             if label["name"].casefold() in {"codex", "dan", "jarvis"}:
                 raise APIError("issue claimed by another worker")
-        result = self.graphql("""
-            mutation($input:AddAssigneesToAssignableInput!) {
-              addAssigneesToAssignable(input:$input) {
-                assignable { ... on Issue { id assignees(first:100) { nodes { id login } } } }
-              }
-            }
-            """, {"input": {
-                "assignableId": issue["id"], "assigneeIds": [bot["id"]],
-                "agentAssignment": {"targetRepositoryId": repository["id"],
-                                    "baseRef": base_ref, "customInstructions": instructions,
-                                    "model": model},
-            }}, user_token=True)
+        if ready_check is not None and not ready_check():
+            raise APIError("project Ready eligibility changed")
+        try:
+            result = self.graphql("""
+                mutation($input:AddAssigneesToAssignableInput!) {
+                  addAssigneesToAssignable(input:$input) {
+                    assignable { ... on Issue { id assignees(first:100) { nodes { id login } } } }
+                  }
+                }
+                """, {"input": {
+                    "assignableId": issue["id"], "assigneeIds": [bot["id"]],
+                    "agentAssignment": {"targetRepositoryId": repository["id"],
+                                        "baseRef": base_ref, "customInstructions": instructions,
+                                        "model": model},
+                }}, user_token=True)
+        except APIError as error:
+            # GraphQL may report partial mutation failure. Without a definitive
+            # HTTP rejection, don't release ownership and risk another job.
+            error.write_outcome_unknown = (error.status is None or error.status == 408
+                                           or error.status >= 500)
+            raise
         assignment = result.get("addAssigneesToAssignable")
         assignable = assignment.get("assignable") if isinstance(assignment, dict) else None
         assignees = assignable.get("assignees") if isinstance(assignable, dict) else None
@@ -219,11 +239,11 @@ class GitHub:
         # GitHub's assignment preview returns the same Bot as "Copilot" here,
         # although suggestedActors uses "copilot-swe-agent". Confirm identity
         # with the selected immutable actor id, rather than its display login.
-        if not isinstance(nodes, list) or not any(
+        if not isinstance(assignable, dict) or assignable.get("id") != issue["id"] or not isinstance(nodes, list) or not any(
             isinstance(node, dict) and node.get("id") == bot["id"]
             for node in nodes
         ):
-            raise APIError("Copilot assignment not confirmed")
+            raise APIError("Copilot assignment not confirmed", write_outcome_unknown=True)
         return result
 
     def repair_comment(self, pr_number: int, body: str):

@@ -91,7 +91,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, also after follow-up rounds and while the PR has merge conflicts (L
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
-- The periodic portion of #12 is `.github/workflows/coordinator.yml`; Dan explicitly authorized it before #11. See [GitHub coordinator](github-coordinator.md) for the secret, controls, eligibility, existing-PR repairs and remaining live acceptance. Its current state must be verified in Actions; it does not claim #12 or deployment complete. Until it is active, Dan merges green PRs.
+- The periodic portion of #12 is `.github/workflows/coordinator.yml`; Dan explicitly authorized it before #11. Its assignment queue is [project 2](https://github.com/users/DanAakesen/projects/2/views/1)'s Ready status; confirmed Copilot assignments move to In progress. See [GitHub coordinator](github-coordinator.md) for the separate Copilot and Projects secrets, controls, eligibility, existing-PR repairs and remaining live acceptance. Its current state must be verified in Actions; it does not claim #12 or deployment complete. Until it is active, Dan merges green PRs.
 ## Azure
 
 | Item | Value |

@@ -37,6 +37,18 @@ class GitHubTests(unittest.TestCase):
         self.assertEqual(user.kwargs["timeout"], TIMEOUT_SECONDS)
         self.assertEqual(json.loads(user.args[0].data), {"body": "@copilot resolve conflicts"})
 
+    def test_projects_requests_use_only_the_separate_project_credential(self):
+        api = GitHub("owner/repo", "workflow-secret", "user-secret", "project-secret")
+        self.opener.open.return_value = response({"data": {"node": {"id": "project"}}})
+        self.assertEqual(api.project_graphql("query { node { id } }", {}), {"node": {"id": "project"}})
+        self.assertEqual(self.opener.open.call_args.args[0].get_header("Authorization"), "Bearer project-secret")
+        self.assertEqual(api.copilot_token, "user-secret")
+
+    def test_missing_project_token_never_uses_the_repo_or_copilot_token(self):
+        with self.assertRaisesRegex(APIError, "PROJECTS_TOKEN not configured"):
+            self.api.project_graphql("query { node { id } }", {})
+        self.opener.open.assert_not_called()
+
     def test_missing_user_token_never_falls_back_to_workflow_token(self):
         api = GitHub("owner/repo", "workflow-secret")
         with self.assertRaisesRegex(APIError, "Copilot user token not configured"):
@@ -159,6 +171,41 @@ class GitHubTests(unittest.TestCase):
             GitHub("owner/repo", "workflow-secret\ninvalid")
         self.assertNotIn("workflow-secret", str(caught.exception))
         self.opener.open.assert_not_called()
+
+    def test_invalid_project_credential_does_not_break_ordinary_pr_api(self):
+        api = GitHub("owner/repo", "workflow-secret", "user-secret", "project-secret\ninvalid")
+        self.opener.open.return_value = response({"ok": True})
+        self.assertEqual(api.request("GET", "/repos/owner/repo/pulls"), {"ok": True})
+        with self.assertRaisesRegex(APIError, "invalid credential configuration"):
+            api.project_graphql("query { node { id } }", {})
+        self.opener.open.assert_called_once()
+
+    def test_final_ready_callback_runs_after_actor_query_and_prevents_mutation(self):
+        self.opener.open.return_value = response({"data": {"repository": {
+            "id": "REPO", "issue": {"id": "ISSUE", "state": "OPEN",
+            "assignees": {"totalCount": 0, "nodes": []},
+            "labels": {"totalCount": 0, "nodes": []}},
+            "suggestedActors": {"nodes": [{"id": "BOT", "login": "copilot-swe-agent"}]}}}})
+        def no_longer_ready():
+            self.opener.open.assert_called_once()
+            return False
+        with self.assertRaisesRegex(APIError, "project Ready eligibility changed") as caught:
+            self.api.assign_copilot(12, "main", "instructions", ready_check=no_longer_ready)
+        self.assertFalse(caught.exception.write_outcome_unknown)
+        self.opener.open.assert_called_once()
+
+    def test_partial_graphql_mutation_failure_has_unknown_write_outcome(self):
+        self.opener.open.side_effect = [
+            response({"data": {"repository": {"id": "REPO", "issue": {
+                "id": "ISSUE", "state": "OPEN", "assignees": {"totalCount": 0, "nodes": []},
+                "labels": {"totalCount": 0, "nodes": []}}, "suggestedActors": {
+                "nodes": [{"id": "BOT", "login": "copilot-swe-agent"}]}}}}),
+            response({"errors": [{"message": "partial mutation failed"}], "data": {}}),
+        ]
+        with self.assertRaises(APIError) as caught:
+            self.api.assign_copilot(12, "main", "instructions")
+        self.assertTrue(caught.exception.write_outcome_unknown)
+        self.assertEqual(self.opener.open.call_count, 2)
 
     def test_copilot_assignment_uses_user_token_and_exact_model_structured_variables(self):
         self.opener.open.side_effect = [

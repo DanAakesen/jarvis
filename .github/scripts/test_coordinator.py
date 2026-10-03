@@ -5,6 +5,7 @@ import copy
 import io
 import unittest
 from contextlib import redirect_stdout
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 from coordinator import MARKER, Coordinator
@@ -160,16 +161,55 @@ class FakeGitHub:
         self.writes.append(("REPAIR", number, body, True))
         self.comments.setdefault(number, []).append({"body": body, "created_at": "2026-10-03T20:00:00Z"})
 
-    def assign_copilot(self, number, ref, instructions, model):
+    def assign_copilot(self, number, ref, instructions, model, ready_check=None):
+        if ready_check is not None and not ready_check():
+            raise APIError("project Ready eligibility changed")
         self.writes.append(("ASSIGN", number, {"ref": ref, "instructions": instructions, "model": model}, True))
         if self.assign_before_error:
             current = next(value for value in self.issues if value["number"] == number)
             current["assignees"] = [{"login": "copilot-swe-agent[bot]"}]
         if self.assignment_error:
             raise self.assignment_error
+        current = next(value for value in self.issues if value["number"] == number)
+        current["assignees"] = [{"login": "Copilot"}]
+
+
+class FakeBoard:
+    def __init__(self, api):
+        self.api = api
+        self.ready = {3: "item-3", 4: "item-4"}
+        self.changed = set()
+        self.error = None
+        self.move_error = None
+
+    def ready_items(self):
+        if self.error:
+            raise self.error
+        return dict(self.ready)
+
+    def is_ready(self, item_id, number):
+        return number not in self.changed and self.ready.get(number) == item_id
+
+    def move_in_progress(self, item_id, number):
+        if self.move_error:
+            raise self.move_error
+        if not self.is_ready(item_id, number):
+            return False
+        self.api.writes.append(("MOVE", number, item_id, True))
+        del self.ready[number]
+        return True
 
 
 class CoordinatorTests(unittest.TestCase):
+    def setUp(self):
+        def make_board(api):
+            if not hasattr(api, "board"):
+                api.board = FakeBoard(api)
+            return api.board
+        self.board_patch = patch("coordinator.ProjectBoard", side_effect=make_board)
+        self.board_patch.start()
+        self.addCleanup(self.board_patch.stop)
+
     def execute(self, api, dry_run=False):
         coordinator = Coordinator(api, dry_run=dry_run)
         with redirect_stdout(io.StringIO()):
@@ -332,14 +372,14 @@ class CoordinatorTests(unittest.TestCase):
         api = FakeGitHub()
         api.issues = [issue(1, "closed"), issue(3)]
         self.execute(api)
-        self.assertEqual([write[0] for write in api.writes], ["POST", "ASSIGN"])
+        self.assertEqual([write[0] for write in api.writes], ["POST", "ASSIGN", "MOVE"])
         self.assertEqual(api.writes[0][2], {"labels": ["Copilot"]})
         self.assertEqual(api.writes[1][2]["model"], "claude-opus-5.5")
 
     def test_rejected_assignment_releases_only_its_unused_claim_and_pauses_more_jobs(self):
         api = FakeGitHub()
         api.issues[1]["labels"] = [{"name": "P0"}]
-        api.assignment_error = APIError("GraphQL request rejected")
+        api.assignment_error = APIError("request rejected", 422)
         coordinator = self.execute(api)
         self.assertEqual([write[0] for write in api.writes], ["POST", "ASSIGN", "DELETE"])
         self.assertTrue(api.writes[2][1].endswith("/issues/3/labels/Copilot"))
@@ -367,6 +407,84 @@ class CoordinatorTests(unittest.TestCase):
         self.assertIn({"name": "Copilot"}, api.issues[1]["labels"])
         self.assertTrue(any("retained any claim" in line for line in coordinator.lines))
 
+    def test_plan_ready_issue_outside_project_ready_does_not_start(self):
+        api = FakeGitHub()
+        api.board = FakeBoard(api)
+        api.board.ready = {}
+        self.execute(api)
+        self.assertEqual(api.writes, [])
+
+    def test_ready_item_moved_by_user_before_claim_does_not_start(self):
+        api = FakeGitHub()
+        api.board = FakeBoard(api)
+        api.board.changed = {3, 4}
+        self.execute(api)
+        self.assertEqual(api.writes, [])
+
+    def test_project_access_failure_leaves_paid_work_unmodified(self):
+        api = FakeGitHub()
+        api.board = FakeBoard(api)
+        api.board.error = APIError("access denied", 403)
+        result = self.execute(api)
+        self.assertEqual(api.writes, [])
+        self.assertTrue(any("project Ready queue unavailable" in line for line in result.lines))
+
+    def test_project_access_failure_does_not_block_ready_pr_merge(self):
+        api = FakeGitHub()
+        api.board = FakeBoard(api)
+        api.board.error = APIError("access denied", 403)
+        api.add_pull(pull())
+        self.execute(api)
+        self.assertEqual([write[0] for write in api.writes], ["PUT"])
+
+    def test_failed_board_write_recovers_without_duplicate_agent_assignment(self):
+        api = FakeGitHub()
+        api.issues = [issue(1, "closed"), issue(3)]
+        api.board = FakeBoard(api)
+        api.board.move_error = APIError("network request failed")
+        self.execute(api)
+        self.assertEqual([write[0] for write in api.writes], ["POST", "ASSIGN"])
+        self.assertEqual(api.issues[1]["assignees"], [{"login": "Copilot"}])
+        self.assertIn({"name": "Copilot"}, api.issues[1]["labels"])
+        api.writes.clear()
+        api.board.move_error = None
+        self.execute(api)
+        self.assertEqual([write[0] for write in api.writes], ["MOVE"])
+        self.assertEqual(api.board.ready.get(3), None)
+
+    def test_existing_human_or_mixed_assignment_never_changes_project_status(self):
+        for assignees in [[{"login": "DanAakesen"}], [{"login": "Copilot"}, {"login": "DanAakesen"}]]:
+            api = FakeGitHub()
+            api.issues = [issue(1, "closed"), issue(3, worker="Copilot")]
+            api.issues[1]["assignees"] = assignees
+            self.execute(api)
+            self.assertEqual(api.writes, [])
+
+    def test_dry_run_reports_assignment_and_status_transition_without_writes(self):
+        result = self.execute(FakeGitHub(), dry_run=True)
+        self.assertTrue(any("would assign Copilot" in line and "In progress" in line for line in result.lines))
+
+    def test_uncertain_mutation_retains_claim_even_before_assignee_becomes_visible(self):
+        api = FakeGitHub()
+        api.assignment_error = APIError("GraphQL request rejected", write_outcome_unknown=True)
+        self.execute(api)
+        self.assertEqual([write[0] for write in api.writes], ["POST", "ASSIGN"])
+        self.assertIn({"name": "Copilot"}, api.issues[1]["labels"])
+        self.assertEqual(api.issues[1]["assignees"], [])
+
+    def test_final_ready_gate_after_claim_releases_unused_claim_without_starting_job(self):
+        api = FakeGitHub()
+        api.board = FakeBoard(api)
+        original = api.board.is_ready
+        def moving_card(item, number):
+            if any(write[0] == "POST" and write[1].endswith("/labels") for write in api.writes):
+                return False
+            return original(item, number)
+        api.board.is_ready = moving_card
+        self.execute(api)
+        self.assertEqual([write[0] for write in api.writes], ["POST", "DELETE"])
+        self.assertNotIn({"name": "Copilot"}, api.issues[1]["labels"])
+
     def test_active_copilot_claims_respect_concurrency_limit(self):
         api = FakeGitHub()
         api.issues = [issue(1, "closed"), issue(3, worker="Copilot"), issue(4)]
@@ -374,6 +492,15 @@ class CoordinatorTests(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             coordinator.run()
         self.assertEqual(api.writes, [])
+
+    def test_manually_assigned_copilot_without_label_uses_capacity(self):
+        api = FakeGitHub()
+        api.issues = [issue(1, "closed"), issue(3), issue(4)]
+        api.issues[1]["assignees"] = [{"login": "Copilot"}]
+        coordinator = Coordinator(api, max_copilot=1)
+        with redirect_stdout(io.StringIO()):
+            coordinator.run()
+        self.assertEqual([write[0] for write in api.writes], ["MOVE"])
 
     def test_workflow_token_merge_explicitly_dispatches_main_ci_without_more_merges(self):
         api = FakeGitHub(user_token="")
