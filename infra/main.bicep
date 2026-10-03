@@ -15,10 +15,10 @@ param backendImage string
 @description('The subscription currency amount for the monthly resource group budget (300 DKK).')
 param monthlyBudgetAmount int = 300
 
-@description('The first day of the current month for the monthly budget period.')
-param budgetStartDate string = utcNow('yyyy-MM-01T00:00:00Z')
+@description('Start of the budget period. Fixed, because Azure rejects changing the start date of an existing budget.')
+param budgetStartDate string = '2026-10-01T00:00:00Z'
 
-@description('Email addresses to notify when the budget is reached.')
+@description('Email addresses to notify at 80 % and 100 % of the budget, in addition to resource group owners.')
 param budgetContactEmails array = []
 
 var suffix = uniqueString(resourceGroup().id)
@@ -143,7 +143,7 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: 'crjarvis${suffix}'
   location: resourceGroup().location
   sku: {
-    name: 'Standard'
+    name: 'Basic'
   }
   tags: {
     project: 'jarvis'
@@ -289,7 +289,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = {
     template: {
       scale: {
         minReplicas: 1
-        maxReplicas: 3
+        maxReplicas: 1
       }
       containers: [
         {
@@ -332,6 +332,16 @@ resource monthlyBudget 'Microsoft.Consumption/budgets@2019-10-01' = {
       startDate: budgetStartDate
     }
     notifications: {
+      Actual_GreaterThan_80_Percent: {
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 80
+        thresholdType: 'Actual'
+        contactEmails: budgetContactEmails
+        contactRoles: [
+          'Owner'
+        ]
+      }
       Actual_GreaterThan_100_Percent: {
         enabled: true
         operator: 'GreaterThan'
