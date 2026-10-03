@@ -51,7 +51,7 @@ Every coding agent on this repository follows these rules. This project requires
 
 ### Task board
 
-Dan follows the work on the [Project Jarvis board](https://github.com/users/DanAakesen/projects/2). Every open issue is on it, and [`project-board.yml`](../.github/workflows/project-board.yml) sets its Status column. Nobody moves cards by hand; the next sync would move them back.
+Dan follows the work on the [Project Jarvis board](https://github.com/users/DanAakesen/projects/2). Every open issue is on it. [`project_board.py`](../.github/scripts/project_board.py) sets its Status column; nobody moves cards by hand, because the next sync moves them back.
 
 | Column | Meaning (open issues) |
 | --- | --- |
@@ -61,10 +61,17 @@ Dan follows the work on the [Project Jarvis board](https://github.com/users/DanA
 | **In review** | Has an open PR with `Fixes #<issue>` that is ready for review: waiting for checks and merge. |
 | **Done** | Issue closed (the project's built-in "Item closed" workflow). |
 
-- The rules are in [`project_board.py`](../.github/scripts/project_board.py) and its tests. Ready on the board is the same as **ready** above.
-- The workflow reconciles every open issue on issue open/close/reopen/label/unlabel, PR open/close/reopen/ready/draft/edit, after each **Plan status** run, daily at 05:17 UTC, and on `workflow_dispatch`. It adds missing issues to the board and writes only cards whose column changed. It uses `pull_request_target`, so PRs with merge conflicts still sync (L38); it never checks out PR code.
-- `GITHUB_TOKEN` can't edit a project owned by a user account, so the workflow uses the `PROJECT_TOKEN` secret (see Dan's manual steps in `PLAN.md`). Without it the run only warns.
-- The project's other built-in workflows (item added, PR linked, PR merged) may set a column first; the sync runs about 20 seconds later and sets the final one.
+- The rules are in `project_board.py` and its tests. Ready on the board is the same as **ready** above.
+- **Who syncs:** an agent running on Dan's PC with his `gh` login, when Dan asks ("sync the board") and after coordinating merges or claims. It reconciles every open issue, adds missing ones, and writes only cards whose column changed:
+
+  ```powershell
+  $env:REPOSITORY="DanAakesen/jarvis"; $env:PROJECT_OWNER="DanAakesen"; $env:PROJECT_NUMBER="2"
+  $env:REPO_TOKEN = $env:PROJECT_TOKEN = (gh auth token)
+  python .github/scripts/project_board.py   # DRY_RUN=1 lists the moves without writing
+  ```
+
+- There is no board workflow: GitHub Actions tokens, GitHub Apps, and fine-grained tokens can't edit a project owned by a personal account, and a classic token stored as a secret would be readable by agent PR workflows. Cloud agents therefore don't touch the board.
+- Between syncs, the project's built-in workflows keep the basics: new issues are added, linked PRs move a card to In progress, closed issues go to Done.
 ### Start a task
 
 1. **Claim the issue before anything else: set your worker label.** Find the issue by task ID, then:
