@@ -21,10 +21,17 @@ param budgetStartDate string = '2026-10-01T00:00:00Z'
 @description('Email addresses to notify at 80 % and 100 % of the budget, in addition to resource group owners.')
 param budgetContactEmails array = []
 
+@description('14-digit UTC timestamp (yyyyMMddHHmmss); keep it unchanged for redeployments and choose a new value if the Foundry account is deleted.')
+@minLength(14)
+@maxLength(14)
+param foundryNameTimestamp string
+
 var suffix = uniqueString(resourceGroup().id)
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
+var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
+var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 
 resource backendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: last(split(backendIdentityResourceId, '/'))
@@ -161,6 +168,119 @@ resource acrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' 
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
     principalId: backendIdentity.properties.principalId
     principalType: 'ServicePrincipal'
+  }
+}
+
+resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
+  name: foundryAccountName
+  location: resourceGroup().location
+  identity: {
+    type: 'SystemAssigned'
+  }
+  sku: {
+    name: 'S0'
+  }
+  kind: 'AIServices'
+  tags: {
+    project: 'jarvis'
+  }
+  properties: {
+    customSubDomainName: foundryAccountName
+    publicNetworkAccess: 'Enabled'
+    allowProjectManagement: true
+    disableLocalAuth: true
+  }
+}
+
+resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' = {
+  parent: foundryAccount
+  name: 'jarvis-${foundryNameTimestamp}'
+  location: resourceGroup().location
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    displayName: 'Jarvis'
+    description: 'Jarvis production project'
+  }
+}
+
+resource gpt56LunaDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'gpt-5.6-luna'
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 1
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-5.6-luna'
+      version: '2026-07-09'
+    }
+  }
+}
+
+resource gptRealtime21Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'gpt-realtime-2.1'
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 1
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-realtime-2.1'
+      version: '2026-07-07'
+    }
+  }
+}
+
+resource foundryAcrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(registry.id, foundryProject.id, acrPullRoleId)
+  scope: registry
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
+    principalId: foundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource foundryAppInsightsAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(appInsights.id, foundryProject.id, monitoringMetricsPublisherRoleId)
+  scope: appInsights
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringMetricsPublisherRoleId)
+    principalId: foundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource foundryAcrConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = {
+  parent: foundryProject
+  name: 'container-registry'
+  properties: {
+    category: 'ContainerRegistry'
+    target: registry.properties.loginServer
+    authType: 'None'
+    metadata: {
+      ResourceId: registry.id
+    }
+  }
+}
+
+resource foundryAppInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = {
+  parent: foundryProject
+  name: 'application-insights'
+  properties: {
+    category: 'AppInsights'
+    target: appInsights.id
+    authType: any('ProjectManagedIdentity')
+    metadata: {
+      ResourceId: appInsights.id
+      ApplicationInsightsConnectionString: appInsights.properties.ConnectionString
+    }
   }
 }
 
@@ -361,6 +481,10 @@ output backendFqdn string = backendApp.properties.configuration.ingress.fqdn
 output applicationInsightsConnectionString string = appInsights.properties.ConnectionString
 output containerRegistryName string = registry.name
 output containerRegistryLoginServer string = registry.properties.loginServer
+output foundryAccountName string = foundryAccount.name
+output foundryProjectName string = foundryProject.name
+output foundryAdminEndpoint string = 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
+output foundryRuntimeEndpoint string = 'https://${foundryAccount.name}.cognitiveservices.azure.com/api/projects/${foundryProject.name}'
 output sqlServerName string = sqlServer.name
 output databaseName string = sqlDatabase.name
 output storageAccountName string = storage.name
