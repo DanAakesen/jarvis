@@ -44,3 +44,11 @@ without choosing the future product identity. Canonical styles live in
 pending; no fake task data or unavailable controls are shown. Unknown addresses
 have a return link. A skip link and visible keyboard focus support navigation.
 Dan's page designs remain to be selected.
+
+## Sign-in (P0-09)
+
+The home page keeps the neutral, single-column shell and presents one Microsoft
+sign-in action. Disable it with an explanation until the backend is configured;
+show pending and refusal feedback beside the action. After `/me` verifies the
+session, show the returned name as the page headline. Do not expose account
+tokens, email addresses, or unverified identity claims in the interface.

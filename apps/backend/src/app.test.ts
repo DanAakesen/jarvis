@@ -13,7 +13,7 @@ function fixture() {
   const records: string[] = [];
   const sink = { trackTrace: vi.fn(), flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}) };
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
-  const app = buildApp(config, createLogger(config, sink, output), { auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }) });
+  const app = buildApp(config, createLogger(config, sink, output), { auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan Aakesen' }) });
   apps.push(app);
   return { app, records, sink };
 }
