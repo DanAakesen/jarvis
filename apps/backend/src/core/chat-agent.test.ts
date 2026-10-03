@@ -50,16 +50,24 @@ describe('HTTP chat agent', () => {
     const agent = createHttpConversationAgent('https://agent.example/chat');
     const input = { messageId: '42', text: 'Hello', language: 'en' as const };
 
+    const unavailableChunks: string[] = [];
     await expect(async () => {
-      for await (const _chunk of agent.stream(input, 'authorization', new AbortController().signal)) {}
+      for await (const chunk of agent.stream(input, 'authorization', new AbortController().signal)) {
+        unavailableChunks.push(chunk);
+      }
     }).rejects.toThrow('Chat agent unavailable');
+    expect(unavailableChunks).toEqual([]);
 
     vi.stubGlobal('fetch', vi.fn(async () => streamedResponse([
       'event: delta\ndata: {"text":"Partial"}\n\n',
     ])));
+    const partialChunks: string[] = [];
     await expect(async () => {
-      for await (const _chunk of agent.stream(input, 'authorization', new AbortController().signal)) {}
+      for await (const chunk of agent.stream(input, 'authorization', new AbortController().signal)) {
+        partialChunks.push(chunk);
+      }
     }).rejects.toThrow('ended unexpectedly');
+    expect(partialChunks).toEqual(['Partial']);
   });
 
   it('does not expose errors sent by the hosted agent', async () => {
@@ -68,12 +76,16 @@ describe('HTTP chat agent', () => {
     ])));
     const agent = createHttpConversationAgent('https://agent.example/chat');
 
+    const chunks: string[] = [];
     await expect(async () => {
-      for await (const _chunk of agent.stream(
+      for await (const chunk of agent.stream(
         { messageId: '42', text: 'Hello', language: 'en' },
         'authorization',
         new AbortController().signal,
-      )) {}
+      )) {
+        chunks.push(chunk);
+      }
     }).rejects.toThrow('Chat agent failed');
+    expect(chunks).toEqual([]);
   });
 });
