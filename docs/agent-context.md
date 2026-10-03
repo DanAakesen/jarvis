@@ -30,7 +30,7 @@ Every coding agent on this repository follows these rules. This project requires
 
 - **Remote only.** Agents work in GitHub Copilot cloud agent or Codex cloud and deliver through a pull request. `main` on GitHub is the only source of truth; nothing may exist only on a local machine.
 - **Local work needs Dan's permission.** An agent running on Dan's PC (Copilot CLI, Codex CLI, or an editor agent) asks Dan before changing anything and stops without a clear yes. Known local-only steps: `infra/bootstrap.ps1` and the Codex login seed, because both need Dan's sign-in.
-- **No Azure access for agents.** Changes reach Azure only through the deploy workflows on `main`. Verify Azure behaviour from workflow runs, or ask Dan.
+- **No Azure access for agents.** Changes reach Azure only through the deploy workflows on `main`; GitHub Actions can sign in to Azure only for `main`. In a PR, check infrastructure without Azure (`az bicep build`, linter); the deploy after merge proves it against Azure. Verify Azure behaviour from those workflow runs, or ask Dan.
 
 ### Task status
 
@@ -44,7 +44,7 @@ Every coding agent on this repository follows these rules. This project requires
 ### Start a task
 
 1. Read the current `main`: the Status column and Current focus in `PLAN.md`, the relevant [decisions](decisions.md), and the files the `AGENTS.md` context map names for your area.
-2. Check that `main` is green: the latest CI and deploy runs on `main` passed. If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
+2. Check that `main` is green: the latest CI and deploy runs on `main` passed (before P0-10 and P0-11 add them, `main` counts as green). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
 3. Check your task: not Complete, not In progress through another PR, and every task in its "Depends on" column Complete. If any check fails, stop and report it on the issue.
 4. Look at the running tasks (In progress rows and open PRs). Stay out of files they change, or say in your PR why you overlap.
 5. Use one branch and one PR. The PR title starts with the task ID, and the PR body contains `Fixes #<issue>`.
