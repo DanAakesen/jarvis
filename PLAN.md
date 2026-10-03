@@ -5,8 +5,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 ## Current focus
 
 - **Active phase:** P0. P0-06 is complete: `infra/bootstrap.ps1` ran on 3 October 2026 (identities, sign-in apps, resource group, empty private repository `DanAakesen/jarvis` with its Actions variables).
-- **Next step:** P0-01, then P0-02, P0-03, and P0-10 so that P0-12 (automatic merges) and P0-13 (automatic statuses) exist early. Until then Dan starts tasks one at a time and merges green PRs.
-- **Blockers:** none. Items marked **Confirm** or **Verify** block only the tasks that depend on them.
+- **Next step:** Finish and merge P0-01 (monorepo layout and empty app builds), then P0-02, P0-03, and P0-10 so that P0-12 (automatic merges) and P0-13 (automatic statuses) exist early. Until then Dan starts tasks one at a time and merges green PRs.
+- **Blockers:** P0-01's cloud environment must allow `api.github.com` to read its issue and deliver the linked PR; Git access and workspace builds work. Items marked **Confirm** or **Verify** block only the tasks that depend on them.
 
 ## Implementation phases
 
@@ -37,7 +37,7 @@ flowchart LR
 
 ### Ground rules for every task
 
-- **Source of truth:** [PRODUCT.md](PRODUCT.md) for requirements, [docs/decisions.md](docs/decisions.md) for decisions and learnings (L1–L23), [docs/architecture.md](docs/architecture.md) for the system. They win over anything a task implies; a task that conflicts with them stops and asks.
+- **Source of truth:** [PRODUCT.md](PRODUCT.md) for requirements, [docs/decisions.md](docs/decisions.md) for decisions and learnings (L1–L24), [docs/architecture.md](docs/architecture.md) for the system. They win over anything a task implies; a task that conflicts with them stops and asks.
 - **Workflow:** every agent follows the [development workflow](docs/agent-context.md#development-workflow): remote only, one PR per task, statuses on `main`, never start from a broken `main`.
 - **Definition of done:** code, tests for changed behaviour, lint clean, every document in the [finish table](docs/agent-context.md#finish-a-task) updated, merged automatically through a PR whose checks pass against the latest `main`, deployed by GitHub Actions. No manual portal changes.
 - **Secrets:** none in code, images, environment variables, or logs. Managed identities and Key Vault only ([sandbox credentials](docs/architecture.md#sandbox-credentials)).
@@ -61,7 +61,7 @@ Goal: an empty Jarvis that Dan can sign in to, deployed entirely by GitHub Actio
 
 | ID | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- |
-| P0-01 | Turn the pushed scaffold into the monorepo: folder layout from the [stack overview](docs/architecture.md#stack-overview) (`apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`), `README.md`, `.gitignore`, editor config, licence. Project rules stay in [docs/agent-context.md](docs/agent-context.md); the generated `AGENTS.md` is not edited | Folder layout on `main`; empty apps build | P0-06 | Not started |
+| P0-01 | Turn the pushed scaffold into the monorepo: folder layout from the [stack overview](docs/architecture.md#stack-overview) (`apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`), `README.md`, `.gitignore`, editor config, licence. Project rules stay in [docs/agent-context.md](docs/agent-context.md); the generated `AGENTS.md` is not edited | Folder layout on `main`; empty apps build | P0-06 | In progress |
 | P0-02 | Web app skeleton: Vite + React + TypeScript, router, lint, Vitest. `npm run dev` in the repository root starts the web app on `http://localhost:5173` against the production backend; configuration comes from `infra/bootstrap.output.json` and the backend URL | `npm run build` and tests pass in CI; `npm run dev` then opening `http://localhost:5173` works with no other step | P0-01 | Not started |
 | P0-03 | Backend skeleton: Fastify + TypeScript, `/health`, structured logging to Application Insights, lint, Vitest, Dockerfile; CORS allows only `http://localhost:5173` and the Static Web App origin | Container builds; `/health` returns 200 | P0-01 | Not started |
 | P0-04 | Bicep: resource group, Log Analytics, Application Insights, Key Vault (RBAC), Storage (Blob), Container Registry, Azure SQL server + database `jarvis` (free offer; Entra admin = group `jarvis-sql-admins`), Container Apps environment + backend app (minimum 1 replica, existing identity `id-jarvis-backend`), Static Web App in West Europe, 300 DKK budget alert. Resource group `rg-jarvis` already exists | `az bicep build` and the Bicep linter pass in the PR (no Azure access needed); everything except the bootstrap items is in Bicep. The first real deployment is checked by P0-11 | P0-06 | Not started |

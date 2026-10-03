@@ -1,8 +1,8 @@
 # Architecture
 
-Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. Nothing is built yet; statuses below say what is decided, proven in a prototype, or proposed.
+Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. P0-01 provides the monorepo folders and empty TypeScript workspace builds; application runtimes are not built yet. Statuses below distinguish implementation, design, and prototype evidence.
 
-- Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L23): [decisions.md](decisions.md).
+- Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L24): [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
 - **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–13 show each flow as swimlanes, coloured by evidence (proven, documented, assumed). Open it in a browser.
 
@@ -10,7 +10,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 | Area | Choice | Status |
 | --- | --- | --- |
-| Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db` | Decided 3 October 2026 |
+| Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces for the two apps, one root lockfile | Implemented in P0-01; empty app builds verified in Codex cloud |
+| Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 7.0.2; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence | Pinned in P0-01; Node workspace builds verified, Python production components pending |
 | Web | React + TypeScript + Vite on Azure Static Web Apps (Free), resource in West Europe (Static Web Apps has no Swedish or Danish region; the files are served from a global network, so the region hardly matters) | Decided |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Decided |
 | Backend framework | Fastify: schema validation, a plugin per area, SSE support | Decided 3 October 2026 |
