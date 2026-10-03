@@ -31,12 +31,12 @@ describe('backend configuration', () => {
   it('requires the static origin in production', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow('STATIC_WEB_APP_ORIGIN');
   });
-  it('requires both secure Foundry endpoints in production', () => {
+  it('allows production startup without Foundry while validating configured endpoints', () => {
     const env = {
       NODE_ENV: 'production',
       STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net',
     };
-    expect(() => loadConfig(env)).toThrow('FOUNDRY_ADMIN_ENDPOINT');
+    expect(loadConfig(env).foundryEndpoints).toBeUndefined();
     expect(() => loadConfig({
       ...env, FOUNDRY_ADMIN_ENDPOINT: 'https://resource.services.ai.azure.com/api/projects/jarvis',
     })).toThrow('configured together');

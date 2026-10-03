@@ -45,9 +45,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if ((foundryAdminEndpoint === undefined) !== (foundryRuntimeEndpoint === undefined)) {
     throw new ConfigurationError('FOUNDRY_ADMIN_ENDPOINT and FOUNDRY_RUNTIME_ENDPOINT must be configured together');
   }
-  if (env.NODE_ENV === 'production' && foundryAdminEndpoint === undefined) {
-    throw new ConfigurationError('FOUNDRY_ADMIN_ENDPOINT and FOUNDRY_RUNTIME_ENDPOINT are required in production');
-  }
   if (foundryAdminEndpoint !== undefined && foundryRuntimeEndpoint !== undefined) {
     validateFoundryEndpoint(foundryAdminEndpoint, '.services.ai.azure.com', 'FOUNDRY_ADMIN_ENDPOINT');
     validateFoundryEndpoint(foundryRuntimeEndpoint, '.cognitiveservices.azure.com', 'FOUNDRY_RUNTIME_ENDPOINT');
