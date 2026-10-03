@@ -82,6 +82,7 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 | 2026-10-03 | The separate Project board sync from #108 is restored; its workflow, script, tests and existing project-board environment are retained | Dan clarified that only the Jarvis coordinator should be removed. The prior cleanup removed too much. Restore the board integration without recreating or deleting its environment | Restored |
 
 | 2026-10-03 | #12's Jarvis coordinator is removed, including automatic issue assignment, PR merging and conflict-repair dispatch | Dan requested coordinator removal and explicitly retained the separate Project board sync | Coordinator withdrawn; Project board retained; deployment integration remains #11 |
+| 2026-10-03 | P0-07's live check (a deploy applies a new migration once) moved into P0-11's acceptance; P0-07 closed as Complete | P0-11 depends on P0-07, so P0-07 could never close; a deadlock that blocked the first deploy and with it P3-10 | Decided |
 
 ## Learnings
 
