@@ -221,9 +221,15 @@ the complete composition. A new area contributes routes and tools through this
 contract without changing `core`. Readiness awaits async module registration and
 refuses a failed plugin; Fastify owns plugin close hooks.
 
-Core owns the health route, tool catalogue and HTTP dispatcher; settings,
-activity, persisted events and the SSE hub remain their later tasks. Factory registers the projects API and reserves tasks APIs and tools for their
-own tasks. The catalogue rejects duplicate
+Core owns the health route, tool catalogue, HTTP dispatcher and typed in-process
+event hub. The Factory task store persists task events and corresponding activity
+rows in the same SQL transaction as task creation, state transitions, or an event
+write; it publishes to the hub only after commit. `TaskStore.recordEvent` is the
+small producer API for later runner and backend event sources. The hub is
+process-local; the single production replica keeps subscribers together. Event
+payloads are capped at 1 MiB, and published payloads over 4 KiB are omitted.
+The authenticated SSE endpoint, heartbeat and replay are P1-06. Factory also owns
+projects and task APIs. The catalogue rejects duplicate
 module/tool identities, snapshots frozen schemas and exposes read-only descriptors
 with ownership and handlers. Authenticated `GET /tools` exposes every descriptor's
 name, description and input schema. The core registers a schema-validated
