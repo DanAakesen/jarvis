@@ -1,8 +1,9 @@
 # Managed project GitHub Actions templates
 
-Copy `templates/github-actions/pr-checks.yml` and
-`templates/github-actions/release.yml` to `.github/workflows/` in the managed
-project. These examples assume Node.js, an `.nvmrc`, `package-lock.json`, npm
+Copy [pr-checks.yml](../templates/github-actions/pr-checks.yml) and
+[release.yml](../templates/github-actions/release.yml) to `.github/workflows/`
+in the managed project. These examples assume Node.js, an `.nvmrc`,
+`package-lock.json`, npm
 scripts named `lint`, `test`, and `build`, and a build output directory named
 `dist/`. Change the runtime, install, check, build, and artifact-path steps to
 match the project's toolchain.
@@ -18,7 +19,8 @@ For Azure OIDC:
 
 1. Create a GitHub environment named `production` in the project repository.
 2. Create an Azure federated identity credential for the deployment identity
-   with subject `repo:OWNER/REPO:environment:production` and audience
+   with issuer `https://token.actions.githubusercontent.com`, subject
+   `repo:OWNER/REPO:environment:production`, and audience
    `api://AzureADTokenExchange`.
 3. Add repository or environment Actions variables `AZURE_CLIENT_ID`,
    `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`. These identifiers are not

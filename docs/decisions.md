@@ -82,6 +82,7 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 | 2026-10-03 | The separate Project board sync from #108 was disabled and removed together with #12's board assignment path at Dan's request | Project-board integration is withdrawn; issue/PLAN status automation remains. No project-token setup is required by the repository workflows | Withdrawn |
 
 | 2026-10-03 | #12 delivered a serialized PR coordinator. Dan subsequently stopped its project-board automation; board access and automatic issue assignment are removed, and the coordinator stays disabled | The personal-project credential setup was not verified in Dan's GitHub account. Codex did not establish live board access; remove its code and instructions rather than retain an unverified integration. Preserve PR maintenance code without reactivating it | Board integration withdrawn; workflow disabled; deployment integration remains #11 |
+| 2026-10-03 | P3-09 provides copyable managed-project workflows: read-only PR checks, then release build/tests and artifact upload before a `main`-only Azure OIDC deploy using the `production` environment | Copying lets each project adapt its own runtime and deployment without coupling it to Jarvis's active workflows. `id-token: write` is limited to the deploy job; OIDC identifiers are Actions variables, not stored credentials | Templates and offline structure checks implemented; adoption and live Azure federation/deployment unverified |
 
 ## Learnings
 

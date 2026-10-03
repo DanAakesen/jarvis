@@ -348,7 +348,7 @@ const FLOWS = [
     summary: "GitHub Actions runs the full build and all tests on the pull request. The backend reads the result by webhook, sends failures back to the agent, applies the project policy, and closes the task and its sandbox. Dan can cancel at any time.",
     nodes: [
       { id: "ctx", lane: "github", col: 1, s: "context", from: [[5, "pr"], [7, "pr"]], t: "From 5–8: pull request open" },
-      { id: "checks", lane: "actions", col: 2, s: "docs", t: "Full build and all tests in GitHub Actions", d: "Runs on every push to the PR.", ev: "Decision 9 (decisions.md): build and release run in GitHub Actions, never in the sandbox.", href: DOC.ghTriggers },
+      { id: "checks", lane: "actions", col: 2, s: "docs", t: "Full build and all tests in GitHub Actions", d: "Runs on every PR; a managed-project template is available.", ev: "P3-09: copyable PR checks are in templates/github-actions/pr-checks.yml; see the adoption guide.", href: "github-actions-templates.md" },
       { id: "cancel", lane: "board", col: 2, s: "assumed", t: "Cancel at any time" },
       { id: "cinv", lane: "backend", col: 2, s: "proven", t: "Cancel the invocation", d: "Returned cancelled." },
       { id: "cdel", lane: "foundry", col: 2, s: "proven", t: "Delete the session", d: "Nothing keeps running." },
@@ -375,8 +375,8 @@ const FLOWS = [
     summary: "After the merge, GitHub Actions builds, tests and deploys. Every step reaches the board's release view through GitHub webhooks; no polling.",
     nodes: [
       { id: "ctx", lane: "github", col: 1, s: "context", from: [[9, "merge"]], t: "From 9: merged to main" },
-      { id: "wf", lane: "actions", col: 2, s: "docs", t: "Release workflow", d: "Build, test and package on merge or tag.", ev: "GitHub Docs: workflow triggers (push, release, tags).", href: DOC.ghTriggers },
-      { id: "deploy", lane: "actions", col: 3, s: "docs", t: "Deploy to Azure with OIDC", d: "Federated credential; no secrets stored in GitHub.", ev: "GitHub Docs: OpenID Connect to Azure.", href: DOC.ghOidc },
+      { id: "wf", lane: "actions", col: 2, s: "docs", t: "Release workflow", d: "Build, test and upload an artifact on merge to main.", ev: "P3-09: copyable release workflow is in templates/github-actions/release.yml; see the adoption guide.", href: "github-actions-templates.md" },
+      { id: "deploy", lane: "actions", col: 3, s: "docs", t: "Deploy to Azure with OIDC", d: "Main-only production environment; id-token permission is limited to deploy.", ev: "P3-09 documents the environment-bound Azure federation setup; live Azure use is unverified.", href: "github-actions-templates.md" },
  
       { id: "migrations", lane: "backend", col: 4, s: "proven", t: "Apply pending migrations before listen", d: "Bounded startup, transaction-owned app lock, immutable checksum ledger; failure rolls back and closes the pool.", ev: "Issue #7: real SQL Server CI passed repeat/concurrent startup, rollback, history, lock contention and cancellation. Live managed identity and deployed Azure revision remain #11." },
       { id: "rec", lane: "data", col: 4, s: "assumed", t: "Release record", d: "Commits, PRs, runs and deployments per release." },
