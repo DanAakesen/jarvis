@@ -32,7 +32,7 @@ afterAll(async () => {
   await administrator.close();
 });
 
-describe.sequential('real SQL Server migration contract', () => {
+describe('real SQL Server migration contract', () => {
   it('boots the committed migration manifest twice without duplicate ledger rows', async () => {
     expect(await applyMigrations(pool, await readMigrations())).toEqual([]);
     expect(await applyMigrations(pool, await readMigrations())).toEqual([]);
