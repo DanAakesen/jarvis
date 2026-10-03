@@ -97,6 +97,8 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Resource group | `rg-jarvis` (one production environment) |
 | Bootstrap IDs | [`infra/bootstrap.output.json`](../infra/bootstrap.output.json); also Actions variables in `DanAakesen/jarvis` |
 
+- `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
+- The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId`, and `backendImage`. `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Confirm the billing currency is DKK and supply any required budget notification email addresses as appropriate. The first Azure deployment and real resource behavior are verified by P0-11, not by the local build/lint.
 - Dan's Azure CLI defaults to the Microsoft tenant: pass `--subscription` in every command and script (L7). For Microsoft Graph, get the token with `az account get-access-token --subscription <id> --resource-type ms-graph`; `--tenant` picks the wrong account.
 - `az` runs through a `.cmd` file: avoid `&`, parentheses, and pipes inside arguments such as `--query` (L20); filter JSON in PowerShell instead.
 - Never reuse a deleted Foundry account or project name; generate timestamped names (L2).
@@ -116,10 +118,12 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 
 ## Setup and commands
 
-Nothing is built yet; P0 creates the apps. Candidate commands (unverified until P0):
+P0 is in progress; the Bicep build and lint commands below have been verified locally. Other application commands are candidates until their tasks add the apps:
 
 | Purpose | Command |
 | --- | --- |
+| Build Bicep (generates `infra/main.json`, which is git-ignored) | `az bicep build --file infra/main.bicep` |
+| Lint Bicep | `az bicep lint --file infra/main.bicep` |
 | Run the web app | `npm run dev` in the repository root, then open `http://localhost:5173` (uses the production backend). Agents run it only in their cloud environment |
 | Bootstrap or repair identities | `./infra/bootstrap.ps1` (safe to re-run; needs Dan's signed-in `az` and `gh`) |
 | Web build and test | `npm run build`, `npm test` in `apps/web` |
