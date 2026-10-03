@@ -260,7 +260,11 @@ Models and voices come from the settings page, passed per session; a new voice-a
 
 The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, and **Key Vault Secrets User** at the vault. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); actual Azure connectivity and permissions remain to be checked by the first deployment.
 
-Required deployment parameters are the full `backendIdentityResourceId`, `sqlAdminGroupObjectId`, and `backendImage`. `sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, the budget start date to the first of the current month, and budget notification emails to an empty array (the Owner role is also notified). The amount is interpreted in the subscription billing currency; confirm that currency is DKK.
+Required deployment parameters are the full `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `backendImage`, and `foundryNameTimestamp`. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`, for example `20261003120000`). P0-11 must persist it in deployment configuration and pass the same value on normal redeployments. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed.
+
+PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. Both `gpt-5.6-luna` and `gpt-realtime-2.1` use Global Standard capacity 1, configured independently. Dan accepted this starting allocation; adjust it if testing demonstrates rate limits. Exact model-specific limits and regional quota availability remain to be verified in P0-11. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
+
+`sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, `budgetStartDate` to `2026-10-01T00:00:00Z`, and budget notification emails to an empty array (the Owner role is also notified). The amount is interpreted in the subscription billing currency; confirm that currency is DKK.
 
 ## Cost
 

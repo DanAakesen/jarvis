@@ -11,3 +11,14 @@ remains unverified.
 
 See the [Azure constraints](../docs/agent-context.md#azure) and
 [architecture](../docs/architecture.md).
+
+## Required deployment inputs
+
+`main.bicep` requires `backendIdentityResourceId`, `sqlAdminGroupObjectId`,
+`backendImage`, and `foundryNameTimestamp`.
+
+Choose the Foundry timestamp once as a 14-digit UTC value (`yyyyMMddHHmmss`,
+for example `20261003120000`). P0-11 must save it in deployment configuration
+and reuse it on every normal redeployment. Generating a new value on each run
+would create a new account and project. Normal updates keep the existing
+resources; deletion is not part of routine deployment.
