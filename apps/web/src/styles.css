@@ -28,6 +28,11 @@ dt { font-weight: 600; }
 dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 .home-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 24px; font-weight: 600; }
 .home-link:hover { color: var(--focus); }
+.primary-button { min-height: 44px; margin-top: 32px; padding: 0 18px; border: 0; border-radius: 6px; background: #1959ac; color: #fff; font: inherit; font-weight: 650; cursor: pointer; }
+.primary-button:hover:not(:disabled) { background: #124889; }
+.primary-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.primary-button:disabled { background: #667487; cursor: not-allowed; }
+.sign-in-status { min-height: 1.6em; margin-top: 16px; font-size: 15px; }
 .skip-link { position: absolute; top: 8px; left: 16px; padding: 8px 16px; background: var(--surface); transform: translateY(-150%); }
 .skip-link:focus { transform: translateY(0); }
 
