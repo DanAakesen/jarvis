@@ -42,8 +42,14 @@ class Backend:
         self,
         catalogue: Any = None,
         call: Callable[[httpx.Request], httpx.Response] | None = None,
+        settings: Any = None,
     ) -> None:
         self.catalogue = [CREATE_TASK] if catalogue is None else catalogue
+        self.settings = (
+            {"model": "gpt-5.6-luna", "reasoningEffort": "none"}
+            if settings is None
+            else settings
+        )
         self.call = call or (
             lambda request: httpx.Response(
                 200,
@@ -63,6 +69,10 @@ class Backend:
             if isinstance(self.catalogue, httpx.Response):
                 return self.catalogue
             return httpx.Response(200, json=self.catalogue)
+        if request.method == "GET" and request.url.path == "/agent/settings":
+            if isinstance(self.settings, httpx.Response):
+                return self.settings
+            return httpx.Response(200, json=self.settings)
         return self.call(request)
 
 
@@ -116,6 +126,37 @@ async def test_new_backend_tools_appear_after_the_cache_expires() -> None:
     now[0] = CATALOGUE_TTL_SECONDS
     assert [tool.name for tool in await client.tools()] == ["create_task", "pause_task"]
     assert len(backend.requests) == 2
+
+
+async def test_loads_effective_model_settings_for_a_new_session() -> None:
+    backend = Backend(settings={"model": "gpt-5.6-luna", "reasoningEffort": "high"})
+    client = make_client(backend)
+
+    settings = await client.model_settings()
+
+    request = backend.requests[0]
+    assert request.method == "GET"
+    assert str(request.url) == "https://backend.example/agent/settings"
+    assert request.headers["authorization"] == "Bearer " + TOKEN
+    assert (settings.model, settings.reasoning_effort) == ("gpt-5.6-luna", "high")
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        httpx.Response(503, json={"error": "unavailable"}),
+        httpx.Response(200, content=b"not json"),
+        {},
+        {"model": "", "reasoningEffort": "none"},
+        {"model": "x" * 101, "reasoningEffort": "none"},
+        {"model": "deployment", "reasoningEffort": "unsupported"},
+    ],
+)
+async def test_invalid_or_unavailable_model_settings_fail_session_start(settings: Any) -> None:
+    client = make_client(Backend(settings=settings))
+
+    with pytest.raises(BackendUnavailable):
+        await client.model_settings()
 
 
 @pytest.mark.parametrize(

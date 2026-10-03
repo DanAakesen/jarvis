@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import socket
@@ -133,6 +134,22 @@ class VoiceRuntime:
                     code="startup_failed",
                     retriable=True,
                     message="VOICE_SAMPLE_REJECT_START is enabled.",
+                )
+            )
+            return
+        try:
+            state.model_settings = await self._model_client.session_settings()
+        except asyncio.CancelledError:
+            state.terminating = True
+            raise
+        except Exception:
+            state.reject()
+            logger.warning("Rejecting session because Jarvis settings are unavailable")
+            await session.send(
+                SessionRejected(
+                    code="startup_failed",
+                    retriable=True,
+                    message="Could not load Jarvis settings.",
                 )
             )
             return

@@ -83,6 +83,14 @@ class ModelMessage:
     content: str
 
 
+@dataclass(frozen=True, slots=True)
+class ModelSettings:
+    """Jarvis model choices captured when one hosted session starts."""
+
+    model: str
+    reasoning_effort: str
+
+
 @dataclass(slots=True)
 class ConversationTurn:
     response_id: str
@@ -211,6 +219,7 @@ class ResponseOperation:
 @dataclass(slots=True)
 class SessionState:
     history: ConversationHistory = field(default_factory=ConversationHistory)
+    model_settings: ModelSettings | None = None
     responses: dict[str, ResponseOperation] = field(default_factory=dict)
     input_responses: dict[str, str] = field(default_factory=dict)
     proactive_requests: dict[str, ProactiveRequest] = field(default_factory=dict)
