@@ -163,7 +163,10 @@ with ownership and handlers. Authenticated `GET /tools` exposes every descriptor
 name, description and input schema. The core registers a schema-validated
 `POST /tools/{name}` for every tool at composition time, passes the request and
 cancellation signal to its handler, then writes the arguments, result and outcome
-to `tool_calls` using the process-owned SQL pool. Calls require
+to `tool_calls` using the process-owned SQL pool. Each response carries `outcome`
+(`ok`, `refused` from a tool's `ToolRefusal`, or `error`) and a `confirmation`
+built only from that recorded result (L16), which Jarvis relays instead of its own
+claim; a non-200 response means nothing was confirmed. Calls require
 `X-Jarvis-Message-ID`; absent persistence returns 503 before tool execution. The
 routes inherit the existing delegated-user policy; a Jarvis service-identity
 policy remains separate. Existing Foundry client, health/security/logging and
