@@ -31,6 +31,135 @@ function extension(id = 'extension', tools: readonly JarvisTool[] = []): Backend
 }
 
 describe('backend module composition', () => {
+  it('lists tools from every module and executes them through their schema-validated routes', async () => {
+    const execute = vi.fn(async (input: unknown) => input);
+    const record = vi.fn(async () => {});
+    const tool: JarvisTool = {
+      name: 'extension_echo', description: 'Echo a validated test input',
+      inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
+      execute,
+    };
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, factoryModule, extension('extension', [tool])],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      toolCallStore: { record },
+    });
+    apps.push(app);
+
+    const listed = await app.inject({ url: '/tools', headers });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()).toEqual([{
+      name: tool.name, description: tool.description, inputSchema: tool.inputSchema,
+    }]);
+
+    const called = await app.inject({
+      method: 'POST', url: '/tools/extension_echo', headers: { ...headers, 'x-jarvis-message-id': '42' },
+      payload: { text: 'hello' },
+    });
+    expect(called.statusCode).toBe(200);
+    expect(called.json()).toEqual({ tool: 'extension_echo', outcome: 'ok', result: { text: 'hello' } });
+    expect(execute).toHaveBeenCalledOnce();
+    expect(record).toHaveBeenCalledWith({
+      messageId: '42', tool: 'extension_echo', arguments: { text: 'hello' },
+      result: { text: 'hello' }, outcome: 'ok',
+    });
+
+    const invalid = await app.inject({
+      method: 'POST', url: '/tools/extension_echo', headers: { ...headers, 'x-jarvis-message-id': '42' },
+      payload: {},
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(execute).toHaveBeenCalledOnce();
+    expect(record).toHaveBeenCalledOnce();
+    expect((await app.inject({ method: 'POST', url: '/tools/missing', headers })).statusCode).toBe(404);
+  });
+
+  it('does not execute without persistence and records sanitized tool failures', async () => {
+    const execute = vi.fn(async () => { throw new Error('sensitive provider detail'); });
+    const record = vi.fn(async () => {});
+    const tool: JarvisTool = {
+      name: 'extension_failure', description: 'Fails safely',
+      inputSchema: { type: 'object', additionalProperties: false },
+      execute,
+    };
+    const unavailable = fixture([extension('extension', [tool])]);
+    expect((await unavailable.inject({ url: '/tools', headers })).statusCode).toBe(200);
+    expect((await unavailable.inject({
+      method: 'POST', url: '/tools/extension_failure', headers: { ...headers, 'x-jarvis-message-id': '42' }, payload: {},
+    })).statusCode).toBe(503);
+    expect(execute).not.toHaveBeenCalled();
+
+    const denied = buildApp(config, undefined, { modules: [coreModule, factoryModule, extension('extension', [tool])] });
+    apps.push(denied);
+    expect((await denied.inject({ url: '/tools' })).statusCode).toBe(401);
+    expect((await denied.inject({
+      method: 'POST', url: '/tools/extension_failure', headers: { 'x-jarvis-message-id': '42' }, payload: {},
+    })).statusCode).toBe(401);
+    expect(execute).not.toHaveBeenCalled();
+
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, factoryModule, extension('extension', [tool])],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      toolCallStore: { record },
+    });
+    apps.push(app);
+    const failed = await app.inject({
+      method: 'POST', url: '/tools/extension_failure', headers: { ...headers, 'x-jarvis-message-id': '42' }, payload: {},
+    });
+    expect(failed.statusCode).toBe(200);
+    expect(failed.json()).toEqual({
+      tool: 'extension_failure', outcome: 'error', result: { error: 'Tool execution failed' },
+    });
+    expect(record).toHaveBeenCalledWith({
+      messageId: '42', tool: 'extension_failure', arguments: {}, result: { error: 'Tool execution failed' }, outcome: 'error',
+    });
+    expect(failed.body).not.toContain('sensitive provider detail');
+  });
+
+  it('rejects malformed message IDs before executing a tool', async () => {
+    const execute = vi.fn(async () => ({ ok: true }));
+    const tool: JarvisTool = {
+      name: 'extension_echo', description: 'Echo',
+      inputSchema: { type: 'object' }, execute,
+    };
+    const record = vi.fn(async () => {});
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, factoryModule, extension('extension', [tool])],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      toolCallStore: { record },
+    });
+    apps.push(app);
+    for (const messageId of ['0', '-1', '9223372036854775808', 'not-an-id']) {
+      const response = await app.inject({
+        method: 'POST', url: '/tools/extension_echo', headers: { ...headers, 'x-jarvis-message-id': messageId }, payload: {},
+      });
+      expect(response.statusCode).toBe(400);
+    }
+    expect(execute).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('does not report success if recording the tool result fails', async () => {
+    const execute = vi.fn(async () => ({ ok: true }));
+    const tool: JarvisTool = {
+      name: 'extension_echo', description: 'Echo',
+      inputSchema: { type: 'object' }, execute,
+    };
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, factoryModule, extension('extension', [tool])],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      toolCallStore: { record: async () => { throw new Error('database-secret'); } },
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: 'POST', url: '/tools/extension_echo', headers: { ...headers, 'x-jarvis-message-id': '42' }, payload: {},
+    });
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({ error: 'Internal server error' });
+    expect(response.body).not.toContain('database-secret');
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
   it('adds a third module with routes and a Jarvis tool through composition alone', async () => {
     const tool: JarvisTool = {
       name: 'extension_echo', description: 'Echo a validated test input',
