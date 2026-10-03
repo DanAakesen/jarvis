@@ -1,11 +1,18 @@
-# Copilot cloud agent never takes its own PR out of draft. When Copilot finishes
-# (title without "[WIP]" and a review request), mark the PR ready so the merge
-# rules apply. Can also be run by hand for one PR. Part of P0-12.
+# Copilot cloud agent never takes its own PR out of draft. Mark a finished
+# Copilot PR ready so the merge rules apply. Part of P0-12.
+# - pull_request_target, not pull_request: GitHub skips pull_request workflows
+#   while a PR has merge conflicts, which is exactly when parallel agents move
+#   main. This job never checks out PR code; it only reads PR metadata.
+# - issue_comment: Copilot ends every follow-up round with a PR comment, and
+#   later rounds don't request review again.
+# - workflow_dispatch: mark one PR ready by hand (no checks), for backfills.
 name: Copilot PR ready
 
 on:
-  pull_request:
+  pull_request_target:
     types: [review_requested]
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       pr:
@@ -13,7 +20,7 @@ on:
         required: true
         type: number
 
-# Marking a PR ready needs contents: write in addition to pull-requests: write.
+# Marking a PR ready needs contents: write in addition to pull-requests: write (L36).
 permissions:
   contents: write
   pull-requests: write
@@ -22,9 +29,10 @@ jobs:
   ready:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.draft &&
-       github.event.pull_request.user.login == 'Copilot' &&
-       !startsWith(github.event.pull_request.title, '[WIP]'))
+      github.event_name == 'pull_request_target' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       github.event.comment.user.login == 'Copilot')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -32,5 +40,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number || inputs.pr }}
-        run: gh pr ready "$PR" --repo "$REPO"
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
+        run: |
+          if [[ "$EVENT" != "workflow_dispatch" ]]; then
+            IFS=$'\t' read -r state draft author title < <(gh api "repos/$REPO/pulls/$PR" --jq '[.state, .draft, .user.login, .title] | @tsv')
+            if [[ "$state" != "open" || "$draft" != "true" || "$author" != "Copilot" || "$title" == "[WIP]"* ]]; then
+              echo "PR #$PR: state=$state draft=$draft author=$author title=$title; nothing to do."
+              exit 0
+            fi
+          fi
+          gh pr ready "$PR" --repo "$REPO"
