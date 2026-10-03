@@ -37,7 +37,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 | **Parallel work** | Dan controls concurrency across projects; capacity depends on provider limits and compute. |
 | **Agent choice** | Codex or GitHub Copilot per task, regardless of project. |
 | **Subscriptions** | Codex uses Dan's ChatGPT Pro plan (Jarvis-only login); Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. No per-use billing for either. |
-| **Voice** | An open browser is enough. Danish and English with a language toggle; status requests and follow-ups. |
+| **Voice** | An open browser is enough. Danish and English with a language toggle; status requests and follow-ups. Voice Live credentials stay on the backend; the browser connects through an authenticated backend WebSocket relay. |
 | **Continuity** | Work continues when the browser or voice session closes. |
 | **Sandbox** | One sandbox per task: starts when work begins, closes after delivery or cancel. The agent runs targeted builds and tests only; no Docker. |
 | **Build and release** | Full builds, all tests, and releases run in GitHub Actions, as in Dan's normal workflow; never in the sandbox. |
