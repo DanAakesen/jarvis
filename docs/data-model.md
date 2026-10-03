@@ -127,7 +127,7 @@ erDiagram
 
 - **One continuous conversation.** Jarvis has a single thread; each time Dan talks or types is a `jarvis_session` within it. Over time the thread needs compaction and memory (Decision 6, deferred); `messages` keeps the full record either way.
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
-- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`error` outcome in `tool_calls`. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. The hosted Jarvis agent (P4-01) sends the stored message ID of the turn that triggered the call; until P4-03 stores messages it has none and makes no call.
+- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`error` outcome in `tool_calls`. P1-01 (#15) creates the table in `0001_core_tables.sql`; no live SQL write has been verified yet. The hosted Jarvis agent (P4-01) sends the stored message ID of the turn that triggered the call; until P4-03 stores messages it has none and makes no call.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes.
 
