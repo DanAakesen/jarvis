@@ -11,7 +11,7 @@ import fnmatch
 import os
 import subprocess
 
-PARTS = ("infra", "backend", "web")
+PARTS = ("infra", "backend", "web", "agent")
 
 # Inputs shared by every part: a change deploys everything.
 SHARED = (
@@ -29,6 +29,7 @@ PART_PATHS = (
     ("db/*", {"backend"}),
     (".dockerignore", {"backend"}),
     ("apps/web/*", {"web"}),
+    ("agents/jarvis/*", {"agent"}),
 )
 
 

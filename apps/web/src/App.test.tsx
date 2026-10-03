@@ -179,7 +179,7 @@ describe('App shell', () => {
 
   it.each([
     ['/factory/tasks/42', 'Task 42'],
-    ['/factory/projects/3', 'Project 3'],
+    ['/factory/projects/3', 'Project settings'],
     ['/factory/releases/7', 'Release 7'],
   ])('opens %s as the page that activity links target', async (path, heading) => {
     await renderSignedIn(path);
