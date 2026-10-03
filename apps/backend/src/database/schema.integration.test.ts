@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readDownMigration, readMigrations, revertMigration, type Migration } from './migrations.js';
 import { createTaskStore } from './task-store.js';
+import { createProjectStore } from './project-store.js';
+import { ProjectConflictError } from '../factory/projects.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -145,6 +147,26 @@ describe('committed domain schema (groups 1-3)', () => {
     await pool.request().input('projectId', sql.BigInt, BigInt(projectId))
       .query('UPDATE dbo.projects SET active = 0 WHERE id = @projectId;');
     expect(await store.create({ projectId, title: 'Archived project', request: 'Must not be queued' })).toBeNull();
+  });
+
+  it('creates, updates, lists, and archives projects through the SQL store', async () => {
+    const store = createProjectStore(pool);
+    const repo = `${database}/project`;
+    const project = await store.create({
+      name: 'Project store', repo, default_branch: 'main', default_agent: 'copilot',
+      policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
+    });
+    expect(project).toMatchObject({ repo, max_parallel_tasks: 1, merge_rules: null, active: true });
+    expect(await store.list()).toContainEqual(project);
+    expect(await store.update(project.id, { max_parallel_tasks: 3 })).toMatchObject({ max_parallel_tasks: 3 });
+    expect(await store.archive(project.id)).toBe(true);
+    expect(await store.list()).not.toContainEqual(expect.objectContaining({ id: project.id }));
+    expect(await store.update(project.id, { name: 'Archived' })).toBeNull();
+    expect(await store.archive(project.id)).toBe(true);
+    await expect(store.create({
+      name: 'Replacement', repo, default_branch: 'main', default_agent: 'copilot',
+      policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
+    })).rejects.toBeInstanceOf(ProjectConflictError);
   });
 
   it.each([

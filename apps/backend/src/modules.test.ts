@@ -289,7 +289,8 @@ describe('backend module composition', () => {
   it('does not advertise unimplemented factory or core APIs or tools', async () => {
     const app = fixture([]);
     expect(app.jarvisTools.list()).toEqual([]);
-    for (const url of ['/factory/projects', '/settings', '/activity', '/events']) {
+    expect((await app.inject({ url: '/factory/projects', headers })).statusCode).toBe(503);
+    for (const url of ['/settings', '/activity', '/events']) {
       expect((await app.inject({ url, headers })).statusCode).toBe(404);
     }
     expect((await app.inject({ url: '/factory/tasks', headers })).statusCode).toBe(503);

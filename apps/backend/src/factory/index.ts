@@ -1,5 +1,6 @@
 import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
+import { projectRoutes } from './projects.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
 import type { CreateTaskInput, TaskListFilters } from './task-store.js';
 
@@ -132,5 +133,6 @@ export const factoryModule: BackendModule = {
       return sendBounded(reply, detail);
     });
 
+    await app.register(projectRoutes, { prefix: '/factory/projects' });
   },
 };

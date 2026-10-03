@@ -64,7 +64,7 @@ export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
         const project = await new sql.Request(transaction)
           .input('projectId', sql.BigInt, BigInt(input.projectId))
           .query<{ defaultAgent: 'codex' | 'copilot' }>(
-            'SELECT default_agent AS defaultAgent FROM dbo.projects WHERE id = @projectId AND active = 1');
+            'SELECT default_agent AS defaultAgent FROM dbo.projects WITH (UPDLOCK, HOLDLOCK) WHERE id = @projectId AND active = 1');
         const defaultAgent = project.recordset[0]?.defaultAgent;
         if (!defaultAgent) {
           await transaction.rollback();

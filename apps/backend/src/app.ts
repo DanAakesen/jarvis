@@ -8,21 +8,28 @@ import { installAuthentication } from './auth/hook.js';
 import type { TokenVerifier } from './auth/verify.js';
 import { coreModule } from './core/index.js';
 import type { ToolCallStore } from './core/tool-calls.js';
+import { conversationModule } from './core/conversation.js';
+import type { ConversationStore } from './core/conversation-store.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskStore } from './factory/task-store.js';
+import type { ProjectStore } from './factory/projects.js';
 import { registerModules, type BackendModule } from './modules.js';
 
 export interface BuildAppOptions {
   readonly auth?: TokenVerifier;
   readonly modules?: readonly BackendModule[];
+  readonly projectStore?: ProjectStore;
   readonly toolCallStore?: ToolCallStore;
   readonly taskStore?: TaskStore;
+  readonly conversationStore?: ConversationStore;
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
+    projectStore: ProjectStore | null;
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
+    conversationStore: ConversationStore | null;
   }
 }
 
@@ -70,8 +77,10 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     reply.code(statusCode).send({ error: statusCode < 500 ? 'Invalid request' : 'Internal server error' });
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));
+  app.decorate('projectStore', options.projectStore ?? null);
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);
-  registerModules(app, options.modules ?? [coreModule, factoryModule]);
+  app.decorate('conversationStore', options.conversationStore ?? null);
+  registerModules(app, options.modules ?? [coreModule, conversationModule, factoryModule]);
   return app;
 }
