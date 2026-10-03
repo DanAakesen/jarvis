@@ -14,13 +14,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
-| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton and core/factory module registration implemented; domain APIs and SSE in their tasks |
+| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton, core/factory module registration and P1-03 projects API implemented; remaining domain APIs and SSE are in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
 | Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15; real Azure identity/deployment validation remains #11 |
 | Files | Azure Blob Storage for artifacts and logs | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
-| Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-11 |
+| Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-16 |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
 | Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name; explicit service-identity authorization remains separate | Browser and backend contracts checked offline in #9; real Entra sign-in and deployed origin remain unverified pending #11 |
 | Board updates | Server-sent events (SSE) over `fetch`, so the bearer token can be sent | Decided |
@@ -48,6 +48,23 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   requests only the delegated API scope and sends the access token to `/me`.
   Cached accounts use silent token acquisition. A missing backend URL disables
   sign-in instead of presenting a false success state.
+- P1-07 adds the app shell. `useSignIn` owns the MSAL session for the whole
+  app, so navigation never repeats sign-in. Until `/me` succeeds, every shell
+  route shows sign-in and the header hides navigation; unknown addresses still
+  show the not-found page. `src/areas.ts` registers each area (`id`, label, top-level
+  path, component). The shell renders its navigation entry and mounts it at
+  `/<path>/*`; the area renders its own nested routes. Software Factory
+  (`src/factory/`) owns `/factory/tasks`, `/factory/tasks/:id`,
+  `/factory/projects`, `/factory/projects/:id` and `/factory/releases/:id`;
+  invalid IDs show not found. `/settings` is the shared settings entry. These
+  pages are placeholders until P1-08 to P1-11 and P3-08.
+- The main page's "Now" activity panel takes a typed `NowFeed`
+  (`src/activity.ts`): running tasks (title, project, agent, activity, start
+  time) and activity items (category, title, `activity.link`, time). Only
+  `task:<id>`, `release:<id>` and `project:<id>` links become routes. Dismissal
+  removes an item only after the injected action resolves. No backend feed
+  exists yet, so production shows the unavailable state; P1-13 adds the API and
+  live updates.
 - `/me` inherits the root authentication hook. The verifier accepts only
   Dan's signed delegated API token and returns a bounded display name from its
   validated `name` claim, falling back to `Dan` if that optional claim is absent
@@ -73,6 +90,18 @@ public; explicit business OPTIONS handlers require authentication. The server
 generates request IDs and records only approved event names,
 methods, route templates, statuses and timings. A final output allowlist covers
 child logger bindings as well as log arguments, dropping request/provider secrets.
+
+The factory registers authenticated `GET /factory/projects`,
+`POST /factory/projects`, `PATCH /factory/projects/:id`, and
+`DELETE /factory/projects/:id` routes. The project
+store uses the process-owned SQL pool and parameterized queries; list returns
+active rows, archive sets `active = 0`, and duplicate repositories return 409.
+Request schemas validate required settings and the database's policy, sandbox,
+tech, repository, and concurrency constraints. When SQL is not configured,
+project requests return 503 rather than claiming success. Route and query-binding
+contracts are covered offline, and SQL Server-container tests execute project
+CRUD and archive queries. Real Azure identity and project CRUD remain unverified
+without Azure access.
 
 With backend-only `APPLICATIONINSIGHTS_CONNECTION_STRING` (P0-11 Key Vault
 reference), an isolated SDK client exports these events as manual traces. No
@@ -155,9 +184,8 @@ contract without changing `core`. Readiness awaits async module registration and
 refuses a failed plugin; Fastify owns plugin close hooks.
 
 Core owns the health route, tool catalogue and HTTP dispatcher; settings,
-activity, persisted events and the SSE hub remain their later tasks. Factory's
-registration boundary owns future projects/tasks APIs and tools; it contributes
-none until those operations are implemented. The catalogue rejects duplicate
+activity, persisted events and the SSE hub remain their later tasks. Factory registers the projects API and reserves tasks APIs and tools for their
+own tasks. The catalogue rejects duplicate
 module/tool identities, snapshots frozen schemas and exposes read-only descriptors
 with ownership and handlers. Authenticated `GET /tools` exposes every descriptor's
 name, description and input schema. The core registers a schema-validated
@@ -173,6 +201,30 @@ policy remains separate. Existing Foundry client, health/security/logging and
 process shutdown behavior are preserved.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
+
+### Conversation storage and history
+
+P4-03 adds the authenticated `/conversation/sessions` API to the shared backend.
+`POST /conversation/sessions` starts one `jarvis_sessions` row per chat or voice
+sitting, `POST /conversation/sessions/{id}/messages` appends a bounded message to
+an active session, and `POST /conversation/sessions/{id}/end` idempotently records
+its end.
+`GET /conversation/history` reads the one continuous conversation across sessions
+in pages of 50 (maximum 100), ordered oldest-to-newest within each page and
+continued with a message-ID cursor. Each entry includes its session's chat/voice
+channel and language. It returns tool-call names, outcomes and task IDs, not the
+stored arguments or results.
+
+The conversation store shares the process-owned SQL pool and uses the existing
+group-one schema; no migration or new service is required. Tool calls continue to
+be written by the P4-02 dispatcher against their source message. The task schema
+already requires `origin_message_id` for non-board tasks; task-creation write
+paths remain in P1-04/P4-01. The global authentication hook keeps these routes
+restricted to Dan. Store, API and web behavior are tested offline; Azure SQL and
+live Entra behavior remain unverified. The store also passes a disposable SQL
+Server integration test, not a production Azure SQL test. The main page reads
+history now; message sending and session lifecycle wiring remain with chat and
+voice tasks (P4-06/P5-03/P5-04).
 
 ```mermaid
 flowchart LR
@@ -226,7 +278,7 @@ Rendered image: [assets/runtime-overview.png](assets/runtime-overview.png).
 
 | Layer | Design |
 | --- | --- |
-| Web | One app shell (Jarvis) with area navigation; each area owns its pages. The main page is the conversation plus activity across areas. |
+| Web | One app shell (Jarvis) with area navigation from `apps/web/src/areas.ts`; each area owns its pages and nested routes. The main page is the conversation plus activity across areas. Shell implemented in P1-07. |
 | Backend | A shared core (sign-in, events, settings, usage, the Jarvis tool registry, dispatcher) plus one module per area, in one deployable backend. Board, voice, and later the Windows app call the same functions. |
 | Jarvis tools | Each area registers its tools with the core, so Jarvis gains abilities without being rebuilt. |
 | Data | Relational Azure SQL tables per area; no JSON files as the domain model. See [data-model.md](data-model.md). |
@@ -341,7 +393,7 @@ The agent can read everything in its sandbox, including environment variables, s
 
 [`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02 and P3-03; repository metadata read is GitHub's required baseline.
 
-The backend will store the private key in Key Vault as `github-app-private-key` and use its managed identity to mint one-hour, repository-scoped installation tokens. The key must never enter a sandbox. A separate `github-app-webhook-secret` is needed once P3-03 deploys the webhook receiver. The App ID is configuration, not a secret. The registration, selected-repository installation, and Key Vault secret are pending Dan's manual setup after P0-11; the webhook URL and secret await P3-03.
+The backend will store the private key in Key Vault as `github-app-private-key` and use its managed identity to mint one-hour, repository-scoped installation tokens. The key must never enter a sandbox. A separate `github-app-webhook-secret` is needed once P3-03 deploys the webhook receiver. The App ID is configuration, not a secret. The registration, selected-repository installation, and Key Vault secret are pending Dan's manual setup after P0-16; the webhook URL and secret await P3-03.
 
 **Codex login rules** (Pro login only; no API key):
 
@@ -387,9 +439,10 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 
 | Area | Design | Evidence |
 | --- | --- | --- |
-| Browser connection | Browser connects to the backend's authenticated `/voice` WebSocket using its delegated API token in the WebSocket subprotocol. The backend verifies it before obtaining a Voice Live-scoped bearer token and opening the upstream connection; provider credentials never enter the browser or URL. | Offline backend test forwards messages bidirectionally to a local mock WebSocket and checks authorization/log redaction. The relay module is a spike: production token-provider/endpoint wiring, browser audio, and real Voice Live interoperability are not verified. |
+| Browser connection | Browser connects to the backend's authenticated `/voice` WebSocket using its delegated API token in the WebSocket subprotocol. When `VOICE_LIVE_ENDPOINT` is configured, the backend obtains a Voice Live-scoped token with `DefaultAzureCredential`, pins the `gpt-realtime-2.1` model, and opens the upstream connection; provider credentials never enter the browser or URL. | Backend configuration and a local mock verify endpoint validation, authentication, relay, and model pinning. P0-16 must configure the endpoint and provider identity; Azure interoperability and browser audio are unverified. |
 | Danish path | Browser microphone → Voice Live voice agent (`kind: voice`) → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | 20/20 Danish commands, 4/4 status answers |
-| English path | `gpt-realtime-2.1` speech-to-speech voice agent with Ryan HD and the butler persona; tools run in the backend, which holds the voice connection | First audio ≈0.5–1.1 s |
+| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | Local mock tests verify the server-owned session update; browser audio and live Voice Live behavior remain unverified pending P0-16/P5-04. |
+| English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Voice calls are not yet persisted as messages/tool-call rows; P4-03/P5-06 own conversation and voice history. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
 | Jarvis model | `gpt-5.6-luna`, reasoning `none`, strict action rules (L16) | ≈0.003 DKK per command |
 | Voices | English: `en-GB-Ryan:DragonHDLatestNeural`. Danish: `en-US-Harper:MAI-Voice-2` locked to `da-DK` with `voice_locale`. Language toggle in the UI. | Chosen by Dan from samples |
@@ -398,12 +451,12 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Interruption | The client stops playback on Voice Live's `speech_started` | Detected in 0.6 s |
 | Reconnect | Reconnect automatically when the voice bridge ends | L21 |
 
-Models and voices come from the settings page, passed per session; a new voice-agent version is created only when the speech-to-text model or voice changes.
+P5-03 pins the English model and Ryan HD in the backend. P5-05 will connect language and voice selection to settings; Danish voice provisioning and history remain separate tasks.
 
 ## Identity and security
 
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID and allows Jarvis's own service identities.
-- [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only; Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
+- [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
 - Secrets only in Key Vault; none in code, images, environment variables, or logs.
 
@@ -430,7 +483,7 @@ The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **A
 
 Required deployment parameters are the full `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed.
 
-PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. Both `gpt-5.6-luna` and `gpt-realtime-2.1` use Global Standard capacity 1, configured independently. Dan accepted this starting allocation; adjust it if testing demonstrates rate limits. Exact model-specific limits and regional quota availability remain to be verified in P0-11. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
+PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. Both `gpt-5.6-luna` and `gpt-realtime-2.1` use Global Standard capacity 1, configured independently. Dan accepted this starting allocation; adjust it if testing demonstrates rate limits. Exact model-specific limits and regional quota availability remain to be verified in P0-16. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
 
 `sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, `budgetStartDate` to `2026-10-01T00:00:00Z`, and budget notification emails to an empty array (the Owner role is also notified). The amount is interpreted in the subscription billing currency; confirm that currency is DKK.
 

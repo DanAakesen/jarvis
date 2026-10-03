@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-03T11:36:36.1924453Z",
+  "generatedAt": "2026-10-03T21:25:20.5587787Z",
   "tenantId": "802efa29-17f2-4a79-8f5f-38f087aed96a",
   "subscriptionId": "0ac7d719-89bc-4100-be87-a79d33e953a7",
   "location": "swedencentral",
@@ -9,7 +9,10 @@
   "deploy": {
     "appId": "6488a417-5e08-42ab-8cf6-b8c8327350b7",
     "servicePrincipalId": "07aef8bd-cd65-469e-a366-c1a0598d397c",
-    "federatedSubject": "repo:DanAakesen/jarvis:ref:refs/heads/main"
+    "federatedSubjects": [
+      "repo:DanAakesen/jarvis:ref:refs/heads/main",
+      "repo:DanAakesen@68902534/jarvis@1403065900:ref:refs/heads/main"
+    ]
   },
   "api": {
     "appId": "9f751b64-ea0f-484f-bf09-f08276a69e2f",

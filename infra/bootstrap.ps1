@@ -129,16 +129,20 @@ if (-not $repoInfo.id -or -not $repoInfo.owner.id) { throw "GitHub returned no o
 Step 'Deploy identity for GitHub Actions'
 $deployApp = Get-OrCreateApp 'jarvis-github-deploy'
 $deploySp = Get-OrCreateServicePrincipal $deployApp.appId
-# GitHub OIDC subjects of repositories created or renamed since 15 July 2026 carry the immutable
-# owner and repository IDs (L49). A credential for the old name-only subject is left in place.
-$subject = "repo:$($repoInfo.owner.login)@$($repoInfo.owner.id)/$($repoInfo.name)@$($repoInfo.id):ref:refs/heads/main"
+$subject = "repo:${GitHubRepo}:ref:refs/heads/main"
+# GitHub also issues OIDC subjects with immutable owner and repository IDs
+# (repo:owner@ownerId/name@repoId:...); trust both forms for main only.
+$idSubject = "repo:$($repoInfo.owner.login)@$($repoInfo.owner.id)/$($repoInfo.name)@$($repoInfo.id):ref:refs/heads/main"
+$subjects = [ordered]@{ 'github-main' = $subject; 'github-main-ids' = $idSubject }
 $creds = @((Invoke-Graph GET "/applications/$($deployApp.id)/federatedIdentityCredentials").value)
-if (-not ($creds | Where-Object { $_.subject -eq $subject })) {
-    Invoke-Graph POST "/applications/$($deployApp.id)/federatedIdentityCredentials" @{
-        name = 'github-main-ids'; issuer = 'https://token.actions.githubusercontent.com'
-        subject = $subject; audiences = @('api://AzureADTokenExchange')
-    } | Out-Null
-    Write-Host "   federated credential: $subject"
+foreach ($name in $subjects.Keys) {
+    if (-not ($creds | Where-Object { $_.subject -eq $subjects[$name] })) {
+        Invoke-Graph POST "/applications/$($deployApp.id)/federatedIdentityCredentials" @{
+            name = $name; issuer = 'https://token.actions.githubusercontent.com'
+            subject = $subjects[$name]; audiences = @('api://AzureADTokenExchange')
+        } | Out-Null
+        Write-Host "   federated credential: $($subjects[$name])"
+    }
 }
 Set-RoleAssignment $deploySp.id 'Contributor' $rgScope
 # Needed because Bicep assigns roles to Jarvis's managed identities; limited to this resource group.
@@ -228,7 +232,7 @@ $output = [ordered]@{
     generatedAt = (Get-Date).ToUniversalTime().ToString('o', [Globalization.CultureInfo]::InvariantCulture)
     tenantId = $TenantId; subscriptionId = $SubscriptionId; location = $Location; resourceGroup = $ResourceGroup
     gitHubRepo = $GitHubRepo; ownerObjectId = $OwnerObjectId
-    deploy = [ordered]@{ appId = $deployApp.appId; servicePrincipalId = $deploySp.id; federatedSubject = $subject }
+    deploy = [ordered]@{ appId = $deployApp.appId; servicePrincipalId = $deploySp.id; federatedSubjects = @($subjects.Values) }
     api = [ordered]@{ appId = $apiApp.appId; identifierUri = "api://$($apiApp.appId)"; scope = "api://$($apiApp.appId)/access_as_user" }
     web = [ordered]@{ appId = $webApp.appId; redirectUris = $WebRedirectUris }
     backendIdentity = [ordered]@{ resourceId = $identity.id; clientId = $identity.clientId; principalId = $identity.principalId }
