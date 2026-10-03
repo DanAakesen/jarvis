@@ -14,7 +14,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
-| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton and core/factory module registration implemented; domain APIs and SSE in their tasks |
+| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton, core/factory module registration and P1-03 projects API implemented; remaining domain APIs and SSE are in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
 | Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15; real Azure identity/deployment validation remains #11 |
 | Files | Azure Blob Storage for artifacts and logs | Decided |
@@ -73,6 +73,18 @@ public; explicit business OPTIONS handlers require authentication. The server
 generates request IDs and records only approved event names,
 methods, route templates, statuses and timings. A final output allowlist covers
 child logger bindings as well as log arguments, dropping request/provider secrets.
+
+The factory registers authenticated `GET /factory/projects`,
+`POST /factory/projects`, `PATCH /factory/projects/:id`, and
+`DELETE /factory/projects/:id` routes. The project
+store uses the process-owned SQL pool and parameterized queries; list returns
+active rows, archive sets `active = 0`, and duplicate repositories return 409.
+Request schemas validate required settings and the database's policy, sandbox,
+tech, repository, and concurrency constraints. When SQL is not configured,
+project requests return 503 rather than claiming success. Route and query-binding
+contracts are covered offline, and SQL Server-container tests execute project
+CRUD and archive queries. Real Azure identity and project CRUD remain unverified
+without Azure access.
 
 With backend-only `APPLICATIONINSIGHTS_CONNECTION_STRING` (P0-11 Key Vault
 reference), an isolated SDK client exports these events as manual traces. No
@@ -155,9 +167,8 @@ contract without changing `core`. Readiness awaits async module registration and
 refuses a failed plugin; Fastify owns plugin close hooks.
 
 Core owns the health route, tool catalogue and HTTP dispatcher; settings,
-activity, persisted events and the SSE hub remain their later tasks. Factory's
-registration boundary owns future projects/tasks APIs and tools; it contributes
-none until those operations are implemented. The catalogue rejects duplicate
+activity, persisted events and the SSE hub remain their later tasks. Factory registers the projects API and reserves tasks APIs and tools for their
+own tasks. The catalogue rejects duplicate
 module/tool identities, snapshots frozen schemas and exposes read-only descriptors
 with ownership and handlers. Authenticated `GET /tools` exposes every descriptor's
 name, description and input schema. The core registers a schema-validated

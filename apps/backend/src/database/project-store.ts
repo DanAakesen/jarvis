@@ -57,11 +57,16 @@ export function createProjectStore(pool: sql.ConnectionPool): ProjectStore {
       if (project.sandbox_size !== undefined) { request.input('sandboxSize', sql.NVarChar(8), project.sandbox_size); assignments.push('sandbox_size = @sandboxSize'); }
       if (project.tech !== undefined) { request.input('tech', sql.NVarChar(32), project.tech); assignments.push('tech = @tech'); }
       if (project.max_parallel_tasks !== undefined) { request.input('maxParallelTasks', sql.Int, project.max_parallel_tasks); assignments.push('max_parallel_tasks = @maxParallelTasks'); }
-      const { recordset } = await request.query<ProjectRow>(`UPDATE dbo.projects
-        SET ${assignments.join(', ')}
-        OUTPUT ${insertedColumns}
-        WHERE id = @id AND active = 1;`);
-      return recordset[0] ?? null;
+      try {
+        const { recordset } = await request.query<ProjectRow>(`UPDATE dbo.projects
+          SET ${assignments.join(', ')}
+          OUTPUT ${insertedColumns}
+          WHERE id = @id AND active = 1;`);
+        return recordset[0] ?? null;
+      } catch (error) {
+        if (isUniqueViolation(error)) throw new ProjectConflictError();
+        throw error;
+      }
     },
     async archive(id: string) {
       const { rowsAffected } = await pool.request().input('id', sql.BigInt, BigInt(id))

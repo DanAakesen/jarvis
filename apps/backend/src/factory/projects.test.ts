@@ -47,15 +47,32 @@ describe('projects API', () => {
     expect(response.json()).toEqual({ ...project, ...validInput });
   });
 
+  it('accepts supported policy, sandbox, repository, tech, and concurrency values', async () => {
+    const app = fixture();
+    const response = await app.inject({
+      method: 'POST', url: '/factory/projects', headers,
+      payload: {
+        ...validInput, repo: 'dan-aakesen/my-site.web_1', policy: 'complete_without_deployment',
+        sandbox_size: '2x4', tech: 'dotnet-8', max_parallel_tasks: 2147483647,
+      },
+    });
+    expect(response.statusCode).toBe(201);
+  });
+
   it.each([
     ['repository shape', { repo: 'not-a-repo' }],
     ['empty repository owner', { repo: '/jarvis' }],
     ['multiple repository separators', { repo: 'DanAakesen/org/jarvis' }],
     ['repository characters', { repo: 'DanAakesen/jarvis!' }],
+    ['repository newline', { repo: 'DanAakesen/jarvis\n' }],
     ['repository maximum length', { repo: `${'a'.repeat(139)}/b` }],
+    ['blank name', { name: '   ' }],
+    ['blank branch', { default_branch: '   ' }],
+    ['UTF-16 name storage width', { name: '😀'.repeat(51) }],
     ['policy vocabulary', { policy: 'auto_merge' }],
     ['sandbox size vocabulary', { sandbox_size: '4x8' }],
     ['tech format', { tech: 'Node.js' }],
+    ['tech newline', { tech: 'node\n' }],
     ['tech maximum length', { tech: `a${'b'.repeat(32)}` }],
     ['max parallel minimum', { max_parallel_tasks: 0 }],
     ['max parallel integer', { max_parallel_tasks: 1.5 }],
@@ -105,8 +122,12 @@ describe('projects API', () => {
     const duplicate = fixture({
       ...store,
       create: vi.fn(async () => { throw new ProjectConflictError(); }),
+      update: vi.fn(async () => { throw new ProjectConflictError(); }),
     });
     expect((await duplicate.inject({ method: 'POST', url: '/factory/projects', headers, payload: validInput })).statusCode).toBe(409);
+    expect((await duplicate.inject({
+      method: 'PATCH', url: '/factory/projects/42', headers, payload: { repo: 'DanAakesen/other' },
+    })).statusCode).toBe(409);
   });
 
   it('archives a project and refuses malformed or out-of-range IDs', async () => {

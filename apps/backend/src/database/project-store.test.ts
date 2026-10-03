@@ -49,13 +49,16 @@ describe('SQL project store', () => {
     expect(query.mock.calls[1]?.[0]).toContain('SET active = 0 WHERE id = @id');
   });
 
-  it('translates only unique-constraint violations into repository conflicts', async () => {
+  it('translates unique-constraint violations into repository conflicts', async () => {
     const { pool, query } = fakePool();
     query.mockRejectedValueOnce(Object.assign(new Error(), { number: 2627 }));
     await expect(createProjectStore(pool).create({
       name: 'Jarvis', repo: 'DanAakesen/jarvis', default_branch: 'main', default_agent: 'copilot',
       policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
     })).rejects.toThrow('Project repository already exists');
+    query.mockRejectedValueOnce(Object.assign(new Error(), { number: 2601 }));
+    await expect(createProjectStore(pool).update('42', { repo: 'DanAakesen/other' }))
+      .rejects.toThrow('Project repository already exists');
     query.mockRejectedValueOnce(new Error('database unavailable'));
     await expect(createProjectStore(pool).list()).rejects.toThrow('database unavailable');
   });

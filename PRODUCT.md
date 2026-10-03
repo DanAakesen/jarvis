@@ -158,6 +158,13 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | List: name, repository, default agent, policy, tech, running tasks, last release | Create, edit, archive a project |
 | Project settings: repository, default branch, default agent, policy, merge rules, sandbox size, tech, max parallel tasks | Save (applies to new tasks only) |
 
+The project API lists active projects, creates and updates settings, and archives
+without deleting the row or its task history. Repositories use `owner/name`;
+policies are `deliver_pr` or `complete_without_deployment`, sandbox sizes are
+`1x2` or `2x4`, tech identifiers start with a lowercase letter and use lowercase
+letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
+32-bit integer (default 1).
+
 #### Settings
 
 | Data points | Actions |

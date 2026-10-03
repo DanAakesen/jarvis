@@ -31,14 +31,14 @@ export class ProjectConflictError extends Error {
 }
 
 const projectFields = {
-  name: { type: 'string', minLength: 1, maxLength: 100 },
-  repo: { type: 'string', minLength: 3, maxLength: 140, pattern: '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' },
-  default_branch: { type: 'string', minLength: 1, maxLength: 255 },
+  name: { type: 'string', minLength: 1, maxLength: 100, pattern: '\\S' },
+  repo: { type: 'string', minLength: 3, maxLength: 140, pattern: '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$(?![\\s\\S])' },
+  default_branch: { type: 'string', minLength: 1, maxLength: 255, pattern: '\\S' },
   default_agent: { type: 'string', enum: ['codex', 'copilot'] },
   policy: { type: 'string', enum: ['deliver_pr', 'complete_without_deployment'] },
   merge_rules: { anyOf: [{ type: 'string', maxLength: 4000 }, { type: 'null' }] },
   sandbox_size: { type: 'string', enum: ['1x2', '2x4'] },
-  tech: { type: 'string', minLength: 1, maxLength: 32, pattern: '^[a-z][a-z0-9_.-]*$' },
+  tech: { type: 'string', minLength: 1, maxLength: 32, pattern: '^[a-z][a-z0-9_.-]*$(?![\\s\\S])' },
   max_parallel_tasks: { type: 'integer', minimum: 1, maximum: 2147483647 },
 } as const;
 
@@ -69,14 +69,19 @@ function isValidId(id: string): boolean {
   return id.length < 19 || (id.length === 19 && id <= '9223372036854775807');
 }
 
-function rejectUnknownProperties(allowed: readonly string[]) {
+function validateBodyProperties(allowed: readonly string[], widths: Readonly<Record<string, number>>) {
   return async (request: { body: unknown }, reply: { code(statusCode: number): { send(payload: unknown): unknown } }) => {
-    if (typeof request.body === 'object' && request.body !== null && !Array.isArray(request.body) &&
-      Object.keys(request.body).some((key) => !allowed.includes(key))) {
-      return reply.code(400).send({ error: 'Invalid request' });
+    if (typeof request.body === 'object' && request.body !== null && !Array.isArray(request.body)) {
+      const fields = Object.entries(request.body);
+      if (fields.some(([key]) => !allowed.includes(key)) ||
+        fields.some(([key, value]) => typeof value === 'string' && value.length > (widths[key] ?? Number.POSITIVE_INFINITY))) {
+        return reply.code(400).send({ error: 'Invalid request' });
+      }
     }
   };
 }
+
+const stringWidths = { name: 100, repo: 140, default_branch: 255, merge_rules: 4000, tech: 32 };
 
 function storeOrUnavailable(store: ProjectStore | null, reply: { code(statusCode: number): { send(payload: unknown): unknown } }): ProjectStore | null {
   if (!store) {
@@ -95,7 +100,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
 
   app.post<{ Body: CreateProject }>('/', {
     schema: createSchema,
-    preValidation: rejectUnknownProperties(Object.keys(projectFields)),
+    preValidation: validateBodyProperties(Object.keys(projectFields), stringWidths),
   }, async (request, reply) => {
     const store = storeOrUnavailable(app.projectStore, reply);
     if (!store) return;
@@ -110,14 +115,19 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch<{ Params: { id: string }; Body: UpdateProject }>('/:id', {
     schema: updateSchema,
-    preValidation: rejectUnknownProperties(Object.keys(projectFields)),
+    preValidation: validateBodyProperties(Object.keys(projectFields), stringWidths),
   }, async (request, reply) => {
     if (!isValidId(request.params.id)) return reply.code(400).send({ error: 'Invalid request' });
     const store = storeOrUnavailable(app.projectStore, reply);
     if (!store) return;
-    const project = await store.update(request.params.id, request.body);
-    if (!project) return reply.code(404).send({ error: 'Not found' });
-    return project;
+    try {
+      const project = await store.update(request.params.id, request.body);
+      if (!project) return reply.code(404).send({ error: 'Not found' });
+      return project;
+    } catch (error) {
+      if (error instanceof ProjectConflictError) return reply.code(409).send({ error: 'Project repository already exists' });
+      throw error;
+    }
   });
 
   app.delete<{ Params: { id: string } }>('/:id', { schema: idSchema }, async (request, reply) => {

@@ -151,6 +151,10 @@ erDiagram
 ```
 
 - One row per repository. `tech` chooses the sandbox image (small images, L23).
+- P1-03's SQL-backed API returns active projects, updates only active rows, and
+  archives by setting `active = 0`; archived rows remain to preserve task
+  references and the unique repository constraint. Repositories stay reserved
+  after archive.
 
 ## 3 · Tasks and queue
 
