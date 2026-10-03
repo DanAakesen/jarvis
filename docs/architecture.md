@@ -2,7 +2,7 @@
 
 Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. P0-01 provides the monorepo folders. P0-02 and P0-03 implement the web and backend skeletons. Statuses below distinguish implementation, design, and prototype evidence.
 
-- Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L35): [decisions.md](decisions.md).
+- Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L36): [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
 - **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–13 show each flow as swimlanes, coloured by evidence (proven, documented, assumed). Open it in a browser.
 
@@ -14,7 +14,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton implemented in P0-02; sign-in P0-09 and deployment P0-11 pending |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
-| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton implemented; area plugins and SSE in their tasks |
+| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton and core/factory module registration implemented; domain APIs and SSE in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
 | Database access | `mssql` driver with Entra ID (managed identity); plain SQL migrations, applied by the backend at startup under a SQL app lock | Decided; **verify** in P0-07 |
 | Files | Azure Blob Storage for artifacts and logs | Decided |
@@ -101,6 +101,26 @@ boundary. No deployed Entra token was obtained; browser sign-in and `/me` remain
 #9, and live deployment verification remains #11.
 
 Where each part runs. The web app is static files on Static Web Apps: free and always reachable. Container Apps hosts only the backend.
+
+### Backend module composition
+
+Issue #16 adds `BackendModule` (`id`, `registerRoutes`, `tools`) and registers
+each module as an encapsulated Fastify plugin after global security/CORS/logging
+hooks. `buildApp` defaults to `core` and `factory`; its optional module list selects
+the complete composition. A new area contributes routes and tools through this
+contract without changing `core`. Readiness awaits async module registration and
+refuses a failed plugin; Fastify owns plugin close hooks.
+
+Core owns the health route and a per-app internal Jarvis tool catalogue; settings,
+activity, persisted events and the SSE hub remain their later tasks. Factory's
+registration boundary owns future projects/tasks APIs and tools; it contributes
+none until those operations are implemented. The catalogue rejects duplicate
+module/tool identities, snapshots frozen schemas and exposes read-only descriptors
+with ownership and handlers. There is no public tool dispatcher: future dispatch
+must authenticate/authorize, validate inputs and bound execution. Existing Foundry
+client, health/security/logging and process shutdown behavior are preserved.
+The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
+resource lifetimes and the verified offline extension contract.
 
 ```mermaid
 flowchart LR
@@ -374,7 +394,7 @@ PR #79 adds the Foundry account, project, model deployments and ACR/Application 
 - One production environment in `rg-jarvis`; no dev environment.
 - Local development: `npm run dev` in the repository root serves the web app on `http://localhost:5173` against the production backend. Backend changes are tested in CI and take effect after deploy.
 - Migrations run in the backend at startup; GitHub runners never connect to Azure SQL.
-- Development of Jarvis itself is remote only: Copilot cloud agent and Codex cloud deliver PRs, `pr-title.yml` keeps PR titles in the `<task ID>: <summary>` format, `copilot-ready.yml` takes finished Copilot PRs out of draft, a merge workflow merges them when checks pass against the latest `main`, and the deploy workflows release them. Rules: [development workflow](agent-context.md#development-workflow).
+- Development of Jarvis itself is remote only: Copilot cloud agent and Codex cloud deliver PRs, `pr-title.yml` keeps PR titles in the `<task ID>: <summary>` format, `worker-label.yml` labels the tasks Copilot takes, `copilot-ready.yml` takes finished Copilot PRs out of draft, a merge workflow merges them when checks pass against the latest `main`, and the deploy workflows release them. Rules: [development workflow](agent-context.md#development-workflow).
 - Everything except the bootstrap items is created by Bicep and deployed by GitHub Actions on merge to `main`; no portal changes.
 
 ## References

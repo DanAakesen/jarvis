@@ -216,7 +216,7 @@ const FLOWS = [
     nodes: [
       { id: "ctx", lane: "jarvis", col: 1, s: "context", from: [[1, "jin"]], t: "From 1: request text", d: "“Start en Codex-opgave på Jarvis: tilføj dark mode”." },
       { id: "load", lane: "jarvis", col: 2, s: "assumed", t: "Load context", d: "Projects, running tasks, recent events.", ev: "Not built. Voice prototype: preloading the task list would save the list_tasks round (≈1–2 s) on most commands." },
-      { id: "read", lane: "backend", col: 2, s: "assumed", t: "Read functions", d: "List projects, list tasks, task status." },
+      { id: "read", lane: "backend", col: 2, s: "assumed", t: "Read functions", d: "List projects, list tasks, task status.", ev: "Issue #16 verifies internal module/tool registration offline. Domain APIs and the authenticated HTTP tool registry endpoint remain unimplemented; this flow is still assumed." },
       { id: "rows", lane: "data", col: 3, s: "assumed", t: "Task rows and events", d: "Read from Azure SQL." },
       { id: "tool", lane: "model", col: 3, s: "proven", t: "Choose an action", d: "Tool call: create_task(project, agent, text).", ev: "Voice prototype V3: gpt-5.6-luna with strict action rules chose the right tool and arguments for 20/20 Danish commands through the deployed path.", href: VR },
       { id: "intent", lane: "model", col: 4, s: "proven", t: "Danish intent accuracy and cost", d: "20/20 commands; ≈0.003 DKK per command (gpt-5.6-luna).", ev: "Voice prototype V3 and reliability trials. Risk found: the model can describe an action it did not take; speak confirmations from tool results.", href: VR },
