@@ -260,3 +260,23 @@ that package (and its linter through the same interpreter).
 - Keep stable decision (#) and learning (L#) numbers; add new ones at the end of [decisions.md](decisions.md).
 - When a status, decision, or learning changes, update the matching boxes in [architecture-flows.html](architecture-flows.html) in the same change.
 - Prototype reports keep only run instructions and raw evidence; decisions and learnings belong in [decisions.md](decisions.md).
+
+## Runner setup and release
+
+Issue #28 adds the Python runner independently of the npm workspaces. With Python
+3.12.14, create `runner/.venv` and install `runner/requirements-dev.txt` with
+`python -m pip install --require-hashes -r ...`. Codex cloud validated frozen
+installation with `uv pip sync --require-hashes`, `python -m pytest -q` and
+`python -m ruff check .` from `runner/`; the local OpenAPI route returned HTTP 200.
+Runner CI owns Docker builds and packaged CLI/HTTP checks because agents have no
+Docker runtime here. Production Key Vault/Foundry acceptance is still unverified.
+
+The main-only [runner deploy workflow](../.github/workflows/runner-deploy.yml)
+requires Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME`, set after #11's successful
+Bicep deployment. It consumes that deployment's existing outputs and bootstrap
+Azure variables, queues under `jarvis-production-deploy`, builds the two images
+in ACR, deploys both capacity tiers, and records identity-probe evidence. #11 must
+use that same deployment concurrency group. The workflow never seeds secrets;
+`github-token`, `copilot-token`, and the Jarvis-only `codex-login` must already be
+in Key Vault. Installation tokens replace the prototype Git-token path in #40.
+See [runner/README.md](../runner/README.md) for commands and the contract.
