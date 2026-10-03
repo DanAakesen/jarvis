@@ -1,0 +1,22 @@
+[
+  [
+    {
+      "number": 30,
+      "body": "Fixes #3",
+      "state": "open",
+      "merged_at": null
+    },
+    {
+      "number": 31,
+      "body": "Fixes #5",
+      "state": "closed",
+      "merged_at": null
+    },
+    {
+      "number": 32,
+      "body": "Fixes #6",
+      "state": "closed",
+      "merged_at": "2026-10-03T00:00:00Z"
+    }
+  ]
+]

@@ -30,17 +30,43 @@ def _cells(line: str) -> list[str]:
 def parse_plan(markdown: str) -> dict[str, dict[str, Any]]:
     """Read task tables only; malformed/duplicate task rows abort coordination."""
     result: dict[str, dict[str, Any]] = {}
+    columns: list[str] | None = None
     for line in markdown.splitlines():
         if not line.lstrip().startswith("|"):
+            columns = None
             continue
         cells = _cells(line)
+        if cells and cells[0].casefold() == "id":
+            columns = [re.sub(r"\s+", " ", cell).casefold() for cell in cells]
+            # The Issue column was added by plan-status. Positional guessing
+            # would silently treat the issue link as the task/dependencies.
+            accepted = {"acceptance", "acceptance criteria"}
+            if not (
+                len(columns) == 5 and columns[:2] == ["id", "task"]
+                and columns[2] in accepted and columns[3:] == ["depends on", "status"]
+                or len(columns) == 6 and columns[:3] == ["id", "issue", "task"]
+                and columns[3] in accepted and columns[4:] == ["depends on", "status"]
+            ):
+                columns = None
+            continue
         if not cells or not re.fullmatch(TASK_ID, cells[0]):
             continue
-        if len(cells) != 5 or cells[0] in result:
+        if columns is None or len(cells) != len(columns) or cells[0] in result:
             raise ValueError(f"Malformed or duplicate PLAN task: {cells[0]}")
-        task_id, title, _, dependencies, status = cells
-        status = status.removeprefix("**").removesuffix("**")
-        if not title or status not in {"Not started", "In progress", "Blocked", "Complete"}:
+        row = dict(zip(columns, cells, strict=True))
+        task_id, title, dependencies = row["id"], row["task"], row["depends on"]
+        if "issue" in row and row["issue"] not in {"", "—", "–", "-"}:
+            issue_link = re.fullmatch(
+                r"\[#([1-9][0-9]*)\]\(https://github\.com/DanAakesen/jarvis/issues/([1-9][0-9]*)\)",
+                row["issue"], re.IGNORECASE,
+            )
+            if issue_link is None or issue_link[1] != issue_link[2]:
+                raise ValueError(f"Invalid PLAN issue link: {task_id}")
+        status = {
+            "notstarted": "Not started", "inprogress": "In progress",
+            "blocked": "Blocked", "complete": "Complete",
+        }.get(re.sub(r"\s+", "", row["status"].strip("* ")).casefold())
+        if not title or status is None:
             raise ValueError(f"Invalid PLAN task: {task_id}")
         deps = []
         if dependencies not in {"", "—", "–", "-", "None"}:

@@ -21,6 +21,8 @@ No visual direction is chosen yet. Dan designs each page by giving an image gene
 | Settings | Models, reasoning, voices, limits, credential status |
 | Usage and cost | Usage by task, project, and period |
 
+The repository `PLAN.md` status workflow is GitHub metadata; it does not add a Jarvis UI control or visual state.
+
 ## Interactions to design
 
 - **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard.

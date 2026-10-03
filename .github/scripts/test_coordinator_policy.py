@@ -22,6 +22,15 @@ PLAN = """
 | P0-04 | Manual setup | Verified | P0-03 | Blocked |
 """
 
+PLAN_WITH_ISSUES = """
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P0-01 | [#1](https://github.com/DanAakesen/jarvis/issues/1) | Foundation | Verified | — | Complete |
+| P0-02 | [#2](https://github.com/DanAakesen/jarvis/issues/2) | Skeleton | Verified | P0-01 | Complete |
+| P0-03 | [#3](https://github.com/DanAakesen/jarvis/issues/3) | Next task | Verified | P0-01, P0-02 | Not started |
+| P0-04 | — | Manual setup | Verified | P0-03 | Blocked |
+"""
+
 
 class PlanPolicyTests(unittest.TestCase):
     def setUp(self):
@@ -39,6 +48,40 @@ class PlanPolicyTests(unittest.TestCase):
         plan = parse_plan((Path(__file__).resolve().parents[2] / "PLAN.md").read_text())
         self.assertEqual(plan["P0-11"]["deps"], [f"P0-{number:02}" for number in range(4, 11)])
         self.assertIn("P3-10", plan)
+
+    def test_plan_status_issue_column_preserves_task_and_dependencies(self):
+        self.plan = parse_plan(PLAN_WITH_ISSUES)
+        self.assertEqual(self.plan, parse_plan(PLAN))
+        self.assertEqual(self.ready(), (True, "ready"))
+        self.issues["P0-02"]["state"] = "open"
+        self.assertFalse(self.ready()[0])
+
+    def test_five_and_six_column_tables_can_coexist(self):
+        first = PLAN.split("| P0-02")[0]
+        second = PLAN_WITH_ISSUES.replace("| P0-01 | [#1](https://github.com/DanAakesen/jarvis/issues/1) | Foundation | Verified | — | Complete |\n", "")
+        self.assertEqual(parse_plan(first + "\n" + second), parse_plan(PLAN))
+
+    def test_plan_status_normalizes_case_and_whitespace(self):
+        for status in ["In Progress", "IN PROGRESS", "InProgress", "**In  progress**"]:
+            with self.subTest(status=status):
+                plan = parse_plan(PLAN_WITH_ISSUES.replace("Not started", status))
+                self.assertEqual(plan["P0-03"]["status"], "In progress")
+        plan = parse_plan(PLAN_WITH_ISSUES.replace("Not started", "NOT STARTED"))
+        self.assertEqual(plan["P0-03"]["status"], "Not started")
+
+    def test_issue_column_header_and_links_fail_closed_on_unknown_shape(self):
+        malformed = [
+            PLAN_WITH_ISSUES.replace("ID | Issue | Task", "ID | Task | Issue"),
+            PLAN_WITH_ISSUES.replace("ID | Issue | Task", "ID | GitHub | Task"),
+            PLAN_WITH_ISSUES.replace("[#1](https://github.com/DanAakesen/jarvis/issues/1)", "[#1](https://github.com/other/repo/issues/1)"),
+            PLAN_WITH_ISSUES.replace("[#1](https://github.com/DanAakesen/jarvis/issues/1)", "[#2](https://github.com/DanAakesen/jarvis/issues/1)"),
+            PLAN_WITH_ISSUES.replace("[#1](https://github.com/DanAakesen/jarvis/issues/1)", "arbitrary link"),
+            PLAN_WITH_ISSUES.replace("Acceptance criteria", "Unknown column"),
+            PLAN_WITH_ISSUES.replace("Not started", "Completed"),
+        ]
+        for markdown in malformed:
+            with self.subTest(markdown=markdown), self.assertRaises(ValueError):
+                parse_plan(markdown)
 
     def test_exact_title_only(self):
         self.assertEqual(issue_task_id("P0-03: Skeleton"), "P0-03")
