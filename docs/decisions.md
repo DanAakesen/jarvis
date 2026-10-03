@@ -113,5 +113,5 @@ Mistakes made so far and the rule that prevents each one.
 
 | **L30** | Database startup ownership | Fastify ready hooks default to a 10-second deadline, shorter than SQL auto-resume and the migration lock wait. `mssql` also refuses to close a connecting pool. | Await bounded database initialization before listen. Own pending connection work through cancellation, close a late connection before migrations, cancel active SQL and roll back before pool disposal. Verify these paths independently of the provider. |
 
-<!-- L30–L34 are reserved for the parallel database, authentication, module structure, CI and cloud setup issues. Add only demonstrated learnings and preserve the existing numbers. -->
+<!-- L31–L34 are reserved for the parallel database, authentication, module structure, CI and cloud setup issues. Add only demonstrated learnings and preserve the existing numbers. -->
 | **L36** | GitHub Actions | The Copilot PR ready workflow failed with `Resource not accessible by integration`: `GITHUB_TOKEN` with only `pull-requests: write` can rename a PR but can't mark it ready. | Declare `contents: write` as well for `gh pr ready`. Test a new workflow with a throwaway PR (`workflow_dispatch`) before relying on it. |
