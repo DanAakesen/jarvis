@@ -56,6 +56,10 @@ session as `agent_session_id` to resume, steer, or pause.
 Start and steer return `invocation_id`, `session_id`, `status`, `agent`, and
 `mode`. Poll the invocation for bounded events, result, error, and timestamps.
 Pause uses ACP cancellation; a later turn reloads the persisted ACP session.
+Every agent prompt, including resumed and recovered turns, is prefixed with
+instructions to commit and push small work-in-progress changes to the existing
+task branch after each meaningful step. Agents must not force-push or push to
+`main`, and must report commit or push failures.
 Cancel terminates the provider process. A `completed` runner turn is not proof
 of a branch or PR: the backend must verify GitHub before accepting delivery
 (L22). The filesystem persists only at Foundry checkpoints. Metadata is stored per
