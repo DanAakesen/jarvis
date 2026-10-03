@@ -18,7 +18,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 | Stack, runtime, sandbox, voice, dispatch, cost | [architecture.md](architecture.md) |
 | Tables, relationships, and groups | [data-model.md](data-model.md) |
 | Step-by-step flows with evidence status | [architecture-flows.html](architecture-flows.html) (open in a browser) |
-| Decisions and learnings L1–L23 | [decisions.md](decisions.md) |
+| Decisions and learnings L1–L24 | [decisions.md](decisions.md) |
 | Prototype code and reports to port in P2 and P4 | [reference/](reference/) |
 | Open-source research | [open-source.md](open-source.md) |
 
@@ -115,21 +115,53 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - In Azure, secrets live only in Key Vault; services use managed identities, and GitHub Actions uses OpenID Connect.
 - Codex: the Jarvis-only login follows the [Codex login rules](architecture.md#sandbox-credentials). Never copy Dan's own Codex login.
 - Codex cloud environment: `GH_TOKEN` is a fine-grained token for `DanAakesen/jarvis` with only **Issues: read and write**, used to claim issues. It is an environment variable, not a Codex secret, because Codex removes secrets before the agent runs. Never print it, write it to files, or use it for anything else.
+- P0-01 exception: Dan explicitly authorized using the existing `GH_TOKEN` to open its linked PR. PR #78 creation succeeded. This task-specific authorization does not change the issue-claim restriction for other tasks.
 
 ## Setup and commands
 
-P0 is in progress; the Bicep build and lint commands below have been verified locally. Other application commands are candidates until their tasks add the apps:
+P0-01 adds npm workspaces for `apps/web` and `apps/backend`, with one root lockfile
+and a shared strict TypeScript configuration. Both currently compile an empty
+module to `dist/`; no UI, HTTP server, application tests, or lint command exists
+yet. Python components and SQL migrations remain in their planned tasks.
+P0-04 adds the Bicep template; its Azure deployment awaits P0-11.
+
+Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), and Python 3.12.14
+(`.python-version`, for future Python work). Install from the repository root,
+not from individual apps. Prototype dependencies are separate and excluded
+from npm workspaces. See [README.md](../README.md).
+
+Verified in Codex cloud for P0-01:
 
 | Purpose | Command |
 | --- | --- |
-| Build Bicep (generates `infra/main.json`, which is git-ignored) | `az bicep build --file infra/main.bicep` |
+| Frozen dependency installation | `npm ci` in the repository root |
+| Both empty workspace builds | `npm run build` in the repository root |
+| Web workspace build | `npm run build --workspace @jarvis/web` in the repository root |
+| Backend workspace build | `npm run build --workspace @jarvis/backend` in the repository root |
+
+Verified locally in P0-04 (Azure deployment remains pending P0-11):
+
+| Purpose | Command |
+| --- | --- |
+| Build Bicep (generates git-ignored `infra/main.json`) | `az bicep build --file infra/main.bicep` |
 | Lint Bicep | `az bicep lint --file infra/main.bicep` |
+
+Cloud tasks use their existing isolated checkout; do not create a worktree or
+another checkout unless Dan asks. Git HTTPS access and GitHub API access are
+separate: cloud environment network settings must allow `api.github.com` for
+issue/PR operations, as well as GitHub Git access and package registries. Never
+request a token merely because a network policy blocks that hostname.
+
+Future commands (unimplemented until their tasks):
+
+| Purpose | Command |
+| --- | --- |
 | Run the web app | `npm run dev` in the repository root, then open `http://localhost:5173` (uses the production backend). Agents run it only in their cloud environment |
 | Bootstrap or repair identities | `./infra/bootstrap.ps1` (safe to re-run; needs Dan's signed-in `az` and `gh`) |
-| Web build and test | `npm run build`, `npm test` in `apps/web` |
-| Backend build and test | `npm run build`, `npm test` in `apps/backend` |
+| Web tests (P0-02) | `npm test` in `apps/web` |
+| Backend tests (P0-03) | `npm test` in `apps/backend` |
 | Python tests | `pytest` in `runner` and `agents/jarvis` |
-| Validate Mermaid diagrams | `npx -y @mermaid-js/mermaid-cli@11 -i <file>.md -o <out>.md` |
+| Validate Mermaid diagrams (candidate; unverified) | `npx -y @mermaid-js/mermaid-cli@11 -i <file>.md -o <out>.md` |
 
 Pin the Codex and Copilot CLI versions locally and in the sandbox image (L13).
 

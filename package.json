@@ -1,0 +1,22 @@
+{
+  "name": "jarvis",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "npm@10.9.9",
+  "engines": {
+    "node": ">=22 <23",
+    "npm": ">=10 <11"
+  },
+  "workspaces": [
+    "apps/web",
+    "apps/backend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}
