@@ -4,9 +4,9 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **Active phase:** P0. P0-01 provides the monorepo folders and verified empty app builds in PR #78; merge puts the layout on `main` and closes issue #1. P0-04 is complete: the Bicep template builds and lints locally; Azure deployment remains to be verified by P0-11. P0-06 is complete: `infra/bootstrap.ps1` ran on 3 October 2026 (identities, sign-in apps, resource group, empty private repository `DanAakesen/jarvis` with its Actions variables).
-- **Next step:** Merge P0-01, then P0-02, P0-03, and P0-10 so that P0-12 (automatic merges) and P0-13 (automatic statuses) exist early. Until then Dan starts tasks one at a time and merges green PRs.
-- **Blockers:** none. Items marked **Confirm** or **Verify** block only the tasks that depend on them.
+- **Active phase:** P0. P0-01 is merged. P0-02 provides React/Vite routing, public configuration, lint, Vitest and web CI. Installation, builds, 17 tests and desktop/mobile browser checks pass; its PR is awaiting merge. P0-04 provides the locally checked Bicep template; deployment remains P0-11. P0-06 completed the bootstrap on 3 October 2026.
+- **Next step:** Merge P0-02, then implement P0-03 and P0-10 so P0-12 (automatic merges) and P0-13 (automatic statuses) can follow. Until then Dan starts tasks and merges green PRs.
+- **Blockers:** No production backend URL exists yet; P0-11 must record it in `apps/web/config.json`. This does not block opening the skeleton. Items marked **Confirm** or **Verify** block only the tasks that depend on them.
 
 ## Implementation phases
 
@@ -62,7 +62,7 @@ Goal: an empty Jarvis that Dan can sign in to, deployed entirely by GitHub Actio
 | ID | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- |
 | P0-01 | Turn the pushed scaffold into the monorepo: folder layout from the [stack overview](docs/architecture.md#stack-overview) (`apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`), `README.md`, `.gitignore`, editor config, licence. Project rules stay in [docs/agent-context.md](docs/agent-context.md); the generated `AGENTS.md` is not edited | Folder layout on `main`; empty apps build | P0-06 | Complete |
-| P0-02 | Web app skeleton: Vite + React + TypeScript, router, lint, Vitest. `npm run dev` in the repository root starts the web app on `http://localhost:5173` against the production backend; configuration comes from `infra/bootstrap.output.json` and the backend URL | `npm run build` and tests pass in CI; `npm run dev` then opening `http://localhost:5173` works with no other step | P0-01 | Not started |
+| P0-02 | Web app skeleton: Vite + React + TypeScript, router, lint, Vitest. `npm run dev` in the repository root starts the web app on `http://localhost:5173` against the production backend; configuration comes from `infra/bootstrap.output.json` and the backend URL | `npm run build` and tests pass in CI; `npm run dev` then opening `http://localhost:5173` works with no other step | P0-01 | Complete |
 | P0-03 | Backend skeleton: Fastify + TypeScript, `/health`, structured logging to Application Insights, lint, Vitest, Dockerfile; CORS allows only `http://localhost:5173` and the Static Web App origin | Container builds; `/health` returns 200 | P0-01 | Not started |
 | P0-04 | Bicep: resource group, Log Analytics, Application Insights, Key Vault (RBAC), Storage (Blob), Container Registry, Azure SQL server + database `jarvis` (free offer; Entra admin = group `jarvis-sql-admins`), Container Apps environment + backend app (minimum 1 replica, existing identity `id-jarvis-backend`), Static Web App in West Europe, 300 DKK budget alert. Resource group `rg-jarvis` already exists | `az bicep build` and the Bicep linter pass in the PR (no Azure access needed); everything except the bootstrap items is in Bicep. The first real deployment is checked by P0-11 | P0-06 | Complete |
 | P0-05 | Bicep: Foundry account and project (timestamped names, L2), model deployments (`gpt-5.6-luna`, `gpt-realtime-2.1`), project connections for ACR and Application Insights | `az bicep build` and the linter pass in the PR; P0-11's first deploy checks that the project data plane and runtime host answer (L10) | P0-04 | Not started |

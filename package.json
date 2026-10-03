@@ -14,9 +14,12 @@
     "apps/backend"
   ],
   "scripts": {
-    "build": "npm run build --workspaces"
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspace @jarvis/web",
+    "lint": "npm run lint --workspace @jarvis/web",
+    "test": "npm test --workspace @jarvis/web"
   },
   "devDependencies": {
-    "typescript": "7.0.2"
+    "typescript": "6.0.3"
   }
 }
