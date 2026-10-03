@@ -221,7 +221,7 @@ const FLOWS = [
       { id: "entra", lane: "entra", col: 4, s: "docs", t: "Return delegated API token", d: "`access_as_user` for `jarvis-api`.", ev: "MSAL and bootstrap configuration are implemented; real Entra consent/sign-in is unverified without Azure access." },
       { id: "me", lane: "backend", col: 5, s: "docs", t: "GET /me", d: "Browser sends the access token as a bearer credential.", ev: "P0-09 tests the authenticated route using a signed local fixture token." },
       { id: "verify", lane: "backend", col: 6, s: "docs", t: "Allow Dan; refuse others", d: "Verify signature, tenant, audience, delegated scope, and allow-listed object ID.", ev: "P0-08's RS256/JWKS tests and P0-09's /me test prove another object ID receives 403 offline." },
-      { id: "result", lane: "board", col: 7, s: "docs", t: "Show name or refusal", d: "Only a successful `/me` response displays the bounded name; 401/403 shows a refusal.", ev: "P0-09 browser tests cover successful name display and refusal; live tenant behavior remains unverified." },
+      { id: "result", lane: "board", col: 7, s: "docs", t: "Open the shell or refuse", d: "Only a successful `/me` response opens the app shell with the bounded name; 401/403 shows a refusal.", ev: "P0-09 browser tests cover successful name display and refusal. P1-07 tests keep area navigation, settings and every shell page behind that response and keep the session while navigating. Live tenant behavior remains unverified." },
     ],
     edges: [
       ["start", "button", "docs", ""], ["button", "msal", "docs", "click"],

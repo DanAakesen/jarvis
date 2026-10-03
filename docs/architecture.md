@@ -48,6 +48,23 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   requests only the delegated API scope and sends the access token to `/me`.
   Cached accounts use silent token acquisition. A missing backend URL disables
   sign-in instead of presenting a false success state.
+- P1-07 adds the app shell. `useSignIn` owns the MSAL session for the whole
+  app, so navigation never repeats sign-in. Until `/me` succeeds, every shell
+  route shows sign-in and the header hides navigation; unknown addresses still
+  show the not-found page. `src/areas.ts` registers each area (`id`, label, top-level
+  path, component). The shell renders its navigation entry and mounts it at
+  `/<path>/*`; the area renders its own nested routes. Software Factory
+  (`src/factory/`) owns `/factory/tasks`, `/factory/tasks/:id`,
+  `/factory/projects`, `/factory/projects/:id` and `/factory/releases/:id`;
+  invalid IDs show not found. `/settings` is the shared settings entry. These
+  pages are placeholders until P1-08 to P1-11 and P3-08.
+- The main page's "Now" activity panel takes a typed `NowFeed`
+  (`src/activity.ts`): running tasks (title, project, agent, activity, start
+  time) and activity items (category, title, `activity.link`, time). Only
+  `task:<id>`, `release:<id>` and `project:<id>` links become routes. Dismissal
+  removes an item only after the injected action resolves. No backend feed
+  exists yet, so production shows the unavailable state; P1-13 adds the API and
+  live updates.
 - `/me` inherits the root authentication hook. The verifier accepts only
   Dan's signed delegated API token and returns a bounded display name from its
   validated `name` claim, falling back to `Dan` if that optional claim is absent
@@ -212,7 +229,7 @@ Rendered image: [assets/runtime-overview.png](assets/runtime-overview.png).
 
 | Layer | Design |
 | --- | --- |
-| Web | One app shell (Jarvis) with area navigation; each area owns its pages. The main page is the conversation plus activity across areas. |
+| Web | One app shell (Jarvis) with area navigation from `apps/web/src/areas.ts`; each area owns its pages and nested routes. The main page is the conversation plus activity across areas. Shell implemented in P1-07. |
 | Backend | A shared core (sign-in, events, settings, usage, the Jarvis tool registry, dispatcher) plus one module per area, in one deployable backend. Board, voice, and later the Windows app call the same functions. |
 | Jarvis tools | Each area registers its tools with the core, so Jarvis gains abilities without being rebuilt. |
 | Data | Relational Azure SQL tables per area; no JSON files as the domain model. See [data-model.md](data-model.md). |

@@ -370,3 +370,4 @@ erDiagram
 ## Still open
 
 - What usage Codex (`codex-acp`) and Copilot CLI report per turn (tokens, premium requests); **verify** in P2.
+- How a dismissed `activity` item is stored. The main page can dismiss items (PRODUCT.md), but `activity` has no dismissal column. P1-13 adds one with its migration and updates this model.
