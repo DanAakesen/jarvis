@@ -4,6 +4,8 @@ export interface AuthConfig {
   tenantId: string;
   apiClientId: string;
   ownerObjectId: string;
+  // Hosted Jarvis agent identity; only routes that opt in accept it.
+  agentObjectId?: string;
 }
 
 // Nonsecret IDs from infra/bootstrap.output.json. Deployment can override them.
@@ -13,6 +15,8 @@ const bootstrap = {
   ownerObjectId: '12bcfab7-49ba-4cf7-8be7-780a13911f93',
 };
 
+const uuid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i;
+
 export function loadAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
   const values: AuthConfig = { ...bootstrap };
   for (const [field, name] of [
@@ -21,10 +25,19 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
     ['ownerObjectId', 'ENTRA_OWNER_OBJECT_ID'],
   ] as const) {
     const value = env[name] ?? bootstrap[field];
-    if (!/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value)) {
+    if (!uuid.test(value)) {
       throw new ConfigurationError(`${name} must be a UUID`);
     }
     values[field] = value.toLowerCase();
+  }
+  // Known only after the agent is deployed; unset or empty leaves the agent denied.
+  const agent = env.ENTRA_JARVIS_AGENT_OBJECT_ID;
+  if (agent !== undefined && agent !== '') {
+    if (!uuid.test(agent)) throw new ConfigurationError('ENTRA_JARVIS_AGENT_OBJECT_ID must be a UUID');
+    if (agent.toLowerCase() === values.ownerObjectId) {
+      throw new ConfigurationError('ENTRA_JARVIS_AGENT_OBJECT_ID must differ from ENTRA_OWNER_OBJECT_ID');
+    }
+    values.agentObjectId = agent.toLowerCase();
   }
   return values;
 }

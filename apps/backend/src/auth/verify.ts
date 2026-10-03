@@ -2,7 +2,12 @@ import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import type { AuthConfig } from './config.js';
 
 export interface UserPrincipal { objectId: string; tenantId: string; displayName: string }
-export type TokenVerifier = (token: string) => Promise<UserPrincipal>;
+export interface AgentPrincipal { kind: 'jarvis-agent'; objectId: string; tenantId: string }
+export type TokenVerifier = (token: string) => Promise<UserPrincipal | AgentPrincipal>;
+export const agentToolsRole = 'Jarvis.Tools';
+export function isAgentPrincipal(principal: UserPrincipal | AgentPrincipal): principal is AgentPrincipal {
+  return 'kind' in principal && principal.kind === 'jarvis-agent';
+}
 export class AuthenticationDenied extends Error {
   constructor(public readonly statusCode: 401 | 403) { super('Authentication denied'); }
 }
@@ -27,14 +32,23 @@ export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey):
       !/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(payload.oid)) {
       throw new AuthenticationDenied(401);
     }
+    const objectId = payload.oid.toLowerCase();
+    if (config.agentObjectId !== undefined && objectId === config.agentObjectId) {
+      // The agent identity signs in app-only: an assigned application role and no delegated scope.
+      if (payload.scp !== undefined || !Array.isArray(payload.roles) || !payload.roles.includes(agentToolsRole) ||
+        (payload.idtyp !== undefined && payload.idtyp !== 'app')) {
+        throw new AuthenticationDenied(403);
+      }
+      return { kind: 'jarvis-agent', objectId, tenantId: config.tenantId };
+    }
     // ID tokens and app-only tokens have no delegated API scope and cannot pass.
-    if (payload.oid.toLowerCase() !== config.ownerObjectId || typeof payload.scp !== 'string' ||
+    if (objectId !== config.ownerObjectId || typeof payload.scp !== 'string' ||
       !payload.scp.split(' ').includes('access_as_user')) {
       throw new AuthenticationDenied(403);
     }
     const displayName = payload.name;
     return {
-      objectId: payload.oid.toLowerCase(),
+      objectId,
       tenantId: config.tenantId,
       displayName: typeof displayName === 'string' && displayName.trim().length > 0 &&
         displayName.length <= 200 && !Array.from(displayName).some((character) => {
