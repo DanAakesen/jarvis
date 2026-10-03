@@ -41,7 +41,9 @@ jobs:
           docker run --detach --name backend --publish 127.0.0.1:3000:3000 \
             --env STATIC_WEB_APP_ORIGIN=https://fixture.azurestaticapps.net jarvis-backend:ci
           trap 'docker logs backend; docker rm --force backend' EXIT
-          curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:3000/health --output /tmp/health.json
+          # Docker can reset an early connection while Node is still starting.
+          curl --fail --retry 20 --retry-all-errors --retry-delay 1 --max-time 2 \
+            http://127.0.0.1:3000/health --output /tmp/health.json
           python -c 'import json; assert json.load(open("/tmp/health.json")) == {"status": "ok"}'
           test "$(docker exec backend id -u)" != 0
           docker exec backend node -e "if (process.version !== 'v22.23.3') process.exit(1); for (const p of ['node_modules/typescript', 'node_modules/vitest', 'node_modules/@jarvis/web', 'docs', 'infra', 'apps/web']) { if (require('node:fs').existsSync(p)) process.exit(1); }"
