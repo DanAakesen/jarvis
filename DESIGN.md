@@ -32,3 +32,13 @@ No visual direction is chosen yet. Dan designs each page by giving an image gene
 ## Visual direction
 
 Not chosen. Add the selected direction, reference images, and findings here.
+
+## Foundation shell (P0-02)
+
+The temporary shell uses system typography, neutral surfaces, one content column
+and a compact Jarvis home link. It establishes responsive and keyboard behavior
+without choosing the future product identity. Canonical styles live in
+`apps/web/src/styles.css`. The home page states that sign-in and deployment are
+pending; no fake task data or unavailable controls are shown. Unknown addresses
+have a return link. A skip link and visible keyboard focus support navigation.
+Dan's page designs remain to be selected.

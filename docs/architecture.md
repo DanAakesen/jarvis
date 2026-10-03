@@ -1,6 +1,6 @@
 # Architecture
 
-Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. P0-01 provides the monorepo folders and empty TypeScript workspace builds; application runtimes are not built yet. Statuses below distinguish implementation, design, and prototype evidence.
+Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. P0-01 provides the monorepo folders. P0-02 implements the web skeleton; the backend runtime remains P0-03. Statuses below distinguish implementation, design, and prototype evidence.
 
 - Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L24): [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
@@ -11,8 +11,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Area | Choice | Status |
 | --- | --- | --- |
 | Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces for the two apps, one root lockfile | Implemented in P0-01; empty app builds verified in Codex cloud |
-| Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 7.0.2; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence | Pinned in P0-01; Node workspace builds verified, Python production components pending |
-| Web | React + TypeScript + Vite on Azure Static Web Apps (Free), resource in West Europe (Static Web Apps has no Swedish or Danish region; the files are served from a global network, so the region hardly matters) | Decided |
+| Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending |
+| Web | React/React DOM 19.3.0, React Router 7.18.4, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton implemented in P0-02; sign-in P0-09 and deployment P0-11 pending |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Decided |
 | Backend framework | Fastify: schema validation, a plugin per area, SSE support | Decided 3 October 2026 |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
@@ -29,7 +29,24 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
 | Voice | Danish: Voice Live voice bridge, MAI Transcribe, Harper. English: `gpt-realtime-2.1` speech to speech, Ryan HD | Decided |
 | Build and release | GitHub Actions: full build, tests, releases, deployments; status through GitHub App webhooks | Decided |
-| Testing | Vitest (web, backend), pytest (Python), Playwright for a few end-to-end board checks; database tests against SQL Server in a container in CI | Decided 3 October 2026 |
+| Testing | Web: Vitest 5.0.3, jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Backend Vitest, Python pytest, future Playwright board checks and SQL container tests | Web implemented in P0-02; remaining checks in their tasks |
+
+## Web skeleton and configuration
+
+- React mounts into `apps/web/index.html`. BrowserRouter renders the home page
+  and a catch-all page with a return link. Production static hosting must fall
+  back to `index.html` for client routes (P0-11).
+- Vite selects the tenant ID, web client ID and API scope from the bootstrap
+  output and injects only those fields plus the backend origin. The bootstrap
+  file is read at build time, never imported into the browser.
+- `apps/web/config.json` records the production HTTPS origin; `VITE_BACKEND_URL`
+  can override it at build/dev time. Missing deployment leaves the shell usable;
+  invalid identity fields or URLs stop startup. P0-11 must persist its
+  `backendFqdn` as the public URL. Backend connectivity is unverified until then.
+- The neutral foundation page shows pending capabilities. It does not authenticate
+  or contact an API; those interactions begin in P0-09.
+- `web-ci.yml` runs lint, tests and root builds without Azure access. P0-10 extends
+  this to monorepo checks rather than duplicating the web job.
 
 ## Runtime overview
 
