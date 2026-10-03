@@ -237,15 +237,24 @@ with no horizontal overflow, all controls at least 44 px high, and no browser
 console errors. The mock does not verify live Entra, Azure SQL, or production settings consumers.
 Never commit the stub or weaken sign-in in the app.
 
-Backend commands implemented in P0-03:
+Backend commands:
 
 | Purpose | Command |
 | --- | --- |
 | Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
+| SQL Server migration and task-store integration tests | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Start compiled backend | `npm start --workspace @jarvis/backend` (after its build) |
 | Build then start backend | `npm run dev --workspace @jarvis/backend` |
 | Health request | `curl --fail http://localhost:3000/health` → `{"status":"ok"}` |
 | Production container (GitHub Actions only; no Docker in an agent sandbox) | `docker build --file apps/backend/Dockerfile --tag jarvis-backend .` from the repository root |
+
+The factory tasks API provides authenticated create, filtered list, and detail
+routes. Task list filters are `projectId`, `agent`, `state`, `createdAfter`,
+`createdBefore`, and `search`; `limit`/`offset` and `eventLimit`/`eventOffset`
+bound result pages. Responses are capped at 1 MiB; event payloads above 4 KiB
+are marked truncated. State is backend-owned; do not add a client state update.
+The task store's transition operation must be used by backend dispatch/control
+code, and `Done` requires a trusted completion-verification call.
 
 `PORT` defaults to 3000, matching Container Apps ingress. `LOG_LEVEL` defaults
 to `info`. `STATIC_WEB_APP_ORIGIN` is an exact HTTPS origin with no trailing
@@ -281,7 +290,10 @@ can read their status; unapproved origins receive no allow-origin header.
 
 `npm test --workspace @jarvis/backend` includes real RSA/local-JWKS auth checks,
 socket duplicate-header rejection, cached keys and bounded provider outages.
-They require no Azure identity or external JWKS service. The production JWKS
+It also covers task API validation and every lifecycle edge. SQL Server
+integration tests cover task creation, event persistence, filtering and
+transitions against an isolated SQL Server 2022 instance; neither test suite
+requires Azure identity or Azure access. The production JWKS
 lookup timeout is five seconds. `/me` and browser sign-in remain P0-09; live
 Azure token verification remains P0-16.
 

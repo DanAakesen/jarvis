@@ -3,6 +3,7 @@ import sql from 'mssql';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readDownMigration, readMigrations, revertMigration, type Migration } from './migrations.js';
+import { createTaskStore } from './task-store.js';
 import { createSettingsStore } from './settings-store.js';
 import { createProjectStore } from './project-store.js';
 import { ProjectConflictError } from '../factory/projects.js';
@@ -102,6 +103,73 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     const row = await pool.request().query<{ state: string; priority: number; attempt_count: number }>(
       `SELECT state, priority, attempt_count FROM dbo.tasks WHERE id = ${String(task)}`);
     expect(row.recordset).toEqual([{ state: 'Running', priority: 0, attempt_count: 0 }]);
+  });
+
+  it('creates, filters, reads and transitions tasks with transactional history', async () => {
+    const projectResult = await pool.request()
+      .input('repo', sql.NVarChar(140), `DanAakesen/tasks-${randomUUID().slice(0, 8)}`)
+      .query<{ id: string }>(`INSERT dbo.projects (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+        OUTPUT CAST(inserted.id AS varchar(19)) AS id
+        VALUES (N'Task API fixture', @repo, N'main', N'copilot', N'deliver_pr', N'1x2', N'node');`);
+    const projectId = projectResult.recordset[0]?.id;
+    if (!projectId) throw new Error('Task API fixture project was not created');
+    const store = createTaskStore(pool);
+    const created = await store.create({ projectId, title: 'Task API contract', request: 'Exercise SQL task operations' });
+    expect(created).toMatchObject({ projectId, agent: 'copilot', source: 'board', state: 'Ready' });
+    if (!created) throw new Error('Task API fixture task was not created');
+
+    expect(await store.list({
+      projectId, agent: 'copilot', state: 'Ready', search: 'contract',
+      limit: 10, offset: 0,
+    })).toEqual([created]);
+    expect(await store.get(created.id, 10, 0)).toMatchObject({
+      id: created.id,
+      events: [{ type: 'created', payload: { state: 'Ready' }, source: 'backend' }],
+    });
+    await pool.request()
+      .input('taskId', sql.BigInt, BigInt(created.id))
+      .input('payload', sql.NVarChar(sql.MAX), JSON.stringify({ data: 'x'.repeat(3_000) }))
+      .query('UPDATE dbo.task_events SET payload = @payload WHERE task_id = @taskId AND type = N\'created\';');
+    expect(await store.get(created.id, 10, 0)).toMatchObject({
+      events: [{ payload: null, payloadTruncated: true }],
+    });
+
+    const transition = async (id: string, state: 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled', verified = false) => {
+      const result = await store.transition(id, state, verified);
+      expect(result.kind).toBe('ok');
+      if (result.kind !== 'ok') throw new Error(`Unexpected transition result: ${result.kind}`);
+      expect(result.task.state).toBe(state);
+    };
+
+    expect((await store.transition(created.id, 'Done')).kind).toBe('invalid-transition');
+    await transition(created.id, 'Running');
+    await transition(created.id, 'PauseRequested');
+    await transition(created.id, 'Paused');
+    await transition(created.id, 'Running');
+    await transition(created.id, 'NeedsAttention');
+    await transition(created.id, 'Running');
+    await transition(created.id, 'Done', true);
+    expect((await store.transition(created.id, 'Running')).kind).toBe('invalid-transition');
+
+    const readyCancel = await store.create({ projectId, title: 'Cancel ready', request: 'Cancel before start' });
+    if (!readyCancel) throw new Error('Ready task fixture was not created');
+    await transition(readyCancel.id, 'Cancelled');
+
+    const runningCancel = await store.create({ projectId, title: 'Cancel running', request: 'Cancel while running' });
+    if (!runningCancel) throw new Error('Running task fixture was not created');
+    await transition(runningCancel.id, 'Running');
+    await transition(runningCancel.id, 'Cancelled');
+
+    const pausedCancel = await store.create({ projectId, title: 'Cancel paused', request: 'Cancel while paused' });
+    if (!pausedCancel) throw new Error('Paused task fixture was not created');
+    await transition(pausedCancel.id, 'Running');
+    await transition(pausedCancel.id, 'PauseRequested');
+    await transition(pausedCancel.id, 'Paused');
+    await transition(pausedCancel.id, 'Cancelled');
+
+    await pool.request().input('projectId', sql.BigInt, BigInt(projectId))
+      .query('UPDATE dbo.projects SET active = 0 WHERE id = @projectId;');
+    expect(await store.create({ projectId, title: 'Archived project', request: 'Must not be queued' })).toBeNull();
   });
 
   it('reads and transactionally writes only the recognized global settings', async () => {

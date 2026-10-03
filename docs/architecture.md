@@ -103,6 +103,16 @@ generates request IDs and records only approved event names,
 methods, route templates, statuses and timings. A final output allowlist covers
 child logger bindings as well as log arguments, dropping request/provider secrets.
 
+The factory module exposes authenticated `POST /factory/tasks`, filtered and
+paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event
+history. It validates active projects and bounded request/query inputs. Clients
+cannot update task state directly; the task store serializes backend transitions,
+checks the lifecycle, and records state events atomically. Completion can reach
+Done only through a trusted call that confirms completion. The browser and hosted
+agent service identities do not receive a task-state bypass. Responses are capped
+at 1 MiB, and event payloads above 4 KiB are omitted with an explicit truncation
+flag.
+
 The factory registers authenticated `GET /factory/projects`,
 `POST /factory/projects`, `PATCH /factory/projects/:id`, and
 `DELETE /factory/projects/:id` routes. The project
@@ -162,7 +172,8 @@ browser sign-in and deployment verification remain #11.
 
 ## Database startup and migration ownership
 
-The process creates one `mssql` pool when SQL settings are supplied. Production
+The process creates one `mssql` pool when SQL settings are supplied and shares
+that process-owned pool with the tool-call and task stores. Production
 configuration requires an Azure SQL host, database and user-assigned identity
 client ID; `azure-active-directory-msi-app-service` delegates token acquisition
 and renewal to Tedious/Azure Identity. TLS certificate validation stays enabled.
