@@ -47,12 +47,3 @@ export function PendingPage({ title, children, back }: {
     </section>
   );
 }
-
-export function SettingsPage() {
-  return (
-    <PendingPage title="Settings">
-      Settings aren&apos;t available yet. Models and reasoning for Jarvis and the coding agents, voices,
-      the default language, parallel-task limits, the sleep switch and credential status will be managed here.
-    </PendingPage>
-  );
-}

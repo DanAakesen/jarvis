@@ -286,11 +286,15 @@ describe('backend module composition', () => {
     expect(second.jarvisTools.list()).toEqual([]);
   });
 
-  it('does not advertise unimplemented factory or core APIs or tools', async () => {
+  it('keeps unimplemented APIs unavailable and reports missing settings storage', async () => {
     const app = fixture([]);
     expect(app.jarvisTools.list()).toEqual([]);
-    for (const url of ['/factory/projects', '/factory/tasks', '/settings', '/activity', '/events']) {
+    for (const url of ['/factory/projects', '/factory/tasks', '/activity', '/events']) {
       expect((await app.inject({ url, headers })).statusCode).toBe(404);
     }
+    expect((await app.inject({ url: '/settings', headers })).statusCode).toBe(503);
+    expect((await app.inject({
+      method: 'PATCH', url: '/settings', headers, payload: { settings: { jarvis: { reasoning: 'low' } } },
+    })).statusCode).toBe(503);
   });
 });

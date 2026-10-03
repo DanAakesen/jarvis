@@ -129,6 +129,16 @@ erDiagram
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
 - The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; any other failure is stored as a generic error. P1-01 (#15) owns the table migration; no live SQL write has been verified yet.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
+- P1-11 stores global defaults in the existing key/value table; missing keys use
+  the documented defaults. Current keys are `jarvis.model`,
+  `jarvis.reasoning_effort`, `voice.stt.model`, `voice.en.model`,
+  `voice.en.voice`, `voice.da.voice`, `voice.default_language`, `codex.model`,
+  `codex.reasoning_effort`, `copilot.model`, and `global.max_parallel_tasks`.
+  Values are JSON scalars. Model/voice/language/reasoning choices are validated
+  against the backend catalog; `default` for Codex/Copilot means defer to the
+  provider's own default until P2-11 verifies model overrides. The global task
+  limit is an integer from 1 to 100. Partial writes are transactional; settings
+  are defaults for future sessions/tasks, not live updates or history.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes.
 
 ## 2 · Projects

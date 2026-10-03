@@ -223,13 +223,18 @@ calls authenticated `/me`; only the backend-approved display name is shown.
 workflow (below). Local tests use signed fixture tokens and do not verify a live
 Entra tenant or Azure deployment.
 
-Browser checks of signed-in pages (verified in Copilot cloud agent for P1-07,
-where the Playwright MCP tools were unavailable; L45): in a scratch directory
-outside the repository, run `npm install --no-save playwright-core`, then drive
+Browser checks of signed-in pages (verified in Copilot cloud agent for P1-07
+and P1-11, where the Playwright MCP tools were unavailable; L45): in a scratch
+directory outside the repository, run `npm install --no-save playwright-core`,
+then drive
 `chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] })`.
 Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
 returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
-URL. Never commit the stub or weaken sign-in in the app.
+URL. For settings, serve a mock `/settings` response from that harness only.
+P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised,
+with no horizontal overflow, all controls at least 44 px high, and no browser
+console errors. The mock does not verify live Entra, Azure SQL, or production settings consumers.
+Never commit the stub or weaken sign-in in the app.
 
 Backend commands implemented in P0-03:
 
