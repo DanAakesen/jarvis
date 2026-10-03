@@ -16,7 +16,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton and core/factory module registration implemented; domain APIs and SSE in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
-| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen | Implemented in #7; real Azure identity/deployment validation remains #11 |
+| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15; real Azure identity/deployment validation remains #11 |
 | Files | Azure Blob Storage for artifacts and logs | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
@@ -124,7 +124,11 @@ applied checksum prefix and applies all pending batches plus ledger entries in
 one transaction. Rollback preserves both data and migration history. No recurring
 migration or readiness queries run while idle; pool minimum is zero and
 `validateConnection=socket` avoids validation queries. The production image
-includes the same migration directory. Business tables are still issue #17.
+includes the same migration directory. `0001_core_tables.sql` (P1-01, #15) creates
+data-model groups 1–3. Each forward migration has a reviewed reverse script in
+`db/migrations/down/`; startup never runs it. `revertMigration` runs it under the
+same lock and transaction, only for the latest applied migration, and removes its
+ledger row. CI proves up, down and re-up against SQL Server.
 
 Real managed-identity token exchange and migrations in a deployed Azure revision
 remain issue #11. See the [database guide](../apps/backend/src/database/README.md)

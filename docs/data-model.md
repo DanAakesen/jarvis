@@ -10,8 +10,10 @@ from the seven domain groups: `name nvarchar(255)` primary key, `checksum char(6
 `SYSUTCDATETIME()`. The backend creates and writes it only while holding the
 transaction-owned `jarvis.schema-migrations` app lock. Its rows must remain an
 unchanged prefix of the committed migrations. Failed or cancelled startup rolls
-back schema, data and ledger together. Domain tables and their up/down migration
-acceptance remain issue #17; issue #7 introduces no domain schema or seed data.
+back schema, data and ledger together. Issue #7 introduced no domain schema or seed
+data. Groups 1–3 are `db/migrations/0001_core_tables.sql` (P1-01, #15), with a
+reverse script in `db/migrations/down/`; see [Physical schema](#physical-schema-groups-13).
+Groups 4–7 follow in P2-01, P2-12 and P3-04.
 
 ## Overview
 
@@ -349,11 +351,33 @@ erDiagram
 
 - Views sum `usage` per task, per project and per period, so Dan sees when Codex and Copilot were used and what each task cost.
 
+## Physical schema (groups 1–3)
+
+`0001_core_tables.sql` implements the diagrams above in `dbo` with these choices:
+
+| Topic | Rule |
+| --- | --- |
+| Keys | `bigint IDENTITY` primary keys; `settings` uses `(scope, [key])` (`key` is reserved in T-SQL, so quote it) |
+| Time | `datetime2(7)` UTC; event and creation times default to `SYSUTCDATETIME()` |
+| Fixed values | `nvarchar` with `Latin1_General_100_BIN2` collation and a check, so `ready` is rejected where `Ready` is required. Values exactly as in the diagrams |
+| Open vocabularies | `activity.area`/`kind` and `task_events.type`: lowercase letters and `_`. `settings.key`: lowercase, digits, `.`, `-`, `_`. `projects.tech`: lowercase, digits, `.`, `-`, `_`. `tool_calls.tool`: the tool registry's `[A-Za-z0-9_-]{1,64}` |
+| JSON | `nvarchar(max)` with `ISJSON(..., VALUE)` (any JSON value, including strings and `null`); `tool_calls.arguments` must be an object (`ISJSON(..., OBJECT)`) |
+| `settings.scope` | `global` or `project:<id>` with a positive integer id |
+| `projects` | `repo` is unique (case-insensitive) and shaped `owner/name` using `A–Z a–z 0–9 . _ -`; `max_parallel_tasks` ≥ 1, default 1; `active` defaults to 1; `merge_rules` is free text, nullable |
+| `tasks` | `state` defaults to `Ready`; `origin_message_id` is required unless `source = 'board'`; `lease_owner` and `lease_until` are both set or both null; `attempt_count` ≥ 0; `priority` defaults to 0; `started_at`/`finished_at` not before `created_at` |
+| `messages` | `model` and token counts are nullable (Dan's messages have none); token counts ≥ 0 |
+| `tool_calls` | `result` nullable; `outcome` is `ok` or `error`; `task_id` nullable |
+| Foreign keys | No cascades. Projects are archived (`active = 0`), not deleted |
+| Indexes | Dispatcher `IX_tasks_state_next_attempt_at`; timeline `IX_task_events_task_id_at`; plus one per foreign key: `IX_messages_jarvis_session_id_at`, `IX_tasks_project_id_state` (also the per-project running count), filtered `IX_tasks_origin_message_id`, `IX_tool_calls_message_id`, filtered `IX_tool_calls_task_id` |
+
+The API still validates every field (P1-03, P1-04); these checks are the last line of defence.
+
 ## Conventions
 
 - `bigint` identity keys; UTC `datetime2` timestamps; states as short strings with check constraints.
 - JSON only for event payloads, tool arguments and settings values; never as the domain model.
-- Indexes: `tasks(state, next_attempt_at)` for the dispatcher; `task_events(task_id, at)`; `workflow_runs(head_sha)`; `usage(task_id)`, `usage(project_id, at)`.
+- Indexes: `tasks(state, next_attempt_at)` for the dispatcher; `task_events(task_id, at)`; `workflow_runs(head_sha)`; `usage(task_id)`, `usage(project_id, at)`; and an index supporting each foreign key.
+- Every migration ships a reverse script in `db/migrations/down/`; CI applies, reverts and reapplies all of them.
 - Thousands of tasks over time are no concern; `task_events` is the only table that grows fast and can be archived by age.
 
 ## Decided in sparring (3 October 2026)

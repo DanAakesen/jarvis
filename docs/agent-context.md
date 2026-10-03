@@ -193,7 +193,7 @@ The repository uses npm workspaces for `apps/web` and `apps/backend`, one root
 lockfile, and shared strict TypeScript configuration. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
-Python runtime and SQL domain tables remain in their planned tasks. Issue #7 adds the database connection and startup migration infrastructure.
+Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3).
 P0-04 adds the Bicep template; its Azure deployment awaits P0-11.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
@@ -312,8 +312,10 @@ The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and
   auto-resume. No idle SQL poll or periodic migration job is added.
 - Append immutable files under `db/migrations/` as `NNNN_name.sql`; use one SQL
   batch per file, no `GO`, and never rewrite an applied file or insert before
-  applied history. See [migration guide](../db/migrations/README.md). Domain
-  schema and up/down acceptance remain #17.
+  applied history. Add the reverse batch under `db/migrations/down/` with the
+  same name; an offline test requires one for every migration, and
+  `schema.integration.test.ts` reverts all of them newest first and reapplies.
+  See [migration guide](../db/migrations/README.md).
 - Offline checks: `npm test --workspace @jarvis/backend`,
   `npm run lint --workspace @jarvis/backend`,
   `npm run build --workspace @jarvis/backend`.
