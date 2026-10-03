@@ -1,12 +1,24 @@
+import type { PublicClientApplication } from '@azure/msal-browser';
+import type { PublicConfig } from '../config/public-config';
 import { ActivityPanel } from './ActivityPanel';
 import type { NowFeed } from './activity';
+import { ConversationHistory } from './ConversationHistory';
+import './ConversationHistory.css';
 
 const nowFeed: NowFeed = {
   status: 'unavailable',
   message: "Activity isn't available yet. Running tasks, tasks that need attention, releases, deployments and credential warnings will appear here.",
 };
 
-export function JarvisPage({ name }: { name: string }) {
+export function JarvisPage({
+  name,
+  client,
+  config,
+}: {
+  name: string;
+  client: PublicClientApplication;
+  config: PublicConfig;
+}) {
   return (
     <div className="jarvis-page">
       <h1>Welcome, {name}</h1>
@@ -14,9 +26,10 @@ export function JarvisPage({ name }: { name: string }) {
         <section className="panel" aria-labelledby="conversation-heading">
           <h2 id="conversation-heading">Conversation</h2>
           <p id="conversation-status">
-            Chat isn&apos;t connected yet. Your messages and Jarvis&apos;s replies, with their time, language and
-            tool calls linked to tasks, will appear here.
+            Chat isn&apos;t connected yet, so you can&apos;t send new messages. Previously saved messages from chat and
+            voice sessions appear below.
           </p>
+          <ConversationHistory client={client} config={config} />
           <form className="composer" onSubmit={(event) => event.preventDefault()}>
             <label htmlFor="message">Message Jarvis</label>
             <textarea id="message" name="message" rows={3} disabled aria-describedby="conversation-status" />

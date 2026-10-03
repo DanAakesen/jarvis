@@ -112,6 +112,8 @@ Global defaults on the settings page; a task can override the coding-agent model
 | Copilot | Model | Copilot default |
 | Global | Max parallel tasks; sleep switch | Set by Dan |
 
+English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
+
 ### Page requirements
 
 Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
@@ -120,7 +122,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 | Data points | Actions |
 | --- | --- |
-| Conversation: messages (Dan, Jarvis), time, language, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
+| Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
 | Voice state: listening, thinking, speaking; what Jarvis heard; latency | Interrupt by speaking; mute |
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake or asleep | Sleep switch (refused while tasks run) |
@@ -158,6 +160,13 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | List: name, repository, default agent, policy, tech, running tasks, last release | Create, edit, archive a project |
 | Project settings: repository, default branch, default agent, policy, merge rules, sandbox size, tech, max parallel tasks | Save (applies to new tasks only) |
 
+The project API lists active projects, creates and updates settings, and archives
+without deleting the row or its task history. Repositories use `owner/name`;
+policies are `deliver_pr` or `complete_without_deployment`, sandbox sizes are
+`1x2` or `2x4`, tech identifiers start with a lowercase letter and use lowercase
+letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
+32-bit integer (default 1).
+
 #### Settings
 
 | Data points | Actions |
@@ -179,6 +188,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 - **Azure:** subscription "Dan Aakesen", tenant Novaro, region Sweden Central. Details in [docs/agent-context.md](docs/agent-context.md).
 - **GitHub:** Dan's private repositories only; a GitHub App provides per-task tokens, webhooks, and merges.
 - **Coding agents:** Codex (ChatGPT Pro, Jarvis-only login) and Copilot (work seat) over ACP; their usage limits are shared with Dan's own use.
+- **English voice:** `gpt-realtime-2.1` with Ryan HD; tool calls execute through the backend's registered tools, and the spoken response uses the backend-built confirmation.
 - **Security:** agents run with full permissions inside their sandbox and can read its tokens, so each token is scoped to the task. Jarvis data and other areas are never reachable from a sandbox.
 - **Cost:** see [Cost](docs/architecture.md#cost) in the architecture map.
 - **Existing systems:** Banking is an existing Azure app using the Agents API (integration code not inspected yet). Daily is an existing ChatGPT site, currently paused; its useful functions and history move over in phase 3.

@@ -27,9 +27,9 @@ timeout or a connection lost after sending, that the action may have happened. T
 unavailable persistence and an unreachable backend. If the catalogue cannot be
 loaded, the turn fails before the model is asked.
 
-The message ID comes from the per-turn `current_message_id` context. Nothing sets
-it until the conversation store (P4-03) exists, so the agent currently answers
-every tool call with "nothing was done". Deployment, the role assignment and a live
+The message ID comes from the per-turn `current_message_id` context. The conversation
+store (P4-03) stores messages, but no caller passes a message ID to the agent yet,
+so the agent currently answers every tool call with "nothing was done". Deployment, the role assignment and a live
 check of the factory tools are P4-08.
 
 ## Commands
