@@ -30,11 +30,11 @@ export const coreModule: BackendModule = {
       if (!request.principal) return reply.code(401).send({ error: 'Unauthorized' });
       return { name: request.principal.displayName };
     });
-    app.get('/tools', async () => app.jarvisTools.list().map(({ name, description, inputSchema }) => ({
+    app.get('/tools', { config: { jarvisAgent: true } }, async () => app.jarvisTools.list().map(({ name, description, inputSchema }) => ({
       name, description, inputSchema,
     })));
     for (const tool of app.jarvisTools.list()) {
-      app.post(`/tools/${tool.name}`, { schema: { body: tool.inputSchema } }, async (request, reply) => {
+      app.post(`/tools/${tool.name}`, { config: { jarvisAgent: true }, schema: { body: tool.inputSchema } }, async (request, reply) => {
         if (!app.toolCallStore) return reply.code(503).send({ error: 'Tool execution unavailable' });
         const messageId = request.headers['x-jarvis-message-id'];
         if (typeof messageId !== 'string' || !/^[1-9]\d{0,18}$/.test(messageId) ||

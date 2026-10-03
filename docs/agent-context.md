@@ -274,6 +274,10 @@ Backend authentication defaults to the nonsecret identities in
 RS256 Entra v2 delegated access token with the API client ID as audience and
 `access_as_user` scope; an ID token, app-only token or another user's object ID
 is denied. `request.principal` contains only the verified object and tenant IDs.
+The optional `ENTRA_JARVIS_AGENT_OBJECT_ID` (a UUID other than Dan's; P4-01)
+admits the hosted Jarvis agent's app-only token with the `Jarvis.Tools` role,
+and only on routes marked `config: { jarvisAgent: true }` (`GET /tools`,
+`POST /tools/{name}`); elsewhere it gets 403. Unset or empty denies the agent.
 Missing/invalid credentials return 401; verified but unauthorized tokens return
 403. Authentication failures never export token/claim/provider details.
 Approved browser origins retain CORS headers on these early denials so the web
@@ -445,7 +449,35 @@ which takes a few minutes; Codex caches the result.
 Python checks use each package's `.venv`. For the runner, from `runner/`:
 `.venv/bin/python -m ruff check .` and `.venv/bin/python -m pytest -q`
 (verified in the P0-14 Copilot session after setup: ruff passed, 36 tests passed).
-`agents/jarvis` has no Python package yet, so setup skips it.
+
+### Jarvis agent
+
+`agents/jarvis` (P4-01) has its own `.venv` from the shared setup script. Verified
+in the P4-01 Copilot session (Docker was available there):
+
+| Purpose | Command |
+| --- | --- |
+| Lint and tests, from `agents/jarvis/` | `.venv/bin/python -m ruff check .`; `.venv/bin/python -m pytest -q` (100 passed) |
+| Same check as CI, from the root | `bash .github/scripts/python-ci.sh agents/jarvis` |
+| Image, from the root | `docker build --tag jarvis-agent:local agents/jarvis` |
+| Model-free voice turn | Run the image with the variables below, then `agents/jarvis/.venv/bin/python agents/jarvis/scripts/smoke_test.py` (default `ws://127.0.0.1:8088/invocations_ws`, text `/help`) |
+| Regenerate the hash locks, from the root, after editing a `.in` file | `uv pip compile --python-version 3.12 --generate-hashes agents/jarvis/requirements.in -o agents/jarvis/requirements.txt`, then the same for `requirements-dev.in` → `requirements-dev.txt` |
+
+Agent configuration (environment variables, no secrets):
+
+| Variable | Meaning |
+| --- | --- |
+| `FOUNDRY_PROJECT_ENDPOINT`, `AZURE_AI_MODEL_DEPLOYMENT_NAME` | Required. Foundry project endpoint (`https://<host>/api/projects/<name>`) and model deployment |
+| `JARVIS_BACKEND_URL` | Required. Backend origin: HTTPS, or HTTP only for `localhost`/`127.0.0.1`/`::1`; no path, query or credentials. Startup fails without it |
+| `JARVIS_API_CLIENT_ID` | Optional `jarvis-api` client ID for the token scope `api://<id>/.default`; defaults to the bootstrap ID |
+| `AZURE_OPENAI_API_KEY` | Optional local model key; without it the agent identity also gets the model token |
+| `AZURE_OPENAI_SYSTEM_PROMPT`, `AZURE_OPENAI_MAX_OUTPUT_TOKENS`, `JARVIS_REASONING_EFFORT`, `LOG_LEVEL` | Optional overrides, as in the prototype |
+
+The agent identity exists only after the agent is deployed (P4-08). Then run
+`./infra/bootstrap.ps1 -JarvisAgentPrincipalId <instance_identity.principal_id>`
+to assign `Jarvis.Tools`, and set the backend's `ENTRA_JARVIS_AGENT_OBJECT_ID` to
+the same ID. Tool calls also need the turn's stored message ID from P4-03; until
+then the agent reports each call as not done.
 
 ## Release procedure
 

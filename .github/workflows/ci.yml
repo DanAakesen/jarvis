@@ -38,6 +38,10 @@ jobs:
     name: Runner
     uses: ./.github/workflows/runner-ci.yml
 
+  jarvis-agent:
+    name: Jarvis agent
+    uses: ./.github/workflows/jarvis-agent-ci.yml
+
   python:
     name: Python lint, test and build
     runs-on: ubuntu-latest
@@ -57,7 +61,7 @@ jobs:
   result:
     name: CI result
     if: always()
-    needs: [web, backend, database, foundry, runner, python]
+    needs: [web, backend, database, foundry, runner, jarvis-agent, python]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
