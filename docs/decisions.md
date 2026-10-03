@@ -83,6 +83,7 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 | 2026-10-03 | The separate Project board sync from #108 is restored; its workflow, script, tests and existing project-board environment are retained | Dan clarified that only the Jarvis coordinator should be removed. The prior cleanup removed too much. Restore the board integration without recreating or deleting its environment | Restored |
 
 | 2026-10-03 | #12's Jarvis coordinator is removed, including automatic issue assignment, PR merging and conflict-repair dispatch | Dan requested coordinator removal and explicitly retained the separate Project board sync | Coordinator withdrawn; Project board retained; deployment integration remains #11 |
+| 2026-10-03 | P3-09 provides copyable managed-project workflows: read-only PR checks, then release build/tests and artifact upload before a `main`-only Azure OIDC deploy using the `production` environment | Copying lets each project adapt its own runtime and deployment without coupling it to Jarvis's active workflows. `id-token: write` is limited to the deploy job; OIDC identifiers are Actions variables, not stored credentials | Templates and offline structure checks implemented; adoption and live Azure federation/deployment unverified |
 
 ## Learnings
 
