@@ -1,5 +1,4 @@
-.conversation-history { margin-top: 44px; }
-.conversation-history h2 { margin: 0 0 16px; font-size: 22px; line-height: 1.3; }
+.conversation-history { margin-top: 24px; }
 .conversation-history > p, .history-feedback p, .history-error { font-size: 16px; }
 .conversation-messages { margin: 20px 0; padding: 0; list-style: none; }
 .conversation-message { padding: 18px 0; border-bottom: 1px solid var(--rule); }
@@ -8,7 +7,20 @@
 .conversation-message > .message-language { margin: 0 0 8px; font-size: 13px; }
 .conversation-message > p { overflow-wrap: anywhere; white-space: pre-wrap; }
 .message-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.message-tools > li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tool-call { display: inline-block; padding: 4px 9px; border-radius: 999px; background: #e9eef5; color: #303e50; font-size: 13px; overflow-wrap: anywhere; }
+.task-reference { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 600; }
+.conversation-history .choice-group { margin: 20px 0 0; }
+.conversation-history .choice { color: var(--text); }
+.conversation-history .composer { margin-top: 20px; }
+.conversation-history .composer label { margin-top: 0; }
+.conversation-history .composer textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.panel p.chat-guidance { margin-top: 6px; font-size: 14px; }
+.panel p.chat-error { margin-top: 12px; color: var(--error); font-size: 15px; }
+.panel p.chat-status { margin-top: 12px; font-size: 14px; }
+.streaming-reply, .interrupted-reply { margin-top: 16px; padding: 12px 14px; border-radius: 6px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.streaming-reply { background: var(--disabled-surface); color: var(--text); }
+.interrupted-reply { background: #fff5e8; color: #593a16; }
 .history-button { min-height: 44px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: inherit; font: inherit; font-weight: 600; cursor: pointer; transition: background-color 120ms ease, transform 120ms ease; }
 .history-button:hover:not(:disabled) { background: #eef2f6; }
 .history-button:active:not(:disabled) { background: #e4eaf1; transform: translateY(1px); }
@@ -18,7 +30,7 @@
 .history-error { margin: 12px 0; }
 
 @media (max-width: 600px) {
-  .conversation-history { margin-top: 36px; }
+  .conversation-history { margin-top: 24px; }
   .message-heading { align-items: flex-start; flex-direction: column; gap: 2px; }
 }
 
