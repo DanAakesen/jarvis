@@ -103,9 +103,8 @@ def task_status(
     worker_claimed = issue.get("state") == "open" and bool(labels & WORKER_LABELS)
     if open_pr or worker_claimed:
         return "In progress"
-    if issue.get("state") == "open":
-        return "Not started"
-    return current
+    # Not completed and nothing open: an open issue waits, a closed one (for example not_planned) was dropped.
+    return "Not started"
 
 
 def issue_link(issue: dict[str, Any] | None, repository: str) -> str:

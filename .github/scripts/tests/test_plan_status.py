@@ -63,7 +63,7 @@ class PlanStatusTests(unittest.TestCase):
             reconciled,
         )
         self.assertIn(
-            "| P0-10 | [#11](https://github.com/DanAakesen/jarvis/issues/11) | Closed task | closed without completion | None | In progress |",
+            "| P0-10 | [#11](https://github.com/DanAakesen/jarvis/issues/11) | Closed task | closed without completion | None | Not started |",
             reconciled,
         )
 
@@ -143,7 +143,7 @@ class PlanStatusTests(unittest.TestCase):
         }
         self.assertEqual(task_status("In progress", assigned_only, []), "Not started")
 
-    def test_closed_issue_labels_record_worker_but_do_not_mark_task_in_progress(self):
+    def test_closed_unfinished_issue_resets_to_not_started_and_labels_only_record_worker(self):
         issue = {
             "number": 8,
             "state": "closed",
@@ -152,7 +152,8 @@ class PlanStatusTests(unittest.TestCase):
             "assignees": [],
         }
         self.assertEqual(task_status("Not started", issue, []), "Not started")
-        self.assertEqual(task_status("In progress", issue, []), "In progress")
+        self.assertEqual(task_status("In progress", issue, []), "Not started")
+        self.assertEqual(task_status("Blocked", issue, []), "Blocked")
 
 
 if __name__ == "__main__":
