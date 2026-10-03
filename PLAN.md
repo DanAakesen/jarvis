@@ -10,7 +10,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 - **Runner (#28):** production port and main-only deployment are implemented in its PR. Live ACR/Foundry/Key Vault acceptance awaits #11; set `JARVIS_INFRA_DEPLOYMENT_NAME` after the successful infrastructure deployment and run Runner deploy from `main`. P2-09 adds per-turn frequent-push instructions with offline coverage; live intermediate-commit acceptance remains with P2-07.
 
-- **Authentication (#8):** backend bearer validation is implemented with signed-token and local JWKS checks. Browser sign-in and `/me` remain #9; deployed Entra validation remains #11. Database startup (#7) and area modules (#16) are parallel work and are not claimed complete by this change.
+- **Authentication (#8):** backend bearer validation is implemented with signed-token and local JWKS checks and integrated with the merged area modules (#16). Browser sign-in and `/me` remain #9; deployed Entra validation remains #11. Database startup (#7) is parallel work and is not claimed complete by this change.
 
 ## Implementation phases
 
