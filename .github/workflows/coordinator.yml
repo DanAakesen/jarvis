@@ -1,0 +1,50 @@
+name: Jarvis coordinator
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Inspect eligibility without merging, updating branches or assigning Copilot
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jarvis-coordinator
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: github.repository == 'DanAakesen/jarvis' && vars.COORDINATOR_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      checks: read
+      contents: write
+      issues: write
+      pull-requests: write
+      statuses: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - name: Reconcile pull requests and ready tasks
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          COPILOT_ASSIGNMENT_TOKEN: ${{ secrets.COPILOT_ASSIGNMENT_TOKEN }}
+          COORDINATOR_MAX_COPILOT: ${{ vars.COORDINATOR_MAX_COPILOT || '3' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          args=()
+          if [[ "$DRY_RUN" == 'true' ]]; then args+=(--dry-run); fi
+          python .github/scripts/coordinator.py "${args[@]}"

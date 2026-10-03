@@ -18,7 +18,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 | Stack, runtime, sandbox, voice, dispatch, cost | [architecture.md](architecture.md) |
 | Tables, relationships, and groups | [data-model.md](data-model.md) |
 | Step-by-step flows with evidence status | [architecture-flows.html](architecture-flows.html) (open in a browser) |
-| Decisions and learnings L1–L37 | [decisions.md](decisions.md) |
+| Decisions and learnings L1–L38 | [decisions.md](decisions.md) |
 | Prototype code and reports to port in P2 and P4 | [reference/](reference/) |
 | Open-source research | [open-source.md](open-source.md) |
 
@@ -89,7 +89,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, so Copilot PRs need no click from Dan.
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
-- Until P0-12 is merged, Dan merges green PRs.
+- The periodic portion of #12 is `.github/workflows/coordinator.yml`; Dan explicitly authorized it before #11. See [GitHub coordinator](github-coordinator.md) for the secret, controls, eligibility, existing-PR repairs and remaining live acceptance. Its current state must be verified in Actions; it does not claim #12 or deployment complete. Until it is active, Dan merges green PRs.
 ## Azure
 
 | Item | Value |
