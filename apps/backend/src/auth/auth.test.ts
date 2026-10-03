@@ -28,6 +28,28 @@ beforeAll(async () => {
     res.writeHead(jwksFailure ? 503 : 200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(jwksFailure ? { secret: 'jwks-body-secret' } : { keys: [jwk] }));
   });
+  it('returns Dan’s signed display name from /me and refuses another account', async () => {
+    const { app } = fixture();
+    const dan = await app.inject({ url: '/me', headers: { authorization: `****** token()}` } });
+    expect(dan.statusCode).toBe(200);
+    expect(dan.json()).toEqual({ name: 'Dan Aakesen' });
+
+    const other = await app.inject({
+      url: '/me',
+      headers: { authorization: `****** token({ oid: '00000000-0000-0000-0000-000000000000' })}` },
+    });
+    expect(other.statusCode).toBe(403);
+    expect(other.json()).toEqual({ error: 'Forbidden' });
+  });
+  it('uses the single-user name when the optional token name is absent', async () => {
+    const { app } = fixture();
+    const response = await app.inject({
+      url: '/me',
+      headers: { authorization: `****** token({ name: undefined })}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ name: 'Dan' });
+  });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('No test listener');
@@ -40,7 +62,7 @@ async function token(overrides: JWTPayload = {}, kid = 'fixture-key') {
   const payload: JWTPayload = {
     iss: issuer, aud: config.auth.apiClientId, sub: 'signed-subject',
     tid: config.auth.tenantId, ver: '2.0', oid: config.auth.ownerObjectId,
-    scp: 'access_as_user', iat: now - 10, nbf: now - 10, exp: now + 3600,
+    name: 'Dan Aakesen', scp: 'access_as_user', iat: now - 10, nbf: now - 10, exp: now + 3600,
     ...overrides,
   };
   for (const field of Object.keys(payload)) if (payload[field] === undefined) delete payload[field];
@@ -68,7 +90,7 @@ describe('Entra bearer authentication at the server boundary', () => {
     for (const path of ['/protected', '/nested']) {
       const response = await app.inject({ url: path, headers: { authorization } });
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ principal: { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId } });
+      expect(response.json()).toEqual({ principal: { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan Aakesen' } });
     }
     expect(jwksRequests - before).toBe(1);
   });
