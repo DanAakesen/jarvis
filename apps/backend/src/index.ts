@@ -4,14 +4,17 @@ import { createLogger, createTelemetry } from './logging.js';
 import { shutdown } from './shutdown.js';
 import { loadDatabaseConfig } from './database/config.js';
 import { createDatabase, registerDatabase } from './database/lifecycle.js';
+import { createToolCallStore } from './database/tool-call-store.js';
 
 try {
   const config = loadConfig();
   const databaseConfig = loadDatabaseConfig();
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
-  const app = buildApp(config, logger);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  const app = buildApp(config, logger, {
+    ...(database ? { toolCallStore: createToolCallStore(database.pool) } : {}),
+  });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
   if (!telemetry) logger.info('telemetry.stdout_only');
