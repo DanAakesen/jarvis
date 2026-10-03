@@ -27,6 +27,10 @@ jobs:
     name: Backend
     uses: ./.github/workflows/backend-ci.yml
 
+  database:
+    name: Database
+    uses: ./.github/workflows/database-ci.yml
+
   foundry:
     name: Foundry
     uses: ./.github/workflows/foundry-contract.yml
@@ -50,7 +54,7 @@ jobs:
   result:
     name: CI result
     if: always()
-    needs: [web, backend, foundry, runner, python]
+    needs: [web, backend, database, foundry, runner, python]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

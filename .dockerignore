@@ -3,6 +3,9 @@
 !package.json
 !package-lock.json
 !tsconfig.base.json
+!db/
+!db/migrations/
+!db/migrations/**
 !apps/
 !apps/backend/
 !apps/backend/package.json

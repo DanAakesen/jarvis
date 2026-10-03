@@ -2,6 +2,17 @@
 
 Version 1, 3 October 2026 (after sparring with Dan). Scope: the Jarvis core and the Software Factory only. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
+## Migration infrastructure
+
+Issue #7 adds `dbo.schema_migrations`, an internal deployment ledger separate
+from the seven domain groups: `name nvarchar(255)` primary key, `checksum char(64)`
+(SHA-256 of committed file bytes), and `applied_at datetime2(7)` defaulting to
+`SYSUTCDATETIME()`. The backend creates and writes it only while holding the
+transaction-owned `jarvis.schema-migrations` app lock. Its rows must remain an
+unchanged prefix of the committed migrations. Failed or cancelled startup rolls
+back schema, data and ledger together. Domain tables and their up/down migration
+acceptance remain issue #17; issue #7 introduces no domain schema or seed data.
+
 ## Overview
 
 Seven groups. Arrows show the main references between groups.
