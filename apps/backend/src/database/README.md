@@ -25,12 +25,13 @@ Run offline tests with `npm test --workspace @jarvis/backend`. Aggregate CI call
 `database-ci.yml`, starts disposable SQL Server and runs
 `npm run test:database --workspace @jarvis/backend`. These integration checks
 cover repeat and concurrent application, rollback, immutable history, app-lock
-contention, and request cancellation. Test-password authentication is allowed
+contention, request cancellation, and down migrations. Test-password authentication is allowed
 only with `NODE_ENV=test` on `127.0.0.1`; CI generates and deletes unique isolated
 databases. Neither agents nor Actions tests connect to Azure SQL.
 
 The Docker image includes committed `db/migrations`; compiled and source code
-resolve the same repository-relative directory. `tool_calls` writes use the
-group-one schema owned by P1-01 (#15), which must be migrated before calls can be
-persisted. Real Azure identity connectivity and new-revision/restart acceptance
-remain issue #11.
+resolve the same repository-relative directory. `tool_calls` writes use the group-one
+schema in `0001_core_tables.sql` (#15). Real Azure identity connectivity and
+new-revision/restart acceptance remain issue #11. `schema.integration.test.ts`
+checks the schema's constraints, and reverts and reapplies every committed migration
+in its own database.
