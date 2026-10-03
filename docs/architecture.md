@@ -22,7 +22,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Images | Azure Container Registry: backend and sandbox images | Decided |
 | Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-11 |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
-| Sign-in | Entra ID: the web app signs in with MSAL and calls the backend with a bearer token; the backend allows only Dan's object ID and Jarvis's own service identities | Decided |
+| Sign-in | Entra ID: backend verifies delegated `jarvis-api` bearer tokens with jose 6.2.12 and Dan's object ID; MSAL web sign-in and explicit service-identity authorization remain their tasks | Backend boundary checked offline in #8; browser and live Entra validation pending #9/#11 |
 | Board updates | Server-sent events (SSE) over `fetch`, so the bearer token can be sent | Decided |
 | Jarvis agent and runner | Python 3.12/3.13 (Foundry hosted agents support Python or C#) | Decided |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
@@ -59,8 +59,11 @@ The backend factory is separate from the process entrypoint. `/health` returns
 binds to `0.0.0.0:3000` by default, validates configuration before listening and
 handles SIGTERM/SIGINT with a five-second close and telemetry flush deadline.
 Browser requests allow only the exact configured `STATIC_WEB_APP_ORIGIN` and
-`http://localhost:5173`; other Origin values receive 403. Authentication remains
-P0-08. The server generates request IDs and records only approved event names,
+`http://localhost:5173`; other Origin values receive 403. A root `onRequest`
+authentication hook runs before CORS and protects current and future nested routes.
+Only the registered `/health` GET/HEAD and CORS-generated preflight route are
+public; explicit business OPTIONS handlers require authentication. The server
+generates request IDs and records only approved event names,
 methods, route templates, statuses and timings. A final output allowlist covers
 child logger bindings as well as log arguments, dropping request/provider secrets.
 
@@ -73,6 +76,27 @@ ingestion remains pending. `backend-ci.yml` proves the production container and
 its health/CORS/shutdown behavior in GitHub Actions without Azure credentials.
 The image uses Node.js 22.23.3, a non-root user, and only backend production output
 and dependencies; prototypes and frontend sources are excluded.
+
+### Backend authentication
+
+The backend verifies RS256 signatures using the configured tenant's Entra v2
+JWKS endpoint. It requires the exact v2 issuer, API client-ID audience (not the
+`api://` resource URI), expiry/not-before/issued-at claims, tenant and v2 version.
+Verified tokens must contain Dan's allow-listed `oid` and delegated
+`access_as_user` scope. Missing, malformed, duplicate or unverifiable credentials
+receive sanitized 401 with a Bearer challenge; verified users/scopes without
+permission receive 403. ID tokens and app-only tokens are not authorized here.
+Future service integrations must add an explicit route-specific identity policy.
+
+JWKS lookups have a five-second timeout, a 30-second refresh cooldown and a
+ten-minute key cache. Provider outages fail closed. Only object ID and tenant ID
+reach `request.principal`; tokens, claims and provider details are excluded from
+logs and responses. Configuration accepts `ENTRA_TENANT_ID`,
+`ENTRA_API_CLIENT_ID` and `ENTRA_OWNER_OBJECT_ID` UUID overrides and otherwise
+uses the nonsecret bootstrap identities. Real RSA signatures, local HTTP JWKS,
+socket duplicate headers and stalled-provider tests establish this offline
+boundary. No deployed Entra token was obtained; browser sign-in and `/me` remain
+#9, and live deployment verification remains #11.
 
 Where each part runs. The web app is static files on Static Web Apps: free and always reachable. Container Apps hosts only the backend.
 

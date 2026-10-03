@@ -167,7 +167,24 @@ slash, path or query; it is required when `NODE_ENV=production`. P0-11 supplies
 the deployed Static Web App origin. Browser origins are limited to this value
 and `http://localhost:5173`; requests with another Origin receive 403. Requests
 without Origin (such as container health probes) are allowed. CORS is not
-authentication; P0-08 supplies token validation before business endpoints exist.
+authentication. P0-08 installs a root bearer-authentication hook before CORS,
+so future area routes inherit it. Only `/health` GET/HEAD and the generated CORS
+preflight route are public; explicit OPTIONS business endpoints are protected.
+
+Backend authentication defaults to the nonsecret identities in
+`infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and
+`ENTRA_OWNER_OBJECT_ID` may override those UUIDs at startup. The API expects an
+RS256 Entra v2 delegated access token with the API client ID as audience and
+`access_as_user` scope; an ID token, app-only token or another user's object ID
+is denied. `request.principal` contains only the verified object and tenant IDs.
+Missing/invalid credentials return 401; verified but unauthorized tokens return
+403. Authentication failures never export token/claim/provider details.
+
+`npm test --workspace @jarvis/backend` includes real RSA/local-JWKS auth checks,
+socket duplicate-header rejection, cached keys and bounded provider outages.
+They require no Azure identity or external JWKS service. The production JWKS
+lookup timeout is five seconds. `/me` and browser sign-in remain P0-09; live
+Azure token verification remains P0-11.
 
 `APPLICATIONINSIGHTS_CONNECTION_STRING` is backend-only protected runtime
 configuration supplied by P0-11 through Key Vault references. When absent,

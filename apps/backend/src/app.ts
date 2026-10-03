@@ -27,6 +27,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
       return reply.code(403).send({ error: 'Origin not allowed' });
     }
   });
+  // Authenticate before CORS can finish OPTIONS requests in its onRequest hook.
+  installAuthentication(app, config, options.auth);
   app.register(cors, {
     origin: (origin, callback) => callback(null, origin === undefined || origins.has(origin)),
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -34,7 +36,6 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     credentials: false,
     strictPreflight: true,
   });
-  installAuthentication(app, config, options.auth);
   app.addHook('onResponse', async (request, reply) => {
     request.log.info({
       method: request.method,

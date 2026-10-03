@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, request, type Server } from 'node:http';
 import { Writable } from 'node:stream';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createRemoteJWKSet, exportJWK, generateKeyPair, SignJWT, type JWTPayload } from 'jose';
@@ -16,6 +16,7 @@ let server: Server;
 let url: URL;
 let jwksRequests = 0;
 let jwksFailure = false;
+let jwksStalled = false;
 const apps: ReturnType<typeof buildApp>[] = [];
 
 beforeAll(async () => {
@@ -23,6 +24,7 @@ beforeAll(async () => {
   const jwk = { ...await exportJWK(keys.publicKey), kid: 'fixture-key', alg: 'RS256', use: 'sig' };
   server = createServer((_req, res) => {
     jwksRequests++;
+    if (jwksStalled) return;
     res.writeHead(jwksFailure ? 503 : 200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(jwksFailure ? { secret: 'jwks-body-secret' } : { keys: [jwk] }));
   });
@@ -31,7 +33,7 @@ beforeAll(async () => {
   if (!address || typeof address === 'string') throw new Error('No test listener');
   url = new URL(`http://127.0.0.1:${address.port}/keys`);
 });
-afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); jwksFailure = false; });
+afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); jwksFailure = false; jwksStalled = false; server.closeAllConnections(); });
 afterAll(async () => { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve())); });
 
 async function token(overrides: JWTPayload = {}, kid = 'fixture-key') {
@@ -131,6 +133,40 @@ describe('Entra bearer authentication at the server boundary', () => {
       expect(text).not.toContain(config.auth.tenantId);
       expect(text).not.toMatch(/secret|127\.0\.0\.1|JWT/);
     }
+  });
+  it('bounds a stalled JWKS lookup and never executes the protected handler', async () => {
+    const { app, records } = fixture();
+    let executed = false;
+    app.get('/sensitive', async () => { executed = true; return { accepted: true }; });
+    jwksStalled = true;
+    const value = await token();
+    const started = performance.now();
+    const response = await app.inject({ url: '/sensitive', headers: { authorization: `Bearer ${value}` } });
+    expect(response.statusCode).toBe(401);
+    expect(performance.now() - started).toBeLessThan(1500);
+    expect(executed).toBe(false);
+    expect(records.join('')).not.toContain(value);
+  });
+  it('rejects duplicate Authorization headers over a real socket before fetching keys', async () => {
+    const { app } = fixture();
+    let executed = false;
+    app.get('/sensitive', async () => { executed = true; return { accepted: true }; });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('No test listener');
+    const value = `Bearer ${await token()}`;
+    const before = jwksRequests;
+    const status = await new Promise<number | undefined>((resolve, reject) => {
+      const req = request({ host: '127.0.0.1', port: address.port, path: '/sensitive', headers: ['Host', `127.0.0.1:${address.port}`, 'Authorization', value, 'authorization', value, 'Connection', 'close'] }, (res) => {
+        res.resume();
+        res.on('end', () => resolve(res.statusCode));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+    expect(status).toBe(401);
+    expect(jwksRequests).toBe(before);
+    expect(executed).toBe(false);
   });
   it('leaves only exact health probes and CORS-generated preflights public', async () => {
     const { app } = fixture();
