@@ -177,6 +177,7 @@ const LANES = {
   voice:    { name: "Voice",            tech: "Voice Live · MAI Transcribe · Ryan HD (EN) · Harper (DA)" },
   jarvis:   { name: "Jarvis agent",     tech: "Foundry hosted agent · voice bridge" },
   model:    { name: "Model",            tech: "gpt-5.6-luna · billed per use" },
+  entra:    { name: "Microsoft Entra",  tech: "Tenant-specific OAuth 2.0 / OIDC" },
   backend:  { name: "Backend",          tech: "Node.js · Container Apps" },
   data:     { name: "Task store",       tech: "Azure SQL · Blob" },
   vault:    { name: "Secrets",          tech: "Key Vault" },
@@ -211,17 +212,35 @@ const FLOWS = [
     ],
   },
   {
+    name: "Sign in",
+    summary: "MSAL requests the delegated Jarvis API scope; the backend verifies Dan and returns only his display name.",
+    nodes: [
+      { id: "start", lane: "user", col: 1, s: "context", t: "Dan opens Jarvis", d: "Use the browser with the configured backend." },
+      { id: "button", lane: "board", col: 2, s: "docs", t: "Choose Microsoft sign-in", d: "Unavailable until a backend URL is configured.", ev: "P0-09: the one-column home page provides pending, disabled, and error states." },
+      { id: "msal", lane: "board", col: 3, s: "docs", t: "MSAL requests the API scope", d: "Tenant-specific popup; browser cache uses session storage.", ev: "P0-09: local tests check the requested scope and access-token forwarding; no live account was used." },
+      { id: "entra", lane: "entra", col: 4, s: "docs", t: "Return delegated API token", d: "`access_as_user` for `jarvis-api`.", ev: "MSAL and bootstrap configuration are implemented; real Entra consent/sign-in is unverified without Azure access." },
+      { id: "me", lane: "backend", col: 5, s: "docs", t: "GET /me", d: "Browser sends the access token as a bearer credential.", ev: "P0-09 tests the authenticated route using a signed local fixture token." },
+      { id: "verify", lane: "backend", col: 6, s: "docs", t: "Allow Dan; refuse others", d: "Verify signature, tenant, audience, delegated scope, and allow-listed object ID.", ev: "P0-08's RS256/JWKS tests and P0-09's /me test prove another object ID receives 403 offline." },
+      { id: "result", lane: "board", col: 7, s: "docs", t: "Show name or refusal", d: "Only a successful `/me` response displays the bounded name; 401/403 shows a refusal.", ev: "P0-09 browser tests cover successful name display and refusal; live tenant behavior remains unverified." },
+    ],
+    edges: [
+      ["start", "button", "docs", ""], ["button", "msal", "docs", "click"],
+      ["msal", "entra", "docs", "API scope"], ["entra", "me", "docs", "access token"],
+      ["me", "verify", "docs", "protected route"], ["verify", "result", "docs", "name or 401/403"],
+    ],
+  },
+  {
     name: "Understand",
     summary: "The Jarvis agent reads context, asks the model which action to take, and calls a backend function with its own identity.",
     nodes: [
       { id: "ctx", lane: "jarvis", col: 1, s: "context", from: [[1, "jin"]], t: "From 1: request text", d: "“Start en Codex-opgave på Jarvis: tilføj dark mode”." },
       { id: "load", lane: "jarvis", col: 2, s: "assumed", t: "Load context", d: "Projects, running tasks, recent events.", ev: "Not built. Voice prototype: preloading the task list would save the list_tasks round (≈1–2 s) on most commands." },
-      { id: "read", lane: "backend", col: 2, s: "assumed", t: "Read functions", d: "List projects, list tasks, task status.", ev: "Issue #16 verifies internal module/tool registration offline. Domain APIs and the authenticated HTTP tool registry endpoint remain unimplemented; this flow is still assumed." },
+      { id: "read", lane: "backend", col: 2, s: "proven", t: "Discover and dispatch tools", d: "GET /tools lists registered schemas; POST /tools/{name} validates and executes a call.", ev: "Offline Fastify tests prove module tools appear without agent changes, schema validation runs before execution, and each call is recorded through the SQL store contract. P1-01 (#15) owns the pending table migration; live SQL/Azure writes remain unverified." },
       { id: "rows", lane: "data", col: 3, s: "assumed", t: "Task rows and events", d: "Read from Azure SQL." },
       { id: "tool", lane: "model", col: 3, s: "proven", t: "Choose an action", d: "Tool call: create_task(project, agent, text).", ev: "Voice prototype V3: gpt-5.6-luna with strict action rules chose the right tool and arguments for 20/20 Danish commands through the deployed path.", href: VR },
       { id: "intent", lane: "model", col: 4, s: "proven", t: "Danish intent accuracy and cost", d: "20/20 commands; ≈0.003 DKK per command (gpt-5.6-luna).", ev: "Voice prototype V3 and reliability trials. Risk found: the model can describe an action it did not take; speak confirmations from tool results.", href: VR },
-      { id: "call", lane: "jarvis", col: 4, s: "proven", t: "Call a backend function", d: "Proven with fake tools in the hosted agent.", ev: "Voice prototype: tools ran inside the hosted agent with fake data. Calling the real backend with the agent's Entra identity is documented, not yet run.", href: VR },
-      { id: "auth", lane: "backend", col: 5, s: "docs", t: "Authorize the caller", d: "Dan's delegated API token is verified; service identity policy remains separate.", ev: "Issue #8: real RSA/local JWKS checks prove RS256 signature, issuer, API audience, time, tenant, Dan's object ID and scope offline. Authentication runs before CORS, including explicit business OPTIONS routes (L31). Browser sign-in, live Entra and Jarvis agent authorization are not yet verified." },
+      { id: "call", lane: "jarvis", col: 4, s: "docs", t: "Call a backend function", d: "Agent sends tool arguments and the source message ID.", ev: "The registry endpoint is tested offline, but the hosted agent has not yet been connected to it. Its service identity needs a route-specific backend authorization policy." },
+      { id: "auth", lane: "backend", col: 5, s: "docs", t: "Authorize the caller", d: "Dan's delegated API token is verified; service identity policy remains separate.", ev: "Issue #8: real RSA/local JWKS checks prove RS256 signature, issuer, API audience, time, tenant, Dan's object ID and scope offline. Authentication runs before CORS, including explicit business OPTIONS routes (L31). P0-09 checks browser token forwarding and /me offline; live Entra and Jarvis agent authorization remain unverified." },
       { id: "confirm", lane: "jarvis", col: 6, s: "proven", t: "Confirm to Dan", d: "Short Danish reply; speak what the tool result says.", ev: "Voice prototype: short spoken Danish confirmations. Rule from L16: base them on the tool result.", href: VR },
     ],
     edges: [
@@ -348,7 +367,7 @@ const FLOWS = [
     summary: "GitHub Actions runs the full build and all tests on the pull request. The backend reads the result by webhook, sends failures back to the agent, applies the project policy, and closes the task and its sandbox. Dan can cancel at any time.",
     nodes: [
       { id: "ctx", lane: "github", col: 1, s: "context", from: [[5, "pr"], [7, "pr"]], t: "From 5–8: pull request open" },
-      { id: "checks", lane: "actions", col: 2, s: "docs", t: "Full build and all tests in GitHub Actions", d: "Runs on every push to the PR.", ev: "Decision 9 (decisions.md): build and release run in GitHub Actions, never in the sandbox.", href: DOC.ghTriggers },
+      { id: "checks", lane: "actions", col: 2, s: "docs", t: "Full build and all tests in GitHub Actions", d: "Runs on every PR; a managed-project template is available.", ev: "P3-09: copyable PR checks are in templates/github-actions/pr-checks.yml; see the adoption guide.", href: "github-actions-templates.md" },
       { id: "cancel", lane: "board", col: 2, s: "assumed", t: "Cancel at any time" },
       { id: "cinv", lane: "backend", col: 2, s: "proven", t: "Cancel the invocation", d: "Returned cancelled." },
       { id: "cdel", lane: "foundry", col: 2, s: "proven", t: "Delete the session", d: "Nothing keeps running." },
@@ -375,8 +394,8 @@ const FLOWS = [
     summary: "After the merge, GitHub Actions builds, tests and deploys. Every step reaches the board's release view through GitHub webhooks; no polling.",
     nodes: [
       { id: "ctx", lane: "github", col: 1, s: "context", from: [[9, "merge"]], t: "From 9: merged to main" },
-      { id: "wf", lane: "actions", col: 2, s: "docs", t: "Release workflow", d: "Build, test and package on merge or tag.", ev: "GitHub Docs: workflow triggers (push, release, tags).", href: DOC.ghTriggers },
-      { id: "deploy", lane: "actions", col: 3, s: "docs", t: "Deploy to Azure with OIDC", d: "Federated credential; no secrets stored in GitHub.", ev: "GitHub Docs: OpenID Connect to Azure.", href: DOC.ghOidc },
+      { id: "wf", lane: "actions", col: 2, s: "docs", t: "Release workflow", d: "Build, test and upload an artifact on merge to main.", ev: "P3-09: copyable release workflow is in templates/github-actions/release.yml; see the adoption guide.", href: "github-actions-templates.md" },
+      { id: "deploy", lane: "actions", col: 3, s: "docs", t: "Deploy to Azure with OIDC", d: "Main-only production environment; id-token permission is limited to deploy.", ev: "P3-09 documents the environment-bound Azure federation setup; live Azure use is unverified.", href: "github-actions-templates.md" },
  
       { id: "migrations", lane: "backend", col: 4, s: "proven", t: "Apply pending migrations before listen", d: "Bounded startup, transaction-owned app lock, immutable checksum ledger; failure rolls back and closes the pool.", ev: "Issue #7: real SQL Server CI passed repeat/concurrent startup, rollback, history, lock contention and cancellation. Live managed identity and deployed Azure revision remain #11." },
       { id: "rec", lane: "data", col: 4, s: "assumed", t: "Release record", d: "Commits, PRs, runs and deployments per release." },

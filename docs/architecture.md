@@ -4,7 +4,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 - Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L36): [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
-- **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–14 show each flow as swimlanes, coloured by evidence (proven, documented, assumed). Open it in a browser.
+- **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–15 show each flow as swimlanes, coloured by evidence (proven, documented, assumed). Open it in a browser.
 
 ## Stack overview
 
@@ -12,7 +12,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | --- | --- | --- |
 | Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces for the two apps, one root lockfile | Implemented in P0-01; empty app builds verified in Codex cloud |
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
-| Web | React/React DOM 19.3.0, React Router 7.18.4, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton implemented in P0-02; sign-in P0-09 and deployment P0-11 pending |
+| Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton and core/factory module registration implemented; domain APIs and SSE in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
@@ -22,7 +22,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Images | Azure Container Registry: backend and sandbox images | Decided |
 | Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-11 |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
-| Sign-in | Entra ID: backend verifies delegated `jarvis-api` bearer tokens with jose 6.2.12 and Dan's object ID; MSAL web sign-in and explicit service-identity authorization remain their tasks | Backend boundary checked offline in #8; browser and live Entra validation pending #9/#11 |
+| Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name; explicit service-identity authorization remains separate | Browser and backend contracts checked offline in #9; real Entra sign-in and deployed origin remain unverified pending #11 |
 | Board updates | Server-sent events (SSE) over `fetch`, so the bearer token can be sent | Decided |
 | Jarvis agent and runner | Python 3.12/3.13 (Foundry hosted agents support Python or C#) | Decided |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
@@ -43,8 +43,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   can override it at build/dev time. Missing deployment leaves the shell usable;
   invalid identity fields or URLs stop startup. P0-11 must persist its
   `backendFqdn` as the public URL. Backend connectivity is unverified until then.
-- The neutral foundation page shows pending capabilities. It does not authenticate
-  or contact an API; those interactions begin in P0-09.
+- The home page uses a tenant-specific MSAL Browser client with the public web
+  client ID and API scope. MSAL stores its cache in session storage; sign-in
+  requests only the delegated API scope and sends the access token to `/me`.
+  Cached accounts use silent token acquisition. A missing backend URL disables
+  sign-in instead of presenting a false success state.
+- `/me` inherits the root authentication hook. The verifier accepts only
+  Dan's signed delegated API token and returns a bounded display name from its
+  validated `name` claim, falling back to `Dan` if that optional claim is absent
+  or malformed. The route exposes only that name, never token claims or IDs.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml` and `runner-ci.yml`
@@ -91,14 +98,15 @@ ID tokens and app-only tokens are not authorized here.
 Future service integrations must add an explicit route-specific identity policy.
 
 JWKS lookups have a five-second timeout, a 30-second refresh cooldown and a
-ten-minute key cache. Provider outages fail closed. Only object ID and tenant ID
-reach `request.principal`; tokens, claims and provider details are excluded from
-logs and responses. Configuration accepts `ENTRA_TENANT_ID`,
+ten-minute key cache. Provider outages fail closed. Only object ID, tenant ID,
+and a validated display name reach `request.principal`; `/me` returns only the
+display name. Tokens, other claims and provider details are excluded from logs
+and responses. Configuration accepts `ENTRA_TENANT_ID`,
 `ENTRA_API_CLIENT_ID` and `ENTRA_OWNER_OBJECT_ID` UUID overrides and otherwise
 uses the nonsecret bootstrap identities. Real RSA signatures, local HTTP JWKS,
-socket duplicate headers and stalled-provider tests establish this offline
-boundary. No deployed Entra token was obtained; browser sign-in and `/me` remain
-#9, and live deployment verification remains #11.
+socket duplicate headers, `/me` authorization and stalled-provider tests
+establish this offline boundary. No deployed Entra token was obtained; live
+browser sign-in and deployment verification remain #11.
 
 ## Database startup and migration ownership
 
@@ -128,7 +136,8 @@ includes the same migration directory. `0001_core_tables.sql` (P1-01, #15) creat
 data-model groups 1–3. Each forward migration has a reviewed reverse script in
 `db/migrations/down/`; startup never runs it. `revertMigration` runs it under the
 same lock and transaction, only for the latest applied migration, and removes its
-ledger row. CI proves up, down and re-up against SQL Server.
+ledger row. CI proves up, down and re-up against SQL Server. This includes the
+`tool_calls` table that the tool dispatcher (P4-02) writes.
 
 Real managed-identity token exchange and migrations in a deployed Azure revision
 remain issue #11. See the [database guide](../apps/backend/src/database/README.md)
@@ -145,14 +154,20 @@ the complete composition. A new area contributes routes and tools through this
 contract without changing `core`. Readiness awaits async module registration and
 refuses a failed plugin; Fastify owns plugin close hooks.
 
-Core owns the health route and a per-app internal Jarvis tool catalogue; settings,
+Core owns the health route, tool catalogue and HTTP dispatcher; settings,
 activity, persisted events and the SSE hub remain their later tasks. Factory's
 registration boundary owns future projects/tasks APIs and tools; it contributes
 none until those operations are implemented. The catalogue rejects duplicate
 module/tool identities, snapshots frozen schemas and exposes read-only descriptors
-with ownership and handlers. There is no public tool dispatcher: future dispatch
-must authenticate/authorize, validate inputs and bound execution. Existing Foundry
-client, health/security/logging and process shutdown behavior are preserved.
+with ownership and handlers. Authenticated `GET /tools` exposes every descriptor's
+name, description and input schema. The core registers a schema-validated
+`POST /tools/{name}` for every tool at composition time, passes the request and
+cancellation signal to its handler, then writes the arguments, result and outcome
+to `tool_calls` using the process-owned SQL pool. Calls require
+`X-Jarvis-Message-ID`; absent persistence returns 503 before tool execution. The
+routes inherit the existing delegated-user policy; a Jarvis service-identity
+policy remains separate. Existing Foundry client, health/security/logging and
+process shutdown behavior are preserved.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
 
@@ -361,6 +376,7 @@ flowchart LR
 
 - One release per merge to `main`; no tags.
 - Commits are not stored; the release view fetches them from GitHub on demand.
+- Copy-ready managed-project examples live in [`templates/github-actions/`](../templates/github-actions/), with Azure OIDC setup and customization steps in [github-actions-templates.md](github-actions-templates.md). PR checks have read-only permissions; the release build and tests precede an artifact upload, and only the `main`-gated deploy job receives `id-token: write`. Azure federation and deployment in an adopting project remain unverified.
 
 ## Voice
 

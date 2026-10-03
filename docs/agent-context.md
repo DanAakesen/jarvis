@@ -72,7 +72,7 @@ Dan follows the work on the [Project Jarvis board](https://github.com/users/DanA
 1. **Claim the issue before anything else: set your worker label.** Find the issue by task ID, then:
    - If it already has a worker label that isn't yours, or an open PR with `Fixes #<issue>` that isn't yours, the task is taken: stop and say so.
   - **Codex:** add the `Codex` label and a comment, using `GH_TOKEN` from the environment: `gh issue edit <n> --repo DanAakesen/jarvis --add-label Codex` and `gh issue comment <n> --repo DanAakesen/jarvis --body "Claimed by Codex at <UTC time>."`. Don't assign the issue. Without `gh`, call the REST API with `curl` (`POST /repos/DanAakesen/jarvis/issues/<n>/labels` with `{"labels":["Codex"]}`, and `/comments`). If the claim fails, stop and report it; never work on an unclaimed task.
-  - **Copilot cloud agent:** Copilot can't edit labels, so the [Worker label](../.github/workflows/worker-label.yml) workflow adds `Copilot` when the issue is assigned to Copilot or Copilot opens a PR with `Fixes #<issue>`. Started outside the issue, open the draft PR with `Fixes #<issue>` in its body first.
+  - **Copilot cloud agent:** Copilot can't edit labels, so the [Worker label](../.github/workflows/worker-label.yml) workflow keeps `Copilot` on an open issue exactly while an open Copilot PR links it (`Fixes`/`Closes`/`Resolves #<issue>`), or while the issue is assigned to Copilot and no Copilot PR for it was closed unmerged. Each run recomputes all open issues ([rules](../.github/scripts/worker_label.py)). Started outside the issue, open the draft PR with `Fixes #<issue>` in its body first.
   - **Dan** adds `Dan` himself. **Jarvis** (from P2) adds `Jarvis` when its dispatcher starts a task.
   - **Releasing a task:** a worker that stops without delivering removes its label and says why in a comment. The Worker label workflow removes `Copilot` when Copilot's PR closes unmerged.
 2. Read the current `main`: the Issue and Status columns and Current focus in `PLAN.md`, the relevant [decisions](decisions.md), and the files the `AGENTS.md` context map names for your area.
@@ -106,7 +106,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 
 - **Coordinator removed.** Dan or an explicitly authorized agent squash-merges a PR when it is ready (not a draft; see Copilot drafts below), no agent is still working on it, its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the authorized worker updates it and waits for the checks again, so every merge is tested against the current `main`.
 - **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, merge only `fix-main:` PRs until `main` is green again.
-- **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, also after follow-up rounds and while the PR has merge conflicts (L
+- **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, also after follow-up rounds and while the PR has merge conflicts (L Follow-up rounds (after an `@copilot` comment) can't edit the title, so on Copilot's closing comment the workflow also drops a leftover `[WIP]` prefix.
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
 - The Jarvis coordinator for #12 is removed at Dan's request. It no longer assigns issues, merges PRs or requests conflict repairs. The separate Project board sync and its `project-board` environment remain. Dan merges green PRs or explicitly instructs an agent to merge them. Deployment integration remains #11.
@@ -215,9 +215,12 @@ Verified in Codex cloud for P0-02:
 
 The web starts with the bootstrap identities and the public production backend
 origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). The URL
-is pending P0-11's first deployment; opening the skeleton needs no extra setup.
-Sign-in and authenticated API calls remain P0-09. `Web CI` checks lint, tests,
-and root builds as part of the aggregate `CI` workflow (below).
+is pending P0-11's first deployment; until configured, sign-in is visibly
+disabled. With a backend URL, MSAL signs in against the configured tenant and
+calls authenticated `/me`; only the backend-approved display name is shown.
+`Web CI` checks lint, tests, and root builds as part of the aggregate `CI`
+workflow (below). Local tests use signed fixture tokens and do not verify a live
+Entra tenant or Azure deployment.
 
 Backend commands implemented in P0-03:
 
@@ -409,6 +412,7 @@ Python checks use each package's `.venv`. For the runner, from `runner/`:
 
 - Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge deploys infrastructure, backend, and web; the backend applies migrations at startup.
 - No manual portal changes.
+- Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.
 
 ## Documentation rules
 

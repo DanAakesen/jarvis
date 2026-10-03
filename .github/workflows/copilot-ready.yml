@@ -45,9 +45,20 @@ jobs:
         run: |
           if [[ "$EVENT" != "workflow_dispatch" ]]; then
             IFS=$'\t' read -r state draft author title < <(gh api "repos/$REPO/pulls/$PR" --jq '[.state, .draft, .user.login, .title] | @tsv')
-            if [[ "$state" != "open" || "$draft" != "true" || "$author" != "Copilot" || "$title" == "[WIP]"* ]]; then
-              echo "PR #$PR: state=$state draft=$draft author=$author title=$title; nothing to do."
+            if [[ "$state" != "open" || "$draft" != "true" || "$author" != "Copilot" ]]; then
+              echo "PR #$PR: state=$state draft=$draft author=$author; nothing to do."
               exit 0
+            fi
+            if [[ "$title" == "[WIP]"* ]]; then
+              if [[ "$EVENT" != "issue_comment" ]]; then
+                echo "PR #$PR is still [WIP]; nothing to do."
+                exit 0
+              fi
+              # Copilot's closing comment ends a follow-up round, but follow-up rounds
+              # can't edit the title, so drop the [WIP] prefix here (seen on #114).
+              new_title="${title#\[WIP\]}"
+              new_title="${new_title# }"
+              jq -n --arg t "$new_title" '{title: $t}' | gh api -X PATCH "repos/$REPO/pulls/$PR" --input - --jq '.title'
             fi
           fi
           gh pr ready "$PR" --repo "$REPO"

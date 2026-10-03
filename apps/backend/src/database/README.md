@@ -30,7 +30,8 @@ only with `NODE_ENV=test` on `127.0.0.1`; CI generates and deletes unique isolat
 databases. Neither agents nor Actions tests connect to Azure SQL.
 
 The Docker image includes committed `db/migrations`; compiled and source code
-resolve the same repository-relative directory. Real Azure identity connectivity
-and new-revision/restart acceptance remain issue #11. Domain schema groups 1–3 are
-`0001_core_tables.sql` (#15); `schema.integration.test.ts` checks its constraints,
-and reverts and reapplies every committed migration in its own database.
+resolve the same repository-relative directory. `tool_calls` writes use the group-one
+schema in `0001_core_tables.sql` (#15). Real Azure identity connectivity and
+new-revision/restart acceptance remain issue #11. `schema.integration.test.ts`
+checks the schema's constraints, and reverts and reapplies every committed migration
+in its own database.

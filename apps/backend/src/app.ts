@@ -7,12 +7,20 @@ import { createLogger } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
 import type { TokenVerifier } from './auth/verify.js';
 import { coreModule } from './core/index.js';
+import type { ToolCallStore } from './core/tool-calls.js';
 import { factoryModule } from './factory/index.js';
 import { registerModules, type BackendModule } from './modules.js';
 
 export interface BuildAppOptions {
   readonly auth?: TokenVerifier;
   readonly modules?: readonly BackendModule[];
+  readonly toolCallStore?: ToolCallStore;
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    toolCallStore: ToolCallStore | null;
+  }
 }
 
 export function buildApp(config: BackendConfig, logger: Logger = createLogger(config), options: BuildAppOptions = {}) {
@@ -59,6 +67,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     reply.code(statusCode).send({ error: statusCode < 500 ? 'Invalid request' : 'Internal server error' });
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));
+  app.decorate('toolCallStore', options.toolCallStore ?? null);
   registerModules(app, options.modules ?? [coreModule, factoryModule]);
   return app;
 }
