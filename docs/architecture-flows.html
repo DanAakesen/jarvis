@@ -194,20 +194,22 @@ const LANE_ORDER = Object.keys(LANES);
 const FLOWS = [
   {
     name: "Request",
-    summary: "Dan asks for work on the board or by voice. Board buttons go straight to the backend; chat and voice go to the Jarvis agent.",
+    summary: "Dan asks for work on the board or by voice. Board buttons go straight to the backend; chat and voice go to the Jarvis agent. The chosen browser voice design sends traffic through an authenticated backend relay.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "context", badge: "Start", t: "Dan wants a change", d: "For example: add dark mode to Jarvis.", ev: "Start of the user flow." },
       { id: "card", lane: "board", col: 2, s: "assumed", t: "Add a card", d: "Project, agent and task text.", ev: "Board requirement in PRODUCT.md; the board is not built yet." },
       { id: "create", lane: "backend", col: 3, s: "assumed", t: "Create task", d: "Board buttons call backend functions directly.", ev: "architecture.md: one backend with shared functions for board, voice and Windows." },
       { id: "chat", lane: "board", col: 4, s: "assumed", t: "Type to Jarvis", d: "Chat box on the board.", ev: "Design assumption: the board can also send free text to the Jarvis agent." },
-      { id: "speak", lane: "voice", col: 2, s: "proven", t: "Speak Danish", d: "Microphone streams to a Voice Live voice agent.", ev: "Voice prototype: console client and synthetic Danish speech through the deployed voice agent (V1, V5).", href: VR },
-      { id: "stt", lane: "voice", col: 3, s: "proven", t: "Danish speech to text", d: "MAI Transcribe, language da: 0–1.8 % word errors.", ev: "Voice prototype V2: MAI Transcribe heard English names in Danish correctly; Azure Speech da-DK had 22–25 % word errors; no language set was unusable.", href: VR },
+      { id: "speak", lane: "voice", col: 2, s: "unknown", t: "Speak Danish", d: "Browser voice uses the authenticated backend WebSocket; provider credentials stay server-side.", ev: "P5-01 local mock test covers the relay only. Browser audio and real Voice Live interoperability are unverified." },
+      { id: "relay", lane: "backend", col: 3, s: "unknown", t: "Relay to Voice Live", d: "Backend authenticates the browser and forwards WebSocket messages to the provider.", ev: "P5-01 test verifies bidirectional forwarding and credential separation against a local mock upstream. Production provider wiring and Azure interoperability are unverified." },
+      { id: "stt", lane: "voice", col: 4, s: "proven", t: "Danish speech to text", d: "MAI Transcribe, language da: 0–1.8 % word errors.", ev: "Voice prototype V2: MAI Transcribe heard English names in Danish correctly; Azure Speech da-DK had 22–25 % word errors; no language set was unusable.", href: VR },
       { id: "vq", lane: "voice", col: 5, s: "proven", t: "Voice quality and cost", d: "2.7–3.9 s to first audio; ≈4 DKK per 30-minute day.", ev: "Voice prototype V6–V7: interruption detected in 0.6 s; cost estimated from measured usage at list prices; billed meters to confirm with infra/cost.ps1.", href: VR },
-      { id: "jin", lane: "jarvis", col: 5, s: "proven", t: "Jarvis agent gets the text", d: "Voice Live bridges to a hosted agent (preview).", ev: "Voice prototype V1: voice agent → hosted agent over Bridge Protocol 1.0 (invocations_ws).", href: VR },
+      { id: "jin", lane: "jarvis", col: 6, s: "proven", t: "Jarvis agent gets the text", d: "Voice Live bridges to a hosted agent (preview).", ev: "Voice prototype V1: voice agent → hosted agent over Bridge Protocol 1.0 (invocations_ws).", href: VR },
     ],
     edges: [
-      ["start", "card", "docs", "click"], ["start", "speak", "proven", "speak", { off: 32 }], ["start", "chat", "docs", "type"],
-      ["card", "create", "docs", "create task"], ["speak", "stt", "proven", "audio"],
+      ["start", "card", "docs", "click"], ["start", "speak", "unknown", "speak", { off: 32 }], ["start", "chat", "docs", "type"],
+      ["card", "create", "docs", "create task"], ["speak", "relay", "unknown", "audio"],
+      ["relay", "stt", "unknown", "audio"],
       ["stt", "jin", "proven", "text"], ["chat", "jin", "docs", "text", { off: 32 }],
     ],
   },
