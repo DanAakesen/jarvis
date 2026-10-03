@@ -7,17 +7,17 @@ tasks and status live in [PLAN.md](PLAN.md).
 
 ## Current implementation
 
-P0-01 provides the monorepo layout and buildable empty TypeScript workspaces.
-The web and backend compile to `dist/`; they do not render a UI or start a server.
-React/Vite is P0-02, Fastify is P0-03, and CI is P0-10. Production Python code,
-database migrations, and deployment follow in their planned tasks. P0-04 has
-added the Bicep template; Azure deployment awaits P0-11.
+P0-02 adds the React/Vite web skeleton, routing, lint, Vitest, and a focused
+web CI workflow. The home page shows the pending sign-in and deployment state;
+unknown routes provide a working return link. The backend still compiles an
+empty module; Fastify follows in P0-03. Monorepo CI is P0-10, sign-in is P0-09,
+and deployment is P0-11. P0-04 provides the Bicep template.
 
 ## Repository layout
 
 | Path | Purpose |
 | --- | --- |
-| `apps/web` | Web workspace; React + Vite follows in P0-02 |
+| `apps/web` | React + Vite web app, routing, lint and Vitest |
 | `apps/backend` | Backend workspace; Fastify follows in P0-03 |
 | `agents/jarvis` | Reserved for the Python Jarvis agent (P4) |
 | `runner` | Reserved for the Python coding-sandbox ACP adapter (P2) |
@@ -45,16 +45,49 @@ workspace with `npm run build --workspace @jarvis/web` or
 `npm run build --workspace @jarvis/backend`. Both use the shared strict
 TypeScript configuration and fail on compilation errors.
 
-There is no dev server, lint command, or application test suite yet. P0-02 and
-P0-03 add those checks; P0-14 adds cloud setup automation. After P0-02, root
-`npm run dev` will serve the web app against the production backend.
+## Run and check the web app
+
+After installation, run from the repository root:
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:5173`. No sign-in, Azure access, backend process, or
+configuration file creation is needed to open the skeleton. Port 5173 is fixed;
+if another process uses it, Vite reports an error rather than changing ports.
+
+```bash
+npm run lint
+npm test
+```
+
+`npm test` runs once; `npm run test:watch --workspace @jarvis/web` watches tests.
+`Web CI` runs installation, lint, tests, and root builds on every PR and `main`
+push. P0-10 will extend CI to the backend and Python components.
+
+### Public configuration
+
+Vite selects only the tenant ID, web application ID and API scope from
+`infra/bootstrap.output.json`. Deployment and owner metadata stay out of the
+client bundle. `apps/web/config.json` stores the production HTTPS backend
+origin; it is currently `null` because the first deployment is P0-11. P0-11
+must record its `backendFqdn` output there as `https://<backendFqdn>` so a new
+checkout starts against production without an additional setup step.
+
+A build or dev session can override that public URL with `VITE_BACKEND_URL`,
+including in a git-ignored root `.env.local`. Never put secrets in that variable.
+Invalid URLs or bootstrap identity fields stop startup/build with a configuration
+error. With no URL, the shell shows that deployment is pending. A configured
+address is not reported as a verified connection; API calls and MSAL sign-in
+follow in P0-09. Production connectivity has not been tested.
 
 ## Contributing
 
 Read [AGENTS.md](AGENTS.md) and [docs/agent-context.md](docs/agent-context.md)
 before execution. Work in an isolated cloud checkout on one task branch and
-deliver one linked PR. Use the checkout provided by the cloud task; do not
-create another checkout or worktree unless requested. Never push directly to
+deliver one linked PR. Dan requests a fresh checkout of the latest `main` for each task; use a new
+cloud checkout or a separate Git worktree when continuing in one cloud session. Never push directly to
 `main` or merge your own PR.
 
 Agents do not access Azure. Deployments run through GitHub Actions on `main`;

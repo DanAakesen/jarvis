@@ -252,9 +252,9 @@ const FLOWS = [
     summary: "The backend starts a Foundry session for the task; the runner fetches its credentials with the agent's own identity.",
     nodes: [
       { id: "ctx", lane: "backend", col: 1, s: "context", from: [[3, "queue"]], t: "From 3: task leaves the queue" },
-      { id: "start", lane: "backend", col: 2, s: "proven", t: "Start the task", d: "Invocations call with agent and task; creates a session.", ev: "Prototype: every task started this way (PRs #1–#11)." },
+      { id: "start", lane: "backend", col: 2, s: "proven", t: "Start the task", d: "Invocations call with agent and task; creates a session.", ev: "Prototype: every task started this way (PRs #1–#11). Issue #30: backend client verified against locally recorded runner responses; production Azure validation pending." },
       { id: "session", lane: "foundry", col: 3, s: "proven", t: "Create the session sandbox", d: "VM-isolated, 1 vCPU / 2 GiB, persistent /files.", ev: "Prototype: dozens of sessions. VM isolation per Microsoft Learn.", href: DOC.sessions },
-      { id: "creds", lane: "runner", col: 4, s: "proven", t: "Read credentials", d: "Agent identity reads Key Vault at task start.", ev: "Prototype: Key Vault check passed on every deploy; tasks used the tokens." },
+      { id: "creds", lane: "runner", col: 4, s: "proven", t: "Read credentials", d: "Agent identity reads Key Vault at task start.", ev: "Prototype: Key Vault check passed on every deploy; tasks used the tokens. Issue #28 ports this handler and tests its Boolean-only response locally; production identity probes remain pending issue #11." },
       { id: "secrets", lane: "vault", col: 4, s: "proven", t: "Copilot token · Codex login · GitHub token", d: "Read-only, except the Codex login.", ev: "Prototype: role scoped to the codex-login secret for write-back." },
       { id: "prep", lane: "runner", col: 5, s: "proven", t: "Prepare the session", d: "Writable home, Codex login, Git credential helper." },
       { id: "mint", lane: "backend", col: 6, s: "docs", t: "Mint a GitHub App token", d: "1-hour token for one repository.", ev: "GitHub Docs: installation access tokens. The prototype used a fine-grained token instead.", href: DOC.ghApp },
@@ -271,7 +271,7 @@ const FLOWS = [
     summary: "The coding agent runs inside the sandbox and delivers a branch and a pull request.",
     nodes: [
       { id: "ctx", lane: "runner", col: 1, s: "context", from: [[4, "prep"]], t: "From 4: session ready" },
-      { id: "acp", lane: "runner", col: 2, s: "proven", t: "Start the agent over ACP", d: "copilot --acp, or codex-acp.", ev: "Prototype: both agents. Copilot's ACP mode is a public preview.", href: DOC.acp },
+      { id: "acp", lane: "runner", col: 2, s: "proven", t: "Start the agent over ACP", d: "copilot --acp, or codex-acp.", ev: "Prototype: both agents. Copilot's ACP mode is a public preview. Issue #28 ports the adapter with local ACP subprocess tests and pinned CLIs; live production deployment remains pending issue #11.", href: DOC.acp },
       { id: "par", lane: "runner", col: 4, s: "proven", t: "Parallel tasks", d: "One sandbox each; two Codex tasks shared one login.", ev: "Prototype: parallel Codex check." },
       { id: "new", lane: "agent", col: 3, s: "proven", t: "New conversation and prompt", d: "ACP session/new and session/prompt." },
       { id: "work", lane: "agent", col: 4, s: "proven", t: "Clone, edit, run tests", d: "742-file TypeScript repository; 2.1 GB disk." },
@@ -291,7 +291,7 @@ const FLOWS = [
     nodes: [
       { id: "ctx", lane: "runner", col: 1, s: "context", from: [[5, "work"]], t: "From 5: agent working", d: "Events recorded per invocation." },
       { id: "live", lane: "runner", col: 2, s: "assumed", t: "Runner pushes live events", d: "Files changed, tests, commits: sent to the backend as they happen.", ev: "Not built. The runner already records these events (prototype telemetry)." },
-      { id: "poll", lane: "backend", col: 2, s: "proven", t: "Sandbox heartbeat", d: "About once a minute: keeps the sandbox alive, detects a dead one.", ev: "Prototype: the driver polled; sandboxes shut down only after 2 quiet minutes. Real-time updates come from the runner, not from the heartbeat." },
+      { id: "poll", lane: "backend", col: 2, s: "proven", t: "Sandbox heartbeat", d: "About once a minute: keeps the sandbox alive, detects a dead one.", ev: "Prototype: the driver polled; sandboxes shut down only after 2 quiet minutes. Issue #30 supplies a bounded status call with preserved HTTP failures, verified offline; the heartbeat policy remains future work. Real-time updates come from the runner, not from the heartbeat." },
       { id: "store", lane: "data", col: 3, s: "assumed", t: "Store events", d: "Task events in Azure SQL." },
       { id: "push", lane: "backend", col: 4, s: "assumed", t: "Push to the board with SSE", d: "Server-sent events; the browser reconnects by itself.", ev: "Decision 3 (decisions.md): SSE, no extra service. Not built.", href: DOC.sse },
       { id: "card", lane: "board", col: 6, s: "assumed", t: "Card shows activity", d: "Current activity and last update." },
@@ -309,7 +309,7 @@ const FLOWS = [
     nodes: [
       { id: "ctx", lane: "board", col: 1, s: "context", from: [[6, "card"]], t: "From 6: Dan sees the work" },
       { id: "fix", lane: "board", col: 2, s: "assumed", t: "Send a correction", d: "Board or voice, e.g. “only even numbers”." },
-      { id: "steer", lane: "backend", col: 3, s: "proven", t: "Steer request", d: "Invocations with mode = steer." },
+      { id: "steer", lane: "backend", col: 3, s: "proven", t: "Steer request", d: "Invocations with mode = steer.", ev: "Issue #30: existing-session request verified offline against recorded runner acknowledgement; end-to-end controls pending." },
       { id: "cancel", lane: "runner", col: 4, s: "proven", t: "Stop the current turn", d: "ACP session/cancel; stopped within 1 second." },
       { id: "ended", lane: "agent", col: 5, s: "proven", t: "Turn ends as cancelled" },
       { id: "cont", lane: "runner", col: 6, s: "proven", t: "Continue with the correction", d: "session/load, then the correction as a new turn." },
@@ -326,11 +326,11 @@ const FLOWS = [
     nodes: [
       { id: "ctx", lane: "board", col: 1, s: "context", from: [[6, "card"]], t: "From 6–7: task running" },
       { id: "pause", lane: "board", col: 2, s: "assumed", t: "Pause" },
-      { id: "preq", lane: "backend", col: 2, s: "proven", t: "Pause request", d: "Invocations with mode = pause." },
+      { id: "preq", lane: "backend", col: 2, s: "proven", t: "Pause request", d: "Invocations with mode = pause.", ev: "Issue #30: recorded pausing/idle acknowledgements verified offline; the client does not infer that the original turn is already paused." },
       { id: "stop", lane: "runner", col: 3, s: "proven", t: "Stop the turn → Paused", d: "ACP session/cancel." },
       { id: "idle", lane: "foundry", col: 4, s: "proven", t: "Idle 2 minutes → sandbox shut down", d: "Files and conversation are kept." },
       { id: "resume", lane: "board", col: 5, s: "assumed", t: "Resume" },
-      { id: "next", lane: "backend", col: 5, s: "proven", t: "Next turn on the same session" },
+      { id: "next", lane: "backend", col: 5, s: "proven", t: "Next turn on the same session", ev: "Issue #30: recorded resume acknowledgement verified offline. Resume is for clean pause/idle shutdown; crash recovery starts a new session." },
       { id: "restore", lane: "foundry", col: 6, s: "proven", t: "New container restores /files", d: "Container start time changed." },
       { id: "reload", lane: "runner", col: 7, s: "proven", t: "Reload conversation and continue", d: "Recalled an unwritten code word; PRs #9 and #11." },
     ],

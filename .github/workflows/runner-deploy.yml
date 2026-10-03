@@ -1,0 +1,65 @@
+name: Runner deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'runner/**'
+      - '.github/workflows/runner-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jarvis-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Set this after #11's infrastructure deployment. A skipped job makes the
+    # missing prerequisite visible without pretending Azure acceptance passed.
+    if: github.ref == 'refs/heads/main' && vars.JARVIS_INFRA_DEPLOYMENT_NAME != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      INFRA_DEPLOYMENT: ${{ vars.JARVIS_INFRA_DEPLOYMENT_NAME }}
+      IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Load infrastructure outputs
+        run: |
+          az deployment group show --resource-group rg-jarvis --name "$INFRA_DEPLOYMENT" --subscription "$SUBSCRIPTION_ID" --query properties.outputs --output json --only-show-errors > /tmp/runner-infra.json
+          python -c 'import json, os; o=json.load(open("/tmp/runner-infra.json")); f=open(os.environ["GITHUB_ENV"], "a"); f.write("REGISTRY=" + o["containerRegistryName"]["value"] + "\nREGISTRY_HOST=" + o["containerRegistryLoginServer"]["value"] + "\n")'
+      - name: Build small technology images in ACR
+        run: |
+          az acr build --registry "$REGISTRY" --image "jarvis-runner-base:$IMAGE_TAG" --file Dockerfile --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
+          az acr build --registry "$REGISTRY" --image "jarvis-runner-dotnet:$IMAGE_TAG" --file Dockerfile.dotnet --build-arg "RUNNER_BASE_IMAGE=$REGISTRY_HOST/jarvis-runner-base:$IMAGE_TAG" --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
+      - run: python -m pip install --require-hashes -r runner/requirements.txt
+      - name: Deploy both capacity tiers and prove Key Vault access
+        run: python runner/scripts/deploy.py --subscription "$SUBSCRIPTION_ID" --outputs /tmp/runner-infra.json --registry "$REGISTRY" --tag "$IMAGE_TAG" --state /tmp/runner-deployment.json
+      - name: Save deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-deployment-${{ github.sha }}
+          path: /tmp/runner-deployment.json
+          if-no-files-found: warn
+  prerequisite:
+    if: github.ref == 'refs/heads/main' && vars.JARVIS_INFRA_DEPLOYMENT_NAME == ''
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo 'Runner deployment and Key Vault acceptance are pending issue #11. Set JARVIS_INFRA_DEPLOYMENT_NAME to its successful infrastructure deployment, then run this workflow from main.' >> "$GITHUB_STEP_SUMMARY"

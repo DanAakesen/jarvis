@@ -1,8 +1,8 @@
 # Architecture
 
-Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. P0-01 provides the monorepo folders and empty TypeScript workspace builds; application runtimes are not built yet. Statuses below distinguish implementation, design, and prototype evidence.
+Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. P0-01 provides the monorepo folders. P0-02 and P0-03 implement the web and backend skeletons. Statuses below distinguish implementation, design, and prototype evidence.
 
-- Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L24): [decisions.md](decisions.md).
+- Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L35): [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
 - **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–13 show each flow as swimlanes, coloured by evidence (proven, documented, assumed). Open it in a browser.
 
@@ -11,16 +11,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Area | Choice | Status |
 | --- | --- | --- |
 | Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces for the two apps, one root lockfile | Implemented in P0-01; empty app builds verified in Codex cloud |
-| Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 7.0.2; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence | Pinned in P0-01; Node workspace builds verified, Python production components pending |
-| Web | React + TypeScript + Vite on Azure Static Web Apps (Free), resource in West Europe (Static Web Apps has no Swedish or Danish region; the files are served from a global network, so the region hardly matters) | Decided |
-| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Decided |
-| Backend framework | Fastify: schema validation, a plugin per area, SSE support | Decided 3 October 2026 |
+| Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending |
+| Web | React/React DOM 19.3.0, React Router 7.18.4, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton implemented in P0-02; sign-in P0-09 and deployment P0-11 pending |
+| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
+| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton implemented; area plugins and SSE in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
 | Database access | `mssql` driver with Entra ID (managed identity); plain SQL migrations, applied by the backend at startup under a SQL app lock | Decided; **verify** in P0-07 |
 | Files | Azure Blob Storage for artifacts and logs | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
-| Monitoring | Application Insights + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Decided |
+| Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-11 |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
 | Sign-in | Entra ID: the web app signs in with MSAL and calls the backend with a bearer token; the backend allows only Dan's object ID and Jarvis's own service identities | Decided |
 | Board updates | Server-sent events (SSE) over `fetch`, so the bearer token can be sent | Decided |
@@ -29,9 +29,46 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
 | Voice | Danish: Voice Live voice bridge, MAI Transcribe, Harper. English: `gpt-realtime-2.1` speech to speech, Ryan HD | Decided |
 | Build and release | GitHub Actions: full build, tests, releases, deployments; status through GitHub App webhooks | Decided |
-| Testing | Vitest (web, backend), pytest (Python), Playwright for a few end-to-end board checks; database tests against SQL Server in a container in CI | Decided 3 October 2026 |
+| Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest, future Playwright board checks and SQL container tests | Web/backend implemented in P0-02/P0-03; remaining checks in their tasks |
+
+## Web skeleton and configuration
+
+- React mounts into `apps/web/index.html`. BrowserRouter renders the home page
+  and a catch-all page with a return link. Production static hosting must fall
+  back to `index.html` for client routes (P0-11).
+- Vite selects the tenant ID, web client ID and API scope from the bootstrap
+  output and injects only those fields plus the backend origin. The bootstrap
+  file is read at build time, never imported into the browser.
+- `apps/web/config.json` records the production HTTPS origin; `VITE_BACKEND_URL`
+  can override it at build/dev time. Missing deployment leaves the shell usable;
+  invalid identity fields or URLs stop startup. P0-11 must persist its
+  `backendFqdn` as the public URL. Backend connectivity is unverified until then.
+- The neutral foundation page shows pending capabilities. It does not authenticate
+  or contact an API; those interactions begin in P0-09.
+- `web-ci.yml` runs lint, tests and root builds without Azure access. P0-10 extends
+  this to monorepo checks rather than duplicating the web job.
 
 ## Runtime overview
+
+The backend factory is separate from the process entrypoint. `/health` returns
+200 with `{"status":"ok"}`; it does not claim SQL or Azure readiness. The process
+binds to `0.0.0.0:3000` by default, validates configuration before listening and
+handles SIGTERM/SIGINT with a five-second close and telemetry flush deadline.
+Browser requests allow only the exact configured `STATIC_WEB_APP_ORIGIN` and
+`http://localhost:5173`; other Origin values receive 403. Authentication remains
+P0-08. The server generates request IDs and records only approved event names,
+methods, route templates, statuses and timings. A final output allowlist covers
+child logger bindings as well as log arguments, dropping request/provider secrets.
+
+With backend-only `APPLICATIONINSIGHTS_CONNECTION_STRING` (P0-11 Key Vault
+reference), an isolated SDK client exports these events as manual traces. No
+global auto-instrumentation captures request headers, URLs or dependency calls,
+and disk retry caching is disabled. Without that setting, stdout JSON logs keep
+offline/CI operation usable. Fake sinks prove the adapter contract; live Azure
+ingestion remains pending. `backend-ci.yml` proves the production container and
+its health/CORS/shutdown behavior in GitHub Actions without Azure credentials.
+The image uses Node.js 22.23.3, a non-root user, and only backend production output
+and dependencies; prototypes and frontend sources are excluded.
 
 Where each part runs. The web app is static files on Static Web Apps: free and always reachable. Container Apps hosts only the backend.
 
@@ -150,6 +187,41 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | Endpoints | Administration (connections, versions): `*.services.ai.azure.com`. Sessions and Invocations: `*.cognitiveservices.azure.com` (L10). |
 | Settings | Model and reasoning per task: `codex-acp` (`model`, `model_reasoning_effort`) and Copilot `--model`; **verify** in P2. |
 
+### Production runner implementation
+
+Issue #28 ports the adapter to `runner/` with task, steer, pause, resume, cancel,
+credential probe, and Codex renewal handlers. Prototype crash-test mode is removed.
+Local Python tests exercise ACP subprocess fixtures; production Azure acceptance
+remains pending #11 and the main-branch runner workflow.
+
+- Node/Python use the small base image; a separate .NET image adds SDK 8.0.419.
+  Both expose 1 vCPU / 2 GiB and 2 vCPU / 4 GiB variants. The default stays 1×2;
+  .NET normally uses 2×4. Full builds stay in GitHub Actions (L23).
+- Python 3.12.14 and Node 22.23.3 are pinned. CLI pins: Copilot 1.0.91, Codex
+  0.157.0, Codex ACP 2.1.1, GitHub CLI 2.98.0. Python hashes and npm integrity
+  locks are committed. Container build and packaged runtime checks run in Runner CI.
+- Runner deploy builds in ACR and deploys manifest digests through OIDC on `main`.
+  It uses the successful infrastructure deployment's admin/runtime endpoints and
+  records each variant only after both Key Vault provider probes pass. Probe
+  sessions are explicitly deleted, including failed probes (L14).
+- Each dedicated agent identity reads only the three credential secret scopes;
+  write access covers only `codex-login`. The port retains `github-token` from the
+  prototype until #40 adds task-scoped GitHub App installation tokens; CLI seat
+  authentication is separate. No workflow seeds credentials.
+- Invocation metadata is stored separately for each turn, with path-safe IDs and
+  backward reads of earlier session records. Idle recreation retains earlier
+  status lookups; prompts, results, and credentials are omitted (L28).
+- Live event push (#29), coordinated renewal scheduling (#34), and frequent Git
+  pushes (#35) remain later work. See [runner instructions](../runner/README.md).
+
+### Backend Foundry client
+
+`apps/backend/src/foundry/client.ts` implements start, steer, pause, resume, cancel, status and explicit session deletion. It stores distinct runtime and administration project endpoints for the same account/project. Administration preflight checks connections and the named agent's versions on the administration host; it creates no session.
+
+The module uses Node 22 native fetch and an injected identity provider requesting `https://ai.azure.com/.default`. Each HTTP call bounds authentication, fetch and response consumption to 30 seconds by default, limits response bodies to 1 MiB, propagates cancellation and refuses redirects. It validates responses and exposes sanitized typed failures, preserving HTTP status codes. It has no retry loop or background polling. The dispatcher owns retries/session cleanup, and the heartbeat owns crash detection. Provider `completed` still requires GitHub branch/PR evidence; resume applies to clean pause/idle shutdown, while crash recovery starts a new session.
+
+Issue #30's offline contracts use actual locally recorded runner handler responses from #28 with ACP execution stubbed. Azure envelope/routing/authorization checks remain pending deployment and end-to-end task-control validation. The [module guide](../apps/backend/src/foundry/README.md) describes the API, bounds and recording provenance.
+
 ### Sandbox credentials
 
 The agent can read everything in its sandbox, including environment variables, so each token is limited to what the task needs.
@@ -243,7 +315,11 @@ Models and voices come from the settings page, passed per session; a new voice-a
 
 The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, and **Key Vault Secrets User** at the vault. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); actual Azure connectivity and permissions remain to be checked by the first deployment.
 
-Required deployment parameters are the full `backendIdentityResourceId`, `sqlAdminGroupObjectId`, and `backendImage`. `sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, the budget start date to the first of the current month, and budget notification emails to an empty array (the Owner role is also notified). The amount is interpreted in the subscription billing currency; confirm that currency is DKK.
+Required deployment parameters are the full `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `backendImage`, and `foundryNameTimestamp`. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`, for example `20261003120000`). P0-11 must persist it in deployment configuration and pass the same value on normal redeployments. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed.
+
+PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. Both `gpt-5.6-luna` and `gpt-realtime-2.1` use Global Standard capacity 1, configured independently. Dan accepted this starting allocation; adjust it if testing demonstrates rate limits. Exact model-specific limits and regional quota availability remain to be verified in P0-11. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
+
+`sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, `budgetStartDate` to `2026-10-01T00:00:00Z`, and budget notification emails to an empty array (the Owner role is also notified). The amount is interpreted in the subscription billing currency; confirm that currency is DKK.
 
 ## Cost
 
