@@ -11,7 +11,8 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const app = buildApp(config, logger);
-  if (databaseConfig) registerDatabase(app, createDatabase(databaseConfig));
+  const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
   if (!telemetry) logger.info('telemetry.stdout_only');
 
@@ -27,8 +28,14 @@ try {
   process.once('SIGTERM', () => { void stop(); });
   process.once('SIGINT', () => { void stop(); });
   try {
-    await app.listen({ port: config.port, host: '0.0.0.0' });
-    logger.info({ port: config.port }, 'server.listening');
+    if (database) {
+      await database.initialize();
+      logger.info('database.ready');
+    }
+    if (!stopping) {
+      await app.listen({ port: config.port, host: '0.0.0.0' });
+      logger.info({ port: config.port }, 'server.listening');
+    }
   } catch {
     logger.error('server.failed');
     process.exitCode = 1;

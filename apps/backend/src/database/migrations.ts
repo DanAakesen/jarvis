@@ -32,27 +32,41 @@ export async function readMigrations(directory = defaultMigrationsDirectory): Pr
   return migrations;
 }
 
-export async function applyMigrations(pool: sql.ConnectionPool, migrations: readonly Migration[], lockTimeoutMs = 60_000): Promise<string[]> {
+export async function applyMigrations(pool: sql.ConnectionPool, migrations: readonly Migration[], lockTimeoutMs = 60_000, signal?: AbortSignal): Promise<string[]> {
+  signal?.throwIfAborted();
   const transaction = new sql.Transaction(pool);
   let rolledBack = false;
   transaction.on('rollback', () => { rolledBack = true; });
   await transaction.begin();
+  const run = async <T>(request: sql.Request, execute: () => Promise<T>): Promise<T> => {
+    signal?.throwIfAborted();
+    const cancel = () => { request.cancel(); };
+    signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      const result = await execute();
+      signal?.throwIfAborted();
+      return result;
+    } finally { signal?.removeEventListener('abort', cancel); }
+  };
   try {
-    const lock = await new sql.Request(transaction)
+    signal?.throwIfAborted();
+    const lockRequest = new sql.Request(transaction)
       .input('resource', sql.NVarChar(255), 'jarvis.schema-migrations')
-      .input('timeout', sql.Int, lockTimeoutMs)
-      .query<{ result: number }>(`DECLARE @result int;
+      .input('timeout', sql.Int, lockTimeoutMs);
+    const lock = await run(lockRequest, () => lockRequest.query<{ result: number }>(`DECLARE @result int;
         EXEC @result = sys.sp_getapplock @Resource=@resource, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=@timeout;
-        SELECT @result AS result;`);
+        SELECT @result AS result;`));
     if ((lock.recordset[0]?.result ?? -999) < 0) throw new Error('Database migration lock was not acquired');
-    await new sql.Request(transaction).batch(`IF OBJECT_ID(N'dbo.schema_migrations', N'U') IS NULL
+    const ledgerRequest = new sql.Request(transaction);
+    await run(ledgerRequest, () => ledgerRequest.batch(`IF OBJECT_ID(N'dbo.schema_migrations', N'U') IS NULL
       CREATE TABLE dbo.schema_migrations (
         name nvarchar(255) NOT NULL CONSTRAINT PK_schema_migrations PRIMARY KEY,
         checksum char(64) NOT NULL,
         applied_at datetime2(7) NOT NULL CONSTRAINT DF_schema_migrations_applied_at DEFAULT SYSUTCDATETIME()
-      );`);
-    const { recordset } = await new sql.Request(transaction).query<{ name: string; checksum: string }>(
-      'SELECT name, checksum FROM dbo.schema_migrations ORDER BY name');
+      );`));
+    const historyRequest = new sql.Request(transaction);
+    const { recordset } = await run(historyRequest, () => historyRequest.query<{ name: string; checksum: string }>(
+      'SELECT name, checksum FROM dbo.schema_migrations ORDER BY name'));
     // Applied migrations must be an unchanged prefix: never silently remove,
     // rewrite or insert a migration before one deployed by another revision.
     if (recordset.some((row, index) => migrations[index]?.name !== row.name || migrations[index]?.checksum !== row.checksum)) {
@@ -60,13 +74,15 @@ export async function applyMigrations(pool: sql.ConnectionPool, migrations: read
     }
     const applied: string[] = [];
     for (const migration of migrations.slice(recordset.length)) {
-      await new sql.Request(transaction).batch(migration.sql);
-      await new sql.Request(transaction)
+      const batchRequest = new sql.Request(transaction);
+      await run(batchRequest, () => batchRequest.batch(migration.sql));
+      const insertRequest = new sql.Request(transaction)
         .input('name', sql.NVarChar(255), migration.name)
-        .input('checksum', sql.Char(64), migration.checksum)
-        .query('INSERT INTO dbo.schema_migrations (name, checksum) VALUES (@name, @checksum)');
+        .input('checksum', sql.Char(64), migration.checksum);
+      await run(insertRequest, () => insertRequest.query('INSERT INTO dbo.schema_migrations (name, checksum) VALUES (@name, @checksum)'));
       applied.push(migration.name);
     }
+    signal?.throwIfAborted();
     await transaction.commit();
     return applied;
   } catch (error) {

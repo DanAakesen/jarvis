@@ -64,6 +64,17 @@ describe.sequential('real SQL Server migration contract', () => {
     await expect(applyMigrations(pool, [])).rejects.toThrow('committed migration history');
     expect((await pool.request().query('SELECT value FROM dbo.migration_fixture')).recordset).toEqual([{ value: 'original' }]);
   });
+  it('cancels active SQL and rolls back before allowing another owner', async () => {
+    const history = await pool.request().query<{ name: string; checksum: string }>('SELECT name, checksum FROM dbo.schema_migrations ORDER BY name');
+    const applied = history.recordset.map((row) => ({ ...row, sql: '' }));
+    const pending = migration('0003_cancelled.sql', "CREATE TABLE dbo.cancelled_fixture (id int); WAITFOR DELAY '00:00:30';");
+    const controller = new AbortController();
+    const timer = setTimeout(() => { controller.abort(); }, 500);
+    try { await expect(applyMigrations(pool, [...applied, pending], 60_000, controller.signal)).rejects.toThrow(); }
+    finally { clearTimeout(timer); }
+    expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.cancelled_fixture', N'U') AS id")).recordset).toEqual([{ id: null }]);
+    expect(await applyMigrations(pool, applied)).toEqual([]);
+  });
   it('refuses a migration when another owner holds the lock and leaves no new state', async () => {
     const blocker = new sql.Transaction(pool);
     await blocker.begin();

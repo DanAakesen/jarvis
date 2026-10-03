@@ -1,9 +1,7 @@
 name: Database CI
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_call:
 
 permissions:
   contents: read
@@ -24,7 +22,7 @@ jobs:
         ports:
           - 127.0.0.1:1433:1433
         options: >-
-          --health-cmd '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -Q "SELECT 1"'
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Jarvis-CI-Fixture-Only!2026 -Q 'SELECT 1'"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 30
