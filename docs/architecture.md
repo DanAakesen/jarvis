@@ -55,11 +55,20 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   path, component). The shell renders its navigation entry and mounts it at
   `/<path>/*`; the area renders its own nested routes. Software Factory
   (`src/factory/`) owns `/factory/tasks`, `/factory/tasks/:id`,
-  `/factory/projects`, `/factory/projects/:id` and `/factory/releases/:id`;
+  `/factory/projects`, `/factory/projects/new`, `/factory/projects/:id` and
+  `/factory/releases/:id`;
   invalid IDs show not found. `/settings` is the shared settings entry. P1-11
   implements it as a responsive form for Jarvis, voice, coding-agent defaults
   and the global task limit; remaining voice samples, sleep and credential
   controls are visibly disabled until their owning services exist.
+- P1-10 passes the backend URL and MSAL token provider into the Software Factory
+  area. The projects list and settings page call the authenticated project CRUD
+  routes; running counts are derived from `GET /factory/tasks?state=Running`
+  and refreshed on demand. Failure to load tasks leaves project management
+  usable with counts marked unavailable. Last release is marked unavailable
+  until release data is connected. Client validation improves form feedback;
+  the backend remains authoritative. Live Azure CRUD is not verified by the
+  browser-mocked UI check.
 - The main page's "Now" activity panel takes a typed `NowFeed`
   (`src/activity.ts`): running tasks (title, project, agent, activity, start
   time) and activity items (category, title, `activity.link`, time). Only
@@ -152,10 +161,10 @@ The hosted Jarvis agent is the one service identity (P4-01). When
 carry the `Jarvis.Tools` application role, no delegated `scp`, and `idtyp` absent
 or `app`; otherwise 403. Its principal goes to `request.agentPrincipal`, never
 `request.principal`, and only routes with `config: { jarvisAgent: true }` accept it:
-`GET /tools` and `POST /tools/{name}`. Every other route, including `/me` and
-unknown paths, returns 403. Unset or empty configuration denies the agent. The
-role is created by `infra/bootstrap.ps1`; `jarvis-api` already requires role
-assignment, so Entra issues the agent a token only after
+`GET /tools`, `GET /factory/context` and `POST /tools/{name}`. Every other route,
+including `/me` and the task APIs, returns 403. Unset or empty configuration
+denies the agent. The role is created by `infra/bootstrap.ps1`; `jarvis-api`
+already requires role assignment, so Entra issues the agent a token only after
 `-JarvisAgentPrincipalId` assigns the role (P4-08).
 
 JWKS lookups have a five-second timeout, a 30-second refresh cooldown and a
@@ -217,9 +226,15 @@ the complete composition. A new area contributes routes and tools through this
 contract without changing `core`. Readiness awaits async module registration and
 refuses a failed plugin; Fastify owns plugin close hooks.
 
-Core owns the health route, tool catalogue and HTTP dispatcher; settings,
-activity, persisted events and the SSE hub remain their later tasks. Factory registers the projects API and reserves tasks APIs and tools for their
-own tasks. The catalogue rejects duplicate
+Core owns the health route, tool catalogue, HTTP dispatcher and typed in-process
+event hub. The Factory task store persists task events and corresponding activity
+rows in the same SQL transaction as task creation, state transitions, or an event
+write; it publishes to the hub only after commit. `TaskStore.recordEvent` is the
+small producer API for later runner and backend event sources. The hub is
+process-local; the single production replica keeps subscribers together. Event
+payloads are capped at 1 MiB, and published payloads over 4 KiB are omitted.
+The authenticated SSE endpoint, heartbeat and replay are P1-06. Factory also owns
+projects and task APIs. The catalogue rejects duplicate
 module/tool identities, snapshots frozen schemas and exposes read-only descriptors
 with ownership and handlers. Authenticated `GET /tools` exposes every descriptor's
 name, description and input schema. The core registers a schema-validated
@@ -505,6 +520,16 @@ rejected arguments, refused identity, unavailable persistence and an unreachable
 backend. An unavailable catalogue fails the turn before the model is called.
 Responses are capped at 1 MiB, catalogues at 128 tools.
 `JARVIS_BACKEND_URL` must be an HTTPS origin, or HTTP only for localhost.
+
+Each model turn fetches `GET /factory/context` using the same agent identity.
+The backend reads at most 20 running tasks and each task's three latest events
+from the existing `tasks` and `task_events` tables. The snapshot omits task
+requests and event payloads; event summaries are capped at 400 characters.
+The agent inserts the snapshot before the current user message, so a status
+answer can use it in one model round instead of calling a task-list tool first.
+An unavailable or invalid snapshot fails the turn before the model call rather
+than answering with stale status. The existing connection history is bounded to
+12 messages, 24,000 characters total, and 8,000 characters per message.
 
 Each call sends `X-Jarvis-Message-ID` from the turn's `current_message_id` context.
 Nothing sets it until P4-03 stores conversation messages, so the agent refuses tool
