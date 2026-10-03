@@ -106,7 +106,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 
 - **Coordinator removed.** Dan or an explicitly authorized agent squash-merges a PR when it is ready (not a draft; see Copilot drafts below), no agent is still working on it, its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the authorized worker updates it and waits for the checks again, so every merge is tested against the current `main`.
 - **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, merge only `fix-main:` PRs until `main` is green again.
-- **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, also after follow-up rounds and while the PR has merge conflicts (L
+- **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, also after follow-up rounds and while the PR has merge conflicts (L Follow-up rounds (after an `@copilot` comment) can't edit the title, so on Copilot's closing comment the workflow also drops a leftover `[WIP]` prefix.
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
 - The Jarvis coordinator for #12 is removed at Dan's request. It no longer assigns issues, merges PRs or requests conflict repairs. The separate Project board sync and its `project-board` environment remain. Dan merges green PRs or explicitly instructs an agent to merge them. Deployment integration remains #11.
@@ -193,7 +193,7 @@ The repository uses npm workspaces for `apps/web` and `apps/backend`, one root
 lockfile, and shared strict TypeScript configuration. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
-Python runtime and SQL domain tables remain in their planned tasks. Issue #7 adds the database connection and startup migration infrastructure.
+Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3).
 P0-04 adds the Bicep template; its Azure deployment awaits P0-11.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
@@ -319,8 +319,10 @@ The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and
   auto-resume. No idle SQL poll or periodic migration job is added.
 - Append immutable files under `db/migrations/` as `NNNN_name.sql`; use one SQL
   batch per file, no `GO`, and never rewrite an applied file or insert before
-  applied history. See [migration guide](../db/migrations/README.md). Domain
-  schema and up/down acceptance remain #17.
+  applied history. Add the reverse batch under `db/migrations/down/` with the
+  same name; an offline test requires one for every migration, and
+  `schema.integration.test.ts` reverts all of them newest first and reapplies.
+  See [migration guide](../db/migrations/README.md).
 - Offline checks: `npm test --workspace @jarvis/backend`,
   `npm run lint --workspace @jarvis/backend`,
   `npm run build --workspace @jarvis/backend`.
