@@ -80,3 +80,44 @@ def test_secret_grants_are_idempotent_and_scope_specific(monkeypatch):
     deploy.grant("subscription", "identity", deploy.READ_SECRET_ROLE, "vault/secrets/copilot-token")
     assert calls[-1][0:3] == ("role", "assignment", "create")
     assert calls[-1][-1] == "vault/secrets/copilot-token"
+
+
+def test_deploy_selects_version_grants_only_credential_scopes_and_probes(monkeypatch):
+    grants = []
+    monkeypatch.setattr(deploy, "grant", lambda *args: grants.append(args))
+
+    def az(subscription, *arguments):
+        if arguments[:2] == ("keyvault", "show"):
+            return {"id": "vault", "properties": {"vaultUri": "https://vault.vault.azure.net/"}}
+        return [{"id": "insights"}]
+
+    monkeypatch.setattr(deploy, "az", az)
+
+    class DeployedFoundry(FakeFoundry):
+        def wait_for_route(self, url):
+            self.calls.append(("WAIT", url, None))
+
+        def request(self, method, url, body=None, merge=False):
+            if "/versions" in url:
+                self.calls.append((method, url, body))
+                if method == "POST":
+                    return {"version": "7"}
+                return {"status": "active", "definition": {"session_configuration": {
+                    "idle_timeout_seconds": 120}}}
+            if "/endpoint/" not in url:
+                self.calls.append((method, url, body))
+                return {"instance_identity": {"principal_id": "agent-identity"}}
+            return super().request(method, url, body)
+
+    outputs = {"foundryAdminEndpoint": {"value": "https://admin/api/projects/jarvis"},
+               "foundryRuntimeEndpoint": {"value": "https://runtime/api/projects/jarvis"},
+               "keyVaultName": {"value": "vault"}}
+    foundry = DeployedFoundry({"key_vault_access": True})
+    result = deploy.deploy(foundry, "subscription", outputs, "registry/runner@sha256:digest", "runner", "2x4")
+    assert result["version"] == "7" and result["key_vault_probe"] is True
+    assert {row[-1] for row in grants if row[-2] == deploy.READ_SECRET_ROLE} == {
+        "vault/secrets/github-token", "vault/secrets/copilot-token", "vault/secrets/codex-login"}
+    assert [row[-1] for row in grants if row[-2] == deploy.WRITE_SECRET_ROLE] == ["vault/secrets/codex-login"]
+    patch = next(body for method, url, body in foundry.calls if method == "PATCH")
+    assert patch["agent_endpoint"]["protocol_configuration"] == {"invocations": {}}
+    assert foundry.calls[-1][0] == "DELETE"

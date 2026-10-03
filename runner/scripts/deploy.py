@@ -61,12 +61,15 @@ class Foundry:
 
     def wait_for_route(self, url: str) -> None:
         deadline = time.monotonic() + 1800
+        authorization_deadline = time.monotonic() + 300
         while True:
             try:
                 self.request("GET", url)
                 return
             except httpx.HTTPStatusError as exc:
-                if exc.response.status_code != 404 or time.monotonic() >= deadline:
+                transient = exc.response.status_code == 404 or (
+                    exc.response.status_code == 403 and time.monotonic() < authorization_deadline)
+                if not transient or time.monotonic() >= deadline:
                     raise
                 time.sleep(15)
 
@@ -100,6 +103,13 @@ def grant(subscription: str, principal: str, role: str, scope: str) -> None:
         return
     az(subscription, "role", "assignment", "create", "--assignee-object-id", principal,
        "--assignee-principal-type", "ServicePrincipal", "--role", role, "--scope", scope)
+
+
+def grant_named(subscription: str, principal: str, role: str, scope: str) -> None:
+    definitions = az(subscription, "role", "definition", "list", "--name", role)
+    if len(definitions) != 1:
+        raise RuntimeError(f"Could not resolve required role {role}")
+    grant(subscription, principal, definitions[0]["name"], scope)
 
 
 def deploy(foundry: Foundry, subscription: str, outputs: dict, image: str, name: str, tier: str) -> dict:
@@ -184,13 +194,10 @@ def main() -> None:
     project = f"{scope}/projects/{outputs['foundryProjectName']['value']}"
     principal = bootstrap["deploy"]["servicePrincipalId"]
     for role in ("Foundry Project Manager", "Foundry User"):
-        az(args.subscription, "role", "assignment", "create", "--assignee-object-id", principal,
-           "--assignee-principal-type", "ServicePrincipal", "--role", role, "--scope", project)
+        grant_named(args.subscription, principal, role, project)
     account = az(args.subscription, "resource", "show", "--ids", project,
                  "--api-version", "2025-04-01-preview")
-    az(args.subscription, "role", "assignment", "create", "--assignee-object-id",
-       account["identity"]["principalId"], "--assignee-principal-type", "ServicePrincipal",
-       "--role", "Foundry User", "--scope", scope)
+    grant_named(args.subscription, account["identity"]["principalId"], "Foundry User", scope)
     foundry = Foundry(args.subscription)
     results = []
     try:
