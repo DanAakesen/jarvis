@@ -215,8 +215,11 @@ remains pending #11 and the main-branch runner workflow.
 - Invocation metadata is stored separately for each turn, with path-safe IDs and
   backward reads of earlier session records. Idle recreation retains earlier
   status lookups; prompts, results, and credentials are omitted (L28).
-- Live event push (#29), coordinated renewal scheduling (#34), and frequent Git
-  pushes (#35) remain later work. See [runner instructions](../runner/README.md).
+- Live event push (#29) and coordinated renewal scheduling (#34) remain later
+  work. P2-09 prepends task-branch commit/push instructions to every ACP prompt,
+  including resumed and recovered turns; offline tests cover these paths. Live
+  intermediate-commit acceptance awaits P2-07. See
+  [runner instructions](../runner/README.md).
 
 ### Backend Foundry client
 
