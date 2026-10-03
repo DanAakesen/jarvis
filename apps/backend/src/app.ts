@@ -4,8 +4,10 @@ import cors from '@fastify/cors';
 import type { Logger } from 'pino';
 import { localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger } from './logging.js';
+import { installAuthentication } from './auth/hook.js';
+import type { TokenVerifier } from './auth/verify.js';
 
-export function buildApp(config: BackendConfig, logger: Logger = createLogger(config)) {
+export function buildApp(config: BackendConfig, logger: Logger = createLogger(config), options: { auth?: TokenVerifier } = {}) {
   const app = Fastify({
     loggerInstance: logger,
     logController: new LogController({ disableRequestLogging: true }),
@@ -32,6 +34,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     credentials: false,
     strictPreflight: true,
   });
+  installAuthentication(app, config, options.auth);
   app.addHook('onResponse', async (request, reply) => {
     request.log.info({
       method: request.method,

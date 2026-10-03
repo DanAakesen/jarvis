@@ -1,16 +1,17 @@
 import type { Level } from 'pino';
+import { loadAuthConfig, type AuthConfig } from './auth/config.js';
+import { ConfigurationError } from './configuration-error.js';
+export { ConfigurationError } from './configuration-error.js';
 
 export interface BackendConfig {
   port: number;
   staticWebAppOrigin?: string;
   logLevel: Level;
   applicationInsightsConnectionString?: string;
+  auth: AuthConfig;
 }
 
 export const localWebOrigin = 'http://localhost:5173';
-
-// Messages are fixed diagnostics that contain no supplied configuration values.
-export class ConfigurationError extends Error {}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig {
   const port = env.PORT ?? '3000';
@@ -53,6 +54,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   }
 
   return {
+    auth: loadAuthConfig(env),
     port: Number(port),
     logLevel: logLevel as Level,
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),

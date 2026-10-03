@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from './config.js';
+import { loadAuthConfig } from './auth/config.js';
 
 describe('backend configuration', () => {
   it('defaults to the infrastructure port and offline logs', () => {
-    expect(loadConfig({})).toEqual({ port: 3000, logLevel: 'info' });
+    expect(loadConfig({})).toEqual({ port: 3000, logLevel: 'info', auth: loadAuthConfig({}) });
   });
   it('accepts a configured HTTPS origin and backend-only telemetry string', () => {
     const connectionString = 'InstrumentationKey=00000000-0000-0000-0000-000000000001;IngestionEndpoint=https://swedencentral-0.in.applicationinsights.azure.com/';
     expect(loadConfig({ NODE_ENV: 'production', PORT: '4000', STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net', APPLICATIONINSIGHTS_CONNECTION_STRING: connectionString, LOG_LEVEL: 'debug' })).toEqual({
-      port: 4000, logLevel: 'debug', staticWebAppOrigin: 'https://fixture.azurestaticapps.net', applicationInsightsConnectionString: connectionString,
+      auth: loadAuthConfig({}), port: 4000, logLevel: 'debug', staticWebAppOrigin: 'https://fixture.azurestaticapps.net', applicationInsightsConnectionString: connectionString,
     });
   });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {
