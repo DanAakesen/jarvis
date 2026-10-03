@@ -135,6 +135,39 @@ def test_acp_loads_a_persisted_session_with_protocol_fixture(tmp_path, monkeypat
     assert any(event["kind"] == "acp_session_loaded" for event in state.events)
 
 
+@pytest.mark.parametrize(
+    ("persisted_session_id", "prompt"),
+    [
+        (None, "new task"),
+        ("persisted", "resumed task"),
+        (None, "recovered task with history"),
+    ],
+    ids=["new", "resumed", "recovered"],
+)
+def test_delivery_instructions_are_added_to_every_agent_prompt(
+    tmp_path, monkeypatch, persisted_session_id, prompt
+):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    state = app.TaskState("i", "s", "copilot", prompt)
+    client = app.ACPClient([], tmp_path, state, {}, persisted_session_id=persisted_session_id)
+    requests = []
+
+    async def request(method, params):
+        requests.append((method, params))
+        return {"sessionId": "new-session"} if method == "session/new" else {"stopReason": "end_turn"}
+
+    monkeypatch.setattr(client, "request", request)
+
+    result = asyncio.run(client.run(prompt))
+
+    sent = next(params["prompt"][0]["text"] for method, params in requests if method == "session/prompt")
+    assert result["response"]["stopReason"] == "end_turn"
+    assert sent.startswith(app.TASK_DELIVERY_INSTRUCTIONS + "\n\n")
+    assert prompt in sent
+    assert "after each meaningful work step create a small commit and push it" in sent
+    assert "Never force-push or push to main" in sent
+
+
 def test_steer_cancels_the_running_turn_with_protocol_fixture(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     fixture = tmp_path / "fake_acp_cancel.py"
