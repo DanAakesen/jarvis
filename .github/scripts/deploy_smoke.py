@@ -148,6 +148,6 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
-    except Exception as error:  # report a controlled message, never tokens or bodies
+    except (OSError, KeyError, ValueError, RuntimeError) as error:  # controlled message; never tokens or bodies
         print(f"::error::Foundry smoke check failed: {error}", file=sys.stderr)
         sys.exit(1)

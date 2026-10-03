@@ -117,8 +117,7 @@ def main() -> None:
             handle.write("### Deploy plan\n\n")
             handle.write(f"Base `{args.base or 'none'}`, head `{args.head}`: {result['reason']}.\n\n")
             handle.write("| Part | Deploy |\n| --- | --- |\n")
-            for part in PARTS:
-                handle.write(f"| {part} | {'yes' if result[part] else 'no'} |\n")
+            handle.writelines(f"| {part} | {'yes' if result[part] else 'no'} |\n" for part in PARTS)
     print(result["reason"])
     print("\n".join(lines))
 
