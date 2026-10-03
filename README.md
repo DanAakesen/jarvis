@@ -10,7 +10,8 @@ tasks and status live in [PLAN.md](PLAN.md).
 P0-01 provides the monorepo layout and buildable empty TypeScript workspaces.
 The web and backend compile to `dist/`; they do not render a UI or start a server.
 React/Vite is P0-02, Fastify is P0-03, and CI is P0-10. Production Python code,
-database migrations, and Bicep follow in their planned tasks.
+database migrations, and deployment follow in their planned tasks. P0-04 has
+added the Bicep template; Azure deployment awaits P0-11.
 
 ## Repository layout
 
@@ -20,7 +21,7 @@ database migrations, and Bicep follow in their planned tasks.
 | `apps/backend` | Backend workspace; Fastify follows in P0-03 |
 | `agents/jarvis` | Reserved for the Python Jarvis agent (P4) |
 | `runner` | Reserved for the Python coding-sandbox ACP adapter (P2) |
-| `infra` | Completed bootstrap and future Bicep/deploy configuration |
+| `infra` | Completed bootstrap, Bicep template, and future deploy configuration |
 | `db` | Reserved for SQL migrations and database fixtures |
 | `docs` | Architecture, data model, decisions, agent context, and flow diagrams |
 | `docs/reference` | Read-only prototype code and evidence; excluded from npm workspaces |

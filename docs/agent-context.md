@@ -80,9 +80,9 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 
 ### Merge
 
-- **No manual approval.** The merge workflow (P0-12) squash-merges a PR when it is ready (not a draft; see the Copilot exception below), its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the workflow updates it and waits for the checks again, so every merge is tested against the current `main`.
+- **No manual approval.** The merge workflow (P0-12) squash-merges a PR when it is ready (not a draft; see Copilot drafts below), no agent is still working on it, its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the workflow updates it and waits for the checks again, so every merge is tested against the current `main`.
 - **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, the merge workflow merges only `fix-main:` PRs until `main` is green again.
-- **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The merge workflow treats that as ready and marks the PR ready itself.
+- **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, so Copilot PRs need no click from Dan.
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
 - Until P0-12 is merged, Dan merges green PRs.
@@ -97,6 +97,8 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Resource group | `rg-jarvis` (one production environment) |
 | Bootstrap IDs | [`infra/bootstrap.output.json`](../infra/bootstrap.output.json); also Actions variables in `DanAakesen/jarvis` |
 
+- `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
+- The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId`, and `backendImage`. `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Confirm the billing currency is DKK and supply any required budget notification email addresses as appropriate. The first Azure deployment and real resource behavior are verified by P0-11, not by the local build/lint.
 - Dan's Azure CLI defaults to the Microsoft tenant: pass `--subscription` in every command and script (L7). For Microsoft Graph, get the token with `az account get-access-token --subscription <id> --resource-type ms-graph`; `--tenant` picks the wrong account.
 - `az` runs through a `.cmd` file: avoid `&`, parentheses, and pipes inside arguments such as `--query` (L20); filter JSON in PowerShell instead.
 - Never reuse a deleted Foundry account or project name; generate timestamped names (L2).
@@ -113,13 +115,15 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - In Azure, secrets live only in Key Vault; services use managed identities, and GitHub Actions uses OpenID Connect.
 - Codex: the Jarvis-only login follows the [Codex login rules](architecture.md#sandbox-credentials). Never copy Dan's own Codex login.
 - Codex cloud environment: `GH_TOKEN` is a fine-grained token for `DanAakesen/jarvis` with only **Issues: read and write**, used to claim issues. It is an environment variable, not a Codex secret, because Codex removes secrets before the agent runs. Never print it, write it to files, or use it for anything else.
+- P0-01 exception: Dan explicitly authorized using the existing `GH_TOKEN` to open its linked PR. PR #78 creation succeeded. This task-specific authorization does not change the issue-claim restriction for other tasks.
 
 ## Setup and commands
 
 P0-01 adds npm workspaces for `apps/web` and `apps/backend`, with one root lockfile
 and a shared strict TypeScript configuration. Both currently compile an empty
 module to `dist/`; no UI, HTTP server, application tests, or lint command exists
-yet. Python components, SQL migrations, and Bicep remain in their planned tasks.
+yet. Python components and SQL migrations remain in their planned tasks.
+P0-04 adds the Bicep template; its Azure deployment awaits P0-11.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), and Python 3.12.14
 (`.python-version`, for future Python work). Install from the repository root,
@@ -134,6 +138,13 @@ Verified in Codex cloud for P0-01:
 | Both empty workspace builds | `npm run build` in the repository root |
 | Web workspace build | `npm run build --workspace @jarvis/web` in the repository root |
 | Backend workspace build | `npm run build --workspace @jarvis/backend` in the repository root |
+
+Verified locally in P0-04 (Azure deployment remains pending P0-11):
+
+| Purpose | Command |
+| --- | --- |
+| Build Bicep (generates git-ignored `infra/main.json`) | `az bicep build --file infra/main.bicep` |
+| Lint Bicep | `az bicep lint --file infra/main.bicep` |
 
 Cloud tasks use their existing isolated checkout; do not create a worktree or
 another checkout unless Dan asks. Git HTTPS access and GitHub API access are
