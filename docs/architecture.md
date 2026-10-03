@@ -289,6 +289,12 @@ The agent can read everything in its sandbox, including environment variables, s
 | Codex | Jarvis-only ChatGPT Pro login, separate from Dan's own apps | Jarvis renews when 3 days or less remain on the access token and writes it back to Key Vault | Proven |
 | GitHub | GitHub App token for one repository: contents and pull requests | 1 hour; the Git credential helper fetches the current token for each push | Decided; the prototype used a fine-grained token |
 
+### GitHub App
+
+[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02 and P3-03; repository metadata read is GitHub's required baseline.
+
+The backend will store the private key in Key Vault as `github-app-private-key` and use its managed identity to mint one-hour, repository-scoped installation tokens. The key must never enter a sandbox. A separate `github-app-webhook-secret` is needed once P3-03 deploys the webhook receiver. The App ID is configuration, not a secret. The registration, selected-repository installation, and Key Vault secret are pending Dan's manual setup after P0-11; the webhook URL and secret await P3-03.
+
 **Codex login rules** (Pro login only; no API key):
 
 1. Create the login once with `codex login` in a Jarvis-only folder. Never copy Dan's own login (L6).
@@ -301,7 +307,7 @@ Jarvis has its own Codex session, so it never signs Dan out of the ChatGPT app o
 
 **Access rules**
 
-- Key Vault holds only these credentials; only the sandbox identity reads them, and it can write only the Codex login secret.
+- Key Vault holds these credentials; the sandbox identity reads only its agent credentials and can write only the Codex login secret. The backend identity will read the GitHub App private key and webhook secret; neither will be accessible to the sandbox.
 - Agents run only on Dan's private repositories.
 - The backend keeps the GitHub App key, creates each task's token, and performs merges outside the sandbox.
 - The sandbox identity cannot reach Jarvis data or other areas; it reports through the backend.
