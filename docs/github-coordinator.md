@@ -11,7 +11,8 @@ The workflow is **disabled in GitHub** as of 3 October 2026, following Dan's
 request to stop project-board automation. Project-board reads and writes,
 Ready-column polling and automatic issue assignment have been removed. No
 Projects credential is required. The remaining code handles PR maintenance;
-this cleanup does not re-enable the workflow.
+this cleanup does not re-enable the workflow. The separate Project board sync
+workflow and script are also disabled and removed; the board is managed manually.
 
 ## Credentials and controls
 
