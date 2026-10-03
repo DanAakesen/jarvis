@@ -7,6 +7,7 @@ from plan_status import (
     new_tasks,
     plan_tasks,
     reconcile_plan,
+    task_status,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -63,6 +64,15 @@ class PlanStatusTests(unittest.TestCase):
         row = "| P0-08 | Range | Ready | P0-04…P0-06 | Not started |"
         task = plan_tasks(row)[0]
         self.assertEqual(task["dependencies"], ["P0-04", "P0-05", "P0-06"])
+
+    def test_assignment_keeps_task_in_progress_until_issue_is_completed(self):
+        issue = {
+            "number": 8,
+            "state": "closed",
+            "state_reason": "not_planned",
+            "assignees": [{"login": "DanAakesen"}],
+        }
+        self.assertEqual(task_status("Not started", issue, []), "In progress")
 
 
 if __name__ == "__main__":

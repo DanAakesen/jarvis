@@ -89,9 +89,7 @@ def task_status(
         return "Complete"
     if current == "Blocked":
         return current
-    if issue.get("state") == "open" and (
-        issue.get("assignees") or any(pull.get("state") == "open" for pull in linked_prs)
-    ):
+    if issue.get("assignees") or any(pull.get("state") == "open" for pull in linked_prs):
         return "In progress"
     return "Not started"
 
@@ -181,6 +179,7 @@ def main() -> None:
     parser.add_argument("--pull-requests", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--new-tasks", required=True, type=Path)
+    parser.add_argument("--tasks-output", required=True, type=Path)
     parser.add_argument("--repository", required=True)
     args = parser.parse_args()
 
@@ -195,6 +194,9 @@ def main() -> None:
     args.new_tasks.write_text(
         json.dumps(new_tasks(plan, issues, args.repository), indent=2) + "\n",
         encoding="utf-8",
+    )
+    args.tasks_output.write_text(
+        json.dumps(plan_tasks(plan), indent=2) + "\n", encoding="utf-8"
     )
 
 

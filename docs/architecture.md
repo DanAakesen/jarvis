@@ -2,9 +2,9 @@
 
 Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. P0-01 provides the monorepo folders. P0-02 and P0-03 implement the web and backend skeletons. Statuses below distinguish implementation, design, and prototype evidence.
 
-- Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L35): [decisions.md](decisions.md).
+- Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L36): [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
-- **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–13 show each flow as swimlanes, coloured by evidence (proven, documented, assumed). Open it in a browser.
+- **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–14 show each flow as swimlanes, coloured by evidence (proven, documented, assumed). Open it in a browser.
 
 ## Stack overview
 
@@ -346,6 +346,7 @@ PR #79 adds the Foundry account, project, model deployments and ACR/Application 
 - Local development: `npm run dev` in the repository root serves the web app on `http://localhost:5173` against the production backend. Backend changes are tested in CI and take effect after deploy.
 - Migrations run in the backend at startup; GitHub runners never connect to Azure SQL.
 - Development of Jarvis itself is remote only: Copilot cloud agent and Codex cloud deliver PRs, `pr-title.yml` keeps PR titles in the `<task ID>: <summary>` format, `copilot-ready.yml` takes finished Copilot PRs out of draft, a merge workflow merges them when checks pass against the latest `main`, and the deploy workflows release them. Rules: [development workflow](agent-context.md#development-workflow).
+- `plan-status.yml` reconciles every `PLAN.md` task from all GitHub issues and pull requests on issue/PR events and manual dispatch. A push changing `PLAN.md` also creates missing task issues and ensures their "Blocked by" links. It commits only Status-cell changes to `main`, skips no-op commits, and rebases/retries once after a rejected push. It uses `GITHUB_TOKEN`; compatibility with protected `main` remains unverified.
 - Everything except the bootstrap items is created by Bicep and deployed by GitHub Actions on merge to `main`; no portal changes.
 
 ## References

@@ -18,7 +18,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 | Stack, runtime, sandbox, voice, dispatch, cost | [architecture.md](architecture.md) |
 | Tables, relationships, and groups | [data-model.md](data-model.md) |
 | Step-by-step flows with evidence status | [architecture-flows.html](architecture-flows.html) (open in a browser) |
-| Decisions and learnings L1–L35 | [decisions.md](decisions.md) |
+| Decisions and learnings L1–L36 | [decisions.md](decisions.md) |
 | Prototype code and reports to port in P2 and P4 | [reference/](reference/) |
 | Open-source research | [open-source.md](open-source.md) |
 
@@ -38,11 +38,12 @@ Every coding agent on this repository follows these rules. This project requires
 - **Dependencies:** the Depends on column is mirrored as GitHub issue dependencies ("Blocked by"). An issue shows **Blocked** until every issue it depends on is closed. A task is **ready** when its issue is open, unassigned, and not blocked; list ready tasks with `gh issue list --repo DanAakesen/jarvis --search "is:open no:assignee -is:blocked"`. Ready tasks can run in parallel.
 - Dependencies order tasks; they don't stop two ready tasks from changing the same files. That is what step 5 of [Start a task](#start-a-task) and the up-to-date rule in [Merge](#merge) are for.
 - `PLAN.md` is the source of truth for what a task is. The issue is where a task is started and discussed, and where its PR is linked. If the two differ, `PLAN.md` wins.
-- When a PR adds a task to `PLAN.md` or changes one, its issue must match: create or update it, including its "Blocked by" dependencies. If you can't edit issues from your environment, list the needed issue changes in the PR body. P0-13 automates this.
+- When a task row is added to `PLAN.md` on `main`, the plan-status workflow creates its issue in the standard format, with the phase label and "Blocked by" dependencies. If an existing task's description or acceptance criteria change, update the issue body too; the workflow reconciles dependencies but does not rewrite existing issue content.
 - Status values: **Not started**, **In progress**, **Blocked**, **Complete**. The Status column in `PLAN.md` on `main` is the shared view of the project.
 - Dan (or later Jarvis) starts a task, from the issue or directly in the agent's app. **The agent claims the issue itself** (step 1 of [Start a task](#start-a-task)); Dan never assigns issues by hand.
-- A task is **In progress** when its issue has an assignee or an open PR containing `Fixes #<issue>`. The plan-status workflow (P0-13) writes that to `PLAN.md` on `main`, sets Complete when the PR merges, and resets Not started if the PR closes unmerged and the issue is unassigned.
-- Until P0-13 is merged, the agent also sets the status in its own PR.
+- A task is **In progress** when its issue has an assignee or an open PR contains `Fixes #<issue>`; Dan as an assignee counts. A merged linked PR or an issue closed as completed sets Complete. Otherwise the task is Not started, except a manually set Blocked value is preserved.
+- `.github/workflows/plan-status.yml` recomputes every task on issue assignment/unassignment/closure/reopen, PR open/close/reopen/edit, or `workflow_dispatch`. A `PLAN.md` push also creates missing issues and dependency links. The workflow serializes runs, commits only Status cells, skips no-op commits, and rebases/retries once after a rejected push. `GITHUB_TOKEN`-made commits do not trigger another push workflow.
+- The status workflow requires `contents: write`, `issues: write`, and `pull-requests: read`. A protected-`main` push and the REST issue-dependency writes have not yet been verified against a live workflow run. After merge, run **Plan status** through `workflow_dispatch` and verify the test task before relying on live writes.
 
 ### Start a task
 
@@ -219,6 +220,18 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
 - Add a new component workflow as `on: workflow_call`, call it from `ci.yml`, and add it to `CI result`'s `needs`, so it runs once per PR and the gate covers it.
 - Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then P0-12 must read the `CI` run result itself.
+
+Plan status, `.github/workflows/plan-status.yml`:
+
+| Item | Detail |
+| --- | --- |
+| Triggers | Issue assigned/unassigned/closed/reopened; PR opened/closed/reopened/edited; push to `main` changing `PLAN.md`; manual `workflow_dispatch` |
+| Status source | Paginated GitHub issue and PR lists; the offline rules and task-row parser are in `.github/scripts/plan_status.py` |
+| New task rows | On a `PLAN.md` push or dispatch, create issues for task IDs without one, add phase labels, then ensure dependency links with the REST `blocked_by` endpoint |
+| Commit | Only changes the Status cells in `PLAN.md`; no commit when unchanged; direct push to `main`, then one fetch/rebase/push retry if rejected |
+| Permissions | `contents: write`, `issues: write`, `pull-requests: read`; no secrets or Azure credentials |
+| Offline tests | `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v` |
+| Live verification | Pending merge: dispatch the workflow and verify a test task; protected-branch push and issue-dependency writes remain unverified |
 
 Future commands (unimplemented until their tasks):
 
