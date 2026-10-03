@@ -1,9 +1,8 @@
 name: Backend CI
 
+# Called by ci.yml (P0-10); it runs on PRs, main and workflow_dispatch.
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_call:
 
 permissions:
   contents: read

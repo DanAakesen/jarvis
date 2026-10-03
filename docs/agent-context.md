@@ -52,7 +52,7 @@ Every coding agent on this repository follows these rules. This project requires
    - **Copilot cloud agent:** started from the issue, Copilot is assigned and opens a draft PR with the issue link automatically. Started anywhere else, open the draft PR with `Fixes #<issue>` in its body first. Its draft PR is its claim.
    - **Any other environment:** claim the same way, or ask Dan.
 2. Read the current `main`: the Status column and Current focus in `PLAN.md`, the relevant [decisions](decisions.md), and the files the `AGENTS.md` context map names for your area.
-3. Check that `main` is green: the latest CI and deploy runs on `main` passed (before P0-10 and P0-11 add them, `main` counts as green). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
+3. Check that `main` is green: the latest `CI` and deploy runs on `main` passed (before P0-11 adds deploy, only `CI` counts). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
 4. Check your task: not Complete, not claimed by anyone else, and every task in its "Depends on" column Complete. If any check fails, stop and report it on the issue.
 5. Look at the running tasks (In progress rows, assigned issues, and open PRs). Stay out of files they change, or say in your PR why you overlap.
 6. Use one branch and one PR. The PR title is exactly `<task ID>: <short summary>`, for example `P0-05: Foundry account and project`: the ID, a colon, a space, no brackets. Copilot's temporary `[WIP] ` prefix is fine. Work outside a task uses `fix-main: …` or `docs: …`. The [PR title](../.github/workflows/pr-title.yml) workflow corrects small deviations and fails otherwise. The PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
@@ -148,7 +148,7 @@ The web starts with the bootstrap identities and the public production backend
 origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). The URL
 is pending P0-11's first deployment; opening the skeleton needs no extra setup.
 Sign-in and authenticated API calls remain P0-09. `Web CI` checks lint, tests,
-and root builds on PRs and `main`; monorepo CI remains P0-10.
+and root builds as part of the aggregate `CI` workflow (below).
 
 Backend commands implemented in P0-03:
 
@@ -207,12 +207,25 @@ Verified locally for issue #30 (no Azure access required):
 
 The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and an injected `getToken(scope, signal)` identity provider. These are module options, not new environment variables. See the [module guide](../apps/backend/src/foundry/README.md) for operation ownership and fixture provenance. Recorded runner responses are captured locally with ACP stubbed; these checks establish the offline contract, not live Azure readiness. The dedicated `Foundry contract CI` workflow checks this module on the current skeleton without depending on the server implementation.
 
+Aggregate CI (P0-10), `.github/workflows/ci.yml`:
+
+| Item | Detail |
+| --- | --- |
+| Triggers | Every `pull_request`, `push` to `main`, and `workflow_dispatch` (P0-12 starts it on `main` after a merge) |
+| Jobs | `Web`, `Backend` (lint, tests, build, container smoke), `Foundry` and `Runner` (base and .NET images, packaged CLI and HTTP smoke) call the reusable `web-ci.yml`, `backend-ci.yml`, `foundry-contract.yml` and `runner-ci.yml`; `Python lint, test and build` (runner lint and tests moved here from `runner-ci.yml`); `CI result` |
+| Gate | `CI result` fails unless every other job succeeded. It is the check to require on `main` and for P0-12 `workflow_run` |
+| Python | `bash .github/scripts/python-ci.sh [dir ...]` (default `runner agents/jarvis`). A component with `pyproject.toml` must have a hash-pinned `requirements-dev.txt` with ruff and pytest; each gets its own venv, `ruff check`, `pytest -q` and `compileall`. A component without `pyproject.toml` is reported as skipped (notice and step summary), not passed |
+| Local workflow lint (verified for P0-10) | `go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7`, then `~/go/bin/actionlint` from the repository root. It passes for the CI files; it reports existing findings in `runner-ci.yml` (SC2034 warning) and `runner-deploy.yml` (an unquoted ` #11` ends the `prerequisite` step's YAML scalar, so that job failed on `main` at 290195b; needs a `fix-main:` PR) |
+
+- Add a new component workflow as `on: workflow_call`, call it from `ci.yml`, and add it to `CI result`'s `needs`, so it runs once per PR and the gate covers it.
+- Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then P0-12 must read the `CI` run result itself.
+
 Future commands (unimplemented until their tasks):
 
 | Purpose | Command |
 | --- | --- |
 | Bootstrap or repair identities | `./infra/bootstrap.ps1` (safe to re-run; needs Dan's signed-in `az` and `gh`) |
-| Python tests | `pytest` in `runner` and `agents/jarvis`, through each package's `.venv` (see [Cloud agent environments](#cloud-agent-environments)) |
+| Python tests | `pytest` in `runner` and `agents/jarvis`, through each package's `.venv` (see [Cloud agent environments](#cloud-agent-environments)); CI runs them through `.github/scripts/python-ci.sh` |
 | Validate Mermaid diagrams (candidate; unverified) | `npx -y @mermaid-js/mermaid-cli@11 -i <file>.md -o <out>.md` |
 
 Pin the Codex and Copilot CLI versions locally and in the sandbox image (L13).

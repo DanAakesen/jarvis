@@ -45,8 +45,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `backendFqdn` as the public URL. Backend connectivity is unverified until then.
 - The neutral foundation page shows pending capabilities. It does not authenticate
   or contact an API; those interactions begin in P0-09.
-- `web-ci.yml` runs lint, tests and root builds without Azure access. P0-10 extends
-  this to monorepo checks rather than duplicating the web job.
+- `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
+  `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
+  (including the container smoke), `foundry-contract.yml` and `runner-ci.yml`
+  (runner images), runs Python lint, tests and byte-compilation for `runner`
+  and `agents/jarvis` when they exist,
+  and ends in one `CI result` gate job. No job uses Azure credentials.
 
 ## Runtime overview
 
