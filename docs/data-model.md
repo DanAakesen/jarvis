@@ -80,6 +80,11 @@ P5-03 does not create `jarvis_sessions`, `messages`, or `tool_calls`; the realti
 
 ## 1 · Jarvis core
 
+P4-06 uses the existing `jarvis_sessions`, `messages`, and `tool_calls` tables:
+each chat sitting is a chat session, the user message is the tool-call source,
+and the completed assistant reply is another message. Task links come from the
+stored `tool_calls.task_id`; no columns or migrations are added.
+
 ```mermaid
 erDiagram
     jarvis_sessions ||--o{ messages : contains
