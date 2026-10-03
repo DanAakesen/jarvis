@@ -47,7 +47,7 @@ Every coding agent on this repository follows these rules. This project requires
 2. Check that `main` is green: the latest CI and deploy runs on `main` passed. If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
 3. Check your task: not Complete, not In progress through another PR, and every task in its "Depends on" column Complete. If any check fails, stop and report it on the issue.
 4. Look at the running tasks (In progress rows and open PRs). Stay out of files they change, or say in your PR why you overlap.
-5. Use one branch and one PR. The PR title starts with the task ID, and the PR body contains `Fixes #<issue>`.
+5. Use one branch and one PR. The PR title starts with the task ID, and the PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
 
 ### Finish a task
 
