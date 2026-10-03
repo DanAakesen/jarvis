@@ -1,0 +1,68 @@
+# Keeps the "Copilot" worker label on task issues in step with Copilot's work.
+# A worker label (Codex, Copilot, Dan, Jarvis) means that worker has taken the
+# task. Codex, Dan and Jarvis set their own label; this workflow sets Copilot's,
+# because Copilot cloud agent can't edit labels. Part of P0-13.
+#   - Issue assigned to Copilot                        -> add "Copilot"
+#   - Copilot opens or reopens a PR with Fixes #n      -> add "Copilot" to #n
+#   - Copilot's PR closed without merge                -> remove "Copilot" from #n
+#   - workflow_dispatch                                -> backfill all open tasks
+name: Worker label
+
+on:
+  issues:
+    types: [assigned]
+  pull_request:
+    types: [opened, reopened, closed]
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: worker-label
+  cancel-in-progress: false
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Issue assigned to Copilot
+        if: github.event_name == 'issues' && github.event.assignee.login == 'Copilot'
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+        run: gh issue edit "$ISSUE" --repo "$REPO" --add-label Copilot
+
+      - name: Copilot pull request
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'Copilot'
+        env:
+          ACTION: ${{ github.event.action }}
+          MERGED: ${{ github.event.pull_request.merged }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          issues=$(grep -oiE '(fixes|closes|resolves) #[0-9]+' <<<"${PR_BODY:-}" | grep -oE '[0-9]+' | sort -u || true)
+          for n in $issues; do
+            if [[ "$ACTION" == "closed" ]]; then
+              if [[ "$MERGED" != "true" ]]; then
+                gh issue edit "$n" --repo "$REPO" --remove-label Copilot || true
+                echo "Released #$n"
+              fi
+            else
+              gh issue edit "$n" --repo "$REPO" --add-label Copilot
+              echo "Labelled #$n"
+            fi
+          done
+
+      - name: Backfill
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          for n in $(gh issue list --repo "$REPO" --state open --assignee Copilot --limit 200 --json number --jq '.[].number'); do
+            gh issue edit "$n" --repo "$REPO" --add-label Copilot && echo "Labelled #$n (assigned)"
+          done
+          gh pr list --repo "$REPO" --state open --author app/copilot-swe-agent --limit 100 --json body --jq '.[].body' \
+            | grep -oiE '(fixes|closes|resolves) #[0-9]+' | grep -oE '[0-9]+' | sort -u \
+            | while read -r n; do gh issue edit "$n" --repo "$REPO" --add-label Copilot && echo "Labelled #$n (open PR)"; done
