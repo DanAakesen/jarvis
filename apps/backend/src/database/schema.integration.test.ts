@@ -125,7 +125,7 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     const projectId = project.recordset[0]?.id;
     if (!projectId) throw new Error('Credential lease project was not created');
 
-    const tasks = createTaskStore(pool);
+    const tasks = createTaskStore(pool, createEventHub<TaskEventMessage>());
     const credentials = createCredentialStatusStore(pool);
     const runningCodex = await tasks.create({ projectId, title: 'Codex active', request: 'Run', agent: 'codex' });
     if (!runningCodex) throw new Error('Codex task was not created');

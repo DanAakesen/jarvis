@@ -38,7 +38,10 @@ jobs:
         run: |
           set -euo pipefail
           docker run --detach --name backend --publish 127.0.0.1:3000:3000 \
-            --env STATIC_WEB_APP_ORIGIN=https://fixture.azurestaticapps.net jarvis-backend:ci
+            --env STATIC_WEB_APP_ORIGIN=https://fixture.azurestaticapps.net \
+            --env FOUNDRY_RUNTIME_ENDPOINT=https://fixture.cognitiveservices.azure.com/api/projects/test \
+            --env FOUNDRY_ADMIN_ENDPOINT=https://fixture.services.ai.azure.com/api/projects/test \
+            --env FOUNDRY_RUNNER_AGENT_NAME=jarvis-runner jarvis-backend:ci
           trap 'docker logs backend; docker rm --force backend' EXIT
           # Docker can reset an early connection while Node is still starting.
           curl --fail --retry 20 --retry-all-errors --retry-delay 1 --max-time 2 \
