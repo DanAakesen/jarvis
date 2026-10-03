@@ -7,11 +7,12 @@ import { createLogger } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
 import type { TokenVerifier } from './auth/verify.js';
 import { coreModule } from './core/index.js';
+import { createEventHub } from './core/event-hub.js';
 import type { ToolCallStore } from './core/tool-calls.js';
 import { conversationModule } from './core/conversation.js';
 import type { ConversationStore } from './core/conversation-store.js';
 import { factoryModule } from './factory/index.js';
-import type { TaskStore } from './factory/task-store.js';
+import type { TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
 import type { ProjectStore } from './factory/projects.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
@@ -22,6 +23,7 @@ export interface BuildAppOptions {
   readonly projectStore?: ProjectStore;
   readonly toolCallStore?: ToolCallStore;
   readonly taskStore?: TaskStore;
+  readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
   readonly conversationStore?: ConversationStore;
 }
@@ -31,6 +33,7 @@ declare module 'fastify' {
     projectStore: ProjectStore | null;
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
+    eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
     conversationStore: ConversationStore | null;
   }
@@ -83,6 +86,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('projectStore', options.projectStore ?? null);
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);
+  app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
   registerModules(app, options.modules ?? [coreModule, conversationModule, factoryModule]);
