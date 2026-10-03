@@ -9,6 +9,11 @@ its local build and lint are verified. P0-05 adds Foundry resources, and P0-11's
 [Deploy workflow](../.github/workflows/deploy.yml) deploys from GitHub Actions on
 `main` using OpenID Connect. The first live deployment is P0-16.
 
+The deploy identity's federated credential uses GitHub's immutable-ID subject
+(`repo:<owner>@<owner ID>/<repo>@<repo ID>:ref:refs/heads/main`); bootstrap reads
+the IDs from the GitHub API (L49). Runs before that change registered only the
+name-only subject, so re-run bootstrap once before the first successful Deploy.
+
 See the [Azure constraints](../docs/agent-context.md#azure) and
 [architecture](../docs/architecture.md).
 
