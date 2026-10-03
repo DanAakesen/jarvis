@@ -29,7 +29,7 @@ The repository `PLAN.md` status workflow is GitHub metadata; it does not add a J
 - **Language toggle:** Danish ↔ English, visible wherever voice is active.
 - **Task controls:** steer, pause, resume, cancel, and recover, each with a clear pending state (for example, "Pausing…" until the turn has stopped).
 - **Sleep switch:** shows awake or asleep; refused with an explanation while tasks run.
-- **Live updates:** cards and timeline entries change state without layout jumps; a visible marker for disconnected or stale data.
+- **Live updates:** cards and timeline entries change state without layout jumps; a visible marker for a disconnected or stale event stream. Only committed task updates are presented as current.
 
 ## Visual direction
 
