@@ -128,7 +128,7 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     ["INSERT dbo.artifacts (task_id, kind, blob_path, size_bytes) VALUES (1, N'log', N'path', -1)", 'CK_artifacts_size_bytes'],
     ["INSERT dbo.webhook_deliveries (delivery_id, event, received_at, processed_at, outcome) VALUES (N'delivery-bad', N'push', '2026-01-01', '2026-01-02', N'pending')", 'CK_webhook_deliveries_outcome'],
     ["INSERT dbo.credential_status (name, status) VALUES (N'unknown', N'ok')", 'CK_credential_status_name'],
-    ["INSERT dbo.credential_status (name, status) VALUES (N'codex-login', N'expired')", 'CK_credential_status_status'],
+    ["INSERT dbo.credential_status (name, status) VALUES (N'copilot-token', N'expired')", 'CK_credential_status_status'],
   ])('rejects invalid data %#', async (statement, constraint) => {
     await expect(pool.request().query(statement)).rejects.toThrow(constraint);
   });
