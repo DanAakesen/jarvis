@@ -1,0 +1,147 @@
+name: Plan status
+
+on:
+  issues:
+    types: [assigned, unassigned, closed, reopened, labeled, unlabeled]
+  pull_request:
+    types: [opened, closed, reopened, edited]
+  push:
+    branches: [main]
+    paths: [PLAN.md]
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Worker label"]
+    types: [completed]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: plan-status-main
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fetch issues and pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp "repos/$REPOSITORY/issues?state=all&per_page=100" > /tmp/issues-pages.json
+          gh api --paginate --slurp "repos/$REPOSITORY/pulls?state=all&per_page=100" > /tmp/pulls-pages.json
+          jq '[.[][] | select(has("pull_request") | not)]' /tmp/issues-pages.json > /tmp/issues.json
+          jq '[.[][]]' /tmp/pulls-pages.json > /tmp/pulls.json
+
+      - name: Read PLAN tasks
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 .github/scripts/plan_status.py \
+            --plan PLAN.md \
+            --issues /tmp/issues-pages.json \
+            --pull-requests /tmp/pulls-pages.json \
+            --output /tmp/plan-before.md \
+            --new-tasks /tmp/new-tasks.json \
+            --tasks-output /tmp/tasks.json \
+            --repository "$REPOSITORY"
+
+      - name: Create missing task issues
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r task; do
+            [[ -z "$task" ]] && continue
+            jq -c '{title, body, labels}' <<<"$task" |
+              gh api --method POST "repos/$REPOSITORY/issues" --input -
+          done < <(jq -c '.[]' /tmp/new-tasks.json)
+
+      - name: Ensure task dependency links
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp "repos/$REPOSITORY/issues?state=all&per_page=100" > /tmp/issues-pages.json
+          jq '[.[][] | select(has("pull_request") | not)]' /tmp/issues-pages.json > /tmp/issues.json
+
+          while IFS= read -r task; do
+            task_id=$(jq -r '.id' <<<"$task")
+            issue_number=$(jq -r --arg id "$task_id" \
+              '[.[] | select(.title | startswith($id + ":"))][0].number // empty' /tmp/issues.json)
+            if [[ -z "$issue_number" ]]; then
+              echo "::error::No GitHub issue found for task $task_id."
+              exit 1
+            fi
+
+            while IFS= read -r dependency; do
+              [[ -z "$dependency" ]] && continue
+              blocker=$(jq -c --arg id "$dependency" \
+                '[.[] | select(.title | startswith($id + ":"))][0] // empty' /tmp/issues.json)
+              if [[ -z "$blocker" ]]; then
+                echo "::error::No GitHub issue found for blocking task $dependency."
+                exit 1
+              fi
+              blocker_number=$(jq -r '.number' <<<"$blocker")
+              blocker_id=$(jq -r '.id' <<<"$blocker")
+              existing=$(gh api "repos/$REPOSITORY/issues/$issue_number/dependencies/blocked_by")
+              if ! jq -e --argjson number "$blocker_number" \
+                'any(.[]; .number == $number)' <<<"$existing" >/dev/null; then
+                gh api --method POST \
+                  "repos/$REPOSITORY/issues/$issue_number/dependencies/blocked_by" \
+                  --field "issue_id=$blocker_id" >/dev/null
+              fi
+            done < <(jq -r '.dependencies[]?' <<<"$task")
+          done < <(jq -c '.[]' /tmp/tasks.json)
+
+      - name: Reconcile task statuses
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp "repos/$REPOSITORY/issues?state=all&per_page=100" > /tmp/issues-pages.json
+          gh api --paginate --slurp "repos/$REPOSITORY/pulls?state=all&per_page=100" > /tmp/pulls-pages.json
+          python3 .github/scripts/plan_status.py \
+            --plan PLAN.md \
+            --issues /tmp/issues-pages.json \
+            --pull-requests /tmp/pulls-pages.json \
+            --output /tmp/PLAN.md \
+            --new-tasks /tmp/new-tasks.json \
+            --tasks-output /tmp/tasks.json \
+            --repository "$REPOSITORY"
+
+          if cmp -s PLAN.md /tmp/PLAN.md; then
+            echo "PLAN.md task statuses are already current."
+            exit 0
+          fi
+
+          cp /tmp/PLAN.md PLAN.md
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- PLAN.md
+          git commit -m "chore(plan): sync task statuses"
+
+          if git push origin HEAD:main; then
+            exit 0
+          fi
+
+          echo "Push rejected; rebasing the status-only commit on the latest main and retrying once."
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main

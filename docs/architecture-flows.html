@@ -447,6 +447,24 @@ const FLOWS = [
       ["version", "check", "proven", ""], ["check", "cost", "proven", "monitor"], ["cost", "teardown", "proven", "when done"],
     ],
   },
+  {
+    name: "Plan status",
+    summary: "GitHub events reconcile PLAN.md task statuses; plan changes create missing issues and dependency links. Live writes and protected-main behavior await post-merge verification.",
+    nodes: [
+      { id: "event", lane: "github", col: 1, s: "docs", t: "Issue, PR, plan push, or dispatch", d: "Issue state/worker-label changes; PR open, close, reopen or edit; Worker label workflow completion; PLAN.md push; manual dispatch.", ev: "P0-13 trigger list in .github/workflows/plan-status.yml." },
+      { id: "read", lane: "actions", col: 2, s: "assumed", t: "Read all issues and PRs", d: "Paginated GitHub REST lists." },
+      { id: "status", lane: "actions", col: 3, s: "assumed", t: "Reconcile task statuses", d: "Preserve manual Blocked; otherwise derive In progress, Complete or Not started.", ev: "Offline fixture tests exist; first live dispatch remains pending." },
+      { id: "new", lane: "actions", col: 4, s: "assumed", t: "Create missing task issues", d: "On PLAN.md push or dispatch: standard task body and phase label." },
+      { id: "deps", lane: "github", col: 5, s: "assumed", t: "Link blocked-by dependencies", d: "Idempotently add the REST issue dependency links." },
+      { id: "commit", lane: "actions", col: 6, s: "assumed", t: "Commit only Issue and Status cells", d: "Skip unchanged plans; rebase and retry a rejected push once." },
+      { id: "protection", lane: "github", col: 7, s: "unknown", t: "Protected main", d: "A direct workflow push may be rejected; protection bypass or PR-based delivery is unverified.", ev: "P0-13 verification needs an authorized protected-branch setup and live run." },
+    ],
+    edges: [
+      ["event", "read", "docs", ""], ["read", "status", "docs", "issues + PRs"],
+      ["event", "new", "docs", "PLAN.md change"], ["new", "deps", "docs", "task dependency IDs"],
+      ["status", "commit", "docs", "status-cell diff"], ["commit", "protection", "unknown", "push rejected?"],
+    ],
+  },
 ];
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -577,7 +595,7 @@ function buildOverview() {
   return {
     name: "Complete flow", overview: true, offScale: OV.offScale, nodes, edges, segments, cols: offset,
     ordered: [...nodes].sort(byPosition),
-    summary: "All thirteen flows in one swimlane, in tab order. Arrows between segments show where each flow picks up; 11–13 run alongside. Select a box for details, or a segment title to open its tab.",
+    summary: "All fourteen flows in one swimlane, in tab order. Arrows between segments show where each flow picks up; 11–14 run alongside. Select a box for details, or a segment title to open its tab.",
   };
 }
 

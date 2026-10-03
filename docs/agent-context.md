@@ -40,22 +40,24 @@ Every coding agent on this repository follows these rules. This project requires
 - Dependencies order tasks; they don't stop two ready tasks from changing the same files. That is what step 5 of [Start a task](#start-a-task) and the up-to-date rule in [Merge](#merge) are for.
 - `PLAN.md` is the source of truth for what a task is. The issue is where a task is started and discussed, and where its PR is linked. If the two differ, `PLAN.md` wins.
 - When a PR adds a task to `PLAN.md` or changes one, its issue must match: create or update it, including its "Blocked by" dependencies. If you can't edit issues from your environment, list the needed issue changes in the PR body. P0-13 automates this.
-- Status values: **Not started**, **In progress**, **Blocked**, **Complete**. The Status column in `PLAN.md` on `main` is the shared view of the project.
+- When a task row is added to `PLAN.md` on `main`, the plan-status workflow creates its issue in the standard format, with the phase label and "Blocked by" dependencies. If an existing task's description or acceptance criteria change, update the issue body too; the workflow reconciles dependencies but does not rewrite existing issue content.
+- Status values: **Not started**, **In progress**, **Blocked**, **Complete**. The Issue and Status columns in `PLAN.md` on `main` are the shared issue and status view of the project.
 - **Worker labels show who has taken a task:** `Codex`, `Copilot`, `Dan`, and `Jarvis` (Jarvis's own coding agents, from P2). **A worker label on an open issue means that worker has taken the task; nobody else may start it.** On a closed issue the label stays as a record of who did it. An issue has at most one worker label.
 - Dan (or later Jarvis) starts a task, from the issue or directly in the agent's app. **The worker sets its own label** (step 1 of [Start a task](#start-a-task)); Dan never labels or assigns by hand, except `Dan` for work he does himself.
-- A task is **In progress** when its issue has a worker label or an open PR containing `Fixes #<issue>`. The plan-status workflow (P0-13) writes that to `PLAN.md` on `main`, sets Complete when the PR merges, and resets Not started if the PR closes unmerged and the issue is unassigned.
-- Until P0-13 is merged, the agent also sets the status in its own PR.
+- A task is **In progress** when its open issue has a worker label or an open PR containing `Fixes #<issue>`. A merged linked PR or an issue closed as completed sets Complete. An open issue without a worker label or open linked PR is Not started, except a manually set Blocked value is preserved.
+- `.github/workflows/plan-status.yml` recomputes every task on issue assignment/unassignment/closure/reopen/label/unlabel, PR open/close/reopen/edit, completion of the Worker label workflow, or `workflow_dispatch`. A `PLAN.md` push also creates missing issues and dependency links. The workflow writes the Issue and Status columns; agents edit those columns only before P0-13 is merged. It serializes runs, commits only those columns, skips no-op commits, and rebases/retries once after a rejected push. `GITHUB_TOKEN`-made commits do not trigger another push workflow.
+- The status workflow requires `contents: write`, `issues: write`, and `pull-requests: read`. A protected-`main` push and the REST issue-dependency writes have not yet been verified against a live workflow run. After merge, run **Plan status** through `workflow_dispatch` and verify the test task before relying on live writes.
 - Issues that existed before worker labels: Codex's claims used Dan as assignee. Those were relabelled `Codex` on 3 October 2026; ignore an assignee without a worker label.
 
 ### Start a task
 
 1. **Claim the issue before anything else: set your worker label.** Find the issue by task ID, then:
    - If it already has a worker label that isn't yours, or an open PR with `Fixes #<issue>` that isn't yours, the task is taken: stop and say so.
-   - **Codex:** add the `Codex` label and a comment, using `GH_TOKEN` from the environment: `gh issue edit <n> --repo DanAakesen/jarvis --add-label Codex` and `gh issue comment <n> --repo DanAakesen/jarvis --body "Claimed by Codex at <UTC time>."`. Don't assign the issue. Without `gh`, call the REST API with `curl` (`POST /repos/DanAakesen/jarvis/issues/<n>/labels` with `{"labels":["Codex"]}`, and `/comments`). If the claim fails, stop and report it; never work on an unclaimed task.
-   - **Copilot:** Copilot can't edit labels, so the [Worker label](../.github/workflows/worker-label.yml) workflow adds `Copilot` when the issue is assigned to Copilot or Copilot opens a PR with `Fixes #<issue>`. Started outside the issue, open the draft PR with `Fixes #<issue>` in its body first.
-   - **Dan** adds `Dan` himself. **Jarvis** (from P2) adds `Jarvis` when its dispatcher starts a task.
-   - **Releasing a task:** a worker that stops without delivering removes its label and says why in a comment. The workflow removes `Copilot` when Copilot's PR closes unmerged.
-2. Read the current `main`: the Status column and Current focus in `PLAN.md`, the relevant [decisions](decisions.md), and the files the `AGENTS.md` context map names for your area.
+  - **Codex:** add the `Codex` label and a comment, using `GH_TOKEN` from the environment: `gh issue edit <n> --repo DanAakesen/jarvis --add-label Codex` and `gh issue comment <n> --repo DanAakesen/jarvis --body "Claimed by Codex at <UTC time>."`. Don't assign the issue. Without `gh`, call the REST API with `curl` (`POST /repos/DanAakesen/jarvis/issues/<n>/labels` with `{"labels":["Codex"]}`, and `/comments`). If the claim fails, stop and report it; never work on an unclaimed task.
+  - **Copilot cloud agent:** Copilot can't edit labels, so the [Worker label](../.github/workflows/worker-label.yml) workflow adds `Copilot` when the issue is assigned to Copilot or Copilot opens a PR with `Fixes #<issue>`. Started outside the issue, open the draft PR with `Fixes #<issue>` in its body first.
+  - **Dan** adds `Dan` himself. **Jarvis** (from P2) adds `Jarvis` when its dispatcher starts a task.
+  - **Releasing a task:** a worker that stops without delivering removes its label and says why in a comment. The Worker label workflow removes `Copilot` when Copilot's PR closes unmerged.
+2. Read the current `main`: the Issue and Status columns and Current focus in `PLAN.md`, the relevant [decisions](decisions.md), and the files the `AGENTS.md` context map names for your area.
 3. Check that `main` is green: the latest `CI` and deploy runs on `main` passed (before P0-11 adds deploy, only `CI` counts). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
 4. Check your task: not Complete, not claimed by anyone else, and every task in its "Depends on" column Complete. If any check fails, stop and report it on the issue.
 5. Look at the running tasks (issues with a worker label, In progress rows, and open PRs). Stay out of files they change, or say in your PR why you overlap.
@@ -318,6 +320,18 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
 - Add a new component workflow as `on: workflow_call`, call it from `ci.yml`, and add it to `CI result`'s `needs`, so it runs once per PR and the gate covers it.
 - Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then P0-12 must read the `CI` run result itself.
+
+Plan status, `.github/workflows/plan-status.yml`:
+
+| Item | Detail |
+| --- | --- |
+| Triggers | Issue assigned/unassigned/closed/reopened; PR opened/closed/reopened/edited; push to `main` changing `PLAN.md`; manual `workflow_dispatch` |
+| Status source | Paginated GitHub issue and PR lists; the offline rules and task-row parser are in `.github/scripts/plan_status.py` |
+| New task rows | On a `PLAN.md` push or dispatch, create issues for task IDs without one, add phase labels, then ensure dependency links with the REST `blocked_by` endpoint |
+| Commit | Only changes the Issue and Status cells in `PLAN.md`; no commit when unchanged; direct push to `main`, then one fetch/rebase/push retry if rejected |
+| Permissions | `contents: write`, `issues: write`, `pull-requests: read`; no secrets or Azure credentials |
+| Offline tests | `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v` |
+| Live verification | Pending merge: dispatch the workflow and verify a test task; protected-branch push and issue-dependency writes remain unverified |
 
 ### Backend modules
 
