@@ -4,9 +4,9 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **Active phase:** P0. P0-01 and P0-02 are merged. P0-05's Foundry template is merged in PR #79; this documentation follow-up lists its required timestamp input. P0-03 is claimed and in progress. P0-04 provides the locally checked core Bicep template; P0-06 completed the bootstrap. Azure deployment remains P0-11.
+- **Active phase:** P0. P0-01 and P0-02 are merged. P0-05's Foundry template is merged in PR #79; this documentation follow-up lists its required timestamp input. P0-03 is claimed and in progress. P0-04 provides the locally checked core Bicep template; P0-06 completed the bootstrap. P3-01's registration manifest and secure setup guide are complete in PR #87; live GitHub and Key Vault setup is tracked separately by P3-10.
 - **Next step:** Complete P0-03, then P0-10 so P0-12 (automatic merges) and P0-13 (automatic statuses) can follow. Until then Dan starts tasks and merges green PRs, or explicitly authorizes Codex to merge them.
-- **Blockers:** No production backend URL exists yet; P0-11 must record it in `apps/web/config.json`. P0-11 must also persist and supply `foundryNameTimestamp` on redeployments. These do not block opening the skeleton. Items marked **Confirm** or **Verify** block only the tasks that depend on them.
+- **Blockers:** No production backend URL exists yet; P0-11 must record it in `apps/web/config.json`. P0-11 must also persist and supply `foundryNameTimestamp` on redeployments. These do not block opening the skeleton. P3-10's live installation and Key Vault storage await Dan and the P0-11 deployment; webhook delivery also needs the P3-03 receiver. Items marked **Confirm** or **Verify** block only the tasks that depend on them.
 
 ## Implementation phases
 
@@ -120,15 +120,16 @@ Goal: PR checks in GitHub Actions drive the task, merges follow the project poli
 
 | ID | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- |
-| P3-01 | GitHub App: permissions (contents, pull requests, checks, actions read, deployments read, webhooks); private key in Key Vault; installed on Dan's repositories | App installed; key never leaves Key Vault and the backend | P0-04 | Not started |
-| P3-02 | Installation tokens per push: the runner's Git credential helper asks the backend for a 1-hour token for the task's repository (agent identity authenticated); replaces the prototype's fine-grained token | Push from a sandbox works with an App token | P3-01, P2-02 | Not started |
-| P3-03 | Webhook receiver: signature check, idempotency via `webhook_deliveries`, events `pull_request`, `check_run`, `workflow_run`, `deployment_status`, `push` | Duplicate deliveries are ignored (test) | P3-01, P2-01 | Not started |
+| P3-01 | Prepare the GitHub App registration settings and secure setup checklist; no live registration, installation, or secret provisioning by the cloud agent | Least-privilege manifest and manual steps are documented without exposing credentials | P0-04 | Complete |
+| P3-02 | Installation tokens per push: the runner's Git credential helper asks the backend for a 1-hour token for the task's repository (agent identity authenticated); replaces the prototype's fine-grained token | Push from a sandbox works with an App token | P3-10, P2-02 | Not started |
+| P3-03 | Webhook receiver: signature check, idempotency via `webhook_deliveries`, events `pull_request`, `check_run`, `workflow_run`, `deployment_status`, `push` | Duplicate deliveries are ignored (test) | P3-10, P2-01 | Not started |
 | P3-04 | Migrations for group 5 (`pull_requests`, `workflow_runs`, `releases`, `deployments`) and mapping from webhooks | Records match GitHub for a test repository | P3-03 | Not started |
 | P3-05 | Checks loop: a failed PR check stores the failing job's log in Blob and steers the task with it; the agent fixes and pushes | A deliberately failing test is fixed by the agent | P3-04, P2-07 | Not started |
 | P3-06 | Project policy and merge: `deliver_pr` stops at a green PR; `complete_without_deployment` merges with the App when the project's merge rules pass; Done follows the policy | Both policies tested on a test repository | P3-04 | Not started |
 | P3-07 | Release records: one release per merge to `main`; workflow runs and deployments linked by SHA | Release view data correct for a test project | P3-04 | Not started |
 | P3-08 | Release view per project: list of releases with runs and deployments; horizontal git graph (branches as lines, commits as dots) from the GitHub API on demand, coloured by PR, checks, release and deployment state | Matches the [page requirements](PRODUCT.md#page-requirements) | P3-07, P1-07 | Not started |
 | P3-09 | Template GitHub Actions workflows for managed projects: PR checks (full build and tests) and release (build, test, deploy with OIDC) | A new project can adopt them in one PR | P3-01 | Not started |
+| P3-10 | Dan's live GitHub App setup: register from the P3-01 settings, install only on selected repositories, and store the private key in the deployed Key Vault | App installation is limited to Dan-selected repositories; Key Vault has the private-key secret; only the backend identity can read it | P0-11, P3-01 | Not started |
 
 ### P4 — Jarvis in chat
 
@@ -169,7 +170,7 @@ Goal: Jarvis runs reliably and transparently day to day.
 | P6-03 | Archive `task_events` by age to Blob; restore on demand for the task detail page | Archive and restore tested | P1-05 | Not started |
 | P6-04 | Database backup and restore drill | Restore of `jarvis` to a temporary database documented | P0-04 | Not started |
 | P6-05 | Parallel load test: several tasks across projects, both agents; watch Codex Pro limits | Results recorded in [docs/decisions.md](docs/decisions.md) | P2-05 | Not started |
-| P6-06 | Runbook in the repository: deploy, rollback, rotate GitHub App key, re-seed Codex login, recover a crashed task, sleep switch | Runbook reviewed by Dan | P2-10, P3-01 | Not started |
+| P6-06 | Runbook in the repository: deploy, rollback, rotate GitHub App key, re-seed Codex login, recover a crashed task, sleep switch | Runbook reviewed by Dan | P2-10, P3-10 | Not started |
 | P6-07 | Ask Microsoft whether sandboxes can get the documented 20 GiB disk; if not, decide on Container Apps Jobs for heavy projects | Answer and decision in [docs/decisions.md](docs/decisions.md) | — | Not started |
 
 ### Out of scope for phase 1
@@ -196,7 +197,7 @@ Everything else is scripted with `az` and `gh`, or runs in GitHub Actions. `infr
 | Optional, now | Upgrade to GitHub Pro (https://github.com/account/upgrade) for required checks and 3,000 Actions minutes | Billing |
 | During P2-08 | `codex login` in the Jarvis-only folder (`CODEX_HOME=.secrets\codex-jarvis`, Codex 0.157.0) | ChatGPT sign-in in the browser |
 | During P2-08 | Create the Copilot fine-grained token (Copilot Requests only) | Fine-grained tokens can't be created by API |
-| During P3-01 | Click **Create** for the GitHub App (manifest prepared by the agent) and install it on the repositories | GitHub requires a browser confirmation |
+| During P3-10 | Follow the [GitHub App setup checklist](docs/agent-context.md#github-app-setup): register the App from the prepared settings, install only on selected repositories, and import its private key into the deployed Key Vault | GitHub requires browser confirmation; key import needs Dan's Azure access; wait for P0-11, and configure webhooks after P3-03 |
 | During P5-07 | Live voice test in Danish and English | Needs Dan's voice and judgement |
 
 ## Ideas

@@ -118,6 +118,51 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - Codex cloud environment: `GH_TOKEN` is a fine-grained token for `DanAakesen/jarvis` with only **Issues: read and write**, used to claim issues. It is an environment variable, not a Codex secret, because Codex removes secrets before the agent runs. Never print it, write it to files, or use it for anything else.
 - P0-01 exception: Dan explicitly authorized using the existing `GH_TOKEN` to open its linked PR. PR #78 creation succeeded. This task-specific authorization does not change the issue-claim restriction for other tasks.
 
+## GitHub App setup
+
+[`github-app-manifest.json`](github-app-manifest.json) is the registration settings reference for the private Jarvis GitHub App. Enter these values in GitHub's **Register a new GitHub App** form; GitHub's settings form does not import this JSON. The `Jarvis Software Factory` name may be changed if GitHub reports it is unavailable.
+
+| GitHub permission | Access | Reason |
+| --- | --- | --- |
+| Contents | Read and write | Read task repositories and push agent branches |
+| Pull requests | Read and write | Create, inspect, and merge pull requests |
+| Checks | Read-only | Read check results |
+| Actions | Read-only | Read workflow runs |
+| Deployments | Read-only | Read deployment status |
+
+Subscribe to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. GitHub requires repository metadata read access automatically. Install only on the repositories Dan selects for Jarvis; do not grant access to all repositories by default.
+
+Do not configure a webhook URL or secret until P0-11 has deployed the backend and P3-03 has implemented its receiver. The manifest intentionally has no webhook URL because neither endpoint is available yet. A GitHub App ID is not a secret; the private key is.
+
+Dan's manual setup checklist:
+
+1. Wait for [P0-11](https://github.com/DanAakesen/jarvis/issues/11) to deploy the Key Vault and backend. Use the deployed `keyVaultName` output; do not guess a vault name.
+2. In GitHub, register the App using the settings above, leave the webhook URL unset until P3-03 is deployed, and install it only on the intended repositories. This requires Dan's GitHub account to administer the owner and selected repositories.
+3. Generate one private key from the App's settings. Download it to a temporary, access-controlled location outside the repository and any synced folder. Never paste or upload it to GitHub, a PR, chat, GitHub Actions, or a sandbox.
+4. From Dan's signed-in Azure CLI, import the PEM file directly into the deployed vault. Replace placeholders locally; do not add the key or its value to the command:
+
+   ```powershell
+   az keyvault secret set --subscription <subscription-id> --vault-name <key-vault-name> --name github-app-private-key --file <private-key.pem> --encoding utf-8 --output none
+   ```
+
+   `--output none` suppresses the returned secret value. Dan needs permission to set secrets on this vault (for example, Key Vault Secrets Officer); cloud coding agents must not run this command or access Azure.
+5. Verify only the secret metadata, never its value:
+
+   ```powershell
+   az keyvault secret show --subscription <subscription-id> --vault-name <key-vault-name> --name github-app-private-key --query "{id:id,enabled:attributes.enabled}" --output json
+   ```
+
+6. Remove the temporary local PEM copy. The backend managed identity reads the key from Key Vault for app authentication; never pass the key to a runner. Record only the non-secret App ID for the later P3-02 backend configuration.
+7. When P3-03 provides a deployed webhook endpoint, set that URL in the App, generate a separate random webhook secret with a password manager, and temporarily stage it outside the repository and synced folders. Import it into Key Vault without displaying the value:
+
+   ```powershell
+   az keyvault secret set --subscription <subscription-id> --vault-name <key-vault-name> --name github-app-webhook-secret --file <webhook-secret.txt> --encoding utf-8 --output none
+   ```
+
+   Configure that same secret in GitHub's App settings and remove the temporary local copy. Do not put either copy in source control or logs.
+
+Until Dan completes these steps, App registration, installation, Key Vault storage, and webhook delivery are unverified. The manifest and instructions do not claim they have happened.
+
 ## Setup and commands
 
 The repository uses npm workspaces for `apps/web` and `apps/backend`, one root

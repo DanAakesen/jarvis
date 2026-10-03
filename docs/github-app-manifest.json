@@ -1,0 +1,19 @@
+{
+  "name": "Jarvis Software Factory",
+  "url": "https://github.com/DanAakesen/jarvis",
+  "public": false,
+  "default_permissions": {
+    "contents": "write",
+    "pull_requests": "write",
+    "checks": "read",
+    "actions": "read",
+    "deployments": "read"
+  },
+  "default_events": [
+    "check_run",
+    "deployment_status",
+    "pull_request",
+    "push",
+    "workflow_run"
+  ]
+}
