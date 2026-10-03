@@ -18,7 +18,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 | Stack, runtime, sandbox, voice, dispatch, cost | [architecture.md](architecture.md) |
 | Tables, relationships, and groups | [data-model.md](data-model.md) |
 | Step-by-step flows with evidence status | [architecture-flows.html](architecture-flows.html) (open in a browser) |
-| Decisions and learnings L1–L35 | [decisions.md](decisions.md) |
+| Decisions and learnings L1–L36 | [decisions.md](decisions.md) |
 | Prototype code and reports to port in P2 and P4 | [reference/](reference/) |
 | Open-source research | [open-source.md](open-source.md) |
 
@@ -36,26 +36,29 @@ Every coding agent on this repository follows these rules. This project requires
 ### Task status
 
 - Every task in [PLAN.md](../PLAN.md) has a [GitHub issue](https://github.com/DanAakesen/jarvis/issues) in `DanAakesen/jarvis`. The title starts with the task ID (for example `P1-04: Tasks API`), the label is the phase (`P0`–`P6`), and the body copies the task, acceptance criteria, and dependencies. Find one with `gh issue list --repo DanAakesen/jarvis --state all --search "P1-04 in:title"`.
-- **Dependencies:** the Depends on column is mirrored as GitHub issue dependencies ("Blocked by"). An issue shows **Blocked** until every issue it depends on is closed. A task is **ready** when its issue is open, unassigned, and not blocked; list ready tasks with `gh issue list --repo DanAakesen/jarvis --search "is:open no:assignee -is:blocked"`. Ready tasks can run in parallel.
+- **Dependencies:** the Depends on column is mirrored as GitHub issue dependencies ("Blocked by"). An issue shows **Blocked** until every issue it depends on is closed. A task is **ready** when its issue is open, not blocked, and has no worker label; list ready tasks with `gh issue list --repo DanAakesen/jarvis --search "is:open -is:blocked -label:Codex -label:Copilot -label:Dan -label:Jarvis"`. Ready tasks can run in parallel.
 - Dependencies order tasks; they don't stop two ready tasks from changing the same files. That is what step 5 of [Start a task](#start-a-task) and the up-to-date rule in [Merge](#merge) are for.
 - `PLAN.md` is the source of truth for what a task is. The issue is where a task is started and discussed, and where its PR is linked. If the two differ, `PLAN.md` wins.
 - When a PR adds a task to `PLAN.md` or changes one, its issue must match: create or update it, including its "Blocked by" dependencies. If you can't edit issues from your environment, list the needed issue changes in the PR body. P0-13 automates this.
 - Status values: **Not started**, **In progress**, **Blocked**, **Complete**. The Status column in `PLAN.md` on `main` is the shared view of the project.
-- Dan (or later Jarvis) starts a task, from the issue or directly in the agent's app. **The agent claims the issue itself** (step 1 of [Start a task](#start-a-task)); Dan never assigns issues by hand.
-- A task is **In progress** when its issue has an assignee or an open PR containing `Fixes #<issue>`. The plan-status workflow (P0-13) writes that to `PLAN.md` on `main`, sets Complete when the PR merges, and resets Not started if the PR closes unmerged and the issue is unassigned.
+- **Worker labels show who has taken a task:** `Codex`, `Copilot`, `Dan`, and `Jarvis` (Jarvis's own coding agents, from P2). **A worker label on an open issue means that worker has taken the task; nobody else may start it.** On a closed issue the label stays as a record of who did it. An issue has at most one worker label.
+- Dan (or later Jarvis) starts a task, from the issue or directly in the agent's app. **The worker sets its own label** (step 1 of [Start a task](#start-a-task)); Dan never labels or assigns by hand, except `Dan` for work he does himself.
+- A task is **In progress** when its issue has a worker label or an open PR containing `Fixes #<issue>`. The plan-status workflow (P0-13) writes that to `PLAN.md` on `main`, sets Complete when the PR merges, and resets Not started if the PR closes unmerged and the issue is unassigned.
 - Until P0-13 is merged, the agent also sets the status in its own PR.
+- Issues that existed before worker labels: Codex's claims used Dan as assignee. Those were relabelled `Codex` on 3 October 2026; ignore an assignee without a worker label.
 
 ### Start a task
 
-1. **Claim the issue before anything else.** Find it by task ID, then:
-   - The task is taken if the issue has a `Claimed by` comment, is assigned to Copilot, or has an open PR with `Fixes #<issue>`, and that claim isn't yours. Then stop and say so. (Codex claims with Dan's token, so Dan as assignee alone doesn't tell who works on it.)
-   - **Codex cloud:** assign the issue and comment, using `GH_TOKEN` from the environment: `gh issue edit <n> --repo DanAakesen/jarvis --add-assignee @me` and `gh issue comment <n> --repo DanAakesen/jarvis --body "Claimed by Codex at <UTC time>."`. Without `gh`, call the GitHub REST API with `curl` (`POST /repos/DanAakesen/jarvis/issues/<n>/assignees` and `/comments`). If the claim fails, stop and report it; never work on an unclaimed task.
-   - **Copilot cloud agent:** started from the issue, Copilot is assigned and opens a draft PR with the issue link automatically. Started anywhere else, open the draft PR with `Fixes #<issue>` in its body first. Its draft PR is its claim.
-   - **Any other environment:** claim the same way, or ask Dan.
+1. **Claim the issue before anything else: set your worker label.** Find the issue by task ID, then:
+   - If it already has a worker label that isn't yours, or an open PR with `Fixes #<issue>` that isn't yours, the task is taken: stop and say so.
+   - **Codex:** add the `Codex` label and a comment, using `GH_TOKEN` from the environment: `gh issue edit <n> --repo DanAakesen/jarvis --add-label Codex` and `gh issue comment <n> --repo DanAakesen/jarvis --body "Claimed by Codex at <UTC time>."`. Don't assign the issue. Without `gh`, call the REST API with `curl` (`POST /repos/DanAakesen/jarvis/issues/<n>/labels` with `{"labels":["Codex"]}`, and `/comments`). If the claim fails, stop and report it; never work on an unclaimed task.
+   - **Copilot:** Copilot can't edit labels, so the [Worker label](../.github/workflows/worker-label.yml) workflow adds `Copilot` when the issue is assigned to Copilot or Copilot opens a PR with `Fixes #<issue>`. Started outside the issue, open the draft PR with `Fixes #<issue>` in its body first.
+   - **Dan** adds `Dan` himself. **Jarvis** (from P2) adds `Jarvis` when its dispatcher starts a task.
+   - **Releasing a task:** a worker that stops without delivering removes its label and says why in a comment. The workflow removes `Copilot` when Copilot's PR closes unmerged.
 2. Read the current `main`: the Status column and Current focus in `PLAN.md`, the relevant [decisions](decisions.md), and the files the `AGENTS.md` context map names for your area.
 3. Check that `main` is green: the latest `CI` and deploy runs on `main` passed (before P0-11 adds deploy, only `CI` counts). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
 4. Check your task: not Complete, not claimed by anyone else, and every task in its "Depends on" column Complete. If any check fails, stop and report it on the issue.
-5. Look at the running tasks (In progress rows, assigned issues, and open PRs). Stay out of files they change, or say in your PR why you overlap.
+5. Look at the running tasks (issues with a worker label, In progress rows, and open PRs). Stay out of files they change, or say in your PR why you overlap.
 6. Use one branch and one PR. The PR title is exactly `<task ID>: <short summary>`, for example `P0-05: Foundry account and project`: the ID, a colon, a space, no brackets. Copilot's temporary `[WIP] ` prefix is fine. Work outside a task uses `fix-main: …` or `docs: …`. The [PR title](../.github/workflows/pr-title.yml) workflow corrects small deviations and fails otherwise. The PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
 
 ### Finish a task
@@ -251,6 +254,15 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
 - Add a new component workflow as `on: workflow_call`, call it from `ci.yml`, and add it to `CI result`'s `needs`, so it runs once per PR and the gate covers it.
 - Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then P0-12 must read the `CI` run result itself.
+
+### Backend modules
+
+Backend modules are composed through the optional third `buildApp` argument;
+defaults are `core` and `factory`. Module plugins inherit root security hooks and
+contribute internal Jarvis tools without exposing a dispatcher. See the
+[module guide](../apps/backend/src/modules.README.md). Register lifecycle hooks
+before `ready()`/`listen()`; module startup failures must prevent listening.
+The existing backend test/lint/build commands cover the module extension contract.
 
 Future commands (unimplemented until their tasks):
 
