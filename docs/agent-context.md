@@ -212,10 +212,43 @@ Future commands (unimplemented until their tasks):
 | Purpose | Command |
 | --- | --- |
 | Bootstrap or repair identities | `./infra/bootstrap.ps1` (safe to re-run; needs Dan's signed-in `az` and `gh`) |
-| Python tests | `pytest` in `runner` and `agents/jarvis` |
+| Python tests | `pytest` in `runner` and `agents/jarvis`, through each package's `.venv` (see [Cloud agent environments](#cloud-agent-environments)) |
 | Validate Mermaid diagrams (candidate; unverified) | `npx -y @mermaid-js/mermaid-cli@11 -i <file>.md -o <out>.md` |
 
 Pin the Codex and Copilot CLI versions locally and in the sandbox image (L13).
+
+### Cloud agent environments
+
+P0-14 prepares both cloud agents with the same dependency step,
+[`scripts/setup-dependencies.sh`](../scripts/setup-dependencies.sh). It is
+noninteractive and safe to re-run. It fails unless Node.js, npm and Python
+exactly match `.nvmrc`, `packageManager` and `.python-version` (it installs the
+pinned npm when needed), runs `npm ci`, and gives each Python package (`runner`,
+`agents/jarvis`) its own git-ignored `.venv`, installed with
+`pip --require-hashes` from `requirements-dev.txt` (else `requirements.txt`). A
+package without a hash-locked file fails; an absent package is reported as
+skipped and has no tests. Setup fails if it changed any tracked file. It reads
+no tokens, calls no Azure service, and builds no Docker image. Lint and tests
+are not part of setup.
+
+| Agent | Setup | Status |
+| --- | --- | --- |
+| Copilot cloud agent | [`.github/workflows/copilot-setup-steps.yml`](../.github/workflows/copilot-setup-steps.yml): `setup-node` and `setup-python` from the pin files, then the shared script. Copilot uses it only once it is on `main`; it also runs as a normal workflow when its inputs change, or manually | The `Copilot Setup Steps` workflow passed on the P0-14 PR; in the P0-14 Copilot session the shared script, `npm run lint`, `npm test` and the runner's ruff and pytest passed |
+| Codex cloud | Setup script (and maintenance script) in the Codex environment settings: `bash scripts/codex-setup.sh`. It runs `nvm install`/`nvm alias default` for Node.js, `pyenv install`/`pyenv global` for Python (uv's managed Python if pyenv lacks the version), then the shared script | nvm + uv path verified outside Codex; the Codex image (pyenv path) and a Codex task are unverified: P0-15 |
+
+For P0-15, Dan sets in the Codex environment: setup script `bash scripts/codex-setup.sh`;
+optionally `CODEX_ENV_NODE_VERSION=22` and `CODEX_ENV_PYTHON_VERSION=3.12`
+(the script installs the exact patch versions itself). The setup script
+downloads from nodejs.org, registry.npmjs.org, python.org or GitHub (uv's
+Python builds) and PyPI; Codex setup scripts normally have internet access, but
+this is unverified for this environment. A Codex task then runs
+`npm run lint` and `npm test`. The pyenv path compiles Python on first setup,
+which takes a few minutes; Codex caches the result.
+
+Python checks use each package's `.venv`. For the runner, from `runner/`:
+`.venv/bin/python -m ruff check .` and `.venv/bin/python -m pytest -q`
+(verified in the P0-14 Copilot session after setup: ruff passed, 36 tests passed).
+`agents/jarvis` has no Python package yet, so setup skips it.
 
 ## Release procedure
 
