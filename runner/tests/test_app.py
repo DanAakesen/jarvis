@@ -479,8 +479,11 @@ def test_renewal_status_persists_only_allowlisted_metadata(tmp_path, monkeypatch
             "last_renewed": "2026-10-01T00:00:00.000000Z",
         },
     }
-    assert "must-not-persist" not in app._task_state_path("renew-session", "renew-persisted").read_text()
-    assert "must-not-persist-either" not in app._task_state_path("renew-session", "renew-persisted").read_text()
+    state_path = app._task_state_path("renew-session", "renew-persisted")
+    assert state_path.stat().st_mode & 0o777 == 0o600
+    assert not state_path.with_suffix(".json.tmp").exists()
+    assert "must-not-persist" not in state_path.read_text()
+    assert "must-not-persist-either" not in state_path.read_text()
 
 
 def test_codex_auth_file_is_private_when_written(tmp_path, monkeypatch):

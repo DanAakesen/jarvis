@@ -116,9 +116,10 @@ def _task_state_path(session_id: str, invocation_id: str) -> Path:
 def _write_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
+    with os.fdopen(os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as output:
+        os.fchmod(output.fileno(), 0o600)
+        json.dump(value, output, separators=(",", ":"))
     temporary.replace(path)
-    path.chmod(0o600)
 
 
 def _capacity_snapshot() -> dict[str, Any]:
