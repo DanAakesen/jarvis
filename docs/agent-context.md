@@ -122,8 +122,10 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Bootstrap IDs | [`infra/bootstrap.output.json`](../infra/bootstrap.output.json); also Actions variables in `DanAakesen/jarvis` |
 
 - `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
-- The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `backendImage`, and `foundryNameTimestamp`. The timestamp is a 14-digit UTC value in `yyyyMMddHHmmss` format, for example `20261003120000`. P0-11 must save the chosen value in deployment configuration and supply the same value on every normal redeployment, so the existing Foundry account and project are updated in place. Do not generate a new timestamp for each workflow run.
-- `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Confirm the billing currency is DKK and supply any required budget notification email addresses as appropriate. The first Azure deployment and real resource behavior are verified by P0-11, not by the local build/lint.
+- The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
+- `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Confirm the billing currency is DKK and supply any required budget notification email addresses as appropriate. The first Azure deployment and real resource behavior are verified by the first Deploy run (P0-16), not by the local build/lint.
+- The [Deploy workflow](../.github/workflows/deploy.yml) is the only routine path to Azure: push to `main` deploys the parts changed since the last successful Deploy run; Dan's `workflow_dispatch` on `main` redeploys everything. Its Bicep deployment is always named `jarvis-infra`. Details: [production deploy](architecture.md#production-deploy-p0-11).
+- GitHub Actions OIDC: GitHub signs this repository's tokens with the immutable-ID subject `repo:DanAakesen@68902534/jarvis@1403065900:ref:refs/heads/main`, not `repo:DanAakesen/jarvis:ref:refs/heads/main`. `infra/bootstrap.ps1` reads the IDs with `gh api repos/DanAakesen/jarvis` and registers the federated credential `github-main-ids`. An `AADSTS700213` sign-in failure means the credential is missing: Dan re-runs bootstrap; the subject is printed under "Federated token details" in the `azure/login` step (L49).
 - Dan's Azure CLI defaults to the Microsoft tenant: pass `--subscription` in every command and script (L7). For Microsoft Graph, get the token with `az account get-access-token --subscription <id> --resource-type ms-graph`; `--tenant` picks the wrong account.
 - `az` runs through a `.cmd` file: avoid `&`, parentheses, and pipes inside arguments such as `--query` (L20); filter JSON in PowerShell instead.
 - Never reuse a deleted Foundry account or project name; generate timestamped names (L2).
@@ -156,11 +158,11 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 
 Subscribe to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. GitHub requires repository metadata read access automatically. Install only on the repositories Dan selects for Jarvis; do not grant access to all repositories by default.
 
-Do not configure a webhook URL or secret until P0-11 has deployed the backend and P3-03 has implemented its receiver. The manifest intentionally has no webhook URL because neither endpoint is available yet. A GitHub App ID is not a secret; the private key is.
+Do not configure a webhook URL or secret until P0-16 has deployed the backend and P3-03 has implemented its receiver. The manifest intentionally has no webhook URL because neither endpoint is available yet. A GitHub App ID is not a secret; the private key is.
 
 Dan's manual setup checklist:
 
-1. Wait for [P0-11](https://github.com/DanAakesen/jarvis/issues/11) to deploy the Key Vault and backend. Use the deployed `keyVaultName` output; do not guess a vault name.
+1. Wait for [P0-16](https://github.com/DanAakesen/jarvis/issues/131) to deploy the Key Vault and backend. Use the deployed `keyVaultName` output; do not guess a vault name.
 2. In GitHub, register the App using the settings above, leave the webhook URL unset until P3-03 is deployed, and install it only on the intended repositories. This requires Dan's GitHub account to administer the owner and selected repositories.
 3. Generate one private key from the App's settings. Download it to a temporary, access-controlled location outside the repository and any synced folder. Never paste or upload it to GitHub, a PR, chat, GitHub Actions, or a sandbox.
 4. From Dan's signed-in Azure CLI, import the PEM file directly into the deployed vault. Replace placeholders locally; do not add the key or its value to the command:
@@ -185,7 +187,7 @@ Dan's manual setup checklist:
 
    Configure that same secret in GitHub's App settings and remove the temporary local copy. Do not put either copy in source control or logs.
 
-Status, 3 October 2026: Dan registered the App and installed it on selected repositories (step 2). No private key exists yet; steps 3–6 follow P0-11 and step 7 follows P3-03 (task P3-10). Key Vault storage and webhook delivery are unverified until then. The manifest and instructions do not claim they have happened.
+Status, 3 October 2026: Dan registered the App and installed it on selected repositories (step 2). No private key exists yet; steps 3–6 follow P0-16 and step 7 follows P3-03 (task P3-10). Key Vault storage and webhook delivery are unverified until then. The manifest and instructions do not claim they have happened.
 
 ## Setup and commands
 
@@ -193,8 +195,8 @@ The repository uses npm workspaces for `apps/web` and `apps/backend`, one root
 lockfile, and shared strict TypeScript configuration. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
-Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds groups 1–3, and P2-01 (#27) adds sandbox and operations groups 4 and 6.
-P0-04 adds the Bicep template; its Azure deployment awaits P0-11.
+Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3), and P2-01 (#27) adds sandbox and operations groups 4 and 6.
+P0-04 adds the Bicep template; its first Azure deployment is P0-16.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
 and Python 3.12.14 (`.python-version`, for future Python work). Install from the
@@ -215,12 +217,20 @@ Verified in Codex cloud for P0-02:
 
 The web starts with the bootstrap identities and the public production backend
 origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). The URL
-is pending P0-11's first deployment; until configured, sign-in is visibly
+is pending P0-16's first deployment; until configured, sign-in is visibly
 disabled. With a backend URL, MSAL signs in against the configured tenant and
 calls authenticated `/me`; only the backend-approved display name is shown.
 `Web CI` checks lint, tests, and root builds as part of the aggregate `CI`
 workflow (below). Local tests use signed fixture tokens and do not verify a live
 Entra tenant or Azure deployment.
+
+Browser checks of signed-in pages (verified in Copilot cloud agent for P1-07,
+where the Playwright MCP tools were unavailable; L45): in a scratch directory
+outside the repository, run `npm install --no-save playwright-core`, then drive
+`chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] })`.
+Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
+returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
+URL. Never commit the stub or weaken sign-in in the app.
 
 Backend commands implemented in P0-03:
 
@@ -242,12 +252,23 @@ authentication. P0-08 installs a root bearer-authentication hook before CORS,
 so future area routes inherit it. Only `/health` GET/HEAD and the generated CORS
 preflight route are public; explicit OPTIONS business endpoints are protected.
 
+The optional `VOICE_LIVE_ENDPOINT` enables `/voice`; it must be a secure Azure
+Voice Live WebSocket endpoint without credentials in its URL. The backend pins
+`gpt-realtime-2.1`, gets the `https://ai.azure.com/.default` token with
+`DefaultAzureCredential`, and owns session settings and tool execution. P0-16
+must configure this endpoint and provider identity before live use. Local voice
+tests use a mock WebSocket and do not verify Azure access or browser audio.
+
 Backend authentication defaults to the nonsecret identities in
 `infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and
 `ENTRA_OWNER_OBJECT_ID` may override those UUIDs at startup. The API expects an
 RS256 Entra v2 delegated access token with the API client ID as audience and
 `access_as_user` scope; an ID token, app-only token or another user's object ID
 is denied. `request.principal` contains only the verified object and tenant IDs.
+The optional `ENTRA_JARVIS_AGENT_OBJECT_ID` (a UUID other than Dan's; P4-01)
+admits the hosted Jarvis agent's app-only token with the `Jarvis.Tools` role,
+and only on routes marked `config: { jarvisAgent: true }` (`GET /tools`,
+`POST /tools/{name}`); elsewhere it gets 403. Unset or empty denies the agent.
 Missing/invalid credentials return 401; verified but unauthorized tokens return
 403. Authentication failures never export token/claim/provider details.
 Approved browser origins retain CORS headers on these early denials so the web
@@ -257,7 +278,7 @@ can read their status; unapproved origins receive no allow-origin header.
 socket duplicate-header rejection, cached keys and bounded provider outages.
 They require no Azure identity or external JWKS service. The production JWKS
 lookup timeout is five seconds. `/me` and browser sign-in remain P0-09; live
-Azure token verification remains P0-11.
+Azure token verification remains P0-16.
 
 `APPLICATIONINSIGHTS_CONNECTION_STRING` is backend-only protected runtime
 configuration supplied by P0-11 through Key Vault references. When absent,
@@ -272,9 +293,9 @@ the backend and bounds close/flush/disposal to five seconds.
 container build and smoke test without Azure credentials. Its image uses pinned
 Node.js, runs as non-root, and contains backend output and production dependencies.
 Container verification belongs in Actions; live telemetry ingestion and Azure
-connectivity remain unverified until P0-11.
+connectivity remain unverified until P0-16.
 
-Verified locally in P0-04 (Azure deployment remains pending P0-11):
+Verified locally in P0-04 (Azure deployment remains pending P0-16):
 
 | Purpose | Command |
 | --- | --- |
@@ -358,6 +379,16 @@ Plan status, `.github/workflows/plan-status.yml`:
 | Offline tests | `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v` |
 | Live verification | Pending merge: dispatch the workflow and verify a test task; protected-branch push and issue-dependency writes remain unverified |
 
+Deploy, `.github/workflows/deploy.yml` (P0-11):
+
+| Item | Detail |
+| --- | --- |
+| Triggers | Push to `main` (except `*.md` and `docs/` only); `workflow_dispatch` on `main` redeploys everything |
+| Scripts | `deploy_plan.py` (parts to deploy), `deploy_bicep.sh` (Bicep deployment `jarvis-infra`), `deploy_smoke.py` (Foundry hosts) in `.github/scripts/` |
+| Permissions | `contents: read`; the plan job adds `actions: read` (last successful run); Azure jobs add `id-token: write` for the bootstrap OIDC identity. No stored secrets; the Static Web Apps token is read at run time and masked |
+| Offline checks (verified for P0-11) | `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v` (plan and smoke rules); `az bicep build --file infra/main.bicep --stdout >/dev/null` and `az bicep lint --file infra/main.bicep`; `actionlint .github/workflows/deploy.yml` (actionlint 1.7.12 does not know `concurrency.queue` yet and reports it; GitHub documents it) |
+| Live verification | Pending the first run (P0-16) |
+
 ### Backend modules
 
 Backend modules are composed through the optional third `buildApp` argument;
@@ -408,11 +439,40 @@ which takes a few minutes; Codex caches the result.
 Python checks use each package's `.venv`. For the runner, from `runner/`:
 `.venv/bin/python -m ruff check .` and `.venv/bin/python -m pytest -q`
 (verified in the P0-14 Copilot session after setup: ruff passed, 36 tests passed).
-`agents/jarvis` has no Python package yet, so setup skips it.
+
+### Jarvis agent
+
+`agents/jarvis` (P4-01) has its own `.venv` from the shared setup script. Verified
+in the P4-01 Copilot session (Docker was available there):
+
+| Purpose | Command |
+| --- | --- |
+| Lint and tests, from `agents/jarvis/` | `.venv/bin/python -m ruff check .`; `.venv/bin/python -m pytest -q` (100 passed) |
+| Same check as CI, from the root | `bash .github/scripts/python-ci.sh agents/jarvis` |
+| Image, from the root | `docker build --tag jarvis-agent:local agents/jarvis` |
+| Model-free voice turn | Run the image with the variables below, then `agents/jarvis/.venv/bin/python agents/jarvis/scripts/smoke_test.py` (default `ws://127.0.0.1:8088/invocations_ws`, text `/help`) |
+| Regenerate the hash locks, from the root, after editing a `.in` file | `uv pip compile --python-version 3.12 --generate-hashes agents/jarvis/requirements.in -o agents/jarvis/requirements.txt`, then the same for `requirements-dev.in` → `requirements-dev.txt` |
+
+Agent configuration (environment variables, no secrets):
+
+| Variable | Meaning |
+| --- | --- |
+| `FOUNDRY_PROJECT_ENDPOINT`, `AZURE_AI_MODEL_DEPLOYMENT_NAME` | Required. Foundry project endpoint (`https://<host>/api/projects/<name>`) and model deployment |
+| `JARVIS_BACKEND_URL` | Required. Backend origin: HTTPS, or HTTP only for `localhost`/`127.0.0.1`/`::1`; no path, query or credentials. Startup fails without it |
+| `JARVIS_API_CLIENT_ID` | Optional `jarvis-api` client ID for the token scope `api://<id>/.default`; defaults to the bootstrap ID |
+| `AZURE_OPENAI_API_KEY` | Optional local model key; without it the agent identity also gets the model token |
+| `AZURE_OPENAI_SYSTEM_PROMPT`, `AZURE_OPENAI_MAX_OUTPUT_TOKENS`, `JARVIS_REASONING_EFFORT`, `LOG_LEVEL` | Optional overrides, as in the prototype |
+
+The agent identity exists only after the agent is deployed (P4-08). Then run
+`./infra/bootstrap.ps1 -JarvisAgentPrincipalId <instance_identity.principal_id>`
+to assign `Jarvis.Tools`, and set the backend's `ENTRA_JARVIS_AGENT_OBJECT_ID` to
+the same ID. Tool calls also need the turn's stored message ID from P4-03; until
+then the agent reports each call as not done.
 
 ## Release procedure
 
-- Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge deploys infrastructure, backend, and web; the backend applies migrations at startup.
+- Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, and web; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).
+- After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>'` so sign-in works there (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
 - No manual portal changes.
 - Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.
 
@@ -435,11 +495,11 @@ Runner CI owns Docker builds and packaged CLI/HTTP checks because agents have no
 Docker runtime here. Production Key Vault/Foundry acceptance is still unverified.
 
 The main-only [runner deploy workflow](../.github/workflows/runner-deploy.yml)
-requires Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME`, set after #11's successful
-Bicep deployment. It consumes that deployment's existing outputs and bootstrap
+requires Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME`, set to `jarvis-infra` after
+the first successful Deploy run. It consumes that deployment's existing outputs and bootstrap
 Azure variables, queues under `jarvis-production-deploy`, builds the two images
-in ACR, deploys both capacity tiers, and records identity-probe evidence. #11 must
-use that same deployment concurrency group. The workflow never seeds secrets;
+in ACR, deploys both capacity tiers, and records identity-probe evidence. The main
+Deploy workflow uses the same group; both set `queue: max` so no queued deploy is dropped. The workflow never seeds secrets;
 `github-token`, `copilot-token`, and the Jarvis-only `codex-login` must already be
 in Key Vault. Installation tokens replace the prototype Git-token path in #40.
 See [runner/README.md](../runner/README.md) for commands and the contract.

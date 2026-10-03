@@ -1,98 +1,57 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, Route, Routes } from 'react-router-dom';
+import { Link, NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
-import { createAuthClient, restoreProfile, signIn, type UserProfile } from './auth';
+import { areas } from './areas';
+import { JarvisPage } from './JarvisPage';
+import { NotFoundPage, SettingsPage, SignInPage } from './pages';
+import { useSignIn, type SignInSession } from './useSignIn';
 
-type SignInState = 'checking' | 'signed-out' | 'signing-in' | 'signed-in' | 'error' | 'unavailable';
-
-function Home({ config }: { config: PublicConfig }) {
-  const client = useMemo(() => createAuthClient(config), [config]);
-  const [state, setState] = useState<SignInState>(config.backendUrl ? 'checking' : 'unavailable');
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [message, setMessage] = useState('');
-
-  useEffect(() => {
-    if (!config.backendUrl) return;
-
-    let active = true;
-    void client.initialize().catch(() => {
-      throw new Error('Microsoft sign-in could not be initialized. Try again.');
-    }).then(async () => {
-      const restored = await restoreProfile(client, config);
-      if (!active) return;
-      setProfile(restored);
-      setState(restored ? 'signed-in' : 'signed-out');
-    }).catch((error: unknown) => {
-      if (!active) return;
-      setMessage(error instanceof Error ? error.message : 'Jarvis could not verify your sign-in. Try again.');
-      setState('error');
-    });
-
-    return () => { active = false; };
-  }, [client, config]);
-
-  async function handleSignIn() {
-    setState('signing-in');
-    setMessage('');
-    try {
-      const signedInProfile = await signIn(client, config);
-      setProfile(signedInProfile);
-      setState('signed-in');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Jarvis could not verify your sign-in. Try again.');
-      setState('error');
-    }
-  }
-
-  if (state === 'signed-in' && profile) {
-    return (
-      <section aria-labelledby="welcome-heading">
-        <h1 id="welcome-heading">Welcome, {profile.name}</h1>
-        <p>You are signed in to Jarvis. Conversation and the Software Factory are still being built.</p>
-      </section>
-    );
-  }
-
-  const pending = state === 'checking' || state === 'signing-in';
-  return (
-    <section aria-labelledby="welcome-heading">
-      <h1 id="welcome-heading">Jarvis is taking shape</h1>
-      <p>Your personal AI platform starts here. Sign in with your Microsoft account to continue.</p>
-      <button className="primary-button" type="button" onClick={handleSignIn} disabled={pending || state === 'unavailable'}>
-        {state === 'signing-in' ? 'Signing in…' : state === 'error' ? 'Try another Microsoft account' : 'Sign in with Microsoft'}
-      </button>
-      <p className="sign-in-status" role={state === 'error' ? 'alert' : 'status'} aria-live="polite">
-        {state === 'checking' && 'Checking for an existing sign-in…'}
-        {state === 'signed-out' && 'Not signed in.'}
-        {state === 'signing-in' && 'Waiting for Microsoft sign-in and backend verification…'}
-        {state === 'unavailable' && 'Sign-in is unavailable until the backend is deployed.'}
-        {state === 'error' && message}
-      </p>
-    </section>
-  );
-}
-
-export function App({ config = __JARVIS_CONFIG__ }: { config?: PublicConfig }) {
+function Shell({ signedIn }: { signedIn: boolean }) {
   return (
     <div className="app">
       <a className="skip-link" href="#content">Skip to content</a>
       <header className="app-header">
         <Link className="brand" to="/" aria-label="Jarvis home">Jarvis</Link>
+        {signedIn && (
+          <>
+            <nav className="area-links" aria-label="Areas">
+              {areas.map((area) => (
+                <NavLink key={area.id} className="nav-link" to={`/${area.path}`}>{area.label}</NavLink>
+              ))}
+            </nav>
+            <NavLink className="nav-link" to="/settings">Settings</NavLink>
+          </>
+        )}
       </header>
       <main id="content" tabIndex={-1}>
-        <Routes>
-          <Route path="/" element={
-            <Home config={config} />
-          } />
-          <Route path="*" element={
-            <section aria-labelledby="missing-heading">
-              <h1 id="missing-heading">Page not found</h1>
-              <p>This address does not have a page in Jarvis.</p>
-              <Link className="home-link" to="/">Return to Jarvis</Link>
-            </section>
-          } />
-        </Routes>
+        <Outlet />
       </main>
     </div>
+  );
+}
+
+/** Every Jarvis page needs Dan's verified session; until then the page shows sign-in instead. */
+function RequireSignIn({ session }: { session: SignInSession }) {
+  return session.state === 'signed-in' && session.profile ? <Outlet /> : <SignInPage session={session} />;
+}
+
+export function App({ config = __JARVIS_CONFIG__ }: { config?: PublicConfig }) {
+  const session = useSignIn(config);
+  const signedIn = session.state === 'signed-in' && session.profile !== null;
+
+  return (
+    <Routes>
+      <Route element={<Shell signedIn={signedIn} />}>
+        <Route element={<RequireSignIn session={session} />}>
+          <Route index element={
+            <JarvisPage name={session.profile?.name ?? ''} client={session.client} config={config} />
+          } />
+          {areas.map(({ id, path, Component }) => (
+            <Route key={id} path={`${path}/*`} element={<Component />} />
+          ))}
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
   );
 }

@@ -51,9 +51,15 @@ retains its owning module and handler. `GET /tools` exposes each registered name
 description and input schema. Core creates a schema-validated `POST /tools/{name}`
 route for each tool, so new modules need no agent or core changes. Calls require
 `X-Jarvis-Message-ID`, run with the request and a cancellation signal, and record
-arguments, result and outcome through the SQL-backed tool-call store. Missing
+arguments, result and outcome through the SQL-backed tool-call store. A tool
+declines an action by throwing `ToolRefusal` with a reason safe to show Dan; the
+outcome is then `refused`. Other errors become a sanitized `error`. The response
+adds a `confirmation` built from the recorded outcome (L16). Missing
 persistence returns 503 before executing a tool. Global delegated-user
-authentication applies; service-identity policy remains separate.
+authentication applies. The tool routes also set `config: { jarvisAgent: true }`,
+so the hosted Jarvis agent's app-only token is accepted there (P4-01); its
+principal is in `request.agentPrincipal` and `request.principal` stays `null`.
+Leave that flag off module routes unless the agent must call them directly.
 
 From the repository root, `npm test --workspace @jarvis/backend` verifies extension
 registration, root security inheritance, lifecycle failures/cleanup and catalogue

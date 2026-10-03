@@ -3,6 +3,8 @@ import sql from 'mssql';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readDownMigration, readMigrations, revertMigration, type Migration } from './migrations.js';
+import { createProjectStore } from './project-store.js';
+import { ProjectConflictError } from '../factory/projects.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -99,6 +101,26 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     const row = await pool.request().query<{ state: string; priority: number; attempt_count: number }>(
       `SELECT state, priority, attempt_count FROM dbo.tasks WHERE id = ${String(task)}`);
     expect(row.recordset).toEqual([{ state: 'Running', priority: 0, attempt_count: 0 }]);
+  });
+
+  it('creates, updates, lists, and archives projects through the SQL store', async () => {
+    const store = createProjectStore(pool);
+    const repo = `${database}/project`;
+    const project = await store.create({
+      name: 'Project store', repo, default_branch: 'main', default_agent: 'copilot',
+      policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
+    });
+    expect(project).toMatchObject({ repo, max_parallel_tasks: 1, merge_rules: null, active: true });
+    expect(await store.list()).toContainEqual(project);
+    expect(await store.update(project.id, { max_parallel_tasks: 3 })).toMatchObject({ max_parallel_tasks: 3 });
+    expect(await store.archive(project.id)).toBe(true);
+    expect(await store.list()).not.toContainEqual(expect.objectContaining({ id: project.id }));
+    expect(await store.update(project.id, { name: 'Archived' })).toBeNull();
+    expect(await store.archive(project.id)).toBe(true);
+    await expect(store.create({
+      name: 'Replacement', repo, default_branch: 'main', default_agent: 'copilot',
+      policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
+    })).rejects.toBeInstanceOf(ProjectConflictError);
   });
 
   it.each([

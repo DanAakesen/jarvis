@@ -1,4 +1,6 @@
 import type { BackendModule } from '../modules.js';
+import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
+import { ToolRefusal } from './tool-registry.js';
 
 export const coreModule: BackendModule = {
   id: 'core',
@@ -28,11 +30,11 @@ export const coreModule: BackendModule = {
       if (!request.principal) return reply.code(401).send({ error: 'Unauthorized' });
       return { name: request.principal.displayName };
     });
-    app.get('/tools', async () => app.jarvisTools.list().map(({ name, description, inputSchema }) => ({
+    app.get('/tools', { config: { jarvisAgent: true } }, async () => app.jarvisTools.list().map(({ name, description, inputSchema }) => ({
       name, description, inputSchema,
     })));
     for (const tool of app.jarvisTools.list()) {
-      app.post(`/tools/${tool.name}`, { schema: { body: tool.inputSchema } }, async (request, reply) => {
+      app.post(`/tools/${tool.name}`, { config: { jarvisAgent: true }, schema: { body: tool.inputSchema } }, async (request, reply) => {
         if (!app.toolCallStore) return reply.code(503).send({ error: 'Tool execution unavailable' });
         const messageId = request.headers['x-jarvis-message-id'];
         if (typeof messageId !== 'string' || !/^[1-9]\d{0,18}$/.test(messageId) ||
@@ -47,7 +49,7 @@ export const coreModule: BackendModule = {
         };
         request.raw.once('aborted', abortOnRequest);
         reply.raw.once('close', abortOnClose);
-        let outcome: 'ok' | 'error' = 'ok';
+        let outcome: ToolCallOutcome = 'ok';
         let result: unknown;
         try {
           result = await tool.execute(request.body, request, controller.signal);
@@ -55,15 +57,20 @@ export const coreModule: BackendModule = {
           if (serialized === undefined || Buffer.byteLength(serialized) > 1024 * 1024) {
             throw new Error('Tool result is not serializable or exceeds the size limit');
           }
-        } catch {
-          outcome = 'error';
-          result = { error: 'Tool execution failed' };
+        } catch (error) {
+          if (error instanceof ToolRefusal && !controller.signal.aborted) {
+            outcome = 'refused';
+            result = { refused: error.message };
+          } else {
+            outcome = 'error';
+            result = { error: 'Tool execution failed' };
+          }
         } finally {
           request.raw.removeListener('aborted', abortOnRequest);
           reply.raw.removeListener('close', abortOnClose);
         }
         await app.toolCallStore.record({ messageId, tool: tool.name, arguments: request.body, result, outcome });
-        return { tool: tool.name, outcome, result };
+        return { tool: tool.name, outcome, result, confirmation: confirmToolCall(tool.name, outcome, result) };
       });
     }
   },

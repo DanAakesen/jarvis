@@ -9,8 +9,8 @@ param sqlAdminGroupObjectId string
 @description('The display name of the SQL administrator group.')
 param sqlAdminGroupName string = 'jarvis-sql-admins'
 
-@description('The container image to run in the backend app.')
-param backendImage string
+@description('The container image to run in the backend app. Empty skips the backend app; the deploy workflow uses this only before the registry holds the first backend image.')
+param backendImage string = ''
 
 @description('The subscription currency amount for the monthly resource group budget (300 DKK).')
 param monthlyBudgetAmount int = 300
@@ -32,6 +32,7 @@ var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
+var deployBackendApp = !empty(backendImage)
 
 resource backendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: last(split(backendIdentityResourceId, '/'))
@@ -205,9 +206,14 @@ resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-0
   }
 }
 
+// Foundry allows one operation at a time per account: create the project first,
+// then each model deployment in turn (the first deploy failed with RequestConflict).
 resource gpt56LunaDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
   name: 'gpt-5.6-luna'
+  dependsOn: [
+    foundryProject
+  ]
   sku: {
     name: 'GlobalStandard'
     capacity: 1
@@ -224,6 +230,9 @@ resource gpt56LunaDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
 resource gptRealtime21Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
   name: 'gpt-realtime-2.1'
+  dependsOn: [
+    gpt56LunaDeployment
+  ]
   sku: {
     name: 'GlobalStandard'
     capacity: 1
@@ -304,6 +313,16 @@ resource sqlServer 'Microsoft.Sql/servers@2021-11-01' = {
     version: '12.0'
     minimalTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
+    // A new server needs an administrator at creation; without a SQL login that must be
+    // the Entra admin with Entra-only authentication (first deploy: InvalidParameterValue Login).
+    administrators: {
+      administratorType: 'ActiveDirectory'
+      azureADOnlyAuthentication: true
+      login: sqlAdminGroupName
+      principalType: 'Group'
+      sid: sqlAdminGroupObjectId
+      tenantId: subscription().tenantId
+    }
   }
 }
 
@@ -377,7 +396,7 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
   }
 }
 
-resource backendApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackendApp) {
   name: 'ca-jarvis-backend-${suffix}'
   location: resourceGroup().location
   identity: {
@@ -419,6 +438,62 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = {
             cpu: json('0.25')
             memory: '0.5Gi'
           }
+          env: [
+            {
+              name: 'STATIC_WEB_APP_ORIGIN'
+              value: 'https://${staticWebApp.properties.defaultHostname}'
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: appInsights.properties.ConnectionString
+            }
+            {
+              name: 'SQL_SERVER'
+              value: sqlServer.properties.fullyQualifiedDomainName
+            }
+            {
+              name: 'SQL_DATABASE'
+              value: sqlDatabase.name
+            }
+            {
+              name: 'SQL_MANAGED_IDENTITY_CLIENT_ID'
+              value: backendIdentity.properties.clientId
+            }
+          ]
+          // Startup applies migrations before listening and may wait for the serverless database to resume (300-second deadline).
+          probes: [
+            {
+              type: 'Startup'
+              httpGet: {
+                path: '/health'
+                port: 3000
+              }
+              initialDelaySeconds: 10
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 10
+            }
+            {
+              type: 'Liveness'
+              httpGet: {
+                path: '/health'
+                port: 3000
+              }
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+            }
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/health'
+                port: 3000
+              }
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            }
+          ]
         }
       ]
     }
@@ -476,8 +551,8 @@ resource monthlyBudget 'Microsoft.Consumption/budgets@2019-10-01' = {
   }
 }
 
-output backendAppName string = backendApp.name
-output backendFqdn string = backendApp.properties.configuration.ingress.fqdn
+output backendAppName string = deployBackendApp ? backendApp.name : ''
+output backendFqdn string = deployBackendApp ? backendApp!.properties.configuration.ingress.fqdn : ''
 output applicationInsightsConnectionString string = appInsights.properties.ConnectionString
 output containerRegistryName string = registry.name
 output containerRegistryLoginServer string = registry.properties.loginServer
@@ -490,3 +565,4 @@ output databaseName string = sqlDatabase.name
 output storageAccountName string = storage.name
 output keyVaultName string = keyVault.name
 output staticWebAppName string = staticWebApp.name
+output staticWebAppHostname string = staticWebApp.properties.defaultHostname

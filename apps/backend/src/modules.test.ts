@@ -3,7 +3,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { coreModule } from './core/index.js';
 import { factoryModule } from './factory/index.js';
-import type { JarvisTool } from './core/tool-registry.js';
+import { ToolRefusal, type JarvisTool } from './core/tool-registry.js';
 import type { BackendModule } from './modules.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -57,7 +57,9 @@ describe('backend module composition', () => {
       payload: { text: 'hello' },
     });
     expect(called.statusCode).toBe(200);
-    expect(called.json()).toEqual({ tool: 'extension_echo', outcome: 'ok', result: { text: 'hello' } });
+    expect(called.json()).toEqual({
+      tool: 'extension_echo', outcome: 'ok', result: { text: 'hello' }, confirmation: 'Done: extension_echo succeeded.',
+    });
     expect(execute).toHaveBeenCalledOnce();
     expect(record).toHaveBeenCalledWith({
       messageId: '42', tool: 'extension_echo', arguments: { text: 'hello' },
@@ -109,11 +111,50 @@ describe('backend module composition', () => {
     expect(failed.statusCode).toBe(200);
     expect(failed.json()).toEqual({
       tool: 'extension_failure', outcome: 'error', result: { error: 'Tool execution failed' },
+      confirmation: 'Not done: extension_failure failed.',
     });
     expect(record).toHaveBeenCalledWith({
       messageId: '42', tool: 'extension_failure', arguments: {}, result: { error: 'Tool execution failed' }, outcome: 'error',
     });
     expect(failed.body).not.toContain('sensitive provider detail');
+  });
+
+  it('reports a refused tool call as refused, never as done', async () => {
+    const record = vi.fn(async () => {});
+    const refusing: JarvisTool = {
+      name: 'extension_refuse', description: 'Refuses with a safe reason',
+      inputSchema: { type: 'object' },
+      execute: async () => { throw new ToolRefusal('Task T-101 is already running.'); },
+    };
+    const invalidRefusal: JarvisTool = {
+      name: 'extension_bad_refusal', description: 'Refuses without a reason',
+      inputSchema: { type: 'object' },
+      execute: async () => { throw new ToolRefusal('  '); },
+    };
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, factoryModule, extension('extension', [refusing, invalidRefusal])],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      toolCallStore: { record },
+    });
+    apps.push(app);
+
+    const refused = await app.inject({
+      method: 'POST', url: '/tools/extension_refuse', headers: { ...headers, 'x-jarvis-message-id': '42' }, payload: {},
+    });
+    expect(refused.statusCode).toBe(200);
+    expect(refused.json()).toEqual({
+      tool: 'extension_refuse', outcome: 'refused', result: { refused: 'Task T-101 is already running.' },
+      confirmation: 'Not done: extension_refuse was refused. Task T-101 is already running.',
+    });
+    expect(record).toHaveBeenCalledWith({
+      messageId: '42', tool: 'extension_refuse', arguments: {},
+      result: { refused: 'Task T-101 is already running.' }, outcome: 'refused',
+    });
+
+    const malformed = await app.inject({
+      method: 'POST', url: '/tools/extension_bad_refusal', headers: { ...headers, 'x-jarvis-message-id': '42' }, payload: {},
+    });
+    expect(malformed.json()).toMatchObject({ outcome: 'error', confirmation: 'Not done: extension_bad_refusal failed.' });
   });
 
   it('rejects malformed message IDs before executing a tool', async () => {
@@ -248,7 +289,8 @@ describe('backend module composition', () => {
   it('does not advertise unimplemented factory or core APIs or tools', async () => {
     const app = fixture([]);
     expect(app.jarvisTools.list()).toEqual([]);
-    for (const url of ['/factory/projects', '/factory/tasks', '/settings', '/activity', '/events']) {
+    expect((await app.inject({ url: '/factory/projects', headers })).statusCode).toBe(503);
+    for (const url of ['/factory/tasks', '/settings', '/activity', '/events']) {
       expect((await app.inject({ url, headers })).statusCode).toBe(404);
     }
   });

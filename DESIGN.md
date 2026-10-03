@@ -25,7 +25,7 @@ The repository `PLAN.md` status workflow is GitHub metadata; it does not add a J
 
 ## Interactions to design
 
-- **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard.
+- **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.
 - **Language toggle:** Danish ↔ English, visible wherever voice is active.
 - **Task controls:** steer, pause, resume, cancel, and recover, each with a clear pending state (for example, "Pausing…" until the turn has stopped).
 - **Sleep switch:** shows awake or asleep; refused with an explanation while tasks run.
@@ -40,10 +40,10 @@ Not chosen. Add the selected direction, reference images, and findings here.
 The temporary shell uses system typography, neutral surfaces, one content column
 and a compact Jarvis home link. It establishes responsive and keyboard behavior
 without choosing the future product identity. Canonical styles live in
-`apps/web/src/styles.css`. The home page states that sign-in and deployment are
-pending; no fake task data or unavailable controls are shown. Unknown addresses
-have a return link. A skip link and visible keyboard focus support navigation.
-Dan's page designs remain to be selected.
+`apps/web/src/styles.css`. The signed-out page states that sign-in and deployment
+are pending; no fake task data is shown. P1-07 shows unbuilt actions as explained,
+disabled controls; see below. Unknown addresses have a return link. A skip link
+and visible keyboard focus support navigation. Dan's page designs remain to be selected.
 
 ## Sign-in (P0-09)
 
@@ -52,3 +52,36 @@ sign-in action. Disable it with an explanation until the backend is configured;
 show pending and refusal feedback beside the action. After `/me` verifies the
 session, show the returned name as the page headline. Do not expose account
 tokens, email addresses, or unverified identity claims in the interface.
+
+## App shell (P1-07)
+
+The shell keeps the neutral foundation and adds structure only, without a
+visual direction. The header contains the Jarvis home link, area navigation
+(Software Factory only) and a separate Settings entry. The current page is marked with a
+surface fill and full outline, never a lone edge. Navigation appears only after
+sign-in; the header wraps on narrow screens.
+
+- **Main page:** the verified name is the headline. Conversation (chat,
+  language, voice, and persisted history) is the wide column; "Now" and Backend
+  sit beside it from 900 px and stack below it on narrower screens.
+- **Unavailable features:** each data area says what it will show. Each action
+  stays visible but disabled, and is linked to that explanation with
+  `aria-describedby`. No sample messages, tasks or states are shown.
+- **Activity panel:** Running tasks, Needs attention, Releases and deployments,
+  and Credential warnings, each with an empty state. Item titles open their
+  task, release or project. Dismiss shows "Dismissing…", keeps the item and
+  explains a failure, and returns focus to the Now heading after removal.
+- **Area pages:** the Software Factory has its own Tasks and Projects
+  navigation. Placeholder pages state that the page isn't available yet.
+  Record pages link back to their list.
+- The P1-07 shell was checked in headless Chromium at 300, 390, 768 and 1280 px
+  with a stubbed sign-in: no horizontal overflow, and controls are at least 44 px high.
+
+## Conversation history (P4-03)
+
+After sign-in, the main page shows the persisted conversation in chronological
+order across chat and voice sessions. Each message has its speaker and time;
+tool calls show the tool and outcome, with a task reference when available.
+History loads in bounded pages, with older entries requested explicitly. Loading,
+empty, and retryable failure states remain within the conversation panel. This is
+an interim implementation, not a selected visual direction.
