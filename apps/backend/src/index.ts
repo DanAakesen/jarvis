@@ -1,10 +1,15 @@
 import { buildApp } from './app.js';
+import { DefaultAzureCredential } from '@azure/identity';
 import { ConfigurationError, loadConfig } from './config.js';
 import { createLogger, createTelemetry } from './logging.js';
 import { shutdown } from './shutdown.js';
 import { loadDatabaseConfig } from './database/config.js';
 import { createDatabase, registerDatabase } from './database/lifecycle.js';
 import { createToolCallStore } from './database/tool-call-store.js';
+import { coreModule } from './core/index.js';
+import { factoryModule } from './factory/index.js';
+import type { BackendModule } from './modules.js';
+import { createVoiceLiveConnector, createVoiceRelayModule } from './voice/relay.js';
 
 try {
   const config = loadConfig();
@@ -12,7 +17,20 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  const modules: BackendModule[] = [coreModule, factoryModule];
+  if (config.voiceLiveEndpoint) {
+    const credential = new DefaultAzureCredential();
+    modules.push(createVoiceRelayModule({
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Voice identity unavailable');
+        return token.token;
+      },
+      connect: createVoiceLiveConnector(config.voiceLiveEndpoint),
+    }));
+  }
   const app = buildApp(config, logger, {
+    modules,
     ...(database ? { toolCallStore: createToolCallStore(database.pool) } : {}),
   });
   if (database) registerDatabase(app, database);

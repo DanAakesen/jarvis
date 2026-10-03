@@ -1,6 +1,7 @@
 import type { Level } from 'pino';
 import { loadAuthConfig, type AuthConfig } from './auth/config.js';
 import { ConfigurationError } from './configuration-error.js';
+import { normalizeVoiceLiveEndpoint } from './voice/relay.js';
 export { ConfigurationError } from './configuration-error.js';
 
 export interface BackendConfig {
@@ -8,6 +9,7 @@ export interface BackendConfig {
   staticWebAppOrigin?: string;
   logLevel: Level;
   applicationInsightsConnectionString?: string;
+  voiceLiveEndpoint?: string;
   auth: AuthConfig;
 }
 
@@ -53,11 +55,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     if (!valid) throw new ConfigurationError('APPLICATIONINSIGHTS_CONNECTION_STRING is invalid');
   }
 
+  let voiceLiveEndpoint: string | undefined;
+  if (env.VOICE_LIVE_ENDPOINT !== undefined) {
+    try {
+      voiceLiveEndpoint = normalizeVoiceLiveEndpoint(env.VOICE_LIVE_ENDPOINT.trim());
+    } catch {
+      throw new ConfigurationError('VOICE_LIVE_ENDPOINT must be a secure Azure Voice Live WebSocket URL');
+    }
+  }
+
   return {
     auth: loadAuthConfig(env),
     port: Number(port),
     logLevel: logLevel as Level,
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),
     ...(connectionString === undefined ? {} : { applicationInsightsConnectionString: connectionString }),
+    ...(voiceLiveEndpoint === undefined ? {} : { voiceLiveEndpoint }),
   };
 }
