@@ -242,6 +242,13 @@ authentication. P0-08 installs a root bearer-authentication hook before CORS,
 so future area routes inherit it. Only `/health` GET/HEAD and the generated CORS
 preflight route are public; explicit OPTIONS business endpoints are protected.
 
+The optional `VOICE_LIVE_ENDPOINT` enables `/voice`; it must be a secure Azure
+Voice Live WebSocket endpoint without credentials in its URL. The backend pins
+`gpt-realtime-2.1`, gets the `https://ai.azure.com/.default` token with
+`DefaultAzureCredential`, and owns session settings and tool execution. P0-11
+must configure this endpoint and provider identity before live use. Local voice
+tests use a mock WebSocket and do not verify Azure access or browser audio.
+
 Backend authentication defaults to the nonsecret identities in
 `infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and
 `ENTRA_OWNER_OBJECT_ID` may override those UUIDs at startup. The API expects an

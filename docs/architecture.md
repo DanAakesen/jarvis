@@ -384,9 +384,10 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 
 | Area | Design | Evidence |
 | --- | --- | --- |
-| Browser connection | Browser connects to the backend's authenticated `/voice` WebSocket using its delegated API token in the WebSocket subprotocol. The backend verifies it before obtaining a Voice Live-scoped bearer token and opening the upstream connection; provider credentials never enter the browser or URL. | Offline backend test forwards messages bidirectionally to a local mock WebSocket and checks authorization/log redaction. The relay module is a spike: production token-provider/endpoint wiring, browser audio, and real Voice Live interoperability are not verified. |
+| Browser connection | Browser connects to the backend's authenticated `/voice` WebSocket using its delegated API token in the WebSocket subprotocol. When `VOICE_LIVE_ENDPOINT` is configured, the backend obtains a Voice Live-scoped token with `DefaultAzureCredential`, pins the `gpt-realtime-2.1` model, and opens the upstream connection; provider credentials never enter the browser or URL. | Backend configuration and a local mock verify endpoint validation, authentication, relay, and model pinning. P0-11 must configure the endpoint and provider identity; Azure interoperability and browser audio are unverified. |
 | Danish path | Browser microphone → Voice Live voice agent (`kind: voice`) → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | 20/20 Danish commands, 4/4 status answers |
-| English path | `gpt-realtime-2.1` speech-to-speech voice agent with Ryan HD and the butler persona; tools run in the backend, which holds the voice connection | First audio ≈0.5–1.1 s |
+| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | Local mock tests verify the server-owned session update; browser audio and live Voice Live behavior remain unverified pending P0-11/P5-04. |
+| English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Voice calls are not yet persisted as messages/tool-call rows; P4-03/P5-06 own conversation and voice history. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
 | Jarvis model | `gpt-5.6-luna`, reasoning `none`, strict action rules (L16) | ≈0.003 DKK per command |
 | Voices | English: `en-GB-Ryan:DragonHDLatestNeural`. Danish: `en-US-Harper:MAI-Voice-2` locked to `da-DK` with `voice_locale`. Language toggle in the UI. | Chosen by Dan from samples |
@@ -395,7 +396,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Interruption | The client stops playback on Voice Live's `speech_started` | Detected in 0.6 s |
 | Reconnect | Reconnect automatically when the voice bridge ends | L21 |
 
-Models and voices come from the settings page, passed per session; a new voice-agent version is created only when the speech-to-text model or voice changes.
+P5-03 pins the English model and Ryan HD in the backend. P5-05 will connect language and voice selection to settings; Danish voice provisioning and history remain separate tasks.
 
 ## Identity and security
 

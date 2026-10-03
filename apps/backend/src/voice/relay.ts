@@ -58,7 +58,10 @@ export function normalizeVoiceLiveEndpoint(endpoint: string): string {
   } catch {
     throw new TypeError('Voice Live endpoint must be a valid URL');
   }
-  const credentialParameters = new Set(['authorization', 'api-key', 'subscription-key']);
+  const credentialParameters = new Set([
+    'authorization', 'api-key', 'api_key', 'subscription-key', 'subscription_key',
+    'access-token', 'access_token', 'token', 'key', 'sig', 'signature',
+  ]);
   const includesCredential = [...url.searchParams.keys()].some((parameter) => credentialParameters.has(parameter.toLowerCase()));
   const modelParameters = url.searchParams.getAll('model');
   if (url.protocol !== 'wss:' || url.port || includesCredential ||
