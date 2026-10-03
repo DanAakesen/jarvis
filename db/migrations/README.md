@@ -3,8 +3,8 @@
 Append reviewed files as `NNNN_name.sql`, for example `0001_core_tables.sql`.
 Use four unique digits and lowercase letters/underscores in the name. Each file
 is one executable SQL Server batch without `GO`, at most 1 MiB. The backend reads
-at most 1,000 migration files, in ordinal sequence order. Domain schema is issue
-#17; this directory currently contains no domain migration.
+at most 1,000 migration files, in ordinal sequence order. Domain schema is P1-01
+(#15); this directory currently contains no domain migration.
 
 Startup acquires transaction-owned `jarvis.schema-migrations`, creates the
 `dbo.schema_migrations` ledger and validates applied names/checksums against an

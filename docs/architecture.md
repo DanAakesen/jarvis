@@ -124,7 +124,8 @@ applied checksum prefix and applies all pending batches plus ledger entries in
 one transaction. Rollback preserves both data and migration history. No recurring
 migration or readiness queries run while idle; pool minimum is zero and
 `validateConnection=socket` avoids validation queries. The production image
-includes the same migration directory. Business tables are still issue #17.
+includes the same migration directory. P1-01 (#15) owns the group-one
+`tool_calls` table required by the tool dispatcher; the migration is still pending.
 
 Real managed-identity token exchange and migrations in a deployed Azure revision
 remain issue #11. See the [database guide](../apps/backend/src/database/README.md)
@@ -141,14 +142,20 @@ the complete composition. A new area contributes routes and tools through this
 contract without changing `core`. Readiness awaits async module registration and
 refuses a failed plugin; Fastify owns plugin close hooks.
 
-Core owns the health route and a per-app internal Jarvis tool catalogue; settings,
+Core owns the health route, tool catalogue and HTTP dispatcher; settings,
 activity, persisted events and the SSE hub remain their later tasks. Factory's
 registration boundary owns future projects/tasks APIs and tools; it contributes
 none until those operations are implemented. The catalogue rejects duplicate
 module/tool identities, snapshots frozen schemas and exposes read-only descriptors
-with ownership and handlers. There is no public tool dispatcher: future dispatch
-must authenticate/authorize, validate inputs and bound execution. Existing Foundry
-client, health/security/logging and process shutdown behavior are preserved.
+with ownership and handlers. Authenticated `GET /tools` exposes every descriptor's
+name, description and input schema. The core registers a schema-validated
+`POST /tools/{name}` for every tool at composition time, passes the request and
+cancellation signal to its handler, then writes the arguments, result and outcome
+to `tool_calls` using the process-owned SQL pool. Calls require
+`X-Jarvis-Message-ID`; absent persistence returns 503 before tool execution. The
+routes inherit the existing delegated-user policy; a Jarvis service-identity
+policy remains separate. Existing Foundry client, health/security/logging and
+process shutdown behavior are preserved.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
 
