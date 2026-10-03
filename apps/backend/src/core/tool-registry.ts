@@ -8,6 +8,19 @@ export interface JarvisTool {
   readonly execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) => Promise<unknown>;
 }
 
+/**
+ * Thrown by a tool that deliberately declines an action. The reason is shown to
+ * Dan, so it must be safe to expose; any other thrown error is reported as a failure.
+ */
+export class ToolRefusal extends Error {
+  constructor(reason: string) {
+    const trimmed = typeof reason === 'string' ? reason.trim() : '';
+    if (!trimmed || trimmed.length > 500) throw new TypeError('Invalid tool refusal reason');
+    super(trimmed);
+    this.name = 'ToolRefusal';
+  }
+}
+
 export interface RegisteredTool extends JarvisTool {
   readonly moduleId: string;
 }
