@@ -60,7 +60,10 @@ jobs:
       - name: Backfill
         if: github.event_name == 'workflow_dispatch'
         run: |
-          for n in $(gh issue list --repo "$REPO" --state open --assignee Copilot --limit 200 --json number --jq '.[].number'); do
+          # gh issue list --assignee can't filter on the Copilot bot, so filter the REST list instead.
+          assigned=$(gh api "repos/$REPO/issues?state=open&per_page=100" --paginate \
+            --jq '.[] | select(.pull_request == null and any(.assignees[]; .login == "Copilot")) | .number')
+          for n in $assigned; do
             gh issue edit "$n" --repo "$REPO" --add-label Copilot && echo "Labelled #$n (assigned)"
           done
           gh pr list --repo "$REPO" --state open --author app/copilot-swe-agent --limit 100 --json body --jq '.[].body' \
