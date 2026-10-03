@@ -120,7 +120,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 | Data points | Actions |
 | --- | --- |
-| Conversation: messages (Dan, Jarvis), time, language, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
+| Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
 | Voice state: listening, thinking, speaking; what Jarvis heard; latency | Interrupt by speaking; mute |
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake or asleep | Sleep switch (refused while tasks run) |

@@ -42,7 +42,9 @@ export function App({ config = __JARVIS_CONFIG__ }: { config?: PublicConfig }) {
     <Routes>
       <Route element={<Shell signedIn={signedIn} />}>
         <Route element={<RequireSignIn session={session} />}>
-          <Route index element={<JarvisPage name={session.profile?.name ?? ''} />} />
+          <Route index element={
+            <JarvisPage name={session.profile?.name ?? ''} client={session.client} config={config} />
+          } />
           {areas.map(({ id, path, Component }) => (
             <Route key={id} path={`${path}/*`} element={<Component />} />
           ))}

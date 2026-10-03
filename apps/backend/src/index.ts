@@ -5,6 +5,7 @@ import { shutdown } from './shutdown.js';
 import { loadDatabaseConfig } from './database/config.js';
 import { createDatabase, registerDatabase } from './database/lifecycle.js';
 import { createToolCallStore } from './database/tool-call-store.js';
+import { createConversationStore } from './database/conversation-store.js';
 
 try {
   const config = loadConfig();
@@ -13,7 +14,10 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const app = buildApp(config, logger, {
-    ...(database ? { toolCallStore: createToolCallStore(database.pool) } : {}),
+    ...(database ? {
+      toolCallStore: createToolCallStore(database.pool),
+      conversationStore: createConversationStore(database.pool),
+    } : {}),
   });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
