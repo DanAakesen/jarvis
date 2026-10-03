@@ -53,6 +53,14 @@ CODEX_RENEW_MIN_DAYS_LEFT = 3.0
 # through its own client (codex-rs login/src/auth/manager.rs).
 CODEX_RENEW_ACCESS_TOKEN_MARKER = "jarvis-renew-required"
 CODEX_CONFIG = 'cli_auth_credentials_store = "file"\n'
+TASK_DELIVERY_INSTRUCTIONS = (
+    "Keep your work on the existing task branch. To limit work lost in a sandbox crash, "
+    "after each meaningful work step create a small commit and push it to that branch, "
+    "small enough for another agent to resume from. Never force-push or push to main. "
+    "Use the runner's configured Git credentials without exposing or persisting them. "
+    "Before finishing, push remaining commits and report their commit IDs; explicitly "
+    "report any commit or push failure."
+)
 _LAST_REFRESH = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$")
 
 
@@ -571,7 +579,12 @@ class ACPClient:
             "session/prompt",
             {
                 "sessionId": self.acp_session_id,
-                "prompt": [{"type": "text", "text": prompt}],
+                "prompt": [
+                    {
+                        "type": "text",
+                        "text": f"{TASK_DELIVERY_INSTRUCTIONS}\n\n{prompt}",
+                    }
+                ],
             },
         )
         return {"acp_session_id": self.acp_session_id, "response": result}

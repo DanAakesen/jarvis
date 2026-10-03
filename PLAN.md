@@ -4,11 +4,11 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **Active phase:** P0. P0-01, P0-02 and P0-03 are merged. P0-03 provides the backend health endpoint, safe structured logs, offline tests and production container checks. P0-04 and P0-05 provide the locally checked core and Foundry Bicep templates; P0-06 completed the bootstrap. P2-02 remains in progress; P2-04's backend Foundry client and offline recorded-handler contracts are complete. P0-14 adds the Copilot and Codex cloud environment setup; the Codex run is P0-15. P3-01's registration manifest and secure setup guide are complete; live GitHub and Key Vault setup is tracked separately by P3-10. Azure deployment remains P0-11.
-- **Next step:** Implement P0-12 (automatic merges) and P0-13 (automatic statuses), now that P0-10's aggregate `CI` workflow provides a single `CI result` check. Required checks on `main` wait for GitHub Pro. Until then Dan starts tasks and merges green PRs, or explicitly authorizes Codex to merge them. Issue #30's live Azure validation remains #11 and end-to-end task controls #33.
-- **Blockers:** No production backend URL exists yet; P0-11 must record it in `apps/web/config.json`. P0-11 must also persist and supply `foundryNameTimestamp` on redeployments. These do not block opening the skeleton. P3-10's live installation and Key Vault storage await Dan and the P0-11 deployment; webhook delivery also needs the P3-03 receiver. Items marked **Confirm** or **Verify** block only the tasks that depend on them.
+- **Active phase:** P0. P0-01, P0-02 and P0-03 are merged. P0-03 provides the backend health endpoint, safe structured logs, offline tests and production container checks. P0-04 and P0-05 provide the locally checked core and Foundry Bicep templates; P0-06 completed the bootstrap. P2-02 and P2-04 are merged with offline runner and backend Foundry contracts; live sandbox acceptance still awaits P0-11. P1-02 provides backend module composition and the internal tool catalogue; domain APIs, event persistence and SSE remain later P1 tasks. P0-14 adds the Copilot and Codex cloud environment setup; the Codex run is P0-15. P3-01's registration settings and secure setup guide are complete; Dan registered and installed the App on 3 October 2026, and its private key and Key Vault storage are P3-10, after P0-11. Azure deployment remains P0-11.
+- **Next step:** P0-10 provides the aggregate `CI` workflow (`CI result` is the single check for `main` and P0-12). Database access (P0-07) and authentication (P0-08) are running in parallel; database/schema work gates the projects/tasks APIs. P0-13 can follow CI; P0-12 also needs deployment P0-11. Required checks on `main` wait for GitHub Pro. Until then Dan starts tasks and merges green PRs, or explicitly authorizes Codex to merge them. Issue #30's live Azure validation remains #11 and end-to-end task controls #33.
+- **Blockers:** No production backend URL exists yet; P0-11 must record it in `apps/web/config.json`. P0-11 must also persist and supply `foundryNameTimestamp` on redeployments. These do not block opening the skeleton. P3-10's private key and Key Vault storage await the P0-11 deployment (the App is already registered and installed); webhook delivery also needs the P3-03 receiver. Items marked **Confirm** or **Verify** block only the tasks that depend on them.
 
-- **Runner (#28):** production port and main-only deployment are implemented in its PR. Live ACR/Foundry/Key Vault acceptance awaits #11; set `JARVIS_INFRA_DEPLOYMENT_NAME` after the successful infrastructure deployment and run Runner deploy from `main`.
+- **Runner (#28):** production port and main-only deployment are implemented in its PR. Live ACR/Foundry/Key Vault acceptance awaits #11; set `JARVIS_INFRA_DEPLOYMENT_NAME` after the successful infrastructure deployment and run Runner deploy from `main`. P2-09 adds per-turn frequent-push instructions with offline coverage; live intermediate-commit acceptance remains with P2-07.
 
 ## Implementation phases
 
@@ -39,7 +39,7 @@ flowchart LR
 
 ### Ground rules for every task
 
-- **Source of truth:** [PRODUCT.md](PRODUCT.md) for requirements, [docs/decisions.md](docs/decisions.md) for decisions and learnings (L1–L35), [docs/architecture.md](docs/architecture.md) for the system. They win over anything a task implies; a task that conflicts with them stops and asks.
+- **Source of truth:** [PRODUCT.md](PRODUCT.md) for requirements, [docs/decisions.md](docs/decisions.md) for decisions and learnings (L1–L36), [docs/architecture.md](docs/architecture.md) for the system. They win over anything a task implies; a task that conflicts with them stops and asks.
 - **Workflow:** every agent follows the [development workflow](docs/agent-context.md#development-workflow): remote only, one PR per task, statuses on `main`, never start from a broken `main`.
 - **Definition of done:** code, tests for changed behaviour, lint clean, every document in the [finish table](docs/agent-context.md#finish-a-task) updated, merged automatically through a PR whose checks pass against the latest `main`, deployed by GitHub Actions. No manual portal changes.
 - **Secrets:** none in code, images, environment variables, or logs. Managed identities and Key Vault only ([sandbox credentials](docs/architecture.md#sandbox-credentials)).
@@ -86,7 +86,7 @@ Goal: the Jarvis app shell, projects and tasks in SQL, and live updates on the b
 | ID | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- |
 | P1-01 | Migrations for data-model groups 1–3: `settings`, `jarvis_sessions`, `messages`, `tool_calls`, `activity`, `projects`, `tasks`, `task_events` (columns, constraints, indexes as in the data model) | Migration up/down works against the CI container; applied in production by the next deploy | P0-07 | Not started |
-| P1-02 | Backend module structure: `core` (settings, activity, events, SSE hub, tool registry) and `factory` (projects, tasks); each module registers routes and Jarvis tools | Adding a module needs no change in `core` | P0-03 | Not started |
+| P1-02 | Backend module structure: `core` (settings, activity, events, SSE hub, tool registry) and `factory` (projects, tasks); each module registers routes and Jarvis tools | Adding a module needs no change in `core` | P0-03 | Complete |
 | P1-03 | Projects API: list, create, update, archive; validation of `repo`, `policy`, `sandbox_size`, `tech`, `max_parallel_tasks` | Tests for each rule | P1-01, P1-02 | Not started |
 | P1-04 | Tasks API: create (from board), list with filters, get with events; [task lifecycle](PRODUCT.md#task-lifecycle) enforced server-side | Illegal transitions rejected; tests for every transition | P1-01, P1-02 | Not started |
 | P1-05 | Event pipeline: every state change and event writes `task_events` and `activity`, and is published on the SSE hub | An event reaches a connected client in under 1 s | P1-04 | Not started |
@@ -110,9 +110,9 @@ Goal: real coding tasks run in Foundry sandboxes, controlled from the board.
 | P2-04 | Backend Foundry client: start task, steer, pause, resume, cancel, status, delete session; separate admin and runtime endpoints (L10) | Contract tests against recorded responses | P0-05 | Complete |
 | P2-05 | Dispatcher: picks Ready tasks within global and project limits using the lease columns; starts a sandbox; retries with `attempt_count`/`next_attempt_at`; then NeedsAttention | Two dispatcher instances never start the same task (test); no SQL queries while no task is Ready, Running or waiting for a retry, so the database can pause (test) | P2-04, P1-04 | Not started |
 | P2-06 | Sandbox heartbeat: about once a minute per running session; updates `last_heartbeat_at`; crash rule from L22 (HTTP 424/404/5xx on two polls or 30 s → NeedsAttention); event gaps alone never trigger it | Rule unit-tested with recorded responses | P2-04, P2-01 | Not started |
-| P2-07 | Task controls on the board: steer (text), pause, resume, cancel; buttons follow the state machine | End-to-end with both agents on a private test repository `DanAakesen/jarvis-test-target` (created with `gh`) | P2-04, P1-09 | Not started |
-| P2-08 | Credentials for the sandbox: Copilot token and Codex login from Key Vault ([Codex login rules](docs/architecture.md#sandbox-credentials)); `credential_status` dates; daily Codex renewal job (renews at ≤3 days, never while a Codex task runs) | Renewal job proven once; dates on the board | P2-02 | Not started |
-| P2-09 | Frequent pushes: instructions to the agent to commit and push work-in-progress to the task branch after each meaningful step | Branch shows intermediate commits on a test task | P2-02 | Not started |
+| P2-07 | Task controls on the board: steer (text), pause, resume, cancel; buttons follow the state machine | End-to-end with both agents on a private test repository `DanAakesen/jarvis-test-target` (created with `gh`); the task branch shows intermediate commits | P2-04, P1-09 | Not started |
+| P2-08 | Credentials for the sandbox: Copilot token and Codex login from Key Vault ([Codex login rules](docs/architecture.md#sandbox-credentials)); `credential_status` dates; daily Codex renewal job (renews at ≤3 days, never while a Codex task runs) | Renewal job proven once; dates on the board | P2-02, P2-01 | Not started |
+| P2-09 | Frequent pushes: instructions to the agent to commit and push work-in-progress to the task branch after each meaningful step | Offline tests verify instructions reach new, resumed, and recovered agent prompts; live task-branch acceptance is checked in P2-07 | P2-02 | Complete |
 | P2-10 | Crash recovery: on NeedsAttention after a crash, "Recover" starts a new session from the task branch with the task, its steering and a summary of its events; `completed` is accepted only when the branch and PR exist on GitHub (L22) | Forced-crash test recovers to a PR | P2-06, P2-09, P3-03 | Not started |
 | P2-11 | Model and reasoning per task: runner passes the model (and reasoning effort for Codex) from settings or task overrides | **Verify** Codex (`codex-acp`) and Copilot CLI options first; record what works in [docs/decisions.md](docs/decisions.md) | P2-02, P1-11 | Not started |
 | P2-12 | Usage: migration for group 7 (`usage`); sandbox minutes and DKK per session; Codex/Copilot turns and any reported tokens or premium requests | **Verify** what each agent reports; usage visible per task | P2-03, P2-01 | Not started |
@@ -132,7 +132,7 @@ Goal: PR checks in GitHub Actions drive the task, merges follow the project poli
 | P3-07 | Release records: one release per merge to `main`; workflow runs and deployments linked by SHA | Release view data correct for a test project | P3-04 | Not started |
 | P3-08 | Release view per project: list of releases with runs and deployments; horizontal git graph (branches as lines, commits as dots) from the GitHub API on demand, coloured by PR, checks, release and deployment state | Matches the [page requirements](PRODUCT.md#page-requirements) | P3-07, P1-07 | Not started |
 | P3-09 | Template GitHub Actions workflows for managed projects: PR checks (full build and tests) and release (build, test, deploy with OIDC) | A new project can adopt them in one PR | P3-01 | Not started |
-| P3-10 | Dan's live GitHub App setup: register from the P3-01 settings, install only on selected repositories, and store the private key in the deployed Key Vault | App installation is limited to Dan-selected repositories; Key Vault has the private-key secret; only the backend identity can read it | P0-11, P3-01 | Not started |
+| P3-10 | Dan's live GitHub App setup: register from the P3-01 settings and install only on selected repositories (done 3 October 2026); after P0-11, generate the private key and store it in the deployed Key Vault | App installation is limited to Dan-selected repositories; Key Vault has the private-key secret; only the backend identity can read it | P0-11, P3-01 | In progress |
 
 ### P4 — Jarvis in chat
 
@@ -171,10 +171,10 @@ Goal: Jarvis runs reliably and transparently day to day.
 | P6-01 | Usage and cost views per task, project and period (DKK where billed; usage only for Codex and Copilot) | Matches the [page requirements](PRODUCT.md#page-requirements) | P2-12 | Not started |
 | P6-02 | Alerts: failed deployments, sandbox crashes, credential expiry, budget 80 % | Each alert fires once in a test | P2-06, P2-08, P3-07 | Not started |
 | P6-03 | Archive `task_events` by age to Blob; restore on demand for the task detail page | Archive and restore tested | P1-05 | Not started |
-| P6-04 | Database backup and restore drill | Restore of `jarvis` to a temporary database documented | P0-04 | Not started |
+| P6-04 | Database backup and restore drill | Restore of `jarvis` to a temporary database documented | P0-04, P0-11 | Not started |
 | P6-05 | Parallel load test: several tasks across projects, both agents; watch Codex Pro limits | Results recorded in [docs/decisions.md](docs/decisions.md) | P2-05 | Not started |
 | P6-06 | Runbook in the repository: deploy, rollback, rotate GitHub App key, re-seed Codex login, recover a crashed task, sleep switch | Runbook reviewed by Dan | P2-10, P3-10 | Not started |
-| P6-07 | Ask Microsoft whether sandboxes can get the documented 20 GiB disk; if not, decide on Container Apps Jobs for heavy projects | Answer and decision in [docs/decisions.md](docs/decisions.md) | — | Not started |
+| P6-07 | Disk headroom: at session start the runner records total and free disk of the writable filesystem as a task event; when free disk drops below 1 GiB during a task, the runner reports it and the task moves to Needs attention with reason `disk_low` instead of failing in a build. Uses the documented budget (up to 20 GiB at ≥1 vCPU, about 20 % reserved) and the measured 6 GiB as the planning value | Disk figures visible on the task detail page; the low-disk path tested with a fake filesystem reading; the threshold is a setting | P2-03 | Not started |
 
 ### Out of scope for phase 1
 
@@ -200,7 +200,7 @@ Everything else is scripted with `az` and `gh`, or runs in GitHub Actions. `infr
 | Optional, now | Upgrade to GitHub Pro (https://github.com/account/upgrade) for required checks and 3,000 Actions minutes | Billing |
 | During P2-08 | `codex login` in the Jarvis-only folder (`CODEX_HOME=.secrets\codex-jarvis`, Codex 0.157.0) | ChatGPT sign-in in the browser |
 | During P2-08 | Create the Copilot fine-grained token (Copilot Requests only) | Fine-grained tokens can't be created by API |
-| During P3-10 | Follow the [GitHub App setup checklist](docs/agent-context.md#github-app-setup): register the App from the prepared settings, install only on selected repositories, and import its private key into the deployed Key Vault | GitHub requires browser confirmation; key import needs Dan's Azure access; wait for P0-11, and configure webhooks after P3-03 |
+| During P3-10 | Follow the [GitHub App setup checklist](docs/agent-context.md#github-app-setup): register the App from the prepared settings and install only on selected repositories (done 3 October 2026); after P0-11, generate its private key and import it into the deployed Key Vault | GitHub requires browser confirmation; key import needs Dan's Azure access; wait for P0-11, and configure webhooks after P3-03 |
 | During P5-07 | Live voice test in Danish and English | Needs Dan's voice and judgement |
 
 ## Ideas

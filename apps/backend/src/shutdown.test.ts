@@ -13,9 +13,9 @@ function fixture() {
 describe('graceful shutdown', () => {
   it('closes the server before flushing and disposing telemetry', async () => {
     const app = fixture();
-    await app.ready();
     const events: string[] = [];
     app.addHook('onClose', async () => { events.push('closed'); });
+    await app.ready();
     const sink = { trackTrace: vi.fn(), flush: vi.fn(async () => { events.push('flushed'); }), shutdown: vi.fn(async () => { events.push('disposed'); }) };
     await shutdown(app, sink);
     expect(events).toEqual(['closed', 'flushed', 'disposed']);
