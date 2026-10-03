@@ -261,7 +261,7 @@ describe('Jarvis agent identity on the tool routes', () => {
       method: 'POST', url: '/tools/extension_echo', headers: { authorization, 'x-jarvis-message-id': '42' }, payload: { text: 'hej' },
     });
     expect(called.statusCode).toBe(200);
-    expect(called.json()).toEqual({ tool: 'extension_echo', outcome: 'ok', result: { text: 'hej' } });
+    expect(called.json()).toEqual({ tool: 'extension_echo', outcome: 'ok', result: { text: 'hej' }, confirmation: 'Done: extension_echo succeeded.' });
     expect(record).toHaveBeenCalledWith({ messageId: '42', tool: 'extension_echo', arguments: { text: 'hej' }, result: { text: 'hej' }, outcome: 'ok' });
     expect(seen).toEqual([{ principal: null, agent: { kind: 'jarvis-agent', objectId: agentObjectId, tenantId: config.auth.tenantId } }]);
   });
