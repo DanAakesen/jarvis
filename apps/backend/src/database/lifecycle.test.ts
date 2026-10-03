@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pino from 'pino';
 import { buildApp } from '../app.js';
+import { loadConfig } from '../config.js';
 import { createDatabase, registerDatabase } from './lifecycle.js';
 
 const mocks = vi.hoisted(() => ({
@@ -22,7 +23,7 @@ function deferred() {
   const promise = new Promise<void>((done) => { resolve = done; });
   return { promise, resolve };
 }
-function app() { return buildApp({ port: 3000, logLevel: 'silent' }, pino({ level: 'silent' })); }
+function app() { return buildApp(loadConfig({}), pino({ level: 'silent' })); }
 
 describe('database startup ownership', () => {
   it('awaits initialization outside Fastify ready hooks and closes resources once', async () => {
