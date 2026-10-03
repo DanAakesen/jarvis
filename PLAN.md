@@ -173,7 +173,7 @@ Goal: Jarvis runs reliably and transparently day to day.
 | P6-04 | Database backup and restore drill | Restore of `jarvis` to a temporary database documented | P0-04 | Not started |
 | P6-05 | Parallel load test: several tasks across projects, both agents; watch Codex Pro limits | Results recorded in [docs/decisions.md](docs/decisions.md) | P2-05 | Not started |
 | P6-06 | Runbook in the repository: deploy, rollback, rotate GitHub App key, re-seed Codex login, recover a crashed task, sleep switch | Runbook reviewed by Dan | P2-10, P3-01 | Not started |
-| P6-07 | Ask Microsoft whether sandboxes can get the documented 20 GiB disk; if not, decide on Container Apps Jobs for heavy projects | Answer and decision in [docs/decisions.md](docs/decisions.md) | — | Not started |
+| P6-07 | Disk headroom: at session start the runner records total and free disk of the writable filesystem as a task event; when free disk drops below 1 GiB during a task, the runner reports it and the task moves to Needs attention with reason `disk_low` instead of failing in a build. Uses the documented budget (up to 20 GiB at ≥1 vCPU, about 20 % reserved) and the measured 6 GiB as the planning value | Disk figures visible on the task detail page; the low-disk path tested with a fake filesystem reading; the threshold is a setting | P2-03 | Not started |
 
 ### Out of scope for phase 1
 
