@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import type { AuthConfig } from './config.js';
 
-export interface UserPrincipal { objectId: string; tenantId: string }
+export interface UserPrincipal { objectId: string; tenantId: string; displayName: string }
 export type TokenVerifier = (token: string) => Promise<UserPrincipal>;
 export class AuthenticationDenied extends Error {
   constructor(public readonly statusCode: 401 | 403) { super('Authentication denied'); }
@@ -32,6 +32,17 @@ export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey):
       !payload.scp.split(' ').includes('access_as_user')) {
       throw new AuthenticationDenied(403);
     }
-    return { objectId: payload.oid.toLowerCase(), tenantId: config.tenantId };
+    const displayName = payload.name;
+    return {
+      objectId: payload.oid.toLowerCase(),
+      tenantId: config.tenantId,
+      displayName: typeof displayName === 'string' && displayName.trim().length > 0 &&
+        displayName.length <= 200 && !Array.from(displayName).some((character) => {
+          const code = character.charCodeAt(0);
+          return code < 32 || code === 127;
+        })
+        ? displayName.trim()
+        : 'Dan',
+    };
   };
 }

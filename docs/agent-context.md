@@ -51,11 +51,21 @@ Every coding agent on this repository follows these rules. This project requires
 
 ### Task board
 
-The GitHub project is managed manually. The separate `Project board` workflow
-was disabled and removed at Dan's request, along with its script and token setup
-instructions. Issue worker labels and `PLAN.md` statuses continue to be maintained
-by the existing Worker label and Plan status workflows; neither accesses the
-project board. Do not restore board automation without Dan's instruction.
+Dan follows the work on the [Project Jarvis board](https://github.com/users/DanAakesen/projects/2). Every open issue is on it. [`project_board.py`](../.github/scripts/project_board.py) sets its Status column; nobody moves cards by hand, because the next sync moves them back.
+
+| Column | Meaning (open issues) |
+| --- | --- |
+| **Backlog** | Blocked: at least one issue it depends on is still open. |
+| **Ready** | Not blocked, no worker label, no open linked PR: any worker may claim it. |
+| **In progress** | Has a worker label, or an open draft PR with `Fixes #<issue>`. |
+| **In review** | Has an open PR with `Fixes #<issue>` that is ready for review: waiting for checks and merge. |
+| **Done** | Issue closed (the project's built-in "Item closed" workflow). |
+
+- The rules are in `project_board.py` and its tests. Ready on the board is the same as **ready** above.
+- **Who syncs:** [`project-board.yml`](../.github/workflows/project-board.yml), in the cloud. It reconciles every open issue on issue open/close/reopen/label/unlabel, PR open/close/reopen/ready/draft/edit, after each **Plan status** run, daily at 05:17 UTC, and on `workflow_dispatch`. It adds missing issues and writes only cards whose column changed. It uses `pull_request_target`, so PRs with merge conflicts still sync (L38), and never checks out PR code. Nobody needs to ask an agent.
+- **Token:** projects owned by a personal account can only be edited with a classic token (`repo` scope); GitHub Actions tokens, GitHub Apps, and fine-grained tokens can't. The token is the `PROJECT_TOKEN` secret of the `project-board` environment, which only `main` may use (deployment branch policy), so workflows on agent PR branches can't read it. Verified on 3 October 2026: a workflow on a test branch was rejected with "Branch is not allowed to deploy to project-board". Without the secret, a run only warns.
+- Manual run, for example to test: `DRY_RUN=1` lists the moves without writing; see the environment variables in the workflow.
+- The project's built-in workflows may set a column first (item added, PR linked, PR merged); the sync runs seconds later and sets the final one. Built-in "Item closed" moves closed issues to Done.
 
 ### Start a task
 
@@ -88,18 +98,18 @@ Before marking the PR ready, update the repository in the same PR so the next ag
 | Settled a visual direction or found a UI issue | [DESIGN.md](../DESIGN.md) |
 | Found work outside the task | `PLAN.md`: a new task (next free ID in its phase, Depends on filled in, Not started) or an entry under Ideas. Update the Depends on column of any task this changes. Never drop it silently. |
 
-The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; the merge workflow never merges a draft.
+The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; never merge a draft.
 
 Every task issue ends with the same "Before you start" and "Definition of done" checklist that summarises these rules. New task issues get it too.
 
 ### Merge
 
-- **No manual approval.** The merge workflow (P0-12) squash-merges a PR when it is ready (not a draft; see Copilot drafts below), no agent is still working on it, its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the workflow updates it and waits for the checks again, so every merge is tested against the current `main`.
-- **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, the merge workflow merges only `fix-main:` PRs until `main` is green again.
+- **Coordinator removed.** Dan or an explicitly authorized agent squash-merges a PR when it is ready (not a draft; see Copilot drafts below), no agent is still working on it, its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the authorized worker updates it and waits for the checks again, so every merge is tested against the current `main`.
+- **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, merge only `fix-main:` PRs until `main` is green again.
 - **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, also after follow-up rounds and while the PR has merge conflicts (L
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
-- The periodic PR coordinator for #12 is `.github/workflows/coordinator.yml`. It is **disabled in GitHub** at Dan's request as of 3 October 2026. Project-board automation and automatic issue assignment have been removed; there is no Projects-secret setup step. See [GitHub coordinator](github-coordinator.md) for the remaining PR maintenance behavior. Do not re-enable the workflow without Dan's instruction. Deployment integration remains #11.
+- The Jarvis coordinator for #12 is removed at Dan's request. It no longer assigns issues, merges PRs or requests conflict repairs. The separate Project board sync and its `project-board` environment remain. Dan merges green PRs or explicitly instructs an agent to merge them. Deployment integration remains #11.
 ## Azure
 
 | Item | Value |
@@ -205,9 +215,12 @@ Verified in Codex cloud for P0-02:
 
 The web starts with the bootstrap identities and the public production backend
 origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). The URL
-is pending P0-11's first deployment; opening the skeleton needs no extra setup.
-Sign-in and authenticated API calls remain P0-09. `Web CI` checks lint, tests,
-and root builds as part of the aggregate `CI` workflow (below).
+is pending P0-11's first deployment; until configured, sign-in is visibly
+disabled. With a backend URL, MSAL signs in against the configured tenant and
+calls authenticated `/me`; only the backend-approved display name is shown.
+`Web CI` checks lint, tests, and root builds as part of the aggregate `CI`
+workflow (below). Local tests use signed fixture tokens and do not verify a live
+Entra tenant or Azure deployment.
 
 Backend commands implemented in P0-03:
 
@@ -320,14 +333,14 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
 | Item | Detail |
 | --- | --- |
-| Triggers | Every `pull_request`, `push` to `main`, and `workflow_dispatch` (P0-12 starts it on `main` after a merge) |
+| Triggers | Every `pull_request`, `push` to `main`, and `workflow_dispatch` for manual verification |
 | Jobs | `Web`, `Backend` (lint, tests, build, container smoke), `Database` (isolated SQL Server contracts), `Foundry` and `Runner` (base and .NET images, packaged CLI and HTTP smoke) call the reusable `web-ci.yml`, `backend-ci.yml`, `database-ci.yml`, `foundry-contract.yml` and `runner-ci.yml`; `Python lint, test and build` (runner lint and tests moved here from `runner-ci.yml`); `CI result` |
-| Gate | `CI result` fails unless every other job succeeded. It is the check to require on `main` and for P0-12 `workflow_run` |
+| Gate | `CI result` fails unless every other job succeeded. It is the check to require on `main` and inspect before merging a PR |
 | Python | `bash .github/scripts/python-ci.sh [dir ...]` (default `runner agents/jarvis`). A component with `pyproject.toml` must have a hash-pinned `requirements-dev.txt` with ruff and pytest; each gets its own venv, `ruff check`, `pytest -q` and `compileall`. A component without `pyproject.toml` is reported as skipped (notice and step summary), not passed |
 | Local workflow lint (verified for P0-10) | `go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7`, then `~/go/bin/actionlint` from the repository root. It passes for the CI files; it reports existing findings in `runner-ci.yml` (SC2034 warning) and `runner-deploy.yml` (an unquoted ` #11` ends the `prerequisite` step's YAML scalar, so that job failed on `main` at 290195b; needs a `fix-main:` PR) |
 
 - Add a new component workflow as `on: workflow_call`, call it from `ci.yml`, and add it to `CI result`'s `needs`, so it runs once per PR and the gate covers it.
-- Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then P0-12 must read the `CI` run result itself.
+- Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then Dan or the authorized merging agent must read the `CI` run result itself.
 
 Plan status, `.github/workflows/plan-status.yml`:
 
@@ -395,7 +408,7 @@ Python checks use each package's `.venv`. For the runner, from `runner/`:
 
 ## Release procedure
 
-- Every change reaches `main` through a PR merged by the merge workflow (see [Merge](#merge)). A merge deploys infrastructure, backend, and web; the backend applies migrations at startup.
+- Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge deploys infrastructure, backend, and web; the backend applies migrations at startup.
 - No manual portal changes.
 
 ## Documentation rules

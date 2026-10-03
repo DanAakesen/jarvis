@@ -44,7 +44,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 | **Project settings** | Per project: how far agents may go (deliver a PR, or complete without deployment), merge rules, sandbox size. |
 | **Settings** | A settings page controls models and reasoning for Jarvis (voice and chat) and for the coding agents; nothing is hard-coded. |
 | **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. |
-| **Sign-in** | Built-in Azure sign-in with Dan's Microsoft account (Entra ID); only Dan's account is allowed. No passwords in Jarvis. |
+| **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Memory** | One continuous conversation will need compaction and memory over time; the memory design is deferred. |
 

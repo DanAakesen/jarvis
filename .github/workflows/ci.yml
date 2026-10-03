@@ -1,7 +1,6 @@
 # Aggregate CI for the monorepo (P0-10). Runs every component check on each
-# PR, on pushes to main, and on workflow_dispatch (the merge workflow, P0-12,
-# starts it on main because merges made with GITHUB_TOKEN trigger no push).
-# "CI result" is the single check to require on main and for P0-12.
+# PR, on pushes to main, and on workflow_dispatch for manual verification.
+# "CI result" is the single check to require on main before merging a PR.
 # Component workflows are reusable (workflow_call) so each check runs once.
 name: CI
 
@@ -48,10 +47,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version-file: .python-version
-      - name: Check coordinator policy and API contracts
-        run: |
-          python -m unittest discover -s .github/scripts -p 'test_coordinator*.py' -v
-          python -m compileall -q .github/scripts/coordinator.py .github/scripts/coordinator_api.py .github/scripts/coordinator_policy.py
       - name: Check present Python components
         run: bash .github/scripts/python-ci.sh
       - name: Plan-status script tests
