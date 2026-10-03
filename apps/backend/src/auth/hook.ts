@@ -1,14 +1,17 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { localWebOrigin, type BackendConfig } from '../config.js';
-import { AuthenticationDenied, createTokenVerifier, type TokenVerifier, type UserPrincipal } from './verify.js';
+import { AuthenticationDenied, createTokenVerifier, isAgentPrincipal, type AgentPrincipal, type TokenVerifier, type UserPrincipal } from './verify.js';
 
 declare module 'fastify' {
-  interface FastifyRequest { principal: UserPrincipal | null }
+  interface FastifyRequest { principal: UserPrincipal | null; agentPrincipal: AgentPrincipal | null }
+  // Routes the hosted Jarvis agent identity may call. Everything else is Dan-only.
+  interface FastifyContextConfig { jarvisAgent?: boolean }
 }
 
 export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth)) {
   app.decorateRequest('principal', null);
+  app.decorateRequest('agentPrincipal', null);
   app.addHook('onRequest', async (request, reply) => {
     if (request.routeOptions.url === '/health' && ['GET', 'HEAD'].includes(request.method)) return;
     // Only the CORS plugin's generated OPTIONS route may run without a token.
@@ -22,7 +25,13 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
     const match = typeof header === 'string' && header.length <= 16_384 ? /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/i.exec(header) : null;
     try {
       if (duplicate || !match) throw new AuthenticationDenied(401);
-      request.principal = await verify(match[1]!);
+      const principal = await verify(match[1]!);
+      if (isAgentPrincipal(principal)) {
+        if (request.routeOptions.config?.jarvisAgent !== true) throw new AuthenticationDenied(403);
+        request.agentPrincipal = principal;
+      } else {
+        request.principal = principal;
+      }
     } catch (error) {
       const statusCode = error instanceof AuthenticationDenied ? error.statusCode : 401;
       request.log.warn({ statusCode }, 'request.auth_denied');

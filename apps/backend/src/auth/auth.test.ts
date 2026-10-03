@@ -1,10 +1,12 @@
 import { createServer, request, type Server } from 'node:http';
 import { Writable } from 'node:stream';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createRemoteJWKSet, exportJWK, generateKeyPair, SignJWT, type JWTPayload } from 'jose';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
+import { coreModule } from '../core/index.js';
+import type { JarvisTool } from '../core/tool-registry.js';
 import { createTokenVerifier } from './verify.js';
 import { loadAuthConfig } from './config.js';
 
@@ -220,6 +222,96 @@ describe('Entra bearer authentication at the server boundary', () => {
   });
 });
 
+const agentObjectId = '3a1f0c2e-7b4d-4e8a-9c6f-1d2e3f405162';
+const agentConfig = loadConfig({ ENTRA_JARVIS_AGENT_OBJECT_ID: agentObjectId.toUpperCase() });
+const bearer = (value: string) => ['Bearer', value].join(' ');
+const agentClaims: JWTPayload = { oid: agentObjectId, name: undefined, scp: undefined, roles: ['Jarvis.Tools'], idtyp: 'app' };
+
+function agentFixture(backendConfig = agentConfig) {
+  const records: string[] = [];
+  const output = new Writable({ write(chunk: Buffer, _enc, done) { records.push(chunk.toString()); done(); } });
+  const seen: unknown[] = [];
+  const tool: JarvisTool = {
+    name: 'extension_echo', description: 'Echo a validated test input',
+    inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
+    execute: async (input, request) => { seen.push({ principal: request.principal, agent: request.agentPrincipal }); return input; },
+  };
+  const record = vi.fn(async () => {});
+  const app = buildApp(backendConfig, createLogger(backendConfig, undefined, output), {
+    auth: createTokenVerifier(backendConfig.auth, createRemoteJWKSet(url, { timeoutDuration: 100, cooldownDuration: 30_000 })),
+    modules: [coreModule, { id: 'extension', tools: [tool], registerRoutes: async () => {} }],
+    toolCallStore: { record },
+  });
+  let executed = false;
+  app.get('/protected', async () => { executed = true; return { accepted: true }; });
+  apps.push(app);
+  return { app, record, seen, records, executed: () => executed };
+}
+
+describe('Jarvis agent identity on the tool routes', () => {
+  it('lets the configured agent list and call tools as an app-only principal', async () => {
+    const { app, record, seen } = agentFixture();
+    const authorization = bearer(await token(agentClaims));
+
+    const listed = await app.inject({ url: '/tools', headers: { authorization } });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()).toEqual([expect.objectContaining({ name: 'extension_echo' })]);
+
+    const called = await app.inject({
+      method: 'POST', url: '/tools/extension_echo', headers: { authorization, 'x-jarvis-message-id': '42' }, payload: { text: 'hej' },
+    });
+    expect(called.statusCode).toBe(200);
+    expect(called.json()).toEqual({ tool: 'extension_echo', outcome: 'ok', result: { text: 'hej' } });
+    expect(record).toHaveBeenCalledWith({ messageId: '42', tool: 'extension_echo', arguments: { text: 'hej' }, result: { text: 'hej' }, outcome: 'ok' });
+    expect(seen).toEqual([{ principal: null, agent: { kind: 'jarvis-agent', objectId: agentObjectId, tenantId: config.auth.tenantId } }]);
+  });
+  it('accepts an agent token without the optional idtyp claim', async () => {
+    const { app } = agentFixture();
+    const response = await app.inject({ url: '/tools', headers: { authorization: bearer(await token({ ...agentClaims, idtyp: undefined })) } });
+    expect(response.statusCode).toBe(200);
+  });
+  it('keeps Dan’s delegated token working on the tool routes', async () => {
+    const { app } = agentFixture();
+    expect((await app.inject({ url: '/tools', headers: { authorization: bearer(await token()) } })).statusCode).toBe(200);
+  });
+  it('refuses the agent on every route that has not opted in', async () => {
+    const { app, records, executed } = agentFixture();
+    const authorization = bearer(await token(agentClaims));
+    for (const path of ['/me', '/protected', '/missing']) {
+      const response = await app.inject({ url: path, headers: { authorization } });
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({ error: 'Forbidden' });
+    }
+    expect(executed()).toBe(false);
+    expect(records.join('')).not.toContain(agentObjectId);
+  });
+  it.each([
+    ['no application role', { roles: undefined }],
+    ['another application role', { roles: ['Jarvis.Admin'] }],
+    ['a role string instead of a list', { roles: 'Jarvis.Tools' }],
+    ['a delegated scope', { scp: 'access_as_user' }],
+    ['a user token type', { idtyp: 'user' }],
+  ])('rejects an agent token with %s with 403', async (_name, claims) => {
+    const { app, record } = agentFixture();
+    const authorization = bearer(await token({ ...agentClaims, ...claims }));
+    expect((await app.inject({ url: '/tools', headers: { authorization } })).statusCode).toBe(403);
+    const called = await app.inject({
+      method: 'POST', url: '/tools/extension_echo', headers: { authorization, 'x-jarvis-message-id': '42' }, payload: { text: 'hej' },
+    });
+    expect(called.statusCode).toBe(403);
+    expect(record).not.toHaveBeenCalled();
+  });
+  it('refuses the agent identity while no agent object ID is configured', async () => {
+    const { app } = agentFixture(config);
+    expect((await app.inject({ url: '/tools', headers: { authorization: bearer(await token(agentClaims)) } })).statusCode).toBe(403);
+  });
+  it('still rejects an unsigned or wrong-audience agent token with 401', async () => {
+    const { app } = agentFixture();
+    const response = await app.inject({ url: '/tools', headers: { authorization: bearer(await token({ ...agentClaims, aud: `api://${config.auth.apiClientId}` })) } });
+    expect(response.statusCode).toBe(401);
+  });
+});
+
 describe('auth configuration', () => {
   it('matches the nonsecret bootstrapped Entra identities', async () => {
     const { readFile } = await import('node:fs/promises');
@@ -228,5 +320,14 @@ describe('auth configuration', () => {
   });
   it.each(['ENTRA_TENANT_ID', 'ENTRA_API_CLIENT_ID', 'ENTRA_OWNER_OBJECT_ID'])('validates %s without echoing values', (name) => {
     for (const value of ['', 'secret', 'https://evil.example', '00000000-0000-0000-0000-000000000000/path']) expect(() => loadConfig({ [name]: value })).toThrow(`${name} must be a UUID`);
+  });
+  it('reads the optional Jarvis agent object ID', () => {
+    expect(loadAuthConfig({ ENTRA_JARVIS_AGENT_OBJECT_ID: '' })).toEqual(loadAuthConfig({}));
+    expect(agentConfig.auth.agentObjectId).toBe(agentObjectId);
+    for (const value of ['secret', 'https://evil.example', '00000000-0000-0000-0000-000000000000/path']) {
+      expect(() => loadConfig({ ENTRA_JARVIS_AGENT_OBJECT_ID: value })).toThrow(/^ENTRA_JARVIS_AGENT_OBJECT_ID must be a UUID$/);
+    }
+    expect(() => loadConfig({ ENTRA_JARVIS_AGENT_OBJECT_ID: config.auth.ownerObjectId.toUpperCase() }))
+      .toThrow('ENTRA_JARVIS_AGENT_OBJECT_ID must differ from ENTRA_OWNER_OBJECT_ID');
   });
 });
