@@ -91,6 +91,9 @@ class ModelSettings:
     reasoning_effort: str
 
 
+DEFAULT_MODEL_SETTINGS = ModelSettings("gpt-5.6-luna", "none")
+
+
 @dataclass(slots=True)
 class ConversationTurn:
     response_id: str

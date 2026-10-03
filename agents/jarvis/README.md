@@ -17,7 +17,8 @@ prototype's fake tools are gone: every tool comes from the backend's tool regist
 Before acknowledging a new hosted session, the agent loads its effective Jarvis
 model and reasoning effort from `GET /agent/settings`. It keeps that snapshot for
 the session, so later settings changes affect only new sessions. If the settings
-cannot be loaded, the session is rejected with a retryable startup failure.
+cannot be loaded, it logs a warning and uses the defaults (`gpt-5.6-luna`,
+reasoning `none`) for that session.
 
 Each turn loads `GET /tools` from `JARVIS_BACKEND_URL` (cached 60 seconds) and
 offers those schemas to the model. A model tool call goes to `POST /tools/{name}`

@@ -82,7 +82,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   only the effective Jarvis model and reasoning effort to the `Jarvis.Tools`
   principal. The hosted agent reads it before acknowledging a new session and
   holds that snapshot for the session; existing sessions and tasks are not
-  updated.
+  updated. If the read is unavailable, the agent logs a warning and uses the
+  default model and reasoning settings for that session.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`

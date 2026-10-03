@@ -18,6 +18,7 @@ from starlette.testclient import TestClient
 from response_coordinator import ResponseCoordinator
 from scripts.smoke_test import ResponseValidator
 from state import (
+    DEFAULT_MODEL_SETTINGS,
     MAX_ACTIVE_RESPONSES,
     MAX_PENDING_PROACTIVE,
     MAX_SEEN_INPUTS,
@@ -212,18 +213,20 @@ def test_each_session_keeps_its_own_model_settings_snapshot() -> None:
     assert model.request_settings == [first_settings, second_settings]
 
 
-def test_session_start_fails_visibly_when_settings_cannot_be_loaded() -> None:
-    model = FakeModel([], settings_error=RuntimeError("private backend detail"))
+def test_session_start_uses_defaults_when_settings_cannot_be_loaded(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    model = FakeModel([["Fallback answer"]], settings_error=RuntimeError("private backend detail"))
     app = create_app(model, configure_observability=None)
 
     with TestClient(app) as client, client.websocket_connect("/invocations_ws") as ws:
-        rejected = start(ws)
+        assert start(ws)["type"] == "session.ready"
+        send_user(ws, "in_fallback", "Use the fallback")
+        receive_until(ws, "response.done")
 
-    assert rejected["type"] == "session.rejected"
-    assert rejected["code"] == "startup_failed"
-    assert rejected["retriable"] is True
-    assert "private backend detail" not in str(rejected)
-    assert model.requests == []
+    assert model.request_settings == [DEFAULT_MODEL_SETTINGS]
+    assert "Could not load Jarvis settings; using default session settings" in caplog.text
+    assert "private backend detail" not in caplog.text
 
 
 def test_input_before_session_start_is_ignored() -> None:
