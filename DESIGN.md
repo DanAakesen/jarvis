@@ -40,10 +40,10 @@ Not chosen. Add the selected direction, reference images, and findings here.
 The temporary shell uses system typography, neutral surfaces, one content column
 and a compact Jarvis home link. It establishes responsive and keyboard behavior
 without choosing the future product identity. Canonical styles live in
-`apps/web/src/styles.css`. The home page states that sign-in and deployment are
-pending; no fake task data or unavailable controls are shown. Unknown addresses
-have a return link. A skip link and visible keyboard focus support navigation.
-Dan's page designs remain to be selected.
+`apps/web/src/styles.css`. The signed-out page states that sign-in and deployment
+are pending; no fake task data or unavailable controls are shown. Unknown
+addresses have a return link. A skip link and visible keyboard focus support
+navigation. Dan's page designs remain to be selected.
 
 ## Sign-in (P0-09)
 
@@ -52,3 +52,12 @@ sign-in action. Disable it with an explanation until the backend is configured;
 show pending and refusal feedback beside the action. After `/me` verifies the
 session, show the returned name as the page headline. Do not expose account
 tokens, email addresses, or unverified identity claims in the interface.
+
+## Conversation history (P4-03)
+
+After sign-in, the main page shows the persisted conversation in chronological
+order across chat and voice sessions. Each message has its speaker and time;
+tool calls show the tool and outcome, with a task reference when available.
+History loads in bounded pages, with older entries requested explicitly. Loading,
+empty, and retryable failure states stay in the existing neutral, single-column
+shell; this is an interim implementation, not a selected visual direction.

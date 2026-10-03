@@ -4,12 +4,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 
-const { createAuthClient, restoreProfile, signIn } = vi.hoisted(() => ({
+const { createAuthClient, restoreProfile, signIn, loadConversationHistory } = vi.hoisted(() => ({
   createAuthClient: vi.fn(() => ({ initialize: vi.fn().mockResolvedValue(undefined) })),
   restoreProfile: vi.fn().mockResolvedValue(null),
   signIn: vi.fn(),
+  loadConversationHistory: vi.fn().mockResolvedValue({ messages: [], nextCursor: null }),
 }));
 vi.mock('./auth', () => ({ createAuthClient, restoreProfile, signIn }));
+vi.mock('./conversation-history', () => ({ loadConversationHistory }));
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com' };
 
@@ -17,6 +19,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   createAuthClient.mockReturnValue({ initialize: vi.fn().mockResolvedValue(undefined) });
   restoreProfile.mockResolvedValue(null);
+  loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
 });
 
 describe('Jarvis routes', () => {
@@ -63,6 +66,28 @@ describe('Jarvis routes', () => {
     render(<MemoryRouter><App config={config} /></MemoryRouter>);
 
     expect(await screen.findByRole('heading', { name: 'Welcome, Dan Aakesen' })).not.toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Conversation history' })).not.toBeNull();
     expect(restoreProfile).toHaveBeenCalledWith(expect.anything(), config);
+  });
+
+  it('shows saved conversation messages on the signed-in home page', async () => {
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    loadConversationHistory.mockResolvedValue({
+      messages: [{
+        id: '42',
+        sessionId: '41',
+        channel: 'chat',
+        language: 'da',
+        role: 'dan',
+        text: 'Please start the task.',
+        model: null,
+        at: '2026-10-03T12:00:00.000Z',
+        toolCalls: [],
+      }],
+      nextCursor: null,
+    });
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+
+    expect(await screen.findByText('Please start the task.')).not.toBeNull();
   });
 });

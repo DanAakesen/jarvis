@@ -125,9 +125,10 @@ erDiagram
     }
 ```
 
-- **One continuous conversation.** Jarvis has a single thread; each time Dan talks or types is a `jarvis_session` within it. Over time the thread needs compaction and memory (Decision 6, deferred); `messages` keeps the full record either way.
+- **One continuous conversation.** Jarvis has a single thread; each chat or voice sitting is a `jarvis_session` within it. Over time the thread needs compaction and memory (Decision 6, deferred); `messages` keeps the full record either way.
+- P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language and tool name, outcome, and task ID, not tool arguments or results. The current main page reads history; chat/voice clients will call the session/message write endpoints in P4-06/P5-03/P5-04. No schema migration was needed.
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
-- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`error` outcome in `tool_calls`. P1-01 (#15) owns the table migration; no live SQL write has been verified yet.
+- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`error` outcome in `tool_calls`. P1-01 (#15) owns the table migration. Session, message, history, task-origin, and tool-call behavior is covered by offline and disposable SQL Server tests; no live Azure SQL write has been verified.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes.
 
@@ -194,7 +195,7 @@ erDiagram
 - **The queue is `tasks` itself (Decision 3, option A).** The dispatcher takes the oldest `Ready` task within the project's and the global limit, sets `lease_owner` and `lease_until`, and starts a sandbox. A lease that expires means the dispatcher died, and another may take over.
 - **Retries:** `attempt_count` and `next_attempt_at`; after the limit the task moves to `NeedsAttention`.
 - `task_events` stores **every** runner event (Dan's choice: maximum freedom for the UI). It is append-only, drives the card's live updates (via SSE) and the task's history, and is the only fast-growing table; archive by age.
-- `origin_message_id` links a task to the message in Jarvis's conversation that created it.
+- `origin_message_id` links a task to the message in Jarvis's conversation that created it. The existing schema requires this reference for non-board tasks; task creation through the in-progress factory APIs remains with P1-04/P4-01.
 
 ## 4 · Sandbox
 

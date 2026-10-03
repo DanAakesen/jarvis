@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, Route, Routes } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
 import { createAuthClient, restoreProfile, signIn, type UserProfile } from './auth';
+import { ConversationHistory } from './ConversationHistory';
+import './ConversationHistory.css';
 
 type SignInState = 'checking' | 'signed-out' | 'signing-in' | 'signed-in' | 'error' | 'unavailable';
 
@@ -48,7 +50,8 @@ function Home({ config }: { config: PublicConfig }) {
     return (
       <section aria-labelledby="welcome-heading">
         <h1 id="welcome-heading">Welcome, {profile.name}</h1>
-        <p>You are signed in to Jarvis. Conversation and the Software Factory are still being built.</p>
+        <p>Your conversation with Jarvis appears below.</p>
+        <ConversationHistory client={client} config={config} />
       </section>
     );
   }
