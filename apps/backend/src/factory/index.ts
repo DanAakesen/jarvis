@@ -133,6 +133,12 @@ export const factoryModule: BackendModule = {
       return sendBounded(reply, detail);
     });
 
+    app.get('/factory/context', { config: { jarvisAgent: true } }, async (_request, reply) => {
+      const store = app.taskStore;
+      if (!store) return reply.code(503).send({ error: 'Task service unavailable' });
+      return sendBounded(reply, await store.getRunningContext());
+    });
+
     await app.register(projectRoutes, { prefix: '/factory/projects' });
   },
 };

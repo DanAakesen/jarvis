@@ -47,6 +47,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 | **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. The hosted Jarvis agent has its own identity and may only list and call tools. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Memory** | One continuous conversation will need compaction and memory over time; the memory design is deferred. |
+| **Turn context** | Each model turn receives current running-task status and recent events plus a bounded recent-message window, so typical status questions do not need a separate task-list model round. |
 
 ### App structure
 
@@ -145,6 +146,8 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Timeline: every runner event, steering messages, check results, state changes | Filter event types; expand payloads; open artifacts (logs, CI logs) |
 | Sandbox sessions: start, end, size, end reason, heartbeat state | — |
 | Usage: sandbox minutes and DKK; Codex/Copilot turns and any reported usage | — |
+
+The backend persists each task event and state change to the task history and activity feed together, then publishes the committed event for live clients.
 
 #### Software Factory — release view (per project)
 

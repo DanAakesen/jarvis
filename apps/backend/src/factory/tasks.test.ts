@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
-import type { TaskDetail, TaskRecord, TaskStore } from './task-store.js';
+import type { RunningTaskContextSnapshot, TaskDetail, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' ') };
@@ -39,18 +39,52 @@ const detail: TaskDetail = {
     at: '2026-10-03T12:00:00.000Z',
   }],
 };
+const context: RunningTaskContextSnapshot = {
+  runningTasks: [{
+    id: '42',
+    projectId: '7',
+    projectName: 'Jarvis',
+    title: 'Fix the bug',
+    agent: 'codex',
+    state: 'Running',
+    activity: 'Updating tests',
+    startedAt: '2026-10-03T12:00:00.000Z',
+    recentEvents: [{
+      type: 'progress',
+      summary: 'Tests are being updated',
+      summaryTruncated: false,
+      source: 'runner',
+      at: '2026-10-03T12:01:00.000Z',
+    }],
+  }],
+  truncated: false,
+};
 
-function fixture(overrides: Partial<TaskStore> = {}) {
+function fixture(
+  overrides: Partial<TaskStore> = {},
+  auth = async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
+) {
   const store: TaskStore = {
     create: vi.fn(async () => task),
     list: vi.fn(async () => [task]),
     get: vi.fn(async () => detail),
+    getRunningContext: vi.fn(async () => context),
     transition: vi.fn(async () => ({ kind: 'ok' as const, task })),
+    recordEvent: vi.fn(async (event) => ({
+      id: '20',
+      taskId: event.taskId,
+      type: event.type,
+      summary: event.summary ?? null,
+      payload: event.payload ?? null,
+      payloadTruncated: false,
+      source: event.source,
+      at: task.createdAt,
+    } satisfies TaskEventMessage)),
     ...overrides,
   };
   const app = buildApp(config, undefined, {
     taskStore: store,
-    auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
+    auth,
   });
   apps.push(app);
   return { app, store };
@@ -131,6 +165,21 @@ describe('factory tasks API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(detail);
     expect(store.get).toHaveBeenCalledWith('42', 20, 2);
+  });
+
+  it('returns the bounded running-task context only to the Jarvis agent', async () => {
+    const { app, store } = fixture({}, async () => ({
+      kind: 'jarvis-agent',
+      objectId: '11111111-1111-4111-8111-111111111111',
+      tenantId: config.auth.tenantId,
+    }));
+    const response = await app.inject({ url: '/factory/context', headers });
+    const taskList = await app.inject({ url: '/factory/tasks', headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(context);
+    expect(store.getRunningContext).toHaveBeenCalledOnce();
+    expect(taskList.statusCode).toBe(403);
   });
 
   it('returns 404 for missing tasks and rejects malformed identifiers', async () => {
