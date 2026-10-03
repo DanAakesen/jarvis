@@ -1,0 +1,253 @@
+# Production deploy for main (P0-11). Deploys only the parts changed since the
+# last successful Deploy run: infra/ -> Bicep; apps/backend/ or db/ -> backend
+# image to ACR and Container Apps; apps/web/ -> Static Web Apps. Shared files
+# (root package files, workflows, deploy scripts) and manual runs deploy
+# everything; documentation-only pushes do not start a run. The concurrency
+# group is shared with Runner deploy: one deploy at a time, queued in order,
+# never cancelled. Azure access uses the bootstrap OIDC identity (main only).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jarvis-production-deploy
+  cancel-in-progress: false
+  queue: max
+
+env:
+  SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  RESOURCE_GROUP: rg-jarvis
+  INFRA_DEPLOYMENT: jarvis-infra
+
+jobs:
+  plan:
+    name: Plan
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      infra: ${{ steps.plan.outputs.infra }}
+      backend: ${{ steps.plan.outputs.backend }}
+      web: ${{ steps.plan.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - name: Find the last successful deploy
+        id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
+          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+      - name: Select the parts to deploy
+        id: plan
+        env:
+          BASE: ${{ steps.base.outputs.sha }}
+        run: python .github/scripts/deploy_plan.py --event "$GITHUB_EVENT_NAME" --base "$BASE" --head "$GITHUB_SHA"
+
+  infra:
+    name: Infrastructure (Bicep)
+    needs: plan
+    if: needs.plan.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy Bicep, keeping the running backend image
+        run: bash .github/scripts/deploy_bicep.sh "$RUNNER_TEMP/infra-outputs.json"
+
+  backend:
+    name: Backend (ACR and Container Apps)
+    needs: [plan, infra]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.backend == 'true' && needs.infra.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Load infrastructure outputs
+        run: |
+          az deployment group show --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --query properties.outputs --output json --only-show-errors >"$RUNNER_TEMP/infra-outputs.json"
+          {
+            echo "REGISTRY=$(jq -er .containerRegistryName.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "REGISTRY_HOST=$(jq -er .containerRegistryLoginServer.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "BACKEND_APP=$(jq -r '.backendAppName.value // ""' "$RUNNER_TEMP/infra-outputs.json")"
+          } >>"$GITHUB_ENV"
+      - name: Build the backend image in ACR
+        run: |
+          az acr build --registry "$REGISTRY" --image "jarvis-backend:$IMAGE_TAG" --file apps/backend/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --only-show-errors .
+          digest=$(az acr manifest show-metadata --registry "$REGISTRY" --name "jarvis-backend:$IMAGE_TAG" --subscription "$SUBSCRIPTION_ID" --query digest --output tsv --only-show-errors)
+          [[ "$digest" == sha256:* ]] || { echo "::error::ACR image has no manifest digest"; exit 1; }
+          echo "IMAGE=$REGISTRY_HOST/jarvis-backend@$digest" >>"$GITHUB_ENV"
+      - name: Deploy the image to Container Apps
+        run: |
+          if [[ -n "$BACKEND_APP" ]]; then
+            az containerapp update --name "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --image "$IMAGE" --output none --only-show-errors
+          else
+            # First deploy: the backend app is created by Bicep once its image exists.
+            bash .github/scripts/deploy_bicep.sh "$RUNNER_TEMP/infra-outputs.json" "$IMAGE"
+            BACKEND_APP=$(jq -er .backendAppName.value "$RUNNER_TEMP/infra-outputs.json")
+          fi
+          # The previous revision serves until the new one passes its /health probes.
+          for attempt in $(seq 1 30); do
+            az containerapp show --name "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --output json --only-show-errors >"$RUNNER_TEMP/backend-app.json"
+            latest=$(jq -r '.properties.latestRevisionName // ""' "$RUNNER_TEMP/backend-app.json")
+            ready=$(jq -r '.properties.latestReadyRevisionName // ""' "$RUNNER_TEMP/backend-app.json")
+            image=$(jq -r '.properties.template.containers[0].image // ""' "$RUNNER_TEMP/backend-app.json")
+            if [[ "$image" == "$IMAGE" && -n "$latest" && "$latest" == "$ready" ]]; then
+              echo "Revision $latest is ready with the new image."
+              exit 0
+            fi
+            echo "Waiting for revision $latest to become ready (attempt $attempt/30)."
+            sleep 30
+          done
+          echo "::error::The new backend revision did not become ready in 15 minutes; the previous revision keeps serving."
+          exit 1
+
+  web:
+    name: Web (Static Web Apps)
+    needs: [plan, infra, backend]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.web == 'true' && needs.infra.result != 'failure' && needs.backend.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Pin npm
+        run: npm install --global npm@10.9.9
+      - run: npm ci
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Load infrastructure outputs
+        run: |
+          az deployment group show --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --query properties.outputs --output json --only-show-errors >"$RUNNER_TEMP/infra-outputs.json"
+          fqdn=$(jq -r '.backendFqdn.value // ""' "$RUNNER_TEMP/infra-outputs.json")
+          [[ -n "$fqdn" ]] || { echo "::error::No backend URL: the backend has not been deployed yet."; exit 1; }
+          {
+            echo "VITE_BACKEND_URL=https://$fqdn"
+            echo "STATIC_WEB_APP=$(jq -er .staticWebAppName.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "STATIC_WEB_APP_HOST=$(jq -er .staticWebAppHostname.value "$RUNNER_TEMP/infra-outputs.json")"
+          } >>"$GITHUB_ENV"
+      - name: Build the web app against the production backend
+        run: npm run build --workspace @jarvis/web
+      - name: Get the Static Web Apps deployment token
+        id: swa
+        run: |
+          token=$(az staticwebapp secrets list --name "$STATIC_WEB_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --query properties.apiKey --output tsv --only-show-errors)
+          echo "::add-mask::$token"
+          echo "token=$token" >>"$GITHUB_OUTPUT"
+      - uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.swa.outputs.token }}
+          action: upload
+          app_location: apps/web/dist
+          output_location: ''
+          skip_app_build: true
+          skip_api_build: true
+      - name: Check the deployed web app and a deep link
+        run: |
+          for path in / /settings; do
+            for _ in $(seq 1 20); do
+              if curl --fail --silent --show-error --max-time 20 "https://$STATIC_WEB_APP_HOST$path" | grep -q '<div id="root">'; then
+                echo "https://$STATIC_WEB_APP_HOST$path serves the app."
+                continue 2
+              fi
+              sleep 15
+            done
+            echo "::error::https://$STATIC_WEB_APP_HOST$path did not serve the app."
+            exit 1
+          done
+
+  smoke:
+    name: Smoke checks
+    needs: [plan, infra, backend, web]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.plan.outputs.infra == 'true' || needs.plan.outputs.backend == 'true') && needs.infra.result != 'failure' && needs.backend.result != 'failure' && needs.web.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Load infrastructure outputs
+        run: |
+          az deployment group show --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --query properties.outputs --output json --only-show-errors >"$RUNNER_TEMP/infra-outputs.json"
+          echo "BACKEND_FQDN=$(jq -er .backendFqdn.value "$RUNNER_TEMP/infra-outputs.json")" >>"$GITHUB_ENV"
+          echo "STATIC_WEB_APP_HOST=$(jq -er .staticWebAppHostname.value "$RUNNER_TEMP/infra-outputs.json")" >>"$GITHUB_ENV"
+      - name: Backend /health (startup applied pending migrations with managed identity)
+        run: |
+          # The backend listens only after its managed-identity SQL connection and migrations succeed.
+          for _ in $(seq 1 20); do
+            if curl --fail --silent --show-error --max-time 20 "https://$BACKEND_FQDN/health"; then
+              echo
+              echo "Backend /health returned 200."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "::error::Backend /health did not return 200 in 10 minutes."
+          exit 1
+      - name: Foundry administration and runtime hosts answer for the project
+        if: needs.plan.outputs.infra == 'true'
+        run: python .github/scripts/deploy_smoke.py --subscription "$SUBSCRIPTION_ID" --resource-group "$RESOURCE_GROUP" --outputs "$RUNNER_TEMP/infra-outputs.json" --principal "$(jq -er .deploy.servicePrincipalId infra/bootstrap.output.json)"
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Production"
+            echo
+            echo "- Jarvis: https://$STATIC_WEB_APP_HOST"
+            echo "- Backend: https://$BACKEND_FQDN"
+            echo
+            echo "Once, after the first deploy: run \`./infra/bootstrap.ps1 -WebRedirectUris 'https://$STATIC_WEB_APP_HOST'\` so sign-in works there, set \`backendUrl\` in \`apps/web/config.json\` to the backend URL for \`npm run dev\`, and set the Actions variable \`JARVIS_INFRA_DEPLOYMENT_NAME\` to \`$INFRA_DEPLOYMENT\` for Runner deploy."
+          } >>"$GITHUB_STEP_SUMMARY"

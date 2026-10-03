@@ -11,7 +11,7 @@ P0-02 adds the React/Vite web skeleton, routing, lint, Vitest, and a focused
 web CI workflow. The home page shows the pending sign-in and deployment state;
 unknown routes provide a working return link. The backend still compiles an
 empty module; Fastify follows in P0-03. The `CI` workflow (P0-10) checks the monorepo, sign-in is P0-09,
-and deployment is P0-11. P0-04 provides the Bicep template.
+and the `main` Deploy workflow is P0-11 (first live run: P0-16). P0-04 provides the Bicep template.
 
 ## Repository layout
 
@@ -71,9 +71,11 @@ The `CI` workflow runs web, backend and Python lint, tests and builds on every P
 Vite selects only the tenant ID, web application ID and API scope from
 `infra/bootstrap.output.json`. Deployment and owner metadata stay out of the
 client bundle. `apps/web/config.json` stores the production HTTPS backend
-origin; it is currently `null` because the first deployment is P0-11. P0-11
-must record its `backendFqdn` output there as `https://<backendFqdn>` so a new
-checkout starts against production without an additional setup step.
+origin; it is currently `null` until the first deployment. After that run, P0-16
+records its `backendFqdn` output there as `https://<backendFqdn>` so a new
+checkout starts against production without an additional setup step. The
+deployed web build gets the same URL from the Deploy workflow through
+`VITE_BACKEND_URL`.
 
 A build or dev session can override that public URL with `VITE_BACKEND_URL`,
 including in a git-ignored root `.env.local`. Never put secrets in that variable.
