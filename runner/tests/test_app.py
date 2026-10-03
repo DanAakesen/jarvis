@@ -352,3 +352,138 @@ def test_client_redacts_credential_values_in_nested_output(tmp_path):
                            {"GH_TOKEN": "PRIVATE-github", "COPILOT_GITHUB_TOKEN": "PRIVATE-copilot"})
     assert client._redact({"content": ["token=PRIVATE-github", {"text": "PRIVATE-copilot"}]}) == {
         "content": ["token=[redacted]", {"text": "[redacted]"}]}
+
+
+def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "session_clients", {})
+    monkeypatch.setattr(app, "session_locks", {})
+    fixture = tmp_path / "failed_initialize.py"
+    fixture.write_text(
+        "import json, sys\n"
+        "for line in sys.stdin:\n"
+        "    message = json.loads(line)\n"
+        "    print(json.dumps({'jsonrpc': '2.0', 'id': message['id'],"
+        " 'error': {'code': -32603, 'message': 'initialization failed'}}), flush=True)\n"
+    )
+
+    async def credentials(agent):
+        return {"github_token": "not-a-real-token", "copilot_token": "not-a-real-seat-token"}
+
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    monkeypatch.setattr(app, "_agent_command", lambda agent: [sys.executable, str(fixture)])
+    state = app.TaskState("failed-init", "s", "copilot", "task")
+
+    async def exercise():
+        try:
+            await app._run_task(state)
+            assert state.status == "failed"
+            assert state.process is not None and state.process.returncode is not None
+            assert app.session_clients == {}
+        finally:
+            # Preserve test isolation even if a future regression leaks the fixture.
+            if state.process is not None and state.process.returncode is None:
+                state.process.kill()
+                await state.process.wait()
+
+    asyncio.run(exercise())
+
+
+def test_cancel_during_credential_fetch_never_starts_provider(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "session_clients", {})
+    monkeypatch.setattr(app, "session_locks", {})
+    state = app.TaskState("cancel-fetch", "s", "copilot", "task")
+    monkeypatch.setattr(app, "tasks", {state.invocation_id: state})
+    provider_started = []
+    monkeypatch.setattr(app, "_agent_command", lambda agent: provider_started.append(agent))
+
+    async def exercise():
+        fetching = asyncio.Event()
+        never_finish = asyncio.Event()
+
+        async def credentials(agent):
+            fetching.set()
+            await never_finish.wait()
+            return {"github_token": "not-a-real-token", "copilot_token": "not-a-real-seat-token"}
+
+        monkeypatch.setattr(app, "_credentials_for", credentials)
+        state.worker = asyncio.create_task(app._run_task(state))
+        await fetching.wait()
+        request = Request({"type": "http", "method": "POST", "headers": [], "path": "/invocations",
+                           "state": {"invocation_id": state.invocation_id}})
+        response = await app.cancel_invocation(request)
+        assert json.loads(response.body)["status"] == "cancelled"
+        assert state.worker.done()
+        assert state.status == "cancelled"
+        assert provider_started == []
+        assert app.session_clients == {}
+
+    asyncio.run(exercise())
+
+
+def test_cancel_queued_turn_prevents_work_after_session_lock(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "session_clients", {})
+    state = app.TaskState("cancel-queued", "s", "copilot", "task")
+    monkeypatch.setattr(app, "tasks", {state.invocation_id: state})
+    provider_started = []
+    monkeypatch.setattr(app, "_agent_command", lambda agent: provider_started.append(agent))
+
+    async def exercise():
+        lock = asyncio.Lock()
+        monkeypatch.setattr(app, "session_locks", {"s": lock})
+        async with lock:
+            state.worker = asyncio.create_task(app._run_task(state))
+            await asyncio.sleep(0)
+            request = Request({"type": "http", "method": "POST", "headers": [], "path": "/invocations",
+                               "state": {"invocation_id": state.invocation_id}})
+            response = await app.cancel_invocation(request)
+            assert json.loads(response.body)["status"] == "cancelled"
+        assert state.status == "cancelled"
+        assert provider_started == []
+
+    asyncio.run(exercise())
+
+
+def test_next_turn_waits_for_provider_cleanup(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "session_clients", {})
+    monkeypatch.setattr(app, "session_locks", {})
+
+    async def exercise():
+        cleaning = asyncio.Event()
+        release_cleanup = asyncio.Event()
+        started = []
+
+        class Client:
+            def __init__(self, command, cwd, state, env, persisted_session_id=None):
+                self.state = state
+
+            async def start(self):
+                started.append(self.state.invocation_id)
+
+            async def run(self, prompt):
+                return {"response": {"stopReason": "end_turn"}}
+
+            async def stop(self):
+                if self.state.invocation_id == "first":
+                    cleaning.set()
+                    await release_cleanup.wait()
+
+        async def credentials(agent):
+            return {"github_token": "not-a-real-token", "copilot_token": "not-a-real-seat-token"}
+
+        monkeypatch.setattr(app, "ACPClient", Client)
+        monkeypatch.setattr(app, "_credentials_for", credentials)
+        first = asyncio.create_task(app._run_task(app.TaskState("first", "s", "copilot", "task")))
+        await cleaning.wait()
+        second = asyncio.create_task(app._run_task(app.TaskState("second", "s", "copilot", "task")))
+        await asyncio.sleep(0)
+        assert started == ["first"]
+        release_cleanup.set()
+        await asyncio.gather(first, second)
+        assert started == ["first", "second"]
+        assert app.session_clients == {}
+
+    asyncio.run(exercise())

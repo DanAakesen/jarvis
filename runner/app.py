@@ -66,6 +66,8 @@ class TaskState:
     result: dict[str, Any] | None = None
     error: str | None = None
     process: asyncio.subprocess.Process | None = None
+    worker: asyncio.Task[None] | None = None
+    cancel_requested: bool = False
     # Set to "steer" or "pause" when the current turn is stopped on purpose.
     stop_requested: str | None = None
 
@@ -624,6 +626,8 @@ async def _stop_session_client(session_id: str) -> None:
 
 
 async def _run_task(state: TaskState) -> None:
+    if state.cancel_requested:
+        return
     state.status = "running"
     state.event("started", agent=state.agent)
     state.event("runner_instance", **RUNNER_INSTANCE)
@@ -632,42 +636,50 @@ async def _run_task(state: TaskState) -> None:
     credentials: dict[str, str] = {}
     client: ACPClient | None = None
     session_lock = session_locks.setdefault(state.session_id, asyncio.Lock())
+    lock_acquired = False
     try:
-        async with session_lock:
-            client = session_clients.get(state.session_id)
-            if client is None:
-                credentials = await _credentials_for(state.agent)
-                env = os.environ.copy()
-                env["GIT_TERMINAL_PROMPT"] = "0"
-                # Foundry may provide a read-only /home/session mount.  Keep
-                # CLI caches and ACP metadata on the session's persistent,
-                # runner-owned filesystem instead.
-                env["HOME"] = str(worktree)
-                env["XDG_CACHE_HOME"] = str(worktree / ".cache")
-                env["GH_TOKEN"] = credentials["github_token"]
-                env["GIT_CONFIG_NOSYSTEM"] = "1"
-                env["GIT_CONFIG_COUNT"] = "1"
-                env["GIT_CONFIG_KEY_0"] = "credential.helper"
-                env["GIT_CONFIG_VALUE_0"] = f"!{_credential_helper(worktree)}"
-                if state.agent == "copilot":
-                    env["COPILOT_GITHUB_TOKEN"] = credentials["copilot_token"]
-                else:
-                    codex_home = worktree / ".codex"
-                    _write_codex_home(codex_home, credentials["codex_login"])
-                    env["CODEX_HOME"] = str(codex_home)
-                # Do not retain secret strings in state or event payloads.
-                credentials.clear()
-                persisted_session_id = _load_acp_session(state.session_id, state.agent)
-                client = ACPClient(
-                    _agent_command(state.agent),
-                    worktree,
-                    state,
-                    env,
-                    persisted_session_id=persisted_session_id,
-                )
-                await client.start()
-                session_clients[state.session_id] = client
-            state.result = await client.run(state.task)
+        await session_lock.acquire()
+        lock_acquired = True
+        if state.cancel_requested:
+            return
+        client = session_clients.get(state.session_id)
+        if client is None:
+            credentials = await _credentials_for(state.agent)
+            if state.cancel_requested:
+                return
+            env = os.environ.copy()
+            env["GIT_TERMINAL_PROMPT"] = "0"
+            # Foundry may provide a read-only /home/session mount.  Keep
+            # CLI caches and ACP metadata on the session's persistent,
+            # runner-owned filesystem instead.
+            env["HOME"] = str(worktree)
+            env["XDG_CACHE_HOME"] = str(worktree / ".cache")
+            env["GH_TOKEN"] = credentials["github_token"]
+            env["GIT_CONFIG_NOSYSTEM"] = "1"
+            env["GIT_CONFIG_COUNT"] = "1"
+            env["GIT_CONFIG_KEY_0"] = "credential.helper"
+            env["GIT_CONFIG_VALUE_0"] = f"!{_credential_helper(worktree)}"
+            if state.agent == "copilot":
+                env["COPILOT_GITHUB_TOKEN"] = credentials["copilot_token"]
+            else:
+                codex_home = worktree / ".codex"
+                _write_codex_home(codex_home, credentials["codex_login"])
+                env["CODEX_HOME"] = str(codex_home)
+            # Do not retain secret strings in state or event payloads.
+            credentials.clear()
+            persisted_session_id = _load_acp_session(state.session_id, state.agent)
+            client = ACPClient(
+                _agent_command(state.agent),
+                worktree,
+                state,
+                env,
+                persisted_session_id=persisted_session_id,
+            )
+            await client.start()
+            session_clients[state.session_id] = client
+        if state.cancel_requested:
+            return
+        state.result = await client.run(state.task)
         if state.stop_requested:
             state.status = STOPPED_STATUS[state.stop_requested]
             state.event(state.status, result=state.result)
@@ -688,30 +700,40 @@ async def _run_task(state: TaskState) -> None:
             state.error = f"Runner task failed: {type(exc).__name__}"
             state.event("failed", error=state.error)
     finally:
-        # Keep the Foundry session's filesystem and ACP session id, but do not
-        # retain a provider process between turns.  A subsequent steer or
-        # resume creates a fresh ACP process and uses session/load, so events
-        # are attributed to the new invocation and the process cannot hang on
-        # a stale request stream.
-        await _stop_session_client(state.session_id)
-        if state.agent == "codex":
-            # Codex may have renewed its login during the turn (for example after
-            # a 401). Keep the newest copy in Key Vault so other sandboxes stay valid.
-            auth_path = worktree / ".codex" / "auth.json"
-            try:
-                if auth_path.exists() and await _store_codex_login_if_newer(auth_path.read_text(encoding="utf-8")):
-                    state.event("codex_login_stored")
-            except Exception as exc:  # sanitized: names the error type only
-                state.event("codex_login_store_failed", error=type(exc).__name__)
-            finally:
-                auth_path.unlink(missing_ok=True)
-        capacity = _capacity_snapshot()
-        state.event("capacity", **capacity)
-        LOGGER.info("capacity %s", json.dumps(capacity, sort_keys=True))
-        credentials.clear()
-        state.finished_at = time.time()
-        _persist_task(state)
+        try:
+            # Keep the Foundry session's filesystem and ACP session id, but do not
+            # retain a provider process between turns.  A subsequent steer or
+            # resume creates a fresh ACP process and uses session/load, so events
+            # are attributed to the new invocation and the process cannot hang on
+            # a stale request stream.
+            # start() can fail after spawning but before registration. Dispose the
+            # locally owned client even in that case, and never stop a newer turn's
+            # client belonging to a different invocation.
+            if client is not None:
+                if session_clients.get(state.session_id) is client:
+                    session_clients.pop(state.session_id)
+                await client.stop()
+            if lock_acquired and state.agent == "codex":
+                # Codex may have renewed its login during the turn (for example after
+                # a 401). Keep the newest copy in Key Vault so other sandboxes stay valid.
+                auth_path = worktree / ".codex" / "auth.json"
+                try:
+                    if auth_path.exists() and await _store_codex_login_if_newer(auth_path.read_text(encoding="utf-8")):
+                        state.event("codex_login_stored")
+                except Exception as exc:  # sanitized: names the error type only
+                    state.event("codex_login_store_failed", error=type(exc).__name__)
+                finally:
+                    auth_path.unlink(missing_ok=True)
+            capacity = _capacity_snapshot()
+            state.event("capacity", **capacity)
+            LOGGER.info("capacity %s", json.dumps(capacity, sort_keys=True))
+            credentials.clear()
+            state.finished_at = time.time()
+            _persist_task(state)
 
+        finally:
+            if lock_acquired:
+                session_lock.release()
 
 async def _stop_running_turn(session_id: str, reason: str, exclude: str | None = None) -> TaskState | None:
     """Stop the session's active turn at a safe point (ACP cancel), forcing it after a timeout."""
@@ -841,7 +863,7 @@ async def invoke(request: Request) -> Response:
     )
     async with tasks_lock:
         tasks[invocation_id] = state
-    asyncio.create_task(_steer_then_run(state) if mode == "steer" else _run_task(state))
+    state.worker = asyncio.create_task(_steer_then_run(state) if mode == "steer" else _run_task(state))
     return JSONResponse(
         {
             "invocation_id": invocation_id,
@@ -884,13 +906,23 @@ async def cancel_invocation(request: Request) -> Response:
     state = tasks.get(invocation_id)
     if not state:
         return JSONResponse({"error": "invocation not found"}, status_code=404)
-    if state.status in {"completed", "failed", "cancelled"}:
+    if state.status in {"completed", "failed", "cancelled", "paused", "interrupted"}:
         return JSONResponse({"invocation_id": invocation_id, "status": state.status})
+    first_cancel = not state.cancel_requested
+    state.cancel_requested = True
     state.status = "cancelling"
-    if state.process and state.process.returncode is None:
-        state.process.terminate()
     state.event("cancel_requested")
-    await _stop_session_client(state.session_id)
+    if state.worker is not None:
+        if first_cancel:
+            state.worker.cancel()
+        await asyncio.gather(state.worker, return_exceptions=True)
+    elif state.process and state.process.returncode is None:
+        state.process.terminate()
+        await state.process.wait()
+    # Never dispose a later turn when cancelling an older invocation.
+    client = session_clients.get(state.session_id)
+    if client is not None and client.state is state:
+        await _stop_session_client(state.session_id)
     state.status = "cancelled"
     state.finished_at = time.time()
     _persist_task(state)
