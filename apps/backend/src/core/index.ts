@@ -1,4 +1,6 @@
 import type { BackendModule } from '../modules.js';
+import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
+import { ToolRefusal } from './tool-registry.js';
 
 export const coreModule: BackendModule = {
   id: 'core',
@@ -47,7 +49,7 @@ export const coreModule: BackendModule = {
         };
         request.raw.once('aborted', abortOnRequest);
         reply.raw.once('close', abortOnClose);
-        let outcome: 'ok' | 'error' = 'ok';
+        let outcome: ToolCallOutcome = 'ok';
         let result: unknown;
         try {
           result = await tool.execute(request.body, request, controller.signal);
@@ -55,15 +57,20 @@ export const coreModule: BackendModule = {
           if (serialized === undefined || Buffer.byteLength(serialized) > 1024 * 1024) {
             throw new Error('Tool result is not serializable or exceeds the size limit');
           }
-        } catch {
-          outcome = 'error';
-          result = { error: 'Tool execution failed' };
+        } catch (error) {
+          if (error instanceof ToolRefusal && !controller.signal.aborted) {
+            outcome = 'refused';
+            result = { refused: error.message };
+          } else {
+            outcome = 'error';
+            result = { error: 'Tool execution failed' };
+          }
         } finally {
           request.raw.removeListener('aborted', abortOnRequest);
           reply.raw.removeListener('close', abortOnClose);
         }
         await app.toolCallStore.record({ messageId, tool: tool.name, arguments: request.body, result, outcome });
-        return { tool: tool.name, outcome, result };
+        return { tool: tool.name, outcome, result, confirmation: confirmToolCall(tool.name, outcome, result) };
       });
     }
   },
