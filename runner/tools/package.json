@@ -1,0 +1,10 @@
+{
+  "name": "jarvis-runner-tools",
+  "private": true,
+  "version": "0.2.0",
+  "dependencies": {
+    "@github/copilot": "1.0.91",
+    "@openai/codex": "0.157.0",
+    "@agentclientprotocol/codex-acp": "2.1.1"
+  }
+}
