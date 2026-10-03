@@ -48,6 +48,29 @@ export interface TaskDetail extends TaskRecord {
   events: TaskEventRecord[];
 }
 
+export interface RunningTaskContext {
+  id: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+  agent: TaskRecord['agent'];
+  state: TaskRecord['state'];
+  activity: string | null;
+  startedAt: string | null;
+  recentEvents: {
+    type: string;
+    summary: string | null;
+    summaryTruncated: boolean;
+    source: TaskEventRecord['source'];
+    at: string;
+  }[];
+}
+
+export interface RunningTaskContextSnapshot {
+  runningTasks: RunningTaskContext[];
+  truncated: boolean;
+}
+
 export interface CreateTaskInput {
   projectId: string;
   title: string;
@@ -78,6 +101,7 @@ export interface TaskStore {
   create(input: CreateTaskInput): Promise<TaskRecord | null>;
   list(filters: TaskListFilters): Promise<TaskRecord[]>;
   get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null>;
+  getRunningContext(): Promise<RunningTaskContextSnapshot>;
   transition(id: string, state: TaskState, completionVerified?: boolean): Promise<TaskTransitionResult>;
   /** Persist the timeline and activity entries atomically, then publish the committed event. */
   recordEvent(event: RecordTaskEventInput): Promise<TaskEventMessage>;

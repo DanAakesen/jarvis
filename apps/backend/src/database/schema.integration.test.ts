@@ -148,6 +148,28 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     await transition(created.id, 'PauseRequested');
     await transition(created.id, 'Paused');
     await transition(created.id, 'Running');
+    await pool.request()
+      .input('taskId', sql.BigInt, BigInt(created.id))
+      .input('longSummary', sql.NVarChar(2_000), 'x'.repeat(450))
+      .query(`INSERT dbo.task_events (task_id, type, summary, source) VALUES
+        (@taskId, N'progress', N'First progress', N'runner'),
+        (@taskId, N'progress', N'Second progress', N'runner'),
+        (@taskId, N'progress', N'Third progress', N'runner'),
+        (@taskId, N'progress', @longSummary, N'runner');`);
+    const context = await store.getRunningContext();
+    const runningTask = context.runningTasks.find(({ id }) => id === created.id);
+    expect(context.truncated).toBe(false);
+    expect(runningTask).toMatchObject({
+      projectId,
+      projectName: 'Task API fixture',
+      title: 'Task API contract',
+      state: 'Running',
+      recentEvents: [
+        { summary: 'x'.repeat(400), summaryTruncated: true },
+        { summary: 'Third progress', summaryTruncated: false },
+        { summary: 'Second progress', summaryTruncated: false },
+      ],
+    });
     await transition(created.id, 'NeedsAttention');
     await transition(created.id, 'Running');
     await transition(created.id, 'Done', true);

@@ -282,7 +282,8 @@ is denied. `request.principal` contains only the verified object and tenant IDs.
 The optional `ENTRA_JARVIS_AGENT_OBJECT_ID` (a UUID other than Dan's; P4-01)
 admits the hosted Jarvis agent's app-only token with the `Jarvis.Tools` role,
 and only on routes marked `config: { jarvisAgent: true }` (`GET /tools`,
-`POST /tools/{name}`); elsewhere it gets 403. Unset or empty denies the agent.
+`GET /factory/context`, `POST /tools/{name}`); elsewhere it gets 403. Unset or
+empty denies the agent.
 Missing/invalid credentials return 401; verified but unauthorized tokens return
 403. Authentication failures never export token/claim/provider details.
 Approved browser origins retain CORS headers on these early denials so the web
@@ -469,6 +470,12 @@ in the P4-01 Copilot session (Docker was available there):
 | Image, from the root | `docker build --tag jarvis-agent:local agents/jarvis` |
 | Model-free voice turn | Run the image with the variables below, then `agents/jarvis/.venv/bin/python agents/jarvis/scripts/smoke_test.py` (default `ws://127.0.0.1:8088/invocations_ws`, text `/help`) |
 | Regenerate the hash locks, from the root, after editing a `.in` file | `uv pip compile --python-version 3.12 --generate-hashes agents/jarvis/requirements.in -o agents/jarvis/requirements.txt`, then the same for `requirements-dev.in` → `requirements-dev.txt` |
+
+P4-04 fetches `GET /factory/context` before each model turn; it contains at most
+20 running tasks and three recent events per task. The voice runtime supplies
+the most recent 12 messages, bounded to 24,000 characters total and 8,000 per
+message. The context endpoint is agent-authorized and adds no configuration or
+secret. SQL-backed context behavior is covered by the database integration suite.
 
 Agent configuration (environment variables, no secrets):
 

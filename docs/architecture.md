@@ -152,10 +152,10 @@ The hosted Jarvis agent is the one service identity (P4-01). When
 carry the `Jarvis.Tools` application role, no delegated `scp`, and `idtyp` absent
 or `app`; otherwise 403. Its principal goes to `request.agentPrincipal`, never
 `request.principal`, and only routes with `config: { jarvisAgent: true }` accept it:
-`GET /tools` and `POST /tools/{name}`. Every other route, including `/me` and
-unknown paths, returns 403. Unset or empty configuration denies the agent. The
-role is created by `infra/bootstrap.ps1`; `jarvis-api` already requires role
-assignment, so Entra issues the agent a token only after
+`GET /tools`, `GET /factory/context` and `POST /tools/{name}`. Every other route,
+including `/me` and the task APIs, returns 403. Unset or empty configuration
+denies the agent. The role is created by `infra/bootstrap.ps1`; `jarvis-api`
+already requires role assignment, so Entra issues the agent a token only after
 `-JarvisAgentPrincipalId` assigns the role (P4-08).
 
 JWKS lookups have a five-second timeout, a 30-second refresh cooldown and a
@@ -511,6 +511,16 @@ rejected arguments, refused identity, unavailable persistence and an unreachable
 backend. An unavailable catalogue fails the turn before the model is called.
 Responses are capped at 1 MiB, catalogues at 128 tools.
 `JARVIS_BACKEND_URL` must be an HTTPS origin, or HTTP only for localhost.
+
+Each model turn fetches `GET /factory/context` using the same agent identity.
+The backend reads at most 20 running tasks and each task's three latest events
+from the existing `tasks` and `task_events` tables. The snapshot omits task
+requests and event payloads; event summaries are capped at 400 characters.
+The agent inserts the snapshot before the current user message, so a status
+answer can use it in one model round instead of calling a task-list tool first.
+An unavailable or invalid snapshot fails the turn before the model call rather
+than answering with stale status. The existing connection history is bounded to
+12 messages, 24,000 characters total, and 8,000 characters per message.
 
 Each call sends `X-Jarvis-Message-ID` from the turn's `current_message_id` context.
 Nothing sets it until P4-03 stores conversation messages, so the agent refuses tool

@@ -47,6 +47,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 | **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. The hosted Jarvis agent has its own identity and may only list and call tools. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Memory** | One continuous conversation will need compaction and memory over time; the memory design is deferred. |
+| **Turn context** | Each model turn receives current running-task status and recent events plus a bounded recent-message window, so typical status questions do not need a separate task-list model round. |
 
 ### App structure
 
