@@ -180,8 +180,12 @@ letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
 | Credentials: name, expiry, last renewal, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
 
 The settings API validates choices against the server's available-model catalog.
-Until provider model support is verified, Codex and Copilot use their provider
-defaults. The global parallel-task limit is a whole number from 1 to 100. Voice
+The coding-agent catalog currently offers only each provider's default. P2-11
+verifies the runner path for explicit model values: Copilot uses its CLI `--model`
+option; Codex uses the ACP `model` and `reasoning_effort` session options. Task
+overrides take precedence over settings defaults when the dispatcher supplies
+the effective values. Actual provider/model availability still needs a live
+task. The global parallel-task limit is a whole number from 1 to 100. Voice
 sample playback, the sleep switch, and credential data/actions remain visibly
 unavailable with an explanation until their owning services exist.
 

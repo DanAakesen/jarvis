@@ -79,6 +79,16 @@ describe("Foundry runner wire contract", () => {
     expect(request(fetch).url.searchParams.get("agent_session_id")).toBe("capture-session");
   });
 
+  it("forwards Codex model and reasoning when resuming", async () => {
+    const { client, fetch } = setup({ ...(fixtures["resume"] as object), agent: "codex" });
+    await client.resume("capture-session", {
+      agent: "codex", task: "Continue", model: "gpt-5.4", reasoning: "high",
+    });
+    expect(request(fetch).body).toEqual({
+      agent: "codex", task: "Continue", model: "gpt-5.4", reasoning: "high",
+    });
+  });
+
   it("cancels only the requested invocation without deleting the session", async () => {
     const { client, fetch } = setup(fixtures["cancel"]);
     expect(await client.cancel("capture-task")).toEqual({ invocationId: "capture-task", status: "cancelled" });

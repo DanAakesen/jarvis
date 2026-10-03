@@ -607,7 +607,10 @@ class ACPClient:
                 )
                 config_options = configured.get("configOptions")
                 selected = next(
-                    (option for option in config_options or [] if option.get("id") == config_id),
+                    (
+                        option for option in config_options
+                        if isinstance(option, dict) and option.get("id") == config_id
+                    ) if isinstance(config_options, list) else (),
                     None,
                 )
                 if selected is None or selected.get("currentValue") != value:

@@ -74,7 +74,7 @@ def test_state_event_is_bounded(tmp_path, monkeypatch):
 
 def test_session_and_task_metadata_are_persisted_without_prompt_or_result(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
-    state = app.TaskState("invocation", "foundry-session", "copilot", "secret prompt")
+    state = app.TaskState("invocation", "foundry-session", "codex", "secret prompt")
     state.result = {"response": "secret result"}
     state.event("started")
     state.model = "gpt-5.4"
@@ -86,7 +86,7 @@ def test_session_and_task_metadata_are_persisted_without_prompt_or_result(tmp_pa
     assert "secret prompt" not in json.dumps(task_metadata)
     assert "secret result" not in json.dumps(task_metadata)
     assert acp_metadata["acp_session_id"] == "acp-session"
-    assert app._load_acp_session("foundry-session", "copilot") == {
+    assert app._load_acp_session("foundry-session", "codex") == {
         "acp_session_id": "acp-session", "model": "gpt-5.4", "reasoning": "high",
     }
     restored = app._load_task("invocation")
@@ -165,6 +165,34 @@ def test_optional_model_config(payload, expected):
 def test_optional_model_config_rejects_invalid_values(payload):
     with pytest.raises(ValueError):
         app._optional_config(payload, "model", 100)
+
+
+def test_invoke_accepts_effective_provider_options(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "tasks", {})
+    monkeypatch.setattr(app, "tasks_lock", asyncio.Lock())
+    monkeypatch.setattr(app.asyncio, "create_task", lambda coroutine: coroutine.close())
+    payload = {"agent": "codex", "task": "Work", "model": "gpt-5.4", "reasoning": "high"}
+    body = json.dumps(payload).encode()
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/invocations",
+            "headers": [(b"content-type", b"application/json")],
+            "state": {"invocation_id": "inv", "session_id": "session"},
+        },
+        receive,
+    )
+    response = asyncio.run(app.invoke(request))
+
+    assert response.status_code == 200
+    assert app.tasks["inv"].model == "gpt-5.4"
+    assert app.tasks["inv"].reasoning == "high"
 
 
 def test_git_credential_helper_uses_process_environment(tmp_path):

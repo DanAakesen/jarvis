@@ -35,6 +35,7 @@ export interface FoundryClientOptions {
 }
 
 export interface RequestOptions { signal?: AbortSignal }
+/** Effective task configuration; the dispatcher resolves overrides before settings defaults. */
 export type TaskRequest =
   | { agent: "copilot"; task: string; model?: string }
   | { agent: "codex"; task: string; model?: string; reasoning?: string };
