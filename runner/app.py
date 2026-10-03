@@ -300,8 +300,9 @@ def _write_codex_home(codex_home: Path, auth_text: str) -> Path:
     codex_home.mkdir(parents=True, exist_ok=True)
     (codex_home / "config.toml").write_text(CODEX_CONFIG, encoding="utf-8")
     auth_path = codex_home / "auth.json"
-    auth_path.write_text(auth_text, encoding="utf-8")
-    auth_path.chmod(0o600)
+    with os.fdopen(os.open(auth_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as auth_file:
+        os.fchmod(auth_file.fileno(), 0o600)
+        auth_file.write(auth_text)
     return auth_path
 
 

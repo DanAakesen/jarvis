@@ -330,6 +330,30 @@ def test_renew_codex_login_renews_writes_back_and_cleans_up(tmp_path, monkeypatc
     assert "SECRET-RENEWED-TOKEN" not in json.dumps(result)
 
 
+def test_codex_auth_file_is_private_when_written(tmp_path, monkeypatch):
+    codex_home = tmp_path / ".codex"
+    auth_path = codex_home / "auth.json"
+    auth_text = '{"tokens":{"refresh_token":"fixture"}}'
+    original_open = os.open
+    modes = []
+
+    def private_open(path, flags, mode=0o777):
+        if Path(path) == auth_path:
+            modes.append(mode)
+        return original_open(path, flags, mode)
+
+    monkeypatch.setattr(app.os, "open", private_open)
+    app._write_codex_home(codex_home, auth_text)
+    assert modes == [0o600]
+    assert auth_path.read_text(encoding="utf-8") == auth_text
+    assert auth_path.stat().st_mode & 0o777 == 0o600
+
+    auth_path.chmod(0o644)
+    app._write_codex_home(codex_home, auth_text)
+    assert modes == [0o600, 0o600]
+    assert auth_path.stat().st_mode & 0o777 == 0o600
+
+
 def test_key_vault_probe_failure_never_exposes_provider_details(monkeypatch):
     async def denied(agent):
         raise RuntimeError("SECRET credential provider detail")
