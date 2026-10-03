@@ -1,9 +1,14 @@
 import sql from 'mssql';
 import type { RunningSandbox, SandboxHeartbeatStore } from '../factory/heartbeat.js';
+import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 
 type RunningSandboxRow = RunningSandbox;
+interface InsertedCrashEventRow extends Omit<TaskEventMessage, 'at' | 'payload'> {
+  at: Date | string;
+  payload: string | null;
+}
 
-export function createSandboxHeartbeatStore(pool: sql.ConnectionPool): SandboxHeartbeatStore {
+export function createSandboxHeartbeatStore(pool: sql.ConnectionPool, eventHub: TaskEventHub): SandboxHeartbeatStore {
   return {
     async listRunning() {
       const { recordset } = await pool.request().query<RunningSandboxRow>(`SELECT
@@ -54,18 +59,30 @@ export function createSandboxHeartbeatStore(pool: sql.ConnectionPool): SandboxHe
           .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
           .query(`UPDATE dbo.sandbox_sessions SET status = N'Crashed', ended_at = SYSUTCDATETIME(),
             end_reason = N'crashed' WHERE id = @sandboxSessionId;`);
-        await new sql.Request(transaction)
+        const summary = 'Sandbox heartbeat detected a crash';
+        const payload = { from: 'Running', to: 'NeedsAttention', reason: 'sandbox_crashed' };
+        const event = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, BigInt(taskId))
           .input('eventType', sql.NVarChar(64), 'state_changed')
-          .input('summary', sql.NVarChar(2000), 'Sandbox heartbeat detected a crash')
-          .input('payload', sql.NVarChar(sql.MAX), JSON.stringify({ from: 'Running', to: 'NeedsAttention', reason: 'sandbox_crashed' }))
-          .query(`UPDATE dbo.tasks SET state = N'NeedsAttention', lease_owner = NULL, lease_until = NULL
+          .input('summary', sql.NVarChar(2000), summary)
+          .input('payload', sql.NVarChar(sql.MAX), JSON.stringify(payload))
+          .query<InsertedCrashEventRow>(`UPDATE dbo.tasks SET state = N'NeedsAttention', lease_owner = NULL, lease_until = NULL
             WHERE id = @taskId AND state = N'Running';
             INSERT dbo.task_events (task_id, type, summary, payload, source)
+            OUTPUT CAST(inserted.id AS varchar(19)) AS id, inserted.type, inserted.summary,
+              inserted.payload, CAST(0 AS bit) AS payloadTruncated, inserted.source,
+              inserted.at, CAST(inserted.task_id AS varchar(19)) AS taskId
             VALUES (@taskId, @eventType, @summary, @payload, N'backend');
             INSERT dbo.activity (area, kind, title, link)
             VALUES (N'factory', @eventType, @summary, CONCAT(N'task:', @taskId));`);
+        const row = event.recordset[0];
+        if (!row) throw new Error('Sandbox crash event insert returned no row');
         await transaction.commit();
+        eventHub.publish({
+          ...row,
+          payload,
+          at: row.at instanceof Date ? row.at.toISOString() : new Date(row.at).toISOString(),
+        });
         return true;
       } catch (error) {
         try { await transaction.rollback(); }

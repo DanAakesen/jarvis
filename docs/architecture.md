@@ -217,9 +217,15 @@ the complete composition. A new area contributes routes and tools through this
 contract without changing `core`. Readiness awaits async module registration and
 refuses a failed plugin; Fastify owns plugin close hooks.
 
-Core owns the health route, tool catalogue and HTTP dispatcher; settings,
-activity, persisted events and the SSE hub remain their later tasks. Factory registers the projects API and reserves tasks APIs and tools for their
-own tasks. The catalogue rejects duplicate
+Core owns the health route, tool catalogue, HTTP dispatcher and typed in-process
+event hub. The Factory task store persists task events and corresponding activity
+rows in the same SQL transaction as task creation, state transitions, or an event
+write; it publishes to the hub only after commit. `TaskStore.recordEvent` is the
+small producer API for later runner and backend event sources. The hub is
+process-local; the single production replica keeps subscribers together. Event
+payloads are capped at 1 MiB, and published payloads over 4 KiB are omitted.
+The authenticated SSE endpoint, heartbeat and replay are P1-06. Factory also owns
+projects and task APIs. The catalogue rejects duplicate
 module/tool identities, snapshots frozen schemas and exposes read-only descriptors
 with ownership and handlers. Authenticated `GET /tools` exposes every descriptor's
 name, description and input schema. The core registers a schema-validated
@@ -349,7 +355,7 @@ These boxes are responsibilities; they do not each need a separate service.
 | Queue | The Azure SQL task table. The dispatcher picks Ready rows within the concurrency limit. |
 | Retries | Attempt count and next-attempt time on the task row; after the limit, Needs attention. |
 | Sandbox heartbeat | At startup, the backend loads active sandbox turns once; the dispatcher registers new turns. Each registered invocation is checked immediately and about once a minute, and `last_heartbeat_at` is updated after a valid response. The poller holds active sessions in memory and makes no recurring SQL reads while idle. |
-| Crash detection | Two consecutive HTTP 424/404/5xx responses, with a confirming poll after 30 s; the task and sandbox session are updated in one transaction. Event gaps alone never trigger it (L22). |
+| Crash detection | Two consecutive HTTP 424/404/5xx responses, with a confirming poll after 30 s; the task and sandbox session are updated in one transaction, then the committed task event is published through the in-process hub. Event gaps alone never trigger it (L22). |
 | Live progress | The runner pushes sandbox events to the backend; every runner event is stored. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`. No polling. |
 | Board updates | The backend pushes to the board with SSE; the browser reconnects and reconciles. |

@@ -11,6 +11,8 @@ import { createProjectStore } from './database/project-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createSandboxHeartbeatStore } from './database/sandbox-heartbeat-store.js';
+import { createEventHub } from './core/event-hub.js';
+import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
 import { coreModule } from './core/index.js';
 import { conversationModule } from './core/conversation.js';
 import { factoryModule } from './factory/index.js';
@@ -25,6 +27,7 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const credential = config.voiceLiveEndpoint || config.foundryEndpoints
     ? new DefaultAzureCredential(process.env.SQL_MANAGED_IDENTITY_CLIENT_ID
       ? { managedIdentityClientId: process.env.SQL_MANAGED_IDENTITY_CLIENT_ID }
@@ -50,7 +53,7 @@ try {
     return client;
   };
   const sandboxHeartbeat = database && config.foundryEndpoints
-    ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool), clientFor, {
+    ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub), clientFor, {
       onError: (error) => {
         const details = error instanceof FoundryClientError
           ? { kind: error.kind, statusCode: error.statusCode, operation: error.operation }
@@ -77,9 +80,10 @@ try {
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: createSettingsStore(database.pool),
       conversationStore: createConversationStore(database.pool),
-      taskStore: createTaskStore(database.pool),
+      taskStore: createTaskStore(database.pool, eventHub),
     } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
+    eventHub,
   });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
