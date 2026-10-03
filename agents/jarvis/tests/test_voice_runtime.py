@@ -150,7 +150,9 @@ def test_model_history_keeps_a_bounded_recent_window() -> None:
     assert messages[0].content == "Question 4"
     assert messages[-2].content == "Answer 9"
     assert messages[-1].content == "Latest question"
-    assert sum(len(message.content) for message in messages) <= MAX_HISTORY_CHARACTERS + MAX_MESSAGE_CHARACTERS
+    assert sum(len(message.content) for message in messages) <= (
+        MAX_HISTORY_CHARACTERS + MAX_MESSAGE_CHARACTERS
+    )
 
 
 def test_streams_model_output_and_commits_history() -> None:

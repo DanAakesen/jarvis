@@ -123,7 +123,9 @@ class FakeBackend:
             if request.url.path == "/factory/context":
                 return httpx.Response(
                     self.context_status,
-                    json=self.context_snapshot if self.context_status == 200 else {"error": "Unavailable"},
+                    json=self.context_snapshot
+                    if self.context_status == 200
+                    else {"error": "Unavailable"},
                 )
             if self.status != 200:
                 return httpx.Response(self.status, json={"error": "Forbidden"})

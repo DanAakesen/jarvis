@@ -199,11 +199,6 @@ export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
             INNER JOIN dbo.projects AS p ON p.id = t.project_id
             WHERE t.state = N'Running'
             ORDER BY t.started_at DESC, t.id DESC
-          ), recent_events AS (
-            SELECT e.id, e.task_id, e.type, e.summary, e.source, e.at,
-              ROW_NUMBER() OVER (PARTITION BY e.task_id ORDER BY e.at DESC, e.id DESC) AS event_order
-            FROM dbo.task_events AS e
-            INNER JOIN running_tasks AS t ON t.task_id = e.task_id
           )
           SELECT CONVERT(varchar(19), t.task_id) AS id,
             CONVERT(varchar(19), t.project_id) AS projectId, t.project_name AS projectName,
@@ -211,7 +206,12 @@ export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
             CONVERT(varchar(19), e.id) AS eventId, e.type AS eventType,
             e.summary AS eventSummary, e.source AS eventSource, e.at AS eventAt
           FROM running_tasks AS t
-          LEFT JOIN recent_events AS e ON e.task_id = t.task_id AND e.event_order <= @eventLimit
+          OUTER APPLY (
+            SELECT TOP (@eventLimit) e.id, e.type, e.summary, e.source, e.at
+            FROM dbo.task_events AS e
+            WHERE e.task_id = t.task_id
+            ORDER BY e.at DESC, e.id DESC
+          ) AS e
           ORDER BY t.task_order, e.at DESC, e.id DESC;`);
       const tasks = new Map<string, RunningTaskContext>();
       for (const row of result.recordset) {

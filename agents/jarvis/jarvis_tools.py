@@ -38,7 +38,7 @@ missing or ambiguous, use the tools or ask Dan to clarify.
 Speech recognition can mishear names: "Jarvis" may arrive as "Jarvi" or "Javis",
 "Codex" as "kodeks" or "Kodex", "Copilot" as "co-pilot" or "kopilot", "Daily" as "Deili",
 "Banking" as "bænking". Map to the closest project or agent from the tools.
-Task ids may be spoken as numbers; use the matching id from the task list.
+Task ids may be spoken as numbers; use the matching id from the supplied context or tool results.
 
 Rules:
 - New work: create a task with the project, the agent, and Dan's request in Danish as the text.
@@ -46,7 +46,8 @@ Rules:
 - Corrections or extra instructions for a running task: steer the task.
 - "Pause" or "stop" means pause. Only "annuller", "afbryd" or "drop" means cancel.
 - "Fortsæt" or "genoptag" means resume.
-- Status questions: answer from the task status or task list in plain Danish.
+- Status questions: answer from the supplied context; list tasks only when the context
+  does not identify the task or is ambiguous.
 - After an action, say briefly what you did.
 - If Dan only thanks you or says goodbye, answer briefly without tools.
 
@@ -281,7 +282,10 @@ class BackendToolClient:
                         or not isinstance(event.get("type"), str)
                         or not isinstance(event.get("source"), str)
                         or not isinstance(event.get("at"), str)
-                        or (event.get("summary") is not None and not isinstance(event["summary"], str))
+                        or (
+                            event.get("summary") is not None
+                            and not isinstance(event["summary"], str)
+                        )
                     ):
                         raise ValueError("invalid turn context")
             return body
