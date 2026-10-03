@@ -44,7 +44,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 | **Project settings** | Per project: how far agents may go (deliver a PR, or complete without deployment), merge rules, sandbox size. |
 | **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models; updates affect new sessions and tasks, not running work. |
 | **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. |
-| **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. No passwords in Jarvis. |
+| **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. The hosted Jarvis agent has its own identity and may only list and call tools. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Memory** | One continuous conversation will need compaction and memory over time; the memory design is deferred. |
 
@@ -60,7 +60,7 @@ flowchart TB
     J --- S["Shared: settings · usage and cost · activity"]
 ```
 
-- Each area owns its pages and registers its tools with Jarvis. The backend exposes every registered tool's input schema and executes calls, recording each result so new modules become available without agent changes. Jarvis's reply about an action comes from that recorded result: a refused or failed call is reported as refused or failed, never as done.
+- Each area owns its pages and registers its tools with Jarvis. The backend exposes every registered tool's input schema and executes calls, recording each result so new modules become available without agent changes. Jarvis's reply about an action comes from that recorded result: a refused or failed call is reported as refused or failed, never as done. The Jarvis agent uses only these backend tools.
 - Page requirements list every data point and action, not the look. Dan creates the visual design from them with an image generator (see [DESIGN.md](DESIGN.md)).
 
 ### Task lifecycle
@@ -159,6 +159,13 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | --- | --- |
 | List: name, repository, default agent, policy, tech, running tasks, last release | Create, edit, archive a project |
 | Project settings: repository, default branch, default agent, policy, merge rules, sandbox size, tech, max parallel tasks | Save (applies to new tasks only) |
+
+The project API lists active projects, creates and updates settings, and archives
+without deleting the row or its task history. Repositories use `owner/name`;
+policies are `deliver_pr` or `complete_without_deployment`, sandbox sizes are
+`1x2` or `2x4`, tech identifiers start with a lowercase letter and use lowercase
+letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
+32-bit integer (default 1).
 
 #### Settings
 

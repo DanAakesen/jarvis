@@ -11,12 +11,14 @@ import type { ToolCallStore } from './core/tool-calls.js';
 import { conversationModule } from './core/conversation.js';
 import type { ConversationStore } from './core/conversation-store.js';
 import { factoryModule } from './factory/index.js';
+import type { ProjectStore } from './factory/projects.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
 
 export interface BuildAppOptions {
   readonly auth?: TokenVerifier;
   readonly modules?: readonly BackendModule[];
+  readonly projectStore?: ProjectStore;
   readonly toolCallStore?: ToolCallStore;
   readonly settingsStore?: SettingsStore;
   readonly conversationStore?: ConversationStore;
@@ -24,6 +26,7 @@ export interface BuildAppOptions {
 
 declare module 'fastify' {
   interface FastifyInstance {
+    projectStore: ProjectStore | null;
     toolCallStore: ToolCallStore | null;
     settingsStore: SettingsStore | null;
     conversationStore: ConversationStore | null;
@@ -74,6 +77,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     reply.code(statusCode).send({ error: statusCode < 500 ? 'Invalid request' : 'Internal server error' });
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));
+  app.decorate('projectStore', options.projectStore ?? null);
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);

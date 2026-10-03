@@ -19,7 +19,7 @@ and the `main` Deploy workflow is P0-11 (first live run: P0-16). P0-04 provides 
 | --- | --- |
 | `apps/web` | React + Vite web app, routing, lint and Vitest |
 | `apps/backend` | Backend workspace; Fastify follows in P0-03 |
-| `agents/jarvis` | Reserved for the Python Jarvis agent (P4) |
+| `agents/jarvis` | Python Foundry hosted Jarvis agent: voice runtime and tool loop over the backend tool registry (P4-01; deployment P4-08) |
 | `runner` | Reserved for the Python coding-sandbox ACP adapter (P2) |
 | `infra` | Completed bootstrap, Bicep template, and future deploy configuration |
 | `db` | Reserved for SQL migrations and database fixtures |

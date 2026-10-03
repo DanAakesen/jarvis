@@ -7,6 +7,7 @@ import { loadDatabaseConfig } from './database/config.js';
 import { createDatabase, registerDatabase } from './database/lifecycle.js';
 import { createToolCallStore } from './database/tool-call-store.js';
 import { createSettingsStore } from './database/settings-store.js';
+import { createProjectStore } from './database/project-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { coreModule } from './core/index.js';
 import { conversationModule } from './core/conversation.js';
@@ -35,6 +36,7 @@ try {
   const app = buildApp(config, logger, {
     modules,
     ...(database ? {
+      projectStore: createProjectStore(database.pool),
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: createSettingsStore(database.pool),
       conversationStore: createConversationStore(database.pool),

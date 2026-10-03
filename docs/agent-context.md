@@ -125,6 +125,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
 - `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Confirm the billing currency is DKK and supply any required budget notification email addresses as appropriate. The first Azure deployment and real resource behavior are verified by the first Deploy run (P0-16), not by the local build/lint.
 - The [Deploy workflow](../.github/workflows/deploy.yml) is the only routine path to Azure: push to `main` deploys the parts changed since the last successful Deploy run; Dan's `workflow_dispatch` on `main` redeploys everything. Its Bicep deployment is always named `jarvis-infra`. Details: [production deploy](architecture.md#production-deploy-p0-11).
+- GitHub Actions OIDC: GitHub signs this repository's tokens with the immutable-ID subject `repo:DanAakesen@68902534/jarvis@1403065900:ref:refs/heads/main`, not `repo:DanAakesen/jarvis:ref:refs/heads/main`. `infra/bootstrap.ps1` reads the IDs with `gh api repos/DanAakesen/jarvis` and registers the federated credential `github-main-ids`. An `AADSTS700213` sign-in failure means the credential is missing: Dan re-runs bootstrap; the subject is printed under "Federated token details" in the `azure/login` step (L49).
 - Dan's Azure CLI defaults to the Microsoft tenant: pass `--subscription` in every command and script (L7). For Microsoft Graph, get the token with `az account get-access-token --subscription <id> --resource-type ms-graph`; `--tenant` picks the wrong account.
 - `az` runs through a `.cmd` file: avoid `&`, parentheses, and pipes inside arguments such as `--query` (L20); filter JSON in PowerShell instead.
 - Never reuse a deleted Foundry account or project name; generate timestamped names (L2).
@@ -194,7 +195,7 @@ The repository uses npm workspaces for `apps/web` and `apps/backend`, one root
 lockfile, and shared strict TypeScript configuration. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
-Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3).
+Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3), and P2-01 (#27) adds sandbox and operations groups 4 and 6.
 P0-04 adds the Bicep template; its first Azure deployment is P0-16.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
@@ -269,6 +270,10 @@ Backend authentication defaults to the nonsecret identities in
 RS256 Entra v2 delegated access token with the API client ID as audience and
 `access_as_user` scope; an ID token, app-only token or another user's object ID
 is denied. `request.principal` contains only the verified object and tenant IDs.
+The optional `ENTRA_JARVIS_AGENT_OBJECT_ID` (a UUID other than Dan's; P4-01)
+admits the hosted Jarvis agent's app-only token with the `Jarvis.Tools` role,
+and only on routes marked `config: { jarvisAgent: true }` (`GET /tools`,
+`POST /tools/{name}`); elsewhere it gets 403. Unset or empty denies the agent.
 Missing/invalid credentials return 401; verified but unauthorized tokens return
 403. Authentication failures never export token/claim/provider details.
 Approved browser origins retain CORS headers on these early denials so the web
@@ -339,6 +344,8 @@ The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and
   applied history. Add the reverse batch under `db/migrations/down/` with the
   same name; an offline test requires one for every migration, and
   `schema.integration.test.ts` reverts all of them newest first and reapplies.
+  `0001_core_tables.sql` contains groups 1–3; `0002_sandbox_operations.sql`
+  contains groups 4 and 6.
   See [migration guide](../db/migrations/README.md).
 - Offline checks: `npm test --workspace @jarvis/backend`,
   `npm run lint --workspace @jarvis/backend`,
@@ -437,7 +444,35 @@ which takes a few minutes; Codex caches the result.
 Python checks use each package's `.venv`. For the runner, from `runner/`:
 `.venv/bin/python -m ruff check .` and `.venv/bin/python -m pytest -q`
 (verified in the P0-14 Copilot session after setup: ruff passed, 36 tests passed).
-`agents/jarvis` has no Python package yet, so setup skips it.
+
+### Jarvis agent
+
+`agents/jarvis` (P4-01) has its own `.venv` from the shared setup script. Verified
+in the P4-01 Copilot session (Docker was available there):
+
+| Purpose | Command |
+| --- | --- |
+| Lint and tests, from `agents/jarvis/` | `.venv/bin/python -m ruff check .`; `.venv/bin/python -m pytest -q` (100 passed) |
+| Same check as CI, from the root | `bash .github/scripts/python-ci.sh agents/jarvis` |
+| Image, from the root | `docker build --tag jarvis-agent:local agents/jarvis` |
+| Model-free voice turn | Run the image with the variables below, then `agents/jarvis/.venv/bin/python agents/jarvis/scripts/smoke_test.py` (default `ws://127.0.0.1:8088/invocations_ws`, text `/help`) |
+| Regenerate the hash locks, from the root, after editing a `.in` file | `uv pip compile --python-version 3.12 --generate-hashes agents/jarvis/requirements.in -o agents/jarvis/requirements.txt`, then the same for `requirements-dev.in` → `requirements-dev.txt` |
+
+Agent configuration (environment variables, no secrets):
+
+| Variable | Meaning |
+| --- | --- |
+| `FOUNDRY_PROJECT_ENDPOINT`, `AZURE_AI_MODEL_DEPLOYMENT_NAME` | Required. Foundry project endpoint (`https://<host>/api/projects/<name>`) and model deployment |
+| `JARVIS_BACKEND_URL` | Required. Backend origin: HTTPS, or HTTP only for `localhost`/`127.0.0.1`/`::1`; no path, query or credentials. Startup fails without it |
+| `JARVIS_API_CLIENT_ID` | Optional `jarvis-api` client ID for the token scope `api://<id>/.default`; defaults to the bootstrap ID |
+| `AZURE_OPENAI_API_KEY` | Optional local model key; without it the agent identity also gets the model token |
+| `AZURE_OPENAI_SYSTEM_PROMPT`, `AZURE_OPENAI_MAX_OUTPUT_TOKENS`, `JARVIS_REASONING_EFFORT`, `LOG_LEVEL` | Optional overrides, as in the prototype |
+
+The agent identity exists only after the agent is deployed (P4-08). Then run
+`./infra/bootstrap.ps1 -JarvisAgentPrincipalId <instance_identity.principal_id>`
+to assign `Jarvis.Tools`, and set the backend's `ENTRA_JARVIS_AGENT_OBJECT_ID` to
+the same ID. Tool calls also need the turn's stored message ID from P4-03; until
+then the agent reports each call as not done.
 
 ## Release procedure
 

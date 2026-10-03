@@ -130,7 +130,7 @@ erDiagram
 - **One continuous conversation.** Jarvis has a single thread; each chat or voice sitting is a `jarvis_session` within it. Over time the thread needs compaction and memory (Decision 6, deferred); `messages` keeps the full record either way.
 - P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language and tool name, outcome, and task ID, not tool arguments or results. The current main page reads history; chat/voice clients will call the session/message write endpoints in P4-06/P5-03/P5-04. No schema migration was needed.
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
-- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; any other failure is stored as a generic error. P1-01 (#15) owns the table migration; no live SQL write has been verified yet.
+- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; any other failure is stored as a generic error. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. The hosted Jarvis agent (P4-01) sends the stored message ID of the turn that triggered the call; P4-03 stores messages, but no caller passes that ID to the agent yet, so the agent makes no tool call.
 - Session, message, history, task-origin, and tool-call behavior is covered by offline and disposable SQL Server tests; live Azure SQL writes have not been verified.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
 - P1-11 stores global defaults in the existing key/value table; missing keys use
@@ -165,6 +165,10 @@ erDiagram
 ```
 
 - One row per repository. `tech` chooses the sandbox image (small images, L23).
+- P1-03's SQL-backed API returns active projects, updates only active rows, and
+  archives by setting `active = 0`; archived rows remain to preserve task
+  references and the unique repository constraint. Repositories stay reserved
+  after archive.
 
 ## 3 · Tasks and queue
 
@@ -255,6 +259,8 @@ erDiagram
 - A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22).
 - The sandbox heartbeat updates `last_heartbeat_at`; live runner events update `last_event_at` and add `task_events`.
 - Large content (logs, CI logs, transcripts) lives in Blob; SQL keeps only the path.
+- The schema checks sandbox sizes, statuses, turn modes, end reasons and artifact kinds against these vocabularies. UTC `datetime2` end and heartbeat/event timestamps cannot precede their start.
+- `sandbox_sessions` is indexed by task and status; turns and artifacts are indexed by their parent and timestamp for the session/task timelines.
 
 ## 5 · GitHub and release
 
@@ -336,7 +342,8 @@ erDiagram
 ```
 
 - `webhook_deliveries` makes webhook handling idempotent: GitHub may deliver the same event twice.
-- `credential_status` stores dates only, never secret values; it drives "renew soon" warnings on the board.
+- A delivery is first stored with null outcome and processing time; those fields are set together to `ok`, `ignored` or `error` when handled. No webhook payload or secret is stored here.
+- `credential_status` stores expiry/renewal dates and status only, never secret values; it drives "renew soon" warnings on the board.
 
 ## 7 · Usage and cost
 

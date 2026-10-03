@@ -194,11 +194,14 @@ const LANE_ORDER = Object.keys(LANES);
 const FLOWS = [
   {
     name: "Request",
-    summary: "Dan asks for work on the board or by voice. Board buttons go straight to the backend; chat and voice go to the Jarvis agent. The chosen browser voice design sends traffic through an authenticated backend relay.",
+    summary: "Dan configures projects and asks for work on the board or by voice. Board controls call the backend directly; P1-03 implements the projects API while the page and task creation remain future work. Chat and voice go to Jarvis; browser voice uses the authenticated backend relay.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "context", badge: "Start", t: "Dan wants a change", d: "For example: add dark mode to Jarvis.", ev: "Start of the user flow." },
       { id: "card", lane: "board", col: 2, s: "assumed", t: "Add a card", d: "Project, agent and task text.", ev: "Board requirement in PRODUCT.md; the board is not built yet." },
       { id: "create", lane: "backend", col: 3, s: "assumed", t: "Create task", d: "Board buttons call backend functions directly.", ev: "architecture.md: one backend with shared functions for board, voice and Windows." },
+      { id: "project-settings", lane: "board", col: 2, s: "assumed", t: "Manage project settings", d: "Create, edit, and archive a project.", ev: "P1-10 owns the project page; the UI is not built yet." },
+      { id: "project-api", lane: "backend", col: 3, s: "proven", t: "Projects API", d: "Authenticated list, create, update, and archive routes validate requests.", ev: "P1-03 offline Fastify tests cover authentication, CRUD responses, and validation rules." },
+      { id: "project-store", lane: "data", col: 4, s: "proven", t: "Read and write projects", d: "Parameterized SQL; archive sets active = 0.", ev: "P1-03 SQL Server-container integration tests execute project CRUD and archive queries; deployed Azure SQL remains unverified." },
       { id: "chat", lane: "board", col: 4, s: "assumed", t: "Type to Jarvis", d: "Chat box on the board.", ev: "Design assumption: the board can also send free text to the Jarvis agent." },
       { id: "speak", lane: "voice", col: 2, s: "unknown", t: "Speak Danish", d: "Browser voice uses the authenticated backend WebSocket; provider credentials stay server-side.", ev: "P5-01 local mock test covers the relay only. Browser audio and real Voice Live interoperability are unverified." },
       { id: "relay", lane: "backend", col: 3, s: "unknown", t: "Relay to Voice Live", d: "Backend authenticates the browser and forwards WebSocket messages to the provider.", ev: "P5-01 test verifies bidirectional forwarding and credential separation against a local mock upstream. Production provider wiring and Azure interoperability are unverified." },
@@ -207,7 +210,8 @@ const FLOWS = [
       { id: "jin", lane: "jarvis", col: 6, s: "proven", t: "Jarvis agent gets the text", d: "Voice Live bridges to a hosted agent (preview).", ev: "Voice prototype V1: voice agent → hosted agent over Bridge Protocol 1.0 (invocations_ws).", href: VR },
     ],
     edges: [
-      ["start", "card", "docs", "click"], ["start", "speak", "unknown", "speak", { off: 32 }], ["start", "chat", "docs", "type"],
+      ["start", "card", "docs", "click"], ["start", "project-settings", "docs", "project settings"], ["project-settings", "project-api", "docs", "API request"],
+      ["project-api", "project-store", "docs", "SQL"], ["start", "speak", "unknown", "speak", { off: 32 }], ["start", "chat", "docs", "type"],
       ["card", "create", "docs", "create task"], ["speak", "relay", "unknown", "audio"],
       ["relay", "stt", "unknown", "audio"],
       ["stt", "jin", "proven", "text"], ["chat", "jin", "docs", "text", { off: 32 }],
@@ -288,10 +292,11 @@ const FLOWS = [
       { id: "rows", lane: "data", col: 3, s: "assumed", t: "Task rows and events", d: "Read from Azure SQL." },
       { id: "tool", lane: "model", col: 3, s: "proven", t: "Choose an action", d: "Tool call: create_task(project, agent, text).", ev: "Voice prototype V3: gpt-5.6-luna with strict action rules chose the right tool and arguments for 20/20 Danish commands through the deployed path.", href: VR },
       { id: "intent", lane: "model", col: 4, s: "proven", t: "Danish intent accuracy and cost", d: "20/20 commands; ≈0.003 DKK per command (gpt-5.6-luna).", ev: "Voice prototype V3 and reliability trials. Risk found: the model can describe an action it did not take; speak confirmations from tool results.", href: VR },
-      { id: "call", lane: "jarvis", col: 4, s: "docs", t: "Call a backend function", d: "Agent sends tool arguments and the source message ID.", ev: "The registry endpoint is tested offline, but the hosted agent has not yet been connected to it. Its service identity needs a route-specific backend authorization policy." },
-      { id: "auth", lane: "backend", col: 5, s: "docs", t: "Authorize the caller", d: "Dan's delegated API token is verified; service identity policy remains separate.", ev: "Issue #8: real RSA/local JWKS checks prove RS256 signature, issuer, API audience, time, tenant, Dan's object ID and scope offline. Authentication runs before CORS, including explicit business OPTIONS routes (L31). P0-09 checks browser token forwarding and /me offline; live Entra and Jarvis agent authorization remain unverified." },
-      { id: "confirm", lane: "jarvis", col: 6, s: "proven", t: "Confirm to Dan", d: "Short Danish reply; speak what the tool result says.", ev: "Voice prototype: short spoken Danish confirmations. Rule from L16: base them on the tool result. P4-05: the dispatcher returns an ok/refused/error outcome and a confirmation built from the recorded result; offline tests prove refused and failed calls are reported as such. The hosted agent relaying it is P4-01.", href: VR },
-    ],
+      { id: "call", lane: "jarvis", col: 4, s: "docs", t: "Call a backend function", d: "Agent sends tool arguments and the source message ID.", ev: "P4-01: agents/jarvis loads GET /tools and sends each model tool call to POST /tools/{name} with an app-only token from its platform identity, verified offline and against the real backend built locally. It needs the turn's stored message ID from P4-03 and has none yet, so it refuses the call; deployment and a live agent token are P4-08." },
+
+      { id: "auth", lane: "backend", col: 5, s: "docs", t: "Authorize the caller", d: "Dan's delegated token, or the Jarvis agent's app-only token with the Jarvis.Tools role on the tool routes only.", ev: "Issue #8: real RSA/local JWKS checks prove RS256 signature, issuer, API audience, time, tenant, Dan's object ID and scope offline. Authentication runs before CORS, including explicit business OPTIONS routes (L31). P0-09 checks browser token forwarding and /me offline. P4-01 adds the agent policy (configured object ID, Jarvis.Tools role, no delegated scope, opted-in routes; elsewhere 403), tested offline with signed tokens; live Entra agent tokens remain unverified (P4-08)." },
+
+      { id: "confirm", lane: "jarvis", col: 6, s: "proven", t: "Confirm to Dan", d: "Short Danish reply; speak what the tool result says.", ev: "Voice prototype: short spoken Danish confirmations. Rule from L16: base them on the tool result. P4-05: the dispatcher returns an ok/refused/error outcome and a confirmation built from the recorded result; offline tests prove refused and failed calls are reported as such. P4-01's agent counts only ok as done and bases its reply on the confirmation (offline).", href: VR },    ],
     edges: [
       ["ctx", "load", "docs", ""], ["load", "read", "docs", "read"], ["read", "rows", "docs", "query"],
       ["load", "tool", "proven", "prompt + tools"], ["tool", "call", "proven", "tool call"],
@@ -446,7 +451,7 @@ const FLOWS = [
       { id: "wf", lane: "actions", col: 2, s: "docs", t: "Release workflow", d: "Build, test and upload an artifact on merge to main.", ev: "P3-09: copyable release workflow is in templates/github-actions/release.yml; see the adoption guide.", href: "github-actions-templates.md" },
       { id: "deploy", lane: "actions", col: 3, s: "docs", t: "Deploy to Azure with OIDC", d: "Main-only production environment; id-token permission is limited to deploy.", ev: "P3-09 documents the environment-bound Azure federation setup; live Azure use is unverified.", href: "github-actions-templates.md" },
  
-      { id: "migrations", lane: "backend", col: 4, s: "proven", t: "Apply pending migrations before listen", d: "Bounded startup, transaction-owned app lock, immutable checksum ledger; failure rolls back and closes the pool.", ev: "Issue #7: real SQL Server CI passed repeat/concurrent startup, rollback, history, lock contention and cancellation. Issue #11 adds the main Deploy workflow, which sets the managed-identity SQL settings in Bicep and requires /health (served only after migrations) on each backend deploy; the first live run is P0-16." },
+      { id: "migrations", lane: "backend", col: 4, s: "proven", t: "Apply pending migrations before listen", d: "Bounded startup, transaction-owned app lock, immutable checksum ledger; failure rolls back and closes the pool.", ev: "Issue #7: real SQL Server CI passed repeat/concurrent startup, rollback, history, lock contention and cancellation. P2-01 (#27) adds groups 4 and 6, checked by the same SQL Server CI. Issue #11 adds the main Deploy workflow, which sets the managed-identity SQL settings in Bicep and requires /health (served only after migrations) on each backend deploy; the first live run is P0-16." },
       { id: "rec", lane: "data", col: 4, s: "assumed", t: "Release record", d: "Commits, PRs, runs and deployments per release." },
       { id: "view", lane: "board", col: 5, s: "assumed", t: "Release view", d: "Commits, PRs, running / passed / failed, deployed." },
       { id: "fail", lane: "backend", col: 5, s: "assumed", t: "Failed release: Needs attention", d: "Offer a fix task with the failing log." },
