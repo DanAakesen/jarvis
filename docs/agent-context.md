@@ -128,7 +128,7 @@ The repository uses npm workspaces for `apps/web` and `apps/backend`, one root
 lockfile, and shared strict TypeScript configuration. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
-Python and SQL components remain in their planned tasks.
+Python runtime and SQL domain tables remain in their planned tasks. Issue #7 adds the database connection and startup migration infrastructure.
 P0-04 adds the Bicep template; its Azure deployment awaits P0-11.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
@@ -211,12 +211,43 @@ Verified locally for issue #30 (no Azure access required):
 
 The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and an injected `getToken(scope, signal)` identity provider. These are module options, not new environment variables. See the [module guide](../apps/backend/src/foundry/README.md) for operation ownership and fixture provenance. Recorded runner responses are captured locally with ACP stubbed; these checks establish the offline contract, not live Azure readiness. The dedicated `Foundry contract CI` workflow checks this module on the current skeleton without depending on the server implementation.
 
+### Database access and migrations (#7)
+
+- Configure `SQL_SERVER=<host>.database.windows.net`, `SQL_DATABASE=jarvis` and
+  `SQL_MANAGED_IDENTITY_CLIENT_ID=<id-jarvis-backend client UUID>` in the backend
+  deployment. These are identifiers, not passwords. `SQL_AUTH_MODE` may be omitted
+  or `managed-identity`. Password/user/port overrides are forbidden in this mode;
+  TLS certificate validation is always enabled.
+- With no SQL variables, the offline skeleton logs `database.not_configured` and
+  keeps `/health` available. Partial/invalid configuration fails startup. #11 must
+  supply all three settings and verify identity membership/SQL connectivity.
+- The backend owns a pool, runs migrations before listening and closes it on
+  failed/cancelled startup or shutdown. SQL calls are bounded to 120 seconds,
+  lock contention to 60 seconds, and complete startup to 300 seconds. Initialization
+  is outside Fastify ready hooks so their 10-second timeout cannot abort SQL
+  auto-resume. No idle SQL poll or periodic migration job is added.
+- Append immutable files under `db/migrations/` as `NNNN_name.sql`; use one SQL
+  batch per file, no `GO`, and never rewrite an applied file or insert before
+  applied history. See [migration guide](../db/migrations/README.md). Domain
+  schema and up/down acceptance remain #17.
+- Offline checks: `npm test --workspace @jarvis/backend`,
+  `npm run lint --workspace @jarvis/backend`,
+  `npm run build --workspace @jarvis/backend`.
+- Real SQL contracts: `npm run test:database --workspace @jarvis/backend` in
+  `database-ci.yml`, called by aggregate `ci.yml` and included in `CI result`.
+  Actions owns the disposable SQL Server container; agents do not run Docker or
+  reach Azure SQL. Test-password mode requires `NODE_ENV=test`, `SQL_SERVER=127.0.0.1`,
+  `SQL_USER`, `SQL_PASSWORD` and `SQL_DATABASE`; its isolated fixture is not a
+  production credential. See [database guide](../apps/backend/src/database/README.md).
+- Real Azure managed-identity exchange and applying/restarting a deployed revision
+  remain #11. Offline contracts never establish live Azure readiness.
+
 Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
 | Item | Detail |
 | --- | --- |
 | Triggers | Every `pull_request`, `push` to `main`, and `workflow_dispatch` (P0-12 starts it on `main` after a merge) |
-| Jobs | `Web`, `Backend` (lint, tests, build, container smoke), `Foundry` and `Runner` (base and .NET images, packaged CLI and HTTP smoke) call the reusable `web-ci.yml`, `backend-ci.yml`, `foundry-contract.yml` and `runner-ci.yml`; `Python lint, test and build` (runner lint and tests moved here from `runner-ci.yml`); `CI result` |
+| Jobs | `Web`, `Backend` (lint, tests, build, container smoke), `Database` (isolated SQL Server contracts), `Foundry` and `Runner` (base and .NET images, packaged CLI and HTTP smoke) call the reusable `web-ci.yml`, `backend-ci.yml`, `database-ci.yml`, `foundry-contract.yml` and `runner-ci.yml`; `Python lint, test and build` (runner lint and tests moved here from `runner-ci.yml`); `CI result` |
 | Gate | `CI result` fails unless every other job succeeded. It is the check to require on `main` and for P0-12 `workflow_run` |
 | Python | `bash .github/scripts/python-ci.sh [dir ...]` (default `runner agents/jarvis`). A component with `pyproject.toml` must have a hash-pinned `requirements-dev.txt` with ruff and pytest; each gets its own venv, `ruff check`, `pytest -q` and `compileall`. A component without `pyproject.toml` is reported as skipped (notice and step summary), not passed |
 | Local workflow lint (verified for P0-10) | `go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7`, then `~/go/bin/actionlint` from the repository root. It passes for the CI files; it reports existing findings in `runner-ci.yml` (SC2034 warning) and `runner-deploy.yml` (an unquoted ` #11` ends the `prerequisite` step's YAML scalar, so that job failed on `main` at 290195b; needs a `fix-main:` PR) |

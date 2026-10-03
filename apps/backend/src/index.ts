@@ -2,12 +2,18 @@ import { buildApp } from './app.js';
 import { ConfigurationError, loadConfig } from './config.js';
 import { createLogger, createTelemetry } from './logging.js';
 import { shutdown } from './shutdown.js';
+import { loadDatabaseConfig } from './database/config.js';
+import { createDatabase, registerDatabase } from './database/lifecycle.js';
 
 try {
   const config = loadConfig();
+  const databaseConfig = loadDatabaseConfig();
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const app = buildApp(config, logger);
+  const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  if (database) registerDatabase(app, database);
+  else logger.info('database.not_configured');
   if (!telemetry) logger.info('telemetry.stdout_only');
 
   let stopping = false;
@@ -22,8 +28,14 @@ try {
   process.once('SIGTERM', () => { void stop(); });
   process.once('SIGINT', () => { void stop(); });
   try {
-    await app.listen({ port: config.port, host: '0.0.0.0' });
-    logger.info({ port: config.port }, 'server.listening');
+    if (database) {
+      await database.initialize();
+      logger.info('database.ready');
+    }
+    if (!stopping) {
+      await app.listen({ port: config.port, host: '0.0.0.0' });
+      logger.info({ port: config.port }, 'server.listening');
+    }
   } catch {
     logger.error('server.failed');
     process.exitCode = 1;
