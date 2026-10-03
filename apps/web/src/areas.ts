@@ -1,12 +1,17 @@
 import type { ComponentType } from 'react';
 import { FactoryArea } from './factory/FactoryArea';
 
+export interface AreaProps {
+  backendUrl: string | null;
+  getAccessToken: () => Promise<string>;
+}
+
 export interface Area {
   id: string;
   label: string;
   /** Top-level path segment; the area's component renders its own nested routes. */
   path: string;
-  Component: ComponentType;
+  Component: ComponentType<AreaProps>;
 }
 
 /** Phase 1 has one area. A later area adds its folder and one entry here; the shell is unchanged. */

@@ -224,17 +224,20 @@ calls authenticated `/me`; only the backend-approved display name is shown.
 workflow (below). Local tests use signed fixture tokens and do not verify a live
 Entra tenant or Azure deployment.
 
-Browser checks of signed-in pages (verified in Copilot cloud agent for P1-07
-and P1-11, where the Playwright MCP tools were unavailable; L45): in a scratch
+Browser checks of signed-in pages (verified in Copilot cloud agent for P1-07,
+P1-10 and P1-11, where the Playwright MCP tools were unavailable; L45): in a scratch
 directory outside the repository, run `npm install --no-save playwright-core`,
 then drive
 `chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] })`.
 Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
 returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
-P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised,
-with no horizontal overflow, all controls at least 44 px high, and no browser
-console errors. The mock does not verify live Entra, Azure SQL, or production settings consumers.
+P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised.
+P1-10 was inspected at 390 and 1280 px with scratch-only project/task API mocks;
+list, create, update and archive worked, the settings form stacked on mobile,
+there was no horizontal overflow, controls were at least 44 px high, and no
+console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
+production API behavior.
 Never commit the stub or weaken sign-in in the app.
 
 Backend commands:
@@ -242,7 +245,7 @@ Backend commands:
 | Purpose | Command |
 | --- | --- |
 | Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
-| SQL Server migration and task-store integration tests | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
+| SQL Server migration and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Start compiled backend | `npm start --workspace @jarvis/backend` (after its build) |
 | Build then start backend | `npm run dev --workspace @jarvis/backend` |
 | Health request | `curl --fail http://localhost:3000/health` → `{"status":"ok"}` |
@@ -291,7 +294,8 @@ is denied. `request.principal` contains only the verified object and tenant IDs.
 The optional `ENTRA_JARVIS_AGENT_OBJECT_ID` (a UUID other than Dan's; P4-01)
 admits the hosted Jarvis agent's app-only token with the `Jarvis.Tools` role,
 and only on routes marked `config: { jarvisAgent: true }` (`GET /tools`,
-`POST /tools/{name}`); elsewhere it gets 403. Unset or empty denies the agent.
+`GET /factory/context`, `POST /tools/{name}`); elsewhere it gets 403. Unset or
+empty denies the agent.
 Missing/invalid credentials return 401; verified but unauthorized tokens return
 403. Authentication failures never export token/claim/provider details.
 Approved browser origins retain CORS headers on these early denials so the web
@@ -478,6 +482,12 @@ in the P4-01 Copilot session (Docker was available there):
 | Image, from the root | `docker build --tag jarvis-agent:local agents/jarvis` |
 | Model-free voice turn | Run the image with the variables below, then `agents/jarvis/.venv/bin/python agents/jarvis/scripts/smoke_test.py` (default `ws://127.0.0.1:8088/invocations_ws`, text `/help`) |
 | Regenerate the hash locks, from the root, after editing a `.in` file | `uv pip compile --python-version 3.12 --generate-hashes agents/jarvis/requirements.in -o agents/jarvis/requirements.txt`, then the same for `requirements-dev.in` → `requirements-dev.txt` |
+
+P4-04 fetches `GET /factory/context` before each model turn; it contains at most
+20 running tasks and three recent events per task. The voice runtime supplies
+the most recent 12 messages, bounded to 24,000 characters total and 8,000 per
+message. The context endpoint is agent-authorized and adds no configuration or
+secret. SQL-backed context behavior is covered by the database integration suite.
 
 Agent configuration (environment variables, no secrets):
 

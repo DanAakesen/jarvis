@@ -11,6 +11,8 @@ import { createProjectStore } from './database/project-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createCredentialStatusStore } from './database/credential-status-store.js';
+import { createEventHub } from './core/event-hub.js';
+import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
 import { coreModule } from './core/index.js';
 import { conversationModule } from './core/conversation.js';
 import { factoryModule } from './factory/index.js';
@@ -25,6 +27,7 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const modules: BackendModule[] = [coreModule, conversationModule, factoryModule];
   const azureCredential = config.voiceLiveEndpoint || config.foundryRuntimeEndpoint
     ? new DefaultAzureCredential()
@@ -46,9 +49,10 @@ try {
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: createSettingsStore(database.pool),
       conversationStore: createConversationStore(database.pool),
-      taskStore: createTaskStore(database.pool),
+      taskStore: createTaskStore(database.pool, eventHub),
       credentialStatusStore: createCredentialStatusStore(database.pool),
     } : {}),
+    eventHub,
   });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');

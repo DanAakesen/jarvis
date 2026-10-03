@@ -1,5 +1,17 @@
 import sql from 'mssql';
-import type { CreateTaskInput, TaskDetail, TaskEventRecord, TaskListFilters, TaskRecord, TaskStore, TaskTransitionResult } from '../factory/task-store.js';
+import type {
+  CreateTaskInput,
+  RecordTaskEventInput,
+  RunningTaskContext,
+  TaskDetail,
+  TaskEventHub,
+  TaskEventMessage,
+  TaskEventRecord,
+  TaskListFilters,
+  TaskRecord,
+  TaskStore,
+  TaskTransitionResult,
+} from '../factory/task-store.js';
 import { canTransitionTask, type TaskState } from '../factory/task-lifecycle.js';
 
 interface TaskRow extends Omit<TaskRecord, 'createdAt' | 'startedAt' | 'finishedAt' | 'nextAttemptAt'> {
@@ -13,6 +25,35 @@ interface EventRow extends Omit<TaskEventRecord, 'at' | 'payload'> {
   at: Date | string;
   payload: string | null;
 }
+
+interface RunningContextRow {
+  id: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+  agent: TaskRecord['agent'];
+  state: TaskRecord['state'];
+  activity: string | null;
+  startedAt: Date | string | null;
+  eventId: string | null;
+  eventType: string | null;
+  eventSummary: string | null;
+  eventSource: TaskEventRecord['source'] | null;
+  eventAt: Date | string | null;
+}
+
+const runningContextTaskLimit = 20;
+const runningContextEventLimit = 3;
+const runningContextSummaryLimit = 400;
+
+interface InsertedEventRow extends Omit<TaskEventRecord, 'at' | 'payload' | 'payloadTruncated'> {
+  at: Date | string;
+  payload: string | null;
+}
+
+const maxSqlBigInt = 9_223_372_036_854_775_807n;
+const maxPayloadBytes = 1024 * 1024;
+const maxPublishedPayloadBytes = 4096;
 
 const taskColumns = `CAST(id AS varchar(19)) AS id, CAST(project_id AS varchar(19)) AS projectId,
   CAST(origin_message_id AS varchar(19)) AS originMessageId, title, request, source, agent,
@@ -50,12 +91,80 @@ function parsePayload(payload: string | null): unknown {
   catch { return null; }
 }
 
+function serializePayload(payload: unknown): string | null {
+  if (payload === undefined) return null;
+  try {
+    const serialized = JSON.stringify(payload);
+    if (serialized === undefined || Buffer.byteLength(serialized) > maxPayloadBytes) {
+      throw new Error();
+    }
+    return serialized;
+  } catch {
+    throw new Error('Invalid task event payload');
+  }
+}
+
+function validateEvent(event: RecordTaskEventInput): string | null {
+  if (typeof event.taskId !== 'string' || !/^[1-9][0-9]{0,18}$/.test(event.taskId) ||
+    event.taskId !== event.taskId.trim() || BigInt(event.taskId) > maxSqlBigInt ||
+    typeof event.type !== 'string' || !/^[a-z][a-z_]{0,63}$/.test(event.type) ||
+    event.type !== event.type.trim() ||
+    !['runner', 'backend', 'github', 'dan'].includes(event.source) ||
+    (event.summary !== undefined && event.summary !== null &&
+      (typeof event.summary !== 'string' || event.summary.length > 2000))) {
+    throw new Error('Invalid task event');
+  }
+  return serializePayload(event.payload);
+}
+
+function toTaskEvent(row: InsertedEventRow, taskId: string): TaskEventMessage {
+  const payloadTruncated = row.payload !== null && Buffer.byteLength(row.payload) > maxPublishedPayloadBytes;
+  return {
+    ...row,
+    taskId,
+    payload: payloadTruncated ? null : parsePayload(row.payload),
+    payloadTruncated,
+    at: iso(row.at) as string,
+  };
+}
+
+async function insertTaskEvent(
+  transaction: sql.Transaction,
+  event: RecordTaskEventInput,
+  payload: string | null,
+): Promise<TaskEventMessage> {
+  const inserted = await new sql.Request(transaction)
+    .input('taskId', sql.BigInt, BigInt(event.taskId))
+    .input('type', sql.NVarChar(64), event.type)
+    .input('summary', sql.NVarChar(2000), event.summary ?? null)
+    .input('payload', sql.NVarChar(sql.MAX), payload)
+    .input('source', sql.NVarChar(16), event.source)
+    .query<InsertedEventRow>(`INSERT INTO dbo.task_events (task_id, type, summary, payload, source)
+      OUTPUT CAST(inserted.id AS varchar(19)) AS id, inserted.type, inserted.summary, inserted.payload,
+        inserted.source, inserted.at
+      VALUES (@taskId, @type, @summary, @payload, @source);`);
+  const row = inserted.recordset[0];
+  if (!row) throw new Error('Task event insert returned no row');
+
+  let title = (event.summary?.trim() || event.type).slice(0, 400);
+  if (title.length === 400 && title.charCodeAt(399) >= 0xd800 && title.charCodeAt(399) <= 0xdbff) {
+    title = title.slice(0, -1);
+  }
+  await new sql.Request(transaction)
+    .input('kind', sql.NVarChar(64), event.type)
+    .input('title', sql.NVarChar(400), title)
+    .input('link', sql.NVarChar(100), `task:${event.taskId}`)
+    .query(`INSERT INTO dbo.activity (area, kind, title, link)
+      VALUES (N'factory', @kind, @title, @link);`);
+  return toTaskEvent(row, event.taskId);
+}
+
 async function rollback(transaction: sql.Transaction): Promise<void> {
   try { await transaction.rollback(); }
   catch { /* The transaction may already have rolled back. */ }
 }
 
-export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
+export function createTaskStore(pool: sql.ConnectionPool, eventHub: TaskEventHub): TaskStore {
   return {
     async create(input: CreateTaskInput) {
       const transaction = new sql.Transaction(pool);
@@ -84,12 +193,17 @@ export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
             VALUES (@projectId, @title, @request, N'board', @agent, @modelOverride, @reasoningOverride, @priority);`);
         const task = inserted.recordset[0];
         if (!task) throw new Error('Task insert returned no row');
-        await new sql.Request(transaction)
-          .input('taskId', sql.BigInt, BigInt(task.id))
-          .input('payload', sql.NVarChar(sql.MAX), JSON.stringify({ state: 'Ready' }))
-          .query(`INSERT INTO dbo.task_events (task_id, type, summary, payload, source)
-            VALUES (@taskId, N'created', N'Task created from the board', @payload, N'backend');`);
+        const event: RecordTaskEventInput = {
+          taskId: task.id,
+          type: 'created',
+          summary: 'Task created from the board',
+          payload: { state: 'Ready' },
+          source: 'backend',
+        };
+        const serializedPayload = validateEvent(event);
+        const publishedEvent = await insertTaskEvent(transaction, event, serializedPayload);
         await transaction.commit();
+        eventHub.publish(publishedEvent);
         return toTask(task);
       } catch {
         await rollback(transaction);
@@ -158,6 +272,68 @@ export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
       };
     },
 
+    async getRunningContext() {
+      const result = await pool.request()
+        .input('taskLimit', sql.Int, runningContextTaskLimit + 1)
+        .input('eventLimit', sql.Int, runningContextEventLimit)
+        .query<RunningContextRow>(`WITH running_tasks AS (
+            SELECT TOP (@taskLimit) t.id AS task_id, t.project_id, p.name AS project_name,
+              t.title, t.agent, t.state, t.activity, t.started_at,
+              ROW_NUMBER() OVER (ORDER BY t.started_at DESC, t.id DESC) AS task_order
+            FROM dbo.tasks AS t
+            INNER JOIN dbo.projects AS p ON p.id = t.project_id
+            WHERE t.state = N'Running'
+            ORDER BY t.started_at DESC, t.id DESC
+          )
+          SELECT CONVERT(varchar(19), t.task_id) AS id,
+            CONVERT(varchar(19), t.project_id) AS projectId, t.project_name AS projectName,
+            t.title, t.agent, t.state, t.activity, t.started_at AS startedAt,
+            CONVERT(varchar(19), e.id) AS eventId, e.type AS eventType,
+            e.summary AS eventSummary, e.source AS eventSource, e.at AS eventAt
+          FROM running_tasks AS t
+          OUTER APPLY (
+            SELECT TOP (@eventLimit) e.id, e.type, e.summary, e.source, e.at
+            FROM dbo.task_events AS e
+            WHERE e.task_id = t.task_id
+            ORDER BY e.at DESC, e.id DESC
+          ) AS e
+          ORDER BY t.task_order, e.at DESC, e.id DESC;`);
+      const tasks = new Map<string, RunningTaskContext>();
+      for (const row of result.recordset) {
+        let task = tasks.get(row.id);
+        if (!task) {
+          task = {
+            id: row.id,
+            projectId: row.projectId,
+            projectName: row.projectName,
+            title: row.title,
+            agent: row.agent,
+            state: row.state,
+            activity: row.activity,
+            startedAt: iso(row.startedAt),
+            recentEvents: [],
+          };
+          tasks.set(row.id, task);
+        }
+        if (row.eventId !== null && row.eventType !== null && row.eventSource !== null && row.eventAt !== null) {
+          const summary = row.eventSummary?.slice(0, runningContextSummaryLimit) ?? null;
+          task.recentEvents.push({
+            type: row.eventType,
+            summary,
+            summaryTruncated: row.eventSummary !== null && row.eventSummary.length > runningContextSummaryLimit,
+            source: row.eventSource,
+            at: iso(row.eventAt) as string,
+          });
+        }
+      }
+      const runningTasks = Array.from(tasks.values());
+      const truncated = runningTasks.length > runningContextTaskLimit;
+      return {
+        runningTasks: runningTasks.slice(0, runningContextTaskLimit),
+        truncated,
+      };
+    },
+
     async transition(id: string, state: TaskState, completionVerified = false): Promise<TaskTransitionResult> {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
@@ -207,16 +383,36 @@ export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
             WHERE id = @taskId;`);
         const task = updated.recordset[0];
         if (!task) throw new Error('Task update returned no row');
-        await new sql.Request(transaction)
-          .input('taskId', sql.BigInt, BigInt(id))
-          .input('payload', sql.NVarChar(sql.MAX), JSON.stringify({ from: current, to: state }))
-          .query(`INSERT INTO dbo.task_events (task_id, type, summary, payload, source)
-            VALUES (@taskId, N'state_changed', N'Task state changed', @payload, N'backend');`);
+        const event: RecordTaskEventInput = {
+          taskId: id,
+          type: 'state_changed',
+          summary: 'Task state changed',
+          payload: { from: current, to: state },
+          source: 'backend',
+        };
+        const serializedPayload = validateEvent(event);
+        const publishedEvent = await insertTaskEvent(transaction, event, serializedPayload);
         await transaction.commit();
+        eventHub.publish(publishedEvent);
         return { kind: 'ok', task: toTask(task) };
       } catch {
         await rollback(transaction);
         throw new Error('Task persistence failed');
+      }
+    },
+
+    async recordEvent(event: RecordTaskEventInput): Promise<TaskEventMessage> {
+      const payload = validateEvent(event);
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        const publishedEvent = await insertTaskEvent(transaction, event, payload);
+        await transaction.commit();
+        eventHub.publish(publishedEvent);
+        return publishedEvent;
+      } catch {
+        await rollback(transaction);
+        throw new Error('Task event persistence failed');
       }
     },
   };
