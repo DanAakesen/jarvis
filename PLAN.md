@@ -17,6 +17,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 - **Schema (#15):** P1-01 adds `0001_core_tables.sql` (groups 1–3) with a reviewed down script and a lock-guarded `revertMigration`; SQL Server CI proves up, constraints, down and re-up. The first production application happens during P0-16's first deploy. P1-03, P1-04 and P1-11 are unblocked on the schema side.
 - **Authentication (#8–#9):** backend bearer validation, MSAL browser sign-in and the protected `/me` profile endpoint are implemented and checked offline. Dan's account is allow-listed by object ID; other accounts are refused. Live Entra sign-in and deployed backend verification remain pending P0-16 because this environment has no Azure access.
+- **Schema follow-up (#27):** P2-01 adds `0002_sandbox_operations.sql` (groups 4 and 6) with its reverse batch and schema contracts. Offline tests pass; isolated SQL Server validation awaits CI, and Azure application remains unverified until #11.
 
 ## Implementation phases
 
