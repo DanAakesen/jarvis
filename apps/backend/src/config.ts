@@ -10,6 +10,7 @@ export interface BackendConfig {
   logLevel: Level;
   applicationInsightsConnectionString?: string;
   voiceLiveEndpoint?: string;
+  chatAgentUrl?: string;
   auth: AuthConfig;
 }
 
@@ -64,6 +65,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     }
   }
 
+  let chatAgentUrl: string | undefined;
+  if (env.JARVIS_CHAT_AGENT_URL !== undefined) {
+    try {
+      const url = new URL(env.JARVIS_CHAT_AGENT_URL.trim());
+      if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.search || url.hash) {
+        throw new Error();
+      }
+      chatAgentUrl = url.toString().replace(/\/+$/, '');
+    } catch {
+      throw new ConfigurationError('JARVIS_CHAT_AGENT_URL must be a secure HTTPS URL without credentials, query, or fragment');
+    }
+  }
+
   return {
     auth: loadAuthConfig(env),
     port: Number(port),
@@ -71,5 +85,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),
     ...(connectionString === undefined ? {} : { applicationInsightsConnectionString: connectionString }),
     ...(voiceLiveEndpoint === undefined ? {} : { voiceLiveEndpoint }),
+    ...(chatAgentUrl === undefined ? {} : { chatAgentUrl }),
   };
 }

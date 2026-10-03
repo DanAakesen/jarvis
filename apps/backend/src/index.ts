@@ -15,6 +15,7 @@ import { conversationModule } from './core/conversation.js';
 import { factoryModule } from './factory/index.js';
 import type { BackendModule } from './modules.js';
 import { createVoiceLiveConnector, createVoiceRelayModule } from './voice/relay.js';
+import { createHttpConversationAgent } from './core/chat-agent.js';
 
 try {
   const config = loadConfig();
@@ -43,6 +44,7 @@ try {
       conversationStore: createConversationStore(database.pool),
       taskStore: createTaskStore(database.pool),
     } : {}),
+    ...(config.chatAgentUrl ? { conversationAgent: createHttpConversationAgent(config.chatAgentUrl) } : {}),
   });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');

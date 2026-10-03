@@ -10,6 +10,7 @@ import { coreModule } from './core/index.js';
 import type { ToolCallStore } from './core/tool-calls.js';
 import { conversationModule } from './core/conversation.js';
 import type { ConversationStore } from './core/conversation-store.js';
+import type { ConversationAgent } from './core/chat-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskStore } from './factory/task-store.js';
 import type { ProjectStore } from './factory/projects.js';
@@ -24,6 +25,7 @@ export interface BuildAppOptions {
   readonly taskStore?: TaskStore;
   readonly settingsStore?: SettingsStore;
   readonly conversationStore?: ConversationStore;
+  readonly conversationAgent?: ConversationAgent;
 }
 
 declare module 'fastify' {
@@ -33,6 +35,7 @@ declare module 'fastify' {
     taskStore: TaskStore | null;
     settingsStore: SettingsStore | null;
     conversationStore: ConversationStore | null;
+    conversationAgent: ConversationAgent | null;
   }
 }
 
@@ -85,6 +88,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('taskStore', options.taskStore ?? null);
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
+  app.decorate('conversationAgent', options.conversationAgent ?? null);
   registerModules(app, options.modules ?? [coreModule, conversationModule, factoryModule]);
   return app;
 }

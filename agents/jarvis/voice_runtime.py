@@ -30,6 +30,7 @@ from azure.ai.agentserver.invocations.voice import (
     VoiceAgentServerHost,
 )
 
+from chat_runtime import ChatContextLoader, load_verified_history, register_chat_route
 from jarvis_tools import current_conversation, current_turn
 from model_contract import StreamingModelClient
 from response_coordinator import ResponseCoordinator
@@ -386,11 +387,14 @@ class VoiceRuntime:
 
 def create_app(
     model_client: StreamingModelClient,
+    *,
+    chat_context_loader: ChatContextLoader = load_verified_history,
     **host_options: Any,
 ) -> VoiceAgentServerHost:
     """Create a Voice host with isolated application state."""
     runtime = VoiceRuntime(model_client)
     app = VoiceAgentServerHost(**host_options)
     runtime.bind(app)
+    register_chat_route(app, model_client, chat_context_loader)
     app.state.voice_runtime = runtime
     return app
