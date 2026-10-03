@@ -18,7 +18,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 | Stack, runtime, sandbox, voice, dispatch, cost | [architecture.md](architecture.md) |
 | Tables, relationships, and groups | [data-model.md](data-model.md) |
 | Step-by-step flows with evidence status | [architecture-flows.html](architecture-flows.html) (open in a browser) |
-| Decisions and learnings L1–L24 | [decisions.md](decisions.md) |
+| Decisions and learnings L1–L35 | [decisions.md](decisions.md) |
 | Prototype code and reports to port in P2 and P4 | [reference/](reference/) |
 | Open-source research | [open-source.md](open-source.md) |
 
@@ -52,7 +52,7 @@ Every coding agent on this repository follows these rules. This project requires
    - **Copilot cloud agent:** started from the issue, Copilot is assigned and opens a draft PR with the issue link automatically. Started anywhere else, open the draft PR with `Fixes #<issue>` in its body first. Its draft PR is its claim.
    - **Any other environment:** claim the same way, or ask Dan.
 2. Read the current `main`: the Status column and Current focus in `PLAN.md`, the relevant [decisions](decisions.md), and the files the `AGENTS.md` context map names for your area.
-3. Check that `main` is green: the latest CI and deploy runs on `main` passed (before P0-10 and P0-11 add them, `main` counts as green). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
+3. Check that `main` is green: the latest `CI` and deploy runs on `main` passed (before P0-11 adds deploy, only `CI` counts). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
 4. Check your task: not Complete, not claimed by anyone else, and every task in its "Depends on" column Complete. If any check fails, stop and report it on the issue.
 5. Look at the running tasks (In progress rows, assigned issues, and open PRs). Stay out of files they change, or say in your PR why you overlap.
 6. Use one branch and one PR. The PR title is exactly `<task ID>: <short summary>`, for example `P0-05: Foundry account and project`: the ID, a colon, a space, no brackets. Copilot's temporary `[WIP] ` prefix is fine. Work outside a task uses `fix-main: …` or `docs: …`. The [PR title](../.github/workflows/pr-title.yml) workflow corrects small deviations and fails otherwise. The PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
@@ -167,8 +167,9 @@ Until Dan completes these steps, App registration, installation, Key Vault stora
 
 The repository uses npm workspaces for `apps/web` and `apps/backend`, one root
 lockfile, and shared strict TypeScript configuration. P0-02 implements the web
-skeleton with React/Vite, routing, ESLint and Vitest; the backend remains an
-empty module until P0-03. Python and SQL components remain in their planned tasks.
+skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
+backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
+Python and SQL components remain in their planned tasks.
 P0-04 adds the Bicep template; its Azure deployment awaits P0-11.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
@@ -182,8 +183,9 @@ Verified in Codex cloud for P0-02:
 | --- | --- |
 | Frozen dependency installation | `npm ci` in the repository root |
 | Both workspace builds | `npm run build` in the repository root |
-| Web lint | `npm run lint` in the repository root |
-| Web tests (single run) | `npm test` in the repository root, or `npm test` in `apps/web` |
+| Both workspace lint checks | `npm run lint` in the repository root (P0-03 adds backend lint) |
+| Both workspace tests (single run) | `npm test` in the repository root (P0-03 adds backend tests) |
+| Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |
 
@@ -191,7 +193,40 @@ The web starts with the bootstrap identities and the public production backend
 origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). The URL
 is pending P0-11's first deployment; opening the skeleton needs no extra setup.
 Sign-in and authenticated API calls remain P0-09. `Web CI` checks lint, tests,
-and root builds on PRs and `main`; monorepo CI remains P0-10.
+and root builds as part of the aggregate `CI` workflow (below).
+
+Backend commands implemented in P0-03:
+
+| Purpose | Command |
+| --- | --- |
+| Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
+| Start compiled backend | `npm start --workspace @jarvis/backend` (after its build) |
+| Build then start backend | `npm run dev --workspace @jarvis/backend` |
+| Health request | `curl --fail http://localhost:3000/health` → `{"status":"ok"}` |
+| Production container (GitHub Actions only; no Docker in an agent sandbox) | `docker build --file apps/backend/Dockerfile --tag jarvis-backend .` from the repository root |
+
+`PORT` defaults to 3000, matching Container Apps ingress. `LOG_LEVEL` defaults
+to `info`. `STATIC_WEB_APP_ORIGIN` is an exact HTTPS origin with no trailing
+slash, path or query; it is required when `NODE_ENV=production`. P0-11 supplies
+the deployed Static Web App origin. Browser origins are limited to this value
+and `http://localhost:5173`; requests with another Origin receive 403. Requests
+without Origin (such as container health probes) are allowed. CORS is not
+authentication; P0-08 supplies token validation before business endpoints exist.
+
+`APPLICATIONINSIGHTS_CONNECTION_STRING` is backend-only protected runtime
+configuration supplied by P0-11 through Key Vault references. When absent,
+logs go to stdout only and `telemetry.stdout_only` makes that state visible.
+The isolated manual SDK receives the same safe events; automatic request and
+dependency instrumentation is not enabled. Log output drops headers, bodies,
+URLs, query strings, arbitrary messages and raw errors. Request IDs are generated
+by the server. Telemetry tests use fake sinks, never Azure. SIGTERM/SIGINT stops
+the backend and bounds close/flush/disposal to five seconds.
+
+`Backend CI` runs the offline lint, tests and targeted build plus a production
+container build and smoke test without Azure credentials. Its image uses pinned
+Node.js, runs as non-root, and contains backend output and production dependencies.
+Container verification belongs in Actions; live telemetry ingestion and Azure
+connectivity remain unverified until P0-11.
 
 Verified locally in P0-04 (Azure deployment remains pending P0-11):
 
@@ -207,16 +242,71 @@ separate: cloud environment network settings must allow `api.github.com` for
 issue/PR operations, as well as GitHub Git access and package registries. Never
 request a token merely because a network policy blocks that hostname.
 
+Verified locally for issue #30 (no Azure access required):
+
+| Purpose | Command from the repository root |
+| --- | --- |
+| Build the standalone backend Foundry client | `npm run build --workspace @jarvis/backend` |
+| Lint the client module | `npx --no-install eslint --config apps/backend/src/foundry/lint.config.mjs apps/backend/src/foundry --max-warnings 0` |
+| Run offline Foundry contract tests | `npx --no-install vitest run --config apps/backend/src/foundry/vitest.config.mts` |
+
+The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and an injected `getToken(scope, signal)` identity provider. These are module options, not new environment variables. See the [module guide](../apps/backend/src/foundry/README.md) for operation ownership and fixture provenance. Recorded runner responses are captured locally with ACP stubbed; these checks establish the offline contract, not live Azure readiness. The dedicated `Foundry contract CI` workflow checks this module on the current skeleton without depending on the server implementation.
+
+Aggregate CI (P0-10), `.github/workflows/ci.yml`:
+
+| Item | Detail |
+| --- | --- |
+| Triggers | Every `pull_request`, `push` to `main`, and `workflow_dispatch` (P0-12 starts it on `main` after a merge) |
+| Jobs | `Web`, `Backend` (lint, tests, build, container smoke), `Foundry` and `Runner` (base and .NET images, packaged CLI and HTTP smoke) call the reusable `web-ci.yml`, `backend-ci.yml`, `foundry-contract.yml` and `runner-ci.yml`; `Python lint, test and build` (runner lint and tests moved here from `runner-ci.yml`); `CI result` |
+| Gate | `CI result` fails unless every other job succeeded. It is the check to require on `main` and for P0-12 `workflow_run` |
+| Python | `bash .github/scripts/python-ci.sh [dir ...]` (default `runner agents/jarvis`). A component with `pyproject.toml` must have a hash-pinned `requirements-dev.txt` with ruff and pytest; each gets its own venv, `ruff check`, `pytest -q` and `compileall`. A component without `pyproject.toml` is reported as skipped (notice and step summary), not passed |
+| Local workflow lint (verified for P0-10) | `go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7`, then `~/go/bin/actionlint` from the repository root. It passes for the CI files; it reports existing findings in `runner-ci.yml` (SC2034 warning) and `runner-deploy.yml` (an unquoted ` #11` ends the `prerequisite` step's YAML scalar, so that job failed on `main` at 290195b; needs a `fix-main:` PR) |
+
+- Add a new component workflow as `on: workflow_call`, call it from `ci.yml`, and add it to `CI result`'s `needs`, so it runs once per PR and the gate covers it.
+- Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then P0-12 must read the `CI` run result itself.
+
 Future commands (unimplemented until their tasks):
 
 | Purpose | Command |
 | --- | --- |
 | Bootstrap or repair identities | `./infra/bootstrap.ps1` (safe to re-run; needs Dan's signed-in `az` and `gh`) |
-| Backend tests (P0-03) | `npm test` in `apps/backend` |
-| Python tests | `pytest` in `runner` and `agents/jarvis` |
+| Python tests | `pytest` in `runner` and `agents/jarvis`, through each package's `.venv` (see [Cloud agent environments](#cloud-agent-environments)); CI runs them through `.github/scripts/python-ci.sh` |
 | Validate Mermaid diagrams (candidate; unverified) | `npx -y @mermaid-js/mermaid-cli@11 -i <file>.md -o <out>.md` |
 
 Pin the Codex and Copilot CLI versions locally and in the sandbox image (L13).
+
+### Cloud agent environments
+
+P0-14 prepares both cloud agents with the same dependency step,
+[`scripts/setup-dependencies.sh`](../scripts/setup-dependencies.sh). It is
+noninteractive and safe to re-run. It fails unless Node.js, npm and Python
+exactly match `.nvmrc`, `packageManager` and `.python-version` (it installs the
+pinned npm when needed), runs `npm ci`, and gives each Python package (`runner`,
+`agents/jarvis`) its own git-ignored `.venv`, installed with
+`pip --require-hashes` from `requirements-dev.txt` (else `requirements.txt`). A
+package without a hash-locked file fails; an absent package is reported as
+skipped and has no tests. Setup fails if it changed any tracked file. It reads
+no tokens, calls no Azure service, and builds no Docker image. Lint and tests
+are not part of setup.
+
+| Agent | Setup | Status |
+| --- | --- | --- |
+| Copilot cloud agent | [`.github/workflows/copilot-setup-steps.yml`](../.github/workflows/copilot-setup-steps.yml): `setup-node` and `setup-python` from the pin files, then the shared script. Copilot uses it only once it is on `main`; it also runs as a normal workflow when its inputs change, or manually | The `Copilot Setup Steps` workflow passed on the P0-14 PR; in the P0-14 Copilot session the shared script, `npm run lint`, `npm test` and the runner's ruff and pytest passed |
+| Codex cloud | Setup script (and maintenance script) in the Codex environment settings: `bash scripts/codex-setup.sh`. It runs `nvm install`/`nvm alias default` for Node.js, `pyenv install`/`pyenv global` for Python (uv's managed Python if pyenv lacks the version), then the shared script | nvm + uv path verified outside Codex; the Codex image (pyenv path) and a Codex task are unverified: P0-15 |
+
+For P0-15, Dan sets in the Codex environment: setup script `bash scripts/codex-setup.sh`;
+optionally `CODEX_ENV_NODE_VERSION=22` and `CODEX_ENV_PYTHON_VERSION=3.12`
+(the script installs the exact patch versions itself). The setup script
+downloads from nodejs.org, registry.npmjs.org, python.org or GitHub (uv's
+Python builds) and PyPI; Codex setup scripts normally have internet access, but
+this is unverified for this environment. A Codex task then runs
+`npm run lint` and `npm test`. The pyenv path compiles Python on first setup,
+which takes a few minutes; Codex caches the result.
+
+Python checks use each package's `.venv`. For the runner, from `runner/`:
+`.venv/bin/python -m ruff check .` and `.venv/bin/python -m pytest -q`
+(verified in the P0-14 Copilot session after setup: ruff passed, 36 tests passed).
+`agents/jarvis` has no Python package yet, so setup skips it.
 
 ## Release procedure
 
@@ -230,3 +320,23 @@ Pin the Codex and Copilot CLI versions locally and in the sandbox image (L13).
 - Keep stable decision (#) and learning (L#) numbers; add new ones at the end of [decisions.md](decisions.md).
 - When a status, decision, or learning changes, update the matching boxes in [architecture-flows.html](architecture-flows.html) in the same change.
 - Prototype reports keep only run instructions and raw evidence; decisions and learnings belong in [decisions.md](decisions.md).
+
+## Runner setup and release
+
+Issue #28 adds the Python runner independently of the npm workspaces. With Python
+3.12.14, create `runner/.venv` and install `runner/requirements-dev.txt` with
+`python -m pip install --require-hashes -r ...`. Codex cloud validated frozen
+installation with `uv pip sync --require-hashes`, `python -m pytest -q` and
+`python -m ruff check .` from `runner/`; the local OpenAPI route returned HTTP 200.
+Runner CI owns Docker builds and packaged CLI/HTTP checks because agents have no
+Docker runtime here. Production Key Vault/Foundry acceptance is still unverified.
+
+The main-only [runner deploy workflow](../.github/workflows/runner-deploy.yml)
+requires Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME`, set after #11's successful
+Bicep deployment. It consumes that deployment's existing outputs and bootstrap
+Azure variables, queues under `jarvis-production-deploy`, builds the two images
+in ACR, deploys both capacity tiers, and records identity-probe evidence. #11 must
+use that same deployment concurrency group. The workflow never seeds secrets;
+`github-token`, `copilot-token`, and the Jarvis-only `codex-login` must already be
+in Key Vault. Installation tokens replace the prototype Git-token path in #40.
+See [runner/README.md](../runner/README.md) for commands and the contract.

@@ -1,0 +1,61 @@
+import type { Level } from 'pino';
+
+export interface BackendConfig {
+  port: number;
+  staticWebAppOrigin?: string;
+  logLevel: Level;
+  applicationInsightsConnectionString?: string;
+}
+
+export const localWebOrigin = 'http://localhost:5173';
+
+// Messages are fixed diagnostics that contain no supplied configuration values.
+export class ConfigurationError extends Error {}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig {
+  const port = env.PORT ?? '3000';
+  if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
+    throw new ConfigurationError('PORT must be an integer from 1 to 65535');
+  }
+  const logLevel = env.LOG_LEVEL ?? 'info';
+  if (!['trace', 'debug', 'info', 'warn', 'error', 'fatal'].includes(logLevel)) {
+    throw new ConfigurationError('LOG_LEVEL must be a supported Pino level');
+  }
+  const origin = env.STATIC_WEB_APP_ORIGIN;
+  if (origin !== undefined) {
+    let valid = false;
+    try {
+      const url = new URL(origin);
+      valid = url.protocol === 'https:' && url.origin === origin;
+    } catch { /* Report only the setting name, never its value. */ }
+    if (!valid) throw new ConfigurationError('STATIC_WEB_APP_ORIGIN must be an HTTPS origin without a path');
+  } else if (env.NODE_ENV === 'production') {
+    throw new ConfigurationError('STATIC_WEB_APP_ORIGIN is required in production');
+  }
+
+  const connectionString = env.APPLICATIONINSIGHTS_CONNECTION_STRING;
+  if (connectionString !== undefined) {
+    const fields = new Map(connectionString.split(';').filter(Boolean).map((field) => {
+      const separator = field.indexOf('=');
+      return [field.slice(0, separator).toLowerCase(), field.slice(separator + 1)];
+    }));
+    const key = fields.get('instrumentationkey') ?? '';
+    let valid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(key);
+    for (const name of ['ingestionendpoint', 'liveendpoint']) {
+      const endpoint = fields.get(name);
+      if (endpoint === undefined) continue;
+      try {
+        const url = new URL(endpoint);
+        valid &&= url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash;
+      } catch { valid = false; }
+    }
+    if (!valid) throw new ConfigurationError('APPLICATIONINSIGHTS_CONNECTION_STRING is invalid');
+  }
+
+  return {
+    port: Number(port),
+    logLevel: logLevel as Level,
+    ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),
+    ...(connectionString === undefined ? {} : { applicationInsightsConnectionString: connectionString }),
+  };
+}

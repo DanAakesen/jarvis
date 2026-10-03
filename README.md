@@ -10,7 +10,7 @@ tasks and status live in [PLAN.md](PLAN.md).
 P0-02 adds the React/Vite web skeleton, routing, lint, Vitest, and a focused
 web CI workflow. The home page shows the pending sign-in and deployment state;
 unknown routes provide a working return link. The backend still compiles an
-empty module; Fastify follows in P0-03. Monorepo CI is P0-10, sign-in is P0-09,
+empty module; Fastify follows in P0-03. The `CI` workflow (P0-10) checks the monorepo, sign-in is P0-09,
 and deployment is P0-11. P0-04 provides the Bicep template.
 
 ## Repository layout
@@ -63,8 +63,8 @@ npm test
 ```
 
 `npm test` runs once; `npm run test:watch --workspace @jarvis/web` watches tests.
-`Web CI` runs installation, lint, tests, and root builds on every PR and `main`
-push. P0-10 will extend CI to the backend and Python components.
+The `CI` workflow runs web, backend and Python lint, tests and builds on every PR,
+`main` push and manual run; see [agent context](docs/agent-context.md#setup-and-commands).
 
 ### Public configuration
 
@@ -89,6 +89,9 @@ before execution. Work in an isolated cloud checkout on one task branch and
 deliver one linked PR. Dan requests a fresh checkout of the latest `main` for each task; use a new
 cloud checkout or a separate Git worktree when continuing in one cloud session. Never push directly to
 `main` or merge your own PR.
+
+Cloud agents prepare their environment with the setup in
+[docs/agent-context.md](docs/agent-context.md#cloud-agent-environments).
 
 Agents do not access Azure. Deployments run through GitHub Actions on `main`;
 bootstrap and sign-in steps remain Dan's responsibility. Never commit secrets,
