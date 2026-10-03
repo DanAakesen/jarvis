@@ -194,12 +194,12 @@ const LANE_ORDER = Object.keys(LANES);
 const FLOWS = [
   {
     name: "Request",
-    summary: "Dan configures projects and asks for work on the board or by voice. Board controls call the backend directly; P1-03 implements the projects API while the page and task creation remain future work. Chat and voice go to Jarvis; browser voice uses the authenticated backend relay.",
+    summary: "Dan configures projects and asks for work on the board or by voice. P1-10 provides the projects page on P1-03's authenticated API; running counts come from the task API and last-release data remains unavailable until release reads are connected. Chat and voice go to Jarvis; browser voice uses the authenticated backend relay.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "context", badge: "Start", t: "Dan wants a change", d: "For example: add dark mode to Jarvis.", ev: "Start of the user flow." },
       { id: "card", lane: "board", col: 2, s: "assumed", t: "Add a card", d: "Project, agent and task text.", ev: "Board requirement in PRODUCT.md; the board is not built yet." },
       { id: "create", lane: "backend", col: 3, s: "assumed", t: "Create task", d: "Board buttons call backend functions directly.", ev: "architecture.md: one backend with shared functions for board, voice and Windows." },
-      { id: "project-settings", lane: "board", col: 2, s: "assumed", t: "Manage project settings", d: "Create, edit, and archive a project.", ev: "P1-10 owns the project page; the UI is not built yet." },
+      { id: "project-settings", lane: "board", col: 2, s: "proven", t: "Manage project settings", d: "Create, edit, and archive a project.", ev: "P1-10 Vitest and Chromium checks with scratch-only auth/API mocks cover list, create, update, archive, and 390/1280 px layouts. Live Entra and Azure SQL behavior remain unverified." },
       { id: "project-api", lane: "backend", col: 3, s: "proven", t: "Projects API", d: "Authenticated list, create, update, and archive routes validate requests.", ev: "P1-03 offline Fastify tests cover authentication, CRUD responses, and validation rules." },
       { id: "project-store", lane: "data", col: 4, s: "proven", t: "Read and write projects", d: "Parameterized SQL; archive sets active = 0.", ev: "P1-03 SQL Server-container integration tests execute project CRUD and archive queries; deployed Azure SQL remains unverified." },
       { id: "chat", lane: "board", col: 4, s: "assumed", t: "Type to Jarvis", d: "Chat box on the board.", ev: "Design assumption: the board can also send free text to the Jarvis agent." },

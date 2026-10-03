@@ -72,8 +72,8 @@ sign-in; the header wraps on narrow screens.
   task, release or project. Dismiss shows "Dismissing…", keeps the item and
   explains a failure, and returns focus to the Now heading after removal.
 - **Area pages:** the Software Factory has its own Tasks and Projects
-  navigation. Placeholder pages state that the page isn't available yet.
-  Record pages link back to their list.
+  navigation. Unbuilt task and release pages explain what is unavailable.
+  Project management is implemented below; record pages link back to their list.
 - The P1-07 shell was checked in headless Chromium at 300, 390, 768 and 1280 px
   with a stubbed sign-in: no horizontal overflow, and controls are at least 44 px high.
 
@@ -89,6 +89,20 @@ exist; no new visual direction or palette is introduced. Checked in Chromium at
 390 and 1280 px with mock auth/settings: no horizontal overflow, controls at
 least 44 px high, and save/disabled states visible. Live backend behavior remains
 unverified.
+
+## Projects (P1-10)
+
+Keep the neutral foundation. The list uses one compact project panel per
+repository, with its settings, running-task count, last-release availability,
+and edit action grouped for scanning. Project settings use labelled form
+sections; create, save, archive confirmation, loading, retry, conflict, and
+success feedback stay close to the relevant actions. Archive messaging explains
+that history remains and the repository stays reserved. Counts refresh manually
+until live updates exist; missing release data is stated, not fabricated.
+Checked in Chromium 154 at 390 and 1280 px with scratch-only auth and API mocks:
+list, create, update, and archive worked; neither width overflowed, controls
+were at least 44 px high, and the project form stacked on mobile. Live Entra and
+Azure SQL behavior remains unverified.
 
 ## Conversation history (P4-03)
 

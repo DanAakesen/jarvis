@@ -169,6 +169,10 @@ policies are `deliver_pr` or `complete_without_deployment`, sandbox sizes are
 letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
 32-bit integer (default 1).
 
+The projects page derives running-task counts from tasks in the `Running` state
+and refreshes them when Dan refreshes the page. Until release data is connected,
+the last-release field is explicitly unavailable rather than inferred.
+
 #### Settings
 
 | Data points | Actions |
