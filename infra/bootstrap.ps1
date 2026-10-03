@@ -245,6 +245,9 @@ $variables = [ordered]@{
     JARVIS_API_CLIENT_ID = $apiApp.appId; JARVIS_WEB_CLIENT_ID = $webApp.appId
     JARVIS_BACKEND_IDENTITY_ID = $identity.id; JARVIS_SQL_ADMIN_GROUP_ID = $group.id
 }
+if ($JarvisAgentPrincipalId) {
+    $variables['ENTRA_JARVIS_AGENT_OBJECT_ID'] = $JarvisAgentPrincipalId
+}
 foreach ($k in $variables.Keys) {
     & gh variable set $k --body $variables[$k] --repo $GitHubRepo | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not set GitHub variable $k" }

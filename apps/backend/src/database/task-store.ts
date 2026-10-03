@@ -2,6 +2,7 @@ import sql from 'mssql';
 import type {
   CreateTaskInput,
   RecordTaskEventInput,
+  RunningTaskContext,
   TaskDetail,
   TaskEventHub,
   TaskEventMessage,
@@ -24,6 +25,26 @@ interface EventRow extends Omit<TaskEventRecord, 'at' | 'payload'> {
   at: Date | string;
   payload: string | null;
 }
+
+interface RunningContextRow {
+  id: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+  agent: TaskRecord['agent'];
+  state: TaskRecord['state'];
+  activity: string | null;
+  startedAt: Date | string | null;
+  eventId: string | null;
+  eventType: string | null;
+  eventSummary: string | null;
+  eventSource: TaskEventRecord['source'] | null;
+  eventAt: Date | string | null;
+}
+
+const runningContextTaskLimit = 20;
+const runningContextEventLimit = 3;
+const runningContextSummaryLimit = 400;
 
 interface InsertedEventRow extends Omit<TaskEventRecord, 'at' | 'payload' | 'payloadTruncated'> {
   at: Date | string;
@@ -248,6 +269,68 @@ export function createTaskStore(pool: sql.ConnectionPool, eventHub: TaskEventHub
           payload: parsePayload(event.payload),
           at: iso(event.at) as string,
         })),
+      };
+    },
+
+    async getRunningContext() {
+      const result = await pool.request()
+        .input('taskLimit', sql.Int, runningContextTaskLimit + 1)
+        .input('eventLimit', sql.Int, runningContextEventLimit)
+        .query<RunningContextRow>(`WITH running_tasks AS (
+            SELECT TOP (@taskLimit) t.id AS task_id, t.project_id, p.name AS project_name,
+              t.title, t.agent, t.state, t.activity, t.started_at,
+              ROW_NUMBER() OVER (ORDER BY t.started_at DESC, t.id DESC) AS task_order
+            FROM dbo.tasks AS t
+            INNER JOIN dbo.projects AS p ON p.id = t.project_id
+            WHERE t.state = N'Running'
+            ORDER BY t.started_at DESC, t.id DESC
+          )
+          SELECT CONVERT(varchar(19), t.task_id) AS id,
+            CONVERT(varchar(19), t.project_id) AS projectId, t.project_name AS projectName,
+            t.title, t.agent, t.state, t.activity, t.started_at AS startedAt,
+            CONVERT(varchar(19), e.id) AS eventId, e.type AS eventType,
+            e.summary AS eventSummary, e.source AS eventSource, e.at AS eventAt
+          FROM running_tasks AS t
+          OUTER APPLY (
+            SELECT TOP (@eventLimit) e.id, e.type, e.summary, e.source, e.at
+            FROM dbo.task_events AS e
+            WHERE e.task_id = t.task_id
+            ORDER BY e.at DESC, e.id DESC
+          ) AS e
+          ORDER BY t.task_order, e.at DESC, e.id DESC;`);
+      const tasks = new Map<string, RunningTaskContext>();
+      for (const row of result.recordset) {
+        let task = tasks.get(row.id);
+        if (!task) {
+          task = {
+            id: row.id,
+            projectId: row.projectId,
+            projectName: row.projectName,
+            title: row.title,
+            agent: row.agent,
+            state: row.state,
+            activity: row.activity,
+            startedAt: iso(row.startedAt),
+            recentEvents: [],
+          };
+          tasks.set(row.id, task);
+        }
+        if (row.eventId !== null && row.eventType !== null && row.eventSource !== null && row.eventAt !== null) {
+          const summary = row.eventSummary?.slice(0, runningContextSummaryLimit) ?? null;
+          task.recentEvents.push({
+            type: row.eventType,
+            summary,
+            summaryTruncated: row.eventSummary !== null && row.eventSummary.length > runningContextSummaryLimit,
+            source: row.eventSource,
+            at: iso(row.eventAt) as string,
+          });
+        }
+      }
+      const runningTasks = Array.from(tasks.values());
+      const truncated = runningTasks.length > runningContextTaskLimit;
+      return {
+        runningTasks: runningTasks.slice(0, runningContextTaskLimit),
+        truncated,
       };
     },
 

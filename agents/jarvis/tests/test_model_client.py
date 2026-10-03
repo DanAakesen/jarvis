@@ -102,16 +102,31 @@ CREATE_TASK = {
 
 
 class FakeBackend:
-    """Answers GET /tools and POST /tools/{name} like the Jarvis backend."""
+    """Answers the agent context, tool catalogue, and tool calls like the Jarvis backend."""
 
-    def __init__(self, catalogue: list[dict[str, Any]] | None = None, status: int = 200) -> None:
+    def __init__(
+        self,
+        catalogue: list[dict[str, Any]] | None = None,
+        status: int = 200,
+        context: dict[str, Any] | None = None,
+        context_status: int = 200,
+    ) -> None:
         self.catalogue = [CREATE_TASK] if catalogue is None else catalogue
         self.status = status
+        self.context_status = context_status
+        self.context_snapshot = context or {"runningTasks": [], "truncated": False}
         self.requests: list[httpx.Request] = []
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         if request.method == "GET":
+            if request.url.path == "/factory/context":
+                return httpx.Response(
+                    self.context_status,
+                    json=self.context_snapshot
+                    if self.context_status == 200
+                    else {"error": "Unavailable"},
+                )
             if self.status != 200:
                 return httpx.Response(self.status, json={"error": "Forbidden"})
             return httpx.Response(200, json=self.catalogue)
@@ -198,6 +213,62 @@ async def test_streams_text_and_disables_remote_storage() -> None:
 
 
 @pytest.mark.asyncio
+async def test_adds_running_tasks_and_recent_events_before_the_current_message() -> None:
+    snapshot = {
+        "runningTasks": [{
+            "id": "42",
+            "projectId": "7",
+            "projectName": "Jarvis",
+            "title": "Fix the bug",
+            "agent": "codex",
+            "state": "Running",
+            "activity": "Updating tests",
+            "startedAt": "2026-10-03T12:00:00.000Z",
+            "recentEvents": [{
+                "type": "progress",
+                "summary": "Tests are being updated",
+                "summaryTruncated": False,
+                "source": "runner",
+                "at": "2026-10-03T12:01:00.000Z",
+            }],
+        }],
+        "truncated": False,
+    }
+    backend = FakeBackend(context=snapshot)
+    model, transport = client(
+        [SimpleNamespace(type="response.output_text.delta", delta="It is running."), completed()],
+        backend=backend,
+    )
+
+    chunks = [chunk async for chunk in model.complete([
+        ModelMessage("assistant", "Previous answer"),
+        ModelMessage("user", "What is running?"),
+    ])]
+
+    assert chunks == ["It is running."]
+    assert len(transport.responses.requests) == 1
+    request_input = transport.responses.request["input"]
+    context = json.loads(request_input[-2]["content"].split("\n", 1)[1])
+    assert context == snapshot
+    assert request_input[-1] == {"role": "user", "content": "What is running?"}
+    assert [(request.method, request.url.path) for request in backend.requests] == [
+        ("GET", "/tools"),
+        ("GET", "/factory/context"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_unavailable_context_fails_before_asking_the_model() -> None:
+    backend = FakeBackend(context_status=503)
+    model, transport = client([completed()], backend=backend)
+
+    with pytest.raises(BackendUnavailable, match="turn context"):
+        _ = [chunk async for chunk in model.complete([ModelMessage("user", "What is running?")])]
+
+    assert transport.responses.requests == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("terminal", ["error", "response.failed", "response.incomplete"])
 async def test_non_success_terminal_fails(terminal: str) -> None:
     model, _ = client(
@@ -278,8 +349,9 @@ async def test_tool_loop_calls_the_backend_tool_and_streams_answer() -> None:
         "outcome": "ok",
         "result": {"id": 7, "state": "Ready"},
     }
-    get, post = backend.requests
-    assert (get.method, get.url.path) == ("GET", "/tools")
+    tools, context, post = backend.requests
+    assert (tools.method, tools.url.path) == ("GET", "/tools")
+    assert (context.method, context.url.path) == ("GET", "/factory/context")
     assert (post.method, post.url.path) == ("POST", "/tools/create_task")
     assert post.headers["x-jarvis-message-id"] == "42"
     assert json.loads(post.content) == {"text": "Tilføj dark mode"}
@@ -303,7 +375,7 @@ async def test_tool_call_without_a_stored_message_is_reported_as_not_done() -> N
 
     output = json.loads(transport.responses.requests[1]["input"][-1]["output"])
     assert output["outcome"] == "error" and "nothing was done" in output["error"]
-    assert [request.method for request in backend.requests] == ["GET"]
+    assert [request.url.path for request in backend.requests] == ["/tools", "/factory/context"]
 
 
 @pytest.mark.asyncio

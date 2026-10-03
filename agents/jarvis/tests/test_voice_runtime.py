@@ -20,9 +20,13 @@ from scripts.smoke_test import ResponseValidator
 from state import (
     DEFAULT_MODEL_SETTINGS,
     MAX_ACTIVE_RESPONSES,
+    MAX_HISTORY_CHARACTERS,
+    MAX_HISTORY_MESSAGES,
+    MAX_MESSAGE_CHARACTERS,
     MAX_PENDING_PROACTIVE,
     MAX_SEEN_INPUTS,
     MAX_TERMINAL_SENDS,
+    ConversationHistory,
     InputClaim,
     InputOrigin,
     ModelMessage,
@@ -151,6 +155,22 @@ def receive_type(websocket: Any, expected: str) -> dict[str, Any]:
 
 def pairs(messages: Sequence[ModelMessage]) -> list[tuple[str, str]]:
     return [(message.role, message.content) for message in messages]
+
+
+def test_model_history_keeps_a_bounded_recent_window() -> None:
+    history = ConversationHistory()
+    for index in range(10):
+        history.commit(str(index), f"Question {index}", f"Answer {index}")
+
+    messages = history.create_request("Latest question")
+
+    assert len(messages) == MAX_HISTORY_MESSAGES + 1
+    assert messages[0].content == "Question 4"
+    assert messages[-2].content == "Answer 9"
+    assert messages[-1].content == "Latest question"
+    assert sum(len(message.content) for message in messages) <= (
+        MAX_HISTORY_CHARACTERS + MAX_MESSAGE_CHARACTERS
+    )
 
 
 def test_streams_model_output_and_commits_history() -> None:
