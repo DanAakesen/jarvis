@@ -9,17 +9,20 @@ import type { TokenVerifier } from './auth/verify.js';
 import { coreModule } from './core/index.js';
 import type { ToolCallStore } from './core/tool-calls.js';
 import { factoryModule } from './factory/index.js';
+import type { TaskStore } from './factory/task-store.js';
 import { registerModules, type BackendModule } from './modules.js';
 
 export interface BuildAppOptions {
   readonly auth?: TokenVerifier;
   readonly modules?: readonly BackendModule[];
   readonly toolCallStore?: ToolCallStore;
+  readonly taskStore?: TaskStore;
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
     toolCallStore: ToolCallStore | null;
+    taskStore: TaskStore | null;
   }
 }
 
@@ -68,6 +71,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));
   app.decorate('toolCallStore', options.toolCallStore ?? null);
+  app.decorate('taskStore', options.taskStore ?? null);
   registerModules(app, options.modules ?? [coreModule, factoryModule]);
   return app;
 }
