@@ -48,6 +48,7 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 | 2026-10-03 | One GitHub issue per plan task; a plan-status workflow writes In progress, Complete, and Not started into `PLAN.md` on `main` | Cloud agents can't push to `main`, so their status can't come from the agent itself; starting a task means assigning its issue | Decided |
 | 2026-10-03 | PRs merge automatically, without approval, when checks pass against the latest `main`; while `main` is red only `fix-main:` PRs merge; one PR per task overrides the template's "no PR required" | Dan doesn't want to approve PRs; agents must never start from a broken `main` | Confirmed |
 | 2026-10-03 | Deploy on every change to `main`, only for the changed parts; documentation-only changes skip deploy; one deploy at a time; manual redeploy available. `docs:` PRs merge automatically like task PRs | Saves deploy time and cost; avoids overlapping deploys; documentation fixes need no task | Decided |
+| 2026-10-03 | Agents claim their task's issue as their first action (assignee and comment, or Copilot's draft PR with `Fixes #<issue>`); Codex uses an issues-only token `GH_TOKEN`; an assignee or open linked PR means In progress | Dan starts tasks in the agents' own apps and won't assign issues by hand; Codex has no GitHub access otherwise until it opens its PR at the end | Decided |
 
 ## Learnings
 
