@@ -1,6 +1,4 @@
 import type { BackendModule } from '../modules.js';
-import type { TaskState } from '../factory/task-lifecycle.js';
-import type { TaskStore } from '../factory/task-store.js';
 import type { ContainerAppScaler, MinimumReplicas } from './container-app-scale.js';
 
 const sleepStates = ['awake', 'asleep'] as const;
@@ -12,15 +10,6 @@ function toMinimumReplicas(state: SleepState): MinimumReplicas {
 
 function toSleepState(minimumReplicas: MinimumReplicas): SleepState {
   return minimumReplicas === 0 ? 'asleep' : 'awake';
-}
-
-async function hasReadyOrRunningTasks(taskStore: TaskStore) {
-  const filters = (state: TaskState) => ({ state, limit: 1, offset: 0 });
-  const [ready, running] = await Promise.all([
-    taskStore.list(filters('Ready')),
-    taskStore.list(filters('Running')),
-  ]);
-  return ready.length > 0 || running.length > 0;
 }
 
 export function createSleepModule(scaler: ContainerAppScaler | null): BackendModule {
@@ -51,8 +40,14 @@ export function createSleepModule(scaler: ContainerAppScaler | null): BackendMod
         if (request.body.state === 'asleep') {
           const taskStore = app.taskStore;
           if (!taskStore) return reply.code(503).send({ error: 'Task service unavailable' });
-          if (await hasReadyOrRunningTasks(taskStore)) {
-            return reply.code(409).send({ error: 'Cannot put the backend to sleep while tasks are Ready or Running.' });
+          try {
+            const result = await taskStore.withNoActiveTasks(() => scaler.setMinimumReplicas(0));
+            if (result.kind === 'active') {
+              return reply.code(409).send({ error: 'Cannot put the backend to sleep while tasks are Ready or Running.' });
+            }
+            return { state: 'asleep' };
+          } catch {
+            return reply.code(503).send({ error: 'Backend scaling is unavailable' });
           }
         }
         try {

@@ -61,9 +61,14 @@ export type TaskTransitionResult =
   | { kind: 'not-found' }
   | { kind: 'invalid-transition' };
 
+export type ActiveTaskGuardResult<T> =
+  | { kind: 'active' }
+  | { kind: 'idle'; value: T };
+
 export interface TaskStore {
   create(input: CreateTaskInput): Promise<TaskRecord | null>;
   list(filters: TaskListFilters): Promise<TaskRecord[]>;
   get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null>;
   transition(id: string, state: TaskState, completionVerified?: boolean): Promise<TaskTransitionResult>;
+  withNoActiveTasks<T>(operation: () => Promise<T>): Promise<ActiveTaskGuardResult<T>>;
 }

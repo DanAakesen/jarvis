@@ -46,6 +46,7 @@ function fixture(overrides: Partial<TaskStore> = {}) {
     list: vi.fn(async () => [task]),
     get: vi.fn(async () => detail),
     transition: vi.fn(async () => ({ kind: 'ok' as const, task })),
+    withNoActiveTasks: vi.fn(async (operation) => ({ kind: 'idle' as const, value: await operation() })),
     ...overrides,
   };
   const app = buildApp(config, undefined, {

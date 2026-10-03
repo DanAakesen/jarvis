@@ -28,6 +28,7 @@ const insertedTaskColumns = `CAST(inserted.id AS varchar(19)) AS id,
   inserted.priority, inserted.attempt_count AS attemptCount, inserted.next_attempt_at AS nextAttemptAt,
   inserted.branch, inserted.created_at AS createdAt, inserted.started_at AS startedAt,
   inserted.finished_at AS finishedAt`;
+const sleepSwitchLock = 'jarvis.backend-sleep-switch';
 
 function iso(value: Date | string | null): string | null {
   if (value === null) return null;
@@ -55,12 +56,24 @@ async function rollback(transaction: sql.Transaction): Promise<void> {
   catch { /* The transaction may already have rolled back. */ }
 }
 
+async function acquireSleepSwitchLock(transaction: sql.Transaction, mode: 'Shared' | 'Exclusive'): Promise<void> {
+  const { recordset } = await new sql.Request(transaction)
+    .input('resource', sql.NVarChar(255), sleepSwitchLock)
+    .input('mode', sql.NVarChar(16), mode)
+    .query<{ result: number }>(`DECLARE @result int;
+      EXEC @result = sys.sp_getapplock
+        @Resource = @resource, @LockMode = @mode, @LockOwner = N'Transaction', @LockTimeout = 10000;
+      SELECT @result AS result;`);
+  if ((recordset[0]?.result ?? -1) < 0) throw new Error('Task coordination lock unavailable');
+}
+
 export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
   return {
     async create(input: CreateTaskInput) {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
+        await acquireSleepSwitchLock(transaction, 'Shared');
         const project = await new sql.Request(transaction)
           .input('projectId', sql.BigInt, BigInt(input.projectId))
           .query<{ defaultAgent: 'codex' | 'copilot' }>(
@@ -91,6 +104,28 @@ export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
             VALUES (@taskId, N'created', N'Task created from the board', @payload, N'backend');`);
         await transaction.commit();
         return toTask(task);
+      } catch {
+        await rollback(transaction);
+        throw new Error('Task persistence failed');
+      }
+    },
+
+    async withNoActiveTasks<T>(operation: () => Promise<T>) {
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        await acquireSleepSwitchLock(transaction, 'Exclusive');
+        const active = await new sql.Request(transaction)
+          .query<{ hasActiveTask: boolean }>(`SELECT CONVERT(bit, CASE WHEN EXISTS (
+            SELECT 1 FROM dbo.tasks WHERE state IN (N'Ready', N'Running')
+          ) THEN 1 ELSE 0 END) AS hasActiveTask;`);
+        if (active.recordset[0]?.hasActiveTask) {
+          await transaction.rollback();
+          return { kind: 'active' as const };
+        }
+        const value = await operation();
+        await transaction.commit();
+        return { kind: 'idle' as const, value };
       } catch {
         await rollback(transaction);
         throw new Error('Task persistence failed');
@@ -162,6 +197,7 @@ export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
+        await acquireSleepSwitchLock(transaction, 'Shared');
         const currentResult = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, BigInt(id))
           .query<{ state: TaskState }>('SELECT state FROM dbo.tasks WITH (UPDLOCK, ROWLOCK) WHERE id = @taskId;');

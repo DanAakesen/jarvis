@@ -40,16 +40,15 @@ function fixture({
   running?: TaskRecord[];
   scalerAvailable?: boolean;
 } = {}) {
-  const list = vi.fn(async ({ state: requestedState }: { state?: string }) => {
-    if (requestedState === 'Ready') return ready;
-    if (requestedState === 'Running') return running;
-    return [];
-  });
-  const taskStore: TaskStore = {
-    create: vi.fn(async () => task),
-    list,
-    get: vi.fn(async () => detail),
-    transition: vi.fn(async () => ({ kind: 'ok' as const, task })),
+const withNoActiveTasks = vi.fn(async (operation: () => Promise<void>) => ready.length > 0 || running.length > 0
+  ? { kind: 'active' as const }
+  : { kind: 'idle' as const, value: await operation() });
+const taskStore: TaskStore = {
+  create: vi.fn(async () => task),
+  list: vi.fn(async () => []),
+  get: vi.fn(async () => detail),
+  transition: vi.fn(async () => ({ kind: 'ok' as const, task })),
+  withNoActiveTasks,
   };
   const scaler: ContainerAppScaler = {
     getMinimumReplicas: vi.fn(async () => state === 'asleep' ? 0 : 1),
@@ -61,7 +60,7 @@ function fixture({
     auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
   });
   apps.push(app);
-  return { app, list, scaler };
+  return { app, withNoActiveTasks, scaler };
 }
 
 afterEach(async () => {
@@ -93,13 +92,12 @@ describe('sleep switch API', () => {
   });
 
   it('sets awake or asleep through ARM when no active task exists', async () => {
-    const { app, list, scaler } = fixture();
+    const { app, withNoActiveTasks, scaler } = fixture();
 
     const sleep = await app.inject({ method: 'PUT', url: '/operations/sleep', headers, payload: { state: 'asleep' } });
     expect(sleep.statusCode).toBe(200);
     expect(sleep.json()).toEqual({ state: 'asleep' });
-    expect(list).toHaveBeenCalledWith({ state: 'Ready', limit: 1, offset: 0 });
-    expect(list).toHaveBeenCalledWith({ state: 'Running', limit: 1, offset: 0 });
+    expect(withNoActiveTasks).toHaveBeenCalledOnce();
     expect(scaler.setMinimumReplicas).toHaveBeenCalledWith(0);
 
     const awake = await app.inject({ method: 'PUT', url: '/operations/sleep', headers, payload: { state: 'awake' } });
