@@ -67,8 +67,8 @@ The PR body states what changed, how it was verified (commands and results), wha
 
 ### Merge
 
-- **No manual approval.** The merge workflow (P0-12) squash-merges a PR when it is ready (not a draft), its title starts with a task ID or `fix-main:`, all checks pass, and it contains the latest `main`. If the branch is behind, the workflow updates it and waits for the checks again, so every merge is tested against the current `main`.
-- **Never start from a broken `main`.** After every merge, CI and deploy run on `main`. If either fails, the merge workflow merges only `fix-main:` PRs until `main` is green again.
+- **No manual approval.** The merge workflow (P0-12) squash-merges a PR when it is ready (not a draft), its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the workflow updates it and waits for the checks again, so every merge is tested against the current `main`.
+- **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, the merge workflow merges only `fix-main:` PRs until `main` is green again.
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
 - Until P0-12 is merged, Dan merges green PRs.

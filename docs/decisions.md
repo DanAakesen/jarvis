@@ -47,6 +47,7 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 | 2026-10-03 | Remote-only development: agents work in Copilot cloud agent or Codex cloud and deliver through PRs; local work needs Dan's permission; GitHub `main` is the only source of truth | Any agent can continue from the repository alone; both cloud agents work on Dan's personal repository and push only to their own branches | Confirmed |
 | 2026-10-03 | One GitHub issue per plan task; a plan-status workflow writes In progress, Complete, and Not started into `PLAN.md` on `main` | Cloud agents can't push to `main`, so their status can't come from the agent itself; starting a task means assigning its issue | Decided |
 | 2026-10-03 | PRs merge automatically, without approval, when checks pass against the latest `main`; while `main` is red only `fix-main:` PRs merge; one PR per task overrides the template's "no PR required" | Dan doesn't want to approve PRs; agents must never start from a broken `main` | Confirmed |
+| 2026-10-03 | Deploy on every change to `main`, only for the changed parts; documentation-only changes skip deploy; one deploy at a time; manual redeploy available. `docs:` PRs merge automatically like task PRs | Saves deploy time and cost; avoids overlapping deploys; documentation fixes need no task | Decided |
 
 ## Learnings
 
