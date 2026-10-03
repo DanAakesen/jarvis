@@ -10,6 +10,7 @@ export interface SignInSession {
   profile: UserProfile | null;
   message: string;
   signIn: () => Promise<void>;
+  getAccessToken: () => Promise<string>;
   client: PublicClientApplication;
 }
 
@@ -53,5 +54,17 @@ export function useSignIn(config: PublicConfig): SignInSession {
     }
   }, [client, config]);
 
-  return { state, profile, message, signIn: handleSignIn, client };
+  const getAccessToken = useCallback(async () => {
+    const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
+    if (!account) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
+    try {
+      const result = await client.acquireTokenSilent({ scopes: [config.apiScope], account });
+      if (result.accessToken) return result.accessToken;
+    } catch {
+      throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
+    }
+    throw new Error('Microsoft sign-in did not return an API token.');
+  }, [client, config]);
+
+  return { state, profile, message, signIn: handleSignIn, getAccessToken, client };
 }

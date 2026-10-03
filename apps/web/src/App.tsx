@@ -2,7 +2,8 @@ import { Link, NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
 import { areas } from './areas';
 import { JarvisPage } from './JarvisPage';
-import { NotFoundPage, SettingsPage, SignInPage } from './pages';
+import { NotFoundPage, SignInPage } from './pages';
+import { SettingsPage } from './SettingsPage';
 import { useSignIn, type SignInSession } from './useSignIn';
 
 function Shell({ signedIn }: { signedIn: boolean }) {
@@ -48,7 +49,7 @@ export function App({ config = __JARVIS_CONFIG__ }: { config?: PublicConfig }) {
           {areas.map(({ id, path, Component }) => (
             <Route key={id} path={`${path}/*`} element={<Component />} />
           ))}
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings" element={<SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>

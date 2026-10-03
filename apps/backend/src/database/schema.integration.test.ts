@@ -3,6 +3,7 @@ import sql from 'mssql';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readDownMigration, readMigrations, revertMigration, type Migration } from './migrations.js';
+import { createSettingsStore } from './settings-store.js';
 import { createProjectStore } from './project-store.js';
 import { ProjectConflictError } from '../factory/projects.js';
 
@@ -101,6 +102,22 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     const row = await pool.request().query<{ state: string; priority: number; attempt_count: number }>(
       `SELECT state, priority, attempt_count FROM dbo.tasks WHERE id = ${String(task)}`);
     expect(row.recordset).toEqual([{ state: 'Running', priority: 0, attempt_count: 0 }]);
+  });
+
+  it('reads and transactionally writes only the recognized global settings', async () => {
+    const store = createSettingsStore(pool);
+    await store.write({
+      jarvis: { model: 'gpt-5.6-luna', reasoning: 'low' },
+      voice: { defaultLanguage: 'en' },
+      global: { maxParallelTasks: 3 },
+    });
+
+    expect(await store.read()).toMatchObject({
+      'jarvis.model': '"gpt-5.6-luna"',
+      'jarvis.reasoning_effort': '"low"',
+      'voice.default_language': '"en"',
+      'global.max_parallel_tasks': '3',
+    });
   });
 
   it('creates, updates, lists, and archives projects through the SQL store', async () => {

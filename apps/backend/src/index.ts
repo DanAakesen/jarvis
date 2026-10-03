@@ -6,9 +6,11 @@ import { shutdown } from './shutdown.js';
 import { loadDatabaseConfig } from './database/config.js';
 import { createDatabase, registerDatabase } from './database/lifecycle.js';
 import { createToolCallStore } from './database/tool-call-store.js';
+import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { coreModule } from './core/index.js';
+import { conversationModule } from './core/conversation.js';
 import { factoryModule } from './factory/index.js';
 import type { BackendModule } from './modules.js';
 import { createVoiceLiveConnector, createVoiceRelayModule } from './voice/relay.js';
@@ -19,7 +21,7 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
-  const modules: BackendModule[] = [coreModule, factoryModule];
+  const modules: BackendModule[] = [coreModule, conversationModule, factoryModule];
   if (config.voiceLiveEndpoint) {
     const credential = new DefaultAzureCredential();
     modules.push(createVoiceRelayModule({
@@ -36,6 +38,7 @@ try {
     ...(database ? {
       projectStore: createProjectStore(database.pool),
       toolCallStore: createToolCallStore(database.pool),
+      settingsStore: createSettingsStore(database.pool),
       conversationStore: createConversationStore(database.pool),
     } : {}),
   });

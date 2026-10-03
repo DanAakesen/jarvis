@@ -77,6 +77,19 @@ sign-in; the header wraps on narrow screens.
 - The P1-07 shell was checked in headless Chromium at 300, 390, 768 and 1280 px
   with a stubbed sign-in: no horizontal overflow, and controls are at least 44 px high.
 
+## Settings (P1-11)
+
+Keep the Settings route within the shell's neutral foundation. Use one page
+headline and distinct form sections for Jarvis, Voice, Coding agents, Global,
+and Credentials. Two columns make related controls easy to scan on wide screens;
+the form stacks on narrow screens. Save feedback stays beside the save action,
+and loading, recovery, and unavailable actions remain explicit. Credential and
+sleep actions are disabled with their explanation until their owning services
+exist; no new visual direction or palette is introduced. Checked in Chromium at
+390 and 1280 px with mock auth/settings: no horizontal overflow, controls at
+least 44 px high, and save/disabled states visible. Live backend behavior remains
+unverified.
+
 ## Conversation history (P4-03)
 
 After sign-in, the main page shows the persisted conversation in chronological
