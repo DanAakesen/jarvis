@@ -26,6 +26,17 @@ tracked_state() {
 }
 before="$(tracked_state)" || fail "the repository root is not a Git checkout"
 
+# Report tracked-file changes on every exit, including a failed install.
+check_tracked() {
+  local status=$?
+  if [[ "$(tracked_state)" != "$before" ]]; then
+    echo "setup-dependencies: setup changed tracked files; see git status" >&2
+    status=1
+  fi
+  exit "$status"
+}
+trap check_tracked EXIT
+
 actual_node="$(node --version)"
 [[ "$actual_node" == "v$node_version" ]] || fail "Node.js $node_version required (.nvmrc), found $actual_node"
 
@@ -62,7 +73,5 @@ for package in runner agents/jarvis; do
   "$python" -m venv --clear "$package/.venv"
   "$package/.venv/bin/python" -m pip install --disable-pip-version-check --no-input --require-hashes -r "$lock"
 done
-
-[[ "$(tracked_state)" == "$before" ]] || fail "setup changed tracked files; see git status"
 
 echo "Dependencies installed"

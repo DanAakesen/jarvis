@@ -35,19 +35,23 @@ elif [[ "$(node --version 2> /dev/null || true)" != "v$node_version" ]]; then
 fi
 
 # Python: prefer pyenv (codex-universal's manager; `pyenv global` persists for
-# agent shells). Fall back to uv's managed Python for the package environments.
+# agent shells). Fall back to uv's managed Python, installed as the default.
 python=""
 if command -v pyenv > /dev/null && pyenv install --list | tr -d ' ' | grep -x "$python_version" > /dev/null; then
   pyenv install --skip-existing "$python_version"
   pyenv global "$python_version"
   python="$(pyenv root)/versions/$python_version/bin/python3"
 elif command -v uv > /dev/null; then
-  uv python install "$python_version"
+  uv python install --default "$python_version"
   python="$(uv python find "$python_version")"
-  echo "codex-setup: Python $python_version installed with uv at $python;" \
-    "use the package .venv interpreters, as python3 on PATH may differ" >&2
-else
-  fail "neither pyenv with a $python_version definition nor uv is available"
+fi
+[[ -n "$python" ]] || fail "neither pyenv with a $python_version definition nor uv is available"
+
+# Agent shells start fresh; warn if their python3 is not the pinned version.
+shell_python="$(bash -lc 'python3 -c "import sys; print(\"%d.%d.%d\" % sys.version_info[:3])"' 2> /dev/null || true)"
+if [[ "$shell_python" != "$python_version" ]]; then
+  echo "codex-setup: warning: a new login shell has python3 ${shell_python:-missing}, not $python_version;" \
+    "use the package .venv interpreters or $python" >&2
 fi
 
 JARVIS_PYTHON="$python" bash "$root/scripts/setup-dependencies.sh"
