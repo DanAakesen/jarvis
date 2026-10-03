@@ -16,7 +16,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton implemented; area plugins and SSE in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
-| Database access | `mssql` driver with Entra ID (managed identity); plain SQL migrations, applied by the backend at startup under a SQL app lock | Decided; **verify** in P0-07 |
+| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen | Implemented in #7; real Azure identity/deployment validation remains #11 |
 | Files | Azure Blob Storage for artifacts and logs | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
@@ -47,7 +47,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   or contact an API; those interactions begin in P0-09.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
-  (including the container smoke), `foundry-contract.yml` and `runner-ci.yml`
+  (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml` and `runner-ci.yml`
   (runner images), runs Python lint, tests and byte-compilation for `runner`
   and `agents/jarvis` when they exist,
   and ends in one `CI result` gate job. No job uses Azure credentials.
@@ -73,6 +73,36 @@ ingestion remains pending. `backend-ci.yml` proves the production container and
 its health/CORS/shutdown behavior in GitHub Actions without Azure credentials.
 The image uses Node.js 22.23.3, a non-root user, and only backend production output
 and dependencies; prototypes and frontend sources are excluded.
+
+## Database startup and migration ownership
+
+The process creates one `mssql` pool when SQL settings are supplied. Production
+configuration requires an Azure SQL host, database and user-assigned identity
+client ID; `azure-active-directory-msi-app-service` delegates token acquisition
+and renewal to Tedious/Azure Identity. TLS certificate validation stays enabled.
+No SQL settings selects the offline skeleton; partial settings stop startup.
+Password authentication is permitted only for isolated loopback CI in test mode.
+
+`index.ts` awaits database initialization before listening, outside Fastify's
+10-second ready-hook limit. Connection/request timeouts are 120 seconds; a
+300-second overall startup deadline includes auto-resume, the 60-second app-lock
+wait and all migrations. Cancellation stops active requests, rolls back the
+transaction and closes the pool. If cancellation occurs during connect, its owner
+closes the late connection before any migration can begin. Process shutdown has
+the existing five-second final deadline. Database logs expose fixed event names,
+never raw errors, tokens or SQL text.
+
+The backend reads committed `db/migrations/NNNN_name.sql` batches, acquires
+`jarvis.schema-migrations` exclusively with `LockOwner=Transaction`, validates the
+applied checksum prefix and applies all pending batches plus ledger entries in
+one transaction. Rollback preserves both data and migration history. No recurring
+migration or readiness queries run while idle; pool minimum is zero and
+`validateConnection=socket` avoids validation queries. The production image
+includes the same migration directory. Business tables are still issue #17.
+
+Real managed-identity token exchange and migrations in a deployed Azure revision
+remain issue #11. See the [database guide](../apps/backend/src/database/README.md)
+and [migration format](../db/migrations/README.md) for configuration and ownership.
 
 Where each part runs. The web app is static files on Static Web Apps: free and always reachable. Container Apps hosts only the backend.
 
