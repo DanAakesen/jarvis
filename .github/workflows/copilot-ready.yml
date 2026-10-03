@@ -1,0 +1,26 @@
+# Copilot cloud agent never takes its own PR out of draft. When Copilot finishes
+# (title without "[WIP]" and a review request), mark the PR ready so the merge
+# rules apply. Part of P0-12.
+name: Copilot PR ready
+
+on:
+  pull_request:
+    types: [review_requested]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  ready:
+    if: >-
+      github.event.pull_request.draft &&
+      github.event.pull_request.user.login == 'Copilot' &&
+      !startsWith(github.event.pull_request.title, '[WIP]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mark the PR ready for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr ready "$PR_URL"
