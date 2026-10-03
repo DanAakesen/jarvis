@@ -206,9 +206,14 @@ resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-0
   }
 }
 
+// Foundry allows one operation at a time per account: create the project first,
+// then each model deployment in turn (the first deploy failed with RequestConflict).
 resource gpt56LunaDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
   name: 'gpt-5.6-luna'
+  dependsOn: [
+    foundryProject
+  ]
   sku: {
     name: 'GlobalStandard'
     capacity: 1
@@ -225,6 +230,9 @@ resource gpt56LunaDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
 resource gptRealtime21Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
   name: 'gpt-realtime-2.1'
+  dependsOn: [
+    gpt56LunaDeployment
+  ]
   sku: {
     name: 'GlobalStandard'
     capacity: 1
@@ -305,6 +313,16 @@ resource sqlServer 'Microsoft.Sql/servers@2021-11-01' = {
     version: '12.0'
     minimalTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
+    // A new server needs an administrator at creation; without a SQL login that must be
+    // the Entra admin with Entra-only authentication (first deploy: InvalidParameterValue Login).
+    administrators: {
+      administratorType: 'ActiveDirectory'
+      azureADOnlyAuthentication: true
+      login: sqlAdminGroupName
+      principalType: 'Group'
+      sid: sqlAdminGroupObjectId
+      tenantId: subscription().tenantId
+    }
   }
 }
 

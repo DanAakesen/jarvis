@@ -6,6 +6,7 @@ import { shutdown } from './shutdown.js';
 import { loadDatabaseConfig } from './database/config.js';
 import { createDatabase, registerDatabase } from './database/lifecycle.js';
 import { createToolCallStore } from './database/tool-call-store.js';
+import { createConversationStore } from './database/conversation-store.js';
 import { coreModule } from './core/index.js';
 import { factoryModule } from './factory/index.js';
 import type { BackendModule } from './modules.js';
@@ -31,7 +32,10 @@ try {
   }
   const app = buildApp(config, logger, {
     modules,
-    ...(database ? { toolCallStore: createToolCallStore(database.pool) } : {}),
+    ...(database ? {
+      toolCallStore: createToolCallStore(database.pool),
+      conversationStore: createConversationStore(database.pool),
+    } : {}),
   });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');

@@ -191,6 +191,30 @@ process shutdown behavior are preserved.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
 
+### Conversation storage and history
+
+P4-03 adds the authenticated `/conversation/sessions` API to the shared backend.
+`POST /conversation/sessions` starts one `jarvis_sessions` row per chat or voice
+sitting, `POST /conversation/sessions/{id}/messages` appends a bounded message to
+an active session, and `POST /conversation/sessions/{id}/end` idempotently records
+its end.
+`GET /conversation/history` reads the one continuous conversation across sessions
+in pages of 50 (maximum 100), ordered oldest-to-newest within each page and
+continued with a message-ID cursor. Each entry includes its session's chat/voice
+channel and language. It returns tool-call names, outcomes and task IDs, not the
+stored arguments or results.
+
+The conversation store shares the process-owned SQL pool and uses the existing
+group-one schema; no migration or new service is required. Tool calls continue to
+be written by the P4-02 dispatcher against their source message. The task schema
+already requires `origin_message_id` for non-board tasks; task-creation write
+paths remain in P1-04/P4-01. The global authentication hook keeps these routes
+restricted to Dan. Store, API and web behavior are tested offline; Azure SQL and
+live Entra behavior remain unverified. The store also passes a disposable SQL
+Server integration test, not a production Azure SQL test. The main page reads
+history now; message sending and session lifecycle wiring remain with chat and
+voice tasks (P4-06/P5-03/P5-04).
+
 ```mermaid
 flowchart LR
     subgraph Client["Dan"]
@@ -421,7 +445,7 @@ P5-03 pins the English model and Ryan HD in the backend. P5-05 will connect lang
 ## Identity and security
 
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID and allows Jarvis's own service identities.
-- [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only; Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
+- [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
 - Secrets only in Key Vault; none in code, images, environment variables, or logs.
 
