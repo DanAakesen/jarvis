@@ -5,7 +5,7 @@
 #
 # Needs the PROJECT_TOKEN secret in the project-board environment, which only main may use:
 # GITHUB_TOKEN, GitHub Apps and fine-grained tokens can't edit a user-owned project, so it is a
-# classic token, and the environment keeps it away from workflows on agent PR branches.
+# classic token, and the environment keeps it away from workflows on agent PR branches
 # pull_request_target (not pull_request) so PRs with merge conflicts still sync
 # (L38); this workflow never checks out PR code.
 name: Project board
