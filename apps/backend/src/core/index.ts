@@ -1,11 +1,13 @@
 import type { BackendModule } from '../modules.js';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { ToolRefusal } from './tool-registry.js';
+import { registerSettingsRoutes } from './settings.js';
 
 export const coreModule: BackendModule = {
   id: 'core',
   tools: [],
   registerRoutes: async (app) => {
+    await registerSettingsRoutes(app);
     app.get('/health', {
       schema: { response: { 200: { type: 'object', properties: { status: { type: 'string', const: 'ok' } }, required: ['status'], additionalProperties: false } } },
     }, async () => ({ status: 'ok' }));

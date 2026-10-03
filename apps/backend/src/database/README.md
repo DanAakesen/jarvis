@@ -31,8 +31,9 @@ databases. Neither agents nor Actions tests connect to Azure SQL.
 
 The Docker image includes committed `db/migrations`; compiled and source code
 resolve the same repository-relative directory. `tool_calls` and the conversation
-store use the group-one schema in `0001_core_tables.sql` (#15). Real Azure identity
-connectivity and new-revision/restart acceptance remain issue #11.
+store use the group-one schema in `0001_core_tables.sql` (#15);
+`0002_sandbox_operations.sql` adds sandbox and operations data-model groups 4 and 6
+(#27). Real Azure identity connectivity and new-revision/restart acceptance remain issue #11.
 `schema.integration.test.ts` checks the schema's constraints, and reverts and
 reapplies every committed migration in its own database.
 `conversation-store.integration.test.ts` exercises conversation writes, history

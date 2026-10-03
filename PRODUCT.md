@@ -42,7 +42,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 | **Sandbox** | One sandbox per task: starts when work begins, closes after delivery or cancel. The agent runs targeted builds and tests only; no Docker. |
 | **Build and release** | Full builds, all tests, and releases run in GitHub Actions, as in Dan's normal workflow; never in the sandbox. Managed projects can copy the repository's PR-check and OIDC-release workflow templates and adapt their build and deployment commands. |
 | **Project settings** | Per project: how far agents may go (deliver a PR, or complete without deployment), merge rules, sandbox size. |
-| **Settings** | A settings page controls models and reasoning for Jarvis (voice and chat) and for the coding agents; nothing is hard-coded. |
+| **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models; updates affect new sessions and tasks, not running work. |
 | **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. |
 | **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. The hosted Jarvis agent has its own identity and may only list and call tools. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
@@ -175,9 +175,15 @@ letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
 | --- | --- |
 | Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
 | Voice: speech-to-text model, voice per language, default language | Change; play a voice sample |
-| Coding agents: default model and reasoning per agent | Change (applies to new tasks) |
+| Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
 | Credentials: name, expiry, last renewal, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
+
+The settings API validates choices against the server's available-model catalog.
+Until provider model support is verified, Codex and Copilot use their provider
+defaults. The global parallel-task limit is a whole number from 1 to 100. Voice
+sample playback, the sleep switch, and credential data/actions remain visibly
+unavailable with an explanation until their owning services exist.
 
 #### Usage and cost
 

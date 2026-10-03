@@ -4,7 +4,8 @@ Append reviewed files as `NNNN_name.sql`, for example `0001_core_tables.sql`.
 Use four unique digits and lowercase letters/underscores in the name. Each file
 is one executable SQL Server batch without `GO`, at most 1 MiB. The backend reads
 at most 1,000 migration files, in ordinal sequence order. `0001_core_tables.sql`
-creates data-model groups 1–3 (issue #15).
+creates data-model groups 1–3 (issue #15); `0002_sandbox_operations.sql` creates
+groups 4 and 6 (issue #27).
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only

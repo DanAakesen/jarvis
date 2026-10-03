@@ -195,7 +195,7 @@ The repository uses npm workspaces for `apps/web` and `apps/backend`, one root
 lockfile, and shared strict TypeScript configuration. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
-Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3).
+Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3), and P2-01 (#27) adds sandbox and operations groups 4 and 6.
 P0-04 adds the Bicep template; its first Azure deployment is P0-16.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
@@ -224,13 +224,18 @@ calls authenticated `/me`; only the backend-approved display name is shown.
 workflow (below). Local tests use signed fixture tokens and do not verify a live
 Entra tenant or Azure deployment.
 
-Browser checks of signed-in pages (verified in Copilot cloud agent for P1-07,
-where the Playwright MCP tools were unavailable; L45): in a scratch directory
-outside the repository, run `npm install --no-save playwright-core`, then drive
+Browser checks of signed-in pages (verified in Copilot cloud agent for P1-07
+and P1-11, where the Playwright MCP tools were unavailable; L45): in a scratch
+directory outside the repository, run `npm install --no-save playwright-core`,
+then drive
 `chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] })`.
 Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
 returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
-URL. Never commit the stub or weaken sign-in in the app.
+URL. For settings, serve a mock `/settings` response from that harness only.
+P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised,
+with no horizontal overflow, all controls at least 44 px high, and no browser
+console errors. The mock does not verify live Entra, Azure SQL, or production settings consumers.
+Never commit the stub or weaken sign-in in the app.
 
 Backend commands:
 
@@ -351,6 +356,8 @@ The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and
   applied history. Add the reverse batch under `db/migrations/down/` with the
   same name; an offline test requires one for every migration, and
   `schema.integration.test.ts` reverts all of them newest first and reapplies.
+  `0001_core_tables.sql` contains groups 1–3; `0002_sandbox_operations.sql`
+  contains groups 4 and 6.
   See [migration guide](../db/migrations/README.md).
 - Offline checks: `npm test --workspace @jarvis/backend`,
   `npm run lint --workspace @jarvis/backend`,

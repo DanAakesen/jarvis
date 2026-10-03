@@ -133,6 +133,16 @@ erDiagram
 - The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; any other failure is stored as a generic error. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. The hosted Jarvis agent (P4-01) sends the stored message ID of the turn that triggered the call; P4-03 stores messages, but no caller passes that ID to the agent yet, so the agent makes no tool call.
 - Session, message, history, task-origin, and tool-call behavior is covered by offline and disposable SQL Server tests; live Azure SQL writes have not been verified.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
+- P1-11 stores global defaults in the existing key/value table; missing keys use
+  the documented defaults. Current keys are `jarvis.model`,
+  `jarvis.reasoning_effort`, `voice.stt.model`, `voice.en.model`,
+  `voice.en.voice`, `voice.da.voice`, `voice.default_language`, `codex.model`,
+  `codex.reasoning_effort`, `copilot.model`, and `global.max_parallel_tasks`.
+  Values are JSON scalars. Model/voice/language/reasoning choices are validated
+  against the backend catalog; `default` for Codex/Copilot means defer to the
+  provider's own default until P2-11 verifies model overrides. The global task
+  limit is an integer from 1 to 100. Partial writes are transactional; settings
+  are defaults for future sessions/tasks, not live updates or history.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes.
 
 ## 2 · Projects
@@ -251,6 +261,8 @@ erDiagram
 - A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22).
 - The sandbox heartbeat updates `last_heartbeat_at`; live runner events update `last_event_at` and add `task_events`.
 - Large content (logs, CI logs, transcripts) lives in Blob; SQL keeps only the path.
+- The schema checks sandbox sizes, statuses, turn modes, end reasons and artifact kinds against these vocabularies. UTC `datetime2` end and heartbeat/event timestamps cannot precede their start.
+- `sandbox_sessions` is indexed by task and status; turns and artifacts are indexed by their parent and timestamp for the session/task timelines.
 
 ## 5 · GitHub and release
 
@@ -332,7 +344,8 @@ erDiagram
 ```
 
 - `webhook_deliveries` makes webhook handling idempotent: GitHub may deliver the same event twice.
-- `credential_status` stores dates only, never secret values; it drives "renew soon" warnings on the board.
+- A delivery is first stored with null outcome and processing time; those fields are set together to `ok`, `ignored` or `error` when handled. No webhook payload or secret is stored here.
+- `credential_status` stores expiry/renewal dates and status only, never secret values; it drives "renew soon" warnings on the board.
 
 ## 7 · Usage and cost
 

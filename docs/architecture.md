@@ -16,7 +16,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton, core/factory module registration and P1-03 projects API implemented; remaining domain APIs and SSE are in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
-| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15; real Azure identity/deployment validation remains #11 |
+| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15 and groups 4 and 6 in #27; real Azure identity/deployment validation remains #11 |
 | Files | Azure Blob Storage for artifacts and logs | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
@@ -56,8 +56,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `/<path>/*`; the area renders its own nested routes. Software Factory
   (`src/factory/`) owns `/factory/tasks`, `/factory/tasks/:id`,
   `/factory/projects`, `/factory/projects/:id` and `/factory/releases/:id`;
-  invalid IDs show not found. `/settings` is the shared settings entry. These
-  pages are placeholders until P1-08 to P1-11 and P3-08.
+  invalid IDs show not found. `/settings` is the shared settings entry. P1-11
+  implements it as a responsive form for Jarvis, voice, coding-agent defaults
+  and the global task limit; remaining voice samples, sleep and credential
+  controls are visibly disabled until their owning services exist.
 - The main page's "Now" activity panel takes a typed `NowFeed`
   (`src/activity.ts`): running tasks (title, project, agent, activity, start
   time) and activity items (category, title, `activity.link`, time). Only
@@ -69,6 +71,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Dan's signed delegated API token and returns a bounded display name from its
   validated `name` claim, falling back to `Dan` if that optional claim is absent
   or malformed. The route exposes only that name, never token claims or IDs.
+- `GET /settings` and `PATCH /settings` inherit the same Dan-only delegated
+  authentication. The backend returns effective defaults with the validated
+  model catalog, rejects unknown keys and unsupported values, and writes a
+  partial update transactionally to whitelisted `global` rows in `dbo.settings`.
+  The SQL adapter is injected only when database configuration exists; the API
+  returns 503 without it. The model catalog offers deployed Jarvis models and
+  only verified provider defaults for Codex and Copilot until P2-11 verifies
+  their CLI model options. Future session/task creation reads these defaults;
+  existing sessions and tasks are not updated.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
