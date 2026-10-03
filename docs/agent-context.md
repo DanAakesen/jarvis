@@ -215,9 +215,12 @@ Verified in Codex cloud for P0-02:
 
 The web starts with the bootstrap identities and the public production backend
 origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). The URL
-is pending P0-11's first deployment; opening the skeleton needs no extra setup.
-Sign-in and authenticated API calls remain P0-09. `Web CI` checks lint, tests,
-and root builds as part of the aggregate `CI` workflow (below).
+is pending P0-11's first deployment; until configured, sign-in is visibly
+disabled. With a backend URL, MSAL signs in against the configured tenant and
+calls authenticated `/me`; only the backend-approved display name is shown.
+`Web CI` checks lint, tests, and root builds as part of the aggregate `CI`
+workflow (below). Local tests use signed fixture tokens and do not verify a live
+Entra tenant or Azure deployment.
 
 Backend commands implemented in P0-03:
 
@@ -407,6 +410,7 @@ Python checks use each package's `.venv`. For the runner, from `runner/`:
 
 - Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge deploys infrastructure, backend, and web; the backend applies migrations at startup.
 - No manual portal changes.
+- Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.
 
 ## Documentation rules
 

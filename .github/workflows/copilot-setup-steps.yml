@@ -32,7 +32,9 @@ jobs:
   # The job must be called copilot-setup-steps for Copilot to use it.
   copilot-setup-steps:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Copilot uses this as the limit for its whole session, not only setup (maximum 59).
+    # 20 cancelled P5-01 (#114) during GitHub's post-session checks.
+    timeout-minutes: 59
     permissions:
       contents: read
     steps:
