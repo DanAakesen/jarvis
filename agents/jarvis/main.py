@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Entry point for the basic Python Voice Live Bridge hosted agent."""
+"""Entry point for the hosted Jarvis voice agent."""
 
 from __future__ import annotations
 

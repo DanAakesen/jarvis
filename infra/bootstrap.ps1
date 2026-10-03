@@ -9,7 +9,8 @@
       - Resource group
       - Entra app 'jarvis-github-deploy' with a GitHub OIDC federated credential (main branch),
         Contributor and Role Based Access Control Administrator on the resource group
-      - Entra app 'jarvis-api' (scope access_as_user, only Dan assigned) and 'jarvis-web' (SPA, pre-authorized)
+      - Entra app 'jarvis-api' (scope access_as_user, only Dan assigned; application role Jarvis.Tools
+        for the hosted Jarvis agent) and 'jarvis-web' (SPA, pre-authorized)
       - User-assigned managed identity for the backend, and the Entra group 'jarvis-sql-admins'
         (Dan + backend identity) used as the Azure SQL Entra admin
       - The private GitHub repository and its Actions variables (IDs only; no secrets)
@@ -21,6 +22,7 @@
 .EXAMPLE
     ./infra/bootstrap.ps1
     ./infra/bootstrap.ps1 -WebRedirectUris 'http://localhost:5173','https://<name>.azurestaticapps.net'
+    ./infra/bootstrap.ps1 -JarvisAgentPrincipalId '<instance_identity.principal_id of the deployed agent>'
 #>
 [CmdletBinding()]
 param(
@@ -30,7 +32,10 @@ param(
     [string]$ResourceGroup = 'rg-jarvis',
     [string]$GitHubRepo = 'DanAakesen/jarvis',
     [string]$OwnerObjectId = '12bcfab7-49ba-4cf7-8be7-780a13911f93',
-    [string[]]$WebRedirectUris = @('http://localhost:5173')
+    [string[]]$WebRedirectUris = @('http://localhost:5173'),
+    # Hosted Jarvis agent identity; known only after the agent is deployed. Empty skips the assignment.
+    [ValidatePattern('^$|^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$')]
+    [string]$JarvisAgentPrincipalId = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -136,6 +141,14 @@ $webApp = Get-OrCreateApp 'jarvis-web'
 $apiApp = Invoke-Graph GET "/applications/$($apiApp.id)"
 $scope = $apiApp.api.oauth2PermissionScopes | Where-Object { $_.value -eq 'access_as_user' }
 $scopeId = if ($scope) { $scope.id } else { [guid]::NewGuid().ToString() }
+# Application role for the hosted Jarvis agent's app-only token; the backend accepts it only on the tool routes.
+$toolsRole = @($apiApp.appRoles) | Where-Object { $_ -and $_.value -eq 'Jarvis.Tools' } | Select-Object -First 1
+$toolsRoleId = if ($toolsRole) { $toolsRole.id } else { [guid]::NewGuid().ToString() }
+$appRoles = @(@($apiApp.appRoles) | Where-Object { $_ -and $_.value -ne 'Jarvis.Tools' } |
+    Select-Object id, value, allowedMemberTypes, isEnabled, displayName, description) + @(@{   # origin is read-only
+    id = $toolsRoleId; value = 'Jarvis.Tools'; allowedMemberTypes = @('Application'); isEnabled = $true
+    displayName = 'Call Jarvis tools'; description = 'The hosted Jarvis agent lists and calls backend tools.'
+})
 Invoke-Graph PATCH "/applications/$($apiApp.id)" @{
     identifierUris = @("api://$($apiApp.appId)")
     api = @{
@@ -146,6 +159,7 @@ Invoke-Graph PATCH "/applications/$($apiApp.id)" @{
             userConsentDisplayName = 'Use Jarvis'; userConsentDescription = 'Sign in to the Jarvis backend as you.'
         })
     }
+    appRoles = @($appRoles)
 } | Out-Null
 Invoke-Graph PATCH "/applications/$($apiApp.id)" @{
     api = @{ preAuthorizedApplications = @(@{ appId = $webApp.appId; delegatedPermissionIds = @($scopeId) }) }
@@ -165,6 +179,16 @@ if (-not $assigned) {
     Invoke-Graph POST "/servicePrincipals/$($apiSp.id)/appRoleAssignedTo" @{
         principalId = $OwnerObjectId; resourceId = $apiSp.id; appRoleId = '00000000-0000-0000-0000-000000000000'
     } | Out-Null
+}
+if ($JarvisAgentPrincipalId) {
+    $agentAssigned = @((Invoke-Graph GET "/servicePrincipals/$($apiSp.id)/appRoleAssignedTo").value) |
+        Where-Object { $_.principalId -eq $JarvisAgentPrincipalId -and $_.appRoleId -eq $toolsRoleId }
+    if (-not $agentAssigned) {
+        Invoke-Graph POST "/servicePrincipals/$($apiSp.id)/appRoleAssignedTo" @{
+            principalId = $JarvisAgentPrincipalId; resourceId = $apiSp.id; appRoleId = $toolsRoleId
+        } | Out-Null
+    }
+    Write-Host "   Jarvis.Tools assigned to agent $JarvisAgentPrincipalId"
 }
 Write-Host "   redirect URIs: $($WebRedirectUris -join ', ')"
 
