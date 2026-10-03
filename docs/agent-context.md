@@ -49,6 +49,22 @@ Every coding agent on this repository follows these rules. This project requires
 - The status workflow requires `contents: write`, `issues: write`, and `pull-requests: read`. A protected-`main` push and the REST issue-dependency writes have not yet been verified against a live workflow run. After merge, run **Plan status** through `workflow_dispatch` and verify the test task before relying on live writes.
 - Issues that existed before worker labels: Codex's claims used Dan as assignee. Those were relabelled `Codex` on 3 October 2026; ignore an assignee without a worker label.
 
+### Task board
+
+Dan follows the work on the [Project Jarvis board](https://github.com/users/DanAakesen/projects/2). Every open issue is on it, and [`project-board.yml`](../.github/workflows/project-board.yml) sets its Status column. Nobody moves cards by hand; the next sync would move them back.
+
+| Column | Meaning (open issues) |
+| --- | --- |
+| **Backlog** | Blocked: at least one issue it depends on is still open. |
+| **Ready** | Not blocked, no worker label, no open linked PR: any worker may claim it. |
+| **In progress** | Has a worker label, or an open draft PR with `Fixes #<issue>`. |
+| **In review** | Has an open PR with `Fixes #<issue>` that is ready for review: waiting for checks and merge. |
+| **Done** | Issue closed (the project's built-in "Item closed" workflow). |
+
+- The rules are in [`project_board.py`](../.github/scripts/project_board.py) and its tests. Ready on the board is the same as **ready** above.
+- The workflow reconciles every open issue on issue open/close/reopen/label/unlabel, PR open/close/reopen/ready/draft/edit, after each **Plan status** run, daily at 05:17 UTC, and on `workflow_dispatch`. It adds missing issues to the board and writes only cards whose column changed. It uses `pull_request_target`, so PRs with merge conflicts still sync (L38); it never checks out PR code.
+- `GITHUB_TOKEN` can't edit a project owned by a user account, so the workflow uses the `PROJECT_TOKEN` secret (see Dan's manual steps in `PLAN.md`). Without it the run only warns.
+- The project's other built-in workflows (item added, PR linked, PR merged) may set a column first; the sync runs about 20 seconds later and sets the final one.
 ### Start a task
 
 1. **Claim the issue before anything else: set your worker label.** Find the issue by task ID, then:
