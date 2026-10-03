@@ -1,3 +1,4 @@
+import type { EventHub } from '../core/event-hub.js';
 import type { TaskState } from './task-lifecycle.js';
 
 export interface TaskRecord {
@@ -29,6 +30,18 @@ export interface TaskEventRecord {
   payloadTruncated: boolean;
   source: 'runner' | 'backend' | 'github' | 'dan';
   at: string;
+}
+
+export interface TaskEventMessage extends TaskEventRecord {
+  taskId: string;
+}
+
+export interface RecordTaskEventInput {
+  taskId: string;
+  type: string;
+  summary?: string | null;
+  payload?: unknown;
+  source: TaskEventRecord['source'];
 }
 
 export interface TaskDetail extends TaskRecord {
@@ -90,4 +103,8 @@ export interface TaskStore {
   get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null>;
   getRunningContext(): Promise<RunningTaskContextSnapshot>;
   transition(id: string, state: TaskState, completionVerified?: boolean): Promise<TaskTransitionResult>;
+  /** Persist the timeline and activity entries atomically, then publish the committed event. */
+  recordEvent(event: RecordTaskEventInput): Promise<TaskEventMessage>;
 }
+
+export type TaskEventHub = EventHub<TaskEventMessage>;

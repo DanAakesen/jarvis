@@ -7,6 +7,8 @@ import { createTaskStore } from './task-store.js';
 import { createSettingsStore } from './settings-store.js';
 import { createProjectStore } from './project-store.js';
 import { ProjectConflictError } from '../factory/projects.js';
+import { createEventHub } from '../core/event-hub.js';
+import type { TaskEventMessage } from '../factory/task-store.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -113,7 +115,7 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
         VALUES (N'Task API fixture', @repo, N'main', N'copilot', N'deliver_pr', N'1x2', N'node');`);
     const projectId = projectResult.recordset[0]?.id;
     if (!projectId) throw new Error('Task API fixture project was not created');
-    const store = createTaskStore(pool);
+    const store = createTaskStore(pool, createEventHub<TaskEventMessage>());
     const created = await store.create({ projectId, title: 'Task API contract', request: 'Exercise SQL task operations' });
     expect(created).toMatchObject({ projectId, agent: 'copilot', source: 'board', state: 'Ready' });
     if (!created) throw new Error('Task API fixture task was not created');
@@ -192,6 +194,67 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     await pool.request().input('projectId', sql.BigInt, BigInt(projectId))
       .query('UPDATE dbo.projects SET active = 0 WHERE id = @projectId;');
     expect(await store.create({ projectId, title: 'Archived project', request: 'Must not be queued' })).toBeNull();
+  });
+
+  it('persists events and activity together, then publishes committed events within one second', async () => {
+    const projectResult = await pool.request()
+      .input('repo', sql.NVarChar(140), `DanAakesen/events-${randomUUID().slice(0, 8)}`)
+      .query<{ id: string }>(`INSERT dbo.projects (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+        OUTPUT CAST(inserted.id AS varchar(19)) AS id
+        VALUES (N'Event pipeline fixture', @repo, N'main', N'copilot', N'deliver_pr', N'1x2', N'node');`);
+    const projectId = projectResult.recordset[0]?.id;
+    if (!projectId) throw new Error('Event pipeline fixture project was not created');
+
+    const hub = createEventHub<TaskEventMessage>();
+    const delivered: TaskEventMessage[] = [];
+    hub.subscribe((event) => delivered.push(event));
+    const store = createTaskStore(pool, hub);
+    const task = await store.create({ projectId, title: 'Event pipeline', request: 'Test persistence and publication' });
+    if (!task) throw new Error('Event pipeline fixture task was not created');
+
+    const startedAt = performance.now();
+    const runnerEvent = await store.recordEvent({
+      taskId: task.id,
+      type: 'files_changed',
+      summary: 'Changed source files',
+      payload: { files: ['src/app.ts'] },
+      source: 'runner',
+    });
+    expect(performance.now() - startedAt).toBeLessThan(1000);
+    expect(runnerEvent).toMatchObject({ taskId: task.id, type: 'files_changed', source: 'runner' });
+    expect((await store.transition(task.id, 'Running')).kind).toBe('ok');
+    expect(delivered.map(({ type }) => type)).toEqual(['created', 'files_changed', 'state_changed']);
+    expect(delivered.map(({ taskId }) => taskId)).toEqual([task.id, task.id, task.id]);
+
+    await expect(store.recordEvent({
+      taskId: '9223372036854775807',
+      type: 'files_changed',
+      source: 'runner',
+    })).rejects.toThrow('Task event persistence failed');
+    await expect(store.recordEvent({
+      taskId: task.id,
+      type: 'files_changed\n',
+      source: 'runner',
+    })).rejects.toThrow('Invalid task event');
+    await expect(store.recordEvent({
+      taskId: task.id,
+      type: 'files_changed',
+      payload: 'x'.repeat(1024 * 1024 - 1),
+      source: 'runner',
+    })).rejects.toThrow('Invalid task event payload');
+    expect(delivered).toHaveLength(3);
+
+    const eventRows = await pool.request().input('taskId', sql.BigInt, BigInt(task.id))
+      .query<{ type: string }>('SELECT type FROM dbo.task_events WHERE task_id = @taskId ORDER BY id;');
+    const activityRows = await pool.request().input('link', sql.NVarChar(100), `task:${task.id}`)
+      .query<{ kind: string; title: string }>(
+        'SELECT kind, title FROM dbo.activity WHERE link = @link ORDER BY id;');
+    expect(eventRows.recordset.map(({ type }) => type)).toEqual(['created', 'files_changed', 'state_changed']);
+    expect(activityRows.recordset).toEqual([
+      { kind: 'created', title: 'Task created from the board' },
+      { kind: 'files_changed', title: 'Changed source files' },
+      { kind: 'state_changed', title: 'Task state changed' },
+    ]);
   });
 
   it('reads and transactionally writes only the recognized global settings', async () => {

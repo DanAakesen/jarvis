@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
-import type { RunningTaskContextSnapshot, TaskDetail, TaskRecord, TaskStore } from './task-store.js';
+import type { RunningTaskContextSnapshot, TaskDetail, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' ') };
@@ -70,6 +70,16 @@ function fixture(
     get: vi.fn(async () => detail),
     getRunningContext: vi.fn(async () => context),
     transition: vi.fn(async () => ({ kind: 'ok' as const, task })),
+    recordEvent: vi.fn(async (event) => ({
+      id: '20',
+      taskId: event.taskId,
+      type: event.type,
+      summary: event.summary ?? null,
+      payload: event.payload ?? null,
+      payloadTruncated: false,
+      source: event.source,
+      at: task.createdAt,
+    } satisfies TaskEventMessage)),
     ...overrides,
   };
   const app = buildApp(config, undefined, {

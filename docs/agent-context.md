@@ -242,7 +242,7 @@ Backend commands:
 | Purpose | Command |
 | --- | --- |
 | Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
-| SQL Server migration and task-store integration tests | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
+| SQL Server migration and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Start compiled backend | `npm start --workspace @jarvis/backend` (after its build) |
 | Build then start backend | `npm run dev --workspace @jarvis/backend` |
 | Health request | `curl --fail http://localhost:3000/health` → `{"status":"ok"}` |
