@@ -1,0 +1,48 @@
+# Prepares the Copilot cloud agent's environment before it starts work (P0-14):
+# pinned Node.js, npm and Python, then dependencies from the committed lockfiles
+# through the shared scripts/setup-dependencies.sh. Lint and tests stay with the
+# agent and CI. Runs as a normal workflow when its inputs change, and manually.
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+      - scripts/setup-dependencies.sh
+      - .nvmrc
+      - .python-version
+      - package.json
+      - package-lock.json
+      - runner/requirements*.txt
+      - agents/jarvis/requirements*.txt
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+      - scripts/setup-dependencies.sh
+      - .nvmrc
+      - .python-version
+      - package.json
+      - package-lock.json
+      - runner/requirements*.txt
+      - agents/jarvis/requirements*.txt
+
+jobs:
+  # The job must be called copilot-setup-steps for Copilot to use it.
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - name: Install pinned npm and dependencies
+        run: bash scripts/setup-dependencies.sh

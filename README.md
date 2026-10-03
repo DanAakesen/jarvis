@@ -90,6 +90,9 @@ deliver one linked PR. Dan requests a fresh checkout of the latest `main` for ea
 cloud checkout or a separate Git worktree when continuing in one cloud session. Never push directly to
 `main` or merge your own PR.
 
+Cloud agents prepare their environment with the setup in
+[docs/agent-context.md](docs/agent-context.md#cloud-agent-environments).
+
 Agents do not access Azure. Deployments run through GitHub Actions on `main`;
 bootstrap and sign-in steps remain Dan's responsibility. Never commit secrets,
 local authentication files, or generated build output.
