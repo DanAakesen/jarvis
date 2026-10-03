@@ -20,8 +20,9 @@ export async function createTelemetry(connectionString?: string): Promise<Teleme
 }
 
 const events = new Set([
-  'request.started', 'request.completed', 'request.failed', 'request.origin_denied',
+  'request.started', 'request.completed', 'request.failed', 'request.origin_denied', 'request.auth_denied',
   'server.listening', 'server.stopping', 'server.stopped', 'server.failed',
+  'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
 ]);
 

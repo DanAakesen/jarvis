@@ -174,7 +174,7 @@ def issue_body(task: dict[str, Any], repository: str) -> str:
 Source of truth: [PLAN.md](https://github.com/{repository}/blob/main/PLAN.md). Follow the [development workflow](https://github.com/{repository}/blob/main/docs/agent-context.md#development-workflow).
 
 ### Before you start
-Claim this issue first: step 1 of [Start a task](https://github.com/{repository}/blob/main/docs/agent-context.md#start-a-task).
+Claim this issue first by setting your worker label (`Codex`, `Copilot`, `Dan`, or `Jarvis`); see step 1 of [Start a task](https://github.com/{repository}/blob/main/docs/agent-context.md#start-a-task). If it already has another worker's label, the task is taken: stop.
 
 ### Definition of done
 - [ ] PR title is exactly `{issue_title(task)}` (ID, colon, space; no brackets); PR body contains `Fixes #<n>`

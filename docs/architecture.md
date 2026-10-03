@@ -16,13 +16,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton and core/factory module registration implemented; domain APIs and SSE in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
-| Database access | `mssql` driver with Entra ID (managed identity); plain SQL migrations, applied by the backend at startup under a SQL app lock | Decided; **verify** in P0-07 |
+| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen | Implemented in #7; real Azure identity/deployment validation remains #11 |
 | Files | Azure Blob Storage for artifacts and logs | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
 | Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-11 |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
-| Sign-in | Entra ID: the web app signs in with MSAL and calls the backend with a bearer token; the backend allows only Dan's object ID and Jarvis's own service identities | Decided |
+| Sign-in | Entra ID: backend verifies delegated `jarvis-api` bearer tokens with jose 6.2.12 and Dan's object ID; MSAL web sign-in and explicit service-identity authorization remain their tasks | Backend boundary checked offline in #8; browser and live Entra validation pending #9/#11 |
 | Board updates | Server-sent events (SSE) over `fetch`, so the bearer token can be sent | Decided |
 | Jarvis agent and runner | Python 3.12/3.13 (Foundry hosted agents support Python or C#) | Decided |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
@@ -47,7 +47,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   or contact an API; those interactions begin in P0-09.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
-  (including the container smoke), `foundry-contract.yml` and `runner-ci.yml`
+  (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml` and `runner-ci.yml`
   (runner images), runs Python lint, tests and byte-compilation for `runner`
   and `agents/jarvis` when they exist,
   and ends in one `CI result` gate job. No job uses Azure credentials.
@@ -59,8 +59,11 @@ The backend factory is separate from the process entrypoint. `/health` returns
 binds to `0.0.0.0:3000` by default, validates configuration before listening and
 handles SIGTERM/SIGINT with a five-second close and telemetry flush deadline.
 Browser requests allow only the exact configured `STATIC_WEB_APP_ORIGIN` and
-`http://localhost:5173`; other Origin values receive 403. Authentication remains
-P0-08. The server generates request IDs and records only approved event names,
+`http://localhost:5173`; other Origin values receive 403. A root `onRequest`
+authentication hook runs before CORS and protects current and future nested routes.
+Only the registered `/health` GET/HEAD and CORS-generated preflight route are
+public; explicit business OPTIONS handlers require authentication. The server
+generates request IDs and records only approved event names,
 methods, route templates, statuses and timings. A final output allowlist covers
 child logger bindings as well as log arguments, dropping request/provider secrets.
 
@@ -73,6 +76,59 @@ ingestion remains pending. `backend-ci.yml` proves the production container and
 its health/CORS/shutdown behavior in GitHub Actions without Azure credentials.
 The image uses Node.js 22.23.3, a non-root user, and only backend production output
 and dependencies; prototypes and frontend sources are excluded.
+
+### Backend authentication
+
+The backend verifies RS256 signatures using the configured tenant's Entra v2
+JWKS endpoint. It requires the exact v2 issuer, API client-ID audience (not the
+`api://` resource URI), expiry/not-before/issued-at claims, tenant and v2 version.
+Verified tokens must contain Dan's allow-listed `oid` and delegated
+`access_as_user` scope. Missing, malformed, duplicate or unverifiable credentials
+receive sanitized 401 with a Bearer challenge; verified users/scopes without
+permission receive 403. These early denials retain CORS response headers only
+for the exact approved browser origins, so sign-in can inspect their status.
+ID tokens and app-only tokens are not authorized here.
+Future service integrations must add an explicit route-specific identity policy.
+
+JWKS lookups have a five-second timeout, a 30-second refresh cooldown and a
+ten-minute key cache. Provider outages fail closed. Only object ID and tenant ID
+reach `request.principal`; tokens, claims and provider details are excluded from
+logs and responses. Configuration accepts `ENTRA_TENANT_ID`,
+`ENTRA_API_CLIENT_ID` and `ENTRA_OWNER_OBJECT_ID` UUID overrides and otherwise
+uses the nonsecret bootstrap identities. Real RSA signatures, local HTTP JWKS,
+socket duplicate headers and stalled-provider tests establish this offline
+boundary. No deployed Entra token was obtained; browser sign-in and `/me` remain
+#9, and live deployment verification remains #11.
+
+## Database startup and migration ownership
+
+The process creates one `mssql` pool when SQL settings are supplied. Production
+configuration requires an Azure SQL host, database and user-assigned identity
+client ID; `azure-active-directory-msi-app-service` delegates token acquisition
+and renewal to Tedious/Azure Identity. TLS certificate validation stays enabled.
+No SQL settings selects the offline skeleton; partial settings stop startup.
+Password authentication is permitted only for isolated loopback CI in test mode.
+
+`index.ts` awaits database initialization before listening, outside Fastify's
+10-second ready-hook limit. Connection/request timeouts are 120 seconds; a
+300-second overall startup deadline includes auto-resume, the 60-second app-lock
+wait and all migrations. Cancellation stops active requests, rolls back the
+transaction and closes the pool. If cancellation occurs during connect, its owner
+closes the late connection before any migration can begin. Process shutdown has
+the existing five-second final deadline. Database logs expose fixed event names,
+never raw errors, tokens or SQL text.
+
+The backend reads committed `db/migrations/NNNN_name.sql` batches, acquires
+`jarvis.schema-migrations` exclusively with `LockOwner=Transaction`, validates the
+applied checksum prefix and applies all pending batches plus ledger entries in
+one transaction. Rollback preserves both data and migration history. No recurring
+migration or readiness queries run while idle; pool minimum is zero and
+`validateConnection=socket` avoids validation queries. The production image
+includes the same migration directory. Business tables are still issue #17.
+
+Real managed-identity token exchange and migrations in a deployed Azure revision
+remain issue #11. See the [database guide](../apps/backend/src/database/README.md)
+and [migration format](../db/migrations/README.md) for configuration and ownership.
 
 Where each part runs. The web app is static files on Static Web Apps: free and always reachable. Container Apps hosts only the backend.
 
@@ -259,6 +315,12 @@ The agent can read everything in its sandbox, including environment variables, s
 | Codex | Jarvis-only ChatGPT Pro login, separate from Dan's own apps | Jarvis renews when 3 days or less remain on the access token and writes it back to Key Vault | Proven |
 | GitHub | GitHub App token for one repository: contents and pull requests | 1 hour; the Git credential helper fetches the current token for each push | Decided; the prototype used a fine-grained token |
 
+### GitHub App
+
+[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02 and P3-03; repository metadata read is GitHub's required baseline.
+
+The backend will store the private key in Key Vault as `github-app-private-key` and use its managed identity to mint one-hour, repository-scoped installation tokens. The key must never enter a sandbox. A separate `github-app-webhook-secret` is needed once P3-03 deploys the webhook receiver. The App ID is configuration, not a secret. The registration, selected-repository installation, and Key Vault secret are pending Dan's manual setup after P0-11; the webhook URL and secret await P3-03.
+
 **Codex login rules** (Pro login only; no API key):
 
 1. Create the login once with `codex login` in a Jarvis-only folder. Never copy Dan's own login (L6).
@@ -271,7 +333,7 @@ Jarvis has its own Codex session, so it never signs Dan out of the ChatGPT app o
 
 **Access rules**
 
-- Key Vault holds only these credentials; only the sandbox identity reads them, and it can write only the Codex login secret.
+- Key Vault holds these credentials; the sandbox identity reads only its agent credentials and can write only the Codex login secret. The backend identity will read the GitHub App private key and webhook secret; neither will be accessible to the sandbox.
 - Agents run only on Dan's private repositories.
 - The backend keeps the GitHub App key, creates each task's token, and performs merges outside the sandbox.
 - The sandbox identity cannot reach Jarvis data or other areas; it reports through the backend.

@@ -14,7 +14,10 @@ and Jarvis tool definitions through the same `BackendModule` contract.
 Empty production tool lists are intentional: the domain API tasks have not
 implemented those operations yet. The registration boundary does not return
 fabricated settings, projects or tasks, and does not advertise unavailable tools.
-Event persistence, SSE publication/replay and authentication retain their own tasks.
+Event persistence and SSE publication/replay retain their own tasks. Root bearer
+authentication is implemented in issue #8 and inherited by every area route;
+only core health GET/HEAD and generated CORS preflights are public. Service
+identities and browser sign-in require their separate policies and integration.
 
 To add an area, implement a module and include it in the composition. No code in
 `core/` needs to change:

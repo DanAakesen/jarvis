@@ -18,7 +18,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 | Stack, runtime, sandbox, voice, dispatch, cost | [architecture.md](architecture.md) |
 | Tables, relationships, and groups | [data-model.md](data-model.md) |
 | Step-by-step flows with evidence status | [architecture-flows.html](architecture-flows.html) (open in a browser) |
-| Decisions and learnings L1–L36 | [decisions.md](decisions.md) |
+| Decisions and learnings L1–L37 | [decisions.md](decisions.md) |
 | Prototype code and reports to port in P2 and P4 | [reference/](reference/) |
 | Open-source research | [open-source.md](open-source.md) |
 
@@ -88,7 +88,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 
 - **No manual approval.** The merge workflow (P0-12) squash-merges a PR when it is ready (not a draft; see Copilot drafts below), no agent is still working on it, its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the workflow updates it and waits for the checks again, so every merge is tested against the current `main`.
 - **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, the merge workflow merges only `fix-main:` PRs until `main` is green again.
-- **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, so Copilot PRs need no click from Dan.
+- **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, also after follow-up rounds and while the PR has merge conflicts (L
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
 - Until P0-12 is merged, Dan merges green PRs.
@@ -124,13 +124,58 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - Codex cloud environment: `GH_TOKEN` is a fine-grained token for `DanAakesen/jarvis` with only **Issues: read and write**, used to claim issues. It is an environment variable, not a Codex secret, because Codex removes secrets before the agent runs. Never print it, write it to files, or use it for anything else.
 - P0-01 exception: Dan explicitly authorized using the existing `GH_TOKEN` to open its linked PR. PR #78 creation succeeded. This task-specific authorization does not change the issue-claim restriction for other tasks.
 
+## GitHub App setup
+
+[`github-app-manifest.json`](github-app-manifest.json) is the registration settings reference for the private Jarvis GitHub App. Enter these values in GitHub's **Register a new GitHub App** form; GitHub's settings form does not import this JSON. The `Jarvis Software Factory` name may be changed if GitHub reports it is unavailable.
+
+| GitHub permission | Access | Reason |
+| --- | --- | --- |
+| Contents | Read and write | Read task repositories and push agent branches |
+| Pull requests | Read and write | Create, inspect, and merge pull requests |
+| Checks | Read-only | Read check results |
+| Actions | Read-only | Read workflow runs |
+| Deployments | Read-only | Read deployment status |
+
+Subscribe to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. GitHub requires repository metadata read access automatically. Install only on the repositories Dan selects for Jarvis; do not grant access to all repositories by default.
+
+Do not configure a webhook URL or secret until P0-11 has deployed the backend and P3-03 has implemented its receiver. The manifest intentionally has no webhook URL because neither endpoint is available yet. A GitHub App ID is not a secret; the private key is.
+
+Dan's manual setup checklist:
+
+1. Wait for [P0-11](https://github.com/DanAakesen/jarvis/issues/11) to deploy the Key Vault and backend. Use the deployed `keyVaultName` output; do not guess a vault name.
+2. In GitHub, register the App using the settings above, leave the webhook URL unset until P3-03 is deployed, and install it only on the intended repositories. This requires Dan's GitHub account to administer the owner and selected repositories.
+3. Generate one private key from the App's settings. Download it to a temporary, access-controlled location outside the repository and any synced folder. Never paste or upload it to GitHub, a PR, chat, GitHub Actions, or a sandbox.
+4. From Dan's signed-in Azure CLI, import the PEM file directly into the deployed vault. Replace placeholders locally; do not add the key or its value to the command:
+
+   ```powershell
+   az keyvault secret set --subscription <subscription-id> --vault-name <key-vault-name> --name github-app-private-key --file <private-key.pem> --encoding utf-8 --output none
+   ```
+
+   `--output none` suppresses the returned secret value. Dan needs permission to set secrets on this vault (for example, Key Vault Secrets Officer); cloud coding agents must not run this command or access Azure.
+5. Verify only the secret metadata, never its value:
+
+   ```powershell
+   az keyvault secret show --subscription <subscription-id> --vault-name <key-vault-name> --name github-app-private-key --query "{id:id,enabled:attributes.enabled}" --output json
+   ```
+
+6. Remove the temporary local PEM copy. The backend managed identity reads the key from Key Vault for app authentication; never pass the key to a runner. Record only the non-secret App ID for the later P3-02 backend configuration.
+7. When P3-03 provides a deployed webhook endpoint, set that URL in the App, generate a separate random webhook secret with a password manager, and temporarily stage it outside the repository and synced folders. Import it into Key Vault without displaying the value:
+
+   ```powershell
+   az keyvault secret set --subscription <subscription-id> --vault-name <key-vault-name> --name github-app-webhook-secret --file <webhook-secret.txt> --encoding utf-8 --output none
+   ```
+
+   Configure that same secret in GitHub's App settings and remove the temporary local copy. Do not put either copy in source control or logs.
+
+Status, 3 October 2026: Dan registered the App and installed it on selected repositories (step 2). No private key exists yet; steps 3–6 follow P0-11 and step 7 follows P3-03 (task P3-10). Key Vault storage and webhook delivery are unverified until then. The manifest and instructions do not claim they have happened.
+
 ## Setup and commands
 
 The repository uses npm workspaces for `apps/web` and `apps/backend`, one root
 lockfile, and shared strict TypeScript configuration. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
-Python and SQL components remain in their planned tasks.
+Python runtime and SQL domain tables remain in their planned tasks. Issue #7 adds the database connection and startup migration infrastructure.
 P0-04 adds the Bicep template; its Azure deployment awaits P0-11.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
@@ -172,7 +217,26 @@ slash, path or query; it is required when `NODE_ENV=production`. P0-11 supplies
 the deployed Static Web App origin. Browser origins are limited to this value
 and `http://localhost:5173`; requests with another Origin receive 403. Requests
 without Origin (such as container health probes) are allowed. CORS is not
-authentication; P0-08 supplies token validation before business endpoints exist.
+authentication. P0-08 installs a root bearer-authentication hook before CORS,
+so future area routes inherit it. Only `/health` GET/HEAD and the generated CORS
+preflight route are public; explicit OPTIONS business endpoints are protected.
+
+Backend authentication defaults to the nonsecret identities in
+`infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and
+`ENTRA_OWNER_OBJECT_ID` may override those UUIDs at startup. The API expects an
+RS256 Entra v2 delegated access token with the API client ID as audience and
+`access_as_user` scope; an ID token, app-only token or another user's object ID
+is denied. `request.principal` contains only the verified object and tenant IDs.
+Missing/invalid credentials return 401; verified but unauthorized tokens return
+403. Authentication failures never export token/claim/provider details.
+Approved browser origins retain CORS headers on these early denials so the web
+can read their status; unapproved origins receive no allow-origin header.
+
+`npm test --workspace @jarvis/backend` includes real RSA/local-JWKS auth checks,
+socket duplicate-header rejection, cached keys and bounded provider outages.
+They require no Azure identity or external JWKS service. The production JWKS
+lookup timeout is five seconds. `/me` and browser sign-in remain P0-09; live
+Azure token verification remains P0-11.
 
 `APPLICATIONINSIGHTS_CONNECTION_STRING` is backend-only protected runtime
 configuration supplied by P0-11 through Key Vault references. When absent,
@@ -213,12 +277,43 @@ Verified locally for issue #30 (no Azure access required):
 
 The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and an injected `getToken(scope, signal)` identity provider. These are module options, not new environment variables. See the [module guide](../apps/backend/src/foundry/README.md) for operation ownership and fixture provenance. Recorded runner responses are captured locally with ACP stubbed; these checks establish the offline contract, not live Azure readiness. The dedicated `Foundry contract CI` workflow checks this module on the current skeleton without depending on the server implementation.
 
+### Database access and migrations (#7)
+
+- Configure `SQL_SERVER=<host>.database.windows.net`, `SQL_DATABASE=jarvis` and
+  `SQL_MANAGED_IDENTITY_CLIENT_ID=<id-jarvis-backend client UUID>` in the backend
+  deployment. These are identifiers, not passwords. `SQL_AUTH_MODE` may be omitted
+  or `managed-identity`. Password/user/port overrides are forbidden in this mode;
+  TLS certificate validation is always enabled.
+- With no SQL variables, the offline skeleton logs `database.not_configured` and
+  keeps `/health` available. Partial/invalid configuration fails startup. #11 must
+  supply all three settings and verify identity membership/SQL connectivity.
+- The backend owns a pool, runs migrations before listening and closes it on
+  failed/cancelled startup or shutdown. SQL calls are bounded to 120 seconds,
+  lock contention to 60 seconds, and complete startup to 300 seconds. Initialization
+  is outside Fastify ready hooks so their 10-second timeout cannot abort SQL
+  auto-resume. No idle SQL poll or periodic migration job is added.
+- Append immutable files under `db/migrations/` as `NNNN_name.sql`; use one SQL
+  batch per file, no `GO`, and never rewrite an applied file or insert before
+  applied history. See [migration guide](../db/migrations/README.md). Domain
+  schema and up/down acceptance remain #17.
+- Offline checks: `npm test --workspace @jarvis/backend`,
+  `npm run lint --workspace @jarvis/backend`,
+  `npm run build --workspace @jarvis/backend`.
+- Real SQL contracts: `npm run test:database --workspace @jarvis/backend` in
+  `database-ci.yml`, called by aggregate `ci.yml` and included in `CI result`.
+  Actions owns the disposable SQL Server container; agents do not run Docker or
+  reach Azure SQL. Test-password mode requires `NODE_ENV=test`, `SQL_SERVER=127.0.0.1`,
+  `SQL_USER`, `SQL_PASSWORD` and `SQL_DATABASE`; its isolated fixture is not a
+  production credential. See [database guide](../apps/backend/src/database/README.md).
+- Real Azure managed-identity exchange and applying/restarting a deployed revision
+  remain #11. Offline contracts never establish live Azure readiness.
+
 Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
 | Item | Detail |
 | --- | --- |
 | Triggers | Every `pull_request`, `push` to `main`, and `workflow_dispatch` (P0-12 starts it on `main` after a merge) |
-| Jobs | `Web`, `Backend` (lint, tests, build, container smoke), `Foundry` and `Runner` (base and .NET images, packaged CLI and HTTP smoke) call the reusable `web-ci.yml`, `backend-ci.yml`, `foundry-contract.yml` and `runner-ci.yml`; `Python lint, test and build` (runner lint and tests moved here from `runner-ci.yml`); `CI result` |
+| Jobs | `Web`, `Backend` (lint, tests, build, container smoke), `Database` (isolated SQL Server contracts), `Foundry` and `Runner` (base and .NET images, packaged CLI and HTTP smoke) call the reusable `web-ci.yml`, `backend-ci.yml`, `database-ci.yml`, `foundry-contract.yml` and `runner-ci.yml`; `Python lint, test and build` (runner lint and tests moved here from `runner-ci.yml`); `CI result` |
 | Gate | `CI result` fails unless every other job succeeded. It is the check to require on `main` and for P0-12 `workflow_run` |
 | Python | `bash .github/scripts/python-ci.sh [dir ...]` (default `runner agents/jarvis`). A component with `pyproject.toml` must have a hash-pinned `requirements-dev.txt` with ruff and pytest; each gets its own venv, `ruff check`, `pytest -q` and `compileall`. A component without `pyproject.toml` is reported as skipped (notice and step summary), not passed |
 | Local workflow lint (verified for P0-10) | `go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7`, then `~/go/bin/actionlint` from the repository root. It passes for the CI files; it reports existing findings in `runner-ci.yml` (SC2034 warning) and `runner-deploy.yml` (an unquoted ` #11` ends the `prerequisite` step's YAML scalar, so that job failed on `main` at 290195b; needs a `fix-main:` PR) |

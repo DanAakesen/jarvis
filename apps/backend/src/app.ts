@@ -4,11 +4,14 @@ import cors from '@fastify/cors';
 import type { Logger } from 'pino';
 import { localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger } from './logging.js';
+import { installAuthentication } from './auth/hook.js';
+import type { TokenVerifier } from './auth/verify.js';
 import { coreModule } from './core/index.js';
 import { factoryModule } from './factory/index.js';
 import { registerModules, type BackendModule } from './modules.js';
 
 export interface BuildAppOptions {
+  readonly auth?: TokenVerifier;
   readonly modules?: readonly BackendModule[];
 }
 
@@ -32,6 +35,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
       return reply.code(403).send({ error: 'Origin not allowed' });
     }
   });
+  // Authenticate before CORS can finish OPTIONS requests in its onRequest hook.
+  installAuthentication(app, config, options.auth);
   app.register(cors, {
     origin: (origin, callback) => callback(null, origin === undefined || origins.has(origin)),
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

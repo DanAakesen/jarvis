@@ -1,11 +1,12 @@
 import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
+import { loadConfig } from './config.js';
 import { createLogger } from './logging.js';
 import { shutdown } from './shutdown.js';
 
 afterEach(() => { vi.useRealTimers(); });
-const config = { port: 3000, logLevel: 'info' as const };
+const config = loadConfig({});
 function fixture() {
   return buildApp(config, createLogger(config, undefined, new Writable({ write(_chunk, _encoding, done) { done(); } })));
 }
