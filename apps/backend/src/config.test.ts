@@ -21,6 +21,24 @@ describe('backend configuration', () => {
   it('requires the static origin in production', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow('STATIC_WEB_APP_ORIGIN');
   });
+  it('pins the English realtime model on the configured Voice Live endpoint', () => {
+    expect(loadConfig({
+      VOICE_LIVE_ENDPOINT: 'wss://resource.services.ai.azure.com/voice-live/realtime?api-version=2026-07-15',
+    }).voiceLiveEndpoint).toBe(
+      'wss://resource.services.ai.azure.com/voice-live/realtime?api-version=2026-07-15&model=gpt-realtime-2.1',
+    );
+  });
+  it.each([
+    '',
+    'https://resource.services.ai.azure.com/voice-live/realtime',
+    'wss://resource.example/voice-live/realtime',
+    'wss://resource.services.ai.azure.com/voice-live/realtime?model=gpt-realtime',
+    'wss://resource.services.ai.azure.com/voice-live/realtime?api-key=secret',
+  ])('rejects an invalid Voice Live endpoint without exposing it', (VOICE_LIVE_ENDPOINT) => {
+    expect(() => loadConfig({ VOICE_LIVE_ENDPOINT })).toThrow(
+      /^VOICE_LIVE_ENDPOINT must be a secure Azure Voice Live WebSocket URL$/,
+    );
+  });
   it('rejects unsupported log levels', () => {
     expect(() => loadConfig({ LOG_LEVEL: 'verbose' })).toThrow('LOG_LEVEL');
   });
