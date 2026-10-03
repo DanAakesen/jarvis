@@ -35,8 +35,10 @@ Every coding agent on this repository follows these rules. This project requires
 ### Task status
 
 - Every task in [PLAN.md](../PLAN.md) has a [GitHub issue](https://github.com/DanAakesen/jarvis/issues) in `DanAakesen/jarvis`. The title starts with the task ID (for example `P1-04: Tasks API`), the label is the phase (`P0`–`P6`), and the body copies the task, acceptance criteria, and dependencies. Find one with `gh issue list --repo DanAakesen/jarvis --state all --search "P1-04 in:title"`.
+- **Dependencies:** the Depends on column is mirrored as GitHub issue dependencies ("Blocked by"). An issue shows **Blocked** until every issue it depends on is closed. A task is **ready** when its issue is open, unassigned, and not blocked; list ready tasks with `gh issue list --repo DanAakesen/jarvis --search "is:open no:assignee -is:blocked"`. Ready tasks can run in parallel.
+- Dependencies order tasks; they don't stop two ready tasks from changing the same files. That is what step 4 of [Start a task](#start-a-task) and the up-to-date rule in [Merge](#merge) are for.
 - `PLAN.md` is the source of truth for what a task is. The issue is where a task is started and discussed, and where its PR is linked. If the two differ, `PLAN.md` wins.
-- When a PR adds a task to `PLAN.md` or changes one, its issue must match: create or update it. If you can't edit issues from your environment, list the needed issue changes in the PR body. P0-13 automates this.
+- When a PR adds a task to `PLAN.md` or changes one, its issue must match: create or update it, including its "Blocked by" dependencies. If you can't edit issues from your environment, list the needed issue changes in the PR body. P0-13 automates this.
 - Status values: **Not started**, **In progress**, **Blocked**, **Complete**. The Status column in `PLAN.md` on `main` is the shared view of the project.
 - A task starts when Dan (or later Jarvis) assigns its issue to Copilot or comments `@codex` on it. The plan-status workflow (P0-13) then sets In progress on `main`, sets Complete when the task's PR merges, and resets Not started if the PR closes unmerged.
 - Until P0-13 is merged, Dan starts tasks one at a time and the agent sets the status in its own PR.
