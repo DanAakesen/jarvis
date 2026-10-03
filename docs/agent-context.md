@@ -233,7 +233,7 @@ are not part of setup.
 
 | Agent | Setup | Status |
 | --- | --- | --- |
-| Copilot cloud agent | [`.github/workflows/copilot-setup-steps.yml`](../.github/workflows/copilot-setup-steps.yml): `setup-node` and `setup-python` from the pin files, then the shared script. Copilot uses it only once it is on `main`; it also runs as a normal workflow when its inputs change, or manually | Shared script, `npm run lint` and `npm test` verified in the P0-14 Copilot session |
+| Copilot cloud agent | [`.github/workflows/copilot-setup-steps.yml`](../.github/workflows/copilot-setup-steps.yml): `setup-node` and `setup-python` from the pin files, then the shared script. Copilot uses it only once it is on `main`; it also runs as a normal workflow when its inputs change, or manually | The `Copilot Setup Steps` workflow passed on the P0-14 PR; in the P0-14 Copilot session the shared script, `npm run lint`, `npm test` and the runner's ruff and pytest passed |
 | Codex cloud | Setup script (and maintenance script) in the Codex environment settings: `bash scripts/codex-setup.sh`. It runs `nvm install`/`nvm alias default` for Node.js, `pyenv install`/`pyenv global` for Python (uv's managed Python if pyenv lacks the version), then the shared script | nvm + uv path verified outside Codex; the Codex image (pyenv path) and a Codex task are unverified: P0-15 |
 
 For P0-15, Dan sets in the Codex environment: setup script `bash scripts/codex-setup.sh`;
@@ -245,8 +245,10 @@ this is unverified for this environment. A Codex task then runs
 `npm run lint` and `npm test`. The pyenv path compiles Python on first setup,
 which takes a few minutes; Codex caches the result.
 
-Python checks once a package exists: `<package>/.venv/bin/python -m pytest` in
-that package (and its linter through the same interpreter).
+Python checks use each package's `.venv`. For the runner, from `runner/`:
+`.venv/bin/python -m ruff check .` and `.venv/bin/python -m pytest -q`
+(verified in the P0-14 Copilot session after setup: ruff passed, 36 tests passed).
+`agents/jarvis` has no Python package yet, so setup skips it.
 
 ## Release procedure
 
