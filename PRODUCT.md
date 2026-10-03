@@ -47,6 +47,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 | **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. The hosted Jarvis agent has its own identity and may only list and call tools. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Memory** | One continuous conversation will need compaction and memory over time; the memory design is deferred. |
+| **Turn context** | Each model turn receives current running-task status and recent events plus a bounded recent-message window, so typical status questions do not need a separate task-list model round. |
 
 ### App structure
 
@@ -170,6 +171,10 @@ policies are `deliver_pr` or `complete_without_deployment`, sandbox sizes are
 `1x2` or `2x4`, tech identifiers start with a lowercase letter and use lowercase
 letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
 32-bit integer (default 1).
+
+The projects page derives running-task counts from tasks in the `Running` state
+and refreshes them when Dan refreshes the page. Until release data is connected,
+the last-release field is explicitly unavailable rather than inferred.
 
 #### Settings
 
