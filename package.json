@@ -16,8 +16,8 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "dev": "npm run dev --workspace @jarvis/web",
-    "lint": "npm run lint --workspace @jarvis/web",
-    "test": "npm test --workspace @jarvis/web"
+    "lint": "npm run lint --workspaces",
+    "test": "npm test --workspaces"
   },
   "devDependencies": {
     "typescript": "6.0.3"

@@ -18,7 +18,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 | Stack, runtime, sandbox, voice, dispatch, cost | [architecture.md](architecture.md) |
 | Tables, relationships, and groups | [data-model.md](data-model.md) |
 | Step-by-step flows with evidence status | [architecture-flows.html](architecture-flows.html) (open in a browser) |
-| Decisions and learnings L1–L24 | [decisions.md](decisions.md) |
+| Decisions and learnings L1–L29 | [decisions.md](decisions.md) |
 | Prototype code and reports to port in P2 and P4 | [reference/](reference/) |
 | Open-source research | [open-source.md](open-source.md) |
 
@@ -122,8 +122,9 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 
 The repository uses npm workspaces for `apps/web` and `apps/backend`, one root
 lockfile, and shared strict TypeScript configuration. P0-02 implements the web
-skeleton with React/Vite, routing, ESLint and Vitest; the backend remains an
-empty module until P0-03. Python and SQL components remain in their planned tasks.
+skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
+backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
+Python and SQL components remain in their planned tasks.
 P0-04 adds the Bicep template; its Azure deployment awaits P0-11.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
@@ -137,8 +138,9 @@ Verified in Codex cloud for P0-02:
 | --- | --- |
 | Frozen dependency installation | `npm ci` in the repository root |
 | Both workspace builds | `npm run build` in the repository root |
-| Web lint | `npm run lint` in the repository root |
-| Web tests (single run) | `npm test` in the repository root, or `npm test` in `apps/web` |
+| Both workspace lint checks | `npm run lint` in the repository root (P0-03 adds backend lint) |
+| Both workspace tests (single run) | `npm test` in the repository root (P0-03 adds backend tests) |
+| Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |
 
@@ -147,6 +149,39 @@ origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). The URL
 is pending P0-11's first deployment; opening the skeleton needs no extra setup.
 Sign-in and authenticated API calls remain P0-09. `Web CI` checks lint, tests,
 and root builds on PRs and `main`; monorepo CI remains P0-10.
+
+Backend commands implemented in P0-03:
+
+| Purpose | Command |
+| --- | --- |
+| Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
+| Start compiled backend | `npm start --workspace @jarvis/backend` (after its build) |
+| Build then start backend | `npm run dev --workspace @jarvis/backend` |
+| Health request | `curl --fail http://localhost:3000/health` → `{"status":"ok"}` |
+| Production container (GitHub Actions only; no Docker in an agent sandbox) | `docker build --file apps/backend/Dockerfile --tag jarvis-backend .` from the repository root |
+
+`PORT` defaults to 3000, matching Container Apps ingress. `LOG_LEVEL` defaults
+to `info`. `STATIC_WEB_APP_ORIGIN` is an exact HTTPS origin with no trailing
+slash, path or query; it is required when `NODE_ENV=production`. P0-11 supplies
+the deployed Static Web App origin. Browser origins are limited to this value
+and `http://localhost:5173`; requests with another Origin receive 403. Requests
+without Origin (such as container health probes) are allowed. CORS is not
+authentication; P0-08 supplies token validation before business endpoints exist.
+
+`APPLICATIONINSIGHTS_CONNECTION_STRING` is backend-only protected runtime
+configuration supplied by P0-11 through Key Vault references. When absent,
+logs go to stdout only and `telemetry.stdout_only` makes that state visible.
+The isolated manual SDK receives the same safe events; automatic request and
+dependency instrumentation is not enabled. Log output drops headers, bodies,
+URLs, query strings, arbitrary messages and raw errors. Request IDs are generated
+by the server. Telemetry tests use fake sinks, never Azure. SIGTERM/SIGINT stops
+the backend and bounds close/flush/disposal to five seconds.
+
+`Backend CI` runs the offline lint, tests and targeted build plus a production
+container build and smoke test without Azure credentials. Its image uses pinned
+Node.js, runs as non-root, and contains backend output and production dependencies.
+Container verification belongs in Actions; live telemetry ingestion and Azure
+connectivity remain unverified until P0-11.
 
 Verified locally in P0-04 (Azure deployment remains pending P0-11):
 
@@ -167,7 +202,7 @@ Verified locally for issue #30 (no Azure access required):
 | Purpose | Command from the repository root |
 | --- | --- |
 | Build the standalone backend Foundry client | `npm run build --workspace @jarvis/backend` |
-| Lint the client module | `npx --no-install eslint --config apps/backend/src/foundry/eslint.config.mjs apps/backend/src/foundry --max-warnings 0` |
+| Lint the client module | `npx --no-install eslint --config apps/backend/src/foundry/lint.config.mjs apps/backend/src/foundry --max-warnings 0` |
 | Run offline Foundry contract tests | `npx --no-install vitest run --config apps/backend/src/foundry/vitest.config.mts` |
 
 The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and an injected `getToken(scope, signal)` identity provider. These are module options, not new environment variables. See the [module guide](../apps/backend/src/foundry/README.md) for operation ownership and fixture provenance. Recorded runner responses are captured locally with ACP stubbed; these checks establish the offline contract, not live Azure readiness. The dedicated `Foundry contract CI` workflow checks this module on the current skeleton without depending on the server implementation.
@@ -177,7 +212,6 @@ Future commands (unimplemented until their tasks):
 | Purpose | Command |
 | --- | --- |
 | Bootstrap or repair identities | `./infra/bootstrap.ps1` (safe to re-run; needs Dan's signed-in `az` and `gh`) |
-| Backend tests (P0-03) | `npm test` in `apps/backend` |
 | Python tests | `pytest` in `runner` and `agents/jarvis` |
 | Validate Mermaid diagrams (candidate; unverified) | `npx -y @mermaid-js/mermaid-cli@11 -i <file>.md -o <out>.md` |
 

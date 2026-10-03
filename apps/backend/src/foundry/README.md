@@ -23,11 +23,11 @@ From the repository root, after `npm ci`:
 
 ```sh
 npm run build --workspace @jarvis/backend
-npx --no-install eslint --config apps/backend/src/foundry/eslint.config.mjs apps/backend/src/foundry --max-warnings 0
+npx --no-install eslint --config apps/backend/src/foundry/lint.config.mjs apps/backend/src/foundry --max-warnings 0
 npx --no-install vitest run --config apps/backend/src/foundry/vitest.config.mts
 ```
 
-`client.test.mts` and its standalone config are excluded by the original backend compiler's `src/**/*.ts` pattern. The dedicated Foundry contract CI workflow runs the build and these tests independently of the server skeleton. The backend test suite can also include `*.test.mts` once it is installed.
+The backend production compiler excludes the contract tests and their standalone config. The dedicated Foundry contract CI workflow runs the build and these tests independently of the server skeleton. The backend test suite also includes `*.test.mts`, so root `npm test` checks the Foundry contract alongside the server tests.
 
 ## Recording provenance
 
