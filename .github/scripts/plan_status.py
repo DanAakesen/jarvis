@@ -15,6 +15,7 @@ FIXES_ISSUE = re.compile(r"\bFixes\s+#(\d+)\b", re.IGNORECASE)
 DEPENDENCY_RANGE = re.compile(
     r"(P\d)-(\d{2})\s*(?:…|\.{3}|–|-)\s*(?:P\d-)?(\d{2})"
 )
+WORKER_LABELS = {"Codex", "Copilot", "Dan", "Jarvis"}
 
 
 def flatten_pages(value: Any) -> list[dict[str, Any]]:
@@ -97,9 +98,14 @@ def task_status(
         return "Complete"
     if current == "Blocked":
         return current
-    if issue.get("assignees") or any(pull.get("state") == "open" for pull in linked_prs):
+    open_pr = any(pull.get("state") == "open" for pull in linked_prs)
+    labels = {label.get("name") for label in issue.get("labels", [])}
+    worker_claimed = issue.get("state") == "open" and bool(labels & WORKER_LABELS)
+    if open_pr or worker_claimed:
         return "In progress"
-    return "Not started"
+    if issue.get("state") == "open":
+        return "Not started"
+    return current
 
 
 def issue_link(issue: dict[str, Any] | None, repository: str) -> str:

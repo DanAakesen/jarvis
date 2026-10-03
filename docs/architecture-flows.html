@@ -447,7 +447,7 @@ const FLOWS = [
     name: "Plan status",
     summary: "GitHub events reconcile PLAN.md task statuses; plan changes create missing issues and dependency links. Live writes and protected-main behavior await post-merge verification.",
     nodes: [
-      { id: "event", lane: "github", col: 1, s: "docs", t: "Issue, PR, plan push, or dispatch", d: "Issue assignment/state; PR open, close, reopen or edit; PLAN.md push; manual dispatch.", ev: "P0-13 trigger list in .github/workflows/plan-status.yml." },
+      { id: "event", lane: "github", col: 1, s: "docs", t: "Issue, PR, plan push, or dispatch", d: "Issue state/worker-label changes; PR open, close, reopen or edit; Worker label workflow completion; PLAN.md push; manual dispatch.", ev: "P0-13 trigger list in .github/workflows/plan-status.yml." },
       { id: "read", lane: "actions", col: 2, s: "assumed", t: "Read all issues and PRs", d: "Paginated GitHub REST lists." },
       { id: "status", lane: "actions", col: 3, s: "assumed", t: "Reconcile task statuses", d: "Preserve manual Blocked; otherwise derive In progress, Complete or Not started.", ev: "Offline fixture tests exist; first live dispatch remains pending." },
       { id: "new", lane: "actions", col: 4, s: "assumed", t: "Create missing task issues", d: "On PLAN.md push or dispatch: standard task body and phase label." },

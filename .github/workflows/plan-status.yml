@@ -2,13 +2,16 @@ name: Plan status
 
 on:
   issues:
-    types: [assigned, unassigned, closed, reopened]
+    types: [assigned, unassigned, closed, reopened, labeled, unlabeled]
   pull_request:
     types: [opened, closed, reopened, edited]
   push:
     branches: [main]
     paths: [PLAN.md]
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Worker label"]
+    types: [completed]
 
 permissions:
   contents: write

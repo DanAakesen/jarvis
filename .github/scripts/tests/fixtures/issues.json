@@ -5,6 +5,7 @@
       "title": "P0-01: Completed task",
       "state": "closed",
       "state_reason": "completed",
+      "labels": [],
       "assignees": []
     },
     {
@@ -12,6 +13,7 @@
       "title": "P0-02: Claimed task",
       "state": "open",
       "state_reason": null,
+      "labels": [],
       "assignees": [{"login": "DanAakesen"}]
     },
     {
@@ -19,6 +21,7 @@
       "title": "P0-03: PR task",
       "state": "open",
       "state_reason": null,
+      "labels": [],
       "assignees": []
     },
     {
@@ -26,13 +29,15 @@
       "title": "P0-04: Blocked task",
       "state": "open",
       "state_reason": null,
+      "labels": [{"name": "Copilot"}],
       "assignees": [{"login": "Copilot"}]
     },
     {
       "number": 5,
       "title": "P0-05: Abandoned task",
-      "state": "closed",
-      "state_reason": "not_planned",
+      "state": "open",
+      "state_reason": null,
+      "labels": [],
       "assignees": []
     },
     {
@@ -40,6 +45,31 @@
       "title": "P0-06: Merged task",
       "state": "open",
       "state_reason": null,
+      "labels": [],
+      "assignees": []
+    },
+    {
+      "number": 8,
+      "title": "P0-08: Labelled task",
+      "state": "open",
+      "state_reason": null,
+      "labels": [{"name": "Codex"}],
+      "assignees": []
+    },
+    {
+      "number": 9,
+      "title": "P0-09: Unknown label task",
+      "state": "open",
+      "state_reason": null,
+      "labels": [{"name": "bug"}],
+      "assignees": []
+    },
+    {
+      "number": 11,
+      "title": "P0-10: Closed task",
+      "state": "closed",
+      "state_reason": "not_planned",
+      "labels": [],
       "assignees": []
     },
     {
