@@ -85,7 +85,9 @@ JWKS endpoint. It requires the exact v2 issuer, API client-ID audience (not the
 Verified tokens must contain Dan's allow-listed `oid` and delegated
 `access_as_user` scope. Missing, malformed, duplicate or unverifiable credentials
 receive sanitized 401 with a Bearer challenge; verified users/scopes without
-permission receive 403. ID tokens and app-only tokens are not authorized here.
+permission receive 403. These early denials retain CORS response headers only
+for the exact approved browser origins, so sign-in can inspect their status.
+ID tokens and app-only tokens are not authorized here.
 Future service integrations must add an explicit route-specific identity policy.
 
 JWKS lookups have a five-second timeout, a 30-second refresh cooldown and a

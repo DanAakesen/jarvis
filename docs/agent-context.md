@@ -179,6 +179,8 @@ RS256 Entra v2 delegated access token with the API client ID as audience and
 is denied. `request.principal` contains only the verified object and tenant IDs.
 Missing/invalid credentials return 401; verified but unauthorized tokens return
 403. Authentication failures never export token/claim/provider details.
+Approved browser origins retain CORS headers on these early denials so the web
+can read their status; unapproved origins receive no allow-origin header.
 
 `npm test --workspace @jarvis/backend` includes real RSA/local-JWKS auth checks,
 socket duplicate-header rejection, cached keys and bounded provider outages.

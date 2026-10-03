@@ -26,6 +26,10 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
     } catch (error) {
       const statusCode = error instanceof AuthenticationDenied ? error.statusCode : 401;
       request.log.warn({ statusCode }, 'request.auth_denied');
+      // Denials precede the CORS hook; let the approved browser read 401/403.
+      if (origin === localWebOrigin || (config.staticWebAppOrigin !== undefined && origin === config.staticWebAppOrigin)) {
+        reply.header('Access-Control-Allow-Origin', origin).header('Vary', 'Origin');
+      }
       if (statusCode === 401) reply.header('WWW-Authenticate', 'Bearer');
       return reply.code(statusCode).send({ error: statusCode === 401 ? 'Unauthorized' : 'Forbidden' });
     }

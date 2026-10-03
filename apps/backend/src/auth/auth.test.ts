@@ -147,6 +147,22 @@ describe('Entra bearer authentication at the server boundary', () => {
     expect(executed).toBe(false);
     expect(records.join('')).not.toContain(value);
   });
+  it('lets approved browser origins read sanitized 401 and 403 responses', async () => {
+    const { app } = fixture();
+    const unauthorized = `Bearer ${await token({ oid: '00000000-0000-0000-0000-000000000000' })}`;
+    for (const origin of ['http://localhost:5173', config.staticWebAppOrigin!]) {
+      for (const [authorization, status] of [[undefined, 401], [unauthorized, 403]] as const) {
+        const response = await app.inject({ url: '/protected', headers: { origin, ...(authorization === undefined ? {} : { authorization }) } });
+        expect(response.statusCode).toBe(status);
+        expect(response.headers['access-control-allow-origin']).toBe(origin);
+        expect(response.headers.vary).toBe('Origin');
+        expect(response.headers['access-control-allow-credentials']).toBeUndefined();
+      }
+    }
+    const denied = await app.inject({ url: '/protected', headers: { origin: 'https://evil.example' } });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.headers['access-control-allow-origin']).toBeUndefined();
+  });
   it('rejects duplicate Authorization headers over a real socket before fetching keys', async () => {
     const { app } = fixture();
     let executed = false;
