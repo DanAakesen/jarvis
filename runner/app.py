@@ -46,6 +46,7 @@ ACTIVE_STATUSES = {"queued", "running"}
 STOP_WAIT_SECONDS = 90
 STOPPED_STATUS = {"steer": "interrupted", "pause": "paused"}
 CODEX_LOGIN_SECRET = "codex-login"
+COPILOT_TOKEN_SECRET = "copilot-token"
 # Codex renews its login itself only when the access token (valid 10 days) is
 # within 5 minutes of expiry, and each renewal invalidates every other copy.
 # Jarvis renews earlier, in one sandbox at a time, so tasks never renew mid-run.
@@ -163,6 +164,15 @@ def _persist_task(state: TaskState) -> None:
                     saved.setdefault("result", {})[key] = value
             if state.result.get("reason") == "fresh":
                 saved.setdefault("result", {})["reason"] = "fresh"
+            copilot = state.result.get("copilot")
+            if isinstance(copilot, dict):
+                saved["result"] = saved.get("result", {})
+                saved["result"]["copilot"] = {
+                    key: value
+                    for key, value in copilot.items()
+                    if key in {"expires", "last_renewed"}
+                    and (value is None or isinstance(value, str) and _LAST_REFRESH.match(value))
+                }
     _write_json(
         _task_state_path(state.session_id, state.invocation_id),
         saved,
@@ -233,6 +243,11 @@ def _required_string(payload: dict[str, Any], key: str) -> str:
 
 
 async def _key_vault_secret(name: str) -> str:
+    value, _, _ = await _key_vault_secret_details(name)
+    return value
+
+
+async def _key_vault_secret_details(name: str) -> tuple[str, str | None, str | None]:
     vault_uri = os.environ.get("KEY_VAULT_URI")
     if not vault_uri:
         raise RuntimeError("KEY_VAULT_URI is not configured")
@@ -256,7 +271,8 @@ async def _key_vault_secret(name: str) -> str:
             secret = await client.get_secret(name)
             if not secret.value:
                 raise RuntimeError(f"Key Vault secret '{name}' is empty")
-            return secret.value
+            properties = secret.properties
+            return secret.value, _iso(properties.expires_on), _iso(properties.updated_on)
         finally:
             await client.close()
     finally:
@@ -420,7 +436,7 @@ async def _credentials_for(agent: str) -> dict[str, str]:
     if agent == "copilot":
         return {
             "github_token": github_token,
-            "copilot_token": await _key_vault_secret("copilot-token"),
+            "copilot_token": await _key_vault_secret(COPILOT_TOKEN_SECRET),
         }
     if agent == "codex":
         return {
@@ -821,6 +837,11 @@ async def _run_codex_renewal(state: TaskState, min_days_left: float, force: bool
         state.status = "running"
         state.event("started", agent="codex", mode="renew-codex")
         state.result = await _renew_codex_login(state.session_id, min_days_left, force)
+        try:
+            _, expires, updated = await _key_vault_secret_details(COPILOT_TOKEN_SECRET)
+            state.result["copilot"] = {"expires": expires, "last_renewed": updated}
+        except Exception:
+            pass
         state.status = "completed"
         state.event("completed", result=state.result)
     except asyncio.CancelledError:

@@ -273,6 +273,15 @@ Voice Live WebSocket endpoint without credentials in its URL. The backend pins
 must configure this endpoint and provider identity before live use. Local voice
 tests use a mock WebSocket and do not verify Azure access or browser audio.
 
+Production Foundry calls use `FOUNDRY_RUNTIME_ENDPOINT`,
+`FOUNDRY_ADMIN_ENDPOINT`, and `FOUNDRY_RUNNER_AGENT_NAME`; Bicep supplies the
+runtime/admin project URLs and the `jarvis-runner-node-1x2` agent name. These
+are non-secret configuration values. Bicep also assigns the backend identity
+Foundry Agent Consumer at the project scope. The backend's managed identity obtains
+the Foundry token. The daily Codex renewal timer starts with the backend and
+uses the SQL credential lease; the task dispatcher must start Codex work
+through `TaskStore.transition` so both operations serialize on that row.
+
 Backend authentication defaults to the nonsecret identities in
 `infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and
 `ENTRA_OWNER_OBJECT_ID` may override those UUIDs at startup. The API expects an

@@ -7,6 +7,7 @@ function fixture(status = 'completed', result: Record<string, unknown> | null = 
   renewed: false,
   reason: 'fresh',
   expires: '2030-01-01T00:00:00.000Z',
+  copilot: { expires: '2030-01-01T00:00:00.000Z', last_renewed: '2026-10-03T00:00:00.000Z' },
 }): {
   store: CredentialStatusStore;
   client: Pick<FoundryClient, 'startCodexRenewal' | 'status' | 'deleteSession'>;
@@ -15,6 +16,7 @@ function fixture(status = 'completed', result: Record<string, unknown> | null = 
     list: vi.fn(async () => []),
     acquireCodexRenewalLease: vi.fn(async () => true),
     refreshCodexRenewalLease: vi.fn(async () => true),
+    updateCopilotStatus: vi.fn(async () => {}),
     completeCodexRenewal: vi.fn(async () => {}),
   };
   const snapshot = {
@@ -45,6 +47,9 @@ describe('Codex renewal job', () => {
     expect(store.acquireCodexRenewalLease).toHaveBeenCalledWith(expect.any(String), 900);
     expect(store.completeCodexRenewal).toHaveBeenCalledWith(
       expect.any(String), 'ok', '2030-01-01T00:00:00.000Z', null, true,
+    );
+    expect(store.updateCopilotStatus).toHaveBeenCalledWith(
+      'ok', '2030-01-01T00:00:00.000Z', '2026-10-03T00:00:00.000Z',
     );
     expect(client.deleteSession).toHaveBeenCalledWith('session');
   });

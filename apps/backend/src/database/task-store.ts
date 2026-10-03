@@ -168,9 +168,13 @@ export function createTaskStore(pool: sql.ConnectionPool): TaskStore {
             .query<{ agent: 'codex' | 'copilot' }>('SELECT agent FROM dbo.tasks WHERE id = @taskId;');
           if (agentResult.recordset[0]?.agent === 'codex') {
             const credential = await new sql.Request(transaction)
-              .query<{ renewalActive: boolean }>(`SELECT CAST(CASE WHEN renewal_lease_until > SYSUTCDATETIME()
-                THEN 1 ELSE 0 END AS bit) AS renewalActive
+              .query<{ status: string; renewalActive: boolean }>(`SELECT status,
+                CAST(CASE WHEN renewal_lease_until > SYSUTCDATETIME() THEN 1 ELSE 0 END AS bit) AS renewalActive
                 FROM dbo.credential_status WITH (UPDLOCK, HOLDLOCK) WHERE name = N'codex-login';`);
+            if (credential.recordset[0]?.status === 'failed') {
+              await transaction.rollback();
+              return { kind: 'credential-unavailable' };
+            }
             if (credential.recordset[0]?.renewalActive !== false) {
               await transaction.rollback();
               return { kind: 'renewal-active' };

@@ -58,6 +58,12 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     expect(await applyMigrations(pool, committed)).toEqual([]);
     expect(await ledger()).toEqual(committed.map((migration) => migration.name));
     expect(await tables()).toEqual(tablesInSchema);
+    const credentials = await pool.request().query<{ name: string; status: string }>(
+      `SELECT name, status FROM dbo.credential_status WHERE name IN (N'codex-login', N'copilot-token') ORDER BY name;`);
+    expect(credentials.recordset).toEqual([
+      { name: 'codex-login', status: 'unknown' },
+      { name: 'copilot-token', status: 'unknown' },
+    ]);
     const { recordset } = await pool.request().query<{ name: string }>(
       `SELECT name FROM sys.indexes WHERE name IN (
         N'IX_tasks_state_next_attempt_at', N'IX_task_events_task_id_at', N'IX_sandbox_sessions_task_id_status',
@@ -140,6 +146,21 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
       owner, 'ok', '2030-01-01T00:00:00.000Z', '2026-10-03T00:00:00.000Z',
     );
     expect((await tasks.transition(blockedCodex.id, 'Running')).kind).toBe('ok');
+    await credentials.updateCopilotStatus(
+      'renew_soon', '2026-10-05T12:00:00.000Z', '2026-10-01T12:00:00.000Z',
+    );
+    expect(await credentials.list()).toEqual([
+      {
+        name: 'codex-login', status: 'ok',
+        expiresAt: '2030-01-01T00:00:00.000Z', lastRenewedAt: '2026-10-03T00:00:00.000Z',
+      },
+      {
+        name: 'copilot-token', status: 'renew_soon',
+        expiresAt: '2026-10-05T12:00:00.000Z', lastRenewedAt: '2026-10-01T12:00:00.000Z',
+      },
+    ]);
+    expect((await tasks.transition(blockedCodex.id, 'PauseRequested')).kind).toBe('ok');
+    expect((await tasks.transition(blockedCodex.id, 'Paused')).kind).toBe('ok');
 
     await pool.request()
       .input('owner', sql.UniqueIdentifier, owner)
@@ -147,7 +168,17 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
         renewal_lease_until = DATEADD(minute, -1, SYSUTCDATETIME()) WHERE name = N'codex-login';`);
     const recoveredOwner = randomUUID();
     expect(await credentials.acquireCodexRenewalLease(recoveredOwner, 900)).toBe(true);
-    await credentials.completeCodexRenewal(recoveredOwner, 'ok', null, null);
+    await credentials.completeCodexRenewal(recoveredOwner, 'failed', null, null);
+    const failedCredentialTask = await tasks.create({
+      projectId, title: 'Blocked by failed credential', request: 'Wait', agent: 'codex',
+    });
+    if (!failedCredentialTask) throw new Error('Failed-credential task was not created');
+    expect((await tasks.transition(failedCredentialTask.id, 'Running')).kind).toBe('credential-unavailable');
+
+    const repairedOwner = randomUUID();
+    expect(await credentials.acquireCodexRenewalLease(repairedOwner, 900)).toBe(true);
+    await credentials.completeCodexRenewal(repairedOwner, 'ok', null, null);
+    expect((await tasks.transition(failedCredentialTask.id, 'Running')).kind).toBe('ok');
   });
 
   it('creates, filters, reads and transitions tasks with transactional history', async () => {
@@ -280,7 +311,7 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     ["INSERT dbo.artifacts (task_id, kind, blob_path, size_bytes) VALUES (1, N'log', N'path', -1)", 'CK_artifacts_size_bytes'],
     ["INSERT dbo.webhook_deliveries (delivery_id, event, received_at, processed_at, outcome) VALUES (N'delivery-bad', N'push', '2026-01-01', '2026-01-02', N'pending')", 'CK_webhook_deliveries_outcome'],
     ["INSERT dbo.credential_status (name, status) VALUES (N'unknown', N'ok')", 'CK_credential_status_name'],
-    ["INSERT dbo.credential_status (name, status) VALUES (N'copilot-token', N'expired')", 'CK_credential_status_status'],
+    ["INSERT dbo.credential_status (name, status) VALUES (N'github-app-key', N'expired')", 'CK_credential_status_status'],
   ])('rejects invalid data %#', async (statement, constraint) => {
     await expect(pool.request().query(statement)).rejects.toThrow(constraint);
   });

@@ -51,11 +51,14 @@ session as `agent_session_id` to resume, steer, or pause.
 | Steer | `{"agent":"copilot","mode":"steer","message":"..."}` |
 | Pause | `{"mode":"pause"}` |
 | Credential probe | `{"agent":"copilot","probe":"key-vault"}` |
-| Codex renewal | `{"mode":"renew-codex","min_days_left":3}` |
+| Codex renewal | `{"agent":"codex","mode":"renew-codex","min_days_left":3}` |
 
-Start and steer return `invocation_id`, `session_id`, `status`, `agent`, and
-`mode`. Poll the invocation for bounded events, result, error, and timestamps.
-Pause uses ACP cancellation; a later turn reloads the persisted ACP session.
+Start, steer and renewal return `invocation_id`, `session_id`, `status`,
+`agent`, and `mode`. Poll the invocation for bounded events, result, error, and
+timestamps. Renewal results contain only expiry/status metadata; those
+allowlisted dates may persist with invocation status, never prompts, secret
+values, or general task results. Pause uses ACP cancellation; a later turn
+reloads the persisted ACP session.
 Every agent prompt, including resumed and recovered turns, is prefixed with
 instructions to commit and push small work-in-progress changes to the existing
 task branch after each meaningful step. Agents must not force-push or push to
@@ -65,8 +68,9 @@ of a branch or PR: the backend must verify GitHub before accepting delivery
 (L22). The filesystem persists only at Foundry checkpoints. Metadata is stored per
 invocation, so an idle recreation still permits polling earlier turns in the
 session. Older images' single `task-state.json` records remain readable. Only
-identifiers, status, and timestamps rehydrate; prompts, events, results, and
-credential values are not stored in these records.
+identifiers, status, and timestamps rehydrate for ordinary turns. Renewal
+records additionally retain allowlisted expiry and last-updated dates so the
+backend can reconcile a completed invocation after runner recreation.
 
 The hosted identity fetches secrets from `KEY_VAULT_URI`; its writable home is
 under `JARVIS_WORK_ROOT` (default `/files/jarvis`). Codex auth files are private

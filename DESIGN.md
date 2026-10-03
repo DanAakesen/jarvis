@@ -83,9 +83,10 @@ Keep the Settings route within the shell's neutral foundation. Use one page
 headline and distinct form sections for Jarvis, Voice, Coding agents, Global,
 and Credentials. Two columns make related controls easy to scan on wide screens;
 the form stacks on narrow screens. Save feedback stays beside the save action,
-and loading, recovery, and unavailable actions remain explicit. Credential and
-sleep actions are disabled with their explanation until their owning services
-exist; no new visual direction or palette is introduced. Checked in Chromium at
+and loading, recovery, and unavailable actions remain explicit. Credentials show text status, expiry, and last-updated dates without secret
+values; manual renewal and reseed controls remain disabled with an explanation.
+The sleep control also remains disabled until its owning workflow exists; no
+new visual direction or palette is introduced. Checked in Chromium at
 390 and 1280 px with mock auth/settings: no horizontal overflow, controls at
 least 44 px high, and save/disabled states visible. Live backend behavior remains
 unverified.

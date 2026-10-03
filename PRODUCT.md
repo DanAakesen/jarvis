@@ -179,6 +179,12 @@ letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
 | Global: max parallel tasks; sleep switch | Change |
 | Credentials: name, expiry, last renewal, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
 
+The backend checks Codex daily and renews only when the access token has three
+days or less remaining and no Codex task is running. Credential dates and
+status are non-secret Key Vault metadata; failed renewal is visible as
+"Action needed". Manual renewal and re-seed controls remain disabled until an
+operator workflow is available.
+
 The settings API validates choices against the server's available-model catalog.
 Until provider model support is verified, Codex and Copilot use their provider
 defaults. The global parallel-task limit is a whole number from 1 to 100. Voice

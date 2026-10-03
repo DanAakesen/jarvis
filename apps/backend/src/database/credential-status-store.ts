@@ -81,6 +81,20 @@ export function createCredentialStatusStore(pool: sql.ConnectionPool): Credentia
       return (rowsAffected[0] ?? 0) === 1;
     },
 
+    async updateCopilotStatus(
+      status: CredentialStatusValue,
+      expiresAt: string | null,
+      lastRenewedAt: string | null,
+    ): Promise<void> {
+      await pool.request()
+        .input('status', sql.NVarChar(16), status)
+        .input('expiresAt', sql.DateTime2(7), expiresAt ? new Date(expiresAt) : null)
+        .input('lastRenewedAt', sql.DateTime2(7), lastRenewedAt ? new Date(lastRenewedAt) : null)
+        .query(`UPDATE dbo.credential_status SET status = @status,
+          expires_at = @expiresAt, last_renewed_at = @lastRenewedAt
+          WHERE name = N'copilot-token';`);
+    },
+
     async completeCodexRenewal(
       owner: string,
       status: Exclude<CredentialStatusValue, 'unknown'>,

@@ -339,13 +339,15 @@ erDiagram
         string name PK "codex-login, copilot-token, github-app-key"
         datetime expires_at
         datetime last_renewed_at
-        string status "ok | renew_soon | failed"
+        string status "ok | renew_soon | failed | unknown"
+        uuid renewal_lease_owner "nullable"
+        datetime renewal_lease_until "nullable"
     }
 ```
 
 - `webhook_deliveries` makes webhook handling idempotent: GitHub may deliver the same event twice.
 - A delivery is first stored with null outcome and processing time; those fields are set together to `ok`, `ignored` or `error` when handled. No webhook payload or secret is stored here.
-- `credential_status` stores expiry/renewal dates and status only, never secret values; it drives "renew soon" warnings on the board.
+- `credential_status` stores expiry/last-updated dates and status only, never secret values. Codex and Copilot start as `unknown`; Key Vault metadata and Codex renewal populate dates. A paired owner/expiry lease serializes Codex renewal against Codex task starts; unknown status alone does not block tasks, while a failed Codex renewal does.
 
 ## 7 · Usage and cost
 

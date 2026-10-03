@@ -12,6 +12,11 @@ export interface CredentialStatusStore {
   list(): Promise<CredentialStatus[]>;
   acquireCodexRenewalLease(owner: string, leaseSeconds: number): Promise<boolean>;
   refreshCodexRenewalLease(owner: string, leaseSeconds: number): Promise<boolean>;
+  updateCopilotStatus(
+    status: CredentialStatusValue,
+    expiresAt: string | null,
+    lastRenewedAt: string | null,
+  ): Promise<void>;
   completeCodexRenewal(
     owner: string,
     status: Exclude<CredentialStatusValue, 'unknown'>,

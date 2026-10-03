@@ -63,7 +63,7 @@ export async function runCodexRenewalOnce(
   let status: Exclude<CredentialStatusValue, 'unknown'> = 'failed';
   let expiresAt: string | null = null;
   let lastRenewedAt: string | null = null;
-  let result: RenewalResult = 'uncertain';
+  let result: RenewalResult;
 
   try {
     const accepted = await client.startCodexRenewal({ signal: controller.signal });
@@ -72,6 +72,16 @@ export async function runCodexRenewalOnce(
       const snapshot = await client.status(accepted.invocationId, { signal: controller.signal });
       if (terminalStatuses.has(snapshot.status)) {
         terminal = true;
+        if (isObject(snapshot.result) && isObject(snapshot.result['copilot'])) {
+          const copilot = snapshot.result['copilot'];
+          const copilotExpires = validDate(copilot['expires']) ? copilot['expires'] : null;
+          const copilotRenewed = validDate(copilot['last_renewed']) ? copilot['last_renewed'] : null;
+          await store.updateCopilotStatus(
+            copilotExpires ? credentialStatus(copilotExpires, Date.now()) : 'unknown',
+            copilotExpires,
+            copilotRenewed,
+          );
+        }
         if (snapshot.status === 'completed' && snapshot.error === null && isObject(snapshot.result)) {
           const renewal = snapshot.result;
           const didRenew = renewal['renewed'] === true;

@@ -31,6 +31,7 @@ var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
+var foundryAgentConsumerRoleId = 'eed3b665-ab3a-47b6-8f48-c9382fb1dad6'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var deployBackendApp = !empty(backendImage)
 
@@ -262,6 +263,16 @@ resource foundryAppInsightsAssignment 'Microsoft.Authorization/roleAssignments@2
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringMetricsPublisherRoleId)
     principalId: foundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource backendFoundryAgentConsumerAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryProject.id, backendIdentity.id, foundryAgentConsumerRoleId)
+  scope: foundryProject
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', foundryAgentConsumerRoleId)
+    principalId: backendIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
