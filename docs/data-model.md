@@ -105,7 +105,7 @@ erDiagram
         string tool "create_task, pause_task, ..."
         json arguments
         json result
-        string outcome "ok | error"
+        string outcome "ok | refused | error"
         bigint task_id FK "nullable"
         datetime at
     }
@@ -127,7 +127,7 @@ erDiagram
 
 - **One continuous conversation.** Jarvis has a single thread; each time Dan talks or types is a `jarvis_session` within it. Over time the thread needs compaction and memory (Decision 6, deferred); `messages` keeps the full record either way.
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
-- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`error` outcome in `tool_calls`. P1-01 (#15) owns the table migration; no live SQL write has been verified yet.
+- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; any other failure is stored as a generic error. P1-01 (#15) owns the table migration; no live SQL write has been verified yet.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes.
 
