@@ -36,20 +36,26 @@ Every coding agent on this repository follows these rules. This project requires
 
 - Every task in [PLAN.md](../PLAN.md) has a [GitHub issue](https://github.com/DanAakesen/jarvis/issues) in `DanAakesen/jarvis`. The title starts with the task ID (for example `P1-04: Tasks API`), the label is the phase (`P0`–`P6`), and the body copies the task, acceptance criteria, and dependencies. Find one with `gh issue list --repo DanAakesen/jarvis --state all --search "P1-04 in:title"`.
 - **Dependencies:** the Depends on column is mirrored as GitHub issue dependencies ("Blocked by"). An issue shows **Blocked** until every issue it depends on is closed. A task is **ready** when its issue is open, unassigned, and not blocked; list ready tasks with `gh issue list --repo DanAakesen/jarvis --search "is:open no:assignee -is:blocked"`. Ready tasks can run in parallel.
-- Dependencies order tasks; they don't stop two ready tasks from changing the same files. That is what step 4 of [Start a task](#start-a-task) and the up-to-date rule in [Merge](#merge) are for.
+- Dependencies order tasks; they don't stop two ready tasks from changing the same files. That is what step 5 of [Start a task](#start-a-task) and the up-to-date rule in [Merge](#merge) are for.
 - `PLAN.md` is the source of truth for what a task is. The issue is where a task is started and discussed, and where its PR is linked. If the two differ, `PLAN.md` wins.
 - When a PR adds a task to `PLAN.md` or changes one, its issue must match: create or update it, including its "Blocked by" dependencies. If you can't edit issues from your environment, list the needed issue changes in the PR body. P0-13 automates this.
 - Status values: **Not started**, **In progress**, **Blocked**, **Complete**. The Status column in `PLAN.md` on `main` is the shared view of the project.
-- A task starts when Dan (or later Jarvis) assigns its issue to Copilot or comments `@codex` on it. The plan-status workflow (P0-13) then sets In progress on `main`, sets Complete when the task's PR merges, and resets Not started if the PR closes unmerged.
-- Until P0-13 is merged, Dan starts tasks one at a time and the agent sets the status in its own PR.
+- Dan (or later Jarvis) starts a task, from the issue or directly in the agent's app. **The agent claims the issue itself** (step 1 of [Start a task](#start-a-task)); Dan never assigns issues by hand.
+- A task is **In progress** when its issue has an assignee or an open PR containing `Fixes #<issue>`. The plan-status workflow (P0-13) writes that to `PLAN.md` on `main`, sets Complete when the PR merges, and resets Not started if the PR closes unmerged and the issue is unassigned.
+- Until P0-13 is merged, the agent also sets the status in its own PR.
 
 ### Start a task
 
-1. Read the current `main`: the Status column and Current focus in `PLAN.md`, the relevant [decisions](decisions.md), and the files the `AGENTS.md` context map names for your area.
-2. Check that `main` is green: the latest CI and deploy runs on `main` passed (before P0-10 and P0-11 add them, `main` counts as green). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
-3. Check your task: not Complete, not In progress through another PR, and every task in its "Depends on" column Complete. If any check fails, stop and report it on the issue.
-4. Look at the running tasks (In progress rows and open PRs). Stay out of files they change, or say in your PR why you overlap.
-5. Use one branch and one PR. The PR title starts with the task ID, and the PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
+1. **Claim the issue before anything else.** Find it by task ID, then:
+   - The task is taken if the issue has a `Claimed by` comment, is assigned to Copilot, or has an open PR with `Fixes #<issue>`, and that claim isn't yours. Then stop and say so. (Codex claims with Dan's token, so Dan as assignee alone doesn't tell who works on it.)
+   - **Codex cloud:** assign the issue and comment, using `GH_TOKEN` from the environment: `gh issue edit <n> --repo DanAakesen/jarvis --add-assignee @me` and `gh issue comment <n> --repo DanAakesen/jarvis --body "Claimed by Codex at <UTC time>."`. Without `gh`, call the GitHub REST API with `curl` (`POST /repos/DanAakesen/jarvis/issues/<n>/assignees` and `/comments`). If the claim fails, stop and report it; never work on an unclaimed task.
+   - **Copilot cloud agent:** started from the issue, Copilot is assigned and opens a draft PR with the issue link automatically. Started anywhere else, open the draft PR with `Fixes #<issue>` in its body first. Its draft PR is its claim.
+   - **Any other environment:** claim the same way, or ask Dan.
+2. Read the current `main`: the Status column and Current focus in `PLAN.md`, the relevant [decisions](decisions.md), and the files the `AGENTS.md` context map names for your area.
+3. Check that `main` is green: the latest CI and deploy runs on `main` passed (before P0-10 and P0-11 add them, `main` counts as green). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
+4. Check your task: not Complete, not claimed by anyone else, and every task in its "Depends on" column Complete. If any check fails, stop and report it on the issue.
+5. Look at the running tasks (In progress rows, assigned issues, and open PRs). Stay out of files they change, or say in your PR why you overlap.
+6. Use one branch and one PR. The PR title starts with the task ID, and the PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
 
 ### Finish a task
 
@@ -68,12 +74,15 @@ Before marking the PR ready, update the repository in the same PR so the next ag
 | Settled a visual direction or found a UI issue | [DESIGN.md](../DESIGN.md) |
 | Found work outside the task | `PLAN.md`: a new task (next free ID in its phase, Depends on filled in, Not started) or an entry under Ideas. Update the Depends on column of any task this changes. Never drop it silently. |
 
-The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups.
+The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; the merge workflow never merges a draft.
+
+Every task issue ends with the same "Before you start" and "Definition of done" checklist that summarises these rules. New task issues get it too.
 
 ### Merge
 
-- **No manual approval.** The merge workflow (P0-12) squash-merges a PR when it is ready (not a draft), its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the workflow updates it and waits for the checks again, so every merge is tested against the current `main`.
+- **No manual approval.** The merge workflow (P0-12) squash-merges a PR when it is ready (not a draft; see the Copilot exception below), its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the workflow updates it and waits for the checks again, so every merge is tested against the current `main`.
 - **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, the merge workflow merges only `fix-main:` PRs until `main` is green again.
+- **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The merge workflow treats that as ready and marks the PR ready itself.
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
 - Until P0-12 is merged, Dan merges green PRs.
@@ -103,6 +112,7 @@ The PR body states what changed, how it was verified (commands and results), wha
 - Local secrets live in `.secrets/` (git-ignored). Never print, copy, or commit them.
 - In Azure, secrets live only in Key Vault; services use managed identities, and GitHub Actions uses OpenID Connect.
 - Codex: the Jarvis-only login follows the [Codex login rules](architecture.md#sandbox-credentials). Never copy Dan's own Codex login.
+- Codex cloud environment: `GH_TOKEN` is a fine-grained token for `DanAakesen/jarvis` with only **Issues: read and write**, used to claim issues. It is an environment variable, not a Codex secret, because Codex removes secrets before the agent runs. Never print it, write it to files, or use it for anything else.
 
 ## Setup and commands
 
