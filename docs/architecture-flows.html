@@ -313,7 +313,7 @@ const FLOWS = [
       { id: "card", lane: "board", col: 4, s: "assumed", t: "Read task as Ready", d: "The API returns created tasks; live board updates await P1-05 SSE.", ev: "P1-04 provides create/list/detail routes. The web task board and live event publication are not built yet." },
       { id: "limit", lane: "backend", col: 3, s: "assumed", t: "Check concurrency limit", d: "Dan controls how many tasks run at once.", ev: "PRODUCT.md: parallel work requirement." },
       { id: "queue", lane: "backend", col: 4, s: "assumed", t: "Dispatcher: the task table is the queue", d: "Picks Ready rows within the limit; one owner for dispatch and retries.", ev: "Decision 3 (decisions.md): option A, SQL as the queue. Not built." },
-      { id: "awake", lane: "backend", col: 5, s: "assumed", t: "Backend always on", d: "Minimum 1 replica (≈ 30 DKK/month); sleep switch in the board.", ev: "Decision 3 (decisions.md). Minimum 1 keeps the sandbox heartbeat running. Sleep sets minimum 0: the backend wakes on the next request; refused while tasks run.", href: DOC.acaScale },
+      { id: "awake", lane: "backend", col: 5, s: "proven", t: "Backend sleep switch", d: "The main-page switch sets minimum replicas to 0 or 1; sleep is refused while a task is Ready or Running.", ev: "P1-12 tests the authenticated sleep routes, ARM client, and task refusal under the SQL application lock. Bicep grants only Container App read/write on the backend app. Live managed-identity, role assignment, and ARM scaling remain unverified.", href: DOC.acaScale },
     ],
     edges: [
       ["ctx", "policy", "proven", ""], ["policy", "row", "proven", "insert"], ["row", "card", "assumed", "GET"],
