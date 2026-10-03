@@ -1,10 +1,11 @@
 import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
+import { loadConfig } from './config.js';
 import { createLogger } from './logging.js';
 
 const staticOrigin = 'https://fixture.azurestaticapps.net';
-const config = { port: 3000, logLevel: 'info' as const, staticWebAppOrigin: staticOrigin };
+const config = loadConfig({ STATIC_WEB_APP_ORIGIN: staticOrigin });
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
@@ -12,7 +13,7 @@ function fixture() {
   const records: string[] = [];
   const sink = { trackTrace: vi.fn(), flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}) };
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
-  const app = buildApp(config, createLogger(config, sink, output));
+  const app = buildApp(config, createLogger(config, sink, output), { auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }) });
   apps.push(app);
   return { app, records, sink };
 }
@@ -55,7 +56,7 @@ describe('Fastify backend', () => {
   it('exports structured request logs without inbound secrets or provider error text', async () => {
     const { app, records, sink } = fixture();
     app.get('/failure', async () => { throw new Error('provider-secret https://example.com?token=error-secret'); });
-    const headers = { authorization: 'Bearer header-secret', cookie: 'session=cookie-secret', 'x-request-id': 'request-id-secret' };
+    const headers = { authorization: 'Bearer a.b.c', cookie: 'session=cookie-secret', 'x-request-id': 'request-id-secret' };
     const health = await app.inject({ url: '/health?token=query-secret', headers });
     const missing = await app.inject({ url: '/path-secret?token=missing-secret', headers });
     const failure = await app.inject({ url: '/failure?token=error-query-secret', headers });
@@ -74,7 +75,7 @@ describe('Fastify backend', () => {
   });
   it('does not echo parser errors or request bodies', async () => {
     const { app, records } = fixture();
-    const response = await app.inject({ method: 'POST', url: '/health', headers: { 'content-type': 'application/json' }, payload: '{"secret":"body-secret"' });
+    const response = await app.inject({ method: 'POST', url: '/health', headers: { authorization: 'Bearer a.b.c', 'content-type': 'application/json' }, payload: '{"secret":"body-secret"' });
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: 'Invalid request' });
     expect(records.join('')).not.toContain('body-secret');

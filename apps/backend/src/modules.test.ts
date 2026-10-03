@@ -1,16 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
+import { loadConfig } from './config.js';
 import { coreModule } from './core/index.js';
 import { factoryModule } from './factory/index.js';
 import type { JarvisTool } from './core/tool-registry.js';
 import type { BackendModule } from './modules.js';
 
-const config = { port: 3000, logLevel: 'silent' as const };
+const config = { ...loadConfig({}), logLevel: 'silent' as const };
+const headers = { authorization: 'Bearer a.b.c' };
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
 function fixture(modules: readonly BackendModule[]) {
-  const app = buildApp(config, undefined, { modules: [coreModule, factoryModule, ...modules] });
+  const app = buildApp(config, undefined, {
+    modules: [coreModule, factoryModule, ...modules],
+    auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+  });
   apps.push(app);
   return app;
 }
@@ -47,20 +52,17 @@ describe('backend module composition', () => {
       },
     }]);
     expect((await app.inject({ url: '/health' })).json()).toEqual({ status: 'ok' });
-    expect((await app.inject({ method: 'POST', url: '/extension/echo', payload: { text: 'hello' } })).json()).toEqual({ text: 'hello' });
-    expect((await app.inject({ method: 'POST', url: '/extension/echo', payload: {} })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/extension/echo', headers, payload: { text: 'hello' } })).json()).toEqual({ text: 'hello' });
+    expect((await app.inject({ method: 'POST', url: '/extension/echo', headers, payload: {} })).statusCode).toBe(400);
     expect(app.jarvisTools.list()).toEqual([expect.objectContaining({ name: 'extension_echo', moduleId: 'extension' })]);
     expect(app.jarvisTools.get('missing')).toBeUndefined();
   });
 
   it('inherits root CORS and authentication hooks and isolates sibling plugin state', async () => {
     const app = fixture([extension('first'), extension('second')]);
-    app.addHook('onRequest', async (request, reply) => {
-      if (request.url !== '/health' && request.headers.authorization !== 'Bearer test') return reply.code(401).send({ error: 'Unauthorized' });
-    });
     expect((await app.inject({ url: '/first' })).statusCode).toBe(401);
-    expect((await app.inject({ url: '/first', headers: { authorization: 'Bearer test', origin: 'https://evil.example' } })).statusCode).toBe(403);
-    const allowed = await app.inject({ url: '/second', headers: { authorization: 'Bearer test', origin: 'http://localhost:5173' } });
+    expect((await app.inject({ url: '/first', headers: { ...headers, origin: 'https://evil.example' } })).statusCode).toBe(403);
+    const allowed = await app.inject({ url: '/second', headers: { ...headers, origin: 'http://localhost:5173' } });
     expect(allowed.statusCode).toBe(200);
     expect(allowed.headers['access-control-allow-origin']).toBe('http://localhost:5173');
     expect(allowed.json()).toEqual({ module: 'second' });
@@ -118,7 +120,7 @@ describe('backend module composition', () => {
     const app = fixture([]);
     expect(app.jarvisTools.list()).toEqual([]);
     for (const url of ['/factory/projects', '/factory/tasks', '/settings', '/activity', '/events']) {
-      expect((await app.inject({ url })).statusCode).toBe(404);
+      expect((await app.inject({ url, headers })).statusCode).toBe(404);
     }
   });
 });
