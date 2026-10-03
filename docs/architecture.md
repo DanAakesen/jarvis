@@ -221,6 +221,29 @@ Models and voices come from the settings page, passed per session; a new voice-a
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
 - Secrets only in Key Vault; none in code, images, environment variables, or logs.
 
+## Bicep resources
+
+[`infra/main.bicep`](../infra/main.bicep) deploys at resource-group scope into the existing `rg-jarvis`; it does not create the resource group or bootstrap Entra objects. Names with `{suffix}` use `uniqueString(resourceGroup().id)`, so they are stable for this resource group while satisfying global-name uniqueness where required.
+
+| Resource | Name | Region and SKU/configuration |
+| --- | --- | --- |
+| Log Analytics workspace | `law-jarvis-{suffix}` | Sweden Central; `PerGB2018`, 30-day retention |
+| Application Insights | `appi-jarvis-{suffix}` | Sweden Central; workspace-based, linked to the workspace above |
+| Key Vault | `kv-jarvis-{suffix}` | Sweden Central; Standard, RBAC authorization |
+| Storage account | `stjarvis{suffix}` | Sweden Central; StorageV2, Standard_LRS, Hot; HTTPS only, shared-key access and public Blob access disabled |
+| Blob containers | `artifacts`, `logs` | Private; created under the Storage account |
+| Container Registry | `crjarvis{suffix}` | Sweden Central; Standard; admin account disabled |
+| SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
+| SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
+| Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, 1–3 replicas; external HTTPS ingress to port 3000 |
+| Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
+| Monthly budget | `jarvis-monthly` | Resource-group scoped; 300 in the subscription billing currency, monthly, actual-cost alert above 100% |
+
+The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, and **Key Vault Secrets User** at the vault. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); actual Azure connectivity and permissions remain to be checked by the first deployment.
+
+Required deployment parameters are the full `backendIdentityResourceId`, `sqlAdminGroupObjectId`, and `backendImage`. `sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, the budget start date to the first of the current month, and budget notification emails to an empty array (the Owner role is also notified). The amount is interpreted in the subscription billing currency; confirm that currency is DKK.
+
 ## Cost
 
 | Part | Cost (DKK) | Basis |
