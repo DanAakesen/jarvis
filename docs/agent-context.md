@@ -18,7 +18,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 | Stack, runtime, sandbox, voice, dispatch, cost | [architecture.md](architecture.md) |
 | Tables, relationships, and groups | [data-model.md](data-model.md) |
 | Step-by-step flows with evidence status | [architecture-flows.html](architecture-flows.html) (open in a browser) |
-| Decisions and learnings L1–L28 | [decisions.md](decisions.md) |
+| Decisions and learnings L1–L29 | [decisions.md](decisions.md) |
 | Prototype code and reports to port in P2 and P4 | [reference/](reference/) |
 | Open-source research | [open-source.md](open-source.md) |
 
@@ -196,6 +196,16 @@ uses a separate Git worktree and task branch. Git HTTPS access and GitHub API ac
 separate: cloud environment network settings must allow `api.github.com` for
 issue/PR operations, as well as GitHub Git access and package registries. Never
 request a token merely because a network policy blocks that hostname.
+
+Verified locally for issue #30 (no Azure access required):
+
+| Purpose | Command from the repository root |
+| --- | --- |
+| Build the standalone backend Foundry client | `npm run build --workspace @jarvis/backend` |
+| Lint the client module | `npx --no-install eslint --config apps/backend/src/foundry/lint.config.mjs apps/backend/src/foundry --max-warnings 0` |
+| Run offline Foundry contract tests | `npx --no-install vitest run --config apps/backend/src/foundry/vitest.config.mts` |
+
+The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and an injected `getToken(scope, signal)` identity provider. These are module options, not new environment variables. See the [module guide](../apps/backend/src/foundry/README.md) for operation ownership and fixture provenance. Recorded runner responses are captured locally with ACP stubbed; these checks establish the offline contract, not live Azure readiness. The dedicated `Foundry contract CI` workflow checks this module on the current skeleton without depending on the server implementation.
 
 Future commands (unimplemented until their tasks):
 
