@@ -223,6 +223,14 @@ calls authenticated `/me`; only the backend-approved display name is shown.
 workflow (below). Local tests use signed fixture tokens and do not verify a live
 Entra tenant or Azure deployment.
 
+Browser checks of signed-in pages (verified in Copilot cloud agent for P1-07,
+where the Playwright MCP tools were unavailable; L45): in a scratch directory
+outside the repository, run `npm install --no-save playwright-core`, then drive
+`chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] })`.
+Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
+returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
+URL. Never commit the stub or weaken sign-in in the app.
+
 Backend commands implemented in P0-03:
 
 | Purpose | Command |
