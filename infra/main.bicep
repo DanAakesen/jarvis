@@ -31,6 +31,7 @@ var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
+var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var deployBackendApp = !empty(backendImage)
 
@@ -266,6 +267,16 @@ resource foundryAppInsightsAssignment 'Microsoft.Authorization/roleAssignments@2
   }
 }
 
+resource backendFoundryUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryProject.id, backendIdentity.id, foundryUserRoleId)
+  scope: foundryProject
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', foundryUserRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource foundryAcrConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = {
   parent: foundryProject
   name: 'container-registry'
@@ -446,6 +457,14 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               value: appInsights.properties.ConnectionString
+            }
+            {
+              name: 'FOUNDRY_ADMIN_ENDPOINT'
+              value: 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
+            }
+            {
+              name: 'FOUNDRY_RUNTIME_ENDPOINT'
+              value: 'https://${foundryAccount.name}.cognitiveservices.azure.com/api/projects/${foundryProject.name}'
             }
             {
               name: 'SQL_SERVER'

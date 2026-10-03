@@ -15,6 +15,7 @@ import type { TaskStore } from './factory/task-store.js';
 import type { ProjectStore } from './factory/projects.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
+import type { SandboxHeartbeat } from './factory/heartbeat.js';
 
 export interface BuildAppOptions {
   readonly auth?: TokenVerifier;
@@ -24,6 +25,7 @@ export interface BuildAppOptions {
   readonly taskStore?: TaskStore;
   readonly settingsStore?: SettingsStore;
   readonly conversationStore?: ConversationStore;
+  readonly sandboxHeartbeat?: SandboxHeartbeat;
 }
 
 declare module 'fastify' {
@@ -33,6 +35,7 @@ declare module 'fastify' {
     taskStore: TaskStore | null;
     settingsStore: SettingsStore | null;
     conversationStore: ConversationStore | null;
+    sandboxHeartbeat: SandboxHeartbeat | null;
   }
 }
 
@@ -85,6 +88,10 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('taskStore', options.taskStore ?? null);
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
+  app.decorate('sandboxHeartbeat', options.sandboxHeartbeat ?? null);
+  if (options.sandboxHeartbeat) {
+    app.addHook('onClose', async () => { await options.sandboxHeartbeat!.stop(); });
+  }
   registerModules(app, options.modules ?? [coreModule, conversationModule, factoryModule]);
   return app;
 }

@@ -6,6 +6,7 @@ import { applyMigrations, readDownMigration, readMigrations, revertMigration, ty
 import { createTaskStore } from './task-store.js';
 import { createSettingsStore } from './settings-store.js';
 import { createProjectStore } from './project-store.js';
+import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
 import { ProjectConflictError } from '../factory/projects.js';
 
 const configuration = loadDatabaseConfig();
@@ -87,8 +88,8 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
       INSERT dbo.activity (area, kind, title, link) VALUES (N'factory', N'task_done', N'Fix it is done', N'task:${String(task)}');
       UPDATE dbo.tasks SET state = N'Running', lease_owner = N'dispatcher-1', lease_until = DATEADD(minute, 5, SYSUTCDATETIME()) WHERE id = ${String(task)};`);
     const sandboxSession = await scalar(`INSERT dbo.sandbox_sessions
-      (task_id, foundry_session_id, agent_version, size, image, status, cost_estimate_dkk)
-      VALUES (${String(task)}, N'foundry-session-1', N'1', N'1x2', N'jarvis-runner:latest', N'Active', 0.25)`);
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status, cost_estimate_dkk)
+      VALUES (${String(task)}, N'foundry-session-1', N'1', N'jarvis-runner-base-1x2', N'1x2', N'jarvis-runner:latest', N'Active', 0.25)`);
     await pool.request().query(`INSERT dbo.sandbox_turns
       (sandbox_session_id, invocation_id, mode, acp_session_id, status)
       VALUES (${String(sandboxSession)}, N'invocation-1', N'task', N'acp-session-1', N'running');
@@ -188,6 +189,49 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     });
   });
 
+  it('heartbeats running sandboxes and atomically marks a confirmed crash', async () => {
+    const project = await createProjectStore(pool).create({
+      name: 'Heartbeat fixture', repo: `${database}/heartbeat`, default_branch: 'main',
+      default_agent: 'copilot', policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
+    });
+    const task = await createTaskStore(pool).create({
+      projectId: project.id, title: 'Heartbeat fixture', request: 'Exercise heartbeat persistence',
+    });
+    if (!task) throw new Error('Heartbeat task fixture was not created');
+    expect((await createTaskStore(pool).transition(task.id, 'Running')).kind).toBe('ok');
+    const sandboxSessionId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+      VALUES (${task.id}, N'heartbeat-session', N'1', N'jarvis-runner-base-1x2', N'1x2',
+        N'jarvis-runner-base@sha256:fixture', N'Active')`);
+    await pool.request().query(`INSERT dbo.sandbox_turns
+      (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+      VALUES (${sandboxSessionId}, N'heartbeat-invocation', N'task', N'heartbeat-acp', N'running')`);
+
+    const store = createSandboxHeartbeatStore(pool);
+    expect(await store.listRunning()).toEqual([{
+      sandboxSessionId: String(sandboxSessionId), foundrySessionId: 'heartbeat-session',
+      agentName: 'jarvis-runner-base-1x2', invocationId: 'heartbeat-invocation',
+    }]);
+    await store.recordHeartbeat(String(sandboxSessionId));
+    const heartbeat = await pool.request().query<{ at: Date | null }>(
+      `SELECT last_heartbeat_at AS at FROM dbo.sandbox_sessions WHERE id = ${sandboxSessionId}`);
+    expect(heartbeat.recordset[0]?.at).toBeInstanceOf(Date);
+
+    expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe(true);
+    expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe(false);
+    const result = await pool.request().query<{ taskState: string; sessionStatus: string; endReason: string; leaseOwner: string | null }>(
+      `SELECT t.state AS taskState, s.status AS sessionStatus, s.end_reason AS endReason, t.lease_owner AS leaseOwner
+        FROM dbo.tasks AS t JOIN dbo.sandbox_sessions AS s ON s.task_id = t.id WHERE s.id = ${sandboxSessionId}`);
+    expect(result.recordset).toEqual([{
+      taskState: 'NeedsAttention', sessionStatus: 'Crashed', endReason: 'crashed', leaseOwner: null,
+    }]);
+    const activity = await pool.request().query<{ kind: string; title: string; link: string }>(
+      `SELECT kind, title, link FROM dbo.activity WHERE link = N'task:${task.id}' AND kind = N'state_changed'`);
+    expect(activity.recordset).toContainEqual({
+      kind: 'state_changed', title: 'Sandbox heartbeat detected a crash', link: `task:${task.id}`,
+    });
+  });
+
   it('creates, updates, lists, and archives projects through the SQL store', async () => {
     const store = createProjectStore(pool);
     const repo = `${database}/project`;
@@ -228,6 +272,7 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     ["INSERT dbo.sandbox_sessions (task_id, foundry_session_id, agent_version, size, image, status) VALUES (1, N'bad-size', N'1', N'4x8', N'image', N'Active')", 'CK_sandbox_sessions_size'],
     ["INSERT dbo.sandbox_sessions (task_id, foundry_session_id, agent_version, size, image, status) VALUES (1, N'bad-status', N'1', N'1x2', N'image', N'active')", 'CK_sandbox_sessions_status'],
     ["INSERT dbo.sandbox_sessions (task_id, foundry_session_id, agent_version, size, image, status) VALUES (1, N'', N'1', N'1x2', N'image', N'Active')", 'CK_sandbox_sessions_foundry_session_id'],
+    ["INSERT dbo.sandbox_sessions (task_id, foundry_session_id, agent_version, agent_name, size, image, status) VALUES (1, N'bad-agent', N'1', N'', N'1x2', N'image', N'Active')", 'CK_sandbox_sessions_agent_name'],
     ["INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status) VALUES (1, N'i', N'other', N'a', N'running')", 'CK_sandbox_turns_mode'],
     ["INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status) VALUES (1, N'i', N'task', N'a', N'Running')", 'CK_sandbox_turns_status'],
     ["INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status) VALUES (1, N'', N'task', N'a', N'running')", 'CK_sandbox_turns_invocation_id'],

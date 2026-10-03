@@ -163,7 +163,7 @@ const DOC = {
 };
 
 const STATUS = {
-  proven:  { label: "Proven in prototype", short: "Proven",  def: "ran in Azure",          lineDef: "ran in Azure",                               dash: "",    width: 2.6, evidence: "Prototype run, 1–2 October 2026.", href: R },
+  proven:  { label: "Proven (prototype or offline)", short: "Proven", def: "prototype or offline tests", lineDef: "tested in prototype or offline", dash: "", width: 2.6, evidence: "Prototype run or offline tests.", href: R },
   docs:    { label: "Confirmed by docs",   short: "Docs",    def: "vendor docs, not run",  lineDef: "standard code or vendor docs, not run",      dash: "",    width: 2.6, evidence: "Vendor documentation; not run by us." },
   assumed: { label: "Assumed",             short: "Assumed", def: "not built yet",         lineDef: "relies on platform behavior not seen yet",   dash: "7 5", width: 2.2, evidence: "Design assumption; not built or tested yet.", href: J },
   unknown: { label: "Unknown",             short: "Unknown", def: "open or untested",      lineDef: "no known way yet",                           dash: "2 4", width: 2.2, evidence: "Open question; not tested.", href: J },
@@ -367,7 +367,7 @@ const FLOWS = [
     nodes: [
       { id: "ctx", lane: "runner", col: 1, s: "context", from: [[5, "work"]], t: "From 5: agent working", d: "Events recorded per invocation." },
       { id: "live", lane: "runner", col: 2, s: "assumed", t: "Runner pushes live events", d: "Files changed, tests, commits: sent to the backend as they happen.", ev: "Not built. The runner already records these events (prototype telemetry)." },
-      { id: "poll", lane: "backend", col: 2, s: "proven", t: "Sandbox heartbeat", d: "About once a minute: keeps the sandbox alive, detects a dead one.", ev: "Prototype: the driver polled; sandboxes shut down only after 2 quiet minutes. Issue #30 supplies a bounded status call with preserved HTTP failures, verified offline; the heartbeat policy remains future work. Real-time updates come from the runner, not from the heartbeat." },
+      { id: "poll", lane: "backend", col: 2, s: "proven", t: "Sandbox heartbeat", d: "Checks active invocations about once a minute; updates last_heartbeat_at.", ev: "P2-06 tests the backend poller against recorded Foundry responses. It reloads active sessions at startup and keeps registered sessions in memory, so it does not query SQL while idle. Live Azure polling remains unverified." },
       { id: "store", lane: "data", col: 3, s: "assumed", t: "Store events", d: "Task events in Azure SQL." },
       { id: "push", lane: "backend", col: 4, s: "assumed", t: "Push to the board with SSE", d: "Server-sent events; the browser reconnects by itself.", ev: "Decision 3 (decisions.md): SSE, no extra service. Not built.", href: DOC.sse },
       { id: "card", lane: "board", col: 6, s: "assumed", t: "Card shows activity", d: "Current activity and last update." },
@@ -469,7 +469,7 @@ const FLOWS = [
     nodes: [
       { id: "ctx", lane: "foundry", col: 1, s: "context", t: "During 5–8" },
       { id: "crash", lane: "foundry", col: 2, s: "proven", t: "Sandbox crashes mid-turn", d: "Files and conversation are lost; a new agent version does not restart sessions.", ev: "Restart report (L22): forced crash lost the clone and the ACP conversation.", href: "reference/coding-sandbox-prototype/RESTART-REPORT.md" },
-      { id: "detect", lane: "backend", col: 3, s: "assumed", t: "Detect a missing or stale task", d: "Sandbox heartbeat fails, or live events stop." },
+      { id: "detect", lane: "backend", col: 3, s: "proven", t: "Confirm sandbox crash", d: "HTTP 424/404/5xx on two polls, with the confirming poll after 30 seconds; event gaps alone do not trigger it.", ev: "P2-06 has recorded-response unit tests and an atomic SQL NeedsAttention transition. Live Foundry failure and Azure SQL behavior remain unverified." },
       { id: "retry", lane: "backend", col: 4, s: "assumed", t: "Dispatcher retries, then Needs attention", d: "Attempt count and next-attempt time on the task row.", ev: "Decision 3 (decisions.md): option A. Not built." },
       { id: "flag", lane: "data", col: 4, s: "assumed", t: "Task row: Needs attention" },
       { id: "card", lane: "board", col: 5, s: "assumed", t: "Card: Needs attention", d: "With a Resume button." },
