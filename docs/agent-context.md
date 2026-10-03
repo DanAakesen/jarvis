@@ -215,9 +215,12 @@ Verified in Codex cloud for P0-02:
 
 The web starts with the bootstrap identities and the public production backend
 origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). The URL
-is pending P0-11's first deployment; opening the skeleton needs no extra setup.
-Sign-in and authenticated API calls remain P0-09. `Web CI` checks lint, tests,
-and root builds as part of the aggregate `CI` workflow (below).
+is pending P0-11's first deployment; until configured, sign-in is visibly
+disabled. With a backend URL, MSAL signs in against the configured tenant and
+calls authenticated `/me`; only the backend-approved display name is shown.
+`Web CI` checks lint, tests, and root builds as part of the aggregate `CI`
+workflow (below). Local tests use signed fixture tokens and do not verify a live
+Entra tenant or Azure deployment.
 
 Backend commands implemented in P0-03:
 
