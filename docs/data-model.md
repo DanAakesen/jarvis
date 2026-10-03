@@ -142,7 +142,9 @@ erDiagram
   against the backend catalog; `default` for Codex/Copilot means defer to the
   provider's own default until P2-11 verifies model overrides. The global task
   limit is an integer from 1 to 100. Partial writes are transactional; settings
-  are defaults for future sessions/tasks, not live updates or history.
+  are defaults for future sessions/tasks, not live updates or history. At the
+  start of a hosted Jarvis session, the agent keeps the effective model and
+  reasoning effort in memory for that session; the snapshot is not persisted.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes.
 
 ## 2 · Projects

@@ -9,17 +9,23 @@ prototype's fake tools are gone: every tool comes from the backend's tool regist
 | --- | --- |
 | `main.py` | Entry point: Voice Live Bridge host on port 8088 (`/invocations_ws`) |
 | `voice_runtime.py`, `response_coordinator.py`, `state.py`, `response_telemetry.py` | Voice turn handling, as in the prototype, including model-free test commands such as `/help` |
-| `model_client.py` | `gpt-5.6-luna` tool loop over the Responses API |
+| `model_client.py` | Per-session configured model and reasoning effort for the Responses API |
 | `jarvis_tools.py` | Instructions and `BackendToolClient` for the backend tool registry |
 
 ## Backend tools
+
+Before acknowledging a new hosted session, the agent loads its effective Jarvis
+model and reasoning effort from `GET /agent/settings`. It keeps that snapshot for
+the session, so later settings changes affect only new sessions. If the settings
+cannot be loaded, the session is rejected with a retryable startup failure.
 
 Each turn loads `GET /tools` from `JARVIS_BACKEND_URL` (cached 60 seconds) and
 offers those schemas to the model. A model tool call goes to `POST /tools/{name}`
 with the arguments and `X-Jarvis-Message-ID`, and the backend result goes back to
 the model unchanged. The agent authenticates with its platform identity
 (`DefaultAzureCredential`, scope `api://<jarvis-api>/.default`). The backend accepts
-that token only with the `Jarvis.Tools` role and only on the tool routes.
+that token only with the `Jarvis.Tools` role on the tool routes and the limited
+Jarvis-settings read.
 
 Only `outcome: "ok"` counts as done. Every failure becomes `outcome: "error"` and
 says whether nothing was done (the request never left the agent) or, after a
