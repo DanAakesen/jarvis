@@ -11,7 +11,7 @@ from the seven domain groups: `name nvarchar(255)` primary key, `checksum char(6
 transaction-owned `jarvis.schema-migrations` app lock. Its rows must remain an
 unchanged prefix of the committed migrations. Failed or cancelled startup rolls
 back schema, data and ledger together. Domain tables and their up/down migration
-acceptance remain issue #17; issue #7 introduces no domain schema or seed data.
+acceptance belongs to P1-01 (#15); issue #7 introduces no domain schema or seed data.
 
 ## Overview
 
@@ -125,6 +125,7 @@ erDiagram
 
 - **One continuous conversation.** Jarvis has a single thread; each time Dan talks or types is a `jarvis_session` within it. Over time the thread needs compaction and memory (Decision 6, deferred); `messages` keeps the full record either way.
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
+- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`error` outcome in `tool_calls`. P1-01 (#15) owns the table migration; no live SQL write has been verified yet.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes.
 

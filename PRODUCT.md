@@ -60,7 +60,7 @@ flowchart TB
     J --- S["Shared: settings · usage and cost · activity"]
 ```
 
-- Each area owns its pages and registers its tools with Jarvis, so Jarvis gains abilities without being rebuilt.
+- Each area owns its pages and registers its tools with Jarvis. The backend exposes every registered tool's input schema and executes calls, recording each result so new modules become available without agent changes.
 - Page requirements list every data point and action, not the look. Dan creates the visual design from them with an image generator (see [DESIGN.md](DESIGN.md)).
 
 ### Task lifecycle
