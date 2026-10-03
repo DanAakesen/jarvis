@@ -7,7 +7,7 @@
     Creates:
       - Resource providers registered on the subscription
       - Resource group
-      - Entra app 'jarvis-github-deploy' with a GitHub OIDC federated credential (main branch),
+      - Entra app 'jarvis-github-deploy' with a GitHub OIDC federated credential (main branch, immutable-ID subject),
         Contributor and Role Based Access Control Administrator on the resource group
       - Entra app 'jarvis-api' (scope access_as_user, only Dan assigned) and 'jarvis-web' (SPA, pre-authorized)
       - User-assigned managed identity for the backend, and the Entra group 'jarvis-sql-admins'
@@ -112,6 +112,19 @@ Step "Resource group $ResourceGroup ($Location)"
 Invoke-Az group create -n $ResourceGroup -l $Location --tags project=jarvis --subscription $SubscriptionId -o none | Out-Null
 $rgScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup"
 
+# --- GitHub repository --------------------------------------------------------------------
+Step "GitHub repository $GitHubRepo"
+& gh repo view $GitHubRepo --json name 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & gh repo create $GitHubRepo --private --description 'Jarvis: personal AI platform' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not create $GitHubRepo" }
+    Write-Host '   created (private, empty)'
+}
+$repoJson = & gh api "repos/$GitHubRepo"
+if ($LASTEXITCODE -ne 0) { throw "Could not read $GitHubRepo from GitHub" }
+$repoInfo = ($repoJson -join "`n") | ConvertFrom-Json
+if (-not $repoInfo.id -or -not $repoInfo.owner.id) { throw "GitHub returned no owner or repository ID for $GitHubRepo" }
+
 # --- Deploy identity for GitHub Actions ---------------------------------------------------
 Step 'Deploy identity for GitHub Actions'
 $deployApp = Get-OrCreateApp 'jarvis-github-deploy'
@@ -119,9 +132,8 @@ $deploySp = Get-OrCreateServicePrincipal $deployApp.appId
 $subject = "repo:${GitHubRepo}:ref:refs/heads/main"
 # GitHub also issues OIDC subjects with immutable owner and repository IDs
 # (repo:owner@ownerId/name@repoId:...); trust both forms for main only.
-$repoInfo = & gh api "repos/$GitHubRepo" --jq '"\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"'
-if ($LASTEXITCODE -ne 0 -or -not $repoInfo) { throw "Could not read the IDs of $GitHubRepo" }
-$subjects = [ordered]@{ 'github-main' = $subject; 'github-main-ids' = "repo:${repoInfo}:ref:refs/heads/main" }
+$idSubject = "repo:$($repoInfo.owner.login)@$($repoInfo.owner.id)/$($repoInfo.name)@$($repoInfo.id):ref:refs/heads/main"
+$subjects = [ordered]@{ 'github-main' = $subject; 'github-main-ids' = $idSubject }
 $creds = @((Invoke-Graph GET "/applications/$($deployApp.id)/federatedIdentityCredentials").value)
 foreach ($name in $subjects.Keys) {
     if (-not ($creds | Where-Object { $_.subject -eq $subjects[$name] })) {
@@ -201,14 +213,8 @@ foreach ($m in @($OwnerObjectId, $identity.principalId)) {
 }
 Write-Host '   members: Dan, id-jarvis-backend'
 
-# --- GitHub -------------------------------------------------------------------------------
-Step "GitHub repository $GitHubRepo"
-& gh repo view $GitHubRepo --json name 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    & gh repo create $GitHubRepo --private --description 'Jarvis: personal AI platform' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Could not create $GitHubRepo" }
-    Write-Host '   created (private, empty)'
-}
+# --- GitHub Actions variables -------------------------------------------------------------
+Step "GitHub Actions variables on $GitHubRepo"
 $variables = [ordered]@{
     AZURE_CLIENT_ID = $deployApp.appId; AZURE_TENANT_ID = $TenantId; AZURE_SUBSCRIPTION_ID = $SubscriptionId
     AZURE_RESOURCE_GROUP = $ResourceGroup; AZURE_LOCATION = $Location
