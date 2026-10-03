@@ -1,0 +1,278 @@
+{
+  "agent": "jarvis-voice-mai",
+  "connections": [
+    {
+      "connected_ms": 2712,
+      "greeting": {
+        "index": 0,
+        "heard": "",
+        "reply": "Hej Dan. Hvad skal jeg gøre?",
+        "latency_ms": null,
+        "interrupted": false,
+        "response_status": "completed",
+        "speech_stopped_ms": null,
+        "first_audio_ms": 1790968282945,
+        "response_done_ms": 1790968283676,
+        "usage": {
+          "total_tokens": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "input_token_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0,
+            "cached_tokens_details": {
+              "text_tokens": 0,
+              "audio_tokens": 0,
+              "image_tokens": 0
+            }
+          },
+          "output_token_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0
+          }
+        },
+        "tools": []
+      },
+      "turns": [
+        {
+          "index": 1,
+          "heard": "/diag",
+          "reply": "tool log: table=on, entries=0, writes=0, last_error=none",
+          "latency_ms": 4595,
+          "interrupted": false,
+          "response_status": "completed",
+          "speech_stopped_ms": 1790968283722,
+          "first_audio_ms": 1790968288317,
+          "response_done_ms": 1790968288404,
+          "usage": {
+            "total_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "input_token_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "text_tokens": 0,
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "cached_tokens_details": {
+                "text_tokens": 0,
+                "audio_tokens": 0,
+                "image_tokens": 0
+              }
+            },
+            "output_token_details": {
+              "text_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "tools": []
+        },
+        {
+          "index": 2,
+          "heard": "Der er han, der er noget samme M.\nHallo, København.\nMikkel Højbjerg.\nHallo.\nMikkel Damsgaard.\nHallo.",
+          "reply": "",
+          "latency_ms": null,
+          "interrupted": true,
+          "response_status": "cancelled",
+          "speech_stopped_ms": 1790968304860,
+          "first_audio_ms": null,
+          "response_done_ms": 1790968305111,
+          "usage": {
+            "total_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "input_token_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "text_tokens": 0,
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "cached_tokens_details": {
+                "text_tokens": 0,
+                "audio_tokens": 0,
+                "image_tokens": 0
+              }
+            },
+            "output_token_details": {
+              "text_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "tools": []
+        },
+        {
+          "index": 3,
+          "heard": "Og hans, og hans tilhører, var du så langt bagud i vandet?\nNej, men det er altså, ja, men det plejede altså at være her.\nDet føltes sådan mere frisk.\nJa, fandt nemlig. Ja, han for 10 år siden.\nFor 100 år siden, da jeg var på mig sidst.",
+          "reply": "",
+          "latency_ms": null,
+          "interrupted": true,
+          "response_status": "cancelled",
+          "speech_stopped_ms": 1790968320941,
+          "first_audio_ms": null,
+          "response_done_ms": 1790968321477,
+          "usage": {
+            "total_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "input_token_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "text_tokens": 0,
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "cached_tokens_details": {
+                "text_tokens": 0,
+                "audio_tokens": 0,
+                "image_tokens": 0
+              }
+            },
+            "output_token_details": {
+              "text_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "tools": []
+        },
+        {
+          "index": 4,
+          "heard": "Øhm.",
+          "reply": "Hvad kan jeg hjælpe med?",
+          "latency_ms": 2260,
+          "interrupted": false,
+          "response_status": "completed",
+          "speech_stopped_ms": 1790968324423,
+          "first_audio_ms": 1790968326683,
+          "response_done_ms": 1790968326712,
+          "usage": {
+            "total_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "input_token_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "text_tokens": 0,
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "cached_tokens_details": {
+                "text_tokens": 0,
+                "audio_tokens": 0,
+                "image_tokens": 0
+              }
+            },
+            "output_token_details": {
+              "text_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "tools": []
+        },
+        {
+          "index": 5,
+          "heard": "Sorry not sorry. Vi skal nok have en ny af den der.\nMå vi have chips eller?\nJa, vi har chips.\nJeg kan godt.\nHar I fået en ny du eller mig?\nJa.\nEr den sorte hernede?",
+          "reply": "Jeg er ikke helt sikker på, hvad du vil have hjælp til—kan du sige det igen med lidt mere sammenhæng?",
+          "latency_ms": null,
+          "interrupted": true,
+          "response_status": "cancelled",
+          "speech_stopped_ms": 1790968341884,
+          "first_audio_ms": null,
+          "response_done_ms": 1790968342789,
+          "usage": {
+            "total_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "input_token_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "text_tokens": 0,
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "cached_tokens_details": {
+                "text_tokens": 0,
+                "audio_tokens": 0,
+                "image_tokens": 0
+              }
+            },
+            "output_token_details": {
+              "text_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "tools": []
+        },
+        {
+          "index": 6,
+          "heard": "Det er",
+          "reply": "",
+          "latency_ms": null,
+          "interrupted": true,
+          "response_status": "cancelled",
+          "speech_stopped_ms": 1790968344196,
+          "first_audio_ms": null,
+          "response_done_ms": 1790968344495,
+          "usage": {
+            "total_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "input_token_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "text_tokens": 0,
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "cached_tokens_details": {
+                "text_tokens": 0,
+                "audio_tokens": 0,
+                "image_tokens": 0
+              }
+            },
+            "output_token_details": {
+              "text_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "tools": []
+        },
+        {
+          "index": 7,
+          "heard": "",
+          "reply": "",
+          "latency_ms": null,
+          "interrupted": false,
+          "response_status": "",
+          "speech_stopped_ms": null,
+          "first_audio_ms": null,
+          "response_done_ms": null,
+          "usage": {},
+          "tools": []
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "tool_log": [
+    {
+      "PartitionKey": "calls",
+      "RowKey": "01790968323446742520-881c5c69",
+      "kind": "model",
+      "instance": "adc-sandbox",
+      "conversation": "adc-sandbox-7f6576e59840",
+      "turn": "in_4V5ZHr6SCRIdY5KOlDgrrK",
+      "at_ms": [
+        1790968323446,
+        "Edm.Int64"
+      ],
+      "model": "gpt-5.6-luna",
+      "round": 1,
+      "input_tokens": 715,
+      "cached_tokens": 0,
+      "output_tokens": 11,
+      "first_text_ms": 1086,
+      "total_ms": 1125,
+      "tool_calls": 0
+    }
+  ],
+  "realtime_usage": null
+}

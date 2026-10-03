@@ -1,0 +1,457 @@
+{
+  "agent": "jarvis-realtime-christel",
+  "connected_ms": 5466,
+  "greeting": {
+    "index": 0,
+    "heard": "",
+    "reply": "Hej Dan. Hvad skal jeg gøre?",
+    "latency_ms": null,
+    "interrupted": true,
+    "response_status": "cancelled",
+    "speech_stopped_ms": null,
+    "first_audio_ms": 1790966309330,
+    "response_done_ms": 1790966309386,
+    "usage": {
+      "total_tokens": 32,
+      "input_tokens": 0,
+      "output_tokens": 32,
+      "input_token_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "text_tokens": 0,
+        "audio_tokens": 0,
+        "image_tokens": 0,
+        "cached_tokens_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0
+        }
+      },
+      "output_token_details": {
+        "text_tokens": 0,
+        "audio_tokens": 32
+      }
+    },
+    "tools": []
+  },
+  "turns": [
+    {
+      "index": 1,
+      "heard": "",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966314781,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966314867,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 2,
+      "heard": "Nej, der er to hold. Kan du høre mig?",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966315715,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966315954,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 3,
+      "heard": "Ja, der er ikke nogen",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966317027,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966317524,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 4,
+      "heard": "og en masse",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966327765,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966328242,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 5,
+      "heard": "Og det er bare så, det er ikke noget. Det er bare det.\nDet er det.\nSå nu skal vi have 20 af dem her ud.\nJa.",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966335537,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966336034,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 6,
+      "heard": "Kan alle være med til sammenspillet?\nNu er du stor. Nu er du stor.\nHallo?",
+      "reply": "Vi ses, Dan",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966339130,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966339726,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 7,
+      "heard": "Seriøst, kan den nu træffe sådan?",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966347376,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966347726,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 8,
+      "heard": "Så mit powerbank er ned ned sådan fast.\nNej, så skulle du bare læse det sådan øh.\nSå skulle du have taget det.",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966352814,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966352868,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 9,
+      "heard": "Indbrudskrav.",
+      "reply": "Selv tak. Sig bare til, hvis du vil have mig til at gøre noget.",
+      "latency_ms": 1073,
+      "interrupted": false,
+      "response_status": "completed",
+      "speech_stopped_ms": 1790966355242,
+      "first_audio_ms": 1790966356315,
+      "response_done_ms": 1790966356584,
+      "usage": {
+        "total_tokens": 1746,
+        "input_tokens": 1590,
+        "output_tokens": 156,
+        "input_token_details": {
+          "cached_tokens": 1344,
+          "cache_write_tokens": 0,
+          "text_tokens": 1138,
+          "audio_tokens": 452,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 1088,
+            "audio_tokens": 256,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 52,
+          "audio_tokens": 104
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 10,
+      "heard": "Jak har du lavet en bil i det?",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966358400,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966358434,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 11,
+      "heard": "Jeg prøver lige at hoppe.",
+      "reply": "Godmorgen, Dan. Hvad vil du gerne have hjælp til i",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966361289,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966362094,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 12,
+      "heard": "Vi havde, jeg tror også, vi har nogle...",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966366688,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966366948,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 13,
+      "heard": "Har vi ikke sådan nogle, har vi ikke nogle solas højtalere heroppe et eller andet sted?\nJo, jo, jo.",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": false,
+      "response_status": "",
+      "speech_stopped_ms": null,
+      "first_audio_ms": null,
+      "response_done_ms": null,
+      "usage": {},
+      "tools": []
+    }
+  ],
+  "tool_log": [],
+  "realtime_usage": {
+    "input_audio": 452,
+    "input_text": 1138,
+    "input_cached": 1344,
+    "output_audio": 136,
+    "output_text": 52
+  },
+  "errors": []
+}

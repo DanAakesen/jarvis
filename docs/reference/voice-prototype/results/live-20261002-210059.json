@@ -1,0 +1,90 @@
+{
+  "agent": "jarvis-voice-mai",
+  "connected_ms": 3521,
+  "greeting": {
+    "index": 0,
+    "heard": "",
+    "reply": "Hej Dan. Hvad skal jeg gøre?",
+    "latency_ms": null,
+    "interrupted": false,
+    "response_status": "completed",
+    "speech_stopped_ms": null,
+    "first_audio_ms": 1790967654480,
+    "response_done_ms": 1790967655209,
+    "usage": {
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "input_token_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "text_tokens": 0,
+        "audio_tokens": 0,
+        "image_tokens": 0,
+        "cached_tokens_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0
+        }
+      },
+      "output_token_details": {
+        "text_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "tools": []
+  },
+  "turns": [
+    {
+      "index": 1,
+      "heard": "desne.",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": false,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790967658074,
+      "first_audio_ms": null,
+      "response_done_ms": 1790967659512,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 2,
+      "heard": "Fint? Ja.",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": false,
+      "response_status": "",
+      "speech_stopped_ms": 1790967659183,
+      "first_audio_ms": null,
+      "response_done_ms": null,
+      "usage": {},
+      "tools": []
+    }
+  ],
+  "tool_log": [],
+  "realtime_usage": null,
+  "errors": [
+    "Hosted Agent Bridge ended unexpectedly (terminal)."
+  ]
+}

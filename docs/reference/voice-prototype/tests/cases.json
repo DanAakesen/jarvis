@@ -1,0 +1,30 @@
+{
+  "commands": [
+    {"id": "c01", "text": "Start en Codex-opgave på Jarvis: tilføj dark mode til indstillingssiden.", "expect": [{"tool": "create_task", "project": "Jarvis", "agent": "codex", "text_any": ["dark mode", "mørk"]}]},
+    {"id": "c02", "text": "Lad Copilot rette stavefejlene i README på Daily.", "expect": [{"tool": "create_task", "project": "Daily", "agent": "copilot", "text_any": ["readme", "stavefejl"]}]},
+    {"id": "c03", "text": "Opret en opgave på Banking om at opdatere afhængighederne.", "expect": [{"tool": "create_task", "project": "Banking", "agent": "codex", "text_any": ["afhængighed"]}]},
+    {"id": "c04", "text": "Hvilke projekter har jeg?", "expect": [{"tool": "list_projects"}]},
+    {"id": "c05", "text": "Hvad kører lige nu?", "expect": [{"tool": "list_tasks"}]},
+    {"id": "c06", "text": "Sæt Jarvis-opgaven på pause.", "expect": [{"tool": "pause_task", "task_id": "T-101"}]},
+    {"id": "c07", "text": "Fortsæt opgaven på Daily.", "expect": [{"tool": "resume_task", "task_id": "T-102"}]},
+    {"id": "c08", "text": "Annuller Codex-opgaven på Jarvis.", "expect": [{"tool": "cancel_task", "task_id": "T-101"}]},
+    {"id": "c09", "text": "Sig til Codex på Jarvis, at den kun må ændre CSS.", "expect": [{"tool": "steer_task", "task_id": "T-101", "text_any": ["css"]}]},
+    {"id": "c10", "text": "Hvad er status på opgave hundrede og tre?", "expect": [{"tool": "task_status", "task_id": "T-103"}]},
+    {"id": "c11", "text": "Start en ny opgave på Daily med Copilot: tilføj eksport til CSV.", "expect": [{"tool": "create_task", "project": "Daily", "agent": "copilot", "text_any": ["csv"]}]},
+    {"id": "c12", "text": "Giv Copilot besked om også at skrive tests.", "expect": [{"tool": "steer_task", "task_id": "T-102", "text_any": ["test"]}]},
+    {"id": "c13", "text": "Hvor langt er Copilot nået?", "expect": [{"tool": "task_status", "task_id": "T-102"}, {"tool": "list_tasks"}]},
+    {"id": "c14", "text": "Stop Jarvis-opgaven et øjeblik.", "expect": [{"tool": "pause_task", "task_id": "T-101"}]},
+    {"id": "c15", "text": "Lav en pull request, der fjerner den gamle login-side i Jarvis, og brug Copilot.", "expect": [{"tool": "create_task", "project": "Jarvis", "agent": "copilot", "text_any": ["login"]}]},
+    {"id": "c16", "text": "Codex skal hellere bruge Tailwind i dark mode-opgaven.", "expect": [{"tool": "steer_task", "task_id": "T-101", "text_any": ["tailwind"]}]},
+    {"id": "c17", "text": "Genoptag opgave hundrede og to.", "expect": [{"tool": "resume_task", "task_id": "T-102"}]},
+    {"id": "c18", "text": "Drop opgaven på Daily.", "expect": [{"tool": "cancel_task", "task_id": "T-102"}]},
+    {"id": "c19", "text": "Hvad skete der med Banking-opgaven?", "expect": [{"tool": "task_status", "task_id": "T-103"}, {"tool": "list_tasks"}]},
+    {"id": "c20", "text": "Tak, det var det for nu.", "expect": [{"tool": null}]}
+  ],
+  "status_questions": [
+    {"id": "s01", "text": "Hvordan går det med Codex-opgaven på Jarvis?", "facts_any": ["test"]},
+    {"id": "s02", "text": "Hvad skete der med Banking-opgaven?", "facts_any": ["42", "toogfyrre", "færdig"]},
+    {"id": "s03", "text": "Hvorfor står Daily-opgaven stille?", "facts_any": ["pause"]},
+    {"id": "s04", "text": "Er der nogen pull requests klar?", "facts_any": ["42", "toogfyrre", "banking"]}
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "generatedAt": "2026-10-03T11:36:36.1924453Z",
+  "tenantId": "802efa29-17f2-4a79-8f5f-38f087aed96a",
+  "subscriptionId": "0ac7d719-89bc-4100-be87-a79d33e953a7",
+  "location": "swedencentral",
+  "resourceGroup": "rg-jarvis",
+  "gitHubRepo": "DanAakesen/jarvis",
+  "ownerObjectId": "12bcfab7-49ba-4cf7-8be7-780a13911f93",
+  "deploy": {
+    "appId": "6488a417-5e08-42ab-8cf6-b8c8327350b7",
+    "servicePrincipalId": "07aef8bd-cd65-469e-a366-c1a0598d397c",
+    "federatedSubject": "repo:DanAakesen/jarvis:ref:refs/heads/main"
+  },
+  "api": {
+    "appId": "9f751b64-ea0f-484f-bf09-f08276a69e2f",
+    "identifierUri": "api://9f751b64-ea0f-484f-bf09-f08276a69e2f",
+    "scope": "api://9f751b64-ea0f-484f-bf09-f08276a69e2f/access_as_user"
+  },
+  "web": {
+    "appId": "36dc1d0c-5c0d-43bc-825d-5a14a610a386",
+    "redirectUris": [
+      "http://localhost:5173"
+    ]
+  },
+  "backendIdentity": {
+    "resourceId": "/subscriptions/0ac7d719-89bc-4100-be87-a79d33e953a7/resourcegroups/rg-jarvis/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-jarvis-backend",
+    "clientId": "2d3e0ff3-0ddc-47b5-b47f-74333c200d96",
+    "principalId": "ab94fbb1-4662-4230-be39-a7afa7fafd46"
+  },
+  "sqlAdminGroup": {
+    "objectId": "ec8ca366-aeef-48ef-8df5-7567f0838758",
+    "displayName": "jarvis-sql-admins"
+  }
+}

@@ -1,0 +1,863 @@
+"""Foundry Invocations adapter for Copilot CLI and Codex ACP.
+
+The container intentionally receives only the Key Vault URI as an agent-version
+setting.  At task start it uses the hosted agent's Entra identity to retrieve
+the per-task credentials, writes the Codex login file with restrictive
+permissions, and starts the selected ACP server over stdio.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import base64
+import json
+import logging
+import os
+import re
+import shutil
+import socket
+import time
+from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from azure.identity.aio import DefaultAzureCredential
+from azure.keyvault.secrets.aio import SecretClient
+from azure.ai.agentserver.invocations import InvocationAgentServerHost
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+
+
+APP_VERSION = "0.1.0"
+WORK_ROOT = Path(os.environ.get("JARVIS_WORK_ROOT", "/files/jarvis"))
+MAX_EVENTS = 500
+TARGET_TENANT_ID = os.environ.get(
+    "JARVIS_TARGET_TENANT_ID",
+    "802efa29-17f2-4a79-8f5f-38f087aed96a",
+)
+TASK_STATE_FILE = "task-state.json"
+ACP_SESSION_FILE = "acp-session.json"
+LOGGER = logging.getLogger("jarvis.runner")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+# Identifies this container instance; a resume after idle deprovisioning shows a new value.
+RUNNER_INSTANCE = {"host": socket.gethostname(), "pid": os.getpid(), "started_at": time.time()}
+ACTIVE_STATUSES = {"queued", "running"}
+STOP_WAIT_SECONDS = 90
+STOPPED_STATUS = {"steer": "interrupted", "pause": "paused"}
+CODEX_LOGIN_SECRET = "codex-login"
+# Codex renews its login itself only when the access token (valid 10 days) is
+# within 5 minutes of expiry, and each renewal invalidates every other copy.
+# Jarvis renews earlier, in one sandbox at a time, so tasks never renew mid-run.
+CODEX_RENEW_MIN_DAYS_LEFT = 3.0
+# An unreadable access token plus an old last_refresh makes Codex renew at once,
+# through its own client (codex-rs login/src/auth/manager.rs).
+CODEX_RENEW_ACCESS_TOKEN_MARKER = "jarvis-renew-required"
+CODEX_CONFIG = 'cli_auth_credentials_store = "file"\n'
+_LAST_REFRESH = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$")
+
+
+@dataclass
+class TaskState:
+    invocation_id: str
+    session_id: str
+    agent: str
+    task: str
+    status: str = "queued"
+    started_at: float = field(default_factory=time.time)
+    finished_at: float | None = None
+    events: list[dict[str, Any]] = field(default_factory=list)
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    process: asyncio.subprocess.Process | None = None
+    # Set to "steer" or "pause" when the current turn is stopped on purpose.
+    stop_requested: str | None = None
+
+    def event(self, kind: str, **data: Any) -> None:
+        self.events.append(
+            {"at": time.time(), "kind": kind, "data": data}
+        )
+        if len(self.events) > MAX_EVENTS:
+            del self.events[: len(self.events) - MAX_EVENTS]
+        _persist_task(self)
+
+
+tasks: dict[str, TaskState] = {}
+session_clients: dict[str, ACPClient] = {}
+session_locks: dict[str, asyncio.Lock] = {}
+tasks_lock = asyncio.Lock()
+
+
+def _session_dir(session_id: str) -> Path:
+    return WORK_ROOT / session_id
+
+
+def _session_metadata_path(session_id: str) -> Path:
+    return _session_dir(session_id) / ACP_SESSION_FILE
+
+
+def _task_state_path(session_id: str) -> Path:
+    return _session_dir(session_id) / TASK_STATE_FILE
+
+
+def _write_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
+    temporary.replace(path)
+    path.chmod(0o600)
+
+
+def _capacity_snapshot() -> dict[str, Any]:
+    """Return non-secret process and session-disk capacity evidence."""
+    snapshot: dict[str, Any] = {"cpu_count": os.cpu_count() or 0}
+    try:
+        usage = shutil.disk_usage(WORK_ROOT)
+        snapshot["disk_used_bytes"] = usage.used
+        snapshot["disk_free_bytes"] = usage.free
+    except OSError:
+        snapshot["disk_used_bytes"] = None
+        snapshot["disk_free_bytes"] = None
+    try:
+        status = Path("/proc/self/status").read_text(encoding="utf-8")
+        for line in status.splitlines():
+            if line.startswith("VmHWM:"):
+                snapshot["peak_memory_kib"] = int(line.split()[1])
+                break
+    except (OSError, ValueError, IndexError):
+        snapshot["peak_memory_kib"] = None
+    return snapshot
+
+
+def _persist_task(state: TaskState) -> None:
+    """Persist resumable metadata without prompts, results, or credentials."""
+    _write_json(
+        _task_state_path(state.session_id),
+        {
+            "invocation_id": state.invocation_id,
+            "session_id": state.session_id,
+            "agent": state.agent,
+            "status": state.status,
+            "started_at": state.started_at,
+            "finished_at": state.finished_at,
+        },
+    )
+
+
+def _load_task(invocation_id: str) -> TaskState | None:
+    if not WORK_ROOT.exists():
+        return None
+    for state_path in WORK_ROOT.glob(f"*/{TASK_STATE_FILE}"):
+        try:
+            saved = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if saved.get("invocation_id") != invocation_id:
+            continue
+        state = TaskState(
+            invocation_id=invocation_id,
+            session_id=str(saved["session_id"]),
+            agent=str(saved["agent"]),
+            task="",
+            status=str(saved.get("status", "unknown")),
+            started_at=float(saved.get("started_at", time.time())),
+            finished_at=saved.get("finished_at"),
+        )
+        return state
+    return None
+
+
+def _load_acp_session(session_id: str, agent: str) -> str | None:
+    path = _session_metadata_path(session_id)
+    if not path.exists():
+        return None
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise RuntimeError("Persisted ACP session metadata is unreadable")
+    if saved.get("agent") != agent:
+        raise RuntimeError("Persisted ACP session belongs to a different provider")
+    session_id_value = saved.get("acp_session_id")
+    if not isinstance(session_id_value, str) or not session_id_value:
+        raise RuntimeError("Persisted ACP session metadata has no session id")
+    return session_id_value
+
+
+def _persist_acp_session(state: TaskState, acp_session_id: str) -> None:
+    _write_json(
+        _session_metadata_path(state.session_id),
+        {
+            "agent": state.agent,
+            "foundry_session_id": state.session_id,
+            "acp_session_id": acp_session_id,
+        },
+    )
+
+
+def _required_string(payload: dict[str, Any], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"'{key}' must be a non-empty string")
+    return value.strip()
+
+
+async def _key_vault_secret(name: str) -> str:
+    vault_uri = os.environ.get("KEY_VAULT_URI")
+    if not vault_uri:
+        raise RuntimeError("KEY_VAULT_URI is not configured")
+    # Hosted-agent managed identities are issued in the Foundry project
+    # tenant.  The current azure-identity runtime does not accept a
+    # ``tenant_id`` keyword on DefaultAzureCredential, and the managed
+    # identity itself already provides the correct tenant boundary.
+    credential = DefaultAzureCredential(exclude_interactive_browser_credential=True)
+    try:
+        client = SecretClient(vault_url=vault_uri, credential=credential)
+        try:
+            secret = await client.get_secret(name)
+            if not secret.value:
+                raise RuntimeError(f"Key Vault secret '{name}' is empty")
+            return secret.value
+        finally:
+            await client.close()
+    finally:
+        await credential.close()
+
+
+async def _set_key_vault_secret(name: str, value: str) -> None:
+    vault_uri = os.environ.get("KEY_VAULT_URI")
+    if not vault_uri:
+        raise RuntimeError("KEY_VAULT_URI is not configured")
+    credential = DefaultAzureCredential(exclude_interactive_browser_credential=True)
+    try:
+        client = SecretClient(vault_url=vault_uri, credential=credential)
+        try:
+            await client.set_secret(name, value)
+        finally:
+            await client.close()
+    finally:
+        await credential.close()
+
+
+def _parse_last_refresh(auth_text: str | None) -> datetime | None:
+    """Read Codex's `last_refresh` timestamp from an auth.json document."""
+    if not auth_text:
+        return None
+    try:
+        value = json.loads(auth_text).get("last_refresh")
+    except (json.JSONDecodeError, AttributeError):
+        return None
+    match = _LAST_REFRESH.match(value) if isinstance(value, str) else None
+    if not match:
+        return None
+    base, fraction, zone = match.groups()
+    micro = (fraction or "0")[:6].ljust(6, "0")
+    offset = "+00:00" if zone == "Z" else zone
+    return datetime.fromisoformat(f"{base}.{micro}{offset}").astimezone(timezone.utc)
+
+
+def _iso(moment: datetime | None) -> str | None:
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ") if moment else None
+
+
+def _access_token_expiry(auth_text: str | None) -> datetime | None:
+    """Read the `exp` claim of the Codex access token without verifying it."""
+    try:
+        token = json.loads(auth_text or "")["tokens"]["access_token"]
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        payload = parts[1] + "=" * (-len(parts[1]) % 4)
+        expires = json.loads(base64.urlsafe_b64decode(payload))["exp"]
+        return datetime.fromtimestamp(int(expires), timezone.utc)
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
+def _write_codex_home(codex_home: Path, auth_text: str) -> Path:
+    codex_home.mkdir(parents=True, exist_ok=True)
+    (codex_home / "config.toml").write_text(CODEX_CONFIG, encoding="utf-8")
+    auth_path = codex_home / "auth.json"
+    auth_path.write_text(auth_text, encoding="utf-8")
+    auth_path.chmod(0o600)
+    return auth_path
+
+
+async def _store_codex_login_if_newer(auth_text: str | None) -> bool:
+    """Write a renewed login back to Key Vault unless the stored copy is as new or newer."""
+    candidate = _parse_last_refresh(auth_text)
+    if candidate is None or not auth_text:
+        return False
+    stored = _parse_last_refresh(await _key_vault_secret(CODEX_LOGIN_SECRET))
+    if stored is not None and candidate <= stored:
+        return False
+    await _set_key_vault_secret(CODEX_LOGIN_SECRET, auth_text)
+    LOGGER.info("codex login stored last_refresh=%s", _iso(candidate))
+    return True
+
+
+def _codex_renew_command() -> list[str]:
+    return ["codex", "exec", "--skip-git-repo-check", "Reply with the single word OK."]
+
+
+async def _renew_codex_login(session_id: str, min_days_left: float, force: bool = False) -> dict[str, Any]:
+    """Renew the stored Codex login in this sandbox only, then write it back.
+
+    Skips the renewal while the access token has more than `min_days_left` days
+    left. Otherwise marks this sandbox's private copy as needing renewal, so
+    Codex renews it through its own client on the next request.
+    """
+    worktree = WORK_ROOT / session_id
+    worktree.mkdir(parents=True, exist_ok=True)
+    stored_text = await _key_vault_secret(CODEX_LOGIN_SECRET)
+    before = _parse_last_refresh(stored_text)
+    expires_before = _access_token_expiry(stored_text)
+    now = datetime.now(timezone.utc)
+    days_left = (expires_before - now).total_seconds() / 86400 if expires_before else None
+    if not force and days_left is not None and days_left > min_days_left:
+        return {
+            "renewed": False,
+            "reason": "fresh",
+            "expires": _iso(expires_before),
+            "days_left": round(days_left, 2),
+        }
+    document = json.loads(stored_text)
+    document["tokens"]["access_token"] = CODEX_RENEW_ACCESS_TOKEN_MARKER
+    document["last_refresh"] = _iso(now - timedelta(days=30))
+    auth_path = _write_codex_home(worktree / ".codex", json.dumps(document))
+    stored_text = None
+    document = None
+    env = os.environ.copy()
+    env["HOME"] = str(worktree)
+    env["CODEX_HOME"] = str(worktree / ".codex")
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *_codex_renew_command(),
+            cwd=str(worktree),
+            env=env,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
+        renewed_text = auth_path.read_text(encoding="utf-8")
+        after = _parse_last_refresh(renewed_text)
+        expires_after = _access_token_expiry(renewed_text)
+        renewed = after is not None and after > now - timedelta(minutes=5) and expires_after is not None
+        stored = await _store_codex_login_if_newer(renewed_text) if renewed else False
+        renewed_text = None
+        result: dict[str, Any] = {
+            "renewed": renewed,
+            "stored": stored,
+            "exit_code": process.returncode,
+            "reply_ok": b"OK" in stdout,
+            "last_refresh_before": _iso(before),
+            "last_refresh_after": _iso(after),
+            "expires_before": _iso(expires_before),
+            "expires_after": _iso(expires_after),
+        }
+        if process.returncode != 0:
+            result["error"] = stderr.decode(errors="replace")[-300:]
+        return result
+    finally:
+        auth_path.unlink(missing_ok=True)
+
+
+async def _credentials_for(agent: str) -> dict[str, str]:
+    github_token = await _key_vault_secret("github-token")
+    if agent == "copilot":
+        return {
+            "github_token": github_token,
+            "copilot_token": await _key_vault_secret("copilot-token"),
+        }
+    if agent == "codex":
+        return {
+            "github_token": github_token,
+            "codex_login": await _key_vault_secret("codex-login"),
+        }
+    raise ValueError("agent must be 'copilot' or 'codex'")
+
+
+class ACPClient:
+    """Small JSON-RPC stdio client for ACP servers.
+
+    Keeping this transport local avoids coupling the hosted image to a specific
+    generated schema revision while still using the public ACP wire protocol.
+    The official Python SDK remains installed for schema compatibility and
+    future richer event handling.
+    """
+
+    def __init__(
+        self,
+        command: list[str],
+        cwd: Path,
+        state: TaskState,
+        env: dict[str, str],
+        persisted_session_id: str | None = None,
+    ):
+        self.command = command
+        self.cwd = cwd
+        self.state = state
+        self.env = env
+        self.process: asyncio.subprocess.Process | None = None
+        self._next_id = 1
+        self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
+        self._reader_task: asyncio.Task[None] | None = None
+        self.acp_session_id: str | None = persisted_session_id
+
+    async def start(self) -> None:
+        self.process = await asyncio.create_subprocess_exec(
+            *self.command,
+            cwd=str(self.cwd),
+            env=self.env,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        self.state.process = self.process
+        self._reader_task = asyncio.create_task(self._read_stdout())
+        asyncio.create_task(self._read_stderr())
+        initialized = await self.request(
+            "initialize",
+            {
+                "protocolVersion": 1,
+                "clientInfo": {"name": "jarvis-foundry-runner", "version": APP_VERSION},
+                "clientCapabilities": {},
+            },
+        )
+        capabilities = initialized.get("agentCapabilities") or {}
+        self.state.event("acp_initialized", load_session=bool(capabilities.get("loadSession")))
+        if self.acp_session_id is not None:
+            await self.request(
+                "session/load",
+                {
+                    "sessionId": self.acp_session_id,
+                    "cwd": str(self.cwd),
+                    "mcpServers": [],
+                },
+            )
+            self.state.event("acp_session_loaded", session_id=self.acp_session_id)
+
+    async def _read_stdout(self) -> None:
+        assert self.process and self.process.stdout
+        while True:
+            line = await self.process.stdout.readline()
+            if not line:
+                break
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                self.state.event("agent_output", text=line.decode(errors="replace").strip())
+                continue
+            if "id" in message and "method" not in message:
+                request_id = message.get("id")
+                future = self._pending.pop(request_id, None)
+                if future and not future.done():
+                    future.set_result(message)
+            elif message.get("method") == "session/request_permission":
+                await self._respond(
+                    message.get("id"),
+                    {"outcome": {"outcome": "approved_for_session"}},
+                )
+            elif "method" in message:
+                self.state.event(
+                    "acp_notification",
+                    method=message.get("method"),
+                    params=message.get("params", {}),
+                )
+
+        for future in self._pending.values():
+            if not future.done():
+                future.set_exception(RuntimeError("ACP process closed stdout"))
+        self._pending.clear()
+
+    async def _read_stderr(self) -> None:
+        assert self.process and self.process.stderr
+        while True:
+            line = await self.process.stderr.readline()
+            if not line:
+                return
+            self.state.event("agent_stderr", text=line.decode(errors="replace").strip())
+
+    async def _respond(self, request_id: Any, result: dict[str, Any]) -> None:
+        if self.process and self.process.stdin and request_id is not None:
+            self.process.stdin.write(
+                (json.dumps({"jsonrpc": "2.0", "id": request_id, "result": result}) + "\n").encode()
+            )
+            await self.process.stdin.drain()
+
+    async def request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        if not self.process or not self.process.stdin:
+            raise RuntimeError("ACP process is not running")
+        request_id = self._next_id
+        self._next_id += 1
+        future: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
+        self._pending[request_id] = future
+        self.process.stdin.write(
+            (
+                json.dumps(
+                    {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
+                )
+                + "\n"
+            ).encode()
+        )
+        await self.process.stdin.drain()
+        timeout_seconds = 120 if method == "initialize" else int(
+            os.environ.get("ACP_REQUEST_TIMEOUT_SECONDS", "3600")
+        )
+        response = await asyncio.wait_for(future, timeout=timeout_seconds)
+        if "error" in response:
+            raise RuntimeError(f"ACP {method} failed: {response['error']}")
+        return response.get("result", {})
+
+    async def run(self, prompt: str) -> dict[str, Any]:
+        if self.acp_session_id is None:
+            session = await self.request(
+                "session/new",
+                {"cwd": str(self.cwd), "mcpServers": []},
+            )
+            self.acp_session_id = session.get("sessionId") or session.get("session_id")
+            if not self.acp_session_id:
+                raise RuntimeError("ACP server did not return a session id")
+            _persist_acp_session(self.state, self.acp_session_id)
+            self.state.event("acp_session", session_id=self.acp_session_id)
+        result = await self.request(
+            "session/prompt",
+            {
+                "sessionId": self.acp_session_id,
+                "prompt": [{"type": "text", "text": prompt}],
+            },
+        )
+        return {"acp_session_id": self.acp_session_id, "response": result}
+
+    async def cancel_turn(self) -> bool:
+        """Send ACP session/cancel; the in-flight session/prompt then returns stopReason 'cancelled'."""
+        if not self.acp_session_id or not self.process or not self.process.stdin:
+            return False
+        if self.process.returncode is not None:
+            return False
+        self.process.stdin.write(
+            (
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "method": "session/cancel",
+                        "params": {"sessionId": self.acp_session_id},
+                    }
+                )
+                + "\n"
+            ).encode()
+        )
+        await self.process.stdin.drain()
+        self.state.event("acp_cancel_sent", session_id=self.acp_session_id)
+        return True
+
+    async def stop(self) -> None:
+        if not self.process:
+            return
+        if self.process.returncode is None:
+            self.process.terminate()
+            try:
+                await asyncio.wait_for(self.process.wait(), timeout=10)
+            except asyncio.TimeoutError:
+                self.process.kill()
+                await self.process.wait()
+        if self._reader_task:
+            await asyncio.gather(self._reader_task, return_exceptions=True)
+
+
+def _agent_command(agent: str) -> list[str]:
+    return ["copilot", "--acp", "--stdio", "--allow-all"] if agent == "copilot" else ["codex-acp"]
+
+
+def _credential_helper(worktree: Path) -> Path:
+    helper = worktree / ".git-credential-helper"
+    helper.write_text(
+        "#!/bin/sh\n"
+        "printf 'username=x-access-token\\npassword=%s\\n' \"$GH_TOKEN\"\n",
+        encoding="utf-8",
+    )
+    helper.chmod(0o700)
+    return helper
+
+
+async def _stop_session_client(session_id: str) -> None:
+    client = session_clients.pop(session_id, None)
+    if client is not None:
+        await client.stop()
+
+
+async def _run_task(state: TaskState) -> None:
+    state.status = "running"
+    state.event("started", agent=state.agent)
+    state.event("runner_instance", **RUNNER_INSTANCE)
+    worktree = WORK_ROOT / state.session_id
+    worktree.mkdir(parents=True, exist_ok=True)
+    credentials: dict[str, str] = {}
+    client: ACPClient | None = None
+    session_lock = session_locks.setdefault(state.session_id, asyncio.Lock())
+    try:
+        async with session_lock:
+            client = session_clients.get(state.session_id)
+            if client is None:
+                credentials = await _credentials_for(state.agent)
+                env = os.environ.copy()
+                env["GIT_TERMINAL_PROMPT"] = "0"
+                # Foundry may provide a read-only /home/session mount.  Keep
+                # CLI caches and ACP metadata on the session's persistent,
+                # runner-owned filesystem instead.
+                env["HOME"] = str(worktree)
+                env["XDG_CACHE_HOME"] = str(worktree / ".cache")
+                env["GH_TOKEN"] = credentials["github_token"]
+                env["GIT_CONFIG_NOSYSTEM"] = "1"
+                env["GIT_CONFIG_COUNT"] = "1"
+                env["GIT_CONFIG_KEY_0"] = "credential.helper"
+                env["GIT_CONFIG_VALUE_0"] = f"!{_credential_helper(worktree)}"
+                if state.agent == "copilot":
+                    env["COPILOT_GITHUB_TOKEN"] = credentials["copilot_token"]
+                else:
+                    codex_home = worktree / ".codex"
+                    _write_codex_home(codex_home, credentials["codex_login"])
+                    env["CODEX_HOME"] = str(codex_home)
+                # Do not retain secret strings in state or event payloads.
+                credentials.clear()
+                persisted_session_id = _load_acp_session(state.session_id, state.agent)
+                client = ACPClient(
+                    _agent_command(state.agent),
+                    worktree,
+                    state,
+                    env,
+                    persisted_session_id=persisted_session_id,
+                )
+                await client.start()
+                session_clients[state.session_id] = client
+            state.result = await client.run(state.task)
+        if state.stop_requested:
+            state.status = STOPPED_STATUS[state.stop_requested]
+            state.event(state.status, result=state.result)
+        else:
+            state.status = "completed"
+            state.event("completed", result=state.result)
+    except asyncio.CancelledError:
+        state.status = "cancelled"
+        state.event("cancelled")
+        raise
+    except Exception as exc:  # sanitized: exception text never includes credentials
+        if state.stop_requested:
+            # A forced stop after the cancel timeout closes the ACP stream.
+            state.status = STOPPED_STATUS[state.stop_requested]
+            state.event(state.status, forced=True, error=str(exc))
+        elif state.status != "cancelled":
+            state.status = "failed"
+            state.error = str(exc)
+            state.event("failed", error=state.error)
+    finally:
+        # Keep the Foundry session's filesystem and ACP session id, but do not
+        # retain a provider process between turns.  A subsequent steer or
+        # resume creates a fresh ACP process and uses session/load, so events
+        # are attributed to the new invocation and the process cannot hang on
+        # a stale request stream.
+        await _stop_session_client(state.session_id)
+        if state.agent == "codex":
+            # Codex may have renewed its login during the turn (for example after
+            # a 401). Keep the newest copy in Key Vault so other sandboxes stay valid.
+            auth_path = worktree / ".codex" / "auth.json"
+            try:
+                if auth_path.exists() and await _store_codex_login_if_newer(auth_path.read_text(encoding="utf-8")):
+                    state.event("codex_login_stored")
+            except Exception as exc:  # sanitized: names the error type only
+                state.event("codex_login_store_failed", error=type(exc).__name__)
+        capacity = _capacity_snapshot()
+        state.event("capacity", **capacity)
+        LOGGER.info("capacity %s", json.dumps(capacity, sort_keys=True))
+        credentials.clear()
+        state.finished_at = time.time()
+        _persist_task(state)
+
+
+async def _stop_running_turn(session_id: str, reason: str, exclude: str | None = None) -> TaskState | None:
+    """Stop the session's active turn at a safe point (ACP cancel), forcing it after a timeout."""
+    running = next(
+        (
+            t
+            for t in tasks.values()
+            if t.session_id == session_id and t.status in ACTIVE_STATUSES and t.invocation_id != exclude
+        ),
+        None,
+    )
+    if running is None:
+        return None
+    running.stop_requested = reason
+    running.event(f"{reason}_requested")
+    client = session_clients.get(session_id)
+    if client is not None:
+        await client.cancel_turn()
+    deadline = time.monotonic() + STOP_WAIT_SECONDS
+    while running.status in ACTIVE_STATUSES and time.monotonic() < deadline:
+        await asyncio.sleep(1)
+    if running.status in ACTIVE_STATUSES:
+        running.event("stop_timeout_forced", seconds=STOP_WAIT_SECONDS)
+        if running.process and running.process.returncode is None:
+            running.process.terminate()
+        deadline = time.monotonic() + 30
+        while running.status in ACTIVE_STATUSES and time.monotonic() < deadline:
+            await asyncio.sleep(1)
+    return running
+
+
+async def _steer_then_run(state: TaskState) -> None:
+    stopped = await _stop_running_turn(state.session_id, "steer", exclude=state.invocation_id)
+    state.event("steer_after", stopped_invocation=stopped.invocation_id if stopped else None)
+    await _run_task(state)
+
+
+def _steering_prompt(message: str) -> str:
+    return (
+        "Correction from the user while you were working:\n"
+        f"{message}\n\n"
+        "Apply this correction to the task you were working on. Update anything you already "
+        "did that conflicts with it, then continue and finish the task."
+    )
+
+
+app = InvocationAgentServerHost(
+    openapi_spec={
+        "openapi": "3.0.3",
+        "info": {"title": "Jarvis Foundry runner", "version": APP_VERSION},
+        "paths": {"/invocations": {"post": {"responses": {"200": {"description": "started"}}}}},
+    }
+)
+
+
+@app.invoke_handler
+async def invoke(request: Request) -> Response:
+    payload = await request.json()
+    if not isinstance(payload, dict):
+        return JSONResponse({"error": "JSON object required"}, status_code=400)
+    mode = str(payload.get("mode") or "task").lower()
+    if mode not in {"task", "steer", "pause", "renew-codex", "crash-test"}:
+        return JSONResponse(
+            {"error": "mode must be 'task', 'steer', 'pause', 'renew-codex', or 'crash-test'"},
+            status_code=400,
+        )
+    if mode == "crash-test":
+        if os.environ.get("JARVIS_ALLOW_CRASH_TEST") != "1":
+            return JSONResponse({"error": "crash-test disabled"}, status_code=403)
+        LOGGER.error("crash-test requested; exiting runner process")
+        os._exit(1)
+    if mode == "renew-codex":
+        try:
+            min_days_left = float(payload.get("min_days_left", CODEX_RENEW_MIN_DAYS_LEFT))
+            result = await _renew_codex_login(
+                request.state.session_id, min_days_left, force=payload.get("force") is True
+            )
+        except Exception as exc:  # sanitized: never includes the login document
+            return JSONResponse({"renewed": False, "error": type(exc).__name__}, status_code=500)
+        return JSONResponse({"session_id": request.state.session_id, **result})
+    if mode == "pause":
+        session_id = request.state.session_id
+        running = next(
+            (t for t in tasks.values() if t.session_id == session_id and t.status in ACTIVE_STATUSES),
+            None,
+        )
+        if running is not None:
+            asyncio.create_task(_stop_running_turn(session_id, "pause"))
+        return JSONResponse(
+            {
+                "session_id": session_id,
+                "status": "pausing" if running else "idle",
+                "paused_invocation": running.invocation_id if running else None,
+            }
+        )
+    try:
+        agent = _required_string(payload, "agent").lower()
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    if agent not in {"copilot", "codex"}:
+        return JSONResponse({"error": "agent must be 'copilot' or 'codex'"}, status_code=400)
+
+    invocation_id = request.state.invocation_id
+    session_id = request.state.session_id
+    if payload.get("probe") == "key-vault":
+        credentials: dict[str, str] = {}
+        try:
+            credentials = await _credentials_for(agent)
+            return JSONResponse({"key_vault_access": True, "session_id": session_id})
+        except Exception:
+            # Keep probe responses Boolean-only so an exception cannot expose
+            # credential-provider details through the deployment gate.
+            return JSONResponse({"key_vault_access": False, "session_id": session_id}, status_code=503)
+        finally:
+            credentials.clear()
+    try:
+        task = (
+            _steering_prompt(_required_string(payload, "message"))
+            if mode == "steer"
+            else _required_string(payload, "task")
+        )
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    state = TaskState(
+        invocation_id=invocation_id,
+        session_id=session_id,
+        agent=agent,
+        task=task,
+    )
+    async with tasks_lock:
+        tasks[invocation_id] = state
+    asyncio.create_task(_steer_then_run(state) if mode == "steer" else _run_task(state))
+    return JSONResponse(
+        {
+            "invocation_id": invocation_id,
+            "session_id": session_id,
+            "status": state.status,
+            "agent": agent,
+            "mode": mode,
+        }
+    )
+
+
+@app.get_invocation_handler
+async def get_invocation(request: Request) -> Response:
+    invocation_id = request.state.invocation_id
+    state = tasks.get(invocation_id)
+    if not state:
+        state = _load_task(invocation_id)
+        if state:
+            tasks[invocation_id] = state
+    if not state:
+        return JSONResponse({"error": "invocation not found"}, status_code=404)
+    return JSONResponse(
+        {
+            "invocation_id": state.invocation_id,
+            "session_id": state.session_id,
+            "agent": state.agent,
+            "status": state.status,
+            "started_at": state.started_at,
+            "finished_at": state.finished_at,
+            "events": state.events,
+            "result": state.result,
+            "error": state.error,
+        }
+    )
+
+
+@app.cancel_invocation_handler
+async def cancel_invocation(request: Request) -> Response:
+    invocation_id = request.state.invocation_id
+    state = tasks.get(invocation_id)
+    if not state:
+        return JSONResponse({"error": "invocation not found"}, status_code=404)
+    if state.status in {"completed", "failed", "cancelled"}:
+        return JSONResponse({"invocation_id": invocation_id, "status": state.status})
+    state.status = "cancelling"
+    if state.process and state.process.returncode is None:
+        state.process.terminate()
+    state.event("cancel_requested")
+    await _stop_session_client(state.session_id)
+    state.status = "cancelled"
+    state.finished_at = time.time()
+    _persist_task(state)
+    return JSONResponse({"invocation_id": invocation_id, "status": state.status})
+
+
+if __name__ == "__main__":
+    app.run()

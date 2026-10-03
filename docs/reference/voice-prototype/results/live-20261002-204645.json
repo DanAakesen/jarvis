@@ -1,0 +1,457 @@
+{
+  "agent": "jarvis-realtime-christel",
+  "connected_ms": 3848,
+  "greeting": {
+    "index": 0,
+    "heard": "",
+    "reply": "Hej Dan. Hvad skal jeg gøre?",
+    "latency_ms": null,
+    "interrupted": true,
+    "response_status": "cancelled",
+    "speech_stopped_ms": null,
+    "first_audio_ms": null,
+    "response_done_ms": 1790966731014,
+    "usage": {
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "input_token_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "text_tokens": 0,
+        "audio_tokens": 0,
+        "image_tokens": 0,
+        "cached_tokens_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0
+        }
+      },
+      "output_token_details": {
+        "text_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "tools": []
+  },
+  "turns": [
+    {
+      "index": 1,
+      "heard": "",
+      "reply": "Jeg fangede ikke helt resten. Kan du gentage, hvad du vil have mig til at gøre, og gerne hvilket projekt det handler om?",
+      "latency_ms": 938,
+      "interrupted": false,
+      "response_status": "completed",
+      "speech_stopped_ms": 1790966732030,
+      "first_audio_ms": 1790966732968,
+      "response_done_ms": 1790966733529,
+      "usage": {
+        "total_tokens": 1222,
+        "input_tokens": 1016,
+        "output_tokens": 206,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 1005,
+          "audio_tokens": 11,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 56,
+          "audio_tokens": 150
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 2,
+      "heard": "Jeg, jeg prøver, jeg",
+      "reply": "Jeg kan ikke høre noget at transskribere lige nu. Prøv at uploade lydklippet eller indsæt optagelsen, så transskriberer jeg det ordret.",
+      "latency_ms": 1220,
+      "interrupted": false,
+      "response_status": "completed",
+      "speech_stopped_ms": 1790966742082,
+      "first_audio_ms": 1790966743302,
+      "response_done_ms": 1790966743954,
+      "usage": {
+        "total_tokens": 1407,
+        "input_tokens": 1141,
+        "output_tokens": 266,
+        "input_token_details": {
+          "cached_tokens": 896,
+          "cache_write_tokens": 0,
+          "text_tokens": 1048,
+          "audio_tokens": 93,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 896,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 97,
+          "audio_tokens": 169
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 3,
+      "heard": "Jeg er koncentreret ud. Det er rigtig godt. Hallo.",
+      "reply": "Jeg hører bare “Jeg siger”. Hvis du vil diktere en opgave eller have noget transskriberet, så sig eller indsæt hele teksten, og gerne hvilket projekt det handler om.",
+      "latency_ms": 1187,
+      "interrupted": false,
+      "response_status": "completed",
+      "speech_stopped_ms": 1790966747185,
+      "first_audio_ms": 1790966748372,
+      "response_done_ms": 1790966749144,
+      "usage": {
+        "total_tokens": 1475,
+        "input_tokens": 1205,
+        "output_tokens": 270,
+        "input_token_details": {
+          "cached_tokens": 1024,
+          "cache_write_tokens": 0,
+          "text_tokens": 1101,
+          "audio_tokens": 104,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 1024,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 71,
+          "audio_tokens": 199
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 4,
+      "heard": "einzieer.",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966754482,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966754540,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 5,
+      "heard": "Så skal vi snakke sammen.\nOkay, jeg tænker åbenbart liv.",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966755543,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966755659,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 6,
+      "heard": "Kommer.",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966756513,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966757584,
+      "usage": {
+        "total_tokens": 1355,
+        "input_tokens": 1337,
+        "output_tokens": 18,
+        "input_token_details": {
+          "cached_tokens": 1024,
+          "cache_write_tokens": 0,
+          "text_tokens": 1171,
+          "audio_tokens": 166,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 1024,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 18,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 7,
+      "heard": "Anker. 3.",
+      "reply": "Måske dykker jeg også rimelig meget. Okay, jeg transskriberer det, jeg kan høre, ordret.",
+      "latency_ms": 1109,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966759424,
+      "first_audio_ms": 1790966760533,
+      "response_done_ms": 1790966760602,
+      "usage": {
+        "total_tokens": 1546,
+        "input_tokens": 1385,
+        "output_tokens": 161,
+        "input_token_details": {
+          "cached_tokens": 1280,
+          "cache_write_tokens": 0,
+          "text_tokens": 1198,
+          "audio_tokens": 187,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 1152,
+            "audio_tokens": 128,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 72,
+          "audio_tokens": 89
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 8,
+      "heard": "Måske dykker og svin ikke. Ja.",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966762501,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966762548,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 9,
+      "heard": "Måske ikke liv alligevel.",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966777272,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966777578,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 10,
+      "heard": "Det betyder, at jeg har lyst til at have 3 ord,\nAh.\nsom jeg tænker.\nØh, dykker.\nKlart dykker.\nJo, faktisk hver gang man rører ved den, så skal man vente. Så skal man vente. Så lige have nu trykket på den her.\nDykker. Skal jeg så sige noget?\nSå skal du sige, hvad for en farve du skal have på.\nSå lægger du en.\nWhat?",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966778820,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966779211,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 11,
+      "heard": "Hallo?",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": true,
+      "response_status": "cancelled",
+      "speech_stopped_ms": 1790966791193,
+      "first_audio_ms": null,
+      "response_done_ms": 1790966791288,
+      "usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 12,
+      "heard": "Okay, vi skal, nu skal vi finde af. Er det så?\nJeg kan godt se keg, fordi sådan en keg.\nMen jeg, men anker synes jeg er mere.\nMen anker er jo.\nDet her med, at de skal.\nOg hummer.\nJa. Og hummer også.\nOg hvad så? Hvad?",
+      "reply": "Det er faktisk også klart.",
+      "latency_ms": 997,
+      "interrupted": false,
+      "response_status": "completed",
+      "speech_stopped_ms": 1790966792862,
+      "first_audio_ms": 1790966793859,
+      "response_done_ms": 1790966793892,
+      "usage": {
+        "total_tokens": 1857,
+        "input_tokens": 1775,
+        "output_tokens": 82,
+        "input_token_details": {
+          "cached_tokens": 1536,
+          "cache_write_tokens": 0,
+          "text_tokens": 1260,
+          "audio_tokens": 515,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 1216,
+            "audio_tokens": 320,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 35,
+          "audio_tokens": 47
+        }
+      },
+      "tools": []
+    },
+    {
+      "index": 13,
+      "heard": "Go back to scratch.",
+      "reply": "",
+      "latency_ms": null,
+      "interrupted": false,
+      "response_status": "",
+      "speech_stopped_ms": null,
+      "first_audio_ms": null,
+      "response_done_ms": null,
+      "usage": {},
+      "tools": []
+    }
+  ],
+  "tool_log": [],
+  "realtime_usage": {
+    "input_audio": 1076,
+    "input_text": 6783,
+    "input_cached": 5760,
+    "output_audio": 654,
+    "output_text": 349
+  },
+  "errors": []
+}

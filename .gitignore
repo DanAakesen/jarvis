@@ -1,0 +1,20 @@
+# Secrets and local state
+.secrets/
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Logs and editors
+*.log
+.DS_Store
+Thumbs.db

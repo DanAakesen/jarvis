@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis flows</title>
+<style>
+  :root {
+    --proven-bg: #166534; --proven-fg: #ffffff; --proven-line: #166534;
+    --docs-bg: #bbf7d0;   --docs-fg: #14532d;   --docs-line: #22a35a;
+    --assumed-bg: #fde68a; --assumed-fg: #713f12; --assumed-line: #b45309;
+    --unknown-bg: #fecaca; --unknown-fg: #7f1d1d; --unknown-line: #dc2626;
+    --context-bg: #e5e7eb; --context-fg: #374151; --context-line: #6b7280;
+    --page: #f4f5f7; --surface: #ffffff; --lane-a: #ffffff; --lane-b: #f8f9fb;
+    --text: #1f2937; --muted: #5b6472; --rule: #dde1e6; --focus: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); background: var(--page); }
+  .page { width: 100%; margin: 0; padding: 16px 20px 24px; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .intro { margin: 0 0 12px; color: var(--muted); }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 0 0 14px; }
+  .stat { border-radius: 10px; padding: 10px 14px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .stat .label { display: block; font-weight: 650; }
+  .stat .metrics { display: flex; gap: 22px; margin-top: 2px; }
+  .stat .metric { display: flex; flex-direction: column; }
+  .stat .value { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .stat .unit { font-size: 12px; opacity: .85; }
+  .stat .where { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; font-size: 12px; }
+  .stat .where-title { font-weight: 600; margin-right: 2px; }
+  .where-link { appearance: none; font: inherit; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer;
+                padding: 0 6px; border-radius: 999px; border: 1px solid var(--unknown-line); background: #fff; color: var(--unknown-fg); }
+  .where-link:hover { background: #fff1f1; }
+  .where-link:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+
+  .tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--rule); }
+  .tab { appearance: none; border: 0; background: transparent; padding: 8px 12px; font: inherit; color: var(--muted);
+         cursor: pointer; white-space: nowrap; border-radius: 8px 8px 0 0; }
+  .tab:hover { color: var(--text); background: #eceef1; }
+  .tab[aria-selected="true"] { background: var(--surface); color: var(--text); font-weight: 600; }
+  .tab .num { display: inline-block; min-width: 1.6em; font-variant-numeric: tabular-nums; }
+  .tab.has-unknown { box-shadow: inset 0 0 0 2px var(--unknown-line); }
+  .tab-flag { width: 22px; height: 14px; border-radius: 4px 4px 0 0; box-shadow: inset 0 0 0 2px var(--unknown-line); flex: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .tab:focus-visible, .pager button:focus-visible, .node:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  .legend { display: grid; gap: 6px; padding: 10px 2px; font-size: 12.5px; }
+  .legend-row { display: grid; grid-template-columns: 88px 1fr; align-items: center; }
+  .legend-items { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+  .legend-title { font-weight: 700; color: var(--muted); }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-item b { font-weight: 600; }
+  .legend-item span.def { color: var(--muted); }
+  .swatch { width: 30px; height: 14px; border-radius: 3px; flex: none; }
+
+  .panel { background: var(--surface); border-radius: 10px; padding: 14px 14px 12px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+  .panel h2 { font-size: 17px; margin: 0 0 2px; }
+  .panel .summary { margin: 0 0 4px; }
+  .counts { margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 12.5px; }
+  .count-group { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .count-title { font-weight: 700; color: var(--muted); }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-weight: 600; font-size: 12px; }
+
+  .diagram-scroll { overflow-x: auto; border-radius: 8px; }
+  .diagram { position: relative; display: grid; min-width: min-content; }
+  .lane-bg { grid-column: 1 / -1; }
+  .lane-bg.even { background: var(--lane-a); }
+  .lane-bg.odd { background: var(--lane-b); }
+  .lane-head { grid-column: 1; position: sticky; left: 0; z-index: 3; padding: 8px 12px;
+               display: flex; flex-direction: column; justify-content: center; box-shadow: 1px 0 0 var(--rule); }
+  .lane-head.even { background: var(--lane-a); }
+  .lane-head.odd { background: var(--lane-b); }
+  .lane-name { font-weight: 600; }
+  .lane-tech { font-size: 12px; color: var(--muted); line-height: 1.3; }
+
+  .node { z-index: 2; align-self: center; justify-self: center; width: calc(100% - 48px); max-width: 320px; min-height: 56px;
+          margin: 7px 0; border-radius: 8px; padding: 5px 9px 6px; text-align: left; font: inherit; cursor: pointer;
+          border: 1px solid transparent; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .node .badge { display: block; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; opacity: .9; }
+  .node .ref { font-size: 11px; letter-spacing: 0; font-variant-numeric: tabular-nums; margin-right: 6px; }
+  .node .title { display: block; font-weight: 650; font-size: 13px; line-height: 1.25; margin-top: 1px; }
+  .node .detail { display: block; font-size: 11.5px; line-height: 1.3; margin-top: 2px; }
+  .node.selected { box-shadow: 0 0 0 3px var(--text); }
+  .proven  { background: var(--proven-bg);  color: var(--proven-fg); }
+  .docs    { background: var(--docs-bg);    color: var(--docs-fg); }
+  .assumed { background: var(--assumed-bg); color: var(--assumed-fg); }
+  .unknown { background: var(--unknown-bg); color: var(--unknown-fg); }
+  .context { background: var(--context-bg); color: var(--context-fg); }
+  .node.context { border: 1px dashed #9aa1ab; box-shadow: none; }
+
+  .overview .node { width: calc(100% - 18px); max-width: none; min-height: 0; margin: 6px 0; padding: 3px 6px 4px; border-radius: 6px; }
+  .overview .node .badge { font-size: 8.5px; letter-spacing: .03em; }
+  .overview .node .ref { font-size: 9.5px; margin-right: 4px; }
+  .overview .node .title { font-size: 11px; font-weight: 600; line-height: 1.2; }
+  .overview .node .detail { display: none; }
+  .overview .node.selected { box-shadow: 0 0 0 2px var(--text); }
+  .overview .lane-head { padding: 6px 10px; }
+  .overview .lane-name { font-size: 12.5px; }
+  .overview .lane-tech { font-size: 10.5px; }
+  .lane-head.corner { background: var(--surface); color: var(--muted); }
+  .seg-head { z-index: 2; appearance: none; border: 0; margin: 4px 5px; padding: 3px 8px; border-radius: 6px; background: #eef0f3;
+              color: var(--text); font: inherit; font-size: 12px; font-weight: 650; text-align: left; cursor: pointer;
+              display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
+  .seg-head:hover { background: #e2e5ea; }
+  .seg-head.has-unknown { box-shadow: inset 0 0 0 2px var(--unknown-line); }
+  .seg-head .num { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .seg-note { font-weight: 400; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  .seg-line { z-index: 0; justify-self: start; width: 0; border-left: 1px dashed #c3c8d0; pointer-events: none; }
+  .zoom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 12.5px; }
+  .zoom-label { font-weight: 700; color: var(--muted); margin-right: 2px; }
+  .zoom button, .open-tab { appearance: none; border: 1px solid var(--rule); background: var(--surface); color: var(--text); font: inherit;
+                            padding: 2px 10px; border-radius: 999px; cursor: pointer; }
+  .zoom button:hover, .open-tab:hover { background: #eceef1; }
+  .zoom button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: #fff; }
+  .open-tab { margin-top: 4px; }
+  .zoom button:focus-visible, .seg-head:focus-visible, .open-tab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  svg.edges { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 1; overflow: visible; }
+
+  .details { margin-top: 10px; padding: 8px 12px; background: var(--lane-b); border-radius: 8px; min-height: 44px; }
+  .details h3 { margin: 0 0 4px; font-size: 15px; }
+  .details p { margin: 2px 0; }
+  .details .hint { color: var(--muted); }
+  .details a { color: #1d4ed8; }
+
+  .pager { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; }
+  .pager button { appearance: none; border: 1px solid var(--rule); background: var(--surface); color: var(--text); font: inherit;
+                  padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+  .pager button:hover { background: #eceef1; }
+  .pager button[hidden] { display: none; }
+
+  @media (prefers-reduced-motion: no-preference) { .tab, .pager button { transition: background-color .12s; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Jarvis flows</h1>
+  <p class="intro">Status on 3 October 2026 from <a href="../PRODUCT.md">PRODUCT.md</a>, <a href="architecture.md">architecture.md</a>, <a href="decisions.md">decisions.md</a>, the <a href="reference/coding-sandbox-prototype/REPORT.md">coding-sandbox report</a> and the <a href="reference/voice-prototype/REPORT.md">voice report</a>. Each tab picks up where the previous one ends. Boxes are numbered left to right, then top to bottom. Select a box to see its evidence and connections.</p>
+  <div class="stats" id="stats" role="list" aria-label="Boxes and connections per status across all flows"></div>
+  <div class="tabs" role="tablist" aria-label="Flows" id="tabs"></div>
+  <div id="panels"></div>
+</div>
+
+<script>
+const J = "decisions.md";
+const R = "reference/coding-sandbox-prototype/REPORT.md";
+const VR = "reference/voice-prototype/REPORT.md";
+const DOC = {
+  hosted: "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents",
+  sessions: "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-sessions",
+  voice: "https://learn.microsoft.com/en-us/azure/foundry/how-to/voice-first-with-hosted-agent",
+  lang: "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support",
+  ghApp: "https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app",
+  ghMerge: "https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request",
+  ghTriggers: "https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows",
+  ghOidc: "https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-azure",
+  ghWebhooks: "https://docs.github.com/en/webhooks/webhook-events-and-payloads",
+  acaScale: "https://learn.microsoft.com/en-us/azure/container-apps/scale-app",
+  sse: "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events",
+  acp: "https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server",
+  codex: "https://github.com/openai/codex/blob/main/codex-rs/login/src/auth/manager.rs",
+};
+
+const STATUS = {
+  proven:  { label: "Proven in prototype", short: "Proven",  def: "ran in Azure",          lineDef: "ran in Azure",                               dash: "",    width: 2.6, evidence: "Prototype run, 1–2 October 2026.", href: R },
+  docs:    { label: "Confirmed by docs",   short: "Docs",    def: "vendor docs, not run",  lineDef: "standard code or vendor docs, not run",      dash: "",    width: 2.6, evidence: "Vendor documentation; not run by us." },
+  assumed: { label: "Assumed",             short: "Assumed", def: "not built yet",         lineDef: "relies on platform behavior not seen yet",   dash: "7 5", width: 2.2, evidence: "Design assumption; not built or tested yet.", href: J },
+  unknown: { label: "Unknown",             short: "Unknown", def: "open or untested",      lineDef: "no known way yet",                           dash: "2 4", width: 2.2, evidence: "Open question; not tested.", href: J },
+  context: { label: "From an earlier step", short: "Continues", def: "start of this tab", dash: "4 4", width: 1.6, evidence: "Continues from an earlier tab." },
+};
+const RISK_KEYS = ["proven", "docs", "assumed", "unknown"];
+
+const LANES = {
+  user:     { name: "Dan",              tech: "Browser · microphone" },
+  board:    { name: "Board",            tech: "React + TypeScript + Vite · Static Web Apps" },
+  voice:    { name: "Voice",            tech: "Voice Live · MAI Transcribe · Ryan HD (EN) · Harper (DA)" },
+  jarvis:   { name: "Jarvis agent",     tech: "Foundry hosted agent · voice bridge" },
+  model:    { name: "Model",            tech: "gpt-5.6-luna · billed per use" },
+  backend:  { name: "Backend",          tech: "Node.js · Container Apps" },
+  data:     { name: "Task store",       tech: "Azure SQL · Blob" },
+  vault:    { name: "Secrets",          tech: "Key Vault" },
+  foundry:  { name: "Sandbox platform", tech: "Foundry Hosted Agents" },
+  runner:   { name: "Runner",           tech: "Python ACP adapter" },
+  agent:    { name: "Coding agent",     tech: "Copilot CLI · Codex (codex-acp)" },
+  github:   { name: "GitHub",           tech: "Repository · pull requests · checks" },
+  actions:  { name: "GitHub Actions",   tech: "Workflows · full build and tests · OIDC deploy" },
+  insights: { name: "Telemetry",        tech: "Application Insights · budget" },
+  ops:      { name: "Operator",         tech: "PowerShell · Azure CLI" },
+};
+const LANE_ORDER = Object.keys(LANES);
+
+const FLOWS = [
+  {
+    name: "Request",
+    summary: "Dan asks for work on the board or by voice. Board buttons go straight to the backend; chat and voice go to the Jarvis agent.",
+    nodes: [
+      { id: "start", lane: "user", col: 1, s: "context", badge: "Start", t: "Dan wants a change", d: "For example: add dark mode to Jarvis.", ev: "Start of the user flow." },
+      { id: "card", lane: "board", col: 2, s: "assumed", t: "Add a card", d: "Project, agent and task text.", ev: "Board requirement in PRODUCT.md; the board is not built yet." },
+      { id: "create", lane: "backend", col: 3, s: "assumed", t: "Create task", d: "Board buttons call backend functions directly.", ev: "architecture.md: one backend with shared functions for board, voice and Windows." },
+      { id: "chat", lane: "board", col: 4, s: "assumed", t: "Type to Jarvis", d: "Chat box on the board.", ev: "Design assumption: the board can also send free text to the Jarvis agent." },
+      { id: "speak", lane: "voice", col: 2, s: "proven", t: "Speak Danish", d: "Microphone streams to a Voice Live voice agent.", ev: "Voice prototype: console client and synthetic Danish speech through the deployed voice agent (V1, V5).", href: VR },
+      { id: "stt", lane: "voice", col: 3, s: "proven", t: "Danish speech to text", d: "MAI Transcribe, language da: 0–1.8 % word errors.", ev: "Voice prototype V2: MAI Transcribe heard English names in Danish correctly; Azure Speech da-DK had 22–25 % word errors; no language set was unusable.", href: VR },
+      { id: "vq", lane: "voice", col: 5, s: "proven", t: "Voice quality and cost", d: "2.7–3.9 s to first audio; ≈4 DKK per 30-minute day.", ev: "Voice prototype V6–V7: interruption detected in 0.6 s; cost estimated from measured usage at list prices; billed meters to confirm with infra/cost.ps1.", href: VR },
+      { id: "jin", lane: "jarvis", col: 5, s: "proven", t: "Jarvis agent gets the text", d: "Voice Live bridges to a hosted agent (preview).", ev: "Voice prototype V1: voice agent → hosted agent over Bridge Protocol 1.0 (invocations_ws).", href: VR },
+    ],
+    edges: [
+      ["start", "card", "docs", "click"], ["start", "speak", "proven", "speak", { off: 32 }], ["start", "chat", "docs", "type"],
+      ["card", "create", "docs", "create task"], ["speak", "stt", "proven", "audio"],
+      ["stt", "jin", "proven", "text"], ["chat", "jin", "docs", "text", { off: 32 }],
+    ],
+  },
+  {
+    name: "Understand",
+    summary: "The Jarvis agent reads context, asks the model which action to take, and calls a backend function with its own identity.",
+    nodes: [
+      { id: "ctx", lane: "jarvis", col: 1, s: "context", from: [[1, "jin"]], t: "From 1: request text", d: "“Start en Codex-opgave på Jarvis: tilføj dark mode”." },
+      { id: "load", lane: "jarvis", col: 2, s: "assumed", t: "Load context", d: "Projects, running tasks, recent events.", ev: "Not built. Voice prototype: preloading the task list would save the list_tasks round (≈1–2 s) on most commands." },
+      { id: "read", lane: "backend", col: 2, s: "assumed", t: "Read functions", d: "List projects, list tasks, task status." },
+      { id: "rows", lane: "data", col: 3, s: "assumed", t: "Task rows and events", d: "Read from Azure SQL." },
+      { id: "tool", lane: "model", col: 3, s: "proven", t: "Choose an action", d: "Tool call: create_task(project, agent, text).", ev: "Voice prototype V3: gpt-5.6-luna with strict action rules chose the right tool and arguments for 20/20 Danish commands through the deployed path.", href: VR },
+      { id: "intent", lane: "model", col: 4, s: "proven", t: "Danish intent accuracy and cost", d: "20/20 commands; ≈0.003 DKK per command (gpt-5.6-luna).", ev: "Voice prototype V3 and reliability trials. Risk found: the model can describe an action it did not take; speak confirmations from tool results.", href: VR },
+      { id: "call", lane: "jarvis", col: 4, s: "proven", t: "Call a backend function", d: "Proven with fake tools in the hosted agent.", ev: "Voice prototype: tools ran inside the hosted agent with fake data. Calling the real backend with the agent's Entra identity is documented, not yet run.", href: VR },
+      { id: "auth", lane: "backend", col: 5, s: "assumed", t: "Authorize the caller", d: "Only the board and the Jarvis agent may call." },
+      { id: "confirm", lane: "jarvis", col: 6, s: "proven", t: "Confirm to Dan", d: "Short Danish reply; speak what the tool result says.", ev: "Voice prototype: short spoken Danish confirmations. Rule from L16: base them on the tool result.", href: VR },
+    ],
+    edges: [
+      ["ctx", "load", "docs", ""], ["load", "read", "docs", "read"], ["read", "rows", "docs", "query"],
+      ["load", "tool", "proven", "prompt + tools"], ["tool", "call", "proven", "tool call"],
+      ["call", "auth", "docs", "create_task"], ["auth", "confirm", "docs", "accepted"],
+    ],
+  },
+  {
+    name: "Accept",
+    summary: "The backend validates the request and stores the task in Azure SQL before anything runs.",
+    nodes: [
+      { id: "ctx", lane: "backend", col: 1, s: "context", from: [[1, "create"], [2, "auth"]], t: "From 1–2: create task", d: "From a board button or the Jarvis agent." },
+      { id: "policy", lane: "backend", col: 2, s: "assumed", t: "Validate and apply project policy", d: "Deliver a PR, or complete without deployment.", ev: "PRODUCT.md: project policies." },
+      { id: "row", lane: "data", col: 3, s: "assumed", t: "Write task row: Ready", d: "Azure SQL is the source of truth.", ev: "Decision 3 in decisions.md; confirmed in design, not built." },
+      { id: "card", lane: "board", col: 4, s: "assumed", t: "Card appears as Ready", d: "Pushed to the browser." },
+      { id: "limit", lane: "backend", col: 3, s: "assumed", t: "Check concurrency limit", d: "Dan controls how many tasks run at once.", ev: "PRODUCT.md: parallel work requirement." },
+      { id: "queue", lane: "backend", col: 4, s: "assumed", t: "Dispatcher: the task table is the queue", d: "Picks Ready rows within the limit; one owner for dispatch and retries.", ev: "Decision 3 (decisions.md): option A, SQL as the queue. Not built." },
+      { id: "awake", lane: "backend", col: 5, s: "assumed", t: "Backend always on", d: "Minimum 1 replica (≈ 30 DKK/month); sleep switch in the board.", ev: "Decision 3 (decisions.md). Minimum 1 keeps the sandbox heartbeat running. Sleep sets minimum 0: the backend wakes on the next request; refused while tasks run.", href: DOC.acaScale },
+    ],
+    edges: [
+      ["ctx", "policy", "docs", ""], ["policy", "row", "docs", "insert"], ["row", "card", "docs", "event"],
+      ["policy", "limit", "docs", ""], ["limit", "queue", "docs", "enqueue"], ["queue", "awake", "docs", ""],
+    ],
+  },
+  {
+    name: "Dispatch",
+    summary: "The backend starts a Foundry session for the task; the runner fetches its credentials with the agent's own identity.",
+    nodes: [
+      { id: "ctx", lane: "backend", col: 1, s: "context", from: [[3, "queue"]], t: "From 3: task leaves the queue" },
+      { id: "start", lane: "backend", col: 2, s: "proven", t: "Start the task", d: "Invocations call with agent and task; creates a session.", ev: "Prototype: every task started this way (PRs #1–#11)." },
+      { id: "session", lane: "foundry", col: 3, s: "proven", t: "Create the session sandbox", d: "VM-isolated, 1 vCPU / 2 GiB, persistent /files.", ev: "Prototype: dozens of sessions. VM isolation per Microsoft Learn.", href: DOC.sessions },
+      { id: "creds", lane: "runner", col: 4, s: "proven", t: "Read credentials", d: "Agent identity reads Key Vault at task start.", ev: "Prototype: Key Vault check passed on every deploy; tasks used the tokens." },
+      { id: "secrets", lane: "vault", col: 4, s: "proven", t: "Copilot token · Codex login · GitHub token", d: "Read-only, except the Codex login.", ev: "Prototype: role scoped to the codex-login secret for write-back." },
+      { id: "prep", lane: "runner", col: 5, s: "proven", t: "Prepare the session", d: "Writable home, Codex login, Git credential helper." },
+      { id: "mint", lane: "backend", col: 6, s: "docs", t: "Mint a GitHub App token", d: "1-hour token for one repository.", ev: "GitHub Docs: installation access tokens. The prototype used a fine-grained token instead.", href: DOC.ghApp },
+      { id: "token", lane: "github", col: 6, s: "docs", t: "Issue the installation token", d: "Contents and pull requests only.", href: DOC.ghApp },
+    ],
+    edges: [
+      ["ctx", "start", "docs", "dispatch"], ["start", "session", "proven", "Invocations"], ["session", "creds", "proven", "start runner"],
+      ["creds", "secrets", "proven", "agent identity"], ["secrets", "prep", "proven", "secrets"],
+      ["mint", "token", "docs", "app key"], ["token", "prep", "docs", "credential helper fetches it for each push"],
+    ],
+  },
+  {
+    name: "Work",
+    summary: "The coding agent runs inside the sandbox and delivers a branch and a pull request.",
+    nodes: [
+      { id: "ctx", lane: "runner", col: 1, s: "context", from: [[4, "prep"]], t: "From 4: session ready" },
+      { id: "acp", lane: "runner", col: 2, s: "proven", t: "Start the agent over ACP", d: "copilot --acp, or codex-acp.", ev: "Prototype: both agents. Copilot's ACP mode is a public preview.", href: DOC.acp },
+      { id: "par", lane: "runner", col: 4, s: "proven", t: "Parallel tasks", d: "One sandbox each; two Codex tasks shared one login.", ev: "Prototype: parallel Codex check." },
+      { id: "new", lane: "agent", col: 3, s: "proven", t: "New conversation and prompt", d: "ACP session/new and session/prompt." },
+      { id: "work", lane: "agent", col: 4, s: "proven", t: "Clone, edit, run tests", d: "742-file TypeScript repository; 2.1 GB disk." },
+      { id: "push", lane: "agent", col: 5, s: "proven", t: "Commit and push the branch", d: "Through the Git credential helper." },
+      { id: "big", lane: "agent", col: 6, s: "proven", t: "Larger builds: disk is the limit", d: "6 GiB writable at every size; full .NET restore filled it.", ev: "Build report (L23): Orleans restore 2.4 GiB of NuGet packages left 219 MiB free; memory about 500 MiB. Single-project builds in the sandbox, full builds in GitHub Actions.", href: "reference/coding-sandbox-prototype/BUILD-REPORT.md" },
+      { id: "pr", lane: "github", col: 6, s: "proven", t: "Open the pull request", d: "PRs #1–#11, none merged." },
+      { id: "trace", lane: "insights", col: 3, s: "proven", t: "Traces keyed by session", d: "Each PR traced to its Foundry session." },
+    ],
+    edges: [
+      ["ctx", "acp", "proven", ""], ["acp", "new", "proven", "ACP"], ["new", "work", "proven", ""], ["work", "push", "proven", ""],
+      ["push", "pr", "proven", "push + PR"], ["acp", "trace", "proven", "telemetry"],
+    ],
+  },
+  {
+    name: "Follow",
+    summary: "The backend checks each running task, stores its events, and updates the board and voice.",
+    nodes: [
+      { id: "ctx", lane: "runner", col: 1, s: "context", from: [[5, "work"]], t: "From 5: agent working", d: "Events recorded per invocation." },
+      { id: "live", lane: "runner", col: 2, s: "assumed", t: "Runner pushes live events", d: "Files changed, tests, commits: sent to the backend as they happen.", ev: "Not built. The runner already records these events (prototype telemetry)." },
+      { id: "poll", lane: "backend", col: 2, s: "proven", t: "Sandbox heartbeat", d: "About once a minute: keeps the sandbox alive, detects a dead one.", ev: "Prototype: the driver polled; sandboxes shut down only after 2 quiet minutes. Real-time updates come from the runner, not from the heartbeat." },
+      { id: "store", lane: "data", col: 3, s: "assumed", t: "Store events", d: "Task events in Azure SQL." },
+      { id: "push", lane: "backend", col: 4, s: "assumed", t: "Push to the board with SSE", d: "Server-sent events; the browser reconnects by itself.", ev: "Decision 3 (decisions.md): SSE, no extra service. Not built.", href: DOC.sse },
+      { id: "card", lane: "board", col: 6, s: "assumed", t: "Card shows activity", d: "Current activity and last update." },
+      { id: "sum", lane: "jarvis", col: 5, s: "proven", t: "Summarize status in Danish", d: "“Hvordan går det med Codex-opgaven?”", ev: "Voice prototype V4: 4/4 Danish status answers matched the task data in every configuration.", href: VR },
+      { id: "say", lane: "voice", col: 7, s: "proven", t: "Speak the answer", d: "Ryan HD in English, Harper in Danish.", ev: "Voice prototype: replies spoken in Danish (Harper) and English (Ryan HD, British butler persona) through Voice Live.", href: VR },
+    ],
+    edges: [
+      ["ctx", "live", "docs", ""], ["live", "store", "docs", "event"], ["ctx", "poll", "proven", "heartbeat"], ["poll", "store", "docs", ""], ["store", "push", "docs", ""],
+      ["push", "card", "docs", "event"], ["store", "sum", "docs", "read"], ["sum", "say", "proven", "text"],
+    ],
+  },
+  {
+    name: "Steer",
+    summary: "Dan corrects the agent mid-task. The runner stops the current turn and continues the same conversation with the correction.",
+    nodes: [
+      { id: "ctx", lane: "board", col: 1, s: "context", from: [[6, "card"]], t: "From 6: Dan sees the work" },
+      { id: "fix", lane: "board", col: 2, s: "assumed", t: "Send a correction", d: "Board or voice, e.g. “only even numbers”." },
+      { id: "steer", lane: "backend", col: 3, s: "proven", t: "Steer request", d: "Invocations with mode = steer." },
+      { id: "cancel", lane: "runner", col: 4, s: "proven", t: "Stop the current turn", d: "ACP session/cancel; stopped within 1 second." },
+      { id: "ended", lane: "agent", col: 5, s: "proven", t: "Turn ends as cancelled" },
+      { id: "cont", lane: "runner", col: 6, s: "proven", t: "Continue with the correction", d: "session/load, then the correction as a new turn." },
+      { id: "pr", lane: "github", col: 7, s: "proven", t: "Pull request has the change", d: "PRs #7 (Copilot) and #8 (Codex)." },
+    ],
+    edges: [
+      ["ctx", "fix", "docs", ""], ["fix", "steer", "docs", ""], ["steer", "cancel", "proven", ""],
+      ["cancel", "ended", "proven", "session/cancel"], ["ended", "cont", "proven", "cancelled"], ["cont", "pr", "proven", ""],
+    ],
+  },
+  {
+    name: "Pause & resume",
+    summary: "Pause stops the turn safely. Azure shuts the idle sandbox down; resume restores its files and the conversation.",
+    nodes: [
+      { id: "ctx", lane: "board", col: 1, s: "context", from: [[6, "card"]], t: "From 6–7: task running" },
+      { id: "pause", lane: "board", col: 2, s: "assumed", t: "Pause" },
+      { id: "preq", lane: "backend", col: 2, s: "proven", t: "Pause request", d: "Invocations with mode = pause." },
+      { id: "stop", lane: "runner", col: 3, s: "proven", t: "Stop the turn → Paused", d: "ACP session/cancel." },
+      { id: "idle", lane: "foundry", col: 4, s: "proven", t: "Idle 2 minutes → sandbox shut down", d: "Files and conversation are kept." },
+      { id: "resume", lane: "board", col: 5, s: "assumed", t: "Resume" },
+      { id: "next", lane: "backend", col: 5, s: "proven", t: "Next turn on the same session" },
+      { id: "restore", lane: "foundry", col: 6, s: "proven", t: "New container restores /files", d: "Container start time changed." },
+      { id: "reload", lane: "runner", col: 7, s: "proven", t: "Reload conversation and continue", d: "Recalled an unwritten code word; PRs #9 and #11." },
+    ],
+    edges: [
+      ["ctx", "pause", "docs", ""], ["pause", "preq", "docs", ""], ["preq", "stop", "proven", ""],
+      ["stop", "idle", "proven", "no requests"], ["resume", "next", "docs", ""], ["next", "restore", "proven", ""],
+      ["restore", "reload", "proven", "session/load"],
+    ],
+  },
+  {
+    name: "Deliver",
+    summary: "GitHub Actions runs the full build and all tests on the pull request. The backend reads the result by webhook, sends failures back to the agent, applies the project policy, and closes the task and its sandbox. Dan can cancel at any time.",
+    nodes: [
+      { id: "ctx", lane: "github", col: 1, s: "context", from: [[5, "pr"], [7, "pr"]], t: "From 5–8: pull request open" },
+      { id: "checks", lane: "actions", col: 2, s: "docs", t: "Full build and all tests in GitHub Actions", d: "Runs on every push to the PR.", ev: "Decision 9 (decisions.md): build and release run in GitHub Actions, never in the sandbox.", href: DOC.ghTriggers },
+      { id: "cancel", lane: "board", col: 2, s: "assumed", t: "Cancel at any time" },
+      { id: "cinv", lane: "backend", col: 2, s: "proven", t: "Cancel the invocation", d: "Returned cancelled." },
+      { id: "cdel", lane: "foundry", col: 2, s: "proven", t: "Delete the session", d: "Nothing keeps running." },
+      { id: "verify", lane: "backend", col: 3, s: "docs", t: "Read check results by webhook", d: "check_run and workflow_run events; never the agent's own report.", ev: "GitHub Docs: webhook events. PRODUCT.md: Done follows verified GitHub results.", href: DOC.ghWebhooks },
+      { id: "fix", lane: "runner", col: 3, s: "assumed", t: "Steer the agent with the failing log", d: "The agent fixes and pushes again.", ev: "Steering is proven (flow 7); sending the CI log as the correction is not built yet." },
+      { id: "policy", lane: "backend", col: 4, s: "assumed", t: "Apply the project policy", d: "Deliver a PR, or complete without deployment." },
+      { id: "done", lane: "data", col: 5, s: "assumed", t: "Task row: Done" },
+      { id: "merge", lane: "github", col: 5, s: "docs", t: "Merge with the GitHub App", d: "The backend merges; the sandbox never does.", ev: "GitHub Docs: merge a pull request.", href: DOC.ghMerge },
+      { id: "open", lane: "github", col: 6, s: "assumed", t: "Merge conditions and Done", d: "Dan's policy per project; not a blocker.", ev: "Decision 2 (decisions.md): a policy choice set per project." },
+      { id: "card", lane: "board", col: 6, s: "assumed", t: "Card moves to Done" },
+      { id: "del", lane: "foundry", col: 6, s: "proven", t: "Delete the session", d: "Sandbox and billing stop." },
+    ],
+    edges: [
+      ["ctx", "checks", "docs", "pull_request"], ["checks", "verify", "docs", "webhook"], ["verify", "policy", "docs", "passed"],
+      ["verify", "fix", "docs", "failed + log"], ["fix", "checks", "proven", "push fix"],
+      ["policy", "done", "docs", "Deliver a PR"], ["policy", "merge", "docs", "merge when the policy allows", { off: 32 }],
+      ["merge", "done", "docs", "merged"],
+      ["done", "card", "docs", "event"], ["done", "del", "proven", "close sandbox", { off: 30 }],
+      ["cancel", "cinv", "docs", ""], ["cinv", "cdel", "proven", ""],
+    ],
+  },
+  {
+    name: "Release",
+    summary: "After the merge, GitHub Actions builds, tests and deploys. Every step reaches the board's release view through GitHub webhooks; no polling.",
+    nodes: [
+      { id: "ctx", lane: "github", col: 1, s: "context", from: [[9, "merge"]], t: "From 9: merged to main" },
+      { id: "wf", lane: "actions", col: 2, s: "docs", t: "Release workflow", d: "Build, test and package on merge or tag.", ev: "GitHub Docs: workflow triggers (push, release, tags).", href: DOC.ghTriggers },
+      { id: "deploy", lane: "actions", col: 3, s: "docs", t: "Deploy to Azure with OIDC", d: "Federated credential; no secrets stored in GitHub.", ev: "GitHub Docs: OpenID Connect to Azure.", href: DOC.ghOidc },
+      { id: "hook", lane: "backend", col: 3, s: "docs", t: "Receive GitHub webhooks", d: "workflow_run, check_run, deployment_status.", ev: "GitHub Docs: webhook events and payloads. Delivered to the backend through the GitHub App.", href: DOC.ghWebhooks },
+      { id: "rec", lane: "data", col: 4, s: "assumed", t: "Release record", d: "Commits, PRs, runs and deployments per release." },
+      { id: "view", lane: "board", col: 5, s: "assumed", t: "Release view", d: "Commits, PRs, running / passed / failed, deployed." },
+      { id: "fail", lane: "backend", col: 5, s: "assumed", t: "Failed release: Needs attention", d: "Offer a fix task with the failing log." },
+      { id: "ask", lane: "jarvis", col: 6, s: "assumed", t: "Answer release questions", d: "“Is the release out, sir?”" },
+    ],
+    edges: [
+      ["ctx", "wf", "docs", "push to main"], ["wf", "deploy", "docs", "tests passed"], ["wf", "hook", "docs", "webhook"],
+      ["deploy", "hook", "docs", "deployment_status"], ["hook", "rec", "docs", "insert"], ["rec", "view", "docs", "event"],
+      ["hook", "fail", "docs", "failed run"], ["fail", "view", "docs", "event"], ["rec", "ask", "docs", "read"],
+    ],
+  },
+  {
+    name: "Recover",
+    summary: "When a sandbox crashes mid-task, its files and conversation are lost. The backend detects it, marks the task Needs attention, and recovery restarts the task from its branch.",
+    nodes: [
+      { id: "ctx", lane: "foundry", col: 1, s: "context", t: "During 5–8" },
+      { id: "crash", lane: "foundry", col: 2, s: "proven", t: "Sandbox crashes mid-turn", d: "Files and conversation are lost; a new agent version does not restart sessions.", ev: "Restart report (L22): forced crash lost the clone and the ACP conversation.", href: "reference/coding-sandbox-prototype/RESTART-REPORT.md" },
+      { id: "detect", lane: "backend", col: 3, s: "assumed", t: "Detect a missing or stale task", d: "Sandbox heartbeat fails, or live events stop." },
+      { id: "retry", lane: "backend", col: 4, s: "assumed", t: "Dispatcher retries, then Needs attention", d: "Attempt count and next-attempt time on the task row.", ev: "Decision 3 (decisions.md): option A. Not built." },
+      { id: "flag", lane: "data", col: 4, s: "assumed", t: "Task row: Needs attention" },
+      { id: "card", lane: "board", col: 5, s: "assumed", t: "Card: Needs attention", d: "With a Resume button." },
+      { id: "resume", lane: "backend", col: 6, s: "assumed", t: "Resume on the same session" },
+      { id: "reload", lane: "runner", col: 7, s: "assumed", t: "Restart from the task branch", d: "New session, branch checked out, task and history from SQL.", ev: "Restart report: reloading after a crash failed and falsely reported completed. Not built; relies on frequent pushes." },
+    ],
+    edges: [
+      ["ctx", "crash", "docs", ""], ["crash", "detect", "proven", "HTTP 424, then 404"], ["detect", "retry", "docs", ""],
+      ["detect", "flag", "docs", ""], ["flag", "card", "docs", "event"], ["card", "resume", "docs", "Resume"],
+      ["resume", "reload", "docs", "new session"],
+    ],
+  },
+  {
+    name: "Renew logins",
+    summary: "In the background, a daily check keeps the Jarvis Codex login fresh without touching Dan's own apps.",
+    nodes: [
+      { id: "ctx", lane: "backend", col: 1, s: "context", t: "Daily, alongside 4–9", d: "Only while no Codex task runs." },
+      { id: "sched", lane: "backend", col: 2, s: "assumed", t: "Schedule renew-codex", d: "Backend timer; the command itself is proven." },
+      { id: "copilot", lane: "user", col: 2, s: "assumed", t: "Renew the Copilot token at expiry", d: "Fine-grained token; manual." },
+      { id: "check", lane: "runner", col: 3, s: "proven", t: "Check the access token", d: "Renews only when 3 days or less remain.", ev: "Prototype: reported “fresh, 9.98 days left”." },
+      { id: "mark", lane: "runner", col: 4, s: "proven", t: "Mark the private copy expired", d: "Then codex exec in a throwaway session." },
+      { id: "renew", lane: "agent", col: 5, s: "proven", t: "Codex renews through its own client", d: "New 10-day access token.", ev: "Prototype: forced renewal at 11:43 UTC. Codex source confirms the trigger.", href: DOC.codex },
+      { id: "back", lane: "vault", col: 6, s: "proven", t: "Write back if newer", d: "Only stored copy; Dan's own login untouched." },
+      { id: "after", lane: "runner", col: 6, s: "assumed", t: "Write back after tasks", d: "When Codex renewed during a task; unit-tested only." },
+      { id: "fail", lane: "user", col: 7, s: "assumed", t: "If renewal fails: sign in again", d: "codex login, then deploy with -ReseedCodexLogin." },
+    ],
+    edges: [
+      ["ctx", "sched", "docs", ""], ["sched", "check", "proven", "renew-codex"], ["check", "mark", "proven", "3 days or less"],
+      ["mark", "renew", "proven", "codex exec"], ["renew", "back", "proven", "renewed login"], ["after", "back", "proven", "same write-back as renewal"],
+      ["back", "fail", "docs", "notify Dan if it fails"],
+    ],
+  },
+  {
+    name: "Operate",
+    summary: "Scripts set up, check and remove the whole environment; cost stays visible throughout.",
+    nodes: [
+      { id: "ctx", lane: "ops", col: 1, s: "context", t: "Around all flows", d: "Set up, watch and remove the environment." },
+      { id: "deploy", lane: "ops", col: 2, s: "proven", t: "deploy.ps1", d: "New account and project names; never reused." },
+      { id: "seed", lane: "vault", col: 3, s: "proven", t: "Seed the Codex login once", d: "Local seed file deleted afterwards." },
+      { id: "version", lane: "foundry", col: 3, s: "proven", t: "Agent version active", d: "1 vCPU / 2 GiB, 120-second idle timeout." },
+      { id: "check", lane: "ops", col: 4, s: "proven", t: "Key Vault check", d: "Then deletes its own session." },
+      { id: "cost", lane: "insights", col: 5, s: "proven", t: "Cost and budget", d: "≈0.89 DKK per sandbox-hour; 300 DKK budget." },
+      { id: "teardown", lane: "ops", col: 6, s: "proven", t: "teardown.ps1", d: "Deletes the resource group; purges Key Vault and Foundry." },
+      { id: "pin", lane: "ops", col: 7, s: "assumed", t: "Pin CLI versions in the image", d: "Learning L13; not done yet." },
+    ],
+    edges: [
+      ["ctx", "deploy", "proven", ""], ["deploy", "version", "proven", ""], ["deploy", "seed", "proven", ""],
+      ["version", "check", "proven", ""], ["check", "cost", "proven", "monitor"], ["cost", "teardown", "proven", "when done"],
+    ],
+  },
+];
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+function buildLegend() {
+  const legend = el("div", "legend");
+  legend.setAttribute("role", "group"); legend.setAttribute("aria-label", "Legend");
+  const item = (sample, title, def) => {
+    const entry = el("div", "legend-item");
+    const label = el("span"); label.append(el("b", null, title), " ", el("span", "def", def));
+    entry.append(sample, label);
+    return entry;
+  };
+  const row = (title, entries) => {
+    const r = el("div", "legend-row");
+    r.setAttribute("role", "group"); r.setAttribute("aria-label", title);
+    const items = el("div", "legend-items"); items.append(...entries);
+    r.append(el("span", "legend-title", title), items);
+    legend.append(r);
+  };
+  row("Boxes", [
+    ...[...RISK_KEYS, "context"].map(key => {
+      const sw = el("span", `swatch ${key}`);
+      if (key === "context") sw.style.border = "1px dashed #9aa1ab";
+      return item(sw, STATUS[key].label, STATUS[key].def);
+    }),
+    item(el("span", "tab-flag"), "Red tab outline", "tab has unknowns"),
+  ]);
+  row("Connections", RISK_KEYS.map(key => item(lineSample(key), STATUS[key].label, STATUS[key].lineDef)));
+  return legend;
+}
+
+function goTo(n, nodeId) {
+  select(n, true);
+  const box = document.querySelector(`#panel-${n} [data-node="${nodeId}"]`);
+  box.click(); box.focus({ preventScroll: true });
+  box.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function buildStats() {
+  const stats = document.getElementById("stats");
+  const nodes = FLOWS.flatMap(flow => flow.nodes).filter(node => RISK_KEYS.includes(node.s));
+  const edges = FLOWS.flatMap((flow, i) => flow.edges.map(e => ({ n: i + 1, flow, e })));
+  const share = (part, all) => `${Math.round(part / all * 100)}%`;
+  for (const key of RISK_KEYS) {
+    const boxes = nodes.filter(node => node.s === key);
+    const lines = edges.filter(x => x.e[2] === key);
+    const card = el("div", `stat ${key}`);
+    card.setAttribute("role", "listitem");
+    const metric = (value, [one, many], all) => {
+      const m = el("span", "metric");
+      m.append(el("span", "value", String(value)), el("span", "unit", `${value === 1 ? one : many} · ${share(value, all)}`));
+      return m;
+    };
+    const metrics = el("div", "metrics");
+    metrics.append(metric(boxes.length, ["box", "boxes"], nodes.length), metric(lines.length, ["connection", "connections"], edges.length));
+    card.append(el("span", "label", STATUS[key].label), metrics);
+    if (key === "unknown" && (boxes.length || lines.length)) {
+      const where = el("div", "where");
+      where.append(el("span", "where-title", "Where:"));
+      for (const node of boxes) {
+        const link = el("button", "where-link", node.ref);
+        link.type = "button"; link.title = node.t;
+        link.setAttribute("aria-label", `${node.ref} ${node.t}`);
+        link.addEventListener("click", () => goTo(node.tab, node.id));
+        where.append(link);
+      }
+      for (const { n, flow, e } of lines) {
+        const from = flow.nodes.find(x => x.id === e[0]), to = flow.nodes.find(x => x.id === e[1]);
+        const link = el("button", "where-link", `${from.ref}→${to.ref}`);
+        link.type = "button"; link.title = `${from.t} → ${to.t}`;
+        link.addEventListener("click", () => goTo(n, from.id));
+        where.append(link);
+      }
+      card.append(where);
+    }
+    stats.append(card);
+  }
+}
+
+function lineSample(key) {
+  const s = STATUS[key];
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "30"); svg.setAttribute("height", "10"); svg.setAttribute("aria-hidden", "true");
+  const line = document.createElementNS(SVG_NS, "line");
+  line.setAttribute("x1", "1"); line.setAttribute("y1", "5"); line.setAttribute("x2", "29"); line.setAttribute("y2", "5");
+  line.setAttribute("style", `stroke: var(--${key}-line); stroke-width: ${s.width}; ${s.dash ? `stroke-dasharray: ${s.dash};` : ""} stroke-linecap: round;`);
+  svg.append(line);
+  return svg;
+}
+
+const byPosition = (a, b) => a.col - b.col || LANE_ORDER.indexOf(a.lane) - LANE_ORDER.indexOf(b.lane);
+const OV = { head: 120, col: 100, gap: 18, offScale: 0.5 };
+let current = 0;
+let zoomMode = 1;
+
+function assignRefs() {
+  FLOWS.forEach((flow, i) => {
+    const n = i + 1;
+    flow.ordered = [...flow.nodes].sort(byPosition);
+    flow.ordered.forEach((node, k) => { node.ref = `${n}.${k + 1}`; node.tab = n; });
+  });
+}
+
+function buildOverview() {
+  const nodes = [], edges = [], segments = [];
+  let offset = 0;
+  FLOWS.forEach((flow, i) => {
+    const n = i + 1;
+    const key = id => `${n}:${id}`;
+    const ctx = n > 1 ? flow.nodes.find(x => x.s === "context") : null;
+    const kept = flow.nodes.filter(x => x !== ctx);
+    const first = Math.min(...kept.map(x => x.col)), last = Math.max(...kept.map(x => x.col));
+    for (const x of kept) nodes.push({ ...x, id: key(x.id), srcId: x.id, col: offset + x.col - first + 1 });
+    for (const [from, to, s, label, opt] of flow.edges) {
+      if (ctx && from === ctx.id) {
+        for (const [fn, fid] of ctx.from || []) edges.push([`${fn}:${fid}`, key(to), s, label, { gutter: true }]);
+      } else edges.push([key(from), key(to), s, label, opt]);
+    }
+    segments.push({
+      n, name: flow.name, start: offset + 1, end: offset + last - first + 1,
+      note: ctx && !ctx.from ? ctx.t : "", ctx: ctx ? ctx.t : "",
+      unknown: kept.some(x => x.s === "unknown") || flow.edges.some(e => e[2] === "unknown"),
+    });
+    offset += last - first + 1;
+  });
+  return {
+    name: "Complete flow", overview: true, offScale: OV.offScale, nodes, edges, segments, cols: offset,
+    ordered: [...nodes].sort(byPosition),
+    summary: "All thirteen flows in one swimlane, in tab order. Arrows between segments show where each flow picks up; 11–13 run alongside. Select a box for details, or a segment title to open its tab.",
+  };
+}
+
+function buildTabs() {
+  const tabs = document.getElementById("tabs");
+  const panels = document.getElementById("panels");
+  VIEWS.forEach((view, n) => {
+    const tab = el("button", "tab");
+    tab.type = "button"; tab.id = `tab-${n}`; tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-controls", `panel-${n}`); tab.setAttribute("aria-selected", "false"); tab.tabIndex = -1;
+    tab.append(el("span", "num", String(n)), view.name);
+    const unknownBoxes = view.nodes.filter(node => node.s === "unknown").length;
+    const unknownLines = view.edges.filter(e => e[2] === "unknown").length;
+    if (unknownBoxes + unknownLines) {
+      tab.classList.add("has-unknown");
+      const parts = [];
+      if (unknownBoxes) parts.push(`${unknownBoxes} unknown ${unknownBoxes === 1 ? "box" : "boxes"}`);
+      if (unknownLines) parts.push(`${unknownLines} unknown ${unknownLines === 1 ? "connection" : "connections"}`);
+      tab.title = parts.join(", ");
+      tab.append(el("span", "sr-only", ` (${tab.title})`));
+    }
+    tab.addEventListener("click", () => select(n, true));
+    tab.addEventListener("keydown", onTabKey);
+    tabs.append(tab);
+    panels.append(buildPanel(view, n));
+  });
+}
+
+function onTabKey(e) {
+  const at = Number(e.currentTarget.id.split("-")[1]);
+  const len = VIEWS.length;
+  let next = null;
+  if (e.key === "ArrowRight") next = (at + 1) % len;
+  else if (e.key === "ArrowLeft") next = (at + len - 1) % len;
+  else if (e.key === "Home") next = 0;
+  else if (e.key === "End") next = len - 1;
+  if (next !== null) { e.preventDefault(); select(next, true); document.getElementById(`tab-${next}`).focus(); }
+}
+
+function buildZoomBar() {
+  const bar = el("div", "zoom");
+  bar.setAttribute("role", "group"); bar.setAttribute("aria-label", "Zoom");
+  bar.append(el("span", "zoom-label", "Zoom"));
+  for (const [label, value] of [["Whole flow", "fit"], ["50%", 0.5], ["75%", 0.75], ["100%", 1]]) {
+    const b = el("button", null, label);
+    b.type = "button"; b.dataset.zoom = String(value); b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", () => setZoom(value));
+    bar.append(b);
+  }
+  return bar;
+}
+
+function setZoom(mode) {
+  zoomMode = mode;
+  const panel = document.getElementById("panel-0");
+  const scroll = panel.querySelector(".diagram-scroll");
+  const diagram = panel.querySelector(".diagram");
+  const natural = OV.head + VIEWS[0].cols * OV.col;
+  const z = mode === "fit" ? Math.min(1, Math.max(0.1, (scroll.clientWidth - 2) / natural)) : mode;
+  diagram.style.zoom = String(z);
+  panel.querySelectorAll(".zoom button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.zoom === String(mode))));
+  if (current === 0) requestAnimationFrame(() => drawEdges(0));
+}
+
+function buildPanel(view, n) {
+  const ov = Boolean(view.overview);
+  const panel = el("section", ov ? "panel overview" : "panel");
+  panel.id = `panel-${n}`; panel.setAttribute("role", "tabpanel"); panel.setAttribute("aria-labelledby", `tab-${n}`); panel.hidden = true;
+  panel.append(el("h2", null, `${n} · ${view.name}`), el("p", "summary", view.summary));
+
+  if (ov) panel.append(buildZoomBar());
+  else {
+    const counts = el("div", "counts");
+    const countGroup = (title, items) => {
+      const g = el("p", "count-group");
+      g.append(el("span", "count-title", title));
+      for (const key of RISK_KEYS) g.append(el("span", `chip ${key}`, `${STATUS[key].short} ${items.filter(x => x === key).length}`));
+      counts.append(g);
+    };
+    countGroup("Boxes", view.nodes.map(node => node.s));
+    countGroup("Connections", view.edges.map(e => e[2]));
+    panel.append(counts);
+  }
+
+  const lanes = LANE_ORDER.filter(lane => view.nodes.some(node => node.lane === lane));
+  const cols = Math.max(...view.nodes.map(node => node.col));
+  const top = ov ? 1 : 0;
+  const scroll = el("div", "diagram-scroll");
+  const diagram = el("div", "diagram");
+  if (ov) {
+    diagram.style.gridTemplateColumns = `${OV.head}px repeat(${cols}, ${OV.col}px)`;
+    diagram.style.gridTemplateRows = `32px repeat(${lanes.length}, minmax(54px, auto))`;
+  } else {
+    diagram.style.gridTemplateColumns = `156px repeat(${cols}, minmax(172px, 1fr))`;
+    diagram.style.gridTemplateRows = `repeat(${lanes.length}, minmax(84px, auto))`;
+  }
+  diagram.setAttribute("role", "group");
+  diagram.setAttribute("aria-label", `${view.name} swimlane diagram`);
+
+  lanes.forEach((lane, row) => {
+    const parity = row % 2 ? "odd" : "even";
+    const bg = el("div", `lane-bg ${parity}`); bg.style.gridRow = String(row + 1 + top); bg.dataset.lane = lane;
+    const head = el("div", `lane-head ${parity}`); head.style.gridRow = String(row + 1 + top);
+    head.append(el("span", "lane-name", LANES[lane].name), el("span", "lane-tech", LANES[lane].tech));
+    diagram.append(bg, head);
+  });
+
+  if (ov) {
+    const corner = el("div", "lane-head corner");
+    corner.style.gridRow = "1";
+    corner.append(el("span", "lane-name", "Flow"));
+    diagram.append(corner);
+    for (const seg of view.segments) {
+      const head = el("button", `seg-head${seg.unknown ? " has-unknown" : ""}`);
+      head.type = "button";
+      head.style.gridRow = "1"; head.style.gridColumn = `${seg.start + 1} / ${seg.end + 2}`;
+      head.append(el("span", "num", String(seg.n)), el("span", "seg-name", seg.name));
+      if (seg.note) head.append(el("span", "seg-note", seg.note));
+      head.title = `Open tab ${seg.n}${seg.ctx ? ` (${seg.ctx})` : ""}${seg.unknown ? " · has unknowns" : ""}`;
+      head.addEventListener("click", () => select(seg.n, true));
+      diagram.append(head);
+      if (seg.n > 1) {
+        const line = el("div", "seg-line");
+        line.style.gridRow = "1 / -1"; line.style.gridColumn = String(seg.start + 1);
+        diagram.append(line);
+      }
+    }
+  }
+
+  const details = el("div", "details");
+  details.setAttribute("aria-live", "polite");
+  details.append(el("p", "hint", "Select a box to see its evidence and connections."));
+
+  for (const node of view.ordered) {
+    const box = el("button", `node ${node.s}`);
+    box.type = "button";
+    box.dataset.node = node.id;
+    box.style.gridRow = String(lanes.indexOf(node.lane) + 1 + top);
+    box.style.gridColumn = String(node.col + 1);
+    const badge = el("span", "badge");
+    badge.append(el("span", "ref", node.ref), node.badge || STATUS[node.s].short);
+    box.append(badge, el("span", "title", node.t));
+    if (node.d) box.append(el("span", "detail", node.d));
+    box.setAttribute("aria-label", `${node.ref} ${node.t}. ${STATUS[node.s].label}. ${LANES[node.lane].name}.`);
+    box.addEventListener("click", () => showDetails(view, node, panel, details));
+    diagram.append(box);
+  }
+
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "edges"); svg.setAttribute("aria-hidden", "true");
+  diagram.append(svg);
+  scroll.append(diagram);
+  panel.append(scroll, buildLegend(), details);
+
+  const pager = el("div", "pager");
+  const last = VIEWS.length - 1;
+  const prev = el("button", null, n > 0 ? `← ${n - 1} ${VIEWS[n - 1].name}` : "");
+  prev.type = "button"; prev.hidden = n === 0; prev.addEventListener("click", () => select(n - 1, true));
+  const next = el("button", null, n < last ? `${n + 1} ${VIEWS[n + 1].name} →` : "");
+  next.type = "button"; next.hidden = n === last; next.addEventListener("click", () => select(n + 1, true));
+  pager.append(prev, next);
+  panel.append(pager);
+  return panel;
+}
+
+function showDetails(view, node, panel, details) {
+  panel.querySelectorAll(".node.selected").forEach(b => b.classList.remove("selected"));
+  panel.querySelector(`[data-node="${node.id}"]`).classList.add("selected");
+  const s = STATUS[node.s];
+  details.replaceChildren();
+  details.append(el("h3", null, `${node.ref} ${node.t}`));
+  const meta = el("p"); meta.append(el("span", `chip ${node.s}`, s.label), ` ${LANES[node.lane].name} · ${LANES[node.lane].tech}`);
+  details.append(meta);
+  if (node.d) details.append(el("p", null, node.d));
+  const ev = el("p"); ev.append(el("b", null, "Evidence: "), node.ev || s.evidence);
+  const href = node.href || s.href;
+  if (href) { ev.append(" "); const a = el("a", null, "Open source"); a.href = href; a.target = "_blank"; a.rel = "noopener"; ev.append(a); }
+  details.append(ev);
+  const title = id => { const x = view.nodes.find(y => y.id === id); return `${x.ref} ${x.t}`; };
+  const describe = (e, other) => `${title(other)}${e[3] ? ` (${e[3]})` : ""} — ${STATUS[e[2]].short}`;
+  const incoming = view.edges.filter(e => e[1] === node.id).map(e => describe(e, e[0]));
+  const outgoing = view.edges.filter(e => e[0] === node.id).map(e => describe(e, e[1]));
+  if (incoming.length) { const p = el("p"); p.append(el("b", null, "Comes from: "), incoming.join("; ")); details.append(p); }
+  if (outgoing.length) { const p = el("p"); p.append(el("b", null, "Leads to: "), outgoing.join("; ")); details.append(p); }
+  if (view.overview) {
+    const open = el("button", "open-tab", `Open in tab ${node.tab} · ${FLOWS[node.tab - 1].name}`);
+    open.type = "button";
+    open.addEventListener("click", () => goTo(node.tab, node.srcId));
+    details.append(open);
+  }
+}
+
+function route(a, b, opt = {}) {
+  const off = opt.off ?? 16;
+  const acx = a.x + a.w / 2, acy = a.y + a.h / 2, bcx = b.x + b.w / 2, bcy = b.y + b.h / 2;
+  if (b.x >= a.x + a.w - 2) {
+    const x1 = a.x + a.w, x2 = b.x;
+    if (Math.abs(acy - bcy) < 1) return `M${x1} ${acy} H${x2}`;
+    const xm = Math.max(x1 + 8, x2 - off);
+    return `M${x1} ${acy} H${xm} V${bcy} H${x2}`;
+  }
+  if (b.x + b.w <= a.x + 2) {
+    const x1 = a.x, x2 = b.x + b.w;
+    if (Math.abs(acy - bcy) < 1) return `M${x1} ${acy} H${x2}`;
+    const xm = Math.min(x1 - 8, x2 + off);
+    return `M${x1} ${acy} H${xm} V${bcy} H${x2}`;
+  }
+  const down = bcy > acy;
+  const y1 = down ? a.y + a.h : a.y, y2 = down ? b.y : b.y + b.h;
+  if (Math.abs(acx - bcx) < 1) return `M${acx} ${y1} V${y2}`;
+  const ym = (y1 + y2) / 2;
+  return `M${acx} ${y1} V${ym} H${bcx} V${y2}`;
+}
+
+// Long links between overview segments run in the column gaps and along the target lane's top edge, so they never pass behind boxes.
+function routeGutter(a, b, laneTop, gap) {
+  const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
+  const xa = x1 + gap / 2, xb = x2 - gap / 2;
+  if (xb - xa < 4) return Math.abs(y1 - y2) < 1 ? `M${x1} ${y1} H${x2}` : `M${x1} ${y1} H${xa} V${y2} H${x2}`;
+  const gy = laneTop + 3;
+  return `M${x1} ${y1} H${xa} V${gy} H${xb} V${y2} H${x2}`;
+}
+
+function drawEdges(n) {
+  const view = VIEWS[n];
+  const panel = document.getElementById(`panel-${n}`);
+  const diagram = panel.querySelector(".diagram");
+  const svg = diagram.querySelector("svg.edges");
+  const z = parseFloat(diagram.style.zoom) || 1;
+  const base = diagram.getBoundingClientRect();
+  const rel = elm => { const r = elm.getBoundingClientRect(); return { x: (r.left - base.left) / z, y: (r.top - base.top) / z, w: r.width / z, h: r.height / z }; };
+  svg.setAttribute("width", String(base.width / z));
+  svg.setAttribute("height", String(base.height / z));
+  svg.replaceChildren();
+  const defs = document.createElementNS(SVG_NS, "defs");
+  for (const key of Object.keys(STATUS)) {
+    const marker = document.createElementNS(SVG_NS, "marker");
+    marker.setAttribute("id", `arrow-${n}-${key}`);
+    marker.setAttribute("viewBox", "0 0 10 10"); marker.setAttribute("refX", "9"); marker.setAttribute("refY", "5");
+    marker.setAttribute("markerUnits", "userSpaceOnUse");
+    marker.setAttribute("markerWidth", "10"); marker.setAttribute("markerHeight", "10"); marker.setAttribute("orient", "auto");
+    const tip = document.createElementNS(SVG_NS, "path");
+    tip.setAttribute("d", "M0,0 L10,5 L0,10 z"); tip.setAttribute("style", `fill: var(--${key}-line)`);
+    marker.append(tip); defs.append(marker);
+  }
+  svg.append(defs);
+  for (const [from, to, status, , opt = {}] of view.edges) {
+    const a = diagram.querySelector(`[data-node="${from}"]`);
+    const b = diagram.querySelector(`[data-node="${to}"]`);
+    if (!a || !b) continue;
+    let d;
+    if (opt.gutter) {
+      const lane = view.nodes.find(x => x.id === to).lane;
+      d = routeGutter(rel(a), rel(b), rel(diagram.querySelector(`.lane-bg[data-lane="${lane}"]`)).y, OV.gap);
+    } else {
+      d = route(rel(a), rel(b), { off: (opt.off ?? 16) * (view.offScale ?? 1) });
+    }
+    const s = STATUS[status];
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", d);
+    path.setAttribute("fill", "none");
+    path.setAttribute("style", `stroke: var(--${status}-line); stroke-width: ${s.width}; ${s.dash ? `stroke-dasharray: ${s.dash};` : ""} stroke-linecap: round; stroke-linejoin: round;`);
+    path.setAttribute("marker-end", `url(#arrow-${n}-${status})`);
+    svg.append(path);
+  }
+}
+
+function select(n, updateHash) {
+  current = n;
+  VIEWS.forEach((_, k) => {
+    const tab = document.getElementById(`tab-${k}`);
+    tab.setAttribute("aria-selected", String(k === n));
+    tab.tabIndex = k === n ? 0 : -1;
+    document.getElementById(`panel-${k}`).hidden = k !== n;
+  });
+  document.getElementById(`tab-${n}`).scrollIntoView({ block: "nearest", inline: "nearest" });
+  if (updateHash) history.replaceState(null, "", `#flow-${n}`);
+  if (n === 0 && zoomMode === "fit") requestAnimationFrame(() => setZoom("fit"));
+  else requestAnimationFrame(() => drawEdges(n));
+}
+
+function redraw() {
+  if (current === 0 && zoomMode === "fit") setZoom("fit");
+  else drawEdges(current);
+}
+
+assignRefs();
+const VIEWS = [buildOverview(), ...FLOWS];
+buildTabs();
+buildStats();
+setZoom(1);
+const fromHash = Number((location.hash.match(/flow-(\d+)/) || [])[1]);
+select(Number.isInteger(fromHash) && fromHash >= 0 && fromHash < VIEWS.length ? fromHash : 0, false);
+let resizeTimer;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(redraw, 80); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
+</script>
+</body>
+</html>

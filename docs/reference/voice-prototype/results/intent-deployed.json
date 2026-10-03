@@ -1,0 +1,1516 @@
+{
+  "model": "gpt-5.6-luna",
+  "summary": {
+    "intent_passed": 20,
+    "intent_total": 20,
+    "status_passed": 4,
+    "status_total": 4,
+    "median_text_to_first_audio_ms": 3699,
+    "p90_text_to_first_audio_ms": 4514,
+    "median_cold_start_ms": 5018,
+    "median_connect_ms": 2481
+  },
+  "cases": [
+    {
+      "id": "c01",
+      "text": "Start en Codex-opgave på Jarvis: tilføj dark mode til indstillingssiden.",
+      "passed": true,
+      "note": "create_task matched",
+      "calls": [
+        {
+          "name": "create_task",
+          "arguments": {
+            "project": "Jarvis",
+            "agent": "codex",
+            "text": "Tilføj dark mode til indstillingssiden. Implementér funktionaliteten, opdatér relevant UI og styling, og tilføj eller kør passende tests."
+          }
+        }
+      ],
+      "answer": "Jeg har startet en Codex-opgave på Jarvis om at tilføje dark mode til indstillingssiden.",
+      "connect_ms": 2891,
+      "cold_start_to_first_audio_ms": 5207,
+      "text_to_first_audio_ms": 4946,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 3073,
+          "first_text_ms": null,
+          "input_tokens": 733,
+          "cached_tokens": 0,
+          "output_tokens": 62
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 934,
+          "first_text_ms": 714,
+          "input_tokens": 885,
+          "cached_tokens": 0,
+          "output_tokens": 28
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c02",
+      "text": "Lad Copilot rette stavefejlene i README på Daily.",
+      "passed": true,
+      "note": "create_task matched",
+      "calls": [
+        {
+          "name": "create_task",
+          "arguments": {
+            "project": "Daily",
+            "agent": "copilot",
+            "text": "Ret stavefejlene i README-filen på Daily-projektet. Lav en pull request med ændringerne."
+          }
+        }
+      ],
+      "answer": "Copilot er sat i gang med at rette stavefejlene i README på Daily og lave en pull request.",
+      "connect_ms": 2539,
+      "cold_start_to_first_audio_ms": 5708,
+      "text_to_first_audio_ms": 3838,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1591,
+          "first_text_ms": null,
+          "input_tokens": 726,
+          "cached_tokens": 0,
+          "output_tokens": 50
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1811,
+          "first_text_ms": 1517,
+          "input_tokens": 854,
+          "cached_tokens": 0,
+          "output_tokens": 27
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c03",
+      "text": "Opret en opgave på Banking om at opdatere afhængighederne.",
+      "passed": true,
+      "note": "create_task matched",
+      "calls": [
+        {
+          "name": "create_task",
+          "arguments": {
+            "project": "Banking",
+            "agent": "codex",
+            "text": "Opdater projektets afhængigheder til passende stabile versioner, håndter eventuelle breaking changes, og kør relevante tests."
+          }
+        }
+      ],
+      "answer": "Jeg har oprettet opgaven på Banking med Codex.",
+      "connect_ms": 2371,
+      "cold_start_to_first_audio_ms": 5021,
+      "text_to_first_audio_ms": 3194,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1768,
+          "first_text_ms": null,
+          "input_tokens": 729,
+          "cached_tokens": 0,
+          "output_tokens": 53
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 984,
+          "first_text_ms": 809,
+          "input_tokens": 863,
+          "cached_tokens": 0,
+          "output_tokens": 17
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c04",
+      "text": "Hvilke projekter har jeg?",
+      "passed": true,
+      "note": "list_projects matched",
+      "calls": [
+        {
+          "name": "list_projects",
+          "arguments": {}
+        }
+      ],
+      "answer": "Du har projekterne Jarvis, Daily og Banking.",
+      "connect_ms": 2417,
+      "cold_start_to_first_audio_ms": 5112,
+      "text_to_first_audio_ms": 3165,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1681,
+          "first_text_ms": null,
+          "input_tokens": 720,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 962,
+          "first_text_ms": 761,
+          "input_tokens": 760,
+          "cached_tokens": 0,
+          "output_tokens": 15
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c05",
+      "text": "Hvad kører lige nu?",
+      "passed": true,
+      "note": "list_tasks matched",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        }
+      ],
+      "answer": "Lige nu kører T-101 i Jarvis, hvor Codex tester dark mode-ændringerne. T-102 er sat på pause, og T-103 er færdig.",
+      "connect_ms": 2401,
+      "cold_start_to_first_audio_ms": 5045,
+      "text_to_first_audio_ms": 2903,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1603,
+          "first_text_ms": null,
+          "input_tokens": 719,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1059,
+          "first_text_ms": 781,
+          "input_tokens": 919,
+          "cached_tokens": 0,
+          "output_tokens": 44
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c06",
+      "text": "Sæt Jarvis-opgaven på pause.",
+      "passed": true,
+      "note": "pause_task matched",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "answer": "Jarvis-opgaven er sat på pause.",
+      "connect_ms": 2548,
+      "cold_start_to_first_audio_ms": 4823,
+      "text_to_first_audio_ms": 3561,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1378,
+          "first_text_ms": null,
+          "input_tokens": 721,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 917,
+          "first_text_ms": null,
+          "input_tokens": 921,
+          "cached_tokens": 0,
+          "output_tokens": 21
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 3,
+          "total_ms": 751,
+          "first_text_ms": 617,
+          "input_tokens": 1013,
+          "cached_tokens": 0,
+          "output_tokens": 13
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c07",
+      "text": "Fortsæt opgaven på Daily.",
+      "passed": true,
+      "note": "resume_task matched",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "resume_task",
+          "arguments": {
+            "task_id": "T-102"
+          }
+        }
+      ],
+      "answer": "Jeg har genoptaget opgaven på Daily.",
+      "connect_ms": 2490,
+      "cold_start_to_first_audio_ms": 4837,
+      "text_to_first_audio_ms": 3852,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1732,
+          "first_text_ms": null,
+          "input_tokens": 720,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 950,
+          "first_text_ms": null,
+          "input_tokens": 920,
+          "cached_tokens": 0,
+          "output_tokens": 21
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 3,
+          "total_ms": 749,
+          "first_text_ms": 586,
+          "input_tokens": 1018,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c08",
+      "text": "Annuller Codex-opgaven på Jarvis.",
+      "passed": true,
+      "note": "cancel_task matched",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "cancel_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "answer": "Codex-opgaven på Jarvis er annulleret.",
+      "connect_ms": 2575,
+      "cold_start_to_first_audio_ms": 4641,
+      "text_to_first_audio_ms": 3992,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1406,
+          "first_text_ms": null,
+          "input_tokens": 723,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1246,
+          "first_text_ms": null,
+          "input_tokens": 923,
+          "cached_tokens": 0,
+          "output_tokens": 21
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 3,
+          "total_ms": 843,
+          "first_text_ms": 606,
+          "input_tokens": 1017,
+          "cached_tokens": 0,
+          "output_tokens": 16
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c09",
+      "text": "Sig til Codex på Jarvis, at den kun må ændre CSS.",
+      "passed": true,
+      "note": "steer_task matched",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke JavaScript, HTML, konfiguration eller andre filer."
+          }
+        }
+      ],
+      "answer": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "connect_ms": 2473,
+      "cold_start_to_first_audio_ms": 4900,
+      "text_to_first_audio_ms": 4344,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1426,
+          "first_text_ms": null,
+          "input_tokens": 728,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1451,
+          "first_text_ms": null,
+          "input_tokens": 928,
+          "cached_tokens": 0,
+          "output_tokens": 46
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 3,
+          "total_ms": 1006,
+          "first_text_ms": 756,
+          "input_tokens": 1062,
+          "cached_tokens": 0,
+          "output_tokens": 22
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c10",
+      "text": "Hvad er status på opgave hundrede og tre?",
+      "passed": true,
+      "note": "task_status matched",
+      "calls": [
+        {
+          "name": "task_status",
+          "arguments": {
+            "task_id": "T-103"
+          }
+        }
+      ],
+      "answer": "Opgave 103 er færdig. Afhængighederne er opdateret, alle tests består, og pull request 42 er klar.",
+      "connect_ms": 2760,
+      "cold_start_to_first_audio_ms": 4795,
+      "text_to_first_audio_ms": 4865,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 2167,
+          "first_text_ms": null,
+          "input_tokens": 724,
+          "cached_tokens": 0,
+          "output_tokens": 21
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 2512,
+          "first_text_ms": 2166,
+          "input_tokens": 827,
+          "cached_tokens": 0,
+          "output_tokens": 36
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c11",
+      "text": "Start en ny opgave på Daily med Copilot: tilføj eksport til CSV.",
+      "passed": true,
+      "note": "create_task matched",
+      "calls": [
+        {
+          "name": "create_task",
+          "arguments": {
+            "project": "Daily",
+            "agent": "copilot",
+            "text": "Tilføj eksport til CSV."
+          }
+        }
+      ],
+      "answer": "Jeg har startet en ny opgave på Daily med Copilot om at tilføje CSV-eksport.",
+      "connect_ms": 2460,
+      "cold_start_to_first_audio_ms": 6048,
+      "text_to_first_audio_ms": 3085,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1685,
+          "first_text_ms": null,
+          "input_tokens": 730,
+          "cached_tokens": 0,
+          "output_tokens": 33
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1030,
+          "first_text_ms": 771,
+          "input_tokens": 824,
+          "cached_tokens": 0,
+          "output_tokens": 26
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c12",
+      "text": "Giv Copilot besked om også at skrive tests.",
+      "passed": true,
+      "note": "steer_task matched",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også relevante tests for ændringen, og kør dem, så login-fejlen er dækket."
+          }
+        }
+      ],
+      "answer": "Jeg har bedt Copilot om også at skrive og køre relevante tests for login-fejlen.",
+      "connect_ms": 2410,
+      "cold_start_to_first_audio_ms": 4826,
+      "text_to_first_audio_ms": 4514,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1459,
+          "first_text_ms": null,
+          "input_tokens": 724,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1424,
+          "first_text_ms": null,
+          "input_tokens": 924,
+          "cached_tokens": 0,
+          "output_tokens": 48
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 3,
+          "total_ms": 1138,
+          "first_text_ms": 800,
+          "input_tokens": 1060,
+          "cached_tokens": 0,
+          "output_tokens": 25
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c13",
+      "text": "Hvor langt er Copilot nået?",
+      "passed": true,
+      "note": "list_tasks matched",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        }
+      ],
+      "answer": "Copilot arbejder på login-fejlen i Daily, men opgaven er sat på pause efter at have fundet fejlen i sessionshåndteringen.",
+      "connect_ms": 2668,
+      "cold_start_to_first_audio_ms": 5015,
+      "text_to_first_audio_ms": 3490,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1485,
+          "first_text_ms": null,
+          "input_tokens": 720,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1523,
+          "first_text_ms": 982,
+          "input_tokens": 920,
+          "cached_tokens": 0,
+          "output_tokens": 36
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c14",
+      "text": "Stop Jarvis-opgaven et øjeblik.",
+      "passed": true,
+      "note": "pause_task matched",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "answer": "Jarvis-opgaven er sat på pause.",
+      "connect_ms": 2508,
+      "cold_start_to_first_audio_ms": 5528,
+      "text_to_first_audio_ms": 5624,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1711,
+          "first_text_ms": null,
+          "input_tokens": 722,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 2215,
+          "first_text_ms": null,
+          "input_tokens": 922,
+          "cached_tokens": 0,
+          "output_tokens": 21
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 3,
+          "total_ms": 1153,
+          "first_text_ms": 932,
+          "input_tokens": 1014,
+          "cached_tokens": 0,
+          "output_tokens": 13
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c15",
+      "text": "Lav en pull request, der fjerner den gamle login-side i Jarvis, og brug Copilot.",
+      "passed": true,
+      "note": "create_task matched",
+      "calls": [
+        {
+          "name": "create_task",
+          "arguments": {
+            "project": "Jarvis",
+            "agent": "copilot",
+            "text": "Fjern den gamle login-side i Jarvis, og lever ændringen som en pull request."
+          }
+        }
+      ],
+      "answer": "Jeg har startet Copilot på opgaven med at fjerne den gamle login-side i Jarvis og lave en pull request.",
+      "connect_ms": 2448,
+      "cold_start_to_first_audio_ms": 4765,
+      "text_to_first_audio_ms": 4289,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1858,
+          "first_text_ms": null,
+          "input_tokens": 733,
+          "cached_tokens": 0,
+          "output_tokens": 46
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1915,
+          "first_text_ms": 1095,
+          "input_tokens": 853,
+          "cached_tokens": 0,
+          "output_tokens": 29
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c16",
+      "text": "Codex skal hellere bruge Tailwind i dark mode-opgaven.",
+      "passed": true,
+      "note": "steer_task matched",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven, og tilpas implementeringen derefter."
+          }
+        }
+      ],
+      "answer": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "connect_ms": 2551,
+      "cold_start_to_first_audio_ms": 4691,
+      "text_to_first_audio_ms": 3953,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1421,
+          "first_text_ms": null,
+          "input_tokens": 726,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1155,
+          "first_text_ms": null,
+          "input_tokens": 926,
+          "cached_tokens": 0,
+          "output_tokens": 43
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 3,
+          "total_ms": 887,
+          "first_text_ms": 662,
+          "input_tokens": 1053,
+          "cached_tokens": 0,
+          "output_tokens": 21
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c17",
+      "text": "Genoptag opgave hundrede og to.",
+      "passed": true,
+      "note": "resume_task matched",
+      "calls": [
+        {
+          "name": "resume_task",
+          "arguments": {
+            "task_id": "T-102"
+          }
+        }
+      ],
+      "answer": "Opgave 102 er genoptaget.",
+      "connect_ms": 2912,
+      "cold_start_to_first_audio_ms": 5324,
+      "text_to_first_audio_ms": 2833,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1598,
+          "first_text_ms": null,
+          "input_tokens": 722,
+          "cached_tokens": 0,
+          "output_tokens": 21
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 866,
+          "first_text_ms": 713,
+          "input_tokens": 820,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c18",
+      "text": "Drop opgaven på Daily.",
+      "passed": true,
+      "note": "cancel_task matched",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "cancel_task",
+          "arguments": {
+            "task_id": "T-102"
+          }
+        }
+      ],
+      "answer": "Jeg har annulleret opgaven på Daily.",
+      "connect_ms": 2673,
+      "cold_start_to_first_audio_ms": 5003,
+      "text_to_first_audio_ms": 3844,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1369,
+          "first_text_ms": null,
+          "input_tokens": 718,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1063,
+          "first_text_ms": null,
+          "input_tokens": 918,
+          "cached_tokens": 0,
+          "output_tokens": 21
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 3,
+          "total_ms": 882,
+          "first_text_ms": 710,
+          "input_tokens": 1017,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c19",
+      "text": "Hvad skete der med Banking-opgaven?",
+      "passed": true,
+      "note": "list_tasks matched",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        }
+      ],
+      "answer": "Banking-opgaven er færdig. Afhængighederne er opdateret, og alle tests består.",
+      "connect_ms": 2364,
+      "cold_start_to_first_audio_ms": 5216,
+      "text_to_first_audio_ms": 2761,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1645,
+          "first_text_ms": null,
+          "input_tokens": 722,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 721,
+          "first_text_ms": 547,
+          "input_tokens": 922,
+          "cached_tokens": 0,
+          "output_tokens": 28
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "c20",
+      "text": "Tak, det var det for nu.",
+      "passed": true,
+      "note": "no action, as expected",
+      "calls": [],
+      "answer": "Velbekomme, vi tales ved.",
+      "connect_ms": 2517,
+      "cold_start_to_first_audio_ms": 5026,
+      "text_to_first_audio_ms": 2020,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1607,
+          "first_text_ms": 1572,
+          "input_tokens": 720,
+          "cached_tokens": 0,
+          "output_tokens": 12
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "s01",
+      "text": "Hvordan går det med Codex-opgaven på Jarvis?",
+      "passed": true,
+      "note": "Danish; mentions ['test']",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        }
+      ],
+      "answer": "Codex-opgaven på Jarvis kører stadig. Den tilføjer dark mode til boardet og kører lige nu testene efter ændringer i seks filer.",
+      "connect_ms": 2449,
+      "cold_start_to_first_audio_ms": 5035,
+      "text_to_first_audio_ms": 4073,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1763,
+          "first_text_ms": null,
+          "input_tokens": 724,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 2024,
+          "first_text_ms": 1549,
+          "input_tokens": 924,
+          "cached_tokens": 0,
+          "output_tokens": 38
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "s02",
+      "text": "Hvad skete der med Banking-opgaven?",
+      "passed": true,
+      "note": "Danish; mentions ['færdig']",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        }
+      ],
+      "answer": "Banking-opgaven er færdig. Afhængighederne er opdateret, og alle tests består.",
+      "connect_ms": 2367,
+      "cold_start_to_first_audio_ms": 5211,
+      "text_to_first_audio_ms": 2628,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1453,
+          "first_text_ms": null,
+          "input_tokens": 722,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 875,
+          "first_text_ms": 646,
+          "input_tokens": 922,
+          "cached_tokens": 0,
+          "output_tokens": 28
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "s03",
+      "text": "Hvorfor står Daily-opgaven stille?",
+      "passed": true,
+      "note": "Danish; mentions ['pause']",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        }
+      ],
+      "answer": "Daily-opgaven står stille, fordi den er sat på pause af dig efter, at fejlen i sessionshåndteringen blev fundet.",
+      "connect_ms": 2447,
+      "cold_start_to_first_audio_ms": 4825,
+      "text_to_first_audio_ms": 3212,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1544,
+          "first_text_ms": null,
+          "input_tokens": 720,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1251,
+          "first_text_ms": 918,
+          "input_tokens": 920,
+          "cached_tokens": 0,
+          "output_tokens": 33
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "s04",
+      "text": "Er der nogen pull requests klar?",
+      "passed": true,
+      "note": "Danish; mentions ['banking']",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        }
+      ],
+      "answer": "Ja, opgave 103 i Banking er færdig, og pull requesten burde være klar. Opgave 101 kører stadig, mens 102 er sat på pause.",
+      "connect_ms": 2447,
+      "cold_start_to_first_audio_ms": 4813,
+      "text_to_first_audio_ms": 2914,
+      "model_rounds": [
+        {
+          "model": "gpt-5.6-luna",
+          "round": 1,
+          "total_ms": 1536,
+          "first_text_ms": null,
+          "input_tokens": 719,
+          "cached_tokens": 0,
+          "output_tokens": 14
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "round": 2,
+          "total_ms": 1131,
+          "first_text_ms": 744,
+          "input_tokens": 919,
+          "cached_tokens": 0,
+          "output_tokens": 42
+        }
+      ],
+      "voice_usage": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    }
+  ]
+}

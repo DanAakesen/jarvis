@@ -1,0 +1,2413 @@
+{
+  "gpt-5.4-mini": {
+    "reasoning_effort": "none",
+    "summary": {
+      "intent_passed": 20,
+      "intent_total": 20,
+      "status_passed": 4,
+      "status_total": 4,
+      "median_total_ms": 2710,
+      "p90_total_ms": 3796,
+      "median_first_round_ms": 1023,
+      "input_tokens": 42828,
+      "cached_tokens": 0,
+      "output_tokens": 1311,
+      "cases": 24
+    },
+    "cases": [
+      {
+        "id": "c01",
+        "text": "Start en Codex-opgave på Jarvis: tilføj dark mode til indstillingssiden.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Jarvis",
+              "agent": "codex",
+              "text": "Tilføj dark mode til indstillingssiden."
+            }
+          }
+        ],
+        "answer": "Jeg har startet opgave 104 på Jarvis med Codex.",
+        "rounds": [
+          {
+            "ms": 1608,
+            "input_tokens": 654,
+            "cached_tokens": 0,
+            "output_tokens": 38
+          },
+          {
+            "ms": 1062,
+            "input_tokens": 758,
+            "cached_tokens": 0,
+            "output_tokens": 18
+          }
+        ],
+        "total_ms": 2671
+      },
+      {
+        "id": "c02",
+        "text": "Lad Copilot rette stavefejlene i README på Daily.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Daily",
+              "agent": "copilot",
+              "text": "Ret stavefejlene i README-filen på Daily."
+            }
+          }
+        ],
+        "answer": "Jeg har sat Copilot i gang med at rette stavefejlene i README på Daily.",
+        "rounds": [
+          {
+            "ms": 1609,
+            "input_tokens": 647,
+            "cached_tokens": 0,
+            "output_tokens": 38
+          },
+          {
+            "ms": 3609,
+            "input_tokens": 751,
+            "cached_tokens": 0,
+            "output_tokens": 23
+          }
+        ],
+        "total_ms": 5219
+      },
+      {
+        "id": "c03",
+        "text": "Opret en opgave på Banking om at opdatere afhængighederne.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Banking",
+              "agent": "codex",
+              "text": "Opdatér afhængighederne."
+            }
+          }
+        ],
+        "answer": "Jeg har oprettet opgaven på Banking.",
+        "rounds": [
+          {
+            "ms": 1015,
+            "input_tokens": 650,
+            "cached_tokens": 0,
+            "output_tokens": 35
+          },
+          {
+            "ms": 1218,
+            "input_tokens": 748,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 2233
+      },
+      {
+        "id": "c04",
+        "text": "Hvilke projekter har jeg?",
+        "passed": true,
+        "note": "list_projects matched",
+        "calls": [
+          {
+            "name": "list_projects",
+            "arguments": {}
+          }
+        ],
+        "answer": "Du har projekterne Jarvis, Daily og Banking.",
+        "rounds": [
+          {
+            "ms": 781,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1280,
+            "input_tokens": 681,
+            "cached_tokens": 0,
+            "output_tokens": 15
+          }
+        ],
+        "total_ms": 2062
+      },
+      {
+        "id": "c05",
+        "text": "Hvad kører lige nu?",
+        "passed": true,
+        "note": "list_tasks matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "T-101 kører lige nu i Jarvis. Det er dark mode på boardet, og den kører testene efter ændringer i 6 filer.",
+        "rounds": [
+          {
+            "ms": 796,
+            "input_tokens": 640,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1157,
+            "input_tokens": 840,
+            "cached_tokens": 0,
+            "output_tokens": 37
+          }
+        ],
+        "total_ms": 1953
+      },
+      {
+        "id": "c06",
+        "text": "Sæt Jarvis-opgaven på pause.",
+        "passed": true,
+        "note": "pause_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "pause_task",
+            "arguments": {
+              "task_id": "T-101"
+            }
+          }
+        ],
+        "answer": "Jeg har sat Jarvis-opgaven på pause.",
+        "rounds": [
+          {
+            "ms": 1405,
+            "input_tokens": 642,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1140,
+            "input_tokens": 842,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1250,
+            "input_tokens": 934,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 3796
+      },
+      {
+        "id": "c07",
+        "text": "Fortsæt opgaven på Daily.",
+        "passed": true,
+        "note": "resume_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "resume_task",
+            "arguments": {
+              "task_id": "T-102"
+            }
+          }
+        ],
+        "answer": "Jeg har genoptaget opgaven på Daily.",
+        "rounds": [
+          {
+            "ms": 1157,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1514,
+            "input_tokens": 841,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 985,
+            "input_tokens": 939,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 3657
+      },
+      {
+        "id": "c08",
+        "text": "Annuller Codex-opgaven på Jarvis.",
+        "passed": true,
+        "note": "cancel_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "cancel_task",
+            "arguments": {
+              "task_id": "T-101"
+            }
+          }
+        ],
+        "answer": "Jeg annullerede Codex-opgaven på Jarvis.",
+        "rounds": [
+          {
+            "ms": 1046,
+            "input_tokens": 644,
+            "cached_tokens": 0,
+            "output_tokens": 32
+          },
+          {
+            "ms": 1015,
+            "input_tokens": 844,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1187,
+            "input_tokens": 938,
+            "cached_tokens": 0,
+            "output_tokens": 16
+          }
+        ],
+        "total_ms": 3250
+      },
+      {
+        "id": "c09",
+        "text": "Sig til Codex på Jarvis, at den kun må ændre CSS.",
+        "passed": true,
+        "note": "steer_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "list_projects",
+            "arguments": {}
+          },
+          {
+            "name": "steer_task",
+            "arguments": {
+              "task_id": "T-101",
+              "text": "Du må kun ændre CSS. Rør ikke ved andre filer eller logik."
+            }
+          }
+        ],
+        "answer": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+        "rounds": [
+          {
+            "ms": 780,
+            "input_tokens": 649,
+            "cached_tokens": 0,
+            "output_tokens": 43
+          },
+          {
+            "ms": 1219,
+            "input_tokens": 902,
+            "cached_tokens": 0,
+            "output_tokens": 42
+          },
+          {
+            "ms": 1233,
+            "input_tokens": 1028,
+            "cached_tokens": 0,
+            "output_tokens": 22
+          }
+        ],
+        "total_ms": 3233
+      },
+      {
+        "id": "c10",
+        "text": "Hvad er status på opgave hundrede og tre?",
+        "passed": true,
+        "note": "task_status matched",
+        "calls": [
+          {
+            "name": "task_status",
+            "arguments": {
+              "task_id": "T-103"
+            }
+          }
+        ],
+        "answer": "Opgave 103 er færdig, og alle tests består. Der er lavet pull request nummer 42.",
+        "rounds": [
+          {
+            "ms": 766,
+            "input_tokens": 645,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1250,
+            "input_tokens": 748,
+            "cached_tokens": 0,
+            "output_tokens": 28
+          }
+        ],
+        "total_ms": 2016
+      },
+      {
+        "id": "c11",
+        "text": "Start en ny opgave på Daily med Copilot: tilføj eksport til CSV.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Daily",
+              "agent": "copilot",
+              "text": "Tilføj eksport til CSV."
+            }
+          }
+        ],
+        "answer": "Jeg har startet opgave T-104 på Daily med Copilot.",
+        "rounds": [
+          {
+            "ms": 4108,
+            "input_tokens": 651,
+            "cached_tokens": 0,
+            "output_tokens": 33
+          },
+          {
+            "ms": 1141,
+            "input_tokens": 745,
+            "cached_tokens": 0,
+            "output_tokens": 18
+          }
+        ],
+        "total_ms": 5250
+      },
+      {
+        "id": "c12",
+        "text": "Giv Copilot besked om også at skrive tests.",
+        "passed": true,
+        "note": "steer_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "steer_task",
+            "arguments": {
+              "task_id": "T-102",
+              "text": "Sørg også for at skrive relevante tests til ændringerne, og kør dem bagefter."
+            }
+          }
+        ],
+        "answer": "Jeg har bedt Copilot om også at skrive relevante tests og køre dem bagefter.",
+        "rounds": [
+          {
+            "ms": 1155,
+            "input_tokens": 645,
+            "cached_tokens": 0,
+            "output_tokens": 20
+          },
+          {
+            "ms": 1000,
+            "input_tokens": 845,
+            "cached_tokens": 0,
+            "output_tokens": 46
+          },
+          {
+            "ms": 1312,
+            "input_tokens": 976,
+            "cached_tokens": 0,
+            "output_tokens": 23
+          }
+        ],
+        "total_ms": 3467
+      },
+      {
+        "id": "c13",
+        "text": "Hvor langt er Copilot nået?",
+        "passed": true,
+        "note": "list_tasks matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Copilot-opgaven er sat på pause. Den er nået til fejlen i sessionshåndteringen på mobil-login.",
+        "rounds": [
+          {
+            "ms": 1141,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1312,
+            "input_tokens": 841,
+            "cached_tokens": 0,
+            "output_tokens": 30
+          }
+        ],
+        "total_ms": 2453
+      },
+      {
+        "id": "c14",
+        "text": "Stop Jarvis-opgaven et øjeblik.",
+        "passed": true,
+        "note": "pause_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "pause_task",
+            "arguments": {
+              "task_id": "T-101"
+            }
+          }
+        ],
+        "answer": "Jeg har sat Jarvis-opgaven på pause.",
+        "rounds": [
+          {
+            "ms": 953,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1280,
+            "input_tokens": 843,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1233,
+            "input_tokens": 935,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 3467
+      },
+      {
+        "id": "c15",
+        "text": "Lav en pull request, der fjerner den gamle login-side i Jarvis, og brug Copilot.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Jarvis",
+              "agent": "copilot",
+              "text": "Lav en pull request, der fjerner den gamle login-side i Jarvis."
+            }
+          }
+        ],
+        "answer": "Jeg har startet opgaven med Copilot til at lave pull requesten.",
+        "rounds": [
+          {
+            "ms": 937,
+            "input_tokens": 654,
+            "cached_tokens": 0,
+            "output_tokens": 43
+          },
+          {
+            "ms": 1140,
+            "input_tokens": 768,
+            "cached_tokens": 0,
+            "output_tokens": 19
+          }
+        ],
+        "total_ms": 2078
+      },
+      {
+        "id": "c16",
+        "text": "Codex skal hellere bruge Tailwind i dark mode-opgaven.",
+        "passed": true,
+        "note": "steer_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "steer_task",
+            "arguments": {
+              "task_id": "T-101",
+              "text": "Brug hellere Tailwind til dark mode-implementeringen i stedet for andre stylingmetoder."
+            }
+          }
+        ],
+        "answer": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+        "rounds": [
+          {
+            "ms": 1266,
+            "input_tokens": 647,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1233,
+            "input_tokens": 854,
+            "cached_tokens": 0,
+            "output_tokens": 45
+          },
+          {
+            "ms": 1312,
+            "input_tokens": 985,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          }
+        ],
+        "total_ms": 3828
+      },
+      {
+        "id": "c17",
+        "text": "Genoptag opgave hundrede og to.",
+        "passed": true,
+        "note": "resume_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "resume_task",
+            "arguments": {
+              "task_id": "T-102"
+            }
+          }
+        ],
+        "answer": "Jeg har genoptaget opgave 102.",
+        "rounds": [
+          {
+            "ms": 750,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 32
+          },
+          {
+            "ms": 1125,
+            "input_tokens": 843,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 875,
+            "input_tokens": 941,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 2750
+      },
+      {
+        "id": "c18",
+        "text": "Drop opgaven på Daily.",
+        "passed": true,
+        "note": "cancel_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "cancel_task",
+            "arguments": {
+              "task_id": "T-102"
+            }
+          }
+        ],
+        "answer": "Jeg har droppet opgaven på Daily.",
+        "rounds": [
+          {
+            "ms": 1155,
+            "input_tokens": 639,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1125,
+            "input_tokens": 839,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1172,
+            "input_tokens": 938,
+            "cached_tokens": 0,
+            "output_tokens": 13
+          }
+        ],
+        "total_ms": 3453
+      },
+      {
+        "id": "c19",
+        "text": "Hvad skete der med Banking-opgaven?",
+        "passed": true,
+        "note": "list_tasks matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Banking-opgaven er færdig. Den opdaterede afhængighederne, og alle tests består.",
+        "rounds": [
+          {
+            "ms": 1014,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 922,
+            "input_tokens": 843,
+            "cached_tokens": 0,
+            "output_tokens": 27
+          }
+        ],
+        "total_ms": 1937
+      },
+      {
+        "id": "c20",
+        "text": "Tak, det var det for nu.",
+        "passed": true,
+        "note": "no action, as expected",
+        "calls": [],
+        "answer": "Selv tak. Sig til, når du er klar igen.",
+        "rounds": [
+          {
+            "ms": 859,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 17
+          }
+        ],
+        "total_ms": 859
+      },
+      {
+        "id": "s01",
+        "text": "Hvordan går det med Codex-opgaven på Jarvis?",
+        "passed": true,
+        "note": "Danish; mentions ['test']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Den kører stadig. Codex arbejder på dark mode til boardet og er lige nu i gang med testene efter ændringer i 6 filer.",
+        "rounds": [
+          {
+            "ms": 967,
+            "input_tokens": 645,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1078,
+            "input_tokens": 845,
+            "cached_tokens": 0,
+            "output_tokens": 35
+          }
+        ],
+        "total_ms": 2046
+      },
+      {
+        "id": "s02",
+        "text": "Hvad skete der med Banking-opgaven?",
+        "passed": true,
+        "note": "Danish; mentions ['færdig']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Banking-opgaven er færdig. Den kørte med Codex, opdaterede afhængighederne, og alle tests består.",
+        "rounds": [
+          {
+            "ms": 907,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1092,
+            "input_tokens": 843,
+            "cached_tokens": 0,
+            "output_tokens": 33
+          }
+        ],
+        "total_ms": 2000
+      },
+      {
+        "id": "s03",
+        "text": "Hvorfor står Daily-opgaven stille?",
+        "passed": true,
+        "note": "Danish; mentions ['pause']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Daily-opgaven er sat på pause af dig selv, efter den fandt fejlen i sessionshåndteringen.",
+        "rounds": [
+          {
+            "ms": 1032,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1217,
+            "input_tokens": 841,
+            "cached_tokens": 0,
+            "output_tokens": 28
+          }
+        ],
+        "total_ms": 2250
+      },
+      {
+        "id": "s04",
+        "text": "Er der nogen pull requests klar?",
+        "passed": true,
+        "note": "Danish; mentions ['banking']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Ja, én er klar: Banking-opgaven er færdig. Jarvis-opgaven kører stadig, og Daily-opgaven er sat på pause.",
+        "rounds": [
+          {
+            "ms": 1546,
+            "input_tokens": 640,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1516,
+            "input_tokens": 840,
+            "cached_tokens": 0,
+            "output_tokens": 35
+          }
+        ],
+        "total_ms": 3062
+      }
+    ]
+  },
+  "gpt-5.6-luna": {
+    "reasoning_effort": "none",
+    "summary": {
+      "intent_passed": 20,
+      "intent_total": 20,
+      "status_passed": 4,
+      "status_total": 4,
+      "median_total_ms": 2780,
+      "p90_total_ms": 4030,
+      "median_first_round_ms": 1164,
+      "input_tokens": 41940,
+      "cached_tokens": 0,
+      "output_tokens": 1467,
+      "cases": 24
+    },
+    "cases": [
+      {
+        "id": "c01",
+        "text": "Start en Codex-opgave på Jarvis: tilføj dark mode til indstillingssiden.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Jarvis",
+              "agent": "codex",
+              "text": "Tilføj dark mode til indstillingssiden. Implementér det i projektets eksisterende arkitektur, genbrug relevante komponenter og stylingmønstre, og tilføj eller opdatér tests efter behov. Lever ændringen som en pull request."
+            }
+          }
+        ],
+        "answer": "Jeg har startet en Codex-opgave på Jarvis om at tilføje dark mode til indstillingssiden.",
+        "rounds": [
+          {
+            "ms": 1312,
+            "input_tokens": 654,
+            "cached_tokens": 0,
+            "output_tokens": 80
+          },
+          {
+            "ms": 1641,
+            "input_tokens": 842,
+            "cached_tokens": 0,
+            "output_tokens": 28
+          }
+        ],
+        "total_ms": 2953
+      },
+      {
+        "id": "c02",
+        "text": "Lad Copilot rette stavefejlene i README på Daily.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Daily",
+              "agent": "copilot",
+              "text": "Ret stavefejlene i README-filen på Daily. Lav en pull request med ændringerne."
+            }
+          }
+        ],
+        "answer": "Copilot er sat til at rette stavefejlene i Daily’s README og lave en pull request.",
+        "rounds": [
+          {
+            "ms": 2280,
+            "input_tokens": 647,
+            "cached_tokens": 0,
+            "output_tokens": 47
+          },
+          {
+            "ms": 1046,
+            "input_tokens": 769,
+            "cached_tokens": 0,
+            "output_tokens": 25
+          }
+        ],
+        "total_ms": 3327
+      },
+      {
+        "id": "c03",
+        "text": "Opret en opgave på Banking om at opdatere afhængighederne.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Banking",
+              "agent": "codex",
+              "text": "Opdater projektets afhængigheder til passende aktuelle versioner, håndtér eventuelle kompatibilitetsproblemer, og kør relevante tests for at sikre, at alt fortsat fungerer."
+            }
+          }
+        ],
+        "answer": "Jeg har oprettet opgaven på Banking. Codex går i gang med at opdatere afhængighederne og køre testene.",
+        "rounds": [
+          {
+            "ms": 1562,
+            "input_tokens": 650,
+            "cached_tokens": 0,
+            "output_tokens": 67
+          },
+          {
+            "ms": 1485,
+            "input_tokens": 812,
+            "cached_tokens": 0,
+            "output_tokens": 34
+          }
+        ],
+        "total_ms": 3047
+      },
+      {
+        "id": "c04",
+        "text": "Hvilke projekter har jeg?",
+        "passed": true,
+        "note": "list_projects matched",
+        "calls": [
+          {
+            "name": "list_projects",
+            "arguments": {}
+          }
+        ],
+        "answer": "Du har projekterne Jarvis, Daily og Banking.",
+        "rounds": [
+          {
+            "ms": 1421,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1046,
+            "input_tokens": 681,
+            "cached_tokens": 0,
+            "output_tokens": 15
+          }
+        ],
+        "total_ms": 2467
+      },
+      {
+        "id": "c05",
+        "text": "Hvad kører lige nu?",
+        "passed": true,
+        "note": "list_tasks matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Lige nu kører opgave 101 i Jarvis-projektet, hvor Codex tester ændringer til dark mode. Opgave 102 er sat på pause, og opgave 103 er færdig.",
+        "rounds": [
+          {
+            "ms": 1094,
+            "input_tokens": 640,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1280,
+            "input_tokens": 840,
+            "cached_tokens": 0,
+            "output_tokens": 50
+          }
+        ],
+        "total_ms": 2375
+      },
+      {
+        "id": "c06",
+        "text": "Sæt Jarvis-opgaven på pause.",
+        "passed": true,
+        "note": "pause_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "pause_task",
+            "arguments": {
+              "task_id": "T-101"
+            }
+          }
+        ],
+        "answer": "Jarvis-opgaven er sat på pause.",
+        "rounds": [
+          {
+            "ms": 1109,
+            "input_tokens": 642,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1297,
+            "input_tokens": 842,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 889,
+            "input_tokens": 934,
+            "cached_tokens": 0,
+            "output_tokens": 13
+          }
+        ],
+        "total_ms": 3296
+      },
+      {
+        "id": "c07",
+        "text": "Fortsæt opgaven på Daily.",
+        "passed": true,
+        "note": "resume_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "resume_task",
+            "arguments": {
+              "task_id": "T-102"
+            }
+          }
+        ],
+        "answer": "Jeg har genoptaget opgaven på Daily.",
+        "rounds": [
+          {
+            "ms": 1141,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1766,
+            "input_tokens": 841,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1125,
+            "input_tokens": 939,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 4032
+      },
+      {
+        "id": "c08",
+        "text": "Annuller Codex-opgaven på Jarvis.",
+        "passed": true,
+        "note": "cancel_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "cancel_task",
+            "arguments": {
+              "task_id": "T-101"
+            }
+          }
+        ],
+        "answer": "Codex-opgaven på Jarvis er annulleret.",
+        "rounds": [
+          {
+            "ms": 905,
+            "input_tokens": 644,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1031,
+            "input_tokens": 844,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 2093,
+            "input_tokens": 938,
+            "cached_tokens": 0,
+            "output_tokens": 16
+          }
+        ],
+        "total_ms": 4030
+      },
+      {
+        "id": "c09",
+        "text": "Sig til Codex på Jarvis, at den kun må ændre CSS.",
+        "passed": true,
+        "note": "steer_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "steer_task",
+            "arguments": {
+              "task_id": "T-101",
+              "text": "Du må kun ændre CSS. Rør ikke ved JavaScript, HTML, konfiguration eller andre filtyper."
+            }
+          }
+        ],
+        "answer": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filtyper.",
+        "rounds": [
+          {
+            "ms": 906,
+            "input_tokens": 649,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1687,
+            "input_tokens": 849,
+            "cached_tokens": 0,
+            "output_tokens": 49
+          },
+          {
+            "ms": 1155,
+            "input_tokens": 989,
+            "cached_tokens": 0,
+            "output_tokens": 30
+          }
+        ],
+        "total_ms": 3750
+      },
+      {
+        "id": "c10",
+        "text": "Hvad er status på opgave hundrede og tre?",
+        "passed": true,
+        "note": "task_status matched",
+        "calls": [
+          {
+            "name": "task_status",
+            "arguments": {
+              "task_id": "T-103"
+            }
+          }
+        ],
+        "answer": "Opgave 103 er færdig i Banking. Alle tests består, og pull request 42 er oprettet.",
+        "rounds": [
+          {
+            "ms": 1406,
+            "input_tokens": 645,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1016,
+            "input_tokens": 748,
+            "cached_tokens": 0,
+            "output_tokens": 30
+          }
+        ],
+        "total_ms": 2422
+      },
+      {
+        "id": "c11",
+        "text": "Start en ny opgave på Daily med Copilot: tilføj eksport til CSV.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Daily",
+              "agent": "copilot",
+              "text": "Tilføj eksport til CSV i Daily. Implementér funktionen i den eksisterende arkitektur, tilføj relevante tests, og lever ændringen som en pull request."
+            }
+          }
+        ],
+        "answer": "Jeg har startet en ny opgave på Daily med Copilot om at tilføje CSV-eksport og levere den som en pull request.",
+        "rounds": [
+          {
+            "ms": 1375,
+            "input_tokens": 651,
+            "cached_tokens": 0,
+            "output_tokens": 61
+          },
+          {
+            "ms": 1125,
+            "input_tokens": 801,
+            "cached_tokens": 0,
+            "output_tokens": 34
+          }
+        ],
+        "total_ms": 2500
+      },
+      {
+        "id": "c12",
+        "text": "Giv Copilot besked om også at skrive tests.",
+        "passed": true,
+        "note": "steer_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "steer_task",
+            "arguments": {
+              "task_id": "T-102",
+              "text": "Skriv også relevante tests til ændringerne, og kør dem for at sikre, at login-fejlen er løst."
+            }
+          }
+        ],
+        "answer": "Jeg har bedt Copilot om også at skrive og køre relevante tests til login-fejlen.",
+        "rounds": [
+          {
+            "ms": 1062,
+            "input_tokens": 645,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1343,
+            "input_tokens": 845,
+            "cached_tokens": 0,
+            "output_tokens": 52
+          },
+          {
+            "ms": 1312,
+            "input_tokens": 989,
+            "cached_tokens": 0,
+            "output_tokens": 25
+          }
+        ],
+        "total_ms": 3717
+      },
+      {
+        "id": "c13",
+        "text": "Hvor langt er Copilot nået?",
+        "passed": true,
+        "note": "list_tasks matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Copilot er nået til opgave 102 i Daily. Den fandt fejlen i sessionshåndteringen, men opgaven er sat på pause.",
+        "rounds": [
+          {
+            "ms": 1125,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 984,
+            "input_tokens": 841,
+            "cached_tokens": 0,
+            "output_tokens": 37
+          }
+        ],
+        "total_ms": 2109
+      },
+      {
+        "id": "c14",
+        "text": "Stop Jarvis-opgaven et øjeblik.",
+        "passed": true,
+        "note": "pause_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "pause_task",
+            "arguments": {
+              "task_id": "T-101"
+            }
+          }
+        ],
+        "answer": "Jarvis-opgaven er sat på pause.",
+        "rounds": [
+          {
+            "ms": 1000,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1000,
+            "input_tokens": 843,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1219,
+            "input_tokens": 935,
+            "cached_tokens": 0,
+            "output_tokens": 13
+          }
+        ],
+        "total_ms": 3219
+      },
+      {
+        "id": "c15",
+        "text": "Lav en pull request, der fjerner den gamle login-side i Jarvis, og brug Copilot.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Jarvis",
+              "agent": "copilot",
+              "text": "Fjern den gamle login-side i Jarvis, og opret en pull request med ændringerne."
+            }
+          }
+        ],
+        "answer": "Jeg har startet Copilot på opgaven med at fjerne den gamle login-side i Jarvis og oprette en pull request.",
+        "rounds": [
+          {
+            "ms": 1203,
+            "input_tokens": 654,
+            "cached_tokens": 0,
+            "output_tokens": 48
+          },
+          {
+            "ms": 983,
+            "input_tokens": 778,
+            "cached_tokens": 0,
+            "output_tokens": 30
+          }
+        ],
+        "total_ms": 2187
+      },
+      {
+        "id": "c16",
+        "text": "Codex skal hellere bruge Tailwind i dark mode-opgaven.",
+        "passed": true,
+        "note": "steer_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "steer_task",
+            "arguments": {
+              "task_id": "T-101",
+              "text": "Brug Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang, og tilpas ændringerne derefter."
+            }
+          }
+        ],
+        "answer": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+        "rounds": [
+          {
+            "ms": 1718,
+            "input_tokens": 647,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 2015,
+            "input_tokens": 847,
+            "cached_tokens": 0,
+            "output_tokens": 53
+          },
+          {
+            "ms": 1046,
+            "input_tokens": 994,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          }
+        ],
+        "total_ms": 4780
+      },
+      {
+        "id": "c17",
+        "text": "Genoptag opgave hundrede og to.",
+        "passed": true,
+        "note": "resume_task matched",
+        "calls": [
+          {
+            "name": "resume_task",
+            "arguments": {
+              "task_id": "T-102"
+            }
+          }
+        ],
+        "answer": "Opgave 102 er genoptaget. Co-pilot arbejder videre på login-fejlen på mobil.",
+        "rounds": [
+          {
+            "ms": 1062,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1156,
+            "input_tokens": 741,
+            "cached_tokens": 0,
+            "output_tokens": 27
+          }
+        ],
+        "total_ms": 2219
+      },
+      {
+        "id": "c18",
+        "text": "Drop opgaven på Daily.",
+        "passed": true,
+        "note": "cancel_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "cancel_task",
+            "arguments": {
+              "task_id": "T-102"
+            }
+          }
+        ],
+        "answer": "Jeg har annulleret opgaven på Daily.",
+        "rounds": [
+          {
+            "ms": 780,
+            "input_tokens": 639,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 4094,
+            "input_tokens": 839,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1016,
+            "input_tokens": 938,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 5891
+      },
+      {
+        "id": "c19",
+        "text": "Hvad skete der med Banking-opgaven?",
+        "passed": true,
+        "note": "list_tasks matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Banking-opgaven er færdig. Afhængighederne er opdateret, og alle tests består.",
+        "rounds": [
+          {
+            "ms": 1187,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1265,
+            "input_tokens": 843,
+            "cached_tokens": 0,
+            "output_tokens": 28
+          }
+        ],
+        "total_ms": 2452
+      },
+      {
+        "id": "c20",
+        "text": "Tak, det var det for nu.",
+        "passed": true,
+        "note": "no action, as expected",
+        "calls": [],
+        "answer": "Selv tak, Dan. Vi tales ved.",
+        "rounds": [
+          {
+            "ms": 1047,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 1047
+      },
+      {
+        "id": "s01",
+        "text": "Hvordan går det med Codex-opgaven på Jarvis?",
+        "passed": true,
+        "note": "Danish; mentions ['test']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Codex-opgaven på Jarvis kører stadig. Den tilføjer dark mode til boardet og kører lige nu testene efter ændringer i seks filer.",
+        "rounds": [
+          {
+            "ms": 1514,
+            "input_tokens": 645,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1187,
+            "input_tokens": 845,
+            "cached_tokens": 0,
+            "output_tokens": 38
+          }
+        ],
+        "total_ms": 2702
+      },
+      {
+        "id": "s02",
+        "text": "Hvad skete der med Banking-opgaven?",
+        "passed": true,
+        "note": "Danish; mentions ['færdig']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Banking-opgaven er færdig. Afhængighederne er opdateret, og alle tests består.",
+        "rounds": [
+          {
+            "ms": 1109,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1280,
+            "input_tokens": 843,
+            "cached_tokens": 0,
+            "output_tokens": 28
+          }
+        ],
+        "total_ms": 2390
+      },
+      {
+        "id": "s03",
+        "text": "Hvorfor står Daily-opgaven stille?",
+        "passed": true,
+        "note": "Danish; mentions ['pause']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Daily-opgaven står stille, fordi den er sat på pause af dig, efter Copilot fandt fejlen i sessionshåndteringen.",
+        "rounds": [
+          {
+            "ms": 1234,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1140,
+            "input_tokens": 841,
+            "cached_tokens": 0,
+            "output_tokens": 33
+          }
+        ],
+        "total_ms": 2375
+      },
+      {
+        "id": "s04",
+        "text": "Er der nogen pull requests klar?",
+        "passed": true,
+        "note": "Danish; mentions ['banking']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Ja, opgave 103 i Banking er færdig, og pull requesten burde være klar. Opgave 101 kører stadig, og 102 er sat på pause.",
+        "rounds": [
+          {
+            "ms": 1375,
+            "input_tokens": 640,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1484,
+            "input_tokens": 840,
+            "cached_tokens": 0,
+            "output_tokens": 42
+          }
+        ],
+        "total_ms": 2859
+      }
+    ]
+  },
+  "gpt-5.4": {
+    "reasoning_effort": "none",
+    "summary": {
+      "intent_passed": 19,
+      "intent_total": 20,
+      "status_passed": 4,
+      "status_total": 4,
+      "median_total_ms": 2827,
+      "p90_total_ms": 4016,
+      "median_first_round_ms": 1242,
+      "input_tokens": 40553,
+      "cached_tokens": 0,
+      "output_tokens": 1247,
+      "cases": 24
+    },
+    "cases": [
+      {
+        "id": "c01",
+        "text": "Start en Codex-opgave på Jarvis: tilføj dark mode til indstillingssiden.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Jarvis",
+              "agent": "codex",
+              "text": "Tilføj dark mode til indstillingssiden."
+            }
+          }
+        ],
+        "answer": "Jeg har startet en Codex-opgave på Jarvis for at tilføje dark mode til indstillingssiden.",
+        "rounds": [
+          {
+            "ms": 1265,
+            "input_tokens": 654,
+            "cached_tokens": 0,
+            "output_tokens": 38
+          },
+          {
+            "ms": 1375,
+            "input_tokens": 758,
+            "cached_tokens": 0,
+            "output_tokens": 28
+          }
+        ],
+        "total_ms": 2656
+      },
+      {
+        "id": "c02",
+        "text": "Lad Copilot rette stavefejlene i README på Daily.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Daily",
+              "agent": "copilot",
+              "text": "Ret stavefejlene i README."
+            }
+          }
+        ],
+        "answer": "Jeg satte Copilot i gang på Daily med at rette stavefejlene i README.",
+        "rounds": [
+          {
+            "ms": 1500,
+            "input_tokens": 647,
+            "cached_tokens": 0,
+            "output_tokens": 34
+          },
+          {
+            "ms": 2093,
+            "input_tokens": 743,
+            "cached_tokens": 0,
+            "output_tokens": 22
+          }
+        ],
+        "total_ms": 3593
+      },
+      {
+        "id": "c03",
+        "text": "Opret en opgave på Banking om at opdatere afhængighederne.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Banking",
+              "agent": "codex",
+              "text": "Opdater afhængighederne."
+            }
+          }
+        ],
+        "answer": "Jeg har startet en Banking-opgave hos Codex om at opdatere afhængighederne.",
+        "rounds": [
+          {
+            "ms": 3047,
+            "input_tokens": 650,
+            "cached_tokens": 0,
+            "output_tokens": 34
+          },
+          {
+            "ms": 1187,
+            "input_tokens": 746,
+            "cached_tokens": 0,
+            "output_tokens": 24
+          }
+        ],
+        "total_ms": 4234
+      },
+      {
+        "id": "c04",
+        "text": "Hvilke projekter har jeg?",
+        "passed": true,
+        "note": "list_projects matched",
+        "calls": [
+          {
+            "name": "list_projects",
+            "arguments": {}
+          }
+        ],
+        "answer": "Du har projekterne Jarvis, Daily og Banking.",
+        "rounds": [
+          {
+            "ms": 765,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1078,
+            "input_tokens": 681,
+            "cached_tokens": 0,
+            "output_tokens": 15
+          }
+        ],
+        "total_ms": 1843
+      },
+      {
+        "id": "c05",
+        "text": "Hvad kører lige nu?",
+        "passed": true,
+        "note": "list_tasks matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Lige nu kører opgave 101 i Jarvis med Codex. Den tilføjer dark mode til boardet og kører testene efter ændringer i 6 filer.",
+        "rounds": [
+          {
+            "ms": 937,
+            "input_tokens": 640,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1796,
+            "input_tokens": 840,
+            "cached_tokens": 0,
+            "output_tokens": 42
+          }
+        ],
+        "total_ms": 2733
+      },
+      {
+        "id": "c06",
+        "text": "Sæt Jarvis-opgaven på pause.",
+        "passed": true,
+        "note": "pause_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "pause_task",
+            "arguments": {
+              "task_id": "T-101"
+            }
+          }
+        ],
+        "answer": "Jeg satte Jarvis-opgaven på pause.",
+        "rounds": [
+          {
+            "ms": 2485,
+            "input_tokens": 642,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1077,
+            "input_tokens": 842,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1125,
+            "input_tokens": 934,
+            "cached_tokens": 0,
+            "output_tokens": 13
+          }
+        ],
+        "total_ms": 4687
+      },
+      {
+        "id": "c07",
+        "text": "Fortsæt opgaven på Daily.",
+        "passed": true,
+        "note": "resume_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "resume_task",
+            "arguments": {
+              "task_id": "T-102"
+            }
+          }
+        ],
+        "answer": "Jeg har genoptaget opgaven på Daily.",
+        "rounds": [
+          {
+            "ms": 1000,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 875,
+            "input_tokens": 841,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1000,
+            "input_tokens": 939,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 2890
+      },
+      {
+        "id": "c08",
+        "text": "Annuller Codex-opgaven på Jarvis.",
+        "passed": true,
+        "note": "cancel_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "cancel_task",
+            "arguments": {
+              "task_id": "T-101"
+            }
+          }
+        ],
+        "answer": "Jeg har annulleret Codex-opgaven på Jarvis.",
+        "rounds": [
+          {
+            "ms": 1516,
+            "input_tokens": 644,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1266,
+            "input_tokens": 844,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1342,
+            "input_tokens": 938,
+            "cached_tokens": 0,
+            "output_tokens": 17
+          }
+        ],
+        "total_ms": 4125
+      },
+      {
+        "id": "c09",
+        "text": "Sig til Codex på Jarvis, at den kun må ændre CSS.",
+        "passed": false,
+        "note": "got create_task({\"project\": \"Jarvis\", \"agent\": \"codex\", \"text\": \"Du må kun ændre CSS.\"})",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Jarvis",
+              "agent": "codex",
+              "text": "Du må kun ændre CSS."
+            }
+          }
+        ],
+        "answer": "Jeg har startet en Codex-opgave på Jarvis og sagt, at den kun må ændre CSS.",
+        "rounds": [
+          {
+            "ms": 1046,
+            "input_tokens": 649,
+            "cached_tokens": 0,
+            "output_tokens": 34
+          },
+          {
+            "ms": 1297,
+            "input_tokens": 745,
+            "cached_tokens": 0,
+            "output_tokens": 26
+          }
+        ],
+        "total_ms": 2344
+      },
+      {
+        "id": "c10",
+        "text": "Hvad er status på opgave hundrede og tre?",
+        "passed": true,
+        "note": "task_status matched",
+        "calls": [
+          {
+            "name": "task_status",
+            "arguments": {
+              "task_id": "T-103"
+            }
+          }
+        ],
+        "answer": "Opgave hundrede og tre er færdig i Banking. Codex har opdateret afhængighederne, alle tests består, og der er lavet pull request nummer 42.",
+        "rounds": [
+          {
+            "ms": 1405,
+            "input_tokens": 645,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1359,
+            "input_tokens": 748,
+            "cached_tokens": 0,
+            "output_tokens": 43
+          }
+        ],
+        "total_ms": 2765
+      },
+      {
+        "id": "c11",
+        "text": "Start en ny opgave på Daily med Copilot: tilføj eksport til CSV.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Daily",
+              "agent": "copilot",
+              "text": "Tilføj eksport til CSV."
+            }
+          }
+        ],
+        "answer": "Jeg har startet en ny opgave på Daily med Copilot for at tilføje eksport til CSV.",
+        "rounds": [
+          {
+            "ms": 1359,
+            "input_tokens": 651,
+            "cached_tokens": 0,
+            "output_tokens": 33
+          },
+          {
+            "ms": 1030,
+            "input_tokens": 745,
+            "cached_tokens": 0,
+            "output_tokens": 25
+          }
+        ],
+        "total_ms": 2390
+      },
+      {
+        "id": "c12",
+        "text": "Giv Copilot besked om også at skrive tests.",
+        "passed": true,
+        "note": "steer_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "steer_task",
+            "arguments": {
+              "task_id": "T-102",
+              "text": "Skriv også tests som en del af opgaven."
+            }
+          }
+        ],
+        "answer": "Jeg har givet Copilot besked om også at skrive tests til opgaven.",
+        "rounds": [
+          {
+            "ms": 953,
+            "input_tokens": 645,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1812,
+            "input_tokens": 845,
+            "cached_tokens": 0,
+            "output_tokens": 36
+          },
+          {
+            "ms": 1250,
+            "input_tokens": 957,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          }
+        ],
+        "total_ms": 4016
+      },
+      {
+        "id": "c13",
+        "text": "Hvor langt er Copilot nået?",
+        "passed": true,
+        "note": "list_tasks matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Copilot er på opgave 102 i Daily, og den er sat på pause. Den havde fundet fejlen i sessionshåndteringen i login på mobil.",
+        "rounds": [
+          {
+            "ms": 1296,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1828,
+            "input_tokens": 841,
+            "cached_tokens": 0,
+            "output_tokens": 39
+          }
+        ],
+        "total_ms": 3125
+      },
+      {
+        "id": "c14",
+        "text": "Stop Jarvis-opgaven et øjeblik.",
+        "passed": true,
+        "note": "pause_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "pause_task",
+            "arguments": {
+              "task_id": "T-101"
+            }
+          }
+        ],
+        "answer": "Jeg har sat Jarvis-opgaven på pause.",
+        "rounds": [
+          {
+            "ms": 968,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1625,
+            "input_tokens": 843,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1172,
+            "input_tokens": 935,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 3766
+      },
+      {
+        "id": "c15",
+        "text": "Lav en pull request, der fjerner den gamle login-side i Jarvis, og brug Copilot.",
+        "passed": true,
+        "note": "create_task matched",
+        "calls": [
+          {
+            "name": "create_task",
+            "arguments": {
+              "project": "Jarvis",
+              "agent": "copilot",
+              "text": "Lav en pull request, der fjerner den gamle login-side i Jarvis."
+            }
+          }
+        ],
+        "answer": "Jeg har sat Copilot i gang i Jarvis med at lave den pull request. Opgaven kører nu.",
+        "rounds": [
+          {
+            "ms": 1342,
+            "input_tokens": 654,
+            "cached_tokens": 0,
+            "output_tokens": 43
+          },
+          {
+            "ms": 1328,
+            "input_tokens": 768,
+            "cached_tokens": 0,
+            "output_tokens": 28
+          }
+        ],
+        "total_ms": 2671
+      },
+      {
+        "id": "c16",
+        "text": "Codex skal hellere bruge Tailwind i dark mode-opgaven.",
+        "passed": true,
+        "note": "steer_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "steer_task",
+            "arguments": {
+              "task_id": "T-101",
+              "text": "Brug Tailwind til dark mode-opgaven i stedet for den nuværende tilgang."
+            }
+          }
+        ],
+        "answer": "Jeg har bedt Codex på dark mode-opgaven om at bruge Tailwind i stedet.",
+        "rounds": [
+          {
+            "ms": 967,
+            "input_tokens": 647,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1360,
+            "input_tokens": 847,
+            "cached_tokens": 0,
+            "output_tokens": 43
+          },
+          {
+            "ms": 1327,
+            "input_tokens": 974,
+            "cached_tokens": 0,
+            "output_tokens": 23
+          }
+        ],
+        "total_ms": 3655
+      },
+      {
+        "id": "c17",
+        "text": "Genoptag opgave hundrede og to.",
+        "passed": true,
+        "note": "resume_task matched",
+        "calls": [
+          {
+            "name": "resume_task",
+            "arguments": {
+              "task_id": "T-102"
+            }
+          }
+        ],
+        "answer": "Jeg har genoptaget opgave 102.",
+        "rounds": [
+          {
+            "ms": 1547,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1921,
+            "input_tokens": 741,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 3469
+      },
+      {
+        "id": "c18",
+        "text": "Drop opgaven på Daily.",
+        "passed": true,
+        "note": "cancel_task matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          },
+          {
+            "name": "cancel_task",
+            "arguments": {
+              "task_id": "T-102"
+            }
+          }
+        ],
+        "answer": "Jeg har annulleret opgaven på Daily.",
+        "rounds": [
+          {
+            "ms": 1030,
+            "input_tokens": 639,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1094,
+            "input_tokens": 839,
+            "cached_tokens": 0,
+            "output_tokens": 21
+          },
+          {
+            "ms": 1092,
+            "input_tokens": 938,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          }
+        ],
+        "total_ms": 3217
+      },
+      {
+        "id": "c19",
+        "text": "Hvad skete der med Banking-opgaven?",
+        "passed": true,
+        "note": "list_tasks matched",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Banking-opgaven blev færdig. Kodeks opdaterede afhængighederne, og alle tests består.",
+        "rounds": [
+          {
+            "ms": 1125,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1375,
+            "input_tokens": 843,
+            "cached_tokens": 0,
+            "output_tokens": 29
+          }
+        ],
+        "total_ms": 2500
+      },
+      {
+        "id": "c20",
+        "text": "Tak, det var det for nu.",
+        "passed": true,
+        "note": "no action, as expected",
+        "calls": [],
+        "answer": "Selv tak. Jeg er her, når du er klar igen.",
+        "rounds": [
+          {
+            "ms": 1297,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 18
+          }
+        ],
+        "total_ms": 1297
+      },
+      {
+        "id": "s01",
+        "text": "Hvordan går det med Codex-opgaven på Jarvis?",
+        "passed": true,
+        "note": "Danish; mentions ['test']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Codex-opgaven på Jarvis kører stadig. Den er i gang med at køre testene efter ændringer i seks filer.",
+        "rounds": [
+          {
+            "ms": 1921,
+            "input_tokens": 645,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1546,
+            "input_tokens": 845,
+            "cached_tokens": 0,
+            "output_tokens": 32
+          }
+        ],
+        "total_ms": 3468
+      },
+      {
+        "id": "s02",
+        "text": "Hvad skete der med Banking-opgaven?",
+        "passed": true,
+        "note": "Danish; mentions ['færdig']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Banking-opgaven blev færdig. Kodeks opdaterede afhængighederne, og alle tests består.",
+        "rounds": [
+          {
+            "ms": 1046,
+            "input_tokens": 643,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1078,
+            "input_tokens": 843,
+            "cached_tokens": 0,
+            "output_tokens": 29
+          }
+        ],
+        "total_ms": 2125
+      },
+      {
+        "id": "s03",
+        "text": "Hvorfor står Daily-opgaven stille?",
+        "passed": true,
+        "note": "Danish; mentions ['pause']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Daily-opgaven står stille, fordi den er sat på pause. Den blev pauset efter at fejlen blev fundet i sessionshåndteringen.",
+        "rounds": [
+          {
+            "ms": 1219,
+            "input_tokens": 641,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1312,
+            "input_tokens": 841,
+            "cached_tokens": 0,
+            "output_tokens": 35
+          }
+        ],
+        "total_ms": 2531
+      },
+      {
+        "id": "s04",
+        "text": "Er der nogen pull requests klar?",
+        "passed": true,
+        "note": "Danish; mentions ['banking']",
+        "calls": [
+          {
+            "name": "list_tasks",
+            "arguments": {}
+          }
+        ],
+        "answer": "Ja, én er klar: opgave 103 i Banking er færdig, så den burde have en pull request klar.",
+        "rounds": [
+          {
+            "ms": 937,
+            "input_tokens": 640,
+            "cached_tokens": 0,
+            "output_tokens": 14
+          },
+          {
+            "ms": 1437,
+            "input_tokens": 840,
+            "cached_tokens": 0,
+            "output_tokens": 30
+          }
+        ],
+        "total_ms": 2375
+      }
+    ]
+  }
+}

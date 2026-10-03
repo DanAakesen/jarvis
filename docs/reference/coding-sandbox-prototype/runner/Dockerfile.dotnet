@@ -1,0 +1,22 @@
+FROM jarvispocscacr.azurecr.io/jarvis-runner:runner-20261002113335
+
+USER root
+
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y gpg apt-transport-https time procps util-linux \
+    && install -d -m 0755 /etc/apt/keyrings \
+    && curl --fail --silent --show-error --location https://packages.microsoft.com/keys/microsoft-2025.asc \
+        | gpg --dearmor --output /etc/apt/keyrings/microsoft.gpg \
+    && chmod 0644 /etc/apt/keyrings/microsoft.gpg \
+    && . /etc/os-release \
+    && printf 'deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/debian/%s/prod %s main\n' "$VERSION_ID" "$VERSION_CODENAME" \
+        > /etc/apt/sources.list.d/microsoft-prod.list \
+    && apt-get update \
+    && apt-get install --no-install-recommends -y dotnet-sdk-8.0 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+USER runner

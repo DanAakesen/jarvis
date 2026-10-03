@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "generator": "shared-project-templates",
+  "templateVersion": "2.2.3",
+  "scope": "personal",
+  "modules": [
+    "node",
+    "react"
+  ],
+  "requestedSkills": [],
+  "files": {
+    ".agents/skills/engineering/SKILL.md": "CDD1910E965DA2AAF327C70865D94B66795FA47F286E45A8F34E05CDB29C6FF6",
+    ".agents/skills/product-ui/SKILL.md": "D561FA635BB8CC36F99FEA4F61ACAC897F3EEF4F17FB090D5F085E033EBA3796",
+    "AGENTS.md": "F82BFA5BAAFF3C96FED7E159B4DFA16DA1B397DB0170A94C024A6D542F66DFB3",
+    ".github/copilot-instructions.md": "F82BFA5BAAFF3C96FED7E159B4DFA16DA1B397DB0170A94C024A6D542F66DFB3"
+  }
+}

@@ -1,0 +1,3969 @@
+{
+  "trials": 8,
+  "summary": {
+    "gpt-5.4-mini / effort none / current prompt": {
+      "passed": "38/40",
+      "false_claims": 0,
+      "median_ms": 3530,
+      "per_command": {
+        "c06": 8,
+        "c09": 8,
+        "c12": 7,
+        "c14": 8,
+        "c16": 7
+      }
+    },
+    "gpt-5.4-mini / effort none / strict prompt": {
+      "passed": "40/40",
+      "false_claims": 0,
+      "median_ms": 3296,
+      "per_command": {
+        "c06": 8,
+        "c09": 8,
+        "c12": 8,
+        "c14": 8,
+        "c16": 8
+      }
+    },
+    "gpt-5.4-mini / effort low / current prompt": {
+      "passed": "39/40",
+      "false_claims": 0,
+      "median_ms": 3766,
+      "per_command": {
+        "c06": 7,
+        "c09": 8,
+        "c12": 8,
+        "c14": 8,
+        "c16": 8
+      }
+    },
+    "gpt-5.4-mini / effort low / strict prompt": {
+      "passed": "40/40",
+      "false_claims": 0,
+      "median_ms": 3842,
+      "per_command": {
+        "c06": 8,
+        "c09": 8,
+        "c12": 8,
+        "c14": 8,
+        "c16": 8
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg satte Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 5547,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3922,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4358,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2968,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3108,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3141,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3532,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3280,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Lad venligst al JavaScript, HTML og anden kode være urørt."
+          }
+        }
+      ],
+      "ms": 3312,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Ingen ændringer i HTML, JavaScript, backend eller tests. Behold fokus på dark mode-arbejdet, men begræns alle kodeændringer til CSS-filer."
+          }
+        }
+      ],
+      "ms": 10702,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Lad være med at ændre HTML, JavaScript eller andre filer."
+          }
+        }
+      ],
+      "ms": 4000,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Dan siger, at du kun må ændre CSS. Lad alt andet kode være urørt."
+          }
+        }
+      ],
+      "ms": 3782,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Lad venligst resten af koden være urørt."
+          }
+        }
+      ],
+      "ms": 4219,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Ingen ændringer i HTML, JavaScript eller andre filer."
+          }
+        }
+      ],
+      "ms": 3671,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Lad alt andet kode være urørt."
+          }
+        }
+      ],
+      "ms": 3125,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved HTML, JavaScript eller andre filer."
+          }
+        }
+      ],
+      "ms": 3265,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests til opgave 102.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests for ændringerne, og sørg for at de dækker den mobile login-fejl og sessionshåndteringen."
+          }
+        }
+      ],
+      "ms": 3094,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive tests til ændringerne."
+          }
+        }
+      ],
+      "ms": 3015,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringerne, og opdater gerne eksisterende tests hvis det er nødvendigt."
+          }
+        }
+      ],
+      "ms": 3452,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive tests til opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests til ændringerne, og sørg for at dække mobil-login-fejlen ordentligt."
+          }
+        }
+      ],
+      "ms": 7328,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": false,
+      "false_claim": false,
+      "note": "got no tool call",
+      "reply": "Jeg mangler hvilken opgave det gælder. Sig opgave-nummeret, så sender jeg beskeden til Copilot.",
+      "calls": [],
+      "ms": 1062,
+      "rounds": 1
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive tests til opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests til ændringerne, så vi får dækket login-fejlen på mobil."
+          }
+        }
+      ],
+      "ms": 3781,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Copilot, at den også skal skrive og opdatere tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive og opdatere relevante tests, så ændringen er dækket."
+          }
+        }
+      ],
+      "ms": 3187,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringerne, og opdater gerne eksisterende tests hvis nødvendigt."
+          }
+        }
+      ],
+      "ms": 4405,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3032,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2719,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3937,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2766,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3530,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2889,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3078,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4953,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex bruge Tailwind til dark mode-opgaven i stedet.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-implementeringen i stedet for custom CSS, og tilpas løsningen derefter."
+          }
+        }
+      ],
+      "ms": 3407,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sendt beskeden videre til Codex om at bruge Tailwind til dark mode, hvis det kan gøres rent.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug helst Tailwind til dark mode-løsningen i stedet for custom CSS, hvis det kan gøres rent."
+          }
+        }
+      ],
+      "ms": 3687,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex, at den skal bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 4014,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug helst Tailwind til dark mode-arbejdet i stedet for anden styling, hvis det passer til koden."
+          }
+        }
+      ],
+      "ms": 3094,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": false,
+      "false_claim": false,
+      "note": "got no tool call",
+      "reply": "Jeg skal lige have opgavenummeret, så jeg kan sende ændringen til den rigtige task.",
+      "calls": [],
+      "ms": 1000,
+      "rounds": 1
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex, at den skal bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-implementeringen i stedet for anden styling. Hold dig til den nuværende opgave om at tilføje dark mode til boardet."
+          }
+        }
+      ],
+      "ms": 4953,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har rettet Codex til at bruge Tailwind i dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 4047,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har rettet Codex ind på at bruge Tailwind til dark mode-ændringerne.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-ændringerne i stedet for custom CSS, hvor det giver mening."
+          }
+        }
+      ],
+      "ms": 5796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2608,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 6500,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3000,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2655,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2890,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2734,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4109,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3858,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved JavaScript, HTML eller andre filer."
+          }
+        }
+      ],
+      "ms": 3077,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Berør ikke JavaScript, HTML eller andre filer."
+          }
+        }
+      ],
+      "ms": 3437,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt det til Codex på Jarvis: den må kun ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Dan siger, at du kun må ændre CSS. Undgå at ændre noget andet end CSS-filer."
+          }
+        }
+      ],
+      "ms": 5172,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Den må kun ændre CSS. Lad venligst være med at røre ved anden kode, HTML eller JavaScript."
+          }
+        }
+      ],
+      "ms": 3796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt det videre til Codex på Jarvis: kun CSS, ingen andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved nogen JavaScript-, TypeScript- eller andre ikke-CSS-filer."
+          }
+        }
+      ],
+      "ms": 3000,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt det til Codex på Jarvis: den må kun ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved JavaScript, HTML eller anden kode."
+          }
+        }
+      ],
+      "ms": 3264,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt det til Codex på Jarvis: den må kun ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "list_projects",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Lad resten af koden være urørt."
+          }
+        }
+      ],
+      "ms": 12359,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt det til Codex på Jarvis: den må kun ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Dan har bedt om, at du kun må ændre CSS. Lad resten af koden være urørt."
+          }
+        }
+      ],
+      "ms": 3094,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg gav Copilot besked om også at skrive tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests sammen med ændringen."
+          }
+        }
+      ],
+      "ms": 4015,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive tests, når opgaven fortsætter.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive tests for ændringerne, når du fortsætter arbejdet."
+          }
+        }
+      ],
+      "ms": 3343,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests sammen med rettelsen."
+          }
+        }
+      ],
+      "ms": 3046,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests for ændringerne, og sørg for at de dækker login-fejlen på mobil."
+          }
+        }
+      ],
+      "ms": 3156,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests til opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests for ændringerne, og sørg for at de dækker den mobile login-fejl."
+          }
+        }
+      ],
+      "ms": 3187,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests til opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests til ændringerne, og sørg for at de dækker mobil-login-fejlen."
+          }
+        }
+      ],
+      "ms": 12203,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Copilot, at den også skal skrive relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også relevante tests for ændringerne, og hold dem opdateret hvis du retter mere i login-flowet."
+          }
+        }
+      ],
+      "ms": 3734,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive eller opdatere tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive eller opdatere relevante tests, så ændringen bliver dækket ordentligt."
+          }
+        }
+      ],
+      "ms": 4592,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2594,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2750,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er allerede sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2952,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3062,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg satte Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3234,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg satte Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4609,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-løsningen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug gerne Tailwind til dark mode-løsningen, hvis det passer bedre til koden. Behold resten af opgaven uændret."
+          }
+        }
+      ],
+      "ms": 3546,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sendt beskeden til Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 2937,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-løsningen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3172,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-løsningen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3296,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sendt beskeden til Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3469,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har rettet Codex til at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen i stedet for nuværende løsning. Behold resten af ændringerne som de er."
+          }
+        }
+      ],
+      "ms": 3453,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Codex besked om at bruge Tailwind til dark mode-løsningen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3875,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sendt beskeden videre til Codex på opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3078,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3452,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 5578,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg satte Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3655,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": false,
+      "false_claim": false,
+      "note": "got list_tasks({})",
+      "reply": "Jarvis-opgaven er allerede sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        }
+      ],
+      "ms": 2485,
+      "rounds": 2
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 6312,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3407,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3125,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4092,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Lad resten af koden være urørt."
+          }
+        }
+      ],
+      "ms": 3594,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS fremover. Rør ikke ved JavaScript, HTML eller andre filer."
+          }
+        }
+      ],
+      "ms": 3546,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Lad al JavaScript, HTML og anden kode være urørt."
+          }
+        }
+      ],
+      "ms": 3733,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved HTML, JavaScript eller andre filer."
+          }
+        }
+      ],
+      "ms": 3391,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Ingen ændringer i HTML, JavaScript eller andre filer."
+          }
+        }
+      ],
+      "ms": 4296,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved HTML, JavaScript eller andre filer."
+          }
+        }
+      ],
+      "ms": 3203,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Lad al JavaScript, HTML og anden kode være urørt."
+          }
+        }
+      ],
+      "ms": 3953,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved HTML, JavaScript eller andre filer."
+          }
+        }
+      ],
+      "ms": 4030,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests til ændringen, så vi får dækket login-fejlen på mobil."
+          }
+        }
+      ],
+      "ms": 5594,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Copilot, at den også skal skrive og opdatere tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive og opdatere relevante tests for ændringerne."
+          }
+        }
+      ],
+      "ms": 3780,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests til opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også relevante tests til ændringerne, når du fortsætter arbejdet."
+          }
+        }
+      ],
+      "ms": 3875,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Copilot, at der også skal skrives og opdateres tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive og opdatere relevante tests for ændringen."
+          }
+        }
+      ],
+      "ms": 3891,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests på opgave T-102.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests for ændringerne, så vi får dækket login-fejlen på mobil ordentligt."
+          }
+        }
+      ],
+      "ms": 3516,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests til opgave T-102.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests til ændringerne, og sørg for at de dækker mobilfejlen."
+          }
+        }
+      ],
+      "ms": 4577,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests til opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests til ændringen, når du fortsætter arbejdet."
+          }
+        }
+      ],
+      "ms": 5437,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive og opdatere relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive og opdatere relevante tests for ændringerne."
+          }
+        }
+      ],
+      "ms": 3655,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 5796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 5828,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3030,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3407,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3389,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg satte Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 5797,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2750,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3562,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex, at dark mode-løsningen hellere skal laves med Tailwind.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 4407,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sendt beskeden videre til Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-arbejdet i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 4422,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-løsningen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug helst Tailwind til dark mode-løsningen i stedet for custom CSS, hvis det passer ind i koden."
+          }
+        }
+      ],
+      "ms": 4483,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for anden styling. Behold resten af arbejdet som det er."
+          }
+        }
+      ],
+      "ms": 6264,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex, at den skal bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3578,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-løsningen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3312,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-løsningen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3766,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex, at den skal bruge Tailwind til dark mode-løsningen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3452,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3233,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 2953,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3235,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4655,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4906,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3452,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3078,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3077,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved HTML, JavaScript eller andre filer."
+          }
+        }
+      ],
+      "ms": 3796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved JavaScript, HTML eller andre filer."
+          }
+        }
+      ],
+      "ms": 3546,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt det til Codex på Jarvis: den må kun ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved JavaScript, HTML eller andre filer."
+          }
+        }
+      ],
+      "ms": 5157,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt det til Codex på Jarvis.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Lad resten af koden være urørt."
+          }
+        }
+      ],
+      "ms": 5655,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Lad alt andet være urørt."
+          }
+        }
+      ],
+      "ms": 4937,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt det til Codex på Jarvis: den må kun ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS i denne opgave. Rør ikke ved andet end styles."
+          }
+        }
+      ],
+      "ms": 4843,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "list_projects",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved andre filer eller logik."
+          }
+        }
+      ],
+      "ms": 4672,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved HTML, JavaScript eller andre filer."
+          }
+        }
+      ],
+      "ms": 4937,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests til ændringerne, og sørg for at de dækker den fejl, du retter."
+          }
+        }
+      ],
+      "ms": 4000,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive og opdatere tests på opgave T-102.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests og opdatér de eksisterende tests, så ændringerne bliver dækket ordentligt."
+          }
+        }
+      ],
+      "ms": 3641,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Copilot, at den også skal skrive tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests for ændringen, når du fortsætter arbejdet."
+          }
+        }
+      ],
+      "ms": 4327,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Copilot, at der også skal skrives tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests for ændringerne, så vi får dækket login-fejlen på mobil."
+          }
+        }
+      ],
+      "ms": 3687,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests for ændringen, når du går videre med opgaven."
+          }
+        }
+      ],
+      "ms": 4407,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har givet Copilot besked om også at skrive tests, når arbejdet fortsætter.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests til ændringen, når du fortsætter arbejdet."
+          }
+        }
+      ],
+      "ms": 3953,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringerne."
+          }
+        }
+      ],
+      "ms": 3858,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også tests for ændringen, når du fortsætter arbejdet."
+          }
+        }
+      ],
+      "ms": 3969,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3203,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 8108,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3359,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3842,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3828,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 5421,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3203,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jeg har sat Jarvis-opgaven på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3483,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-løsningen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen, i stedet for custom CSS, hvis det passer ind."
+          }
+        }
+      ],
+      "ms": 5796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug helst Tailwind til dark mode-implementeringen i stedet for custom CSS, medmindre der er en god grund til noget andet."
+          }
+        }
+      ],
+      "ms": 3562,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen i stedet for custom CSS, og tilpas løsningen så den følger Tailwind dark mode-mønsteret."
+          }
+        }
+      ],
+      "ms": 3453,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3406,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode og undgå custom CSS hvor det er muligt.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen, og undgå custom CSS hvor det er muligt."
+          }
+        }
+      ],
+      "ms": 3280,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sendt beskeden videre til Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3250,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har rettet Codex på T-101 til at bruge Tailwind til dark mode-løsningen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3891,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-løsningen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug hellere Tailwind til dark mode-løsningen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3985,
+      "rounds": 3
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+# Decisions
+
+Confirmed choices, their rationale, evidence, and status. Requirements live in [PRODUCT.md](../PRODUCT.md); the resulting system in [architecture.md](architecture.md). Keep decision (#) and learning (L#) numbers stable; add new ones at the end.
+
+## Decision areas
+
+The nine design areas and where each stands. **Confirmed** = Dan's requirement or choice; **Proven** = shown in a prototype; **Decided** = chosen design, not built; **Open** = still to resolve.
+| # | Topic | Current position / remaining work |
+| --- | --- | --- |
+| **1** | Driving experience | **Confirmed:** open browser is sufficient; English voice Ryan HD (British butler), Danish voice Harper, toggled in the UI. **Proven:** Danish voice with interruption (see [voice](architecture.md#voice)). **Open:** browser audio client, reconnect, choice between voice bridge and speech-to-speech for each language. |
+| **2** | Autonomy | **Confirmed:** configurable per project. Merge requirements, overrides, and Done are Dan's policy choices, set per project; not a blocker. |
+| **3** | Execution ownership | **Confirmed:** the Azure SQL task record is the source of truth; sandboxes are disposable and report events to the backend; a sandbox restart mid-turn moves the task to Needs attention. **Decided (option A):** the task table is the queue. A backend dispatcher picks Ready rows within the concurrency limit and owns retries (attempt count and next-attempt time, then Needs attention). Live updates: the runner pushes sandbox events, GitHub sends webhooks, the backend pushes to the board with SSE. **Decided (keep-awake):** the backend runs with a minimum of 1 replica (always on, ≈ 30 DKK/month at the idle rate), so the sandbox heartbeat never stops; the board has a sleep switch that sets the minimum to 0 (scale to zero, wakes on the next request) and is refused while tasks run. The backend does not query SQL while idle, so the database can still pause. |
+| **4** | Task controls | **Confirmed and proven:** steer and pause stop the turn with ACP cancel; resume reloads the conversation after an idle shutdown. **Not** after a crash: recovery restarts from the task branch (L22). **Open:** provider switching. |
+| **5** | Parallel changes | **Confirmed:** one sandbox and branch per task isolates work (proven with parallel runs). **Open:** conflicts between PRs in one repository. |
+| **6** | Memory | **Confirmed:** Jarvis is one continuous conversation (sessions within one thread, see [data model](data-model.md)), so it will need compaction and memory over time. **Deferred:** the memory design itself. |
+| **7** | Cost | **Confirmed:** minimum cost; cold starts acceptable. **Measured:** about 0.89 DKK per sandbox-hour plus about 33 DKK per month fixed. **Estimated:** voice ≈4 DKK per 30-minute day (billed meters to confirm). |
+| **8** | Subscriptions | **Confirmed:** Codex uses a Jarvis-only ChatGPT Pro login, with no API key; the Copilot seat may be used for Jarvis and has ample usage. **Proven:** both subscriptions in the sandbox, including parallel Codex, and Codex login renewal. **Open:** schedule the daily renewal check in the backend; watch Codex Pro limits under parallel tasks. |
+| **9** | Build and release | **Confirmed:** full builds, tests, releases, and deployments run in GitHub Actions; the sandbox runs targeted builds and tests only. The board shows a task view and a release view fed by GitHub webhooks. **Measured:** disk (6 GiB writable), not CPU or memory, limits builds in the sandbox; full-solution builds belong in GitHub Actions (L23). **Open:** whether Foundry can provide the documented 20 GiB; Container Apps Jobs remains the fallback for heavy projects. |
+
+## Decision log
+
+| Date | Decision | Rationale and evidence | Status |
+| --- | --- | --- | --- |
+| 2026-10-01 | Coding sandbox: Foundry Hosted Agents, one session per task; Container Apps Jobs as fallback behind the same runner contract | Proof of concept: all nine checks passed for Copilot and Codex ([report](reference/coding-sandbox-prototype/REPORT.md)) | Proven |
+| 2026-10-01 | ACP for both agents: Copilot CLI `--acp`, Codex via `codex-acp`; Python adapter in the sandbox image | Steer, pause, and resume proven over ACP; Foundry hosted agents support only Python or C# | Proven |
+| 2026-10-02 | Codex uses a Jarvis-only ChatGPT Pro login, renewed by Jarvis; no API key | Renewal proven through Codex's own client; Dan's own login untouched (L6, L12) | Proven |
+| 2026-10-02 | Danish voice: Voice Live voice bridge with MAI Transcribe and `gpt-5.6-luna` | V1–V7 passed; Azure Speech `da-DK` misheard English names (L15) ([voice report](reference/voice-prototype/REPORT.md)) | Proven; Dan's live test (V8) pending |
+| 2026-10-02 | Voices: English Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`) with a British butler persona; Danish Harper (MAI-Voice-2, `da-DK`); language toggle in the UI | Chosen by Dan from samples; MAI-Voice-2 has no British or Danish voices, and its American male voices were rejected | Confirmed |
+| 2026-10-02 | English voice runs as `gpt-realtime-2.1` speech to speech; warm-up before the microphone opens and automatic reconnect | Faster first audio; warm-up and reconnect prevent the bridge drop (L21) | Decided |
+| 2026-10-02 | Build and release run in GitHub Actions; the sandbox runs targeted builds and tests only; failed checks steer the same task with the failing log | Disk, not CPU or memory, limits sandbox builds (L23); matches Dan's normal workflow | Confirmed |
+| 2026-10-02 | Sandbox crash recovery: detect by HTTP 424/404/5xx; restart from the task branch; the agent pushes often; never trust `completed` without GitHub evidence | Restart test lost files and conversation (L22) | Decided |
+| 2026-10-02 | Queue: the Azure SQL task table, with a backend dispatcher owning dispatch and retries | Cheapest option for one user; Service Bus and Durable Functions rejected | Decided |
+| 2026-10-02 | Board updates with server-sent events over `fetch`; the runner pushes sandbox events; GitHub webhooks for build and release | No extra service; Web PubSub kept as an idea | Decided |
+| 2026-10-02 | Backend on Container Apps, always on (minimum 1 replica, ≈30 DKK/month) with a sleep switch that sets minimum 0 and is refused while tasks run | Keeps the sandbox heartbeat running; a KEDA SQL scale rule would stop the database from pausing | Decided |
+| 2026-10-02 | Settings page controls models and reasoning for Jarvis and the coding agents; changes apply to new sessions and tasks only | Nothing hard-coded; Dan wants to switch models | Confirmed |
+| 2026-10-02 | Sign-in: Entra ID with Dan's Microsoft account only; no passwords in Jarvis | Single user; built-in Azure sign-in | Confirmed |
+| 2026-10-02 | App structure: Jarvis is the app and main page; areas are modules with their own pages and Jarvis tools; one backend with a core and a module per area | Later areas (Banking, Health and fitness, Calendar) plug in without rework | Confirmed |
+| 2026-10-02 | Data model v1: one continuous conversation split into sessions; every runner event stored; one release per merge to `main` (no tags); commits fetched from GitHub on demand; usage per task and project; no settings history | Sparring with Dan ([data model](data-model.md)) | Confirmed |
+| 2026-10-03 | Stack: monorepo layout, Fastify, `mssql` with a migration runner, Bicep, MSAL flow, Vitest/pytest/Playwright, SQL free offer | Accepted by Dan; Fastify for schema validation, a plugin per area, and SSE | Decided |
+| 2026-10-03 | Project knowledge moved into the scaffold documents; prototype Azure resources and test repository deleted; prototype code and reports kept in [reference/](reference/) | One source of truth; no running prototype cost | Done |
+| 2026-10-03 | One production environment; the local web app (`npm run dev`, `http://localhost:5173`) uses the production backend | Single user; no cost or upkeep for a second environment | Confirmed |
+| 2026-10-03 | Migrations run in the backend at startup under a SQL app lock; CI tests the database against SQL Server in a container | GitHub runners can't reach Azure SQL without opening its firewall | Decided |
+| 2026-10-03 | Static Web App resource in West Europe | No Static Web Apps region in Sweden or Denmark (checked with `az`); files are served globally | Decided |
+| 2026-10-03 | The dispatcher sends no SQL queries while there is no work | Otherwise the free-offer database never pauses | Decided |
+| 2026-10-03 | Bootstrap script `infra/bootstrap.ps1` creates the deploy identity, sign-in apps, backend identity, SQL admin group, and repository; run and verified the same day | The deploy workflows can't create their own identity or Entra objects | Done |
+| 2026-10-03 | Required checks on `main` need GitHub Pro (Dan's account is on Free); until then Jarvis merges only when checks pass | GitHub Free has no branch protection on private repositories | Pending Dan's choice of GitHub Pro |
+| 2026-10-03 | Remote-only development: agents work in Copilot cloud agent or Codex cloud and deliver through PRs; local work needs Dan's permission; GitHub `main` is the only source of truth | Any agent can continue from the repository alone; both cloud agents work on Dan's personal repository and push only to their own branches | Confirmed |
+| 2026-10-03 | One GitHub issue per plan task; a plan-status workflow writes In progress, Complete, and Not started into `PLAN.md` on `main` | Cloud agents can't push to `main`, so their status can't come from the agent itself; starting a task means assigning its issue | Decided |
+| 2026-10-03 | PRs merge automatically, without approval, when checks pass against the latest `main`; while `main` is red only `fix-main:` PRs merge; one PR per task overrides the template's "no PR required" | Dan doesn't want to approve PRs; agents must never start from a broken `main` | Confirmed |
+
+## Learnings
+
+Mistakes made so far and the rule that prevents each one.
+| # | Area | What happened | Rule |
+| --- | --- | --- | --- |
+| **L1** | Foundry agent routes | The `/agents` list route returned `Project not found`, and the deploy script treated it as an Azure block. | Create and check agents through `/agents/{name}/versions`. Prove any "Azure is blocking us" claim with a direct API call. |
+| **L2** | Foundry names | Recreated account and project names kept stale state for over an hour. | Never reuse a deleted account or project name; generate timestamped names. |
+| **L3** | Sandbox size | 0.5 vCPU / 1 GiB failed with `ImageError`. | Use at least 1 vCPU / 2 GiB. |
+| **L4** | Steering | A correction queued behind the running turn and changed nothing. | Interrupt with ACP `session/cancel`, then send the correction as the next turn. |
+| **L5** | Pause | Stopping the sandbox mid-turn lost the turn. | Pause with ACP `session/cancel`, then let the sandbox idle out. |
+| **L6** | Codex login | The prototype copied Dan's PC login into every sandbox; the first renewal would have signed out one copy. Replaced by a Jarvis-only login on 2 October 2026. | Follow the [Codex login rules](architecture.md#sandbox-credentials). |
+| **L7** | Azure tenant | Dan's Azure CLI defaults to the Microsoft tenant; wrong-tenant tokens returned misleading 404s. | Target the Novaro subscription explicitly in every script. |
+| **L8** | Monitoring | Application Insights created a managed workspace outside the resource group. | Create the Log Analytics workspace in the resource group first. |
+| **L9** | Runner | Copilot needed a writable home and non-interactive mode; ACP calls timed out. | Writable session home, Copilot `--allow-all`, and an ACP timeout above the longest turn. |
+| **L10** | Endpoints | The driver used the runtime host for administration calls. | Store both endpoints ([coding sandbox](architecture.md#coding-sandbox)). |
+| **L11** | AI delivery | A builder agent spent 2.5 hours polishing teardown edge cases and declared its own work done. | Builders never review their own work; fix the main blocker first. |
+| **L12** | Codex renewal | OpenAI's docs say Codex renews after 8 days, but the current client renews only 5 minutes before the 10-day access token expires. A renewal based on `last_refresh` did nothing. | Check vendor behavior in the current source. Trigger Codex renewal on the access token's expiry date. |
+| **L13** | Tool versions | The company npm mirror's `latest` Codex was a Windows-only alpha with no executable. | Pin CLI versions (Codex 0.157.0 worked) locally and in the sandbox image. |
+| **L14** | Sessions | The deploy script's Key Vault check left its session running, which blocked renewal. | Every component that opens a session deletes it. |
+| **L15** | Danish speech to text | Azure Speech `da-DK` turned English names into Danish-sounding words ("Jarvis" → "jobes", "dark mode" → "dog mode"); the phrase list did not help. With no language set, it heard German and French. | Use MAI Transcribe with language `da`. Always set the language. |
+| **L16** | Spoken confirmations | The model said "Jeg har sagt det til Codex" after creating a new task instead of steering the existing one. | Strict action rules in the instructions; speak confirmations from the backend's tool result. |
+| **L17** | Voice cold start | The first hosted-agent turn of each call took ≈5 s; later turns ≈3 s. | Warm the agent session when a call connects, with a message that needs no model. |
+| **L18** | Hosted agent settings | Setting `FOUNDRY_PROJECT_ENDPOINT` failed: `FOUNDRY_*` and `AGENT_*` variables are reserved. The tool log failed silently because Table storage treats Python integers as 32-bit. | Let the platform inject its variables. Store large integers as Int64, and give every agent a no-model status command (`/diag`). |
+| **L19** | Voice tests | Results were wrong three ways: the container clock differed from the PC's, earlier commands changed the data for later ones, and replies were fully generated before an interruption. | Match logs as "new since the command", use a fresh session per scored command, and measure interruption as detection while audio still plays. |
+| **L20** | Windows scripts | `az` is a `.cmd`, so `&` in a URL split the command; the Danish culture wrote times with "." and Azure rejected the budget dates. | No `&` in `az` arguments; format dates with the invariant culture. |
+| **L21** | Voice bridge drop | In a noisy room, two speech fragments 0.4 s apart reached a freshly started hosted agent; interrupting its first answer ended the preview voice bridge (`bridge_session_ended`). Intermittent: 1 of 4 reproductions. | Warm the agent with a silent no-model message before opening the microphone; reconnect automatically when the bridge ends. |
+| **L22** | Sandbox crash | A forced crash mid-turn lost the cloned repository and the agent's conversation; resume then reported `completed` with no branch or PR. Foundry persists session files only at certain points, not continuously. | Push work to the task branch often; recover by restarting from the branch; never trust `completed` without checking GitHub for the branch and PR. Detect a crash by HTTP 424/404/5xx on two polls or for 30 s, not by an event gap. |
+| **L23** | Sandbox disk | Every sandbox size had a 6 GiB writable disk (docs: up to 20 GiB), about 3 GiB free with a .NET image; a full .NET solution restore (2.4 GiB of NuGet packages) filled it. | Keep sandbox images small, build single projects, and run full builds in GitHub Actions. |

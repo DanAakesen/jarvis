@@ -1,0 +1,3985 @@
+{
+  "trials": 8,
+  "summary": {
+    "gpt-5.6-luna / effort none / current prompt": {
+      "passed": "40/40",
+      "false_claims": 0,
+      "median_ms": 3828,
+      "per_command": {
+        "c06": 8,
+        "c09": 8,
+        "c12": 8,
+        "c14": 8,
+        "c16": 8
+      }
+    },
+    "gpt-5.6-luna / effort none / strict prompt": {
+      "passed": "39/40",
+      "false_claims": 0,
+      "median_ms": 3782,
+      "per_command": {
+        "c06": 8,
+        "c09": 8,
+        "c12": 8,
+        "c14": 7,
+        "c16": 8
+      }
+    },
+    "gpt-5.6-luna / effort low / current prompt": {
+      "passed": "40/40",
+      "false_claims": 0,
+      "median_ms": 4328,
+      "per_command": {
+        "c06": 8,
+        "c09": 8,
+        "c12": 8,
+        "c14": 8,
+        "c16": 8
+      }
+    },
+    "gpt-5.6-luna / effort low / strict prompt": {
+      "passed": "40/40",
+      "false_claims": 0,
+      "median_ms": 4500,
+      "per_command": {
+        "c06": 8,
+        "c09": 8,
+        "c12": 8,
+        "c14": 8,
+        "c16": 8
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4875,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 6296,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3453,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4078,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3406,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven med dark mode er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3296,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3905,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3780,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer og CSS-relateret kode. Rør ikke JavaScript, HTML, tests, konfiguration eller andre filer."
+          }
+        }
+      ],
+      "ms": 3625,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filtyper.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke JavaScript, TypeScript, HTML, konfiguration eller andre filtyper."
+          }
+        }
+      ],
+      "ms": 3547,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke andre filtyper.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer og CSS-relateret styling. Undlad alle ændringer i JavaScript, TypeScript, HTML, konfiguration og andre filtyper."
+          }
+        }
+      ],
+      "ms": 4391,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS i opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS i denne opgave. Rør ikke ved JavaScript, TypeScript, HTML, konfiguration eller andre filtyper."
+          }
+        }
+      ],
+      "ms": 3796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke JavaScript, TypeScript, HTML, konfiguration eller andre filer."
+          }
+        }
+      ],
+      "ms": 3828,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke andre filtyper.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer og CSS-relateret styling. Undlad alle ændringer i JavaScript, TypeScript, HTML, konfiguration og andre filtyper."
+          }
+        }
+      ],
+      "ms": 3233,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS-filer og ikke røre andre filtyper.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer. Rør ikke JavaScript, TypeScript, HTML, konfiguration eller andre filtyper."
+          }
+        }
+      ],
+      "ms": 4765,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer og CSS-relaterede styles. Rør ikke JavaScript, TypeScript, HTML, konfiguration eller andre filer."
+          }
+        }
+      ],
+      "ms": 3858,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests til loginrettelsen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringerne."
+          }
+        }
+      ],
+      "ms": 3141,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests, når opgaven genoptages.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringerne og kør dem, når opgaven genoptages."
+          }
+        }
+      ],
+      "ms": 3765,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests til loginrettelsen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringen og kør dem."
+          }
+        }
+      ],
+      "ms": 5092,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests til login-fejlen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringen og kør dem, før opgaven afsluttes."
+          }
+        }
+      ],
+      "ms": 3312,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og køre dem, før opgaven afleveres.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også relevante tests for ændringen, og kør dem før du afleverer."
+          }
+        }
+      ],
+      "ms": 3328,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive og køre relevante tests for ændringerne."
+          }
+        }
+      ],
+      "ms": 5250,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests, når opgaven genoptages.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringerne og kør dem, når opgaven genoptages."
+          }
+        }
+      ],
+      "ms": 3296,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests til loginrettelsen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringerne."
+          }
+        }
+      ],
+      "ms": 4687,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4203,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3484,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4312,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3531,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3671,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3297,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3516,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen, og tilpas de eksisterende ændringer derefter."
+          }
+        }
+      ],
+      "ms": 3796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen, og tilpas de igangværende ændringer efter behov."
+          }
+        }
+      ],
+      "ms": 4030,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang, og bevar eksisterende funktionalitet."
+          }
+        }
+      ],
+      "ms": 5655,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex bruge Tailwind til dark mode-opgaven og bevare de eksisterende tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang, og bevar eksisterende funktionalitet og tests."
+          }
+        }
+      ],
+      "ms": 3233,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3858,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen, og tilpas løsningen derefter."
+          }
+        }
+      ],
+      "ms": 3983,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen, og hold dig til det i stedet for andre stylingløsninger."
+          }
+        }
+      ],
+      "ms": 3828,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen, og tilpas løsningen så den følger projektets eksisterende Tailwind-mønstre."
+          }
+        }
+      ],
+      "ms": 6375,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3782,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4235,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4483,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3452,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4718,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3422,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3797,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4171,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke JavaScript, TypeScript, HTML eller andre filtyper."
+          }
+        }
+      ],
+      "ms": 4516,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke JavaScript, TypeScript, HTML, konfiguration eller andre filtyper."
+          }
+        }
+      ],
+      "ms": 3280,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer og CSS-relateret styling. Ændr ikke JavaScript, TypeScript, HTML, konfiguration eller andre filtyper."
+          }
+        }
+      ],
+      "ms": 3578,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved andre filtyper eller kode."
+          }
+        }
+      ],
+      "ms": 9375,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke JavaScript, HTML, tests eller andre filer."
+          }
+        }
+      ],
+      "ms": 3405,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke JavaScript, HTML, tests eller andre filer."
+          }
+        }
+      ],
+      "ms": 4203,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke JavaScript, HTML, tests eller andre filer."
+          }
+        }
+      ],
+      "ms": 3671,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Undlad at ændre JavaScript, TypeScript, HTML, konfiguration eller andre filer."
+          }
+        }
+      ],
+      "ms": 6453,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringerne og køre dem."
+          }
+        }
+      ],
+      "ms": 4483,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests for ændringen og kør dem."
+          }
+        }
+      ],
+      "ms": 3282,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive og køre relevante tests til ændringerne."
+          }
+        }
+      ],
+      "ms": 8780,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive og køre relevante tests som en del af løsningen."
+          }
+        }
+      ],
+      "ms": 3750,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og køre dem, før opgaven afsluttes.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Husk også at skrive relevante tests til ændringerne og køre dem, før opgaven afsluttes."
+          }
+        }
+      ],
+      "ms": 3828,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests og køre dem, før opgaven afsluttes."
+          }
+        }
+      ],
+      "ms": 3296,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og køre dem.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også relevante tests til ændringerne, og sørg for at køre dem."
+          }
+        }
+      ],
+      "ms": 4484,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og sikre, at de består.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også relevante automatiserede tests for ændringen, og sørg for at de består."
+          }
+        }
+      ],
+      "ms": 4530,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3515,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3641,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": false,
+      "false_claim": false,
+      "note": "got list_tasks({})",
+      "reply": "Jarvis-opgaven er allerede sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        }
+      ],
+      "ms": 2078,
+      "rounds": 2
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3671,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3532,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3217,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3266,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-ændringerne, og tilpas den nuværende løsning efter behov."
+          }
+        }
+      ],
+      "ms": 4030,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen, og tilpas den nuværende løsning derefter."
+          }
+        }
+      ],
+      "ms": 3812,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang, og bevar eksisterende funktionalitet."
+          }
+        }
+      ],
+      "ms": 3203,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen, og tilpas den eksisterende løsning efter behov."
+          }
+        }
+      ],
+      "ms": 4062,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang, og sørg for at følge projektets eksisterende Tailwind-mønstre."
+          }
+        }
+      ],
+      "ms": 5125,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven, og tilpas den nuværende implementation derefter."
+          }
+        }
+      ],
+      "ms": 3141,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven, og tilpas den igangværende løsning derefter."
+          }
+        }
+      ],
+      "ms": 3500,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "none",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-ændringen, og tilpas den nuværende løsning derefter."
+          }
+        }
+      ],
+      "ms": 3421,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4187,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4421,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4328,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4983,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4421,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 5296,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4172,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3422,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke andre filtyper.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer og CSS-relaterede styles. Ændr ikke JavaScript, TypeScript, HTML, tests eller andre filer."
+          }
+        }
+      ],
+      "ms": 12391,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved JavaScript, HTML, backend eller andre filer."
+          }
+        }
+      ],
+      "ms": 5030,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og styling – ingen andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer og CSS-relateret styling. Undlad at ændre JavaScript, HTML, konfiguration eller andre filer."
+          }
+        }
+      ],
+      "ms": 4031,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filtyper.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke JavaScript, TypeScript, HTML, konfiguration eller andre filtyper."
+          }
+        }
+      ],
+      "ms": 3937,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS-filer og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer. Rør ikke JavaScript, HTML eller andre filer."
+          }
+        }
+      ],
+      "ms": 4733,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved JavaScript, TypeScript, HTML eller andre filer."
+          }
+        }
+      ],
+      "ms": 5141,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Undlad alle ændringer i JavaScript, HTML, tests eller andre filer."
+          }
+        }
+      ],
+      "ms": 4187,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer og CSS-relateret styling. Rør ikke JavaScript, HTML eller andre filer."
+          }
+        }
+      ],
+      "ms": 4296,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests til login-rettelsen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Husk også at skrive relevante tests for ændringen og køre dem, før du afleverer pull requesten."
+          }
+        }
+      ],
+      "ms": 4155,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og sikre, at de består.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Husk også at skrive relevante tests for ændringen og sikre, at de består."
+          }
+        }
+      ],
+      "ms": 8391,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og køre dem på opgaven i Daily.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringen og køre dem."
+          }
+        }
+      ],
+      "ms": 5296,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests til login-rettelsen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til rettelsen, herunder tests for mobil-login og sessionshåndtering."
+          }
+        }
+      ],
+      "ms": 8405,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og sikre, at de består.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også relevante tests for ændringen, og sørg for at de består."
+          }
+        }
+      ],
+      "ms": 4500,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests til login-rettelsen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også relevante automatiske tests for ændringen, og sørg for at køre dem."
+          }
+        }
+      ],
+      "ms": 5109,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests til login-fejlen.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringen og kør dem, før opgaven afsluttes."
+          }
+        }
+      ],
+      "ms": 4797,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også relevante tests for ændringen, og kør dem."
+          }
+        }
+      ],
+      "ms": 4453,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3421,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3358,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4594,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3531,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3983,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3750,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4265,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3702,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven i stedet.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang, og tilpas løsningen derefter."
+          }
+        }
+      ],
+      "ms": 3657,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang, og behold ændringerne konsistente med projektets eksisterende stil."
+          }
+        }
+      ],
+      "ms": 4187,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang, og tilpas ændringerne derefter."
+          }
+        }
+      ],
+      "ms": 6078,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen i stedet for den nuværende tilgang, og tilpas ændringerne derefter."
+          }
+        }
+      ],
+      "ms": 4155,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven, og tilpas løsningen så vidt muligt til eksisterende Tailwind-mønstre i projektet."
+          }
+        }
+      ],
+      "ms": 3625,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-implementeringen, inklusive relevante dark:-klasser og konfiguration. Tilpas den nuværende løsning efter behov."
+          }
+        }
+      ],
+      "ms": 4219,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven, inklusive styling og dark mode-varianter, i stedet for en anden stylingløsning."
+          }
+        }
+      ],
+      "ms": 5452,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "current",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven, og tilpas implementeringen derefter."
+          }
+        }
+      ],
+      "ms": 5625,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3859,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4452,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 6280,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3453,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4782,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 5483,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4358,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c06",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 5655,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke JavaScript, HTML eller andre filer."
+          }
+        }
+      ],
+      "ms": 4328,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS-filer og ikke røre andre filtyper.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer. Rør ikke JavaScript, TypeScript, HTML eller andre filtyper."
+          }
+        }
+      ],
+      "ms": 4437,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre anden kode.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved andre filtyper eller applikationslogik."
+          }
+        }
+      ],
+      "ms": 4891,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre anden kode.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved andre filtyper eller kode."
+          }
+        }
+      ],
+      "ms": 3953,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS-filer og ikke røre andre filtyper.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer. Rør ikke JavaScript, TypeScript, HTML eller andre filtyper."
+          }
+        }
+      ],
+      "ms": 4608,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS-filer og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS-filer. Rør ikke JavaScript, HTML eller andre filer."
+          }
+        }
+      ],
+      "ms": 6282,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis, at den kun må ændre CSS og ikke røre andre filer.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Undlad at ændre JavaScript, HTML, konfiguration eller andre filer."
+          }
+        }
+      ],
+      "ms": 5250,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c09",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har sagt til Codex på Jarvis-opgaven, at den kun må ændre CSS og ikke røre anden logik.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Du må kun ændre CSS. Rør ikke ved andre filtyper eller logik."
+          }
+        }
+      ],
+      "ms": 4842,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringen og kør dem, før opgaven afsluttes."
+          }
+        }
+      ],
+      "ms": 4625,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og køre dem.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Husk også at skrive relevante tests for ændringen og køre dem."
+          }
+        }
+      ],
+      "ms": 4328,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og køre dem.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringerne og kør dem."
+          }
+        }
+      ],
+      "ms": 6484,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og sikre, at de består.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også relevante tests for ændringen, og sørg for at de består."
+          }
+        }
+      ],
+      "ms": 7796,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og køre dem, før opgaven afleveres.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringen, og kør dem før du afleverer."
+          }
+        }
+      ],
+      "ms": 4657,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og køre dem.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringen og kør dem."
+          }
+        }
+      ],
+      "ms": 3828,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive og køre relevante tests.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Skriv også relevante tests for ændringen, og kør dem for at sikre, at login-fejlen er løst."
+          }
+        }
+      ],
+      "ms": 5719,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c12",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Copilot om også at skrive relevante tests og køre dem.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-102",
+            "text": "Sørg også for at skrive relevante tests til ændringen og kør dem."
+          }
+        }
+      ],
+      "ms": 4500,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3781,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4358,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4093,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3797,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 3953,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4608,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 5000,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c14",
+      "passed": true,
+      "false_claim": false,
+      "note": "pause_task matched",
+      "reply": "Jarvis-opgaven er sat på pause.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "pause_task",
+          "arguments": {
+            "task_id": "T-101"
+          }
+        }
+      ],
+      "ms": 4797,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven, og tilpas implementeringen derefter."
+          }
+        }
+      ],
+      "ms": 5202,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 4062,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven, og tilpas løsningen derefter."
+          }
+        }
+      ],
+      "ms": 3797,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven, og tilpas løsningen derefter."
+          }
+        }
+      ],
+      "ms": 4733,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven, og tilpas implementeringen derefter."
+          }
+        }
+      ],
+      "ms": 3842,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3828,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-ændringerne i stedet for den nuværende tilgang."
+          }
+        }
+      ],
+      "ms": 3967,
+      "rounds": 3
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "prompt": "strict",
+      "id": "c16",
+      "passed": true,
+      "false_claim": false,
+      "note": "steer_task matched",
+      "reply": "Jeg har bedt Codex om at bruge Tailwind til dark mode-opgaven.",
+      "calls": [
+        {
+          "name": "list_tasks",
+          "arguments": {}
+        },
+        {
+          "name": "steer_task",
+          "arguments": {
+            "task_id": "T-101",
+            "text": "Brug Tailwind til dark mode-opgaven, og tilpas implementeringen derefter."
+          }
+        }
+      ],
+      "ms": 3985,
+      "rounds": 3
+    }
+  ]
+}

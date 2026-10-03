@@ -1,0 +1,19 @@
+# Secrets and local state
+.secrets/
+.env
+*.token
+*.pem
+auth.json
+auth.json
+driver/.jarvis-state.json
+driver/*.local.json
+infra/.deployment-state.json
+evidence/
+
+# Dependencies and build output
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

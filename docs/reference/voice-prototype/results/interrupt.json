@@ -1,0 +1,76 @@
+{
+  "passed": true,
+  "first_reply_audio_seconds": 18.1,
+  "barge_in_after_first_audio_ms": 1545,
+  "speech_detected_after_barge_in_ms": 563,
+  "reply_still_playing_when_detected": true,
+  "playback_remaining_at_detection_ms": 16004,
+  "second_turn_correct": true,
+  "first_reply": {
+    "index": 1,
+    "heard": "Fortæl mig om alle opgaverne, en af gangen med alle detaljer, du har.",
+    "reply": "Jeg har tre opgaver: T-101 i Jarvis med dark mode til boardet, kører lige nu og tester efter ændringer i 6 filer; T-102 i Daily med login-fejlen på mobil, den er pauset efter at fejlen blev fundet i sessionshåndteringen; og T-103 i Banking med opdatering af afhængigheder, den er færdig og alle tests består.",
+    "latency_ms": 4125,
+    "interrupted": false,
+    "response_status": "completed",
+    "speech_stopped_ms": 1790957688138,
+    "first_audio_ms": 1790957692263,
+    "response_done_ms": 1790957693326,
+    "usage": {
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "input_token_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "text_tokens": 0,
+        "audio_tokens": 0,
+        "image_tokens": 0,
+        "cached_tokens_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0
+        }
+      },
+      "output_token_details": {
+        "text_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "tools": []
+  },
+  "second_turn": {
+    "index": 2,
+    "heard": "Stop hvad er status på bankingopgaven?",
+    "reply": "Banking-opgaven er færdig. Den hedder opdater afhængighederne, og alle tests består.",
+    "latency_ms": 2933,
+    "interrupted": false,
+    "response_status": "completed",
+    "speech_stopped_ms": 1790957698678,
+    "first_audio_ms": 1790957701611,
+    "response_done_ms": 1790957702044,
+    "usage": {
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "input_token_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "text_tokens": 0,
+        "audio_tokens": 0,
+        "image_tokens": 0,
+        "cached_tokens_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0
+        }
+      },
+      "output_token_details": {
+        "text_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "tools": []
+  },
+  "errors": []
+}

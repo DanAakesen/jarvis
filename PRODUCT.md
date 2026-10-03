@@ -1,0 +1,196 @@
+# Product
+
+Jarvis is Dan's personal AI platform: one app, controlled by chat and voice, that grows area by area. Phase 1 is the **Software Factory**: Dan asks Jarvis for a change, a coding agent (Codex or GitHub Copilot) does the work in a cloud sandbox, and GitHub Actions builds, tests, and releases it.
+
+Keep implementation phases and progress in [PLAN.md](PLAN.md), visual choices in [DESIGN.md](DESIGN.md), system structure in [docs/architecture.md](docs/architecture.md), the data model in [docs/data-model.md](docs/data-model.md), commands and operating constraints in [docs/agent-context.md](docs/agent-context.md), and dated decisions and learnings in [docs/decisions.md](docs/decisions.md).
+
+## Purpose and users
+
+- **User:** Dan only. Single user; no multi-tenant or team features.
+- **Purpose:** one Azure platform for building software projects, and later for banking, health and fitness, calendar, and further areas, all controlled through one shared UI and voice.
+- **Language:** Dan speaks Danish and English. UI copy and documentation are English.
+- Jarvis can develop its own repository through the same task flow.
+- Prefer Microsoft services, so Dan learns the stack and new Foundry features, as long as they meet the requirements.
+
+### Roadmap
+
+| Phase | Goal |
+| --- | --- |
+| **1 — Software Factory** | Voice or chat → coding agent → GitHub → live board and voice updates. Start with one project, then verify parallel tasks. |
+| **2 — Banking** | Integrate the existing Banking app into Jarvis with shared UI and voice access. Scope open. |
+| **3 — Health and fitness (Daily)** | Clean up the existing Daily solution and migrate valuable functions, integrations, and history to Azure. |
+| **4 — Windows app** | The same core experience through the shared backend. Framework open. |
+
+Only phase 1 is in scope now. Banking, health and fitness, calendar, and other areas get no tables, pages, or code until their phase starts.
+
+## Scope and core workflows
+
+### Confirmed experience
+
+| Area | Requirement |
+| --- | --- |
+| **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice). |
+| **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
+| **Updates** | Events update state and progress live, without manual refresh. |
+| **Assignment** | One active coding agent per task. |
+| **Parallel work** | Dan controls concurrency across projects; capacity depends on provider limits and compute. |
+| **Agent choice** | Codex or GitHub Copilot per task, regardless of project. |
+| **Subscriptions** | Codex uses Dan's ChatGPT Pro plan (Jarvis-only login); Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. No per-use billing for either. |
+| **Voice** | An open browser is enough. Danish and English with a language toggle; status requests and follow-ups. |
+| **Continuity** | Work continues when the browser or voice session closes. |
+| **Sandbox** | One sandbox per task: starts when work begins, closes after delivery or cancel. The agent runs targeted builds and tests only; no Docker. |
+| **Build and release** | Full builds, all tests, and releases run in GitHub Actions, as in Dan's normal workflow; never in the sandbox. |
+| **Project settings** | Per project: how far agents may go (deliver a PR, or complete without deployment), merge rules, sandbox size. |
+| **Settings** | A settings page controls models and reasoning for Jarvis (voice and chat) and for the coding agents; nothing is hard-coded. |
+| **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. |
+| **Sign-in** | Built-in Azure sign-in with Dan's Microsoft account (Entra ID); only Dan's account is allowed. No passwords in Jarvis. |
+| **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
+| **Memory** | One continuous conversation will need compaction and memory over time; the memory design is deferred. |
+
+### App structure
+
+Jarvis's main page is the conversation with Jarvis plus an overview of what is happening across areas. Each area has its own pages for details. The structure exists from the start so later areas plug in without rework.
+
+```mermaid
+flowchart TB
+    J["Jarvis (main page)<br/>conversation: chat + voice<br/>'now': activity across areas"]
+    J --> SF["Area: Software Factory<br/>task view · task detail · release view · projects"]
+    J --> X["Later areas (not in phase 1)"]
+    J --- S["Shared: settings · usage and cost · activity"]
+```
+
+- Each area owns its pages and registers its tools with Jarvis, so Jarvis gains abilities without being rebuilt.
+- Page requirements list every data point and action, not the look. Dan creates the visual design from them with an image generator (see [DESIGN.md](DESIGN.md)).
+
+### Task lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Ready
+    Ready --> Running: Start
+    Running --> PauseRequested: Pause
+    PauseRequested --> Paused: Turn stopped and saved
+    Paused --> Running: Resume
+    Running --> NeedsAttention: Blocked, failed, or sandbox crashed
+    NeedsAttention --> Running: Continue or recover
+    Running --> Done: Project policy satisfied
+    Ready --> Cancelled: Cancel
+    Running --> Cancelled: Cancel
+    Paused --> Cancelled: Cancel
+```
+
+- **Steer and pause** stop the current turn at a safe point; **resume** continues the agent's conversation.
+- **Sandbox crash:** the task moves to Needs attention; **recover** restarts it in a new sandbox from the task branch, with the task and its history.
+- **Checks loop:** when a pull request's checks fail, Jarvis sends the failing log back to the same task; the agent fixes and pushes again.
+- **Done** follows the project policy and verified GitHub results, never the agent's own report.
+- Show observed milestones; use percentages only when measurable. Show stale or disconnected status and reconcile after reconnect.
+- Changing the provider (Codex ↔ Copilot) on a running task is out of scope for now.
+
+### Project policies
+
+| Policy | Allowed outcome |
+| --- | --- |
+| **Deliver a PR** | Implement, test, push a task branch, and open or update a pull request. Stop at a green PR. |
+| **Complete without deployment** | Also merge when the project's merge rules pass. |
+
+- Merge rules and Done are Dan's choices per project.
+- Permissions are enforced in the backend and runner, and GitHub branch protection is respected.
+
+### Settings
+
+Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered.
+
+| Area | Setting | Default |
+| --- | --- | --- |
+| Jarvis | Model and reasoning effort | `gpt-5.6-luna`, reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
+| Voice | Speech to text | MAI Transcribe |
+| Voice | Voice per language | English: Ryan HD (British butler persona, addresses Dan as "sir"); Danish: Harper (MAI-Voice-2) |
+| Voice | Default language | Danish |
+| Codex | Model and reasoning effort | Codex default |
+| Copilot | Model | Copilot default |
+| Global | Max parallel tasks; sleep switch | Set by Dan |
+
+### Page requirements
+
+Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
+
+#### Jarvis main page
+
+| Data points | Actions |
+| --- | --- |
+| Conversation: messages (Dan, Jarvis), time, language, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
+| Voice state: listening, thinking, speaking; what Jarvis heard; latency | Interrupt by speaking; mute |
+| "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings | Open a task, release, or project; dismiss an activity item |
+| Backend state: awake or asleep | Sleep switch (refused while tasks run) |
+
+#### Software Factory — task view
+
+| Data points | Actions |
+| --- | --- |
+| Columns by state: Ready, Running, Paused, Needs attention, Done, Cancelled | Create task (project, agent, text, optional model/reasoning override) |
+| Card: title, project, agent, state, current activity, last update, duration, attempt count, PR number and checks state, usage so far | Open; steer; pause; resume; cancel; recover (Needs attention) |
+| Filters: project, agent, state, period | Filter; search |
+
+#### Software Factory — task detail
+
+| Data points | Actions |
+| --- | --- |
+| Header: title, request, project, agent, model, state, branch, PR, checks, timestamps, the message in the conversation that created it | Steer, pause, resume, cancel, recover; open PR or branch on GitHub |
+| Timeline: every runner event, steering messages, check results, state changes | Filter event types; expand payloads; open artifacts (logs, CI logs) |
+| Sandbox sessions: start, end, size, end reason, heartbeat state | — |
+| Usage: sandbox minutes and DKK; Codex/Copilot turns and any reported usage | — |
+
+#### Software Factory — release view (per project)
+
+| Data points | Actions |
+| --- | --- |
+| Horizontal git graph: branches as lines, commits as dots (from GitHub on demand), coloured by PR, checks, release, and deployment state | Hover a dot for commit details; open commit, PR, or run on GitHub |
+| Releases (one per merge to `main`): build number, SHA, status, created and released time, linked tasks and PRs | Open a release; open its workflow runs |
+| Workflow runs: workflow, trigger, status, conclusion, duration | Open the run on GitHub; open the failing log |
+| Deployments: environment, status, time | Open the deployment |
+
+#### Software Factory — projects
+
+| Data points | Actions |
+| --- | --- |
+| List: name, repository, default agent, policy, tech, running tasks, last release | Create, edit, archive a project |
+| Project settings: repository, default branch, default agent, policy, merge rules, sandbox size, tech, max parallel tasks | Save (applies to new tasks only) |
+
+#### Settings
+
+| Data points | Actions |
+| --- | --- |
+| Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
+| Voice: speech-to-text model, voice per language, default language | Change; play a voice sample |
+| Coding agents: default model and reasoning per agent | Change (applies to new tasks) |
+| Global: max parallel tasks; sleep switch | Change |
+| Credentials: name, expiry, last renewal, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
+
+#### Usage and cost
+
+| Data points | Actions |
+| --- | --- |
+| Per task, project, and period: sandbox minutes and DKK; Jarvis model tokens and DKK; voice minutes and DKK; Codex and Copilot usage (no DKK) | Change period; group by project, agent, or source; open a task |
+
+## Constraints and integrations
+
+- **Azure:** subscription "Dan Aakesen", tenant Novaro, region Sweden Central. Details in [docs/agent-context.md](docs/agent-context.md).
+- **GitHub:** Dan's private repositories only; a GitHub App provides per-task tokens, webhooks, and merges.
+- **Coding agents:** Codex (ChatGPT Pro, Jarvis-only login) and Copilot (work seat) over ACP; their usage limits are shared with Dan's own use.
+- **Security:** agents run with full permissions inside their sandbox and can read its tokens, so each token is scoped to the task. Jarvis data and other areas are never reachable from a sandbox.
+- **Cost:** see [Cost](docs/architecture.md#cost) in the architecture map.
+- **Existing systems:** Banking is an existing Azure app using the Agents API (integration code not inspected yet). Daily is an existing ChatGPT site, currently paused; its useful functions and history move over in phase 3.
+
+## Success criteria
+
+- Dan can ask Jarvis, by voice or chat, to start a task on a project; a coding agent delivers a pull request; GitHub Actions checks it; Jarvis merges and releases it according to the project policy.
+- Dan sees every task and release update live, can steer, pause, resume, cancel, and recover tasks, and sees what each task used and cost.
+- Each phase in [PLAN.md](PLAN.md) meets its acceptance criteria. Prototype results are evidence for feasibility; production behavior needs its own verification.
+
+## Open questions
+
+- Conflicts between pull requests in one repository (Decision 5).
+- Changing the provider on a running task (Decision 4).
+- Memory design (Decision 6).
+- What usage Codex and Copilot report per turn ([data model](docs/data-model.md#still-open)).
+- Whether Foundry sandboxes can get the documented 20 GiB disk (Decision 9).
