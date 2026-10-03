@@ -1,0 +1,62 @@
+# Aggregate CI for the monorepo (P0-10). Runs every component check on each
+# PR, on pushes to main, and on workflow_dispatch (the merge workflow, P0-12,
+# starts it on main because merges made with GITHUB_TOKEN trigger no push).
+# "CI result" is the single check to require on main and for P0-12.
+# Component workflows are reusable (workflow_call) so each check runs once.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  web:
+    name: Web
+    uses: ./.github/workflows/web-ci.yml
+
+  backend:
+    name: Backend
+    uses: ./.github/workflows/backend-ci.yml
+
+  foundry:
+    name: Foundry
+    uses: ./.github/workflows/foundry-contract.yml
+
+  runner:
+    name: Runner
+    uses: ./.github/workflows/runner-ci.yml
+
+  python:
+    name: Python lint, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - name: Check present Python components
+        run: bash .github/scripts/python-ci.sh
+
+  result:
+    name: CI result
+    if: always()
+    needs: [web, backend, foundry, runner, python]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every component check to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' >/dev/null
