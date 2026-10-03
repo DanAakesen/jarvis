@@ -37,6 +37,22 @@ describe("Foundry runner wire contract", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("passes effective model and Codex reasoning to new runner sessions", async () => {
+    const { client, fetch } = setup({ ...(fixtures["task_start"] as object), agent: "codex" });
+    await client.startTask({
+      agent: "codex", task: "Implement issue #37", model: "gpt-5.4", reasoning: "high",
+    });
+    expect(request(fetch).body).toEqual({
+      agent: "codex", task: "Implement issue #37", model: "gpt-5.4", reasoning: "high",
+    });
+  });
+
+  it("omits provider defaults and reasoning for Copilot", async () => {
+    const { client, fetch } = setup();
+    await client.startTask({ agent: "copilot", task: "Work", model: "default" });
+    expect(request(fetch).body).toEqual({ agent: "copilot", task: "Work" });
+  });
+
   it("steers the existing session through runner mode=steer", async () => {
     const { client, fetch } = setup(fixtures["steer"]);
     const accepted = await client.steer("capture-session", "copilot", "Change the requirement");
@@ -261,6 +277,8 @@ describe("bounded failures and validation", () => {
     await expect(client.deleteSession("..")).rejects.toBeInstanceOf(TypeError);
     await expect(client.startTask({ agent: "other" as "copilot", task: "Work" })).rejects.toBeInstanceOf(TypeError);
     await expect(client.startTask({ agent: "copilot", task: "x".repeat(65_537) })).rejects.toBeInstanceOf(TypeError);
+    await expect(client.startTask({ agent: "copilot", task: "Work", model: "x".repeat(101) })).rejects.toBeInstanceOf(TypeError);
+    await expect(client.startTask({ agent: "codex", task: "Work", reasoning: "x".repeat(33) })).rejects.toBeInstanceOf(TypeError);
     expect(fetch).not.toHaveBeenCalled();
     expect(getToken).not.toHaveBeenCalled();
   });
