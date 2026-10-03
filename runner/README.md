@@ -57,7 +57,11 @@ Start and steer return `invocation_id`, `session_id`, `status`, `agent`, and
 Pause uses ACP cancellation; a later turn reloads the persisted ACP session.
 Cancel terminates the provider process. A `completed` runner turn is not proof
 of a branch or PR: the backend must verify GitHub before accepting delivery
-(L22). The filesystem persists only at Foundry checkpoints.
+(L22). The filesystem persists only at Foundry checkpoints. Metadata is stored per
+invocation, so an idle recreation still permits polling earlier turns in the
+session. Older images' single `task-state.json` records remain readable. Only
+identifiers, status, and timestamps rehydrate; prompts, events, results, and
+credential values are not stored in these records.
 
 The hosted identity fetches secrets from `KEY_VAULT_URI`; its writable home is
 under `JARVIS_WORK_ROOT` (default `/files/jarvis`). Codex auth files are private
@@ -85,8 +89,8 @@ Actions because sandbox disk is limited (L23).
 
 `runner-deploy.yml` runs only on `main` with the bootstrap OIDC identity. It
 queues under `jarvis-production-deploy`; #11's infrastructure/backend deploy
-workflow must use that same concurrency group. It builds both images in ACR,
-checks their manifests, deploys immutable digest references, selects the active
+workflow must use that same concurrency group. It builds both images in ACR with Dockerfile paths relative to the uploaded
+`runner/` context (`Dockerfile` and `Dockerfile.dotnet`), checks their manifests, deploys immutable digest references, selects the active
 Invocations version, grants each dedicated agent identity secret-specific read
 access and write access only to `codex-login`, then probes both providers from
 a session it deletes in `finally`. Existing resources, credentials, and task

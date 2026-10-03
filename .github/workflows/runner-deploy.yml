@@ -45,8 +45,8 @@ jobs:
           python -c 'import json, os; o=json.load(open("/tmp/runner-infra.json")); f=open(os.environ["GITHUB_ENV"], "a"); f.write("REGISTRY=" + o["containerRegistryName"]["value"] + "\nREGISTRY_HOST=" + o["containerRegistryLoginServer"]["value"] + "\n")'
       - name: Build small technology images in ACR
         run: |
-          az acr build --registry "$REGISTRY" --image "jarvis-runner-base:$IMAGE_TAG" --file runner/Dockerfile --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
-          az acr build --registry "$REGISTRY" --image "jarvis-runner-dotnet:$IMAGE_TAG" --file runner/Dockerfile.dotnet --build-arg "RUNNER_BASE_IMAGE=$REGISTRY_HOST/jarvis-runner-base:$IMAGE_TAG" --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
+          az acr build --registry "$REGISTRY" --image "jarvis-runner-base:$IMAGE_TAG" --file Dockerfile --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
+          az acr build --registry "$REGISTRY" --image "jarvis-runner-dotnet:$IMAGE_TAG" --file Dockerfile.dotnet --build-arg "RUNNER_BASE_IMAGE=$REGISTRY_HOST/jarvis-runner-base:$IMAGE_TAG" --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
       - run: python -m pip install --require-hashes -r runner/requirements.txt
       - name: Deploy both capacity tiers and prove Key Vault access
         run: python runner/scripts/deploy.py --subscription "$SUBSCRIPTION_ID" --outputs /tmp/runner-infra.json --registry "$REGISTRY" --tag "$IMAGE_TAG" --state /tmp/runner-deployment.json

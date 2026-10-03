@@ -121,3 +121,24 @@ def test_deploy_selects_version_grants_only_credential_scopes_and_probes(monkeyp
     patch = next(body for method, url, body in foundry.calls if method == "PATCH")
     assert patch["agent_endpoint"]["protocol_configuration"] == {"invocations": {}}
     assert foundry.calls[-1][0] == "DELETE"
+
+
+def test_acr_workflow_dockerfiles_resolve_from_uploaded_source_context():
+    import shlex
+    from pathlib import Path
+
+    repo = Path(__file__).parents[2]
+    workflow = repo.joinpath(".github/workflows/runner-deploy.yml").read_text()
+    commands = [shlex.split(line.strip()) for line in workflow.splitlines()
+                if line.strip().startswith("az acr build ")]
+    assert len(commands) == 2
+    files = []
+    for command in commands:
+        context = repo / command[-1]
+        dockerfile = command[command.index("--file") + 1]
+        # ACR resolves --file relative to the uploaded source-code root,
+        # unlike docker build's local file argument.
+        assert context == repo / "runner"
+        assert (context / dockerfile).is_file()
+        files.append(dockerfile)
+    assert set(files) == {"Dockerfile", "Dockerfile.dotnet"}

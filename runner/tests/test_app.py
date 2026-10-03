@@ -66,7 +66,7 @@ def test_state_event_is_bounded(tmp_path, monkeypatch):
         state.event("test", number=number)
     assert len(state.events) == app.MAX_EVENTS
     assert state.events[-1]["data"]["number"] == app.MAX_EVENTS + 9
-    assert (tmp_path / "s" / app.TASK_STATE_FILE).exists()
+    assert app._task_state_path("s", "i").exists()
 
 
 def test_session_and_task_metadata_are_persisted_without_prompt_or_result(tmp_path, monkeypatch):
@@ -76,7 +76,7 @@ def test_session_and_task_metadata_are_persisted_without_prompt_or_result(tmp_pa
     state.event("started")
     app._persist_acp_session(state, "acp-session")
 
-    task_metadata = json.loads((tmp_path / "foundry-session" / app.TASK_STATE_FILE).read_text())
+    task_metadata = json.loads(app._task_state_path("foundry-session", "invocation").read_text())
     acp_metadata = json.loads((tmp_path / "foundry-session" / app.ACP_SESSION_FILE).read_text())
     assert "secret prompt" not in json.dumps(task_metadata)
     assert "secret result" not in json.dumps(task_metadata)
@@ -487,3 +487,57 @@ def test_next_turn_waits_for_provider_cleanup(tmp_path, monkeypatch):
         assert app.session_clients == {}
 
     asyncio.run(exercise())
+
+
+def test_every_invocation_reloads_after_session_idle_recreation(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    first = app.TaskState("first-turn", "shared-session", "copilot", "private prompt",
+                          status="completed", started_at=100, finished_at=110)
+    second = app.TaskState("second-turn", "shared-session", "copilot", "private correction",
+                           status="interrupted", started_at=120, finished_at=130)
+    app._persist_task(first)
+    app._persist_task(second)
+    monkeypatch.setattr(app, "tasks", {})
+
+    async def poll():
+        for state in (first, second):
+            request = Request({"type": "http", "method": "GET", "headers": [], "path": "/invocations",
+                               "state": {"invocation_id": state.invocation_id}})
+            response = await app.get_invocation(request)
+            assert response.status_code == 200
+            payload = json.loads(response.body)
+            assert payload["invocation_id"] == state.invocation_id
+            assert payload["session_id"] == state.session_id
+            assert payload["status"] == state.status
+            assert payload["started_at"] == state.started_at
+            assert payload["finished_at"] == state.finished_at
+
+    asyncio.run(poll())
+    saved_files = list((tmp_path / "shared-session" / "invocations").glob("*.json"))
+    assert len(saved_files) == 2
+    assert all("private" not in path.read_text() for path in saved_files)
+    if os.name != "nt":
+        assert all(path.stat().st_mode & 0o777 == 0o600 for path in saved_files)
+
+
+def test_task_rehydration_reads_legacy_metadata_without_overriding_new_record(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    legacy = {"invocation_id": "old-turn", "session_id": "s", "agent": "copilot", "status": "paused",
+              "started_at": 10, "finished_at": 20}
+    app._write_json(tmp_path / "s" / "task-state.json", legacy)
+    loaded = app._load_task("old-turn")
+    assert loaded is not None and loaded.status == "paused"
+    loaded.status = "completed"
+    app._persist_task(loaded)
+    assert app._load_task("old-turn").status == "completed"
+
+
+def test_untrusted_invocation_identifier_cannot_escape_metadata_directory(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    state = app.TaskState("../../outside/turn", "s", "copilot", "private prompt", status="completed")
+    app._persist_task(state)
+    saved_files = list(tmp_path.rglob("*.json"))
+    assert len(saved_files) == 1
+    assert saved_files[0].parent == tmp_path / "s" / "invocations"
+    assert len(saved_files[0].stem) == 64
+    assert app._load_task(state.invocation_id).status == "completed"

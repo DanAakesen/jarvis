@@ -19,6 +19,8 @@ import socket
 import time
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
+from hashlib import sha256
+from itertools import chain
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +35,7 @@ APP_VERSION = "0.2.0"
 WORK_ROOT = Path(os.environ.get("JARVIS_WORK_ROOT", "/files/jarvis"))
 MAX_EVENTS = 500
 TASK_STATE_FILE = "task-state.json"
+TASK_STATE_DIR = "invocations"
 ACP_SESSION_FILE = "acp-session.json"
 LOGGER = logging.getLogger("jarvis.runner")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -94,8 +97,9 @@ def _session_metadata_path(session_id: str) -> Path:
     return _session_dir(session_id) / ACP_SESSION_FILE
 
 
-def _task_state_path(session_id: str) -> Path:
-    return _session_dir(session_id) / TASK_STATE_FILE
+def _task_state_path(session_id: str, invocation_id: str) -> Path:
+    filename = sha256(invocation_id.encode("utf-8")).hexdigest() + ".json"
+    return _session_dir(session_id) / TASK_STATE_DIR / filename
 
 
 def _write_json(path: Path, value: dict[str, Any]) -> None:
@@ -128,9 +132,9 @@ def _capacity_snapshot() -> dict[str, Any]:
 
 
 def _persist_task(state: TaskState) -> None:
-    """Persist resumable metadata without prompts, results, or credentials."""
+    """Persist per-invocation metadata without prompts, results, or credentials."""
     _write_json(
-        _task_state_path(state.session_id),
+        _task_state_path(state.session_id, state.invocation_id),
         {
             "invocation_id": state.invocation_id,
             "session_id": state.session_id,
@@ -145,7 +149,10 @@ def _persist_task(state: TaskState) -> None:
 def _load_task(invocation_id: str) -> TaskState | None:
     if not WORK_ROOT.exists():
         return None
-    for state_path in WORK_ROOT.glob(f"*/{TASK_STATE_FILE}"):
+    # Prefer the per-invocation records; retain reads of older images' metadata.
+    state_paths = chain(WORK_ROOT.glob(f"*/{TASK_STATE_DIR}/*.json"),
+                        WORK_ROOT.glob(f"*/{TASK_STATE_FILE}"))
+    for state_path in state_paths:
         try:
             saved = json.loads(state_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
