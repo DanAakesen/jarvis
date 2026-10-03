@@ -2,7 +2,7 @@
 
 Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. P0-01 provides the monorepo folders. P0-02 and P0-03 implement the web and backend skeletons. Statuses below distinguish implementation, design, and prototype evidence.
 
-- Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L29): [decisions.md](decisions.md).
+- Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L35): [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
 - **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–13 show each flow as swimlanes, coloured by evidence (proven, documented, assumed). Open it in a browser.
 
@@ -11,7 +11,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Area | Choice | Status |
 | --- | --- | --- |
 | Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces for the two apps, one root lockfile | Implemented in P0-01; empty app builds verified in Codex cloud |
-| Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending |
+| Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton implemented in P0-02; sign-in P0-09 and deployment P0-11 pending |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton implemented; area plugins and SSE in their tasks |
@@ -45,8 +45,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `backendFqdn` as the public URL. Backend connectivity is unverified until then.
 - The neutral foundation page shows pending capabilities. It does not authenticate
   or contact an API; those interactions begin in P0-09.
-- `web-ci.yml` runs lint, tests and root builds without Azure access. P0-10 extends
-  this to monorepo checks rather than duplicating the web job.
+- `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
+  `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
+  (including the container smoke), `foundry-contract.yml` and `runner-ci.yml`
+  (runner images), runs Python lint, tests and byte-compilation for `runner`
+  and `agents/jarvis` when they exist,
+  and ends in one `CI result` gate job. No job uses Azure credentials.
 
 ## Runtime overview
 
@@ -178,7 +182,7 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | --- | --- |
 | Host | Foundry Hosted Agents, one session per task. Container Apps Jobs is the fallback behind the same runner contract. |
 | Size | 1 vCPU / 2 GiB default; 2 vCPU / 4 GiB for .NET (3.5× faster restore). Never 0.5 / 1 (L3). |
-| Disk | 6 GiB writable at every size, shared by image, `$HOME`, `/files`, and `/tmp`; about 3 GiB free with a .NET image. The agent builds single projects and keeps package caches small; full builds run in GitHub Actions (L23). |
+| Disk | Measured 6 GiB writable at every size (Microsoft documents a budget of up to 20 GiB at ≥1 vCPU with about 20 % reserved, not configurable), shared by image, `$HOME`, `/files`, and `/tmp`; about 3 GiB free with a .NET image. The runner reports disk per session (P6-07). The agent builds single projects and keeps package caches small; full builds run in GitHub Actions (L23). |
 | Runner contract | Start, steer, pause, resume, cancel, and events. The host can change without changing the backend. |
 | Adapter | Python; lives only in the sandbox image. The backend stays Node. |
 | Steer and pause | ACP `session/cancel` stops the current turn; the next turn continues the same conversation with `session/load` (L4, L5). |
@@ -186,6 +190,36 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | Crash | Files and conversation since the last persist point are lost; a new agent version does not restart running sessions. Recovery starts a new session from the task branch with the task history from SQL; the agent pushes often (L22). |
 | Endpoints | Administration (connections, versions): `*.services.ai.azure.com`. Sessions and Invocations: `*.cognitiveservices.azure.com` (L10). |
 | Settings | Model and reasoning per task: `codex-acp` (`model`, `model_reasoning_effort`) and Copilot `--model`; **verify** in P2. |
+
+### Production runner implementation
+
+Issue #28 ports the adapter to `runner/` with task, steer, pause, resume, cancel,
+credential probe, and Codex renewal handlers. Prototype crash-test mode is removed.
+Local Python tests exercise ACP subprocess fixtures; production Azure acceptance
+remains pending #11 and the main-branch runner workflow.
+
+- Node/Python use the small base image; a separate .NET image adds SDK 8.0.419.
+  Both expose 1 vCPU / 2 GiB and 2 vCPU / 4 GiB variants. The default stays 1×2;
+  .NET normally uses 2×4. Full builds stay in GitHub Actions (L23).
+- Python 3.12.14 and Node 22.23.3 are pinned. CLI pins: Copilot 1.0.91, Codex
+  0.157.0, Codex ACP 2.1.1, GitHub CLI 2.98.0. Python hashes and npm integrity
+  locks are committed. Container build and packaged runtime checks run in Runner CI.
+- Runner deploy builds in ACR and deploys manifest digests through OIDC on `main`.
+  It uses the successful infrastructure deployment's admin/runtime endpoints and
+  records each variant only after both Key Vault provider probes pass. Probe
+  sessions are explicitly deleted, including failed probes (L14).
+- Each dedicated agent identity reads only the three credential secret scopes;
+  write access covers only `codex-login`. The port retains `github-token` from the
+  prototype until #40 adds task-scoped GitHub App installation tokens; CLI seat
+  authentication is separate. No workflow seeds credentials.
+- Invocation metadata is stored separately for each turn, with path-safe IDs and
+  backward reads of earlier session records. Idle recreation retains earlier
+  status lookups; prompts, results, and credentials are omitted (L28).
+- Live event push (#29) and coordinated renewal scheduling (#34) remain later
+  work. P2-09 prepends task-branch commit/push instructions to every ACP prompt,
+  including resumed and recovered turns; offline tests cover these paths. Live
+  intermediate-commit acceptance awaits P2-07. See
+  [runner instructions](../runner/README.md).
 
 ### Backend Foundry client
 
