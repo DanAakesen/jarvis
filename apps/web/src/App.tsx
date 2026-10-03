@@ -47,7 +47,9 @@ export function App({ config = __JARVIS_CONFIG__ }: { config?: PublicConfig }) {
             <JarvisPage name={session.profile?.name ?? ''} client={session.client} config={config} />
           } />
           {areas.map(({ id, path, Component }) => (
-            <Route key={id} path={`${path}/*`} element={<Component />} />
+            <Route key={id} path={`${path}/*`} element={
+              <Component backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+            } />
           ))}
           <Route path="settings" element={<SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />} />
         </Route>

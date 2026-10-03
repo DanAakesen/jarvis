@@ -1,5 +1,7 @@
 import { Navigate, NavLink, Route, Routes, useParams } from 'react-router-dom';
 import { NotFoundPage, PendingPage } from '../pages';
+import type { AreaProps } from '../areas';
+import { ProjectSettingsPage, ProjectsPage } from './ProjectsPage';
 
 const idPattern = /^[1-9]\d{0,15}$/;
 
@@ -18,7 +20,7 @@ const tasksLink = { to: '/factory/tasks', label: 'Back to tasks' };
 const projectsLink = { to: '/factory/projects', label: 'Back to projects' };
 
 /** The Software Factory area owns its pages; the shell only mounts it under `/factory`. */
-export function FactoryArea() {
+export function FactoryArea({ backendUrl, getAccessToken }: AreaProps) {
   return (
     <div className="area">
       <nav className="area-nav" aria-label="Software Factory">
@@ -36,14 +38,12 @@ export function FactoryArea() {
         <Route path="tasks/:taskId" element={
           <RecordPage param="taskId" title="Task" back={tasksLink}>Details for this task aren&apos;t available yet.</RecordPage>
         } />
-        <Route path="projects" element={
-          <PendingPage title="Projects">
-            The project list isn&apos;t available yet. Projects, their settings and their release views will be
-            managed here.
-          </PendingPage>
+        <Route path="projects" element={<ProjectsPage backendUrl={backendUrl} getAccessToken={getAccessToken} />} />
+        <Route path="projects/new" element={
+          <ProjectSettingsPage backendUrl={backendUrl} getAccessToken={getAccessToken} />
         } />
         <Route path="projects/:projectId" element={
-          <RecordPage param="projectId" title="Project" back={projectsLink}>Details for this project aren&apos;t available yet.</RecordPage>
+          <ProjectSettingsPage backendUrl={backendUrl} getAccessToken={getAccessToken} />
         } />
         <Route path="releases/:releaseId" element={
           <RecordPage param="releaseId" title="Release" back={projectsLink}>Details for this release aren&apos;t available yet.</RecordPage>
