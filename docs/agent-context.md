@@ -209,6 +209,15 @@ The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and
 
 Future commands (unimplemented until their tasks):
 
+Backend modules are composed through the optional third `buildApp` argument;
+defaults are `core` and `factory`. Module plugins inherit root security hooks and
+contribute internal Jarvis tools without exposing a dispatcher. See the
+[module guide](../apps/backend/src/modules.README.md). Register lifecycle hooks
+before `ready()`/`listen()`; module startup failures must prevent listening.
+The existing backend test/lint/build commands cover the module extension contract.
+
+Future commands (unimplemented until their tasks):
+
 | Purpose | Command |
 | --- | --- |
 | Bootstrap or repair identities | `./infra/bootstrap.ps1` (safe to re-run; needs Dan's signed-in `az` and `gh`) |
