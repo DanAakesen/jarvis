@@ -1,0 +1,16 @@
+# Only production backend build inputs enter the Docker context.
+**
+!package.json
+!package-lock.json
+!tsconfig.base.json
+!apps/
+!apps/backend/
+!apps/backend/package.json
+!apps/backend/tsconfig.json
+!apps/backend/src/
+!apps/backend/src/**
+!apps/web/
+!apps/web/package.json
+apps/backend/src/**/*.test.*
+apps/backend/src/**/vitest.config.*
+apps/backend/src/**/fixtures/**
