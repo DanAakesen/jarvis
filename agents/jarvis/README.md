@@ -15,17 +15,22 @@ prototype's fake tools are gone: every tool comes from the backend's tool regist
 ## Backend tools
 
 Each turn loads `GET /tools` from `JARVIS_BACKEND_URL` (cached 60 seconds) and
-offers those schemas to the model. A model tool call goes to `POST /tools/{name}`
-with the arguments and `X-Jarvis-Message-ID`, and the backend result goes back to
-the model unchanged. The agent authenticates with its platform identity
-(`DefaultAzureCredential`, scope `api://<jarvis-api>/.default`). The backend accepts
-that token only with the `Jarvis.Tools` role and only on the tool routes.
+fetches `GET /factory/context` before calling the model. The context contains up
+to 20 running tasks and their three most recent events; the agent's in-session
+message history is bounded to 12 messages / 24,000 characters. A model tool call
+goes to `POST /tools/{name}` with the arguments and `X-Jarvis-Message-ID`, and the
+backend result goes back to the model unchanged. The agent authenticates with its
+platform identity (`DefaultAzureCredential`, scope `api://<jarvis-api>/.default`).
+The backend accepts that token only with the `Jarvis.Tools` role and only on
+agent-enabled routes.
 
 Only `outcome: "ok"` counts as done. Every failure becomes `outcome: "error"` and
 says whether nothing was done (the request never left the agent) or, after a
 timeout or a connection lost after sending, that the action may have happened. These failures cover unknown tools, bad arguments, refused identity,
 unavailable persistence and an unreachable backend. If the catalogue cannot be
 loaded, the turn fails before the model is asked.
+If the context snapshot cannot be loaded, the turn also fails before the model
+call rather than answering with missing or stale task status.
 
 The message ID comes from the per-turn `current_message_id` context. The conversation
 store (P4-03) stores messages, but no caller passes a message ID to the agent yet,
