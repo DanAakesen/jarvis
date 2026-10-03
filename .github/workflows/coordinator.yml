@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Inspect eligibility without merging, updating branches or assigning Copilot
+        description: Inspect PR eligibility without merging, updating branches or requesting repairs
         type: boolean
         default: true
 
@@ -38,12 +38,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version-file: .python-version
-      - name: Reconcile pull requests and ready tasks
+      - name: Reconcile pull requests
         env:
           GITHUB_TOKEN: ${{ github.token }}
           COPILOT_ASSIGNMENT_TOKEN: ${{ secrets.COPILOT_ASSIGNMENT_TOKEN }}
-          PROJECTS_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
-          COORDINATOR_MAX_COPILOT: ${{ vars.COORDINATOR_MAX_COPILOT || '3' }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         run: |
           args=()

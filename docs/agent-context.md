@@ -51,21 +51,12 @@ Every coding agent on this repository follows these rules. This project requires
 
 ### Task board
 
-Dan follows the work on the [Project Jarvis board](https://github.com/users/DanAakesen/projects/2). Every open issue is on it. [`project_board.py`](../.github/scripts/project_board.py) sets its Status column; nobody moves cards by hand, because the next sync moves them back.
+The GitHub project is managed manually. The separate `Project board` workflow
+was disabled and removed at Dan's request, along with its script and token setup
+instructions. Issue worker labels and `PLAN.md` statuses continue to be maintained
+by the existing Worker label and Plan status workflows; neither accesses the
+project board. Do not restore board automation without Dan's instruction.
 
-| Column | Meaning (open issues) |
-| --- | --- |
-| **Backlog** | Blocked: at least one issue it depends on is still open. |
-| **Ready** | Not blocked, no worker label, no open linked PR: any worker may claim it. |
-| **In progress** | Has a worker label, or an open draft PR with `Fixes #<issue>`. |
-| **In review** | Has an open PR with `Fixes #<issue>` that is ready for review: waiting for checks and merge. |
-| **Done** | Issue closed (the project's built-in "Item closed" workflow). |
-
-- The rules are in `project_board.py` and its tests. Ready on the board is the same as **ready** above.
-- **Who syncs:** [`project-board.yml`](../.github/workflows/project-board.yml), in the cloud. It reconciles every open issue on issue open/close/reopen/label/unlabel, PR open/close/reopen/ready/draft/edit, after each **Plan status** run, daily at 05:17 UTC, and on `workflow_dispatch`. It adds missing issues and writes only cards whose column changed. It uses `pull_request_target`, so PRs with merge conflicts still sync (L38), and never checks out PR code. Nobody needs to ask an agent.
-- **Token:** projects owned by a personal account can only be edited with a classic token (`repo` scope); GitHub Actions tokens, GitHub Apps, and fine-grained tokens can't. The token is the `PROJECT_TOKEN` secret of the `project-board` environment, which only `main` may use (deployment branch policy), so workflows on agent PR branches can't read it. Verified on 3 October 2026: a workflow on a test branch was rejected with "Branch is not allowed to deploy to project-board". Without the secret, a run only warns.
-- Manual run, for example to test: `DRY_RUN=1` lists the moves without writing; see the environment variables in the workflow.
-- The project's built-in workflows may set a column first (item added, PR linked, PR merged); the sync runs seconds later and sets the final one. Built-in "Item closed" moves closed issues to Done.
 ### Start a task
 
 1. **Claim the issue before anything else: set your worker label.** Find the issue by task ID, then:
@@ -108,7 +99,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, also after follow-up rounds and while the PR has merge conflicts (L
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
-- The periodic portion of #12 is `.github/workflows/coordinator.yml`; Dan explicitly authorized it before #11. Its assignment queue is [project 2](https://github.com/users/DanAakesen/projects/2/views/1)'s Ready status; confirmed Copilot assignments move to In progress. See [GitHub coordinator](github-coordinator.md) for the separate Copilot and Projects secrets, controls, eligibility, existing-PR repairs and remaining live acceptance. Its current state must be verified in Actions; it does not claim #12 or deployment complete. Until it is active, Dan merges green PRs.
+- The periodic PR coordinator for #12 is `.github/workflows/coordinator.yml`. It is **disabled in GitHub** at Dan's request as of 3 October 2026. Project-board automation and automatic issue assignment have been removed; there is no Projects-secret setup step. See [GitHub coordinator](github-coordinator.md) for the remaining PR maintenance behavior. Do not re-enable the workflow without Dan's instruction. Deployment integration remains #11.
 ## Azure
 
 | Item | Value |
