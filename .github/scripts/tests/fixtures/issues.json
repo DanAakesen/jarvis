@@ -1,0 +1,52 @@
+[
+  [
+    {
+      "number": 1,
+      "title": "P0-01: Completed task",
+      "state": "closed",
+      "state_reason": "completed",
+      "assignees": []
+    },
+    {
+      "number": 2,
+      "title": "P0-02: Claimed task",
+      "state": "open",
+      "state_reason": null,
+      "assignees": [{"login": "DanAakesen"}]
+    },
+    {
+      "number": 3,
+      "title": "P0-03: PR task",
+      "state": "open",
+      "state_reason": null,
+      "assignees": []
+    },
+    {
+      "number": 4,
+      "title": "P0-04: Blocked task",
+      "state": "open",
+      "state_reason": null,
+      "assignees": [{"login": "Copilot"}]
+    },
+    {
+      "number": 5,
+      "title": "P0-05: Abandoned task",
+      "state": "closed",
+      "state_reason": "not_planned",
+      "assignees": []
+    },
+    {
+      "number": 6,
+      "title": "P0-06: Merged task",
+      "state": "open",
+      "state_reason": null,
+      "assignees": []
+    },
+    {
+      "number": 10,
+      "title": "P0-01: A pull request, not an issue",
+      "state": "open",
+      "pull_request": {"url": "https://api.github.com/repos/o/r/pulls/1"}
+    }
+  ]
+]
