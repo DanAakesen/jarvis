@@ -22,9 +22,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Images | Azure Container Registry: backend and sandbox images | Decided |
 | Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-11 |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
-| Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name; explicit service-identity authorization remains separate | Browser and backend contracts checked offline in #9; real Entra sign-in and deployed origin remain unverified pending #11 |
+| Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (application role `Jarvis.Tools`) is accepted only on the tool routes (P4-01) | Browser and backend contracts checked offline in #9; agent policy checked offline in P4-01; real Entra sign-in, agent tokens and deployed origin remain unverified pending #11 and P4-08 |
 | Board updates | Server-sent events (SSE) over `fetch`, so the bearer token can be sent | Decided |
-| Jarvis agent and runner | Python 3.12/3.13 (Foundry hosted agents support Python or C#) | Decided |
+| Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment is P4-08 |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
 | Voice | Danish: Voice Live voice bridge, MAI Transcribe, Harper. English: `gpt-realtime-2.1` speech to speech, Ryan HD | Decided |
@@ -54,8 +54,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   or malformed. The route exposes only that name, never token claims or IDs.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
-  (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml` and `runner-ci.yml`
-  (runner images), runs Python lint, tests and byte-compilation for `runner`
+  (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
+  (runner images) and `jarvis-agent-ci.yml` (agent image, non-root and fail-fast
+  configuration checks, and a model-free voice turn over its WebSocket), runs Python lint, tests and byte-compilation for `runner`
   and `agents/jarvis` when they exist,
   and ends in one `CI result` gate job. No job uses Azure credentials.
 
@@ -94,16 +95,27 @@ Verified tokens must contain Dan's allow-listed `oid` and delegated
 receive sanitized 401 with a Bearer challenge; verified users/scopes without
 permission receive 403. These early denials retain CORS response headers only
 for the exact approved browser origins, so sign-in can inspect their status.
-ID tokens and app-only tokens are not authorized here.
-Future service integrations must add an explicit route-specific identity policy.
+ID tokens and other app-only tokens are not authorized here.
+
+The hosted Jarvis agent is the one service identity (P4-01). When
+`ENTRA_JARVIS_AGENT_OBJECT_ID` is set, a verified token whose `oid` matches it must
+carry the `Jarvis.Tools` application role, no delegated `scp`, and `idtyp` absent
+or `app`; otherwise 403. Its principal goes to `request.agentPrincipal`, never
+`request.principal`, and only routes with `config: { jarvisAgent: true }` accept it:
+`GET /tools` and `POST /tools/{name}`. Every other route, including `/me` and
+unknown paths, returns 403. Unset or empty configuration denies the agent. The
+role is created by `infra/bootstrap.ps1`; `jarvis-api` already requires role
+assignment, so Entra issues the agent a token only after
+`-JarvisAgentPrincipalId` assigns the role (P4-08).
 
 JWKS lookups have a five-second timeout, a 30-second refresh cooldown and a
 ten-minute key cache. Provider outages fail closed. Only object ID, tenant ID,
 and a validated display name reach `request.principal`; `/me` returns only the
-display name. Tokens, other claims and provider details are excluded from logs
+display name. The agent principal holds only its object ID and tenant ID. Tokens, other claims and provider details are excluded from logs
 and responses. Configuration accepts `ENTRA_TENANT_ID`,
 `ENTRA_API_CLIENT_ID` and `ENTRA_OWNER_OBJECT_ID` UUID overrides and otherwise
-uses the nonsecret bootstrap identities. Real RSA signatures, local HTTP JWKS,
+uses the nonsecret bootstrap identities; `ENTRA_JARVIS_AGENT_OBJECT_ID` is an
+optional UUID that must differ from Dan's. Real RSA signatures, local HTTP JWKS,
 socket duplicate headers, `/me` authorization and stalled-provider tests
 establish this offline boundary. No deployed Entra token was obtained; live
 browser sign-in and deployment verification remain #11.
@@ -161,8 +173,8 @@ name, description and input schema. The core registers a schema-validated
 cancellation signal to its handler, then writes the arguments, result and outcome
 to `tool_calls` using the process-owned SQL pool. Calls require
 `X-Jarvis-Message-ID`; absent persistence returns 503 before tool execution. The
-routes inherit the existing delegated-user policy; a Jarvis service-identity
-policy remains separate. Existing Foundry client, health/security/logging and
+tool routes accept Dan's delegated token and opt in to the Jarvis agent identity
+([backend authentication](#backend-authentication)). Existing Foundry client, health/security/logging and
 process shutdown behavior are preserved.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
@@ -392,9 +404,33 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 
 Models and voices come from the settings page, passed per session; a new voice-agent version is created only when the speech-to-text model or voice changes.
 
+### Jarvis agent
+
+`agents/jarvis` (P4-01) is the ported voice-prototype agent: the Voice Live Bridge
+runtime, response coordinator, strict action rules for spoken Danish replies and the `gpt-5.6-luna` tool loop
+over the Responses API. It defines no tools itself. Each turn loads the backend
+catalogue from `GET /tools` (cached for 60 seconds) and sends each model tool call
+to `POST /tools/{name}`. The agent gets a token for `api://<jarvis-api>/.default`
+from its platform identity through `DefaultAzureCredential`; the same credential
+reaches the model when no API key is set. The backend result is passed back to the
+model unchanged. Only `outcome: "ok"` counts as done.
+
+Failures come back to the model as `outcome: "error"`. They say whether nothing was
+done, or whether a timeout means the action may have happened. They cover unknown tools, invalid JSON,
+rejected arguments, refused identity, unavailable persistence and an unreachable
+backend. An unavailable catalogue fails the turn before the model is called.
+Responses are capped at 1 MiB, catalogues at 128 tools.
+`JARVIS_BACKEND_URL` must be an HTTPS origin, or HTTP only for localhost.
+
+Each call sends `X-Jarvis-Message-ID` from the turn's `current_message_id` context.
+Nothing sets it until P4-03 stores conversation messages, so the agent refuses tool
+calls locally instead of inventing an ID. The prototype's English instructions
+(P5-03) and Azure Table tool log were not ported; the backend's `tool_calls` is the
+record. Deployment to Foundry and live agent tokens are P4-08.
+
 ## Identity and security
 
-- Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID and allows Jarvis's own service identities.
+- Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID. The hosted Jarvis agent is assigned the application role `Jarvis.Tools` and may call only the tool routes.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only; Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
 - Secrets only in Key Vault; none in code, images, environment variables, or logs.

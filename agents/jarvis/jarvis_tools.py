@@ -256,8 +256,9 @@ class BackendToolClient:
     async def _call(
         self, name: str, arguments_json: str | None, message_id: str | None
     ) -> dict[str, Any]:
-        catalogue = self._catalogue or ()
-        if not any(tool.name == name for tool in catalogue):
+        if self._catalogue is None:
+            return _error(name, "The backend tool catalogue is unavailable; nothing was done.")
+        if not any(tool.name == name for tool in self._catalogue):
             return _error(name, "Unknown tool; nothing was done.")
         try:
             arguments = json.loads(arguments_json or "{}")

@@ -218,6 +218,19 @@ async def test_refuses_calls_the_backend_could_not_accept_without_sending_them(
     assert [request.method for request in backend.requests] == ["GET"]
 
 
+async def test_call_before_a_loaded_catalogue_reports_it_unavailable() -> None:
+    backend = Backend(catalogue=httpx.Response(403, json={"error": "Forbidden"}))
+    client = make_client(backend)
+    with pytest.raises(BackendUnavailable):
+        await client.tools()
+
+    result = await client.call("create_task", "{}", "42")
+
+    assert result["outcome"] == "error"
+    assert result["error"] == "The backend tool catalogue is unavailable; nothing was done."
+    assert [request.method for request in backend.requests] == ["GET"]
+
+
 @pytest.mark.parametrize(
     ("status", "expected"),
     [

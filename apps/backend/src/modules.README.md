@@ -53,7 +53,10 @@ route for each tool, so new modules need no agent or core changes. Calls require
 `X-Jarvis-Message-ID`, run with the request and a cancellation signal, and record
 arguments, result and outcome through the SQL-backed tool-call store. Missing
 persistence returns 503 before executing a tool. Global delegated-user
-authentication applies; service-identity policy remains separate.
+authentication applies. The tool routes also set `config: { jarvisAgent: true }`,
+so the hosted Jarvis agent's app-only token is accepted there (P4-01); its
+principal is in `request.agentPrincipal` and `request.principal` stays `null`.
+Leave that flag off module routes unless the agent must call them directly.
 
 From the repository root, `npm test --workspace @jarvis/backend` verifies extension
 registration, root security inheritance, lifecycle failures/cleanup and catalogue
