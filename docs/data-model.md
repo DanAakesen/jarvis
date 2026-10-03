@@ -241,6 +241,8 @@ erDiagram
 - A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22).
 - The sandbox heartbeat updates `last_heartbeat_at`; live runner events update `last_event_at` and add `task_events`.
 - Large content (logs, CI logs, transcripts) lives in Blob; SQL keeps only the path.
+- The schema checks sandbox sizes, statuses, turn modes, end reasons and artifact kinds against these vocabularies. UTC `datetime2` end and heartbeat/event timestamps cannot precede their start.
+- `sandbox_sessions` is indexed by task and status; turns and artifacts are indexed by their parent and timestamp for the session/task timelines.
 
 ## 5 · GitHub and release
 
@@ -322,7 +324,8 @@ erDiagram
 ```
 
 - `webhook_deliveries` makes webhook handling idempotent: GitHub may deliver the same event twice.
-- `credential_status` stores dates only, never secret values; it drives "renew soon" warnings on the board.
+- A delivery is first stored with null outcome and processing time; those fields are set together to `ok`, `ignored` or `error` when handled. No webhook payload or secret is stored here.
+- `credential_status` stores expiry/renewal dates and status only, never secret values; it drives "renew soon" warnings on the board.
 
 ## 7 · Usage and cost
 
