@@ -31,6 +31,7 @@ var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
+var backendAppScaleRoleId = guid(resourceGroup().id, 'jarvis-backend-app-scaler')
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var deployBackendApp = !empty(backendImage)
 
@@ -459,6 +460,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               name: 'SQL_MANAGED_IDENTITY_CLIENT_ID'
               value: backendIdentity.properties.clientId
             }
+            {
+              name: 'BACKEND_CONTAINER_APP_RESOURCE_ID'
+              value: resourceId('Microsoft.App/containerApps', 'ca-jarvis-backend-${suffix}')
+            }
           ]
           // Startup applies migrations before listening and may wait for the serverless database to resume (300-second deadline).
           probes: [
@@ -501,6 +506,39 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
   dependsOn: [
     acrPullAssignment
   ]
+}
+
+resource backendAppScaleRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = if (deployBackendApp) {
+  name: backendAppScaleRoleId
+  properties: {
+    roleName: 'Jarvis backend app scaler'
+    description: 'Read and scale the Jarvis backend Container App.'
+    type: 'CustomRole'
+    permissions: [
+      {
+        actions: [
+          'Microsoft.App/containerApps/read'
+          'Microsoft.App/containerApps/write'
+        ]
+        notActions: []
+        dataActions: []
+        notDataActions: []
+      }
+    ]
+    assignableScopes: [
+      resourceGroup().id
+    ]
+  }
+}
+
+resource backendAppScaleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployBackendApp) {
+  name: guid(backendApp.id, backendIdentity.id, backendAppScaleRole.id)
+  scope: backendApp
+  properties: {
+    roleDefinitionId: backendAppScaleRole.id
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
 }
 
 resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {
