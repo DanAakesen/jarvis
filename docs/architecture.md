@@ -47,8 +47,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   or contact an API; those interactions begin in P0-09.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
-  (including the container smoke) and `foundry-contract.yml`, runs Python lint,
-  tests and byte-compilation for `runner` and `agents/jarvis` when they exist,
+  (including the container smoke), `foundry-contract.yml` and `runner-ci.yml`
+  (runner images), runs Python lint, tests and byte-compilation for `runner`
+  and `agents/jarvis` when they exist,
   and ends in one `CI result` gate job. No job uses Azure credentials.
 
 ## Runtime overview

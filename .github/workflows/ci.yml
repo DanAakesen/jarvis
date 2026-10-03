@@ -31,6 +31,10 @@ jobs:
     name: Foundry
     uses: ./.github/workflows/foundry-contract.yml
 
+  runner:
+    name: Runner
+    uses: ./.github/workflows/runner-ci.yml
+
   python:
     name: Python lint, test and build
     runs-on: ubuntu-latest
@@ -46,7 +50,7 @@ jobs:
   result:
     name: CI result
     if: always()
-    needs: [web, backend, foundry, python]
+    needs: [web, backend, foundry, runner, python]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

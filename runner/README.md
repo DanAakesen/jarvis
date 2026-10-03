@@ -33,7 +33,8 @@ live in `tools/package.json` and `tools/package-lock.json`.
 | GitHub CLI | 2.98.0 |
 | .NET SDK (separate image) | 8.0.419 |
 
-`runner-ci.yml` runs lint, tests, both image builds, packaged CLI checks, and an
+The aggregate `CI` workflow runs runner lint and tests in its Python job and calls
+`runner-ci.yml` for both image builds, packaged CLI checks, and an
 HTTP smoke request against the container's OpenAPI route. The cloud agent
 sandbox cannot run Docker; GitHub Actions owns those checks.
 
