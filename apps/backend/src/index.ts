@@ -2,12 +2,17 @@ import { buildApp } from './app.js';
 import { ConfigurationError, loadConfig } from './config.js';
 import { createLogger, createTelemetry } from './logging.js';
 import { shutdown } from './shutdown.js';
+import { loadDatabaseConfig } from './database/config.js';
+import { createDatabase, registerDatabase } from './database/lifecycle.js';
 
 try {
   const config = loadConfig();
+  const databaseConfig = loadDatabaseConfig();
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const app = buildApp(config, logger);
+  if (databaseConfig) registerDatabase(app, createDatabase(databaseConfig));
+  else logger.info('database.not_configured');
   if (!telemetry) logger.info('telemetry.stdout_only');
 
   let stopping = false;
