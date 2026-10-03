@@ -20,7 +20,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Files | Azure Blob Storage for artifacts and logs | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
-| Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-11 |
+| Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-16 |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
 | Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name; explicit service-identity authorization remains separate | Browser and backend contracts checked offline in #9; real Entra sign-in and deployed origin remain unverified pending #11 |
 | Board updates | Server-sent events (SSE) over `fetch`, so the bearer token can be sent | Decided |
@@ -382,7 +382,7 @@ The agent can read everything in its sandbox, including environment variables, s
 
 [`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02 and P3-03; repository metadata read is GitHub's required baseline.
 
-The backend will store the private key in Key Vault as `github-app-private-key` and use its managed identity to mint one-hour, repository-scoped installation tokens. The key must never enter a sandbox. A separate `github-app-webhook-secret` is needed once P3-03 deploys the webhook receiver. The App ID is configuration, not a secret. The registration, selected-repository installation, and Key Vault secret are pending Dan's manual setup after P0-11; the webhook URL and secret await P3-03.
+The backend will store the private key in Key Vault as `github-app-private-key` and use its managed identity to mint one-hour, repository-scoped installation tokens. The key must never enter a sandbox. A separate `github-app-webhook-secret` is needed once P3-03 deploys the webhook receiver. The App ID is configuration, not a secret. The registration, selected-repository installation, and Key Vault secret are pending Dan's manual setup after P0-16; the webhook URL and secret await P3-03.
 
 **Codex login rules** (Pro login only; no API key):
 
@@ -428,9 +428,10 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 
 | Area | Design | Evidence |
 | --- | --- | --- |
-| Browser connection | Browser connects to the backend's authenticated `/voice` WebSocket using its delegated API token in the WebSocket subprotocol. The backend verifies it before obtaining a Voice Live-scoped bearer token and opening the upstream connection; provider credentials never enter the browser or URL. | Offline backend test forwards messages bidirectionally to a local mock WebSocket and checks authorization/log redaction. The relay module is a spike: production token-provider/endpoint wiring, browser audio, and real Voice Live interoperability are not verified. |
+| Browser connection | Browser connects to the backend's authenticated `/voice` WebSocket using its delegated API token in the WebSocket subprotocol. When `VOICE_LIVE_ENDPOINT` is configured, the backend obtains a Voice Live-scoped token with `DefaultAzureCredential`, pins the `gpt-realtime-2.1` model, and opens the upstream connection; provider credentials never enter the browser or URL. | Backend configuration and a local mock verify endpoint validation, authentication, relay, and model pinning. P0-16 must configure the endpoint and provider identity; Azure interoperability and browser audio are unverified. |
 | Danish path | Browser microphone → Voice Live voice agent (`kind: voice`) → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | 20/20 Danish commands, 4/4 status answers |
-| English path | `gpt-realtime-2.1` speech-to-speech voice agent with Ryan HD and the butler persona; tools run in the backend, which holds the voice connection | First audio ≈0.5–1.1 s |
+| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | Local mock tests verify the server-owned session update; browser audio and live Voice Live behavior remain unverified pending P0-16/P5-04. |
+| English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Voice calls are not yet persisted as messages/tool-call rows; P4-03/P5-06 own conversation and voice history. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
 | Jarvis model | `gpt-5.6-luna`, reasoning `none`, strict action rules (L16) | ≈0.003 DKK per command |
 | Voices | English: `en-GB-Ryan:DragonHDLatestNeural`. Danish: `en-US-Harper:MAI-Voice-2` locked to `da-DK` with `voice_locale`. Language toggle in the UI. | Chosen by Dan from samples |
@@ -439,7 +440,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Interruption | The client stops playback on Voice Live's `speech_started` | Detected in 0.6 s |
 | Reconnect | Reconnect automatically when the voice bridge ends | L21 |
 
-Models and voices come from the settings page, passed per session; a new voice-agent version is created only when the speech-to-text model or voice changes.
+P5-03 pins the English model and Ryan HD in the backend. P5-05 will connect language and voice selection to settings; Danish voice provisioning and history remain separate tasks.
 
 ## Identity and security
 
@@ -471,7 +472,7 @@ The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **A
 
 Required deployment parameters are the full `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed.
 
-PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. Both `gpt-5.6-luna` and `gpt-realtime-2.1` use Global Standard capacity 1, configured independently. Dan accepted this starting allocation; adjust it if testing demonstrates rate limits. Exact model-specific limits and regional quota availability remain to be verified in P0-11. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
+PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. Both `gpt-5.6-luna` and `gpt-realtime-2.1` use Global Standard capacity 1, configured independently. Dan accepted this starting allocation; adjust it if testing demonstrates rate limits. Exact model-specific limits and regional quota availability remain to be verified in P0-16. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
 
 `sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, `budgetStartDate` to `2026-10-01T00:00:00Z`, and budget notification emails to an empty array (the Owner role is also notified). The amount is interpreted in the subscription billing currency; confirm that currency is DKK.
 

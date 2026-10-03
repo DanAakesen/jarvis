@@ -25,7 +25,7 @@ The repository `PLAN.md` status workflow is GitHub metadata; it does not add a J
 
 ## Interactions to design
 
-- **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard.
+- **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.
 - **Language toggle:** Danish ↔ English, visible wherever voice is active.
 - **Task controls:** steer, pause, resume, cancel, and recover, each with a clear pending state (for example, "Pausing…" until the turn has stopped).
 - **Sleep switch:** shows awake or asleep; refused with an explanation while tasks run.

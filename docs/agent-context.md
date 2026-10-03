@@ -157,11 +157,11 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 
 Subscribe to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. GitHub requires repository metadata read access automatically. Install only on the repositories Dan selects for Jarvis; do not grant access to all repositories by default.
 
-Do not configure a webhook URL or secret until P0-11 has deployed the backend and P3-03 has implemented its receiver. The manifest intentionally has no webhook URL because neither endpoint is available yet. A GitHub App ID is not a secret; the private key is.
+Do not configure a webhook URL or secret until P0-16 has deployed the backend and P3-03 has implemented its receiver. The manifest intentionally has no webhook URL because neither endpoint is available yet. A GitHub App ID is not a secret; the private key is.
 
 Dan's manual setup checklist:
 
-1. Wait for [P0-11](https://github.com/DanAakesen/jarvis/issues/11) to deploy the Key Vault and backend. Use the deployed `keyVaultName` output; do not guess a vault name.
+1. Wait for [P0-16](https://github.com/DanAakesen/jarvis/issues/131) to deploy the Key Vault and backend. Use the deployed `keyVaultName` output; do not guess a vault name.
 2. In GitHub, register the App using the settings above, leave the webhook URL unset until P3-03 is deployed, and install it only on the intended repositories. This requires Dan's GitHub account to administer the owner and selected repositories.
 3. Generate one private key from the App's settings. Download it to a temporary, access-controlled location outside the repository and any synced folder. Never paste or upload it to GitHub, a PR, chat, GitHub Actions, or a sandbox.
 4. From Dan's signed-in Azure CLI, import the PEM file directly into the deployed vault. Replace placeholders locally; do not add the key or its value to the command:
@@ -186,7 +186,7 @@ Dan's manual setup checklist:
 
    Configure that same secret in GitHub's App settings and remove the temporary local copy. Do not put either copy in source control or logs.
 
-Status, 3 October 2026: Dan registered the App and installed it on selected repositories (step 2). No private key exists yet; steps 3–6 follow P0-11 and step 7 follows P3-03 (task P3-10). Key Vault storage and webhook delivery are unverified until then. The manifest and instructions do not claim they have happened.
+Status, 3 October 2026: Dan registered the App and installed it on selected repositories (step 2). No private key exists yet; steps 3–6 follow P0-16 and step 7 follows P3-03 (task P3-10). Key Vault storage and webhook delivery are unverified until then. The manifest and instructions do not claim they have happened.
 
 ## Setup and commands
 
@@ -195,7 +195,7 @@ lockfile, and shared strict TypeScript configuration. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
 Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3).
-P0-04 adds the Bicep template; its Azure deployment awaits P0-11.
+P0-04 adds the Bicep template; its first Azure deployment is P0-16.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
 and Python 3.12.14 (`.python-version`, for future Python work). Install from the
@@ -216,7 +216,7 @@ Verified in Codex cloud for P0-02:
 
 The web starts with the bootstrap identities and the public production backend
 origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). The URL
-is pending P0-11's first deployment; until configured, sign-in is visibly
+is pending P0-16's first deployment; until configured, sign-in is visibly
 disabled. With a backend URL, MSAL signs in against the configured tenant and
 calls authenticated `/me`; only the backend-approved display name is shown.
 `Web CI` checks lint, tests, and root builds as part of the aggregate `CI`
@@ -251,6 +251,13 @@ authentication. P0-08 installs a root bearer-authentication hook before CORS,
 so future area routes inherit it. Only `/health` GET/HEAD and the generated CORS
 preflight route are public; explicit OPTIONS business endpoints are protected.
 
+The optional `VOICE_LIVE_ENDPOINT` enables `/voice`; it must be a secure Azure
+Voice Live WebSocket endpoint without credentials in its URL. The backend pins
+`gpt-realtime-2.1`, gets the `https://ai.azure.com/.default` token with
+`DefaultAzureCredential`, and owns session settings and tool execution. P0-16
+must configure this endpoint and provider identity before live use. Local voice
+tests use a mock WebSocket and do not verify Azure access or browser audio.
+
 Backend authentication defaults to the nonsecret identities in
 `infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and
 `ENTRA_OWNER_OBJECT_ID` may override those UUIDs at startup. The API expects an
@@ -266,7 +273,7 @@ can read their status; unapproved origins receive no allow-origin header.
 socket duplicate-header rejection, cached keys and bounded provider outages.
 They require no Azure identity or external JWKS service. The production JWKS
 lookup timeout is five seconds. `/me` and browser sign-in remain P0-09; live
-Azure token verification remains P0-11.
+Azure token verification remains P0-16.
 
 `APPLICATIONINSIGHTS_CONNECTION_STRING` is backend-only protected runtime
 configuration supplied by P0-11 through Key Vault references. When absent,
@@ -281,9 +288,9 @@ the backend and bounds close/flush/disposal to five seconds.
 container build and smoke test without Azure credentials. Its image uses pinned
 Node.js, runs as non-root, and contains backend output and production dependencies.
 Container verification belongs in Actions; live telemetry ingestion and Azure
-connectivity remain unverified until P0-11.
+connectivity remain unverified until P0-16.
 
-Verified locally in P0-04 (Azure deployment remains pending P0-11):
+Verified locally in P0-04 (Azure deployment remains pending P0-16):
 
 | Purpose | Command |
 | --- | --- |

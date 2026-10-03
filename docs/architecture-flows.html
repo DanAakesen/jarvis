@@ -174,9 +174,9 @@ const RISK_KEYS = ["proven", "docs", "assumed", "unknown"];
 const LANES = {
   user:     { name: "Dan",              tech: "Browser · microphone" },
   board:    { name: "Board",            tech: "React + TypeScript + Vite · Static Web Apps" },
-  voice:    { name: "Voice",            tech: "Voice Live · MAI Transcribe · Ryan HD (EN) · Harper (DA)" },
+  voice:    { name: "Voice",            tech: "Voice Live · Ryan HD (EN) · Harper (DA)" },
   jarvis:   { name: "Jarvis agent",     tech: "Foundry hosted agent · voice bridge" },
-  model:    { name: "Model",            tech: "gpt-5.6-luna · billed per use" },
+  model:    { name: "Model",            tech: "gpt-5.6-luna · gpt-realtime-2.1" },
   entra:    { name: "Microsoft Entra",  tech: "Tenant-specific OAuth 2.0 / OIDC" },
   backend:  { name: "Backend",          tech: "Node.js · Container Apps" },
   data:     { name: "Task store",       tech: "Azure SQL · Blob" },
@@ -511,6 +511,26 @@ const FLOWS = [
       ["event", "read", "docs", ""], ["read", "status", "docs", "issues + PRs"],
       ["event", "new", "docs", "PLAN.md change"], ["new", "deps", "docs", "task dependency IDs"],
       ["status", "commit", "docs", "status-cell diff"], ["commit", "protection", "unknown", "push rejected?"],
+    ],
+  },
+  {
+    name: "English voice",
+    summary: "The backend configures the English realtime session and runs its registered tools; the browser relays audio only.",
+    nodes: [
+      { id: "start", lane: "user", col: 1, s: "unknown", t: "Speak to Jarvis", d: "Browser audio client connects to the authenticated `/voice` WebSocket.", ev: "P5-04 owns the browser audio client; it is not yet implemented." },
+      { id: "relay", lane: "backend", col: 2, s: "unknown", t: "Authenticate and configure", d: "Backend obtains a Voice Live token and pins `gpt-realtime-2.1`, Ryan HD and the butler instructions.", ev: "P5-03 mock tests cover configuration and the relay. P0-16 endpoint/identity setup and live Azure behavior remain unverified." },
+      { id: "model", lane: "model", col: 3, s: "unknown", t: "Interpret speech", d: "Realtime model can call only schemas supplied by the backend registry.", ev: "The session is server-configured; real Azure model behavior has not been tested." },
+      { id: "tool", lane: "backend", col: 4, s: "unknown", t: "Execute registered tool", d: "Backend validates arguments, executes the tool and returns its result and confirmation to the model.", ev: "P5-03 local mock verifies tool execution and P4-05 result/confirmation delivery. Voice calls are not persisted yet; P4-03/P5-06 own history." },
+      { id: "voice", lane: "voice", col: 5, s: "unknown", t: "Speak the result", d: "Ryan HD replies in British English using the backend tool result.", ev: "The result continuation is verified with a local mock; live audio and Azure interoperability remain unverified." },
+      { id: "done", lane: "user", col: 6, s: "unknown", t: "Hear the reply", d: "Browser plays the returned audio.", ev: "Browser microphone, playback and interruption are P5-04." },
+    ],
+    edges: [
+      ["start", "relay", "unknown", "audio"],
+      ["relay", "model", "unknown", "session + audio"],
+      ["model", "tool", "unknown", "function call"],
+      ["tool", "model", "unknown", "tool result"],
+      ["model", "voice", "unknown", "spoken response"],
+      ["voice", "done", "unknown", "audio"],
     ],
   },
 ];

@@ -112,6 +112,8 @@ Global defaults on the settings page; a task can override the coding-agent model
 | Copilot | Model | Copilot default |
 | Global | Max parallel tasks; sleep switch | Set by Dan |
 
+English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
+
 ### Page requirements
 
 Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
@@ -179,6 +181,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 - **Azure:** subscription "Dan Aakesen", tenant Novaro, region Sweden Central. Details in [docs/agent-context.md](docs/agent-context.md).
 - **GitHub:** Dan's private repositories only; a GitHub App provides per-task tokens, webhooks, and merges.
 - **Coding agents:** Codex (ChatGPT Pro, Jarvis-only login) and Copilot (work seat) over ACP; their usage limits are shared with Dan's own use.
+- **English voice:** `gpt-realtime-2.1` with Ryan HD; tool calls execute through the backend's registered tools, and the spoken response uses the backend-built confirmation.
 - **Security:** agents run with full permissions inside their sandbox and can read its tokens, so each token is scoped to the task. Jarvis data and other areas are never reachable from a sandbox.
 - **Cost:** see [Cost](docs/architecture.md#cost) in the architecture map.
 - **Existing systems:** Banking is an existing Azure app using the Agents API (integration code not inspected yet). Daily is an existing ChatGPT site, currently paused; its useful functions and history move over in phase 3.
