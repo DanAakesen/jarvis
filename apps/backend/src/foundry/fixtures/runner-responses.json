@@ -1,0 +1,157 @@
+{
+  "source": "Actual runner/app.py handler responses captured locally; external ACP work stubbed; not Azure envelopes",
+  "runner_source_commit": "cb5b713",
+  "capture_clock": 1791038000.0,
+  "records": {
+    "task_start": {
+      "status_code": 200,
+      "body": {
+        "invocation_id": "capture-task",
+        "session_id": "capture-session",
+        "status": "queued",
+        "agent": "copilot",
+        "mode": "task"
+      }
+    },
+    "status_running": {
+      "status_code": 200,
+      "body": {
+        "invocation_id": "capture-task",
+        "session_id": "capture-session",
+        "agent": "copilot",
+        "status": "running",
+        "started_at": 1791038000.0,
+        "finished_at": null,
+        "events": [
+          {
+            "at": 1791038000.0,
+            "kind": "started",
+            "data": {
+              "agent": "copilot"
+            }
+          }
+        ],
+        "result": null,
+        "error": null
+      }
+    },
+    "resume": {
+      "status_code": 200,
+      "body": {
+        "invocation_id": "capture-resume",
+        "session_id": "capture-session",
+        "status": "queued",
+        "agent": "copilot",
+        "mode": "task"
+      }
+    },
+    "steer": {
+      "status_code": 200,
+      "body": {
+        "invocation_id": "capture-steer",
+        "session_id": "capture-session",
+        "status": "queued",
+        "agent": "copilot",
+        "mode": "steer"
+      }
+    },
+    "pause_active": {
+      "status_code": 200,
+      "body": {
+        "session_id": "capture-session",
+        "status": "pausing",
+        "paused_invocation": "capture-task"
+      }
+    },
+    "status_completed": {
+      "status_code": 200,
+      "body": {
+        "invocation_id": "capture-task",
+        "session_id": "capture-session",
+        "agent": "copilot",
+        "status": "completed",
+        "started_at": 1791038000.0,
+        "finished_at": 1791038060.0,
+        "events": [
+          {
+            "at": 1791038000.0,
+            "kind": "completed",
+            "data": {
+              "result": {
+                "acp_session_id": "fixture-acp",
+                "response": {
+                  "stopReason": "end_turn"
+                }
+              }
+            }
+          }
+        ],
+        "result": {
+          "acp_session_id": "fixture-acp",
+          "response": {
+            "stopReason": "end_turn"
+          }
+        },
+        "error": null
+      }
+    },
+    "pause_idle": {
+      "status_code": 200,
+      "body": {
+        "session_id": "capture-session",
+        "status": "idle",
+        "paused_invocation": null
+      }
+    },
+    "cancel": {
+      "status_code": 200,
+      "body": {
+        "invocation_id": "capture-task",
+        "status": "cancelled"
+      }
+    },
+    "status_cancelled": {
+      "status_code": 200,
+      "body": {
+        "invocation_id": "capture-task",
+        "session_id": "capture-session",
+        "agent": "copilot",
+        "status": "cancelled",
+        "started_at": 1791038000.0,
+        "finished_at": 1791038000.0,
+        "events": [
+          {
+            "at": 1791038000.0,
+            "kind": "completed",
+            "data": {
+              "result": {
+                "acp_session_id": "fixture-acp",
+                "response": {
+                  "stopReason": "end_turn"
+                }
+              }
+            }
+          },
+          {
+            "at": 1791038000.0,
+            "kind": "cancel_requested",
+            "data": {}
+          }
+        ],
+        "result": {
+          "acp_session_id": "fixture-acp",
+          "response": {
+            "stopReason": "end_turn"
+          }
+        },
+        "error": null
+      }
+    },
+    "status_not_found": {
+      "status_code": 404,
+      "body": {
+        "error": "invocation not found"
+      }
+    }
+  }
+}

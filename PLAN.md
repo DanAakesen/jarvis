@@ -5,7 +5,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 ## Current focus
 
 - **Active phase:** P0. P0-01 and P0-02 are merged. P0-05's Foundry template is merged in PR #79; this documentation follow-up lists its required timestamp input. P0-03 is claimed and in progress. P0-04 provides the locally checked core Bicep template; P0-06 completed the bootstrap. Azure deployment remains P0-11.
-- **Next step:** Complete P0-03, then P0-10 so P0-12 (automatic merges) and P0-13 (automatic statuses) can follow. Until then Dan starts tasks and merges green PRs, or explicitly authorizes Codex to merge them.
+- **Next step:** Complete P0-03, then P0-10 so P0-12 (automatic merges) and P0-13 (automatic statuses) can follow. Until then Dan starts tasks and merges green PRs, or explicitly authorizes Codex to merge them. Issue #30 adds the standalone Foundry client and offline recorded-handler contract checks; live Azure validation remains #11 and end-to-end task controls #33.
 - **Blockers:** No production backend URL exists yet; P0-11 must record it in `apps/web/config.json`. P0-11 must also persist and supply `foundryNameTimestamp` on redeployments. These do not block opening the skeleton. Items marked **Confirm** or **Verify** block only the tasks that depend on them.
 
 ## Implementation phases
@@ -104,7 +104,7 @@ Goal: real coding tasks run in Foundry sandboxes, controlled from the board.
 | P2-01 | Migrations for group 4 (`sandbox_sessions`, `sandbox_turns`, `artifacts`) and group 6 (`webhook_deliveries`, `credential_status`) | Migration works | P1-01 | Not started |
 | P2-02 | Port the runner from the prototype into `runner/`; image builds in ACR; agent version deployed by a workflow (1×2 and 2×4 variants; small images per tech, L23); pinned CLI versions (L13) | Prototype runner tests pass; Key Vault probe works with the agent identity | P0-05 | Not started |
 | P2-03 | Runner pushes live events to the backend (`POST /factory/sandbox-events`) authenticated with the agent identity; backend validates the identity and stores every event in `task_events` | Events appear on the task detail page live | P2-02, P1-05 | Not started |
-| P2-04 | Backend Foundry client: start task, steer, pause, resume, cancel, status, delete session; separate admin and runtime endpoints (L10) | Contract tests against recorded responses | P0-05 | Not started |
+| P2-04 | Backend Foundry client: start task, steer, pause, resume, cancel, status, delete session; separate admin and runtime endpoints (L10) | Contract tests against recorded responses | P0-05 | Complete |
 | P2-05 | Dispatcher: picks Ready tasks within global and project limits using the lease columns; starts a sandbox; retries with `attempt_count`/`next_attempt_at`; then NeedsAttention | Two dispatcher instances never start the same task (test); no SQL queries while no task is Ready, Running or waiting for a retry, so the database can pause (test) | P2-04, P1-04 | Not started |
 | P2-06 | Sandbox heartbeat: about once a minute per running session; updates `last_heartbeat_at`; crash rule from L22 (HTTP 424/404/5xx on two polls or 30 s → NeedsAttention); event gaps alone never trigger it | Rule unit-tested with recorded responses | P2-04, P2-01 | Not started |
 | P2-07 | Task controls on the board: steer (text), pause, resume, cancel; buttons follow the state machine | End-to-end with both agents on a private test repository `DanAakesen/jarvis-test-target` (created with `gh`) | P2-04, P1-09 | Not started |

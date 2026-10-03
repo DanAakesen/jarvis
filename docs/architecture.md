@@ -167,6 +167,14 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | Endpoints | Administration (connections, versions): `*.services.ai.azure.com`. Sessions and Invocations: `*.cognitiveservices.azure.com` (L10). |
 | Settings | Model and reasoning per task: `codex-acp` (`model`, `model_reasoning_effort`) and Copilot `--model`; **verify** in P2. |
 
+### Backend Foundry client
+
+`apps/backend/src/foundry/client.ts` implements start, steer, pause, resume, cancel, status and explicit session deletion. It stores distinct runtime and administration project endpoints for the same account/project. Administration preflight checks connections and the named agent's versions on the administration host; it creates no session.
+
+The module uses Node 22 native fetch and an injected identity provider requesting `https://ai.azure.com/.default`. Each HTTP call bounds authentication, fetch and response consumption to 30 seconds by default, limits response bodies to 1 MiB, propagates cancellation and refuses redirects. It validates responses and exposes sanitized typed failures, preserving HTTP status codes. It has no retry loop or background polling. The dispatcher owns retries/session cleanup, and the heartbeat owns crash detection. Provider `completed` still requires GitHub branch/PR evidence; resume applies to clean pause/idle shutdown, while crash recovery starts a new session.
+
+Issue #30's offline contracts use actual locally recorded runner handler responses from #28 with ACP execution stubbed. Azure envelope/routing/authorization checks remain pending deployment and end-to-end task-control validation. The [module guide](../apps/backend/src/foundry/README.md) describes the API, bounds and recording provenance.
+
 ### Sandbox credentials
 
 The agent can read everything in its sandbox, including environment variables, so each token is limited to what the task needs.
