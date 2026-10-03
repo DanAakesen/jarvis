@@ -490,15 +490,19 @@ Agent configuration (environment variables, no secrets):
 | `AZURE_OPENAI_API_KEY` | Optional local model key; without it the agent identity also gets the model token |
 | `AZURE_OPENAI_SYSTEM_PROMPT`, `AZURE_OPENAI_MAX_OUTPUT_TOKENS`, `JARVIS_REASONING_EFFORT`, `LOG_LEVEL` | Optional overrides, as in the prototype |
 
-The agent identity exists only after the agent is deployed (P4-08). Then run
-`./infra/bootstrap.ps1 -JarvisAgentPrincipalId <instance_identity.principal_id>`
-to assign `Jarvis.Tools`, and set the backend's `ENTRA_JARVIS_AGENT_OBJECT_ID` to
-the same ID. Tool calls also need the turn's stored message ID from P4-03; until
-then the agent reports each call as not done.
+The main Deploy workflow publishes the agent image by digest, creates a hosted
+version with `JARVIS_BACKEND_URL`, and configures the backend with the version's
+instance identity. After its summary reports `instance_identity.principal_id`,
+run `./infra/bootstrap.ps1 -JarvisAgentPrincipalId <instance_identity.principal_id>`
+to assign `Jarvis.Tools` and persist that same value as the
+`ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable. Bicep uses that variable on later
+infrastructure deployments. Cloud agents cannot run bootstrap or verify Azure;
+Dan verifies the hosted deployment and tools after this local step. Tool calls
+also need the stored message ID from P4-03, supplied by the caller in P4-06.
 
 ## Release procedure
 
-- Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, and web; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).
+- Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, web, and the Jarvis agent; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).
 - After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>'` so sign-in works there (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
 - No manual portal changes.
 - Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.

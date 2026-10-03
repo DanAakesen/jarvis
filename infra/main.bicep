@@ -12,6 +12,9 @@ param sqlAdminGroupName string = 'jarvis-sql-admins'
 @description('The container image to run in the backend app. Empty skips the backend app; the deploy workflow uses this only before the registry holds the first backend image.')
 param backendImage string = ''
 
+@description('The Entra object ID of the hosted Jarvis agent. Empty keeps agent access disabled.')
+param jarvisAgentObjectId string = ''
+
 @description('The subscription currency amount for the monthly resource group budget (300 DKK).')
 param monthlyBudgetAmount int = 300
 
@@ -438,7 +441,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             cpu: json('0.25')
             memory: '0.5Gi'
           }
-          env: [
+          env: concat([
             {
               name: 'STATIC_WEB_APP_ORIGIN'
               value: 'https://${staticWebApp.properties.defaultHostname}'
@@ -459,7 +462,12 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               name: 'SQL_MANAGED_IDENTITY_CLIENT_ID'
               value: backendIdentity.properties.clientId
             }
-          ]
+          ], empty(jarvisAgentObjectId) ? [] : [
+            {
+              name: 'ENTRA_JARVIS_AGENT_OBJECT_ID'
+              value: jarvisAgentObjectId
+            }
+          ])
           // Startup applies migrations before listening and may wait for the serverless database to resume (300-second deadline).
           probes: [
             {
