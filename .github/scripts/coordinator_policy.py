@@ -1,7 +1,7 @@
 """Pure, fail-closed eligibility rules for the periodic GitHub coordinator.
 
 API access, pagination, fresh reads, ancestry checks and side effects belong to
-the caller. These rules never trust GitHub search's ``is:blocked`` filtering.
+the caller. These rules bind merge decisions to the tested head and current main.
 """
 
 from __future__ import annotations
@@ -12,8 +12,6 @@ from typing import Any
 
 TASK_ID = r"P[0-6]-[0-9]{2}"
 TASK_TITLE = re.compile(rf"^({TASK_ID}): \S[^\n]*$")
-WORKER_LABELS = frozenset({"codex", "jarvis", "dan", "copilot"})
-REPOSITORY = "DanAakesen/jarvis"
 
 
 def issue_task_id(title: str) -> str | None:
@@ -87,61 +85,6 @@ def parse_plan(markdown: str) -> dict[str, dict[str, Any]]:
     if not result:
         raise ValueError("PLAN contains no task rows")
     return result
-
-
-def closing_issue_numbers(body: str, repository: str = REPOSITORY) -> set[int]:
-    """Recognize GitHub closing keywords, restricting cross-repo references.
-
-    Comments/code can look like closing references; treating those as claimed is
-    deliberately conservative. A linked issue must never be assigned twice.
-    """
-    pattern = re.compile(
-        r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)\s+"
-        r"(?:https://github\.com/(?P<url_repo>[\w.-]+/[\w.-]+)/issues/"
-        r"|(?:(?P<repo>[\w.-]+/[\w.-]+))?#)(?P<number>[1-9][0-9]*)\b",
-        re.IGNORECASE,
-    )
-    numbers = set()
-    for match in pattern.finditer(body):
-        target = match.group("url_repo") or match.group("repo")
-        if target is None or target.casefold() == repository.casefold():
-            numbers.add(int(match.group("number")))
-    return numbers
-
-
-def ready_issue(
-    issue: dict[str, Any],
-    plan: dict[str, dict[str, Any]],
-    issues_by_task: dict[str, dict[str, Any]],
-    open_pr_bodies: list[str],
-) -> tuple[bool, str]:
-    """PLAN and current issue data must both permit a new Copilot assignment."""
-    if str(issue.get("state", "")).casefold() != "open":
-        return False, "issue is not open"
-    task_id = issue_task_id(issue.get("title", ""))
-    task = plan.get(task_id or "")
-    if task is None:
-        return False, "issue has no exact PLAN task"
-    if task.get("status") != "Not started":
-        return False, "PLAN task is not Not started"
-    labels = {str(label.get("name", "") if isinstance(label, dict) else label).casefold() for label in issue.get("labels", [])}
-    if labels & WORKER_LABELS:
-        return False, "issue has a worker label"
-    if issue.get("assignees"):
-        return False, "issue has an assignee"
-    number = issue.get("number")
-    if not isinstance(number, int) or number <= 0:
-        return False, "issue number is missing"
-    if any(number in closing_issue_numbers(body) for body in open_pr_bodies):
-        return False, "issue has a linked open PR"
-    for dependency in task.get("deps", []):
-        prerequisite = plan.get(dependency)
-        if prerequisite is None or prerequisite.get("status") != "Complete":
-            return False, f"PLAN dependency {dependency} is incomplete or missing"
-        dependency_issue = issues_by_task.get(dependency)
-        if dependency_issue is None or str(dependency_issue.get("state", "")).casefold() != "closed":
-            return False, f"GitHub dependency {dependency} is not confirmed closed"
-    return True, "ready"
 
 
 def latest_workflow_runs_green(

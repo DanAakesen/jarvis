@@ -1,16 +1,14 @@
-"""Behavioral contracts for unclaimed tasks and SHA-bound merge decisions."""
+"""Behavioral contracts for PLAN parsing and SHA-bound merge decisions."""
 
 import copy
 import unittest
 from pathlib import Path
 
 from coordinator_policy import (
-    closing_issue_numbers,
     decide_merge,
     issue_task_id,
     latest_workflow_runs_green,
     parse_plan,
-    ready_issue,
 )
 
 PLAN = """
@@ -41,8 +39,6 @@ class PlanPolicyTests(unittest.TestCase):
             "P0-02": {"number": 2, "state": "closed"},
         }
 
-    def ready(self, bodies=None):
-        return ready_issue(self.issue, self.plan, self.issues, bodies or [])
 
     def test_real_plan_parses_including_range(self):
         plan = parse_plan((Path(__file__).resolve().parents[2] / "PLAN.md").read_text())
@@ -52,9 +48,6 @@ class PlanPolicyTests(unittest.TestCase):
     def test_plan_status_issue_column_preserves_task_and_dependencies(self):
         self.plan = parse_plan(PLAN_WITH_ISSUES)
         self.assertEqual(self.plan, parse_plan(PLAN))
-        self.assertEqual(self.ready(), (True, "ready"))
-        self.issues["P0-02"]["state"] = "open"
-        self.assertFalse(self.ready()[0])
 
     def test_five_and_six_column_tables_can_coexist(self):
         first = PLAN.split("| P0-02")[0]
@@ -97,62 +90,6 @@ class PlanPolicyTests(unittest.TestCase):
     def test_escaped_pipe_does_not_shift_dependencies(self):
         plan = parse_plan(PLAN.replace("Next task", r"Next \| task"))
         self.assertEqual(plan["P0-03"]["title"], "Next | task")
-
-    def test_ready_issue_requires_plan_and_github(self):
-        self.assertEqual(self.ready(), (True, "ready"))
-        self.issues["P0-01"]["state"] = "open"
-        self.assertFalse(self.ready()[0])
-        self.issues.pop("P0-01")
-        self.assertFalse(self.ready()[0])
-
-    def test_every_worker_label_blocks_case_insensitively(self):
-        for label in ["Codex", "CODEX", "codex", "Copilot", "COPILOT", "copilot", "Jarvis", "JARVIS", "jarvis", "Dan", "DAN", "dan"]:
-            for wrapped in [label, {"name": label}]:
-                with self.subTest(label=wrapped):
-                    self.issue["labels"] = [wrapped]
-                    self.assertFalse(self.ready()[0])
-
-    def test_assigned_or_closed_issue_not_ready(self):
-        self.issue["assignees"] = [{"login": "some-worker"}]
-        self.assertFalse(self.ready()[0])
-        self.issue["assignees"] = []
-        self.issue["state"] = "closed"
-        self.assertFalse(self.ready()[0])
-
-    def test_search_ready_result_cannot_override_plan(self):
-        # GitHub search may return a task for -is:blocked even with prerequisites
-        # pending. Its search result is never a readiness decision.
-        self.plan["P0-02"]["status"] = "In progress"
-        self.assertFalse(self.ready()[0])
-        self.plan.pop("P0-02")
-        self.assertFalse(self.ready()[0])
-
-    def test_manual_blocked_complete_progress_never_assigned(self):
-        for status in ["Blocked", "Complete", "In progress"]:
-            with self.subTest(status=status):
-                self.plan["P0-03"]["status"] = status
-                self.assertFalse(self.ready()[0])
-
-    def test_no_plan_task_or_number_rejects(self):
-        self.issue["title"] = "Some task"
-        self.assertFalse(self.ready()[0])
-        self.issue["title"] = "P0-03: Next task"
-        self.issue.pop("number")
-        self.assertFalse(self.ready()[0])
-
-    def test_dependency_blocks_only_its_dependants(self):
-        self.plan["P0-04"]["status"] = "In progress"
-        self.assertTrue(self.ready()[0])
-
-    def test_open_pr_claims_all_supported_closing_reference_forms(self):
-        for body in ["Fixes #3", "closes #3", "Resolved #3", "Fixes DanAakesen/jarvis#3", "Fixes https://github.com/DanAakesen/jarvis/issues/3"]:
-            with self.subTest(body=body):
-                self.assertFalse(self.ready([body])[0])
-        self.assertTrue(self.ready(["Refs #3", "Fixes other/repo#3", "Fixes https://github.com/other/repo/issues/3"])[0])
-
-    def test_closing_keyword_boundaries(self):
-        self.assertEqual(closing_issue_numbers("prefixes #3; Fixes #30; FIX #3"), {3, 30})
-        self.assertEqual(closing_issue_numbers("Fixes 3"), set())
 
 
 class MainPolicyTests(unittest.TestCase):
