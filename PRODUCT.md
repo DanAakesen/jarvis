@@ -116,6 +116,8 @@ Global defaults on the settings page; a task can override the coding-agent model
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
+Danish voice uses the authenticated backend `/voice/da` WebSocket to a provisioned Foundry Voice Live agent. The agent bridges to the hosted Jarvis agent, uses MAI Transcribe with language `da` and the Danish phrase list, and fixes Harper to `da-DK`.
+
 ### Page requirements
 
 Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).

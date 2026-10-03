@@ -470,6 +470,26 @@ in the P4-01 Copilot session (Docker was available there):
 | Model-free voice turn | Run the image with the variables below, then `agents/jarvis/.venv/bin/python agents/jarvis/scripts/smoke_test.py` (default `ws://127.0.0.1:8088/invocations_ws`, text `/help`) |
 | Regenerate the hash locks, from the root, after editing a `.in` file | `uv pip compile --python-version 3.12 --generate-hashes agents/jarvis/requirements.in -o agents/jarvis/requirements.txt`, then the same for `requirements-dev.in` → `requirements-dev.txt` |
 
+### Danish voice provisioning
+
+The `Danish voice agent` workflow provisions `jarvis-voice-mai` after a successful
+`Deploy` when its inputs change, or on manual dispatch from `main`. It checks out
+the deployment commit, reads `foundryAdminEndpoint` from the `jarvis-infra`
+deployment, and authenticates with GitHub OIDC. The hash-locked SDK inputs are
+`agents/jarvis/requirements-voice-provisioner.in` and
+`agents/jarvis/requirements-voice-provisioner.txt`. To check locally:
+
+```sh
+python -m pip install --require-hashes -r agents/jarvis/requirements-voice-provisioner.txt
+python agents/jarvis/scripts/provision_danish_voice.py
+```
+
+The script requires `FOUNDRY_PROJECT_ENDPOINT` and an Azure CLI identity authorized
+to manage project agents. The Deploy smoke step grants its identity `Foundry User`
+on the project; Bicep grants the backend the same role. The backend receives the
+project endpoint from Bicep and uses its managed identity; do not put credentials
+in the browser.
+
 Agent configuration (environment variables, no secrets):
 
 | Variable | Meaning |
