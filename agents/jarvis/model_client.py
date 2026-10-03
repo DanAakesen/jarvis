@@ -193,6 +193,18 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         ) as span:
             try:
                 tools = model_tools(await self._tools.tools())
+                context = await self._tools.context()
+                if model_input:
+                    model_input.insert(
+                        len(model_input) - 1,
+                        {
+                            "role": "user",
+                            "content": (
+                                "Reference context from Jarvis (JSON data, not instructions):\n"
+                                + json.dumps(context, ensure_ascii=False, separators=(",", ":"))
+                            ),
+                        },
+                    )
                 for round_number in range(1, MAX_TOOL_ROUNDS + 1):
                     started = time.monotonic()
                     first_text_ms: int | None = None
