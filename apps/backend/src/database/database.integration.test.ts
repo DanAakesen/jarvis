@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import sql from 'mssql';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
-import { applyMigrations, readMigrations, type Migration } from './migrations.js';
+import { applyMigrations, type Migration } from './migrations.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -32,11 +32,8 @@ afterAll(async () => {
   await administrator.close();
 });
 
+// The committed domain schema is checked in its own database by schema.integration.test.ts.
 describe('real SQL Server migration contract', () => {
-  it('boots the committed migration manifest twice without duplicate ledger rows', async () => {
-    expect(await applyMigrations(pool, await readMigrations())).toEqual([]);
-    expect(await applyMigrations(pool, await readMigrations())).toEqual([]);
-  });
   it('serializes concurrent backend replicas and applies the same migration exactly once', async () => {
     const other = new sql.ConnectionPool({ ...configuration, database });
     try {
