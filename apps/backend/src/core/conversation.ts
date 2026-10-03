@@ -54,7 +54,7 @@ const historySchema = {
               properties: {
                 id: { type: 'string' },
                 tool: { type: 'string' },
-                outcome: { type: 'string', enum: ['ok', 'error'] },
+                outcome: { type: 'string', enum: ['ok', 'refused', 'error'] },
                 taskId: { type: ['string', 'null'] },
               },
               required: ['id', 'tool', 'outcome', 'taskId'],

@@ -22,7 +22,7 @@ export interface ConversationMessage {
 export interface ConversationToolCall {
   readonly id: string;
   readonly tool: string;
-  readonly outcome: 'ok' | 'error';
+  readonly outcome: 'ok' | 'refused' | 'error';
   readonly taskId: string | null;
 }
 

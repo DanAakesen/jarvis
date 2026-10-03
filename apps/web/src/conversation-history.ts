@@ -4,7 +4,7 @@ import type { PublicConfig } from '../config/public-config';
 export interface ConversationHistoryToolCall {
   id: string;
   tool: string;
-  outcome: 'ok' | 'error';
+  outcome: 'ok' | 'refused' | 'error';
   taskId: string | null;
 }
 
@@ -41,7 +41,7 @@ function isHistoryPage(value: unknown): value is ConversationHistoryPage {
         !Array.isArray(message.toolCalls)) return false;
     return message.toolCalls.every((call) =>
       isRecord(call) && typeof call.id === 'string' && typeof call.tool === 'string' &&
-      (call.outcome === 'ok' || call.outcome === 'error') &&
+      (call.outcome === 'ok' || call.outcome === 'refused' || call.outcome === 'error') &&
       (call.taskId === null || typeof call.taskId === 'string'));
   });
 }

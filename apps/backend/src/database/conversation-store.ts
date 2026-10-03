@@ -37,7 +37,7 @@ interface ToolCallRow {
   id: string;
   message_id: string;
   tool: string;
-  outcome: 'ok' | 'error';
+  outcome: 'ok' | 'refused' | 'error';
   task_id: string | null;
 }
 

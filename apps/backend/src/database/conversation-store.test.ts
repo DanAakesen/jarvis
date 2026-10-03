@@ -74,7 +74,7 @@ describe('SQL conversation store', () => {
         ],
         [
           { id: '90', message_id: '11', tool: 'factory_create_task', outcome: 'ok', task_id: '77' },
-          { id: '91', message_id: '12', tool: 'factory_list_tasks', outcome: 'error', task_id: null },
+          { id: '91', message_id: '12', tool: 'factory_list_tasks', outcome: 'refused', task_id: null },
         ],
       ],
       rowsAffected: [],
@@ -102,7 +102,7 @@ describe('SQL conversation store', () => {
           text: 'Newest',
           model: null,
           at: new Date('2026-10-03T12:02:00Z'),
-          toolCalls: [{ id: '91', tool: 'factory_list_tasks', outcome: 'error', taskId: null }],
+          toolCalls: [{ id: '91', tool: 'factory_list_tasks', outcome: 'refused', taskId: null }],
         },
       ],
       nextCursor: '11',

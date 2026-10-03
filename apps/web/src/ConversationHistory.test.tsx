@@ -28,11 +28,15 @@ beforeEach(() => {
 
 describe('ConversationHistory', () => {
   it('shows persisted messages and tool-call task references', async () => {
-    loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });
+    const refused = {
+      ...message,
+      toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'refused' as const, taskId: null }],
+    };
+    loadConversationHistory.mockResolvedValue({ messages: [refused], nextCursor: null });
     render(<ConversationHistory client={client} config={config} />);
 
     expect(await screen.findByText('I started the task.')).not.toBeNull();
-    expect(screen.getByText('factory_create_task · ok · Task #77')).not.toBeNull();
+    expect(screen.getByText('factory_create_task · refused')).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Conversation history' })).not.toBeNull();
   });
 

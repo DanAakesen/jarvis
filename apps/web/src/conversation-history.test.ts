@@ -3,7 +3,20 @@ import { loadConversationHistory } from './conversation-history';
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com/' };
 const account = { homeAccountId: 'account' };
-const history = { messages: [], nextCursor: null };
+const history = {
+  messages: [{
+    id: '42',
+    sessionId: '41',
+    channel: 'chat',
+    language: 'en',
+    role: 'jarvis',
+    text: 'That action was refused.',
+    model: null,
+    at: '2026-10-03T12:00:00.000Z',
+    toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'refused', taskId: null }],
+  }],
+  nextCursor: null,
+};
 
 function createClient(overrides: Record<string, unknown> = {}) {
   return {

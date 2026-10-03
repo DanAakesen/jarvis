@@ -105,7 +105,7 @@ erDiagram
         string tool "create_task, pause_task, ..."
         json arguments
         json result
-        string outcome "ok | error"
+        string outcome "ok | refused | error"
         bigint task_id FK "nullable"
         datetime at
     }
@@ -128,7 +128,8 @@ erDiagram
 - **One continuous conversation.** Jarvis has a single thread; each chat or voice sitting is a `jarvis_session` within it. Over time the thread needs compaction and memory (Decision 6, deferred); `messages` keeps the full record either way.
 - P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language and tool name, outcome, and task ID, not tool arguments or results. The current main page reads history; chat/voice clients will call the session/message write endpoints in P4-06/P5-03/P5-04. No schema migration was needed.
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
-- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`error` outcome in `tool_calls`. P1-01 (#15) owns the table migration. Session, message, history, task-origin, and tool-call behavior is covered by offline and disposable SQL Server tests; no live Azure SQL write has been verified.
+- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; any other failure is stored as a generic error. P1-01 (#15) owns the table migration; no live SQL write has been verified yet.
+- Session, message, history, task-origin, and tool-call behavior is covered by offline and disposable SQL Server tests; live Azure SQL writes have not been verified.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes.
 
@@ -368,11 +369,16 @@ erDiagram
 | `projects` | `repo` is unique (case-insensitive) and shaped `owner/name` using `A–Z a–z 0–9 . _ -`; `max_parallel_tasks` ≥ 1, default 1; `active` defaults to 1; `merge_rules` is free text, nullable |
 | `tasks` | `state` defaults to `Ready`; `origin_message_id` is required unless `source = 'board'`; `lease_owner` and `lease_until` are both set or both null; `attempt_count` ≥ 0; `priority` defaults to 0; `started_at`/`finished_at` not before `created_at` |
 | `messages` | `model` and token counts are nullable (Dan's messages have none); token counts ≥ 0 |
-| `tool_calls` | `result` nullable; `outcome` is `ok` or `error`; `task_id` nullable |
+| `tool_calls` | `result` nullable; `0001` permits `ok` or `error`; `task_id` nullable |
 | Foreign keys | No cascades. Projects are archived (`active = 0`), not deleted |
 | Indexes | Dispatcher `IX_tasks_state_next_attempt_at`; timeline `IX_task_events_task_id_at`; plus one per foreign key: `IX_messages_jarvis_session_id_at`, `IX_tasks_project_id_state` (also the per-project running count), filtered `IX_tasks_origin_message_id`, `IX_tool_calls_message_id`, filtered `IX_tool_calls_task_id` |
 
 The API still validates every field (P1-03, P1-04); these checks are the last line of defence.
+
+P4-05 adds `refused` to the runtime tool-call outcomes, but the current
+`CK_tool_calls_outcome` constraint in `0001_core_tables.sql` still permits only
+`ok` and `error`. Persisting a refused call therefore needs a forward schema
+migration; the history API accepts and displays all three outcomes.
 
 ## Conventions
 
@@ -396,3 +402,4 @@ The API still validates every field (P1-03, P1-04); these checks are the last li
 ## Still open
 
 - What usage Codex (`codex-acp`) and Copilot CLI report per turn (tokens, premium requests); **verify** in P2.
+- How a dismissed `activity` item is stored. The main page can dismiss items (PRODUCT.md), but `activity` has no dismissal column. P1-13 adds one with its migration and updates this model.

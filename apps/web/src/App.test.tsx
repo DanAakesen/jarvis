@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -89,5 +89,87 @@ describe('Jarvis routes', () => {
     render(<MemoryRouter><App config={config} /></MemoryRouter>);
 
     expect(await screen.findByText('Please start the task.')).not.toBeNull();
+  });
+});
+
+describe('App shell', () => {
+  async function renderSignedIn(path = '/') {
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    render(<MemoryRouter initialEntries={[path]}><App config={config} /></MemoryRouter>);
+    await screen.findByRole('navigation', { name: 'Areas' });
+  }
+
+  it('hides navigation and area pages until Dan is signed in', async () => {
+    render(<MemoryRouter initialEntries={['/factory/tasks']}><App config={config} /></MemoryRouter>);
+
+    expect(await screen.findByRole('button', { name: 'Sign in with Microsoft' })).not.toBeNull();
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Tasks' })).toBeNull();
+  });
+
+  it('offers only the Software Factory area and a settings entry', async () => {
+    await renderSignedIn();
+
+    const areas = screen.getByRole('navigation', { name: 'Areas' });
+    expect(within(areas).getAllByRole('link').map((link) => link.textContent)).toEqual(['Software Factory']);
+    expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
+  });
+
+  it('shows every main-page data area and explains each unavailable action', async () => {
+    await renderSignedIn();
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Welcome, Dan Aakesen');
+    for (const name of ['Conversation', 'Now', 'Backend']) {
+      expect(screen.getByRole('heading', { level: 2, name })).not.toBeNull();
+    }
+    expect(screen.getByText(/Activity isn't available yet/)).not.toBeNull();
+
+    const explained = [
+      ['textbox', 'Message Jarvis', /Chat isn't connected yet/],
+      ['button', 'Send', /Chat isn't connected yet/],
+      ['radio', 'Danish', /Switching between Danish and English/],
+      ['radio', 'English', /Switching between Danish and English/],
+      ['button', 'Start voice', /Voice isn't available yet/],
+      ['button', 'Mute', /Voice isn't available yet/],
+      ['button', 'Put the backend to sleep', /awake or asleep isn't reported yet/],
+    ] as const;
+    for (const [role, name, description] of explained) {
+      expect(screen.getByRole(role, { name, description })).toHaveProperty('disabled', true);
+    }
+  });
+
+  it('keeps the session while moving between areas, settings and the main page', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    await user.click(screen.getByRole('link', { name: 'Software Factory' }));
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Tasks');
+    expect(screen.getByRole('link', { name: 'Software Factory' }).getAttribute('aria-current')).toBe('page');
+    const factory = screen.getByRole('navigation', { name: 'Software Factory' });
+    expect(within(factory).getByRole('link', { name: 'Tasks' }).getAttribute('aria-current')).toBe('page');
+
+    await user.click(within(factory).getByRole('link', { name: 'Projects' }));
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Projects');
+
+    await user.click(screen.getByRole('link', { name: 'Settings' }));
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Settings');
+
+    await user.click(screen.getByRole('link', { name: 'Jarvis home' }));
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Welcome, Dan Aakesen');
+    expect(restoreProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['/factory/tasks/42', 'Task 42'],
+    ['/factory/projects/3', 'Project 3'],
+    ['/factory/releases/7', 'Release 7'],
+  ])('opens %s as the page that activity links target', async (path, heading) => {
+    await renderSignedIn(path);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(heading);
+  });
+
+  it.each(['/factory/tasks/abc', '/factory/tasks/0', '/factory/unknown'])('treats %s as an unknown page', async (path) => {
+    await renderSignedIn(path);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Page not found');
   });
 });

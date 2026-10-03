@@ -122,8 +122,9 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Bootstrap IDs | [`infra/bootstrap.output.json`](../infra/bootstrap.output.json); also Actions variables in `DanAakesen/jarvis` |
 
 - `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
-- The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `backendImage`, and `foundryNameTimestamp`. The timestamp is a 14-digit UTC value in `yyyyMMddHHmmss` format, for example `20261003120000`. P0-11 must save the chosen value in deployment configuration and supply the same value on every normal redeployment, so the existing Foundry account and project are updated in place. Do not generate a new timestamp for each workflow run.
-- `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Confirm the billing currency is DKK and supply any required budget notification email addresses as appropriate. The first Azure deployment and real resource behavior are verified by P0-11, not by the local build/lint.
+- The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
+- `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Confirm the billing currency is DKK and supply any required budget notification email addresses as appropriate. The first Azure deployment and real resource behavior are verified by the first Deploy run (P0-16), not by the local build/lint.
+- The [Deploy workflow](../.github/workflows/deploy.yml) is the only routine path to Azure: push to `main` deploys the parts changed since the last successful Deploy run; Dan's `workflow_dispatch` on `main` redeploys everything. Its Bicep deployment is always named `jarvis-infra`. Details: [production deploy](architecture.md#production-deploy-p0-11).
 - Dan's Azure CLI defaults to the Microsoft tenant: pass `--subscription` in every command and script (L7). For Microsoft Graph, get the token with `az account get-access-token --subscription <id> --resource-type ms-graph`; `--tenant` picks the wrong account.
 - `az` runs through a `.cmd` file: avoid `&`, parentheses, and pipes inside arguments such as `--query` (L20); filter JSON in PowerShell instead.
 - Never reuse a deleted Foundry account or project name; generate timestamped names (L2).
@@ -221,6 +222,14 @@ calls authenticated `/me`; only the backend-approved display name is shown.
 `Web CI` checks lint, tests, and root builds as part of the aggregate `CI`
 workflow (below). Local tests use signed fixture tokens and do not verify a live
 Entra tenant or Azure deployment.
+
+Browser checks of signed-in pages (verified in Copilot cloud agent for P1-07,
+where the Playwright MCP tools were unavailable; L45): in a scratch directory
+outside the repository, run `npm install --no-save playwright-core`, then drive
+`chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] })`.
+Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
+returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
+URL. Never commit the stub or weaken sign-in in the app.
 
 Backend commands implemented in P0-03:
 
@@ -356,6 +365,16 @@ Plan status, `.github/workflows/plan-status.yml`:
 | Offline tests | `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v` |
 | Live verification | Pending merge: dispatch the workflow and verify a test task; protected-branch push and issue-dependency writes remain unverified |
 
+Deploy, `.github/workflows/deploy.yml` (P0-11):
+
+| Item | Detail |
+| --- | --- |
+| Triggers | Push to `main` (except `*.md` and `docs/` only); `workflow_dispatch` on `main` redeploys everything |
+| Scripts | `deploy_plan.py` (parts to deploy), `deploy_bicep.sh` (Bicep deployment `jarvis-infra`), `deploy_smoke.py` (Foundry hosts) in `.github/scripts/` |
+| Permissions | `contents: read`; the plan job adds `actions: read` (last successful run); Azure jobs add `id-token: write` for the bootstrap OIDC identity. No stored secrets; the Static Web Apps token is read at run time and masked |
+| Offline checks (verified for P0-11) | `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v` (plan and smoke rules); `az bicep build --file infra/main.bicep --stdout >/dev/null` and `az bicep lint --file infra/main.bicep`; `actionlint .github/workflows/deploy.yml` (actionlint 1.7.12 does not know `concurrency.queue` yet and reports it; GitHub documents it) |
+| Live verification | Pending the first run (P0-16) |
+
 ### Backend modules
 
 Backend modules are composed through the optional third `buildApp` argument;
@@ -410,7 +429,8 @@ Python checks use each package's `.venv`. For the runner, from `runner/`:
 
 ## Release procedure
 
-- Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge deploys infrastructure, backend, and web; the backend applies migrations at startup.
+- Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, and web; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).
+- After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>'` so sign-in works there (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
 - No manual portal changes.
 - Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.
 
@@ -433,11 +453,11 @@ Runner CI owns Docker builds and packaged CLI/HTTP checks because agents have no
 Docker runtime here. Production Key Vault/Foundry acceptance is still unverified.
 
 The main-only [runner deploy workflow](../.github/workflows/runner-deploy.yml)
-requires Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME`, set after #11's successful
-Bicep deployment. It consumes that deployment's existing outputs and bootstrap
+requires Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME`, set to `jarvis-infra` after
+the first successful Deploy run. It consumes that deployment's existing outputs and bootstrap
 Azure variables, queues under `jarvis-production-deploy`, builds the two images
-in ACR, deploys both capacity tiers, and records identity-probe evidence. #11 must
-use that same deployment concurrency group. The workflow never seeds secrets;
+in ACR, deploys both capacity tiers, and records identity-probe evidence. The main
+Deploy workflow uses the same group; both set `queue: max` so no queued deploy is dropped. The workflow never seeds secrets;
 `github-token`, `copilot-token`, and the Jarvis-only `codex-login` must already be
 in Key Vault. Installation tokens replace the prototype Git-token path in #40.
 See [runner/README.md](../runner/README.md) for commands and the contract.
