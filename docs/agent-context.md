@@ -98,14 +98,14 @@ Before marking the PR ready, update the repository in the same PR so the next ag
 | Settled a visual direction or found a UI issue | [DESIGN.md](../DESIGN.md) |
 | Found work outside the task | `PLAN.md`: a new task (next free ID in its phase, Depends on filled in, Not started) or an entry under Ideas. Update the Depends on column of any task this changes. Never drop it silently. |
 
-The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; the merge workflow never merges a draft.
+The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; never merge a draft.
 
 Every task issue ends with the same "Before you start" and "Definition of done" checklist that summarises these rules. New task issues get it too.
 
 ### Merge
 
 - **Coordinator removed.** Dan or an explicitly authorized agent squash-merges a PR when it is ready (not a draft; see Copilot drafts below), no agent is still working on it, its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the authorized worker updates it and waits for the checks again, so every merge is tested against the current `main`.
-- **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, the merge workflow merges only `fix-main:` PRs until `main` is green again.
+- **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, merge only `fix-main:` PRs until `main` is green again.
 - **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, also after follow-up rounds and while the PR has merge conflicts (L
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
@@ -330,14 +330,14 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
 | Item | Detail |
 | --- | --- |
-| Triggers | Every `pull_request`, `push` to `main`, and `workflow_dispatch` (P0-12 starts it on `main` after a merge) |
+| Triggers | Every `pull_request`, `push` to `main`, and `workflow_dispatch` for manual verification |
 | Jobs | `Web`, `Backend` (lint, tests, build, container smoke), `Database` (isolated SQL Server contracts), `Foundry` and `Runner` (base and .NET images, packaged CLI and HTTP smoke) call the reusable `web-ci.yml`, `backend-ci.yml`, `database-ci.yml`, `foundry-contract.yml` and `runner-ci.yml`; `Python lint, test and build` (runner lint and tests moved here from `runner-ci.yml`); `CI result` |
-| Gate | `CI result` fails unless every other job succeeded. It is the check to require on `main` and for P0-12 `workflow_run` |
+| Gate | `CI result` fails unless every other job succeeded. It is the check to require on `main` and inspect before merging a PR |
 | Python | `bash .github/scripts/python-ci.sh [dir ...]` (default `runner agents/jarvis`). A component with `pyproject.toml` must have a hash-pinned `requirements-dev.txt` with ruff and pytest; each gets its own venv, `ruff check`, `pytest -q` and `compileall`. A component without `pyproject.toml` is reported as skipped (notice and step summary), not passed |
 | Local workflow lint (verified for P0-10) | `go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7`, then `~/go/bin/actionlint` from the repository root. It passes for the CI files; it reports existing findings in `runner-ci.yml` (SC2034 warning) and `runner-deploy.yml` (an unquoted ` #11` ends the `prerequisite` step's YAML scalar, so that job failed on `main` at 290195b; needs a `fix-main:` PR) |
 
 - Add a new component workflow as `on: workflow_call`, call it from `ci.yml`, and add it to `CI result`'s `needs`, so it runs once per PR and the gate covers it.
-- Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then P0-12 must read the `CI` run result itself.
+- Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then Dan or the authorized merging agent must read the `CI` run result itself.
 
 Plan status, `.github/workflows/plan-status.yml`:
 
@@ -405,7 +405,7 @@ Python checks use each package's `.venv`. For the runner, from `runner/`:
 
 ## Release procedure
 
-- Every change reaches `main` through a PR merged by the merge workflow (see [Merge](#merge)). A merge deploys infrastructure, backend, and web; the backend applies migrations at startup.
+- Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge deploys infrastructure, backend, and web; the backend applies migrations at startup.
 - No manual portal changes.
 
 ## Documentation rules

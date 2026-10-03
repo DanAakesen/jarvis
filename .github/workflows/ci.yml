@@ -1,7 +1,6 @@
 # Aggregate CI for the monorepo (P0-10). Runs every component check on each
-# PR, on pushes to main, and on workflow_dispatch (the merge workflow, P0-12,
-# starts it on main because merges made with GITHUB_TOKEN trigger no push).
-# "CI result" is the single check to require on main and for P0-12.
+# PR, on pushes to main, and on workflow_dispatch for manual verification.
+# "CI result" is the single check to require on main before merging a PR.
 # Component workflows are reusable (workflow_call) so each check runs once.
 name: CI
 
