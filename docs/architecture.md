@@ -14,7 +14,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton implemented in P0-02; sign-in P0-09 and deployment P0-11 pending |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
-| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton implemented; area plugins and SSE in their tasks |
+| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton and core/factory module registration implemented; domain APIs and SSE in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
 | Database access | `mssql` driver with Entra ID (managed identity); plain SQL migrations, applied by the backend at startup under a SQL app lock | Decided; **verify** in P0-07 |
 | Files | Azure Blob Storage for artifacts and logs | Decided |
@@ -75,6 +75,26 @@ The image uses Node.js 22.23.3, a non-root user, and only backend production out
 and dependencies; prototypes and frontend sources are excluded.
 
 Where each part runs. The web app is static files on Static Web Apps: free and always reachable. Container Apps hosts only the backend.
+
+### Backend module composition
+
+Issue #16 adds `BackendModule` (`id`, `registerRoutes`, `tools`) and registers
+each module as an encapsulated Fastify plugin after global security/CORS/logging
+hooks. `buildApp` defaults to `core` and `factory`; its optional module list selects
+the complete composition. A new area contributes routes and tools through this
+contract without changing `core`. Readiness awaits async module registration and
+refuses a failed plugin; Fastify owns plugin close hooks.
+
+Core owns the health route and a per-app internal Jarvis tool catalogue; settings,
+activity, persisted events and the SSE hub remain their later tasks. Factory's
+registration boundary owns future projects/tasks APIs and tools; it contributes
+none until those operations are implemented. The catalogue rejects duplicate
+module/tool identities, snapshots frozen schemas and exposes read-only descriptors
+with ownership and handlers. There is no public tool dispatcher: future dispatch
+must authenticate/authorize, validate inputs and bound execution. Existing Foundry
+client, health/security/logging and process shutdown behavior are preserved.
+The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
+resource lifetimes and the verified offline extension contract.
 
 ```mermaid
 flowchart LR
@@ -182,7 +202,7 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | --- | --- |
 | Host | Foundry Hosted Agents, one session per task. Container Apps Jobs is the fallback behind the same runner contract. |
 | Size | 1 vCPU / 2 GiB default; 2 vCPU / 4 GiB for .NET (3.5× faster restore). Never 0.5 / 1 (L3). |
-| Disk | 6 GiB writable at every size, shared by image, `$HOME`, `/files`, and `/tmp`; about 3 GiB free with a .NET image. The agent builds single projects and keeps package caches small; full builds run in GitHub Actions (L23). |
+| Disk | Measured 6 GiB writable at every size (Microsoft documents a budget of up to 20 GiB at ≥1 vCPU with about 20 % reserved, not configurable), shared by image, `$HOME`, `/files`, and `/tmp`; about 3 GiB free with a .NET image. The runner reports disk per session (P6-07). The agent builds single projects and keeps package caches small; full builds run in GitHub Actions (L23). |
 | Runner contract | Start, steer, pause, resume, cancel, and events. The host can change without changing the backend. |
 | Adapter | Python; lives only in the sandbox image. The backend stays Node. |
 | Steer and pause | ACP `session/cancel` stops the current turn; the next turn continues the same conversation with `session/load` (L4, L5). |
@@ -215,8 +235,11 @@ remains pending #11 and the main-branch runner workflow.
 - Invocation metadata is stored separately for each turn, with path-safe IDs and
   backward reads of earlier session records. Idle recreation retains earlier
   status lookups; prompts, results, and credentials are omitted (L28).
-- Live event push (#29), coordinated renewal scheduling (#34), and frequent Git
-  pushes (#35) remain later work. See [runner instructions](../runner/README.md).
+- Live event push (#29) and coordinated renewal scheduling (#34) remain later
+  work. P2-09 prepends task-branch commit/push instructions to every ACP prompt,
+  including resumed and recovered turns; offline tests cover these paths. Live
+  intermediate-commit acceptance awaits P2-07. See
+  [runner instructions](../runner/README.md).
 
 ### Backend Foundry client
 
@@ -345,7 +368,7 @@ PR #79 adds the Foundry account, project, model deployments and ACR/Application 
 - One production environment in `rg-jarvis`; no dev environment.
 - Local development: `npm run dev` in the repository root serves the web app on `http://localhost:5173` against the production backend. Backend changes are tested in CI and take effect after deploy.
 - Migrations run in the backend at startup; GitHub runners never connect to Azure SQL.
-- Development of Jarvis itself is remote only: Copilot cloud agent and Codex cloud deliver PRs, `pr-title.yml` keeps PR titles in the `<task ID>: <summary>` format, `copilot-ready.yml` takes finished Copilot PRs out of draft, a merge workflow merges them when checks pass against the latest `main`, and the deploy workflows release them. Rules: [development workflow](agent-context.md#development-workflow).
+- Development of Jarvis itself is remote only: Copilot cloud agent and Codex cloud deliver PRs, `pr-title.yml` keeps PR titles in the `<task ID>: <summary>` format, `worker-label.yml` labels the tasks Copilot takes, `copilot-ready.yml` takes finished Copilot PRs out of draft, a merge workflow merges them when checks pass against the latest `main`, and the deploy workflows release them. Rules: [development workflow](agent-context.md#development-workflow).
 - `worker-label.yml` maintains the Copilot worker label; Codex, Dan, and Jarvis set their own labels. `plan-status.yml` reconciles every task's Issue link and Status in `PLAN.md` from GitHub issues, worker labels, and pull requests on issue/PR events, Worker label workflow completion, and manual dispatch. A push changing `PLAN.md` also creates missing task issues and ensures their "Blocked by" links. It commits only Issue- and Status-cell changes to `main`, skips no-op commits, and rebases/retries once after a rejected push. It uses `GITHUB_TOKEN`; compatibility with protected `main` remains unverified.
 - Everything except the bootstrap items is created by Bicep and deployed by GitHub Actions on merge to `main`; no portal changes.
 

@@ -4,8 +4,15 @@ import cors from '@fastify/cors';
 import type { Logger } from 'pino';
 import { localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger } from './logging.js';
+import { coreModule } from './core/index.js';
+import { factoryModule } from './factory/index.js';
+import { registerModules, type BackendModule } from './modules.js';
 
-export function buildApp(config: BackendConfig, logger: Logger = createLogger(config)) {
+export interface BuildAppOptions {
+  readonly modules?: readonly BackendModule[];
+}
+
+export function buildApp(config: BackendConfig, logger: Logger = createLogger(config), options: BuildAppOptions = {}) {
   const app = Fastify({
     loggerInstance: logger,
     logController: new LogController({ disableRequestLogging: true }),
@@ -47,8 +54,6 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     reply.code(statusCode).send({ error: statusCode < 500 ? 'Invalid request' : 'Internal server error' });
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));
-  app.get('/health', {
-    schema: { response: { 200: { type: 'object', properties: { status: { type: 'string', const: 'ok' } }, required: ['status'], additionalProperties: false } } },
-  }, async () => ({ status: 'ok' }));
+  registerModules(app, options.modules ?? [coreModule, factoryModule]);
   return app;
 }
