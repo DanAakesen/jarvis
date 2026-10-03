@@ -55,11 +55,20 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   path, component). The shell renders its navigation entry and mounts it at
   `/<path>/*`; the area renders its own nested routes. Software Factory
   (`src/factory/`) owns `/factory/tasks`, `/factory/tasks/:id`,
-  `/factory/projects`, `/factory/projects/:id` and `/factory/releases/:id`;
+  `/factory/projects`, `/factory/projects/new`, `/factory/projects/:id` and
+  `/factory/releases/:id`;
   invalid IDs show not found. `/settings` is the shared settings entry. P1-11
   implements it as a responsive form for Jarvis, voice, coding-agent defaults
   and the global task limit; remaining voice samples, sleep and credential
   controls are visibly disabled until their owning services exist.
+- P1-10 passes the backend URL and MSAL token provider into the Software Factory
+  area. The projects list and settings page call the authenticated project CRUD
+  routes; running counts are derived from `GET /factory/tasks?state=Running`
+  and refreshed on demand. Failure to load tasks leaves project management
+  usable with counts marked unavailable. Last release is marked unavailable
+  until release data is connected. Client validation improves form feedback;
+  the backend remains authoritative. Live Azure CRUD is not verified by the
+  browser-mocked UI check.
 - The main page's "Now" activity panel takes a typed `NowFeed`
   (`src/activity.ts`): running tasks (title, project, agent, activity, start
   time) and activity items (category, title, `activity.link`, time). Only

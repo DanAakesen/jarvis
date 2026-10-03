@@ -170,6 +170,9 @@ erDiagram
   archives by setting `active = 0`; archived rows remain to preserve task
   references and the unique repository constraint. Repositories stay reserved
   after archive.
+- P1-10 reads project settings from that API and derives each running-task count
+  from `tasks.state = 'Running'`. No project columns or migration are added;
+  release data remains in group 5 and is not yet shown as a real value.
 
 ## 3 · Tasks and queue
 
