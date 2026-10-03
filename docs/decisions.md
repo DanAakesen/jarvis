@@ -86,6 +86,7 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 | 2026-10-03 | P3-09 provides copyable managed-project workflows: read-only PR checks, then release build/tests and artifact upload before a `main`-only Azure OIDC deploy using the `production` environment | Copying lets each project adapt its own runtime and deployment without coupling it to Jarvis's active workflows. `id-token: write` is limited to the deploy job; OIDC identifiers are Actions variables, not stored credentials | Templates and offline structure checks implemented; adoption and live Azure federation/deployment unverified |
 
 | 2026-10-03 | P4-02 dispatches tools through per-tool Fastify routes generated from the composed registry; each request supplies `X-Jarvis-Message-ID`, and the backend stores its arguments, result and outcome in `tool_calls` | Fastify validates each request against the module's schema; a new module therefore exposes its tools without changing core or agent code. SQL writes use the existing process-owned pool. The table migration belongs to P1-01 (#15); only offline endpoint and parameter-binding tests ran | Implemented offline; database/Azure writes and service-identity authorization remain unverified |
+| 2026-10-03 | P0-07's live check (a deploy applies a new migration once) moved into P0-11's acceptance; P0-07 closed as Complete | P0-11 depends on P0-07, so P0-07 could never close; a deadlock that blocked the first deploy and with it P3-10 | Decided |
 
 ## Learnings
 
