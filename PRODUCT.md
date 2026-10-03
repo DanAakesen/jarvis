@@ -33,7 +33,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 | **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
 | **Updates** | Events update state and progress live, without manual refresh. |
 | **Assignment** | One active coding agent per task. |
-| **Plan tracking** | The repository's `PLAN.md` is the shared task-status view. Issue assignments and open linked PRs set In progress, completed tasks set Complete, and other tasks reset to Not started unless Blocked is set by hand. New task rows get a labelled issue with dependency links. |
+| **Plan tracking** | The repository's `PLAN.md` is the shared task-status view, with each task linked to its GitHub issue. Issue assignments and open linked PRs set In progress, completed tasks set Complete, and other tasks reset to Not started unless Blocked is set by hand. New task rows get a labelled issue with dependency links. |
 | **Parallel work** | Dan controls concurrency across projects; capacity depends on provider limits and compute. |
 | **Agent choice** | Codex or GitHub Copilot per task, regardless of project. |
 | **Subscriptions** | Codex uses Dan's ChatGPT Pro plan (Jarvis-only login); Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. No per-use billing for either. |

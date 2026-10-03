@@ -37,21 +37,29 @@ def dependencies_from_text(value: str) -> list[str]:
 
 def plan_tasks(plan: str) -> list[dict[str, Any]]:
     tasks = []
+    columns: dict[str, int] = {}
     for line in plan.splitlines():
-        if not re.match(r"^\|\s*P\d-\d{2}\s*\|", line):
-            continue
         cells = [cell.strip() for cell in line.split("|")[1:-1]]
-        if len(cells) < 5:
+        if "ID" in cells and "Task" in cells and "Status" in cells:
+            columns = {name: index for index, name in enumerate(cells)}
             continue
-        task_id, task, acceptance, depends_on, status = cells[:5]
+        if not columns or not re.match(r"^\|\s*P\d-\d{2}\s*\|", line):
+            continue
+        if len(cells) <= max(columns.values()):
+            continue
+        task_id = cells[columns["ID"]]
+        task = cells[columns["Task"]]
+        acceptance = cells[columns["Acceptance criteria"]]
+        depends_on = cells[columns["Depends on"]]
         tasks.append(
             {
                 "id": task_id,
+                "issue": cells[columns["Issue"]] if "Issue" in columns else "",
                 "task": task,
                 "acceptance": acceptance,
                 "depends_on": depends_on,
                 "dependencies": dependencies_from_text(depends_on),
-                "status": status,
+                "status": cells[columns["Status"]],
             }
         )
     return tasks
@@ -94,33 +102,51 @@ def task_status(
     return "Not started"
 
 
+def issue_link(issue: dict[str, Any] | None, repository: str) -> str:
+    if issue is None:
+        return ""
+    return f'[#{issue["number"]}](https://github.com/{repository}/issues/{issue["number"]})'
+
+
 def reconcile_plan(
-    plan: str, issues: list[dict[str, Any]], pull_requests: list[dict[str, Any]]
+    plan: str,
+    issues: list[dict[str, Any]],
+    pull_requests: list[dict[str, Any]],
+    repository: str = "DanAakesen/jarvis",
 ) -> str:
     issue_by_task = task_issue_map(issues)
     rows = []
+    columns: dict[str, int] = {}
     for line in plan.splitlines(keepends=True):
-        match = re.match(r"^\|\s*(P\d-\d{2})\s*\|", line)
-        if not match:
+        cells = [cell.strip() for cell in line.split("|")[1:-1]]
+        if "ID" in cells and "Task" in cells and "Status" in cells:
+            columns = {name: index for index, name in enumerate(cells)}
             rows.append(line)
             continue
-        task_id = match.group(1)
-        last_pipe = line.rfind("|")
-        status_pipe = line.rfind("|", 0, last_pipe)
-        if last_pipe < 0 or status_pipe < 0:
+        if not columns or not re.match(r"^\|\s*P\d-\d{2}\s*\|", line):
             rows.append(line)
             continue
-        cell = line[status_pipe + 1 : last_pipe]
-        current = cell.strip()
-        updated = task_status(current, issue_by_task.get(task_id), pull_requests)
-        if current == updated:
+        if len(cells) <= max(columns.values()):
             rows.append(line)
             continue
-        leading = cell[: len(cell) - len(cell.lstrip())]
-        trailing = cell[len(cell.rstrip()) :]
-        rows.append(
-            line[: status_pipe + 1] + leading + updated + trailing + line[last_pipe:]
-        )
+        task_id = cells[columns["ID"]]
+        issue = issue_by_task.get(task_id)
+        replacements = {"Status": task_status(cells[columns["Status"]], issue, pull_requests)}
+        if "Issue" in columns:
+            replacements["Issue"] = issue_link(issue, repository)
+
+        parts = line.split("|")
+        for name, updated in replacements.items():
+            cell_index = columns[name] + 1
+            cell = parts[cell_index]
+            current = cell.strip()
+            if current == updated:
+                continue
+            if not updated:
+                parts[cell_index] = " "
+                continue
+            parts[cell_index] = f" {updated} "
+        rows.append("|".join(parts))
     return "".join(rows)
 
 
@@ -189,7 +215,7 @@ def main() -> None:
         json.loads(args.pull_requests.read_text(encoding="utf-8"))
     )
     args.output.write_text(
-        reconcile_plan(plan, issues, pull_requests), encoding="utf-8"
+        reconcile_plan(plan, issues, pull_requests, args.repository), encoding="utf-8"
     )
     args.new_tasks.write_text(
         json.dumps(new_tasks(plan, issues, args.repository), indent=2) + "\n",

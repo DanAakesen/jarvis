@@ -452,7 +452,7 @@ const FLOWS = [
       { id: "status", lane: "actions", col: 3, s: "assumed", t: "Reconcile task statuses", d: "Preserve manual Blocked; otherwise derive In progress, Complete or Not started.", ev: "Offline fixture tests exist; first live dispatch remains pending." },
       { id: "new", lane: "actions", col: 4, s: "assumed", t: "Create missing task issues", d: "On PLAN.md push or dispatch: standard task body and phase label." },
       { id: "deps", lane: "github", col: 5, s: "assumed", t: "Link blocked-by dependencies", d: "Idempotently add the REST issue dependency links." },
-      { id: "commit", lane: "actions", col: 6, s: "assumed", t: "Commit only Status cells", d: "Skip unchanged plans; rebase and retry a rejected push once." },
+      { id: "commit", lane: "actions", col: 6, s: "assumed", t: "Commit only Issue and Status cells", d: "Skip unchanged plans; rebase and retry a rejected push once." },
       { id: "protection", lane: "github", col: 7, s: "unknown", t: "Protected main", d: "A direct workflow push may be rejected; protection bypass or PR-based delivery is unverified.", ev: "P0-13 verification needs an authorized protected-branch setup and live run." },
     ],
     edges: [
