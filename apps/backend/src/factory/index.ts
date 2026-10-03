@@ -1,8 +1,11 @@
 import type { BackendModule } from '../modules.js';
+import { projectRoutes } from './projects.js';
 
-/** Projects/tasks routes and tools are added here by their domain API tasks. */
+/** Projects and tasks routes and tools are added here by their domain API tasks. */
 export const factoryModule: BackendModule = {
   id: 'factory',
   tools: [],
-  registerRoutes: async () => {},
+  registerRoutes: async (app) => {
+    await app.register(projectRoutes, { prefix: '/factory/projects' });
+  },
 };
