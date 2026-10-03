@@ -7,7 +7,7 @@ and Jarvis tool definitions through the same `BackendModule` contract.
 
 | Owner | Current implementation | Later domain work |
 | --- | --- | --- |
-| `core/` | Health route; per-app read-only tool catalogue | Settings, activity, persisted events and SSE hub |
+| `core/` | Health route; per-app tool catalogue and authenticated HTTP dispatcher | Settings, activity, persisted events and SSE hub |
 | `factory/` | Module registration boundary | Projects/tasks routes and their real Jarvis tools |
 | `foundry/` | Existing bounded sandbox client | Used by the dispatcher and task controls |
 
@@ -47,11 +47,13 @@ hooks before `ready()` or `listen()`. `index.ts` remains the process resource ow
 `app.jarvisTools.list()` and `.get(name)` are internal APIs. Registration validates
 module IDs, tool names/descriptions and object-shaped input schemas, rejects
 duplicate module IDs/tool names and snapshots/freeze schemas. Each descriptor
-retains its owning module and handler. Fastify separately rejects duplicate routes.
-There is no runtime registration API, module loading from requests or HTTP tool
-dispatcher. Future Jarvis dispatch must authenticate and authorize the caller,
-validate input against the tool schema and supply the handler with the request and
-a bounded cancellation signal. Registration alone does not perform those checks.
+retains its owning module and handler. `GET /tools` exposes each registered name,
+description and input schema. Core creates a schema-validated `POST /tools/{name}`
+route for each tool, so new modules need no agent or core changes. Calls require
+`X-Jarvis-Message-ID`, run with the request and a cancellation signal, and record
+arguments, result and outcome through the SQL-backed tool-call store. Missing
+persistence returns 503 before executing a tool. Global delegated-user
+authentication applies; service-identity policy remains separate.
 
 From the repository root, `npm test --workspace @jarvis/backend` verifies extension
 registration, root security inheritance, lifecycle failures/cleanup and catalogue

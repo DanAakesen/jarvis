@@ -4,7 +4,7 @@ export interface JarvisTool {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: Readonly<Record<string, unknown>>;
-  /** The future authenticated gateway owns validation, authorization and deadlines. */
+  /** The core dispatcher supplies validated input, the request and a cancellation signal. */
   readonly execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) => Promise<unknown>;
 }
 
