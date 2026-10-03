@@ -1,8 +1,8 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { defaultMigrationsDirectory, readMigrations } from './migrations.js';
+import { defaultMigrationsDirectory, readDownMigration, readMigrations } from './migrations.js';
 
 const directories: string[] = [];
 async function directory() {
@@ -38,5 +38,22 @@ describe('committed SQL manifest', () => {
     await writeFile(join(path, '0001_first.sql'), 'SELECT 1;');
     await writeFile(join(path, '0001_second.sql'), 'SELECT 2;');
     await expect(readMigrations(path)).rejects.toThrow('duplicate');
+  });
+  it('ships a reviewed down script for every committed migration', async () => {
+    const migrations = await readMigrations();
+    expect(migrations[0]?.name).toBe('0001_core_tables.sql');
+    for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
+  });
+  it('reads down scripts from down/ without treating them as forward migrations', async () => {
+    const path = await directory();
+    await mkdir(join(path, 'down'));
+    await writeFile(join(path, '0001_first.sql'), 'CREATE TABLE dbo.t (id int);');
+    await writeFile(join(path, 'down', '0001_first.sql'), 'DROP TABLE dbo.t;');
+    expect((await readMigrations(path)).map((migration) => migration.name)).toEqual(['0001_first.sql']);
+    expect(await readDownMigration('0001_first.sql', path)).toEqual({ name: '0001_first.sql', sql: 'DROP TABLE dbo.t;' });
+    await writeFile(join(path, 'down', '0001_first.sql'), 'DROP TABLE dbo.t;\nGO');
+    await expect(readDownMigration('0001_first.sql', path)).rejects.toThrow('nonempty SQL batch');
+    await expect(readDownMigration('../0001_first.sql', path)).rejects.toThrow('Invalid database migration name');
+    await expect(readDownMigration('0002_missing.sql', path)).rejects.toThrow();
   });
 });

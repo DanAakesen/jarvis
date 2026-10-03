@@ -257,7 +257,7 @@ const FLOWS = [
     nodes: [
       { id: "ctx", lane: "backend", col: 1, s: "context", from: [[1, "create"], [2, "auth"]], t: "From 1–2: create task", d: "From a board button or the Jarvis agent." },
       { id: "policy", lane: "backend", col: 2, s: "assumed", t: "Validate and apply project policy", d: "Deliver a PR, or complete without deployment.", ev: "PRODUCT.md: project policies." },
-      { id: "row", lane: "data", col: 3, s: "assumed", t: "Write task row: Ready", d: "Azure SQL is the source of truth.", ev: "Decision 3 in decisions.md; confirmed in design, not built." },
+      { id: "row", lane: "data", col: 3, s: "assumed", t: "Write task row: Ready", d: "Azure SQL is the source of truth.", ev: "Decision 3 in decisions.md. P1-01 (#15) created the tasks table (state check, default Ready) and proved it against SQL Server in CI; the API write path is P1-04, not built." },
       { id: "card", lane: "board", col: 4, s: "assumed", t: "Card appears as Ready", d: "Pushed to the browser." },
       { id: "limit", lane: "backend", col: 3, s: "assumed", t: "Check concurrency limit", d: "Dan controls how many tasks run at once.", ev: "PRODUCT.md: parallel work requirement." },
       { id: "queue", lane: "backend", col: 4, s: "assumed", t: "Dispatcher: the task table is the queue", d: "Picks Ready rows within the limit; one owner for dispatch and retries.", ev: "Decision 3 (decisions.md): option A, SQL as the queue. Not built." },
