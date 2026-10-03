@@ -10,7 +10,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Implementation phases
 
-Seven phases, P0–P6, each ending in something Dan can use. Every task is sized for one coding-agent task, has acceptance criteria, and names its dependencies. Each task has a [GitHub issue](https://github.com/DanAakesen/jarvis/issues) whose title starts with the task ID. Status values, who sets them, and the start, finish, and merge rules are in the [development workflow](docs/agent-context.md#development-workflow). Mark a phase complete only when all its acceptance criteria are met.
+Seven phases, P0–P6, each ending in something Dan can use. Every task is sized for one coding-agent task, has acceptance criteria, and names its dependencies. Each task has a [GitHub issue](https://github.com/DanAakesen/jarvis/issues) whose title starts with the task ID, and the Depends on column is mirrored as the issues' "Blocked by" dependencies, so GitHub shows which tasks are ready. Status values, who sets them, and the start, finish, and merge rules are in the [development workflow](docs/agent-context.md#development-workflow). Mark a phase complete only when all its acceptance criteria are met.
 
 ```mermaid
 flowchart LR
@@ -193,10 +193,10 @@ Everything else is scripted with `az` and `gh`, or runs in GitHub Actions. `infr
 | Now | Copilot cloud agent: allow GitHub Actions to run on Copilot's PRs without approval (repository settings) | Repository setting with no CLI command |
 | Now | Codex cloud: connect GitHub and `DanAakesen/jarvis` in ChatGPT → Codex; after P0-14, set its environment's setup script | ChatGPT sign-in in the browser |
 | Optional, now | Upgrade to GitHub Pro (https://github.com/account/upgrade) for required checks and 3,000 Actions minutes | Billing |
-| P2-08 | `codex login` in the Jarvis-only folder (`CODEX_HOME=.secrets\codex-jarvis`, Codex 0.157.0) | ChatGPT sign-in in the browser |
-| P2-08 | Create the Copilot fine-grained token (Copilot Requests only) | Fine-grained tokens can't be created by API |
-| P3-01 | Click **Create** for the GitHub App (manifest prepared by the agent) and install it on the repositories | GitHub requires a browser confirmation |
-| P5-07 | Live voice test in Danish and English | Needs Dan's voice and judgement |
+| During P2-08 | `codex login` in the Jarvis-only folder (`CODEX_HOME=.secrets\codex-jarvis`, Codex 0.157.0) | ChatGPT sign-in in the browser |
+| During P2-08 | Create the Copilot fine-grained token (Copilot Requests only) | Fine-grained tokens can't be created by API |
+| During P3-01 | Click **Create** for the GitHub App (manifest prepared by the agent) and install it on the repositories | GitHub requires a browser confirmation |
+| During P5-07 | Live voice test in Danish and English | Needs Dan's voice and judgement |
 
 ## Ideas
 
