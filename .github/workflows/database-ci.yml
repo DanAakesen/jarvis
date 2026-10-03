@@ -1,0 +1,45 @@
+name: Database CI
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  database:
+    name: SQL Server migrations and database contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      sql:
+        image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_PID: Developer
+          # Disposable, isolated CI fixture; never an Azure or production login.
+          MSSQL_SA_PASSWORD: Jarvis-CI-Fixture-Only!2026
+        ports:
+          - 127.0.0.1:1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Jarvis-CI-Fixture-Only!2026 -Q 'SELECT 1'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      NODE_ENV: test
+      SQL_AUTH_MODE: test-password
+      SQL_SERVER: 127.0.0.1
+      SQL_DATABASE: jarvis_ci
+      SQL_USER: sa
+      SQL_PASSWORD: Jarvis-CI-Fixture-Only!2026
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Pin npm
+        run: npm install --global npm@10.9.9
+      - run: npm ci
+      - run: npm run test:database --workspace @jarvis/backend
