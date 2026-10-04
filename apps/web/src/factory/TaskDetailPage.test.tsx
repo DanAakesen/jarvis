@@ -1,21 +1,72 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskDetailPage } from './TaskDetailPage';
 
+const streamHarness = vi.hoisted(() => ({
+  callbacks: new Map<string, (event: {
+    id: string;
+    taskId: string;
+    type: string;
+    summary: string | null;
+    payload: unknown;
+    payloadTruncated: boolean;
+    source: 'runner' | 'backend' | 'github' | 'dan';
+    at: string;
+  }) => void>(),
+  lastEventIds: new Map<string, string | undefined>(),
+}));
+
+vi.mock('../task-events', () => ({
+  streamTaskEvents: vi.fn(async (options: {
+    taskId: string;
+    lastEventId?: string;
+    signal: AbortSignal;
+    onEvent: (event: {
+      id: string;
+      taskId: string;
+      type: string;
+      summary: string | null;
+      payload: unknown;
+      payloadTruncated: boolean;
+      source: 'runner' | 'backend' | 'github' | 'dan';
+      at: string;
+    }) => void;
+    onStatus?: (status: 'connecting' | 'connected' | 'reconnecting' | 'error') => void;
+  }) => {
+    options.onStatus?.('connected');
+    streamHarness.callbacks.set(options.taskId, options.onEvent);
+    streamHarness.lastEventIds.set(options.taskId, options.lastEventId);
+    await new Promise<void>((resolve) => options.signal.addEventListener('abort', () => resolve(), { once: true }));
+  }),
+}));
+
+const project = { id: '7', name: 'Jarvis', repo: 'DanAakesen/jarvis' };
 const getAccessToken = vi.fn(async () => 'test-access-token');
 const fetchMock = vi.fn<typeof fetch>();
+
+function event(id: string, type: string, source: 'runner' | 'backend' | 'github' | 'dan', summary = type) {
+  return {
+    id,
+    type,
+    summary,
+    payload: { eventId: id },
+    payloadTruncated: false,
+    source,
+    at: `2026-10-04T12:${String(Number(id) % 60).padStart(2, '0')}:00.000Z`,
+  };
+}
 
 const task = {
   id: '42',
   projectId: '7',
-  originMessageId: null,
+  originMessageId: '9',
   title: 'Keep disk headroom',
   request: 'Monitor writable disk',
-  source: 'board',
+  source: 'chat',
   agent: 'copilot',
-  modelOverride: null,
+  modelOverride: 'gpt-5.6-luna',
   reasoningOverride: null,
   state: 'NeedsAttention',
   activity: null,
@@ -28,9 +79,7 @@ const task = {
   finishedAt: null,
   events: [
     {
-      id: '20',
-      type: 'disk_snapshot',
-      summary: 'Session disk snapshot',
+      ...event('20', 'disk_snapshot', 'runner', 'Session disk snapshot'),
       payload: {
         invocationId: 'invocation-1',
         eventIndex: 1,
@@ -40,23 +89,13 @@ const task = {
           threshold_bytes: 1024 ** 3,
         },
       },
-      payloadTruncated: false,
-      source: 'runner',
-      at: '2026-10-04T12:01:01.000Z',
     },
     {
-      id: '21',
-      type: 'state_changed',
-      summary: 'Low sandbox disk; task needs attention',
+      ...event('21', 'state_changed', 'backend', 'Low sandbox disk; task needs attention'),
       payload: { from: 'Running', to: 'NeedsAttention', reason: 'disk_low' },
-      payloadTruncated: false,
-      source: 'backend',
-      at: '2026-10-04T12:02:00.000Z',
     },
     {
-      id: '22',
-      type: 'disk_low',
-      summary: 'Writable disk is below the configured threshold',
+      ...event('22', 'disk_low', 'runner', 'Writable disk is below the configured threshold'),
       payload: {
         invocationId: 'invocation-1',
         eventIndex: 2,
@@ -66,10 +105,9 @@ const task = {
           threshold_bytes: 1024 ** 3,
         },
       },
-      payloadTruncated: false,
-      source: 'runner',
-      at: '2026-10-04T12:02:00.000Z',
     },
+    event('23', 'check_result', 'github', 'GitHub reported passing checks'),
+    event('24', 'steered', 'dan', 'Dan sent a steering message'),
   ],
   usage: [
     {
@@ -105,28 +143,72 @@ const task = {
   ],
 };
 
+let taskEvents: typeof task.events;
+
+function response(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function renderTaskPage() {
+  return render(
+    <MemoryRouter>
+      <TaskDetailPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} taskId="42" />
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
   getAccessToken.mockClear();
-  fetchMock.mockReset().mockResolvedValue(new Response(JSON.stringify(task), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  }));
+  streamHarness.callbacks.clear();
+  streamHarness.lastEventIds.clear();
+  taskEvents = [...task.events];
+  fetchMock.mockReset().mockImplementation(async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/factory/projects') return response([project]);
+    if (url.pathname === '/conversation/history') {
+      return response({
+        messages: [{
+          id: '9',
+          sessionId: '3',
+          role: 'dan',
+          text: 'Please monitor writable disk.',
+          at: '2026-10-04T11:59:00.000Z',
+        }],
+        nextCursor: null,
+      });
+    }
+    if (url.pathname === '/factory/tasks/42') {
+      const offset = Number(url.searchParams.get('eventOffset') ?? 0);
+      const limit = Number(url.searchParams.get('eventLimit') ?? 100);
+      return response({ ...task, events: taskEvents.slice(offset, offset + limit) });
+    }
+    return response({ error: 'Unexpected request' }, 500);
+  });
   vi.stubGlobal('fetch', fetchMock);
 });
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('task detail page', () => {
-  it('shows measured disk figures and the low-disk attention reason', async () => {
-    render(
-      <MemoryRouter>
-        <TaskDetailPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} taskId="42" />
-      </MemoryRouter>,
-    );
+  it('shows task metadata, project and branch links, disabled actions, disk readings, and every event source', async () => {
+    renderTaskPage();
 
     expect(await screen.findByRole('heading', { name: 'Keep disk headroom' })).not.toBeNull();
+    expect(screen.getByText('Monitor writable disk')).not.toBeNull();
     expect(screen.getByText('Needs attention')).not.toBeNull();
-    expect(screen.getByText('disk_low')).not.toBeNull();
+    expect(screen.getAllByText('disk_low').length).toBeGreaterThan(0);
+    const agentRow = screen.getByText('Agent').closest('div');
+    if (!agentRow) throw new Error('Agent metadata row is missing');
+    expect(within(agentRow).getByText('Copilot')).not.toBeNull();
+    expect(screen.getByText('gpt-5.6-luna')).not.toBeNull();
+    expect(await screen.findByText('Please monitor writable disk.')).not.toBeNull();
+    expect((await screen.findByRole('link', { name: 'Jarvis' })).getAttribute('href')).toBe('/factory/projects/7');
+    expect(screen.getByRole('link', { name: 'task/disk-headroom' }).getAttribute('href'))
+      .toBe('https://github.com/DanAakesen/jarvis/tree/task/disk-headroom');
+    expect(screen.getAllByText('Not reported')).toHaveLength(2);
     expect(screen.getAllByText('6.00 GiB')).toHaveLength(2);
     expect(screen.getByText('2.50 GiB')).not.toBeNull();
     expect(screen.getByText('0.50 GiB')).not.toBeNull();
@@ -137,19 +219,70 @@ describe('task detail page', () => {
     expect(screen.getByText('Estimated · DKK 0.0519')).not.toBeNull();
     expect(screen.getByText('Agent turns')).not.toBeNull();
     expect(screen.getByText('Premium requests')).not.toBeNull();
-    expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/factory/tasks/42', expect.objectContaining({
-      headers: { Authorization: `${['Bear', 'er'].join('')} test-access-token` },
-    }));
+    expect(screen.getByText('Session disk snapshot')).not.toBeNull();
+    expect(screen.getByText('Low sandbox disk; task needs attention')).not.toBeNull();
+    expect(screen.getByText('GitHub reported passing checks')).not.toBeNull();
+    expect(screen.getByText('Dan sent a steering message')).not.toBeNull();
+    expect(screen.getByText('Chat')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Steer' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Pause' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('Task controls are shown here and will be enabled in P2.')).not.toBeNull();
+    expect(screen.getByText('Live updates connected')).not.toBeNull();
+    expect(streamHarness.lastEventIds.get('42')).toBe('24');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.com/factory/tasks/42?eventLimit=100&eventOffset=0',
+      expect.objectContaining({ headers: { Authorization: `${['Bear', 'er'].join('')} test-access-token` } }),
+    );
+  });
+
+  it('filters event types, expands event payloads, and displays live runner events', async () => {
+    const user = userEvent.setup();
+    renderTaskPage();
+    expect(await screen.findByText('Session disk snapshot')).not.toBeNull();
+
+    await user.selectOptions(screen.getByLabelText('Event type'), 'disk_low');
+    expect(screen.getByText('Writable disk is below the configured threshold')).not.toBeNull();
+    expect(screen.queryByText('Session disk snapshot')).toBeNull();
+    await user.click(screen.getByText('View event payload'));
+    expect(screen.getByText(/invocation-1/)).not.toBeNull();
+
+    await user.selectOptions(screen.getByLabelText('Event type'), 'all');
+    await waitFor(() => expect(streamHarness.callbacks.has('42')).toBe(true));
+    streamHarness.callbacks.get('42')?.({
+      ...event('25', 'tests_run', 'runner', 'Runner finished tests'),
+      taskId: '42',
+    });
+    expect(await screen.findByText('Runner finished tests')).not.toBeNull();
+  });
+
+  it('loads the next bounded archived-event page on demand', async () => {
+    const user = userEvent.setup();
+    taskEvents = Array.from({ length: 101 }, (_value, index) => event(String(index + 1), 'runner_event', 'runner', `Timeline event ${index + 1}`));
+    renderTaskPage();
+    expect(await screen.findByText('Timeline event 1')).not.toBeNull();
+    expect(screen.queryByText('Timeline event 101')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Load more events' }));
+
+    expect(await screen.findByText('Timeline event 101')).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.com/factory/tasks/42?eventLimit=100&eventOffset=100',
+      expect.objectContaining({ headers: { Authorization: `${['Bear', 'er'].join('')} test-access-token` } }),
+    );
   });
 
   it('retries the task detail request and uses the same response for usage', async () => {
     const user = userEvent.setup();
-    fetchMock.mockReset()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'unavailable' }), { status: 503 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(task), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }));
+    const loadTask = fetchMock.getMockImplementation();
+    if (!loadTask) throw new Error('Default fetch mock is missing');
+    let failed = false;
+    fetchMock.mockImplementation(async (input, init) => {
+      if (!failed && String(input).includes('/factory/tasks/42')) {
+        failed = true;
+        return new Response(JSON.stringify({ error: 'unavailable' }), { status: 503 });
+      }
+      return loadTask(input, init);
+    });
     render(
       <MemoryRouter>
         <TaskDetailPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} taskId="42" />
@@ -160,6 +293,6 @@ describe('task detail page', () => {
     expect(alert.textContent).toContain('Task details could not be loaded');
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('table', { name: 'Usage entries for task 42' })).not.toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/factory/tasks/42'))).toHaveLength(2);
   });
 });

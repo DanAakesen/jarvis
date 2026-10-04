@@ -249,6 +249,12 @@ mocks. All six columns, task creation, filter submission, modal dismissal, and
 focus return worked; the page had no horizontal overflow, controls were at least
 44 px high, and no console errors occurred. The wide board scrolls within its
 own region. Mocks do not verify live Entra, Azure SQL, or deployed SSE.
+P1-09 was inspected at 390 and 1280 px with a scratch-only `./useSignIn` stub
+and project/task/conversation/SSE mocks. The source message, project and branch
+links, live SSE event, event filter, and expanded payload worked; actions stayed
+disabled as described. Neither width overflowed, interactive controls were at
+least 44 px high, and no console errors occurred. Live Entra, Azure SQL/Blob
+archive reads, and deployed SSE remain unverified.
 Never commit the stub or weaken sign-in in the app.
 
 Backend commands:

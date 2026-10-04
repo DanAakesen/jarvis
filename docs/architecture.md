@@ -152,6 +152,16 @@ default Dan-only authentication. Offline API and SQL Server integration tests
 cover the contracts; deployed Entra, SQL and streaming behavior remain
 unverified.
 
+P1-09's task detail page reads `GET /factory/tasks/:id` in 100-event pages using
+`eventOffset`; the backend merges archived and SQL rows transparently. It resumes
+the authenticated P1-06 SSE stream from the last event in the initial page and
+deduplicates live/replayed events with the same persisted IDs. Project links reuse
+the active-project API to form validated GitHub branch links. PR/check data,
+artifacts and task-control writes remain unavailable to this page until
+their owning integrations and P2 controls are ready; P2-12's usage section shows the task's recorded usage. For tasks created from a
+conversation, it fetches the matching message with a one-row paginated history
+request. No schema or API write path changed.
+
 `GET /operations/sleep` reports the Container App's configured minimum replicas;
 `PUT /operations/sleep` accepts only awake (1) or asleep (0). Both routes use the
 root's Dan-only authentication. The backend targets only its Bicep-configured
