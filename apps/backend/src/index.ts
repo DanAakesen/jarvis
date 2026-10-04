@@ -58,6 +58,9 @@ import { createAlertActivityStore } from './database/alert-store.js';
 import { createGraphClient } from './graph/client.js';
 import { createNotesModule } from './notes/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
+import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
+import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
+import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
 import { createEphemeralAudioStore } from './teams/audio-store.js';
 import { createAzureSpeechSynthesizer } from './teams/speech.js';
@@ -307,6 +310,16 @@ try {
       } : {}),
     }),
   ];
+  if (database && settingsStore && config.foundryProjectEndpoint && credential) {
+    modules.push(createScreenVisionModule(new ScreenVisionService(
+      createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry screen identity unavailable');
+        return token.token;
+      }),
+      createScreenFrameUsageStore(database.pool),
+    )));
+  }
   if (graphClient) {
     modules.push(createNotesModule({
       graph: graphClient,
