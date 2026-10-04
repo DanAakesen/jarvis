@@ -346,6 +346,23 @@ Generated views are temporary; theme values persist. Small-orb input controls
 start voice explicitly. Glass/transparency and futuristic styling are exploratory;
 white wireframe windows are not a selected final treatment.
 
+## Temporary workspace composition (P8-06)
+
+The main workspace accepts an in-memory set of typed views. Desktop opens in a
+tiled arrangement and can switch to overlapping layers; using a layered window
+raises it, with explicit order controls as a keyboard alternative. Move and resize
+work with pointer gestures or focused arrow-key controls. At widths up to 900px,
+both arrangements reflow to a single-column view stack to keep content within the
+viewport.
+
+Each view presents ready, empty, loading, error, or interrupted content. Retry and
+continue feedback stays with the view, including partial interrupted content.
+Window geometry, order, and the open view set remain in memory only. The host is
+currently empty until P8-14 provides generated-view data and P8-15 supplies
+Jarvis-directed workspace commands; those data and agent-control contracts are
+not part of P8-06. These structural choices reuse the neutral shell tokens and
+do not settle the deferred full visual system in P8-20.
+
 ## Proposed surfaces for accepted capability additions
 
 Editable personality should live in **Settings → Jarvis → Personality**, reached
