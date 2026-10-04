@@ -19,7 +19,6 @@ export interface BackendConfig {
   foundryChatAgentName?: string;
   foundryProjectEndpoint?: string;
   githubAppId?: string;
-  keyVaultUri?: string;
   auth: AuthConfig;
 }
 
@@ -121,19 +120,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (githubAppId !== undefined && !/^[1-9][0-9]{0,19}$/u.test(githubAppId)) {
     throw new ConfigurationError('GITHUB_APP_ID must be a positive decimal identifier');
   }
-  let keyVaultUri: string | undefined;
-  if (env.KEY_VAULT_URI !== undefined) {
-    try {
-      const url = new URL(env.KEY_VAULT_URI);
-      if (url.protocol !== 'https:' || !url.hostname.endsWith('.vault.azure.net') ||
-        url.port || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
-        throw new Error();
-      }
-      keyVaultUri = `${url.origin}/`;
-    } catch {
-      throw new ConfigurationError('KEY_VAULT_URI must be a secure Azure Key Vault origin');
-    }
-  }
   if (githubAppId !== undefined && keyVaultUri === undefined) {
     throw new ConfigurationError('KEY_VAULT_URI is required when GITHUB_APP_ID is configured');
   }
@@ -153,7 +139,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(githubAppId === undefined ? {} : { githubAppId }),
-    ...(keyVaultUri === undefined ? {} : { keyVaultUri }),
   };
 }
 
