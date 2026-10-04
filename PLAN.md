@@ -257,7 +257,7 @@ Goal: Dan reaches Jarvis away from the browser, and Jarvis can see, act on his P
 | P7-10 | [#208](https://github.com/DanAakesen/jarvis/issues/208) | Second brain: notes search through Graph search over a OneDrive notes folder | Jarvis quotes a known note with a link | P4-02 | In progress |
 | P7-11 | [#209](https://github.com/DanAakesen/jarvis/issues/209) | Model switching by voice for the Jarvis model and coding tasks, limited to verified options | Valid, invalid and refused cases tested | P2-11, P4-07, P4-02 | Complete |
 | P7-12 | [#210](https://github.com/DanAakesen/jarvis/issues/210) | Live status by voice: Jarvis announces selected Now-feed events and summarises status on request | Announcements merge bursts and never interrupt Dan | P5-03, P1-13 | In progress |
-| P7-16 | [#266](https://github.com/DanAakesen/jarvis/issues/266) | Editable Jarvis personality shared by chat and voice: validated tone, response-style, and bounded custom instructions | Saved preferences persist and reset to the current British-butler defaults, apply to new chat and voice sessions, and never change identity, tool permissions, truthful action outcomes, or active voice sessions | P1-11, P4-09, P5-03 | In progress |
+| P7-16 | [#266](https://github.com/DanAakesen/jarvis/issues/266) | Editable Jarvis personality shared by chat and voice: validated tone, response-style, and bounded custom instructions | Saved preferences persist and reset to the current British-butler defaults, apply to new chat and voice sessions, and never change identity, tool permissions, truthful action outcomes, or active voice sessions | P1-11, P4-09, P5-03 | Complete |
 
 ### P8 — Jarvis UI
 
