@@ -146,11 +146,11 @@ describe('SQL conversation store', () => {
     expect(usage.recordset[0]).toMatchObject({ count: 1, source: 'voice', metric: 'minutes' });
     expect(usage.recordset[0]?.quantity).toBeGreaterThanOrEqual(0);
 
-    await expect(store.getHistory({ limit: 10 })).resolves.toMatchObject({
-      messages: [
-        { id: dan.id, channel: 'voice', language: 'en', text: 'How is the task going?', voiceMinutes: usage.recordset[0]?.quantity },
-        { id: jarvis.id, channel: 'voice', language: 'en', text: 'The task is complete.', voiceMinutes: usage.recordset[0]?.quantity },
-      ],
-    });
+    // Earlier tests in this database leave their own messages; check only this session's.
+    const history = await store.getHistory({ limit: 10 });
+    expect(history.messages.filter((message) => message.sessionId === session.id)).toMatchObject([
+      { id: dan.id, channel: 'voice', language: 'en', text: 'How is the task going?', voiceMinutes: usage.recordset[0]?.quantity },
+      { id: jarvis.id, channel: 'voice', language: 'en', text: 'The task is complete.', voiceMinutes: usage.recordset[0]?.quantity },
+    ]);
   });
 });
