@@ -374,8 +374,14 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
 
     expect((await store.transition(created.id, 'Done')).kind).toBe('invalid-transition');
     await transition(created.id, 'Running');
+    expect(await store.getActiveRepository(created.id)).toBe(
+      (await pool.request().input('id', sql.BigInt, BigInt(projectId))
+        .query<{ repo: string }>('SELECT repo FROM dbo.projects WHERE id = @id;')).recordset[0]?.repo,
+    );
     await transition(created.id, 'PauseRequested');
+    expect(await store.getActiveRepository(created.id)).not.toBeNull();
     await transition(created.id, 'Paused');
+    expect(await store.getActiveRepository(created.id)).toBeNull();
     await transition(created.id, 'Running');
     await pool.request()
       .input('taskId', sql.BigInt, BigInt(created.id))

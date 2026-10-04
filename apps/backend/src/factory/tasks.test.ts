@@ -6,6 +6,7 @@ import { createEventHub } from '../core/event-hub.js';
 import type {
   RunningTaskContextSnapshot, TaskController, TaskDetail, TaskEventMessage, TaskRecord, TaskStore,
 } from './task-store.js';
+import type { GitHubAppTokenIssuer } from '../github-app.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' ') };
@@ -70,12 +71,14 @@ function fixture(
     objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan',
   }),
   taskController?: TaskController,
+  githubAppTokenIssuer?: GitHubAppTokenIssuer,
 ) {
   const eventHub = createEventHub<TaskEventMessage>();
   const store: TaskStore = {
     create: vi.fn(async () => task),
     list: vi.fn(async () => [task]),
     get: vi.fn(async () => detail),
+    getActiveRepository: vi.fn(async () => 'DanAakesen/jarvis-test-target'),
     getEventsAfter: vi.fn(async (taskId, eventId, limit) => detail.events
       .filter((event) => BigInt(event.id) > BigInt(eventId))
       .slice(0, limit)
@@ -98,6 +101,7 @@ function fixture(
   const app = buildApp(config, undefined, {
     taskStore: store,
     ...(taskController ? { taskController } : {}),
+    ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
     eventHub,
     auth,
   });
@@ -193,6 +197,7 @@ describe('factory tasks API', () => {
       headers,
       payload: { action: 'steer', message: 'Keep the current approach.' },
     });
+
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(task);
     expect(controller.control).toHaveBeenCalledWith('42', {
@@ -210,6 +215,63 @@ describe('factory tasks API', () => {
     })).statusCode).toBe(400);
     expect((await app.inject({
       method: 'POST', url: '/factory/tasks/42/controls', headers, payload: { action: 'delete' },
+    })).statusCode).toBe(400);
+  });
+
+  it('mints a task repository token only for the runner identity', async () => {
+    const issue = vi.fn(async (repository: string) =>
+      repository === 'DanAakesen/jarvis-test-target' ? 'ghs_test-installation-token' : 'wrong-repository');
+    const issuer = { issue } satisfies GitHubAppTokenIssuer;
+    const runnerAuth: TokenVerifier = async () => ({
+      kind: 'jarvis-runner',
+      objectId: '11111111-1111-4111-8111-111111111111',
+      tenantId: config.auth.tenantId,
+    });
+    const runner = fixture({}, runnerAuth, undefined, issuer);
+    const response = await runner.app.inject({
+      method: 'POST', url: '/factory/tasks/42/github-token', headers,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.json()).toEqual({
+      token: 'ghs_test-installation-token',
+      repository: 'DanAakesen/jarvis-test-target',
+    });
+    expect(runner.store.getActiveRepository).toHaveBeenCalledWith('42');
+    expect(issue).toHaveBeenCalledWith('DanAakesen/jarvis-test-target');
+
+    const user = fixture({}, undefined, undefined, issuer);
+    const denied = await user.app.inject({
+      method: 'POST', url: '/factory/tasks/42/github-token', headers,
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(issue).toHaveBeenCalledOnce();
+  });
+
+  it('rejects inactive tasks and sanitizes GitHub token failures', async () => {
+    const runnerAuth: TokenVerifier = async () => ({
+      kind: 'jarvis-runner',
+      objectId: '11111111-1111-4111-8111-111111111111',
+      tenantId: config.auth.tenantId,
+    });
+    const issuer = { issue: vi.fn(async () => 'ghs_test-token') };
+    const inactive = fixture({ getActiveRepository: vi.fn(async () => null) }, runnerAuth, undefined, issuer);
+    expect((await inactive.app.inject({
+      method: 'POST', url: '/factory/tasks/42/github-token', headers,
+    })).statusCode).toBe(404);
+    expect(issuer.issue).not.toHaveBeenCalled();
+
+    const failing = fixture({}, runnerAuth, undefined, {
+      issue: vi.fn(async () => { throw new Error('private provider detail'); }),
+    });
+    const failed = await failing.app.inject({
+      method: 'POST', url: '/factory/tasks/42/github-token', headers,
+    });
+    expect(failed.statusCode).toBe(502);
+    expect(failed.json()).toEqual({ error: 'GitHub token unavailable' });
+    expect(failed.body).not.toContain('private provider detail');
+    expect((await failing.app.inject({
+      method: 'POST', url: '/factory/tasks/9223372036854775808/github-token', headers,
     })).statusCode).toBe(400);
   });
 

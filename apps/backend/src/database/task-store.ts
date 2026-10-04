@@ -491,6 +491,16 @@ export function createTaskStore(
       }
     },
 
+    async getActiveRepository(id: string): Promise<string | null> {
+      const result = await pool.request()
+        .input('taskId', sql.BigInt, BigInt(id))
+        .query<{ repo: string }>(`SELECT p.repo
+          FROM dbo.tasks AS t
+          INNER JOIN dbo.projects AS p ON p.id = t.project_id
+          WHERE t.id = @taskId AND t.state IN (N'Running', N'PauseRequested');`);
+      return result.recordset[0]?.repo ?? null;
+    },
+
     async getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]> {
       const result = await pool.request()
         .input('taskId', sql.BigInt, BigInt(taskId))
