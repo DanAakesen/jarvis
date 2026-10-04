@@ -29,7 +29,7 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
   min-height: 100vh;
   min-height: 100dvh;
   grid-template-columns: 56px minmax(0, var(--sidebar-size)) minmax(0, 1fr) minmax(0, var(--context-size));
-  grid-template-rows: 56px minmax(0, 1fr) 30px;
+  grid-template-rows: 72px minmax(0, 1fr) 30px;
   color: var(--text);
   background: #f6f7f9;
 }
@@ -465,7 +465,7 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
   .app-topbar { grid-column: 2; grid-row: 1; display: grid; justify-items: stretch; gap: 2px; padding: 6px 8px; }
   .topbar-context { min-height: 38px; justify-content: flex-end; }
   .topbar-context .brand { margin-right: auto; }
-  .topbar-actions { justify-content: space-between; gap: 2px; }
+  .topbar-actions { flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
   .topbar-feature-button { min-height: 38px; gap: 4px; padding: 2px 4px; font-size: 12px; }
   .topbar-feature-button svg { width: 17px; height: 17px; }
   .topbar-feature-note { max-width: 104px; font-size: 9px; }
