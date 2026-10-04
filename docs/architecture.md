@@ -59,9 +59,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `/factory/releases/:id`;
   invalid IDs show not found. The Usage area (`src/usage/`) owns `/usage` and
   reads the signed-in user's usage report. `/settings` is the shared settings entry. P1-11
-  implements it as a responsive form for Jarvis, voice, coding-agent defaults
-  and the global task limit; remaining voice samples, sleep and credential
-  controls are visibly disabled until their owning services exist.
+  implements it as a responsive form for Jarvis, voice, coding-agent defaults,
+  global task limits, and appearance. P8-13's shell-level theme provider loads
+  the accepted `appearance.theme` from `/settings`, saves light/dark changes
+  through the same authenticated API, and applies them to semantic CSS
+  variables on the document root. Theme changes take effect only after the
+  server returns the accepted value; rejected updates retain the previous
+  appearance. Remaining voice samples, sleep, credential, and custom-theme
+  controls are visibly disabled until their owning services/contracts exist.
 - P7-16 extends the same authenticated, validated `dbo.settings` key/value store
   with bounded personality preferences. Hosted chat and Danish voice read them
   for each new agent invocation/session; the backend snapshots them when it
@@ -108,7 +113,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   authentication. The backend returns effective defaults with the validated
   model catalog, rejects unknown keys and unsupported values, and writes a
   partial update transactionally to whitelisted `global` rows in `dbo.settings`.
-  The `newProjects` settings area validates owner, visibility, templates
+  The `appearance.theme` value accepts only `light` or `dark` and reuses the
+  global `dbo.settings` key/value table without a migration. The `newProjects`
+  settings area validates owner, visibility, templates
   repository, default agent, policy, per-project task limit, and default branch;
   these defaults reuse the existing settings table and are available to future
   project registration without changing the project API.

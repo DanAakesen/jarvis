@@ -2,8 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPage } from './SettingsPage';
+import { ThemePreferenceContext, type ThemeMode, type ThemePreference } from './theme-preference-context';
 
 const settings = {
+  appearance: { theme: 'light' as ThemeMode },
   jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
   personality: {
     tone: 'british_butler' as 'british_butler' | 'warm' | 'direct' | 'playful',
@@ -32,6 +34,7 @@ const settings = {
 };
 
 const options = {
+  themes: ['light', 'dark'],
   jarvisModels: ['gpt-5.6-luna'],
   reasoningEfforts: ['none', 'low', 'medium', 'high'],
   personalityTones: ['british_butler', 'warm', 'direct', 'playful'],
@@ -52,6 +55,15 @@ const options = {
 const getAccessToken = vi.fn(async () => ['access', 'token', 'fixture'].join('.'));
 const fetchMock = vi.fn<typeof fetch>();
 const backendUrl = 'https://api.example.com';
+const themePreference = {
+  theme: 'light' as ThemeMode,
+  state: 'ready' as const,
+  saving: false,
+  error: '',
+  message: '',
+  saveTheme: vi.fn<ThemePreference['saveTheme']>(async () => {}),
+  retry: vi.fn(),
+};
 
 function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -67,12 +79,18 @@ function settingsResponse(current = settings, credentials: {
 }
 
 function renderSettingsPage(url: string | null = backendUrl) {
-  return render(<SettingsPage backendUrl={url} getAccessToken={getAccessToken} />);
+  return render(
+    <ThemePreferenceContext.Provider value={themePreference}>
+      <SettingsPage backendUrl={url} getAccessToken={getAccessToken} />
+    </ThemePreferenceContext.Provider>,
+  );
 }
 
 beforeEach(() => {
   getAccessToken.mockClear();
   fetchMock.mockReset();
+  themePreference.saveTheme.mockClear();
+  themePreference.retry.mockClear();
   vi.stubGlobal('fetch', fetchMock);
 });
 
@@ -110,6 +128,7 @@ describe('SettingsPage', () => {
         global: { maxParallelTasks: 3 },
       },
     });
+
     expect(screen.getByRole('button', {
       name: 'Play English sample',
       description: /voice playback is connected/,
@@ -209,6 +228,23 @@ describe('SettingsPage', () => {
     expect(screen.getByText(/already matches the default/)).not.toBeNull();
     const [, request] = fetchMock.mock.calls[2]!;
     expect(JSON.parse(String(request?.body))).toEqual({ settings: { personality: settings.personality } });
+  });
+
+  it('offers light and dark modes and explains that custom variables are unavailable', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()));
+    renderSettingsPage();
+
+    await screen.findByRole('heading', { name: 'Appearance', level: 2 });
+    expect(screen.getByRole('radio', { name: 'Light' })).toHaveProperty('checked', true);
+    expect(screen.getByRole('radio', { name: 'Dark' })).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', {
+      name: 'Edit theme variables',
+      description: /validated settings and tool update path is implemented/,
+    })).toHaveProperty('disabled', true);
+
+    await user.click(screen.getByRole('radio', { name: 'Dark' }));
+    expect(themePreference.saveTheme).toHaveBeenCalledWith('dark');
   });
 
   it('shows custom-instruction validation and prevents saving invalid control characters', async () => {
