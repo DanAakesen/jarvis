@@ -123,7 +123,7 @@ def test_deploy_selects_version_grants_only_credential_scopes_and_probes(monkeyp
     assert foundry.calls[-1][0] == "DELETE"
 
 
-def test_acr_workflow_dockerfiles_resolve_from_uploaded_source_context():
+def test_acr_workflow_dockerfiles_resolve_from_the_workflow_working_directory():
     import shlex
     from pathlib import Path
 
@@ -136,9 +136,9 @@ def test_acr_workflow_dockerfiles_resolve_from_uploaded_source_context():
     for command in commands:
         context = repo / command[-1]
         dockerfile = command[command.index("--file") + 1]
-        # ACR resolves --file relative to the uploaded source-code root,
-        # unlike docker build's local file argument.
+        # az acr build checks --file from the working directory (the repository
+        # root in the workflow), not from the context argument (L53).
         assert context == repo / "runner"
-        assert (context / dockerfile).is_file()
+        assert (repo / dockerfile).is_file()
         files.append(dockerfile)
-    assert set(files) == {"Dockerfile", "Dockerfile.dotnet"}
+    assert set(files) == {"runner/Dockerfile", "runner/Dockerfile.dotnet"}
