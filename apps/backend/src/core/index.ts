@@ -119,8 +119,8 @@ export const coreModule: BackendModule = {
           await app.toolCallStore!.record({
             messageId: messageId!,
             tool: tool.name,
-            arguments: auditToolArguments(tool.name, request.body),
-            result: auditToolResult(tool.name, outcome, result),
+            arguments: tool.sensitive ? { redacted: true } : auditToolArguments(tool.name, request.body),
+            result: tool.sensitive ? { redacted: true } : auditToolResult(tool.name, outcome, result),
             outcome,
           });
         }

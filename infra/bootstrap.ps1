@@ -10,7 +10,8 @@
       - Entra app 'jarvis-github-deploy' with a GitHub OIDC federated credential (main branch, immutable-ID subject),
         Contributor and Role Based Access Control Administrator on the resource group
       - Entra app 'jarvis-api' (scope access_as_user, roles Jarvis.Tools and
-        Jarvis.Runner.Events) and 'jarvis-web' (SPA, pre-authorized)
+        Jarvis.Runner.Events), 'jarvis-web' (SPA), and 'jarvis-pc-bridge' (public client,
+        device-code sign-in, pre-authorized for the delegated API scope)
       - User-assigned managed identity for the backend, and the Entra group 'jarvis-sql-admins'
         (Dan + backend identity) used as the Azure SQL Entra admin
       - The private GitHub repository and its Actions variables (IDs only; no secrets)
@@ -157,9 +158,10 @@ Set-RoleAssignment $deploySp.id 'Contributor' $rgScope
 Set-RoleAssignment $deploySp.id 'Role Based Access Control Administrator' $rgScope
 
 # --- Sign-in apps -------------------------------------------------------------------------
-Step 'Sign-in apps: jarvis-api and jarvis-web'
+Step 'Sign-in apps: jarvis-api, jarvis-web and jarvis-pc-bridge'
 $apiApp = Get-OrCreateApp 'jarvis-api'
 $webApp = Get-OrCreateApp 'jarvis-web'
+$pcBridgeApp = Get-OrCreateApp 'jarvis-pc-bridge'
 $apiApp = Invoke-Graph GET "/applications/$($apiApp.id)"
 $scope = $apiApp.api.oauth2PermissionScopes | Where-Object { $_.value -eq 'access_as_user' }
 $scopeId = if ($scope) { $scope.id } else { [guid]::NewGuid().ToString() }
@@ -189,7 +191,16 @@ Invoke-Graph PATCH "/applications/$($apiApp.id)" @{
     appRoles = @($appRoles)
 } | Out-Null
 Invoke-Graph PATCH "/applications/$($apiApp.id)" @{
-    api = @{ preAuthorizedApplications = @(@{ appId = $webApp.appId; delegatedPermissionIds = @($scopeId) }) }
+    api = @{
+        preAuthorizedApplications = @(
+            @($apiApp.api.preAuthorizedApplications) |
+                Where-Object { $_ -and $_.appId -notin @($webApp.appId, $pcBridgeApp.appId) } |
+                ForEach-Object { @{ appId = $_.appId; delegatedPermissionIds = @($_.delegatedPermissionIds) } }
+        ) + @(
+            @{ appId = $webApp.appId; delegatedPermissionIds = @($scopeId) }
+            @{ appId = $pcBridgeApp.appId; delegatedPermissionIds = @($scopeId) }
+        )
+    }
 } | Out-Null
 $webCurrent = Invoke-Graph GET "/applications/$($webApp.id)?`$select=spa"
 $WebRedirectUris = @(@($webCurrent.spa.redirectUris) + $WebRedirectUris | Where-Object { $_ } | Sort-Object -Unique)   # never drop URIs added later
@@ -197,8 +208,29 @@ Invoke-Graph PATCH "/applications/$($webApp.id)" @{
     spa = @{ redirectUris = @($WebRedirectUris) }
     requiredResourceAccess = @(@{ resourceAppId = $apiApp.appId; resourceAccess = @(@{ id = $scopeId; type = 'Scope' }) })
 } | Out-Null
+$pcBridgeCurrent = Invoke-Graph GET "/applications/$($pcBridgeApp.id)"
+$pcBridgeResourceAccess = @(
+    @($pcBridgeCurrent.requiredResourceAccess) |
+        Where-Object { $_.resourceAppId -eq $apiApp.appId } |
+        ForEach-Object { $_.resourceAccess }
+)
+if (-not ($pcBridgeResourceAccess | Where-Object { $_.id -eq $scopeId -and $_.type -eq 'Scope' })) {
+    $pcBridgeResourceAccess += @{ id = $scopeId; type = 'Scope' }
+}
+$pcBridgeRequiredResourceAccess = @(
+    @($pcBridgeCurrent.requiredResourceAccess) |
+        Where-Object { $_.resourceAppId -ne $apiApp.appId } |
+        ForEach-Object {
+            @{ resourceAppId = $_.resourceAppId; resourceAccess = @($_.resourceAccess) }
+        }
+) + @(@{ resourceAppId = $apiApp.appId; resourceAccess = @($pcBridgeResourceAccess) })
+Invoke-Graph PATCH "/applications/$($pcBridgeApp.id)" @{
+    isFallbackPublicClient = $true
+    requiredResourceAccess = $pcBridgeRequiredResourceAccess
+} | Out-Null
 $apiSp = Get-OrCreateServicePrincipal $apiApp.appId
 Get-OrCreateServicePrincipal $webApp.appId | Out-Null
+Get-OrCreateServicePrincipal $pcBridgeApp.appId | Out-Null
 # Only assigned users can get tokens for the API; Dan is the only assignment. The backend's allow-list is a second check.
 Invoke-Graph PATCH "/servicePrincipals/$($apiSp.id)" @{ appRoleAssignmentRequired = $true } | Out-Null
 $assigned = @((Invoke-Graph GET "/servicePrincipals/$($apiSp.id)/appRoleAssignedTo").value) | Where-Object { $_.principalId -eq $OwnerObjectId }
@@ -279,6 +311,7 @@ $variables = [ordered]@{
     AZURE_CLIENT_ID = $deployApp.appId; AZURE_TENANT_ID = $TenantId; AZURE_SUBSCRIPTION_ID = $SubscriptionId
     AZURE_RESOURCE_GROUP = $ResourceGroup; AZURE_LOCATION = $Location
     JARVIS_API_CLIENT_ID = $apiApp.appId; JARVIS_WEB_CLIENT_ID = $webApp.appId
+    JARVIS_PC_BRIDGE_CLIENT_ID = $pcBridgeApp.appId
     JARVIS_BACKEND_IDENTITY_ID = $identity.id; JARVIS_SQL_ADMIN_GROUP_ID = $group.id
 }
 if ($JarvisAgentPrincipalId) {
@@ -298,6 +331,7 @@ $output = [ordered]@{
     deploy = [ordered]@{ appId = $deployApp.appId; servicePrincipalId = $deploySp.id; federatedSubjects = @($subjects.Values) }
     api = [ordered]@{ appId = $apiApp.appId; identifierUri = "api://$($apiApp.appId)"; scope = "api://$($apiApp.appId)/access_as_user" }
     web = [ordered]@{ appId = $webApp.appId; redirectUris = $WebRedirectUris }
+    pcBridge = [ordered]@{ appId = $pcBridgeApp.appId; signIn = 'device code; delegated access_as_user' }
     backendIdentity = [ordered]@{ resourceId = $identity.id; clientId = $identity.clientId; principalId = $identity.principalId }
     sqlAdminGroup = [ordered]@{ objectId = $group.id; displayName = 'jarvis-sql-admins' }
 }

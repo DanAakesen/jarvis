@@ -33,5 +33,7 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
     const reason = (result as { refused?: unknown } | null)?.refused;
     return `Not done: ${tool} was refused.${typeof reason === 'string' ? ` ${reason}` : ''}`;
   }
+  const failure = (result as { failure?: unknown } | null)?.failure;
+  if (typeof failure === 'string') return `Not done: ${tool} failed. ${failure}`;
   return `Not done: ${tool} failed.`;
 }

@@ -20,6 +20,8 @@ export interface BackendConfig {
   foundryProjectEndpoint?: string;
   foundryMemoryEmbeddingDeploymentName?: string;
   githubAppId?: string;
+  graphAppId?: string;
+  graphTimeZone?: string;
   monthlyBudgetResourceId?: string;
   notesFolderPath: string;
   teams?: {
@@ -140,6 +142,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (githubAppId !== undefined && keyVaultUri === undefined) {
     throw new ConfigurationError('KEY_VAULT_URI is required when GITHUB_APP_ID is configured');
   }
+  const graphAppId = env.JARVIS_GRAPH_APP_ID;
+  if (graphAppId !== undefined && !/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(graphAppId)) {
+    throw new ConfigurationError('JARVIS_GRAPH_APP_ID must be a UUID');
+  }
+  const graphTimeZone = env.JARVIS_GRAPH_TIME_ZONE;
+  if (graphAppId !== undefined && keyVaultUri === undefined) {
+    throw new ConfigurationError('KEY_VAULT_URI is required when JARVIS_GRAPH_APP_ID is configured');
+  }
+  if ((graphAppId === undefined) !== (graphTimeZone === undefined)) {
+    throw new ConfigurationError('JARVIS_GRAPH_APP_ID and JARVIS_GRAPH_TIME_ZONE must be configured together');
+  }
+  if (graphTimeZone !== undefined) {
+    try { new Intl.DateTimeFormat('en-GB', { timeZone: graphTimeZone }); }
+    catch { throw new ConfigurationError('JARVIS_GRAPH_TIME_ZONE must be a supported time zone'); }
+  }
   const monthlyBudgetResourceId = env.JARVIS_MONTHLY_BUDGET_RESOURCE_ID;
   if (monthlyBudgetResourceId !== undefined &&
     !/^\/subscriptions\/[\da-f-]+\/resourceGroups\/[a-z\d._()-]+\/providers\/Microsoft\.Consumption\/budgets\/[a-z\d._()-]+$/iu.test(monthlyBudgetResourceId)) {
@@ -211,6 +228,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
     ...(githubAppId === undefined ? {} : { githubAppId }),
+    ...(graphAppId === undefined ? {} : { graphAppId: graphAppId.toLowerCase() }),
+    ...(graphTimeZone === undefined ? {} : { graphTimeZone }),
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
     ...(teams ? { teams } : {}),
     notesFolderPath: notesFolderPath.replace(/\/+$/u, ''),

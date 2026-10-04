@@ -456,7 +456,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
   }
 
   return (
-    <section className="task-detail" aria-labelledby="task-heading">
+    <section className="task-detail" data-task-state={task?.state} aria-labelledby="task-heading">
       <Link className="home-link" to="/factory/tasks">Back to tasks</Link>
       <h1 id="task-heading">{task?.title ?? `Task ${taskId}`}</h1>
       {result.status === 'loading' && <p role="status">Loading task details…</p>}
