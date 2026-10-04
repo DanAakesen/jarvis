@@ -96,9 +96,10 @@ Before marking the PR ready, update the repository in the same PR so the next ag
 | Added or verified a command, environment variable, secret name, or setup step | this file |
 | Built or proved a step in a flow | [architecture-flows.html](architecture-flows.html): the box status |
 | Settled a visual direction or found a UI issue | [DESIGN.md](../DESIGN.md) |
+| Added, changed, removed or verified a feature (including new planned tasks) | [features.md](features.md): its row's status, surface and tasks |
 | Found work outside the task | `PLAN.md`: a new task (next free ID in its phase, Depends on filled in, Not started) or an entry under Ideas. Update the Depends on column of any task this changes. Never drop it silently. |
 
-The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; never merge a draft.
+The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; never merge a draft, and never merge a PR whose diff against `main` is empty or whose only commits are a plan or merges from `main` (L69).
 
 Every task issue ends with the same "Before you start" and "Definition of done" checklist that summarises these rules. New task issues get it too.
 
@@ -216,6 +217,7 @@ Verified in Codex cloud for P0-02:
 | Both workspace tests (single run) | `npm test` in the repository root (P0-03 adds backend tests) |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
+| Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
@@ -249,10 +251,20 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
+P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
+project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
+when requests settled, and status polling stopped while idle. No horizontal
+overflow or page exceptions occurred. This does not verify live SQL auto-resume.
+Focused P1-14 checks: `npm test --workspace @jarvis/backend -- src/app.test.ts
+src/factory/tasks.test.ts src/database/wake-retry.test.ts src/database/lifecycle.test.ts
+src/database/config.test.ts` and `npm test --workspace @jarvis/web -- --run
+src/DatabaseWakeStatus.test.tsx src/App.test.tsx src/task-events.test.tsx`.
 P3-11 rechecked Settings and Projects at 390 and 1280 px: New projects defaults
 load and save, and the Projects page retains edit/archive but has no create form.
-The backend project POST route remains for P3-12. Live Entra and Azure SQL
-behavior remain unverified.
+P3-12 adds the authenticated `create_project` tool and backend-only Key Vault
+repository creation. Backend and runner contract tests are local/offline; live
+Entra, Key Vault, Azure SQL, private template access and the throwaway end-to-end
+scaffolding PR remain unverified.
 P1-08 was inspected at 390 and 1280 px with scratch-only auth and project/task/SSE
 mocks. All six columns, task creation, filter submission, modal dismissal, and
 focus return worked; the page had no horizontal overflow, controls were at least
@@ -283,7 +295,7 @@ Backend commands:
 | Purpose | Command |
 | --- | --- |
 | Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
-| SQL Server migration and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
+| SQL Server migration, webhook mapping, and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
 | Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
 | P6-05 SQL Server parallel load test (CI `Database` job; prints a `P6-05 load:` summary line) | `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher-load.integration.test.ts` (isolated loopback SQL Server only) |
@@ -436,6 +448,15 @@ Verified locally for issue #30 (no Azure access required):
 | Run offline Foundry contract tests | `npx --no-install vitest run --config apps/backend/src/foundry/vitest.config.mts` |
 
 The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and an injected `getToken(scope, signal)` identity provider. These are module options, not new environment variables. See the [module guide](../apps/backend/src/foundry/README.md) for operation ownership and fixture provenance. Recorded runner responses are captured locally with ACP stubbed; these checks establish the offline contract, not live Azure readiness. The dedicated `Foundry contract CI` workflow checks this module on the current skeleton without depending on the server implementation.
+
+P2-13 task starts require `repository` (`owner/name`), `defaultBranch`, and
+`branch` in addition to the task identifier. The runner prepares the Git
+checkout before starting ACP; provider probes and Codex renewal do not clone a
+repository. Keep the existing Git credential-helper interface when changing
+token acquisition (P3-02). After merge, the coordinator must run one Copilot and
+one Codex task on `DanAakesen/jarvis-test-target`, verify pushes to their
+`jarvis/task-<id>` branches, and verify that a commit-free agent question appears
+as Needs attention.
 
 ### Database access and migrations (#7)
 

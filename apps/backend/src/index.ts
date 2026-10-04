@@ -38,6 +38,7 @@ import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
 import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
 import { createNowFeedStore } from './database/now-feed-store.js';
+import { createRepoAdminRepositoryCreator } from './credentials/repo-admin.js';
 import { createGitHubAppTokenIssuer } from './github-app.js';
 import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js';
 import { createGithubWebhookModule } from './github/webhook.js';
@@ -63,6 +64,16 @@ try {
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
+    : undefined;
+  const projectRepositoryCreator = config.keyVaultUri && credential
+    ? createRepoAdminRepositoryCreator(
+      config.keyVaultUri,
+      async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Key Vault identity unavailable');
+        return token.token;
+      },
+    )
     : undefined;
   const githubAppKeyVault = config.githubAppId && config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
@@ -191,8 +202,10 @@ try {
   const credentialStatusStore = database ? createCredentialStatusStore(database.pool) : undefined;
   const app = buildApp(config, logger, {
     modules,
+    ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(database && taskStore && settingsStore ? {
       projectStore: createProjectStore(database.pool),
+      ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),

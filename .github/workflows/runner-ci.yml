@@ -19,7 +19,7 @@ jobs:
       - run: docker build --file runner/Dockerfile.dotnet --tag jarvis-runner-dotnet:local runner
       - name: Check packaged runtimes and non-root user
         run: |
-          docker run --rm jarvis-runner:local sh -ec 'test "$(id -u)" != 0; python --version; node --version; npm --version; gh version; copilot --version; codex --version; codex-acp --version'
+          docker run --rm jarvis-runner:local sh -ec 'test "$(id -u)" != 0; python --version; node --version; npm --version; gh version; copilot --version; codex --version; codex-acp --version; pwsh --version'
           docker run --rm jarvis-runner-dotnet:local dotnet --version
       - name: Serve the invocation API from the image
         run: |

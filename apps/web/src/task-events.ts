@@ -1,3 +1,5 @@
+import { backendFetch, beginBackendRequest } from './backend-request';
+
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxSseEventLength = 1024 * 1024;
 
@@ -35,19 +37,23 @@ async function readEvents(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
   onEvent: (id: string, data: string) => void,
+  onReady: () => void,
 ): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let eventId = '';
+  let eventType = '';
   let frameLength = 0;
   const data: string[] = [];
 
   const processLine = (line: string) => {
     if (line.endsWith('\r')) line = line.slice(0, -1);
     if (!line) {
+      if (eventType === 'ready') onReady();
       if (eventId && data.length) onEvent(eventId, data.join('\n'));
       eventId = '';
+      eventType = '';
       data.length = 0;
       frameLength = 0;
       return;
@@ -60,6 +66,7 @@ async function readEvents(
     let value = separator === -1 ? '' : line.slice(separator + 1);
     if (value.startsWith(' ')) value = value.slice(1);
     if (field === 'id' && !value.includes('\0')) eventId = value;
+    else if (field === 'event') eventType = value;
     else if (field === 'data') data.push(value);
   };
 
@@ -104,9 +111,13 @@ export async function streamTaskEvents<T extends { id: string }>({
   let reconnectDelay = 1000;
   while (!signal.aborted) {
     onStatus?.('connecting');
+    let finishReplay = () => {};
     try {
       const token = await getAccessToken();
-      const response = await fetch(`${backendUrl.replace(/\/+$/, '')}/factory/tasks/${taskId}/events`, {
+      const url = `${backendUrl.replace(/\/+$/, '')}/factory/tasks/${taskId}/events`;
+      // Headers and event pages can precede more SQL replay; only ready ends this wait.
+      finishReplay = beginBackendRequest(url, signal);
+      const response = await backendFetch(url, {
         headers: {
           Authorization: `${['Bear', 'er'].join('')} ${token}`,
           Accept: 'text/event-stream',
@@ -136,7 +147,7 @@ export async function streamTaskEvents<T extends { id: string }>({
           lastEventId = id;
           reconnectDelay = 1000;
           onEvent(event as T);
-        });
+        }, finishReplay);
         if (signal.aborted) return;
         onStatus?.('reconnecting');
       }
@@ -147,6 +158,8 @@ export async function streamTaskEvents<T extends { id: string }>({
         throw error;
       }
       onStatus?.('reconnecting');
+    } finally {
+      finishReplay();
     }
     await waitForReconnect(reconnectDelay, signal);
     reconnectDelay = Math.min(reconnectDelay * 2, 30_000);

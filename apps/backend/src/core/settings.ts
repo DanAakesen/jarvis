@@ -262,6 +262,10 @@ function parseStoredValues(values: Record<string, unknown>): Partial<Settings> {
   return stored as Partial<Settings>;
 }
 
+export async function readSettings(settingsStore: SettingsStore): Promise<Settings> {
+  return mergeSettings(parseStoredValues(await settingsStore.read()));
+}
+
 function flattenSettings(settings: SettingsPatch): { key: string; value: string }[] {
   const entries: { key: string; value: string }[] = [];
   for (const area of Object.keys(settings) as (keyof Settings)[]) {
@@ -279,9 +283,8 @@ function flattenSettings(settings: SettingsPatch): { key: string; value: string 
 export async function registerSettingsRoutes(app: import('fastify').FastifyInstance) {
   app.get('/settings', async (_request, reply) => {
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
-    const stored = await app.settingsStore.read();
     const credentials = await app.credentialStatusStore?.list() ?? [];
-    return { settings: mergeSettings(parseStoredValues(stored)), options: settingsOptions, credentials };
+    return { settings: await readSettings(app.settingsStore), options: settingsOptions, credentials };
   });
 
   app.get('/agent/settings', {
@@ -311,7 +314,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
   }, async (request, reply) => {
     if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
-    const settings = mergeSettings(parseStoredValues(await app.settingsStore.read()));
+    const settings = await readSettings(app.settingsStore);
     return { model: settings.jarvis.model, reasoningEffort: settings.jarvis.reasoning };
   });
 
@@ -321,9 +324,8 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     if (!isSettingsPatch(body.settings)) return reply.code(400).send({ error: 'Invalid setting value' });
     const patch = body.settings;
     await app.settingsStore.write(patch);
-    const stored = await app.settingsStore.read();
     const credentials = await app.credentialStatusStore?.list() ?? [];
-    return { settings: mergeSettings(parseStoredValues(stored)), options: settingsOptions, credentials };
+    return { settings: await readSettings(app.settingsStore), options: settingsOptions, credentials };
   });
 }
 

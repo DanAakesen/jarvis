@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { backendFetch } from '../backend-request';
 import { Link } from 'react-router-dom';
 import type { AreaProps } from '../areas';
 
@@ -146,7 +147,7 @@ async function fetchUsageReport(
   if (!backendUrl) throw new Error('Usage data is unavailable until the backend is deployed.');
   const token = await getAccessToken();
   const authorization = `${['Bear', 'er'].join('')} ${token}`;
-  const response = await fetch(`${backendUrl}/usage?period=${period}`, {
+  const response = await backendFetch(`${backendUrl}/usage?period=${period}`, {
     headers: { Authorization: authorization },
     signal,
   });
