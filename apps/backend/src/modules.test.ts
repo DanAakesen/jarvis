@@ -3,7 +3,6 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { coreModule } from './core/index.js';
 import { factoryModule } from './factory/index.js';
-import { createProjectTool } from './factory/new-project.js';
 import { ToolRefusal, type JarvisTool } from './core/tool-registry.js';
 import type { BackendModule } from './modules.js';
 
@@ -50,11 +49,7 @@ describe('backend module composition', () => {
     const listed = await app.inject({ url: '/tools', headers });
     expect(listed.statusCode).toBe(200);
     expect(listed.json()).toEqual([
-      {
-        name: createProjectTool.name,
-        description: createProjectTool.description,
-        inputSchema: createProjectTool.inputSchema,
-      },
+      ...factoryModule.tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
       { name: tool.name, description: tool.description, inputSchema: tool.inputSchema },
     ]);
 
@@ -230,10 +225,8 @@ describe('backend module composition', () => {
     expect((await app.inject({ url: '/health' })).json()).toEqual({ status: 'ok' });
     expect((await app.inject({ method: 'POST', url: '/extension/echo', headers, payload: { text: 'hello' } })).json()).toEqual({ text: 'hello' });
     expect((await app.inject({ method: 'POST', url: '/extension/echo', headers, payload: {} })).statusCode).toBe(400);
-    expect(app.jarvisTools.list()).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: createProjectTool.name, moduleId: 'factory' }),
-      expect.objectContaining({ name: 'extension_echo', moduleId: 'extension' }),
-    ]));
+    expect(app.jarvisTools.list()).toHaveLength(factoryModule.tools.length + 1);
+    expect(app.jarvisTools.get(tool.name)).toMatchObject({ name: 'extension_echo', moduleId: 'extension' });
     expect(app.jarvisTools.get('missing')).toBeUndefined();
   });
 
@@ -292,16 +285,12 @@ describe('backend module composition', () => {
     expect(first.jarvisTools.get('echo')?.inputSchema).toEqual({ type: 'object', properties: { text: { type: 'string' } } });
     expect(Object.isFrozen(first.jarvisTools.get('echo')?.inputSchema.properties)).toBe(true);
     expect(Object.isFrozen(first.jarvisTools.list())).toBe(true);
-    expect(second.jarvisTools.list()).toEqual([
-      expect.objectContaining({ name: createProjectTool.name, moduleId: 'factory' }),
-    ]);
+    expect(second.jarvisTools.list().map(({ name }) => name)).toEqual(factoryModule.tools.map(({ name }) => name));
   });
 
   it('keeps unimplemented APIs unavailable and reports missing task and settings storage', async () => {
     const app = fixture([]);
-    expect(app.jarvisTools.list()).toEqual([
-      expect.objectContaining({ name: createProjectTool.name, moduleId: 'factory' }),
-    ]);
+    expect(app.jarvisTools.list().map(({ name }) => name)).toEqual(factoryModule.tools.map(({ name }) => name));
     expect((await app.inject({ url: '/factory/projects', headers })).statusCode).toBe(503);
     for (const url of ['/activity', '/events']) {
       expect((await app.inject({ url, headers })).statusCode).toBe(404);

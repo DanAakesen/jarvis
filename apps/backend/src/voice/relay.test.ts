@@ -386,7 +386,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     });
     expect(session.tools).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'function', name: 'greet' }),
-      expect.objectContaining({ type: 'function', name: 'create_project' }),
+      ...factoryModule.tools.map(({ name }) => expect.objectContaining({ type: 'function', name })),
     ]));
     expect(session.instructions).toContain('British English');
     browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
