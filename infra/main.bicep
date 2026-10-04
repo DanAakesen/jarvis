@@ -23,6 +23,8 @@ param notesFolderPath string = '/Jarvis/Notes'
 @description('The non-secret GitHub App ID used by the backend to mint installation tokens.')
 param githubAppId string = ''
 
+@description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')
+param pcBridgeClientId string = ''
 @description('The non-secret Outlook app registration ID. Empty disables Outlook tools.')
 param jarvisGraphAppId string = ''
 
@@ -684,6 +686,11 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'GITHUB_APP_ID'
               value: githubAppId
+            }
+          ], empty(pcBridgeClientId) ? [] : [
+            {
+              name: 'ENTRA_PC_BRIDGE_CLIENT_ID'
+              value: pcBridgeClientId
             }
           ], empty(jarvisGraphAppId) ? [] : [
             {

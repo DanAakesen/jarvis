@@ -511,6 +511,57 @@ one Codex task on `DanAakesen/jarvis-test-target`, verify pushes to their
 `jarvis/task-<id>` branches, and verify that a commit-free agent question appears
 as Needs attention.
 
+### Local PC bridge (P7-06)
+
+The .NET 10 Windows tray companion is in `pc-bridge/`. Its portable command
+policy and protocol projects run on Linux; `backend-ci.yml` also builds the
+`net10.0-windows` app with Windows targeting enabled.
+
+After merge, the coordinator must provision the app and deploy before installing
+the companion on Dan's PC:
+
+1. Run `infra/bootstrap.ps1` in Dan's signed-in Azure/GitHub session. It creates
+   or repairs `jarvis-pc-bridge`, pre-authorizes its delegated `access_as_user`
+   permission, and writes `JARVIS_PC_BRIDGE_CLIENT_ID` as an Actions variable.
+   Run the main Deploy workflow so Bicep configures `ENTRA_PC_BRIDGE_CLIENT_ID`
+   in the backend. Agents do not have Azure/tenant access.
+2. Get `backendFqdn` from the `jarvis-infra` deployment output. On Dan's Windows
+   PC, publish the self-contained app to a temporary directory:
+
+   ```powershell
+   dotnet publish .\pc-bridge\Jarvis.PcBridge\Jarvis.PcBridge.csproj `
+     --configuration Release --runtime win-x64 --self-contained true `
+     --output "$env:TEMP\jarvis-pc-bridge"
+   ```
+
+3. Install for the current Windows user with the IDs from
+   `infra/bootstrap.output.json`:
+
+   ```powershell
+   .\pc-bridge\Install-Bridge.ps1 `
+     -PublishPath "$env:TEMP\jarvis-pc-bridge" `
+     -BackendUrl https://<backendFqdn> `
+     -TenantId <tenant-guid> `
+     -ApiClientId <jarvis-api-client-guid> `
+     -BridgeClientId <jarvis-pc-bridge-client-guid>
+   ```
+
+   The installer stops an existing bridge process, copies app files under
+   `%LOCALAPPDATA%\Programs\Jarvis.PcBridge`, writes nonsecret settings under
+   `%LOCALAPPDATA%\Jarvis\PcBridge`, and creates a Startup shortcut. Launch the
+   installed executable once to sign in by device code; MSAL stores its refresh
+   cache with Windows DPAPI. Re-running the installer updates the files without
+   deleting that token cache. The bridge connects outbound and creates no
+   inbound firewall rule.
+4. Confirm the tray reports Online, then ask Jarvis to open an HTTP(S) URL or an
+   allow-listed app. Check the authenticated Now feed for online/offline status.
+   Verify active-window reads and exact-title focus with Dan present at the PC.
+
+The app allows only HTTP(S) URLs, VS Code, Edge, File Explorer, Windows Terminal,
+folders below `C:\Repo` in VS Code, active-window title, and exact-title focus.
+Offline policy/protocol tests do not verify live Entra sign-in or Windows
+execution; those remain coordinator post-merge checks.
+
 ### Database access and migrations (#7)
 
 - Configure `SQL_SERVER=<host>.database.windows.net`, `SQL_DATABASE=jarvis` and

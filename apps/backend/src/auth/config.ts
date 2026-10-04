@@ -6,6 +6,7 @@ export interface AuthConfig {
   ownerObjectId: string;
   // Hosted Jarvis agent identity; only routes that opt in accept it.
   agentObjectId?: string;
+  pcBridgeClientId?: string;
 }
 
 // Nonsecret IDs from infra/bootstrap.output.json. Deployment can override them.
@@ -38,6 +39,11 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
       throw new ConfigurationError('ENTRA_JARVIS_AGENT_OBJECT_ID must differ from ENTRA_OWNER_OBJECT_ID');
     }
     values.agentObjectId = agent.toLowerCase();
+  }
+  const pcBridgeClientId = env.ENTRA_PC_BRIDGE_CLIENT_ID;
+  if (pcBridgeClientId !== undefined && pcBridgeClientId !== '') {
+    if (!uuid.test(pcBridgeClientId)) throw new ConfigurationError('ENTRA_PC_BRIDGE_CLIENT_ID must be a UUID');
+    values.pcBridgeClientId = pcBridgeClientId.toLowerCase();
   }
   return values;
 }
