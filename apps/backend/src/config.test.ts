@@ -40,6 +40,25 @@ describe('backend configuration', () => {
       'wss://resource.services.ai.azure.com/voice-live/realtime?api-version=2026-07-15&model=gpt-realtime-2.1',
     );
   });
+  it('accepts a secure Foundry project endpoint for the Danish voice agent', () => {
+    expect(loadConfig({
+      FOUNDRY_PROJECT_ENDPOINT: 'https://resource.services.ai.azure.com/api/projects/jarvis',
+    }).foundryProjectEndpoint).toBe(
+      'https://resource.services.ai.azure.com/api/projects/jarvis',
+    );
+  });
+  it.each([
+    '',
+    'http://resource.services.ai.azure.com/api/projects/jarvis',
+    'https://resource.example/api/projects/jarvis',
+    'https://resource.services.ai.azure.com/api/projects/jarvis/',
+    'https://resource.services.ai.azure.com/api/projects/jarvis?token=secret',
+    '******resource.services.ai.azure.com/api/projects/jarvis',
+  ])('rejects an invalid Foundry project endpoint without exposing it', (FOUNDRY_PROJECT_ENDPOINT) => {
+    expect(() => loadConfig({ FOUNDRY_PROJECT_ENDPOINT })).toThrow(
+      /^FOUNDRY_PROJECT_ENDPOINT must be a secure Azure AI project URL$/,
+    );
+  });
   it.each([
     '',
     'https://resource.services.ai.azure.com/voice-live/realtime',

@@ -300,8 +300,8 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
                 onChange={(event) => update('global', 'maxParallelTasks', Number(event.target.value))} />
               <p className="settings-explanation">Choose a whole number from 1 to 100.</p>
             </div>
-            <p className="settings-explanation" id="sleep-switch-help">Backend sleep controls will be available in P1-12.</p>
-            <button className="secondary-button" type="button" disabled aria-describedby="sleep-switch-help">Sleep switch unavailable</button>
+            <p className="settings-explanation" id="sleep-switch-help">Manage backend sleep from the Jarvis main page.</p>
+            <a className="home-link" href="/" aria-describedby="sleep-switch-help">Open the Jarvis main page</a>
           </section>
 
           <section className="settings-section" aria-labelledby="credentials-heading">

@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Sequence
 from typing import Protocol
 
-from state import ModelMessage
+from state import ModelMessage, ModelSettings
 
 
 class StreamingModelClient(Protocol):
@@ -16,7 +16,13 @@ class StreamingModelClient(Protocol):
     model_name: str
     server_address: str
 
-    async def complete(self, messages: Sequence[ModelMessage]) -> AsyncIterator[str]:
+    async def session_settings(self) -> ModelSettings:
+        """Load effective model settings for a newly starting session."""
+        ...
+
+    async def complete(
+        self, messages: Sequence[ModelMessage], *, settings: ModelSettings | None = None
+    ) -> AsyncIterator[str]:
         """Yield ordered assistant text chunks."""
         if False:
             yield ""

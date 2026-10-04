@@ -191,7 +191,7 @@ jobs:
           ensure_role "$project_identity" "Foundry User" "$account_id"
       - name: Build the Jarvis agent image in ACR
         run: |
-          az acr build --registry "$REGISTRY" --image "jarvis-agent:$IMAGE_TAG" --file Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --only-show-errors agents/jarvis
+          az acr build --registry "$REGISTRY" --image "jarvis-agent:$IMAGE_TAG" --file agents/jarvis/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --only-show-errors agents/jarvis
           digest=$(az acr manifest show-metadata --registry "$REGISTRY" --name "jarvis-agent:$IMAGE_TAG" --subscription "$SUBSCRIPTION_ID" --query digest --output tsv --only-show-errors)
           [[ "$digest" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || { echo "::error::ACR agent image has no valid digest."; exit 1; }
           echo "AGENT_IMAGE=$REGISTRY_HOST/jarvis-agent@$digest" >>"$GITHUB_ENV"

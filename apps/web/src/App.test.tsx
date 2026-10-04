@@ -1,26 +1,43 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 
-const { createAuthClient, restoreProfile, signIn, loadConversationHistory } = vi.hoisted(() => ({
-  createAuthClient: vi.fn(() => ({ initialize: vi.fn().mockResolvedValue(undefined) })),
-  restoreProfile: vi.fn().mockResolvedValue(null),
-  signIn: vi.fn(),
-  loadConversationHistory: vi.fn().mockResolvedValue({ messages: [], nextCursor: null }),
-}));
+const { createAuthClient, restoreProfile, signIn, loadConversationHistory, makeAuthClient } = vi.hoisted(() => {
+  const account = { homeAccountId: 'dan' };
+  const makeAuthClient = () => ({
+    initialize: vi.fn().mockResolvedValue(undefined),
+    getActiveAccount: vi.fn(() => account),
+    getAllAccounts: vi.fn(() => [account]),
+    acquireTokenSilent: vi.fn().mockResolvedValue({ accessToken: 'fixture-token' }),
+  });
+  return {
+    createAuthClient: vi.fn(makeAuthClient),
+    restoreProfile: vi.fn().mockResolvedValue(null),
+    signIn: vi.fn(),
+    loadConversationHistory: vi.fn().mockResolvedValue({ messages: [], nextCursor: null }),
+    makeAuthClient,
+  };
+});
 vi.mock('./auth', () => ({ createAuthClient, restoreProfile, signIn }));
 vi.mock('./conversation-history', () => ({ loadConversationHistory }));
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com' };
+const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
   vi.clearAllMocks();
-  createAuthClient.mockReturnValue({ initialize: vi.fn().mockResolvedValue(undefined) });
+  createAuthClient.mockReturnValue(makeAuthClient());
   restoreProfile.mockResolvedValue(null);
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
+  fetchMock.mockResolvedValue(new Response(JSON.stringify({ state: 'awake' }), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  }));
+  vi.stubGlobal('fetch', fetchMock);
 });
+
+afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('Jarvis routes', () => {
   it('disables sign-in until a backend is deployed', () => {
@@ -132,11 +149,12 @@ describe('App shell', () => {
     const explained = [
       ['button', 'Start voice', /Voice isn't available yet/],
       ['button', 'Mute', /Voice isn't available yet/],
-      ['button', 'Put the backend to sleep', /awake or asleep isn't reported yet/],
     ] as const;
     for (const [role, name, description] of explained) {
       expect(screen.getByRole(role, { name, description })).toHaveProperty('disabled', true);
     }
+    expect(await screen.findByText('The backend is awake.')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Put the backend to sleep' })).toHaveProperty('disabled', false);
   });
 
   it('keeps the session while moving between areas, settings and the main page', async () => {

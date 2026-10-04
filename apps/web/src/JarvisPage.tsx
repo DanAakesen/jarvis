@@ -2,6 +2,7 @@ import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import { ActivityPanel } from './ActivityPanel';
 import type { NowFeed } from './activity';
+import { BackendSleepControl } from './BackendSleepControl';
 import { ConversationHistory } from './ConversationHistory';
 import './ConversationHistory.css';
 
@@ -48,13 +49,7 @@ export function JarvisPage({
           <ActivityPanel feed={nowFeed} />
           <section className="panel" aria-labelledby="backend-heading">
             <h2 id="backend-heading">Backend</h2>
-            <p id="backend-status">
-              Whether the backend is awake or asleep isn&apos;t reported yet. The sleep switch will be refused while
-              tasks run.
-            </p>
-            <div className="action-row">
-              <button className="secondary-button" type="button" disabled aria-describedby="backend-status">Put the backend to sleep</button>
-            </div>
+            <BackendSleepControl client={client} config={config} />
           </section>
         </div>
       </div>
