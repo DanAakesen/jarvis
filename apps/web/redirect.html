@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="robots" content="noindex" />
+    <title>Signing in to Jarvis</title>
+  </head>
+  <body>
+    <p>Signing in…</p>
+    <script type="module">
+      // MSAL v5 redirect bridge: hands the sign-in response from the popup back to the app window.
+      import { broadcastResponseToMainFrame } from '@azure/msal-browser/redirect-bridge';
+
+      broadcastResponseToMainFrame().catch(() => {
+        document.body.textContent = 'Sign-in could not be completed. Close this window and try again.';
+      });
+    </script>
+  </body>
+</html>

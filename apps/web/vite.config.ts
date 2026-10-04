@@ -20,6 +20,15 @@ export default defineConfig(({ mode }) => {
     envPrefix: [],
     define: { __JARVIS_CONFIG__: JSON.stringify(publicConfig) },
     server: { host: '0.0.0.0', port: 5173, strictPort: true },
+    build: {
+      rollupOptions: {
+        // redirect.html is MSAL's redirect bridge for popup and silent sign-in (L63).
+        input: {
+          main: fileURLToPath(new URL('./index.html', import.meta.url)),
+          redirect: fileURLToPath(new URL('./redirect.html', import.meta.url)),
+        },
+      },
+    },
     test: {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],

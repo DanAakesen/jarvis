@@ -127,7 +127,7 @@ async function request(
   backendUrl: string,
   getAccessToken: () => Promise<string>,
   path: string,
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
+  method: 'GET' | 'PATCH' | 'DELETE' = 'GET',
   body?: unknown,
 ): Promise<unknown> {
   let response: Response;
@@ -230,7 +230,6 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
       <h1 id="projects-heading">Projects</h1>
       <p>Manage repositories and the defaults used for new tasks. Changes do not alter running tasks.</p>
       <div className="projects-toolbar">
-        <Link className="primary-button projects-new-link" to="/factory/projects/new">New project</Link>
         {visibleState === 'ready' && (
           <button className="secondary-button" type="button" onClick={retry}>Refresh projects</button>
         )}
@@ -250,8 +249,8 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
           {projects.length === 0 ? (
             <section className="project-empty" aria-labelledby="empty-projects-heading">
               <h2 id="empty-projects-heading">No active projects</h2>
-              <p>Add a repository to configure its task defaults.</p>
-              <Link className="secondary-button projects-empty-link" to="/factory/projects/new">Create a project</Link>
+              <p>Projects are registered by Jarvis. Configure their defaults in Settings.</p>
+              <Link className="home-link" to="/settings">New project defaults</Link>
             </section>
           ) : (
             <ul className="project-list" aria-label="Active projects">
@@ -285,10 +284,9 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
 
 export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPageProps) {
   const projectId = useParams().projectId;
-  const isCreate = projectId === undefined;
   const navigate = useNavigate();
   const location = useLocation();
-  const [state, setState] = useState<LoadState>(isCreate && backendUrl ? 'ready' : 'loading');
+  const [state, setState] = useState<LoadState>('loading');
   const [values, setValues] = useState<ProjectValues>(emptyValues);
   const [savedValues, setSavedValues] = useState<ProjectValues | null>(null);
   const [error, setError] = useState(!backendUrl ? 'Project settings are unavailable until the backend is deployed.' : '');
@@ -299,18 +297,17 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
   const [retryKey, setRetryKey] = useState(0);
   const [validationError, setValidationError] = useState('');
   const [settledRequestKey, setSettledRequestKey] = useState('');
-  const invalidProjectId = !isCreate &&
-    (!projectId || !projectIdPattern.test(projectId) || BigInt(projectId) > maxProjectId);
-  const requestKey = `${projectId ?? 'new'}:${retryKey}`;
+  const invalidProjectId = !projectId || !projectIdPattern.test(projectId) || BigInt(projectId) > maxProjectId;
+  const requestKey = `${projectId ?? ''}:${retryKey}`;
   const visibleState: LoadState = !backendUrl || invalidProjectId ? 'error' :
-    isCreate ? 'ready' : settledRequestKey === requestKey ? state : 'loading';
+    settledRequestKey === requestKey ? state : 'loading';
   const visibleError = !backendUrl
     ? 'Project settings are unavailable until the backend is deployed.'
     : invalidProjectId ? 'This project address is invalid.' : error;
 
   useEffect(() => {
     let active = true;
-    if (!backendUrl || isCreate || invalidProjectId || !projectId) return () => { active = false; };
+    if (!backendUrl || invalidProjectId || !projectId) return () => { active = false; };
     void loadProjects(backendUrl, getAccessToken).then((projects) => {
       if (!active) return;
       const project = projects.find((item) => item.id === projectId);
@@ -327,7 +324,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
       setSettledRequestKey(requestKey);
     });
     return () => { active = false; };
-  }, [backendUrl, getAccessToken, invalidProjectId, isCreate, projectId, requestKey]);
+  }, [backendUrl, getAccessToken, invalidProjectId, projectId, requestKey]);
 
   const update = (key: keyof ProjectValues, value: string | number) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -338,19 +335,17 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!backendUrl || saving || archivePending) return;
+    if (!backendUrl || !projectId || saving || archivePending) return;
     const validation = validateProjectValues(values);
     if (validation) {
       setValidationError(validation);
       return;
     }
     const fields = toProjectFields(values);
-    const changed = savedValues
-      ? Object.fromEntries(Object.entries(fields).filter(([key, value]) =>
-        value !== (key === 'merge_rules' && savedValues.merge_rules.trim() === '' ? null : savedValues[key as keyof ProjectValues]),
-      )) as Partial<ProjectFields>
-      : fields;
-    if (savedValues && Object.keys(changed).length === 0) return;
+    const changed = Object.fromEntries(Object.entries(fields).filter(([key, value]) =>
+      value !== (key === 'merge_rules' && savedValues?.merge_rules.trim() === '' ? null : savedValues?.[key as keyof ProjectValues]),
+    )) as Partial<ProjectFields>;
+    if (Object.keys(changed).length === 0) return;
     setSaving(true);
     setError('');
     setMessage('');
@@ -358,22 +353,15 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
       const result = await request(
         backendUrl,
         getAccessToken,
-        isCreate ? '/factory/projects' : `/factory/projects/${projectId}`,
-        isCreate ? 'POST' : 'PATCH',
+        `/factory/projects/${projectId}`,
+        'PATCH',
         changed,
       );
       if (!isProject(result) || !result.active) throw new Error('Jarvis returned invalid project data. Try again.');
-      if (isCreate) {
-        navigate('/factory/projects', {
-          replace: true,
-          state: { notice: 'Project created. Its defaults apply to new tasks only.' },
-        });
-      } else {
-        const nextValues = toProjectValues(result);
-        setValues(nextValues);
-        setSavedValues(nextValues);
-        setMessage('Saved. These defaults apply to new tasks only; running tasks keep their current settings.');
-      }
+      const nextValues = toProjectValues(result);
+      setValues(nextValues);
+      setSavedValues(nextValues);
+      setMessage('Saved. These defaults apply to new tasks only; running tasks keep their current settings.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Project settings could not be saved. Try again.');
     } finally {
@@ -396,8 +384,8 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
     }
   };
 
-  const dirty = isCreate || (savedValues !== null &&
-    JSON.stringify(toProjectFields(values)) !== JSON.stringify(toProjectFields(savedValues)));
+  const dirty = savedValues !== null &&
+    JSON.stringify(toProjectFields(values)) !== JSON.stringify(toProjectFields(savedValues));
   const disabled = saving || archivePending;
 
   if (visibleState === 'loading') {
@@ -406,7 +394,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
 
   return (
     <section className="project-settings-page" aria-labelledby="project-settings-heading">
-      <h1 id="project-settings-heading">{isCreate ? 'New project' : 'Project settings'}</h1>
+      <h1 id="project-settings-heading">Project settings</h1>
       <p>These defaults apply to new tasks only. Running tasks keep their current settings.</p>
       {visibleState === 'error' ? (
         <div className="projects-feedback" role="alert">
@@ -493,32 +481,30 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
           </section>
           <div className="settings-save">
             <button className="primary-button" type="submit" disabled={disabled || !dirty}>
-              {saving ? 'Saving…' : isCreate ? 'Create project' : 'Save project'}
+              {saving ? 'Saving…' : 'Save project'}
             </button>
             <Link className="secondary-button" to="/factory/projects">Cancel</Link>
             {message && <p className="settings-feedback" role="status">{message}</p>}
           </div>
-          {!isCreate && (
-            <section className="project-archive" aria-labelledby="archive-project-heading">
-              <h2 id="archive-project-heading">Archive project</h2>
-              <p>Archiving hides this project from active lists. Its task history stays available and its repository remains reserved.</p>
-              {!showArchiveConfirmation ? (
-                <button className="secondary-button" type="button" disabled={disabled}
-                  onClick={() => setShowArchiveConfirmation(true)}>Archive project</button>
-              ) : (
-                <div className="project-archive-confirm" role="group" aria-label="Confirm project archive">
-                  <p>Archive {values.name || 'this project'}?</p>
-                  <div className="settings-actions">
-                    <button className="primary-button" type="button" disabled={disabled} onClick={() => { void archive(); }}>
-                      {archivePending ? 'Archiving…' : 'Confirm archive'}
-                    </button>
-                    <button className="secondary-button" type="button" disabled={disabled}
-                      onClick={() => setShowArchiveConfirmation(false)}>Cancel archive</button>
-                  </div>
+          <section className="project-archive" aria-labelledby="archive-project-heading">
+            <h2 id="archive-project-heading">Archive project</h2>
+            <p>Archiving hides this project from active lists. Its task history stays available and its repository remains reserved.</p>
+            {!showArchiveConfirmation ? (
+              <button className="secondary-button" type="button" disabled={disabled}
+                onClick={() => setShowArchiveConfirmation(true)}>Archive project</button>
+            ) : (
+              <div className="project-archive-confirm" role="group" aria-label="Confirm project archive">
+                <p>Archive {values.name || 'this project'}?</p>
+                <div className="settings-actions">
+                  <button className="primary-button" type="button" disabled={disabled} onClick={() => { void archive(); }}>
+                    {archivePending ? 'Archiving…' : 'Confirm archive'}
+                  </button>
+                  <button className="secondary-button" type="button" disabled={disabled}
+                    onClick={() => setShowArchiveConfirmation(false)}>Cancel archive</button>
                 </div>
-              )}
-            </section>
-          )}
+              </div>
+            )}
+          </section>
         </form>
       )}
     </section>

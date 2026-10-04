@@ -52,11 +52,6 @@ beforeEach(() => {
       return response({ tasks: [{ projectId: '7', state: 'Running' }], limit: 100, offset: 0 });
     }
     if (url.endsWith('/factory/projects') && method === 'GET') return response(projects);
-    if (url.endsWith('/factory/projects') && method === 'POST') {
-      const created = { ...project, ...JSON.parse(String(init?.body)), id: '18' };
-      projects = [...projects, created];
-      return response(created, 201);
-    }
     if (url.endsWith('/factory/projects/7') && method === 'PATCH') {
       const updated = { ...project, ...JSON.parse(String(init?.body)) };
       projects = projects.map((item) => item.id === '7' ? updated : item);
@@ -90,38 +85,17 @@ describe('Projects page', () => {
     expect(request?.headers).toMatchObject({ Authorization: ['Bearer', 'test-access-token'].join(' ') });
   });
 
-  it('creates a project with validated settings and explains their scope', async () => {
-    const user = userEvent.setup();
+  it('does not expose a project creation form or link', async () => {
     renderFactory();
     await screen.findByRole('heading', { name: 'Projects' });
-    await user.click(screen.getByRole('link', { name: 'New project' }));
 
-    await user.type(screen.getByRole('textbox', { name: 'Project name' }), 'Daily');
-    await user.type(screen.getByRole('textbox', { name: 'Repository (owner/name)' }), 'DanAakesen/daily');
-    await user.type(screen.getByRole('textbox', { name: 'Default branch' }), 'main');
-    await user.type(screen.getByRole('textbox', { name: 'Tech identifier' }), 'python');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Default agent' }), 'codex');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Policy' }), 'complete_without_deployment');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Sandbox size' }), '2x4');
-    await user.click(screen.getByRole('button', { name: 'Create project' }));
+    expect(screen.queryByRole('link', { name: 'New project' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Project name' })).toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 
-    expect(await screen.findByText(/Project created\. Its defaults apply to new tasks only/)).not.toBeNull();
-    expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/factory/projects', expect.objectContaining({
-      method: 'POST',
-      headers: expect.objectContaining({ Authorization: ['Bearer', 'test-access-token'].join(' ') }),
-      body: JSON.stringify({
-        name: 'Daily',
-        repo: 'DanAakesen/daily',
-        default_branch: 'main',
-        default_agent: 'codex',
-        policy: 'complete_without_deployment',
-        merge_rules: null,
-        sandbox_size: '2x4',
-        tech: 'python',
-        max_parallel_tasks: 1,
-      }),
-    }));
-    expect(await screen.findByRole('article', { name: 'Daily' })).not.toBeNull();
+    renderFactory('/factory/projects/new');
+    expect((await screen.findByRole('alert')).textContent).toContain('This project address is invalid.');
+    expect(screen.queryByRole('textbox', { name: 'Project name' })).toBeNull();
   });
 
   it('saves changed settings and confirms archive before retaining history', async () => {
@@ -145,22 +119,6 @@ describe('Projects page', () => {
     expect(await screen.findByRole('heading', { name: 'No active projects' })).not.toBeNull();
     expect(screen.getByText(/Project archived\. Its task history is retained/)).not.toBeNull();
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true);
-  });
-
-  it('rejects invalid settings before sending a create request', async () => {
-    const user = userEvent.setup();
-    renderFactory('/factory/projects/new');
-    await user.type(await screen.findByRole('textbox', { name: 'Project name' }), 'Daily');
-    await user.type(screen.getByRole('textbox', { name: 'Repository (owner/name)' }), 'not-a-repository');
-    await user.type(screen.getByRole('textbox', { name: 'Default branch' }), 'main');
-    await user.type(screen.getByRole('textbox', { name: 'Tech identifier' }), 'python');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Default agent' }), 'codex');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Policy' }), 'deliver_pr');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Sandbox size' }), '1x2');
-    await user.click(screen.getByRole('button', { name: 'Create project' }));
-
-    expect((await screen.findByRole('alert')).textContent).toMatch(/owner\/name format/);
-    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
 
   it('keeps project records visible when running-task counts cannot be loaded', async () => {

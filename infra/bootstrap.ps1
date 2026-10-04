@@ -21,7 +21,7 @@
 
 .EXAMPLE
     ./infra/bootstrap.ps1
-    ./infra/bootstrap.ps1 -WebRedirectUris 'http://localhost:5173','https://<name>.azurestaticapps.net'
+    ./infra/bootstrap.ps1 -WebRedirectUris 'http://localhost:5173/redirect.html','https://<name>.azurestaticapps.net/redirect.html'
     ./infra/bootstrap.ps1 -JarvisAgentPrincipalId '<instance_identity.principal_id of the deployed agent>'
     ./infra/bootstrap.ps1 -JarvisRunnerPrincipalIds '<base-1x2-id>','<base-2x4-id>','<dotnet-1x2-id>','<dotnet-2x4-id>'
 #>
@@ -33,7 +33,7 @@ param(
     [string]$ResourceGroup = 'rg-jarvis',
     [string]$GitHubRepo = 'DanAakesen/jarvis',
     [string]$OwnerObjectId = '12bcfab7-49ba-4cf7-8be7-780a13911f93',
-    [string[]]$WebRedirectUris = @('http://localhost:5173'),
+    [string[]]$WebRedirectUris = @('http://localhost:5173/redirect.html'),
     # Hosted Jarvis agent identity; known only after the agent is deployed. Empty skips the assignment.
     [ValidatePattern('^$|^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$')]
     [string]$JarvisAgentPrincipalId = '',

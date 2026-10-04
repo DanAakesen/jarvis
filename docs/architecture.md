@@ -87,6 +87,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   authentication. The backend returns effective defaults with the validated
   model catalog, rejects unknown keys and unsupported values, and writes a
   partial update transactionally to whitelisted `global` rows in `dbo.settings`.
+  The `newProjects` settings area validates owner, visibility, templates
+  repository, default agent, policy, per-project task limit, and default branch;
+  these defaults reuse the existing settings table and are available to future
+  project registration without changing the project API.
   The SQL adapter is injected only when database configuration exists; the API
   returns 503 without it. The model catalog offers deployed Jarvis models and
   only provider defaults for Codex and Copilot because their available-model
@@ -618,6 +622,7 @@ Every GitHub credential Jarvis uses, checked with Dan on 4 October 2026. Each to
 | Jarvis Software Factory | GitHub App, installed on all of Dan's repositories. Repository permissions: Contents and Pull requests read/write; Actions, Checks and Deployments read; Metadata read; nothing else | Private key as Key Vault `github-app-private-key` (backend only) | Backend: one-hour, single-repository installation tokens (P3-02 to P3-06) | Permanent; rotate the key if exposed |
 | `jarvis-github` | Fine-grained token: Contents and Pull requests read/write on all repositories | Key Vault `jarvis-github` | Legacy sandbox Git credential path while App-token mode is disabled | Keep until the post-merge App-token push check succeeds; then revoke/remove in a follow-up |
 | `jarvis-copilot` | Fine-grained token: only the Copilot Requests account permission; no repository access | Key Vault `jarvis-copilot` | Copilot CLI sign-in inside the sandbox | Until revoked |
+| `jarvis-repo-admin` | Fine-grained token: Administration read/write on all repositories (creates repositories); planned with P3-12 | Key Vault `jarvis-repo-admin` (backend only) | Backend: create a new project's repository | Until revoked |
 | `PROJECT_TOKEN` | Classic token: `project` and `repo` | GitHub environment `project-board` (only `main` can use it) | Project board sync workflow; user-owned boards accept no App or fine-grained token | Until revoked |
 | `GITHUB_TOKEN` | Automatic per workflow run | GitHub Actions | CI and repository workflows | One run |
 

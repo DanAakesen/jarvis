@@ -406,5 +406,5 @@ jobs:
             echo "- Jarvis: https://$STATIC_WEB_APP_HOST"
             echo "- Backend: https://$BACKEND_FQDN"
             echo
-            echo "Once, after the first deploy: run \`./infra/bootstrap.ps1 -WebRedirectUris 'https://$STATIC_WEB_APP_HOST'\` so sign-in works there, set \`backendUrl\` in \`apps/web/config.json\` to the backend URL for \`npm run dev\`, and set the Actions variable \`JARVIS_INFRA_DEPLOYMENT_NAME\` to \`$INFRA_DEPLOYMENT\` for Runner deploy."
+            echo "Once, after the first deploy: run \`./infra/bootstrap.ps1 -WebRedirectUris 'https://$STATIC_WEB_APP_HOST/redirect.html'\` so sign-in works there, set \`backendUrl\` in \`apps/web/config.json\` to the backend URL for \`npm run dev\`, and set the Actions variable \`JARVIS_INFRA_DEPLOYMENT_NAME\` to \`$INFRA_DEPLOYMENT\` for Runner deploy."
           } >>"$GITHUB_STEP_SUMMARY"
