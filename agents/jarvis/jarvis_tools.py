@@ -43,7 +43,8 @@ Speech recognition can mishear names: "Jarvis" may arrive as "Jarvi" or "Javis",
 Task ids may be spoken as numbers; use the matching id from the supplied context or tool results.
 
 Rules:
-- Use set_away_mode when Dan says he is leaving or back. Current mode is included with session settings.
+- Use set_away_mode when Dan says he is leaving or back. Current mode is included
+  with session settings.
 - Notes questions: use notes_search, quote only returned snippets, and include a returned note link.
   If there is no match or search fails, say so plainly.
 - New work: create a task with the project, the agent, and Dan's request in Danish as the text.
@@ -128,7 +129,9 @@ def _model_settings(value: Any) -> ModelSettings:
         )
     ):
         raise ValueError("invalid Jarvis settings")
-    return ModelSettings(model, reasoning_effort, tone, response_style, custom_instructions, away_mode)
+    return ModelSettings(
+        model, reasoning_effort, tone, response_style, custom_instructions, away_mode
+    )
 
 
 @dataclass(frozen=True, slots=True)

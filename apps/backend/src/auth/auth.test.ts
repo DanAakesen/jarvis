@@ -255,7 +255,9 @@ describe('Jarvis agent identity on the tool routes', () => {
 
     const listed = await app.inject({ url: '/tools', headers: { authorization } });
     expect(listed.statusCode).toBe(200);
-    expect(listed.json().map(({ name }: { name: string }) => name)).toEqual(['set_jarvis_model', 'extension_echo']);
+    expect(listed.json().map(({ name }: { name: string }) => name)).toEqual([
+      'set_jarvis_model', 'set_away_mode', 'extension_echo',
+    ]);
 
     const called = await app.inject({
       method: 'POST', url: '/tools/extension_echo', headers: { authorization, 'x-jarvis-message-id': '42' }, payload: { text: 'hej' },

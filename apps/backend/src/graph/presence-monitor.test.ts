@@ -23,7 +23,9 @@ describe('Teams presence monitoring', () => {
   it('polls immediately, serializes checks and aborts its active request on stop', async () => {
     vi.useFakeTimers();
     let requestSignal!: AbortSignal;
-    const get = vi.fn((_path: string, signal: AbortSignal) => {
+    let requestPath = '';
+    const get = vi.fn((path: string, signal: AbortSignal) => {
+      requestPath = path;
       requestSignal = signal;
       return new Promise<unknown>((_resolve, reject) => {
         signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
@@ -38,6 +40,7 @@ describe('Teams presence monitoring', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(get).toHaveBeenCalledOnce();
     await stop();
+    expect(requestPath).toBe('users/11111111-1111-4111-8111-111111111111/presence');
     expect(requestSignal.aborted).toBe(true);
     expect(store.observePresence).not.toHaveBeenCalled();
   });

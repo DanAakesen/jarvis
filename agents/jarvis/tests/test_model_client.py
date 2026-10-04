@@ -57,7 +57,7 @@ def test_personalized_instructions_include_current_away_mode_and_brief_speech() 
     )
 
     assert "Current away mode: on" in away
-    assert "spoken replies to one short sentence" in away
+    assert "spoken replies use one short sentence" in away
     assert "Current away mode: off" in present
 
 
