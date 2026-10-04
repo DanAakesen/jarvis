@@ -67,11 +67,23 @@ async function createProject(index: number, maxParallelTasks: number): Promise<s
 }
 
 async function activeCounts(): Promise<{ global: number; byProject: Map<string, number> }> {
-  const { recordset } = await pool.request()
-    .query<{ projectId: string; active: number }>(`SELECT CAST(project_id AS varchar(19)) AS projectId, COUNT(*) AS active
-      FROM dbo.tasks
-      WHERE state IN (N'Running', N'PauseRequested') OR (state = N'Ready' AND lease_until > SYSUTCDATETIME())
-      GROUP BY project_id;`);
+  // This observer read can be chosen as a deadlock victim against the dispatchers' update locks.
+  // Retry it so a lost observation doesn't fail the fake start and strand a task (L64).
+  let recordset: { projectId: string; active: number }[] = [];
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      ({ recordset } = await pool.request()
+        .query<{ projectId: string; active: number }>(`SET DEADLOCK_PRIORITY LOW;
+          SELECT CAST(project_id AS varchar(19)) AS projectId, COUNT(*) AS active
+          FROM dbo.tasks
+          WHERE state IN (N'Running', N'PauseRequested') OR (state = N'Ready' AND lease_until > SYSUTCDATETIME())
+          GROUP BY project_id;`));
+      break;
+    } catch (error) {
+      const deadlocked = typeof error === 'object' && error !== null && (error as { number?: unknown }).number === 1205;
+      if (!deadlocked || attempt >= 5) throw error;
+    }
+  }
   const byProject = new Map(recordset.map((row) => [row.projectId, row.active]));
   return { global: recordset.reduce((sum, row) => sum + row.active, 0), byProject };
 }
