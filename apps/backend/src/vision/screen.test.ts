@@ -26,7 +26,7 @@ function createFixture(options: {
   const reservations: unknown[] = [];
   const describe = vi.fn(options.describe ?? (async ({ image }) => {
       expect(image.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
-      return { description: 'A window with a chart.', inputTokens: 12, outputTokens: 5 };
+      return { description: 'A window with a chart.', inputTokens: 12, outputTokens: 5, costDkk: 0.0001 };
     }));
   const model: ScreenVisionModel = { describe };
   const usage: ScreenFrameUsageStore = {
@@ -68,7 +68,9 @@ describe('screen vision endpoint', () => {
     });
     expect(model.describe).toHaveBeenCalledOnce();
     expect(reservations).toHaveLength(1);
-    expect(recorded).toMatchObject([{ sessionId: '42', inputTokens: 12, outputTokens: 5 }]);
+    expect(recorded).toMatchObject([{
+      sessionId: '42', inputTokens: 12, outputTokens: 5, costDkk: 0.0001,
+    }]);
   });
 
   it('rejects unauthenticated, invalid-session, and non-JPEG frames before inference', async () => {

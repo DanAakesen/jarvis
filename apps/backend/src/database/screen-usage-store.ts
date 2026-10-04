@@ -65,10 +65,18 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
       }
     },
 
-    async recordTokens({ sessionId, eventId, inputTokens, outputTokens, at }) {
+    async recordTokens({ sessionId, eventId, inputTokens, outputTokens, costDkk, at }) {
       const transaction = new sql.Transaction(pool);
       try {
         await transaction.begin();
+        const frameUsage = await transaction.request()
+          .input('eventId', sql.NVarChar(300), `screen:${eventId}`)
+          .input('costDkk', sql.Decimal(12, 4), costDkk)
+          .query(`UPDATE dbo.usage
+            SET cost_dkk = @costDkk
+            WHERE source = N'jarvis_model' AND metric = N'screen_frames'
+              AND source_event_id = @eventId;`);
+        if (frameUsage.rowsAffected[0] !== 1) throw new Error('Screen frame reservation was not found');
         for (const [metric, quantity] of [
           ['input_tokens', inputTokens],
           ['output_tokens', outputTokens],

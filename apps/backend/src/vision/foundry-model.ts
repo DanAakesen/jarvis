@@ -4,6 +4,9 @@ import type { ScreenVisionModel, ScreenVisionResult } from './screen.js';
 
 const MAX_RESPONSE_BYTES = 1_048_576;
 const REQUEST_TIMEOUT_MS = 30_000;
+const MODEL_RATES_DKK_PER_MILLION_TOKENS = new Map([
+  ['gpt-5.6-luna', { input: 1.3157, output: 7.8941 }],
+]);
 
 interface JsonObject {
   readonly [key: string]: unknown;
@@ -15,6 +18,12 @@ function isObject(value: unknown): value is JsonObject {
 
 function tokenCount(value: unknown): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+function estimateCostDkk(model: string, inputTokens: number, outputTokens: number): number | undefined {
+  const rates = MODEL_RATES_DKK_PER_MILLION_TOKENS.get(model);
+  if (!rates) return undefined;
+  return Math.round((inputTokens * rates.input + outputTokens * rates.output) / 1_000_000 * 10_000) / 10_000;
 }
 
 async function readBoundedJson(response: Response): Promise<unknown> {
@@ -110,10 +119,18 @@ export function createFoundryScreenVisionModel(
           !isObject(body['usage'])) {
         throw new Error('Invalid screen model response');
       }
+      const inputTokens = tokenCount(body['usage']['prompt_tokens']);
+      const outputTokens = tokenCount(body['usage']['completion_tokens']);
+      const hasTokenUsage = Number.isSafeInteger(body['usage']['prompt_tokens']) &&
+        Number(body['usage']['prompt_tokens']) >= 0 &&
+        Number.isSafeInteger(body['usage']['completion_tokens']) &&
+        Number(body['usage']['completion_tokens']) >= 0;
+      const costDkk = hasTokenUsage ? estimateCostDkk(model, inputTokens, outputTokens) : undefined;
       return {
         description: choice['message']['content'],
-        inputTokens: tokenCount(body['usage']['prompt_tokens']),
-        outputTokens: tokenCount(body['usage']['completion_tokens']),
+        inputTokens,
+        outputTokens,
+        ...(costDkk === undefined ? {} : { costDkk }),
       };
     },
   };

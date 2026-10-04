@@ -11,6 +11,7 @@ export interface ScreenVisionResult {
   readonly description: string;
   readonly inputTokens: number;
   readonly outputTokens: number;
+  readonly costDkk?: number;
 }
 
 export interface ScreenVisionModel {
@@ -33,6 +34,7 @@ export interface ScreenFrameUsageStore {
     readonly eventId: string;
     readonly inputTokens: number;
     readonly outputTokens: number;
+    readonly costDkk: number | null;
     readonly at: Date;
   }): Promise<void>;
 }
@@ -91,7 +93,9 @@ export class ScreenVisionService {
       });
       if (!result.description.trim() || result.description.length > MAX_SCREEN_DESCRIPTION_CHARACTERS ||
           !Number.isSafeInteger(result.inputTokens) || result.inputTokens < 0 ||
-          !Number.isSafeInteger(result.outputTokens) || result.outputTokens < 0) {
+          !Number.isSafeInteger(result.outputTokens) || result.outputTokens < 0 ||
+          (result.costDkk !== undefined &&
+            (!Number.isFinite(result.costDkk) || result.costDkk < 0))) {
         throw new Error('Invalid screen description response');
       }
       await this.usage.recordTokens({
@@ -99,6 +103,7 @@ export class ScreenVisionService {
         eventId,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
+        costDkk: result.costDkk ?? null,
         at,
       });
       return {
