@@ -4,10 +4,11 @@ import { ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
 import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
+import { setJarvisModelTool } from './model-tools.js';
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [],
+  tools: [setJarvisModelTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);

@@ -19,7 +19,10 @@ For a new managed project, use create_project with its name and description.
 For new work, use create_task with a project ID and Dan's request, and codex unless he names another
 agent. Use steer_task for corrections to running tasks, pause_task for pause/hold/stop, cancel_task
 only for cancel/abort/drop, and resume_task for continue/resume. If an action needs a task ID, look
-it up first. Vary acknowledgements and do not announce routine actions.`;
+it up first. Use set_jarvis_model to change Jarvis for the next session, and set_task_model to change
+the agent or verified model options of a Ready task. If a task is already running, explain that the
+change was refused and the task remains unchanged. Vary acknowledgements and do not announce routine
+actions.`;
 
 const MAX_TOOL_ARGUMENT_BYTES = 65_536;
 const MAX_TOOL_RESULT_BYTES = 1_048_576;
