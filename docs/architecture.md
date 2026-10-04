@@ -124,9 +124,10 @@ paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated even
 history. It validates active projects and bounded request/query inputs. Runner
 identities with the `Jarvis.Runner.Events` app role may call
 `POST /factory/sandbox-events` and `POST /factory/tasks/:id/github-token`. The
-token route requires an active task, derives its repository from task/project
-state, and mints a one-hour repository-scoped App token; it accepts no repository
-from the caller. The events route validates task/event fields and records source
+token route requires an active task and its unended Foundry session, derives its
+repository from task/project state, and mints a one-hour repository-scoped App
+token; it accepts neither a repository nor an unrelated task/session from the
+caller. The events route validates task/event fields and records source
 `runner` through `TaskStore.recordEvent`. Clients cannot update task state directly;
 the task store serializes backend transitions, checks the lifecycle, and records
 state events atomically. Completion can reach Done only through a trusted call that
@@ -236,8 +237,8 @@ or `app`; otherwise 403. Its principal goes to `request.agentPrincipal`, never
 `GET /tools`, `GET /factory/context`, and `POST /tools/{name}`. Coding runner
 identities receive a separate `Jarvis.Runner.Events` app role and are accepted only
 on `POST /factory/sandbox-events` and the narrowly scoped
-`POST /factory/tasks/:id/github-token`; the latter can only issue a token for an
-active task's repository. Their principal is kept separately as
+`POST /factory/tasks/:id/github-token`; the latter requires the Foundry session
+ID and can only issue a token for that session's active task repository. Their principal is kept separately as
 `request.runnerPrincipal`. The bootstrap script assigns this role only to the
 runner principals supplied after Runner deploy. All other routes, including `/me`
 and task APIs, reject runner identities. `jarvis-api` requires role assignment, so
@@ -626,7 +627,20 @@ Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The 
 
 [`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02 and P3-03; repository metadata read is GitHub's required baseline.
 
-The backend reads `github-app-private-key` from Key Vault with its managed identity and uses the configured `GITHUB_APP_ID` to mint one-hour installation tokens scoped to the repository of an active task. The Deploy workflow maps repository Actions variable `JARVIS_GITHUB_APP_ID` to that backend setting. The runner-only `POST /factory/tasks/:id/github-token` route derives the repository from backend task/project state; it does not trust a caller-supplied repository. The runner's app-only identity must carry `Jarvis.Runner.Events`, and the route opts into that principal separately from user and Jarvis-agent routes. The key never enters a sandbox. Git credential requests call the backend for a fresh token and match the returned repository to the GitHub host and path before returning credentials.
+The backend reads `github-app-private-key` from Key Vault with its managed identity
+and uses the configured `GITHUB_APP_ID` to mint one-hour installation tokens
+scoped to the repository of an active task. The Deploy workflow maps repository
+Actions variable `JARVIS_GITHUB_APP_ID` to that backend setting. The runner-only
+`POST /factory/tasks/:id/github-token` route requires the caller's Foundry session
+ID and verifies it is an unended session for the active task before deriving the
+repository from backend task/project state; it does not trust a caller-supplied
+repository or task ID alone. The runner's app-only identity must carry
+`Jarvis.Runner.Events`, and the route opts into that principal separately from user
+and Jarvis-agent routes. The key never enters a sandbox. Git credential requests
+call the backend for a fresh token and match the returned repository to the
+GitHub host and path before returning credentials. The runner retries a 404
+session lookup with bounded delays to cover the interval before the backend
+persists the newly started Foundry session.
 
 App-token mode is explicitly opt-in through the Runner deploy Actions variable `JARVIS_GITHUB_APP_TOKEN_ENABLED` (default `false`); enabling it also requires `GITHUB_APP_ID`. Keep the legacy `jarvis-github` secret and runner read grant until the live post-merge push check against `DanAakesen/jarvis-test-target` succeeds. A separate `github-app-webhook-secret` is needed for P3-03; this flow does not implement or configure webhooks.
 

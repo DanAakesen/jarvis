@@ -20,6 +20,7 @@ def test_get_installation_token_uses_managed_identity_and_task_route(monkeypatch
 
     class Response:
         is_success = True
+        status_code = 200
         content = b'{"token":"ghs_task-token","repository":"DanAakesen/jarvis-test-target"}'
 
         def json(self):
@@ -48,7 +49,7 @@ def test_get_installation_token_uses_managed_identity_and_task_route(monkeypatch
     )
     monkeypatch.setattr(github_token.httpx, "Client", Client)
 
-    assert github_token.get_installation_token(BACKEND_URL, API_SCOPE, "42") == (
+    assert github_token.get_installation_token(BACKEND_URL, API_SCOPE, "42", "session-42") == (
         "ghs_task-token", "DanAakesen/jarvis-test-target",
     )
     assert calls[0][0] == "credential"
@@ -56,9 +57,64 @@ def test_get_installation_token_uses_managed_identity_and_task_route(monkeypatch
     assert ("client", 10, False) in calls
     assert calls[3][1:] == (
         f"{BACKEND_URL}/factory/tasks/42/github-token",
-        {"Authorization": f"{'Bear' + 'er'} runner-access-token"},
+        {
+            "Authorization": f"{'Bear' + 'er'} runner-access-token",
+            "X-Jarvis-Session-Id": "session-42",
+        },
     )
     assert calls[-1] == ("close",)
+
+
+def test_missing_session_lookup_retries_with_a_bounded_delay(monkeypatch):
+    calls = []
+    delays = []
+
+    class Credential:
+        def get_token(self, _scope):
+            return type("AccessToken", (), {"token": "runner-access-token"})()
+
+        def close(self):
+            pass
+
+    class NotFound:
+        status_code = 404
+        is_success = False
+        content = b'{"error":"Task not found"}'
+
+    class Response:
+        status_code = 200
+        is_success = True
+        content = b'{"token":"ghs_task-token","repository":"DanAakesen/jarvis-test-target"}'
+
+        def json(self):
+            return {
+                "token": "ghs_task-token",
+                "repository": "DanAakesen/jarvis-test-target",
+            }
+
+    class Client:
+        def __init__(self, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def post(self, *_args, **_kwargs):
+            calls.append(True)
+            return NotFound() if len(calls) == 1 else Response()
+
+    monkeypatch.setattr(github_token, "DefaultAzureCredential", lambda **_options: Credential())
+    monkeypatch.setattr(github_token.httpx, "Client", Client)
+    monkeypatch.setattr(github_token.time, "sleep", delays.append)
+
+    assert github_token.get_installation_token(BACKEND_URL, API_SCOPE, "42", "session-42") == (
+        "ghs_task-token", "DanAakesen/jarvis-test-target",
+    )
+    assert calls == [True, True]
+    assert delays == [0.1]
 
 
 def test_invalid_configuration_does_not_acquire_a_credential(monkeypatch):
@@ -69,10 +125,13 @@ def test_invalid_configuration_does_not_acquire_a_credential(monkeypatch):
     )
 
     with pytest.raises(RuntimeError, match="Invalid backend token configuration"):
-        github_token.get_installation_token("http://backend.example", API_SCOPE, "42")
+        github_token.get_installation_token("http://backend.example", API_SCOPE, "42", "session-42")
 
     with pytest.raises(RuntimeError, match="Invalid backend token configuration"):
-        github_token.get_installation_token(BACKEND_URL, API_SCOPE, "9223372036854775808")
+        github_token.get_installation_token(BACKEND_URL, API_SCOPE, "9223372036854775808", "session-42")
+
+    with pytest.raises(RuntimeError, match="Invalid backend token configuration"):
+        github_token.get_installation_token(BACKEND_URL, API_SCOPE, "42", "session 42")
 
     assert created == []
 
@@ -90,7 +149,7 @@ def test_provider_failure_is_sanitized_and_credential_is_closed(monkeypatch):
     monkeypatch.setattr(github_token, "DefaultAzureCredential", lambda **_options: Credential())
 
     with pytest.raises(RuntimeError, match="GitHub installation token request failed") as error:
-        github_token.get_installation_token(BACKEND_URL, API_SCOPE, "42")
+        github_token.get_installation_token(BACKEND_URL, API_SCOPE, "42", "session-42")
 
     assert "private provider detail" not in str(error.value)
     assert closed == [True]

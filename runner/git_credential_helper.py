@@ -42,6 +42,7 @@ def main(arguments: list[str] | None = None) -> int:
                 os.environ["JARVIS_BACKEND_URL"],
                 os.environ["JARVIS_API_SCOPE"],
                 os.environ["JARVIS_TASK_ID"],
+                os.environ["JARVIS_SESSION_ID"],
             )
             if _repository_path(fields.get("path", "")) != repository.casefold():
                 return 0

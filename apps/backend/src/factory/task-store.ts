@@ -119,7 +119,7 @@ export interface TaskStore {
   create(input: CreateTaskInput): Promise<TaskRecord | null>;
   list(filters: TaskListFilters): Promise<TaskRecord[]>;
   get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null>;
-  getActiveRepository(id: string): Promise<string | null>;
+  getActiveRepository(id: string, foundrySessionId: string): Promise<string | null>;
   getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]>;
   getRunningContext(): Promise<RunningTaskContextSnapshot>;
   transition(id: string, state: TaskState, completionVerified?: boolean): Promise<TaskTransitionResult>;

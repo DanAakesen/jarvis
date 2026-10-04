@@ -97,8 +97,9 @@ The runner reads Key Vault secrets `jarvis-github`, `jarvis-copilot` and
 `codex-login`; `jarvis-copilot` authenticates the CLI seat, while `jarvis-github`
 is the legacy Git credential path. P3-02 adds GitHub App installation tokens:
 the backend keeps the App private key and mints a one-hour token for the active
-task's repository, and the Git credential helper requests a fresh token on each
-Git credential lookup. Set repository Actions variable
+task's repository only when the request's Foundry session matches that task. The
+Git credential helper requests a fresh token on each Git credential lookup. Set
+repository Actions variable
 `JARVIS_GITHUB_APP_TOKEN_ENABLED=true` only after deploying/configuring the backend;
 it defaults to `false`, preserving the legacy path. Actions variable
 `JARVIS_GITHUB_APP_ID` configures the backend's `GITHUB_APP_ID`; neither value is

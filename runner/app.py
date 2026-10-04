@@ -999,7 +999,7 @@ async def _run_task(
                 backend_url = os.environ["JARVIS_BACKEND_URL"]
                 api_scope = os.environ["JARVIS_API_SCOPE"]
                 token, _repository = await asyncio.to_thread(
-                    get_installation_token, backend_url, api_scope, state.task_id,
+                    get_installation_token, backend_url, api_scope, state.task_id, state.session_id,
                 )
                 credentials["github_token"] = token
             else:
@@ -1023,6 +1023,7 @@ async def _run_task(
             env["GIT_CONFIG_VALUE_1"] = "true"
             if state.task_id is not None:
                 env["JARVIS_TASK_ID"] = state.task_id
+                env["JARVIS_SESSION_ID"] = state.session_id
             if state.agent == "copilot":
                 env["COPILOT_GITHUB_TOKEN"] = credentials["copilot_token"]
             else:

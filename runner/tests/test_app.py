@@ -548,6 +548,7 @@ def test_task_uses_an_app_token_and_configures_per_push_credentials(tmp_path, mo
         "https://backend.example",
         "api://00000000-0000-4000-8000-000000000000/.default",
         "42",
+        "app-token-session",
     )]
     assert captured_env["GH_TOKEN"] == "ghs_app-token"
     assert captured_env["GIT_CONFIG_COUNT"] == "2"
@@ -557,6 +558,7 @@ def test_task_uses_an_app_token_and_configures_per_push_credentials(tmp_path, mo
     assert captured_env["GIT_CONFIG_KEY_1"] == "credential.useHttpPath"
     assert captured_env["GIT_CONFIG_VALUE_1"] == "true"
     assert captured_env["JARVIS_TASK_ID"] == "42"
+    assert captured_env["JARVIS_SESSION_ID"] == "app-token-session"
 
 
 def test_acp_loads_a_persisted_session_with_protocol_fixture(tmp_path, monkeypatch):

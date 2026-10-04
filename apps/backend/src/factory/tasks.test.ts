@@ -10,6 +10,7 @@ import type { GitHubAppTokenIssuer } from '../github-app.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' ') };
+const runnerHeaders = { ...headers, 'x-jarvis-session-id': 'session-42' };
 const apps: ReturnType<typeof buildApp>[] = [];
 
 const task: TaskRecord = {
@@ -218,7 +219,7 @@ describe('factory tasks API', () => {
     })).statusCode).toBe(400);
   });
 
-  it('mints a task repository token only for the runner identity', async () => {
+  it('mints a task repository token only for its runner session', async () => {
     const issue = vi.fn(async (repository: string) =>
       repository === 'DanAakesen/jarvis-test-target' ? 'ghs_test-installation-token' : 'wrong-repository');
     const issuer = { issue } satisfies GitHubAppTokenIssuer;
@@ -229,7 +230,7 @@ describe('factory tasks API', () => {
     });
     const runner = fixture({}, runnerAuth, undefined, issuer);
     const response = await runner.app.inject({
-      method: 'POST', url: '/factory/tasks/42/github-token', headers,
+      method: 'POST', url: '/factory/tasks/42/github-token', headers: runnerHeaders,
     });
     expect(response.statusCode).toBe(200);
     expect(response.headers['cache-control']).toBe('no-store');
@@ -237,12 +238,24 @@ describe('factory tasks API', () => {
       token: 'ghs_test-installation-token',
       repository: 'DanAakesen/jarvis-test-target',
     });
-    expect(runner.store.getActiveRepository).toHaveBeenCalledWith('42');
+    expect(runner.store.getActiveRepository).toHaveBeenCalledWith('42', 'session-42');
     expect(issue).toHaveBeenCalledWith('DanAakesen/jarvis-test-target');
+
+    const otherSession = fixture({
+      getActiveRepository: vi.fn(async (_taskId, sessionId) =>
+        sessionId === 'session-42' ? 'DanAakesen/jarvis-test-target' : null),
+    }, runnerAuth, undefined, issuer);
+    const mismatched = await otherSession.app.inject({
+      method: 'POST',
+      url: '/factory/tasks/42/github-token',
+      headers: { ...runnerHeaders, 'x-jarvis-session-id': 'another-session' },
+    });
+    expect(mismatched.statusCode).toBe(404);
+    expect(issue).toHaveBeenCalledOnce();
 
     const user = fixture({}, undefined, undefined, issuer);
     const denied = await user.app.inject({
-      method: 'POST', url: '/factory/tasks/42/github-token', headers,
+      method: 'POST', url: '/factory/tasks/42/github-token', headers: runnerHeaders,
     });
     expect(denied.statusCode).toBe(403);
     expect(issue).toHaveBeenCalledOnce();
@@ -257,21 +270,25 @@ describe('factory tasks API', () => {
     const issuer = { issue: vi.fn(async () => 'ghs_test-token') };
     const inactive = fixture({ getActiveRepository: vi.fn(async () => null) }, runnerAuth, undefined, issuer);
     expect((await inactive.app.inject({
-      method: 'POST', url: '/factory/tasks/42/github-token', headers,
+      method: 'POST', url: '/factory/tasks/42/github-token', headers: runnerHeaders,
     })).statusCode).toBe(404);
     expect(issuer.issue).not.toHaveBeenCalled();
+
+    expect((await fixture({}, runnerAuth, undefined, issuer).app.inject({
+      method: 'POST', url: '/factory/tasks/42/github-token', headers,
+    })).statusCode).toBe(400);
 
     const failing = fixture({}, runnerAuth, undefined, {
       issue: vi.fn(async () => { throw new Error('private provider detail'); }),
     });
     const failed = await failing.app.inject({
-      method: 'POST', url: '/factory/tasks/42/github-token', headers,
+      method: 'POST', url: '/factory/tasks/42/github-token', headers: runnerHeaders,
     });
     expect(failed.statusCode).toBe(502);
     expect(failed.json()).toEqual({ error: 'GitHub token unavailable' });
     expect(failed.body).not.toContain('private provider detail');
     expect((await failing.app.inject({
-      method: 'POST', url: '/factory/tasks/9223372036854775808/github-token', headers,
+      method: 'POST', url: '/factory/tasks/9223372036854775808/github-token', headers: runnerHeaders,
     })).statusCode).toBe(400);
   });
 
