@@ -124,11 +124,11 @@ describe('App shell', () => {
     expect(screen.queryByRole('heading', { name: 'Tasks' })).toBeNull();
   });
 
-  it('offers only the Software Factory area and a settings entry', async () => {
+  it('offers the Software Factory and Usage areas with a settings entry', async () => {
     await renderSignedIn();
 
     const areas = screen.getByRole('navigation', { name: 'Areas' });
-    expect(within(areas).getAllByRole('link').map((link) => link.textContent)).toEqual(['Software Factory']);
+    expect(within(areas).getAllByRole('link').map((link) => link.textContent)).toEqual(['Software Factory', 'Usage']);
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
   });
 
