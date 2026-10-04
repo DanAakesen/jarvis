@@ -49,6 +49,7 @@ export class SandboxHeartbeat {
   private readonly failureConfirmMs: number;
   private readonly now: () => number;
   private readonly onError: (error: unknown) => void;
+  private completionHandler: ((sandbox: RunningSandbox) => Promise<boolean>) | undefined;
   private started = false;
 
   constructor(
@@ -77,6 +78,10 @@ export class SandboxHeartbeat {
     };
     this.tracked.set(sandbox.sandboxSessionId, entry);
     if (this.started) this.poll(entry);
+  }
+
+  setCompletionHandler(handler: (sandbox: RunningSandbox) => Promise<boolean>): void {
+    this.completionHandler = handler;
   }
 
   untrack(sandboxSessionId: string): void {
@@ -120,6 +125,8 @@ export class SandboxHeartbeat {
         if (paused) this.untrack(entry.sandbox.sandboxSessionId);
       } else if (result.status === 'running' || result.status === 'queued') {
         await this.store.resolvePause(entry.sandbox.sandboxSessionId, 'Running');
+      } else if (result.status === 'completed' && this.completionHandler) {
+        if (await this.completionHandler(entry.sandbox)) this.untrack(entry.sandbox.sandboxSessionId);
       } else if (result.status === 'needs_attention') {
         await this.store.markNeedsAttention(entry.sandbox.sandboxSessionId, result.error ?? undefined);
         this.untrack(entry.sandbox.sandboxSessionId);

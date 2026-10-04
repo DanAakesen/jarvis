@@ -147,7 +147,7 @@ export const factoryModule: BackendModule = {
         body: {
           type: 'object',
           properties: {
-            action: { type: 'string', enum: ['steer', 'pause', 'resume', 'cancel'] },
+            action: { type: 'string', enum: ['steer', 'pause', 'resume', 'cancel', 'recover'] },
             message: { type: 'string', minLength: 1, maxLength: 65_536 },
           },
           required: ['action'],
