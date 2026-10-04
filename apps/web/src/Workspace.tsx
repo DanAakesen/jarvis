@@ -227,7 +227,9 @@ export const Workspace = forwardRef<WorkspaceController, { views: readonly Works
 
   function raiseView(event: { target: EventTarget }, id: string) {
     if (arrangement !== 'layered' || narrow) return;
-    if (event.target instanceof Element && event.target.closest('.workspace-window-order button:not(.workspace-move-handle)')) return;
+    if (event.target instanceof Element && event.target.closest(
+      '.workspace-window-actions button:not(.workspace-move-handle):not(.workspace-resize-handle), .workspace-window-actions summary',
+    )) return;
     const index = orderedViews.findIndex((view) => view.id === id);
     if (index >= 0) reorder(id, orderedViews.length - index - 1, 'brought forward');
   }

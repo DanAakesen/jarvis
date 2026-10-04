@@ -90,7 +90,6 @@ function ShellLayout({ signedIn, config, session }: { signedIn: boolean; config:
   }
 
   return (
-    <WorkspaceCommandContext.Provider value={workspaceCommands}>
     <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && navigationOpen} data-context-open={signedIn && contextPanel.isOpen}>
       <a className="skip-link" href="#content">Skip to content</a>
       {signedIn && (
@@ -169,12 +168,14 @@ function ShellLayout({ signedIn, config, session }: { signedIn: boolean; config:
         )}
       </header>
       <main id="content" className="shell-main" tabIndex={-1}>
-        <Outlet />
-        {signedIn && (
-          <div className="workspace-shell-area" hidden={pathname !== '/'}>
-            <Workspace ref={workspaceController} views={[]} />
-          </div>
-        )}
+        <WorkspaceCommandContext.Provider value={workspaceCommands}>
+          <Outlet />
+          {signedIn && (
+            <div className="workspace-shell-area" hidden={pathname !== '/'}>
+              <Workspace ref={workspaceController} views={[]} />
+            </div>
+          )}
+        </WorkspaceCommandContext.Provider>
       </main>
       <footer className="bottom-bar">
         {signedIn && config.backendUrl && (
@@ -183,7 +184,6 @@ function ShellLayout({ signedIn, config, session }: { signedIn: boolean; config:
       </footer>
       {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} />}
     </div>
-    </WorkspaceCommandContext.Provider>
   );
 }
 

@@ -360,8 +360,23 @@ continue feedback stays with the view, including partial interrupted content.
 Window geometry, order, and the open view set remain in memory only. The host is
 currently empty until P8-14 provides generated-view data and P8-15 supplies
 Jarvis-directed workspace commands; those data and agent-control contracts are
-not part of P8-06. These structural choices reuse the neutral shell tokens and
-do not settle the deferred full visual system in P8-20.
+not part of P8-06. These structural choices reuse the shared Concept B/C surfaces
+and motion tokens in P8-20. Voice-layout transitions remain with P8-10 and P8-11.
+
+## Window lifecycle and tabs (P8-07)
+
+Each temporary window has a title bar with labelled minimise, maximise, and
+close icon actions. Minimise hides the mounted view and adds a compact,
+animated tab to the active workspace; restoring from the tab returns focus to
+the view title. The in-memory view and its local component state remain intact,
+and neither minimising nor closing saves or deletes source data. Maximise fills
+the workspace canvas and toggling it off returns to the existing arrangement.
+
+Workspace and per-window arrangement controls live behind an **Arrange**
+disclosure so the canvas and title bar stay compact; keyboard move and resize
+controls remain available there. The shell exposes the typed workspace command
+controller to page consumers; authenticated Jarvis delivery remains P8-15.
+Tab motion uses the P8-20 tokens and becomes static under reduced motion.
 
 ## Proposed surfaces for accepted capability additions
 
