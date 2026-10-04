@@ -6,7 +6,8 @@ is one executable SQL Server batch without `GO`, at most 1 MiB. The backend read
 at most 1,000 migration files, in ordinal sequence order. `0001_core_tables.sql`
 creates data-model groups 1–3 (issue #15); `0002_sandbox_operations.sql` creates
 groups 4 and 6 (issue #27); `0009_github_release_records.sql` creates group 5
-(issue #42).
+(issue #42). `0010_idle_expired_sessions.sql` adds the `idle_expired`
+session end reason (P2-14, #226).
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only
