@@ -224,6 +224,8 @@ describe('Entra bearer authentication at the server boundary', () => {
 
 const agentObjectId = '3a1f0c2e-7b4d-4e8a-9c6f-1d2e3f405162';
 const agentConfig = loadConfig({ ENTRA_JARVIS_AGENT_OBJECT_ID: agentObjectId.toUpperCase() });
+const pcBridgeClientId = '6e706561-e95a-4dcf-aafd-6f568da82cf1';
+const pcBridgeConfig = loadConfig({ ENTRA_PC_BRIDGE_CLIENT_ID: pcBridgeClientId });
 const bearer = (value: string) => ['Bearer', value].join(' ');
 const agentClaims: JWTPayload = { oid: agentObjectId, name: undefined, scp: undefined, roles: ['Jarvis.Tools'], idtyp: 'app' };
 
@@ -354,6 +356,47 @@ describe('runner identity on sandbox-event routes', () => {
   });
 });
 
+describe('PC bridge identity on the outbound bridge route', () => {
+  function fixtureWithBridge() {
+    const app = buildApp(pcBridgeConfig, createLogger(pcBridgeConfig, undefined, new Writable({
+      write(_chunk: Buffer, _enc, done) { done(); },
+    })), {
+      auth: createTokenVerifier(pcBridgeConfig.auth, createRemoteJWKSet(url, { timeoutDuration: 100, cooldownDuration: 30_000 })),
+    });
+    app.get('/bridge-only', { config: { jarvisPcBridge: true } }, async (request) => ({
+      bridge: request.pcBridgePrincipal,
+    }));
+    apps.push(app);
+    return app;
+  }
+
+  it('accepts only Dan’s delegated token from the configured PC bridge client on its route', async () => {
+    const app = fixtureWithBridge();
+    const authorization = bearer(await token({ azp: pcBridgeClientId }));
+
+    const accepted = await app.inject({ url: '/bridge-only', headers: { authorization } });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toEqual({
+      bridge: { kind: 'jarvis-pc-bridge', objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId },
+    });
+    expect((await app.inject({ url: '/me', headers: { authorization } })).statusCode).toBe(403);
+  });
+
+  it.each([
+    ['the ordinary Jarvis web client', { azp: undefined }],
+    ['another Entra account', { oid: '00000000-0000-0000-0000-000000000000' }],
+    ['an app-only token', { scp: undefined, roles: ['Jarvis.Tools'], idtyp: 'app' }],
+    ['a token without the API scope', { scp: 'other_scope' }],
+  ])('refuses %s on the bridge route', async (_name, claims) => {
+    const app = fixtureWithBridge();
+    const response = await app.inject({
+      url: '/bridge-only',
+      headers: { authorization: bearer(await token({ azp: pcBridgeClientId, ...claims })) },
+    });
+    expect(response.statusCode).toBe(403);
+  });
+});
+
 describe('auth configuration', () => {
   it('matches the nonsecret bootstrapped Entra identities', async () => {
     const { readFile } = await import('node:fs/promises');
@@ -371,5 +414,12 @@ describe('auth configuration', () => {
     }
     expect(() => loadConfig({ ENTRA_JARVIS_AGENT_OBJECT_ID: config.auth.ownerObjectId.toUpperCase() }))
       .toThrow('ENTRA_JARVIS_AGENT_OBJECT_ID must differ from ENTRA_OWNER_OBJECT_ID');
+  });
+  it('reads and validates the optional PC bridge client ID', () => {
+    expect(loadAuthConfig({ ENTRA_PC_BRIDGE_CLIENT_ID: '' })).toEqual(loadAuthConfig({}));
+    expect(pcBridgeConfig.auth.pcBridgeClientId).toBe(pcBridgeClientId);
+    for (const value of ['secret', 'https://evil.example', '00000000-0000-0000-0000-000000000000/path']) {
+      expect(() => loadConfig({ ENTRA_PC_BRIDGE_CLIENT_ID: value })).toThrow(/^ENTRA_PC_BRIDGE_CLIENT_ID must be a UUID$/);
+    }
   });
 });

@@ -50,6 +50,8 @@ import { createGithubWebhookModule } from './github/webhook.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
 import { createProjectPolicyEvaluator } from './github/project-policy.js';
 import { createGitHubDeliveryHandler } from './github/delivery.js';
+import { createPcBridgeModule } from './pc-bridge/bridge.js';
+import { createPcBridgeStatusStore } from './database/pc-bridge-status-store.js';
 import { createAlertNotifier } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
@@ -193,6 +195,9 @@ try {
     })
     : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
+  const pcBridgeStatusStore = database
+    ? createPcBridgeStatusStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
+    : undefined;
   const dispatcher = database && taskStore && settingsStore && sandboxHeartbeat && config.foundryEndpoints
     ? new TaskDispatcher(
       createDispatcherStore(database.pool, eventHub),
@@ -245,6 +250,10 @@ try {
           await projectPolicyEvaluator?.handle(mapping);
         },
       } : {}),
+    }),
+    createPcBridgeModule({
+      ...(pcBridgeStatusStore ? { onStatusChange: (online) => pcBridgeStatusStore.setStatus(online) } : {}),
+      onStatusError: () => logger.warn('pc_bridge.status_update_failed'),
     }),
   ];
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {

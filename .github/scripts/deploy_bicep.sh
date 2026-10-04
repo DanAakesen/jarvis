@@ -41,6 +41,13 @@ if [[ -n "${GITHUB_APP_ID:-}" ]]; then
   }
   parameters+=(githubAppId="$GITHUB_APP_ID")
 fi
+if [[ -n "${JARVIS_PC_BRIDGE_CLIENT_ID:-}" ]]; then
+  [[ "$JARVIS_PC_BRIDGE_CLIENT_ID" =~ ^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$ ]] || {
+    echo "::error::JARVIS_PC_BRIDGE_CLIENT_ID must be a UUID"
+    exit 1
+  }
+  parameters+=(pcBridgeClientId="$JARVIS_PC_BRIDGE_CLIENT_ID")
+fi
 if [[ -n "${ENTRA_JARVIS_AGENT_OBJECT_ID:-}" ]]; then
   parameters+=(jarvisAgentObjectId="$ENTRA_JARVIS_AGENT_OBJECT_ID")
 fi
