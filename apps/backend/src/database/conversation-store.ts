@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import type {
   ConversationChannel,
   ConversationHistoryMessage,
@@ -83,7 +84,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
     },
 
     async getSession(sessionId) {
-      const result = await pool.request()
+      const result = await databaseReadRequest(pool)
         .input('sessionId', sql.BigInt, BigInt(sessionId))
         .query<SessionIdRow>(`SELECT CONVERT(varchar(20), id) AS id, channel, language,
           started_at, ended_at
@@ -147,7 +148,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
     },
 
     async getHistory({ limit, before }) {
-      const result = await pool.request()
+      const result = await databaseReadRequest(pool)
         .input('take', sql.Int, limit + 1)
         .input('beforeId', sql.BigInt, before === undefined ? null : BigInt(before))
         .query<HistoryRow>(`DECLARE @history TABLE (

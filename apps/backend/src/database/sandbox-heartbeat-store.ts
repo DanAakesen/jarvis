@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import type { RunningSandbox, SandboxHeartbeatStore } from '../factory/heartbeat.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 
@@ -11,7 +12,7 @@ interface InsertedCrashEventRow extends Omit<TaskEventMessage, 'at' | 'payload'>
 export function createSandboxHeartbeatStore(pool: sql.ConnectionPool, eventHub: TaskEventHub): SandboxHeartbeatStore {
   return {
     async listRunning() {
-      const { recordset } = await pool.request().query<RunningSandboxRow>(`SELECT
+      const { recordset } = await databaseReadRequest(pool).query<RunningSandboxRow>(`SELECT
         CAST(s.id AS varchar(19)) AS sandboxSessionId, s.foundry_session_id AS foundrySessionId,
         s.agent_name AS agentName, activeTurn.invocation_id AS invocationId
         FROM dbo.sandbox_sessions AS s
@@ -82,7 +83,7 @@ export function createSandboxHeartbeatStore(pool: sql.ConnectionPool, eventHub: 
       }
     },
 
-    async markNeedsAttention(sandboxSessionId) {
+    async markNeedsAttention(sandboxSessionId, question) {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
@@ -106,12 +107,22 @@ export function createSandboxHeartbeatStore(pool: sql.ConnectionPool, eventHub: 
           return false;
         }
 
+        const attentionQuestion = typeof question === 'string' ? question.trim().slice(0, 500) : '';
         await new sql.Request(transaction)
           .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
-          .query(`UPDATE dbo.sandbox_sessions SET status = N'Crashed', ended_at = SYSUTCDATETIME(),
-            end_reason = N'crashed' WHERE id = @sandboxSessionId;`);
-        const summary = 'Sandbox heartbeat detected a crash';
-        const payload = { from: state, to: 'NeedsAttention', reason: 'sandbox_crashed' };
+          .input('status', sql.NVarChar(16), attentionQuestion ? 'Ended' : 'Crashed')
+          .input('endReason', sql.NVarChar(16), attentionQuestion ? 'done' : 'crashed')
+          .query(`UPDATE dbo.sandbox_sessions SET status = @status, ended_at = SYSUTCDATETIME(),
+            end_reason = @endReason WHERE id = @sandboxSessionId;`);
+        const summary = attentionQuestion
+          ? `Question for Dan: ${attentionQuestion}`
+          : 'Sandbox heartbeat detected a crash';
+        const payload = {
+          from: state,
+          to: 'NeedsAttention',
+          reason: attentionQuestion ? 'agent_question' : 'sandbox_crashed',
+          ...(attentionQuestion ? { question: attentionQuestion } : {}),
+        };
         const event = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, BigInt(taskId))
           .input('eventType', sql.NVarChar(64), 'state_changed')

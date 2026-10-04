@@ -441,6 +441,22 @@ describe('committed domain schema (groups 1-7)', () => {
     const created = await store.create({ projectId, title: 'Task API contract', request: 'Exercise SQL task operations' });
     expect(created).toMatchObject({ projectId, agent: 'copilot', source: 'board', state: 'Ready' });
     if (!created) throw new Error('Task API fixture task was not created');
+    const chatSessionId = await scalar("INSERT dbo.jarvis_sessions (channel, language) VALUES (N'chat', N'en')");
+    const messageId = await scalar(`INSERT dbo.messages (jarvis_session_id, role, text, model)
+      VALUES (${chatSessionId}, N'dan', N'Create a project', NULL)`);
+    const chatTask = await store.create({
+      projectId,
+      title: 'Chat-created project scaffold',
+      request: 'Scaffold from chat',
+      source: 'chat',
+      originMessageId: String(messageId),
+    });
+    expect(chatTask).toMatchObject({ source: 'chat', originMessageId: String(messageId) });
+    if (!chatTask) throw new Error('Chat-created task fixture was not created');
+    expect(await store.get(chatTask.id, 10, 0)).toMatchObject({
+      events: [{ type: 'created', summary: 'Task created from chat' }],
+    });
+    expect((await store.transition(chatTask.id, 'Cancelled')).kind).toBe('ok');
     let idleOperationRan = false;
     expect(await store.withNoActiveTasks(async () => { idleOperationRan = true; }))
       .toEqual({ kind: 'active' });
@@ -782,6 +798,44 @@ describe('committed domain schema (groups 1-7)', () => {
       payload: { from: 'Running', to: 'NeedsAttention', reason: 'sandbox_crashed' },
       source: 'backend',
     });
+  });
+
+  it('stores the agent question when a sandbox needs Dan', async () => {
+    const project = await createProjectStore(pool).create({
+      name: 'Needs attention question fixture', repo: `${database}/attention-question`, default_branch: 'main',
+      default_agent: 'copilot', policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
+    });
+    const taskStore = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    const task = await taskStore.create({
+      projectId: project.id, title: 'Scaffold question', request: 'Ask for missing information',
+    });
+    if (!task) throw new Error('Needs attention question task was not created');
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    const sandboxSessionId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+      VALUES (${task.id}, N'attention-question-session', N'1', N'jarvis-runner-base-1x2', N'1x2',
+        N'jarvis-runner-base@sha256:fixture', N'Active')`);
+    const eventHub = createEventHub<TaskEventMessage>();
+    const published: TaskEventMessage[] = [];
+    eventHub.subscribe((event) => published.push(event));
+    const store = createSandboxHeartbeatStore(pool, eventHub);
+    const question = 'Which license should this project use?';
+
+    expect(await store.markNeedsAttention(String(sandboxSessionId), question)).toBe(true);
+    const taskDetail = await taskStore.get(task.id, 10, 0);
+    expect(taskDetail?.state).toBe('NeedsAttention');
+    expect(taskDetail?.events).toEqual(expect.arrayContaining([expect.objectContaining({
+      type: 'state_changed',
+      summary: `Question for Dan: ${question}`,
+      payload: { from: 'Running', to: 'NeedsAttention', reason: 'agent_question', question },
+    })]));
+    expect(published).toHaveLength(1);
+    expect(published[0]?.summary).toBe(`Question for Dan: ${question}`);
+    const sandbox = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .query<{ status: string; endReason: string }>(`SELECT status, end_reason AS endReason
+        FROM dbo.sandbox_sessions WHERE id = @sandboxSessionId;`);
+    expect(sandbox.recordset).toEqual([{ status: 'Ended', endReason: 'done' }]);
   });
 
   it('creates, updates, lists, and archives projects through the SQL store', async () => {
