@@ -115,9 +115,9 @@ def test_secret_grants_are_idempotent_and_scope_specific(monkeypatch):
     monkeypatch.setattr(deploy, "az", az)
     deploy.grant("subscription", "identity", deploy.READ_SECRET_ROLE, "vault/secrets/codex-login")
     assert len(calls) == 1
-    deploy.grant("subscription", "identity", deploy.READ_SECRET_ROLE, "vault/secrets/copilot-token")
+    deploy.grant("subscription", "identity", deploy.READ_SECRET_ROLE, "vault/secrets/jarvis-copilot")
     assert calls[-1][0:3] == ("role", "assignment", "create")
-    assert calls[-1][-1] == "vault/secrets/copilot-token"
+    assert calls[-1][-1] == "vault/secrets/jarvis-copilot"
 
 
 def test_deploy_selects_version_grants_only_credential_scopes_and_probes(monkeypatch):
@@ -158,7 +158,7 @@ def test_deploy_selects_version_grants_only_credential_scopes_and_probes(monkeyp
     )
     assert result["version"] == "7" and result["key_vault_probe"] is True
     assert {row[-1] for row in grants if row[-2] == deploy.READ_SECRET_ROLE} == {
-        "vault/secrets/github-token", "vault/secrets/copilot-token", "vault/secrets/codex-login"}
+        "vault/secrets/jarvis-github", "vault/secrets/jarvis-copilot", "vault/secrets/codex-login"}
     assert [row[-1] for row in grants if row[-2] == deploy.WRITE_SECRET_ROLE] == ["vault/secrets/codex-login"]
     patch = next(body for method, url, body in foundry.calls if method == "PATCH")
     assert patch["agent_endpoint"]["protocol_configuration"] == {"invocations": {}}

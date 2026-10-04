@@ -90,7 +90,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
 
 const credentialNames: Record<CredentialStatus['name'], string> = {
   'codex-login': 'Codex login',
-  'copilot-token': 'Copilot token',
+  'copilot-token': 'Copilot token (jarvis-copilot)',
 };
 const credentialStatusLabels: Record<CredentialStatus['status'], string> = {
   ok: 'OK',

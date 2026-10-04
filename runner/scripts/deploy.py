@@ -205,7 +205,7 @@ def deploy(
     principal = (record.get("instance_identity") or current.get("instance_identity") or {}).get("principal_id")
     if not principal:
         raise RuntimeError("Agent has no dedicated Entra identity")
-    for secret in ("github-token", "copilot-token", "codex-login"):
+    for secret in ("jarvis-github", "jarvis-copilot", "codex-login"):
         grant(subscription, principal, READ_SECRET_ROLE, f"{vault['id']}/secrets/{secret}")
     grant(subscription, principal, WRITE_SECRET_ROLE, f"{vault['id']}/secrets/codex-login")
     grant(subscription, principal, METRICS_ROLE, ai["id"])

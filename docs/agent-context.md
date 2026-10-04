@@ -689,6 +689,6 @@ the first successful Deploy run. It consumes that deployment's existing outputs 
 Azure variables, queues under `jarvis-production-deploy`, builds the two images
 in ACR, deploys both capacity tiers, and records identity-probe evidence. The main
 Deploy workflow uses the same group; both set `queue: max` so no queued deploy is dropped. The workflow never seeds secrets;
-`github-token`, `copilot-token`, and the Jarvis-only `codex-login` must already be
+`jarvis-github`, `jarvis-copilot`, and the Jarvis-only `codex-login` must already be
 in Key Vault. Installation tokens replace the prototype Git-token path in #40.
 See [runner/README.md](../runner/README.md) for commands and the contract.
