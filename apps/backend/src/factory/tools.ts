@@ -3,6 +3,7 @@ import { ToolRefusal } from '../core/tool-registry.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
 import type { Project } from './projects.js';
 import type { TaskDetail, TaskListFilters, TaskRecord } from './task-store.js';
+import { settingsOptions } from '../core/settings.js';
 
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -36,9 +37,28 @@ interface CreateTaskToolInput {
   reasoning?: string;
 }
 
+interface SetTaskModelInput {
+  taskId: string;
+  agent?: string;
+  model?: string;
+  reasoning?: string;
+}
+
 function requireStore<T>(store: T | null, name: string): T {
   if (!store) throw new Error(`${name} unavailable`);
   return store;
+}
+
+function isOption(value: string, options: readonly string[]): boolean {
+  return options.includes(value);
+}
+
+function optionsList(options: readonly string[]): string {
+  return options.join(', ');
+}
+
+function taskModelOptions(agent: TaskRecord['agent']): readonly string[] {
+  return agent === 'codex' ? settingsOptions.codexModels : settingsOptions.copilotModels;
 }
 
 function assertSqlBigInt(value: string): void {
@@ -171,6 +191,19 @@ export const factoryTools: readonly JarvisTool[] = [
     execute: async (input, request) => {
       const { projectId, prompt, agent, model, reasoning } = input as CreateTaskToolInput;
       assertSqlBigInt(projectId);
+      if (agent !== undefined && !isOption(agent, settingsOptions.projectAgents)) {
+        throw new ToolRefusal(`Unsupported coding agent. Valid agents: ${optionsList(settingsOptions.projectAgents)}.`);
+      }
+      const modelOptions = agent
+        ? taskModelOptions(agent)
+        : [...new Set([...settingsOptions.codexModels, ...settingsOptions.copilotModels])];
+      if (model !== undefined && !isOption(model, modelOptions)) {
+        throw new ToolRefusal(`Unsupported coding-agent model. Valid models: ${optionsList(modelOptions)}.`);
+      }
+      if (reasoning !== undefined &&
+        (agent !== 'codex' || !isOption(reasoning, settingsOptions.codexReasoningEfforts))) {
+        throw new ToolRefusal(`Unsupported reasoning. Specify Codex and use one of the valid Codex reasoning levels: ${optionsList(settingsOptions.codexReasoningEfforts)}.`);
+      }
       const store = requireStore(request.server.taskStore, 'Task service');
       const task = await store.create({
         projectId,
@@ -182,6 +215,64 @@ export const factoryTools: readonly JarvisTool[] = [
       });
       if (!task) throw new ToolRefusal('Active project not found.');
       return task;
+    },
+  },
+  {
+    name: 'set_task_model',
+    description: 'Set the coding agent, model, or reasoning for a Ready task; running tasks are not changed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: idSchema,
+        agent: { type: 'string', minLength: 1, maxLength: 32 },
+        model: { type: 'string', minLength: 1, maxLength: 100 },
+        reasoning: { type: 'string', minLength: 1, maxLength: 32 },
+      },
+      required: ['taskId'],
+      anyOf: [{ required: ['agent'] }, { required: ['model'] }, { required: ['reasoning'] }],
+      additionalProperties: false,
+    },
+    execute: async (input, request) => {
+      const { taskId, agent: requestedAgent, model, reasoning } = input as SetTaskModelInput;
+      assertSqlBigInt(taskId);
+      if (requestedAgent !== undefined && !isOption(requestedAgent, settingsOptions.projectAgents)) {
+        throw new ToolRefusal(`Unsupported coding agent. Valid agents: ${optionsList(settingsOptions.projectAgents)}.`);
+      }
+      const store = requireStore(request.server.taskStore, 'Task service');
+      const current = await store.get(taskId, 1, 0);
+      if (!current) throw new ToolRefusal('Task not found.');
+      if (current.state !== 'Ready') {
+        throw new ToolRefusal(`Task is ${current.state}. Model changes are accepted only while a task is Ready; running tasks are refused and remain unchanged.`);
+      }
+
+      const agent = (requestedAgent ?? current.agent) as TaskRecord['agent'];
+      const modelOptions = taskModelOptions(agent);
+      if (model !== undefined && !isOption(model, modelOptions)) {
+        throw new ToolRefusal(`Unsupported ${agent} model. Valid models: ${optionsList(modelOptions)}.`);
+      }
+      if (reasoning !== undefined &&
+        (agent !== 'codex' || !isOption(reasoning, settingsOptions.codexReasoningEfforts))) {
+        throw new ToolRefusal(`Unsupported ${agent} reasoning. Valid Codex reasoning levels: ${optionsList(settingsOptions.codexReasoningEfforts)}.`);
+      }
+
+      const changedAgent = agent !== current.agent;
+      const result = await store.updateModelConfig(taskId, {
+        agent,
+        modelOverride: model ?? (changedAgent ? null : current.modelOverride),
+        reasoningOverride: reasoning ?? (changedAgent ? null : current.reasoningOverride),
+      });
+      if (result.kind === 'not-found') throw new ToolRefusal('Task not found.');
+      if (result.kind === 'not-ready') {
+        throw new ToolRefusal('Task is no longer Ready. Model changes are accepted only while a task is Ready; the current turn is unchanged.');
+      }
+      return {
+        taskId: result.task.id,
+        state: result.task.state,
+        agent: result.task.agent,
+        model: result.task.modelOverride,
+        reasoning: result.task.reasoningOverride,
+        applies: 'next task turn',
+      };
     },
   },
   {

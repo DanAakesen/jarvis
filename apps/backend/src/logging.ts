@@ -24,12 +24,18 @@ const events = new Set([
   'server.listening', 'server.stopping', 'server.stopped', 'server.failed',
   'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
+  'sandbox_heartbeat.decision',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
 // Headers, bodies, URLs, query strings, arbitrary messages and errors are discarded.
 const authDenialReasons = new Set([
   'missing_token', 'malformed_authorization', 'duplicate_authorization', 'invalid_token', 'principal_not_allowed_on_route',
+]);
+const heartbeatDecisions = new Set([
+  'queued', 'running', 'completed', 'crashed', 'idle_expired', 'needs_attention',
+  'paused', 'pause_unchanged', 'cancelled', 'cancelling', 'interrupted', 'unknown',
+  'unchanged', 'confirm_failure', 'persistence_failed', 'poll_failed',
 ]);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
@@ -40,6 +46,21 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (typeof input.reason === 'string' && authDenialReasons.has(input.reason)) fields.reason = input.reason;
   for (const key of ['statusCode', 'responseTime', 'port']) {
     if (typeof input[key] === 'number' && Number.isFinite(input[key])) fields[key] = input[key];
+  }
+  if (input.msg === 'sandbox_heartbeat.decision') {
+    if (typeof input.sandboxSessionId === 'string' && /^[1-9]\d{0,18}$/.test(input.sandboxSessionId)) {
+      fields.sandboxSessionId = input.sandboxSessionId;
+    }
+    if (typeof input.invocationId === 'string' && /^[\w.:-]{1,256}$/.test(input.invocationId)) {
+      fields.invocationId = input.invocationId;
+    }
+    if (input.httpStatus === null ||
+      (Number.isInteger(input.httpStatus) && Number(input.httpStatus) >= 100 && Number(input.httpStatus) <= 599)) {
+      fields.httpStatus = input.httpStatus;
+    }
+    if (typeof input.decision === 'string' && heartbeatDecisions.has(input.decision)) {
+      fields.decision = input.decision;
+    }
   }
   return fields;
 }

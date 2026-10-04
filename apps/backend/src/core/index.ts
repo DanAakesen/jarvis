@@ -1,10 +1,11 @@
 import { generatedViewSchema, isGeneratedView } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
-import { ToolRefusal } from './tool-registry.js';
+import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
 import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
+import { setJarvisModelTool } from './model-tools.js';
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -17,7 +18,7 @@ function trustedBlobHost(): string | undefined {
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [],
+  tools: [setJarvisModelTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);
@@ -91,6 +92,9 @@ export const coreModule: BackendModule = {
           if (error instanceof ToolRefusal && !controller.signal.aborted) {
             outcome = 'refused';
             result = { refused: error.message };
+          } else if (error instanceof ToolFailure && !controller.signal.aborted) {
+            outcome = 'error';
+            result = { error: error.message };
           } else {
             outcome = 'error';
             result = { error: 'Tool execution failed' };
