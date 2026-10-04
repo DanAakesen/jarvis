@@ -1,5 +1,6 @@
 import sql from 'mssql';
-import type { DispatcherStore, DispatchClaimResult } from '../factory/dispatcher.js';
+import type { DispatcherStore, DispatchClaimResult, TaskControlTarget } from '../factory/dispatcher.js';
+import type { RunningSandbox } from '../factory/heartbeat.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 
 interface DispatchTaskRow {
@@ -48,17 +49,19 @@ async function insertEvent(
   type: string,
   summary: string,
   payload: Record<string, unknown>,
+  source: 'backend' | 'dan' = 'backend',
 ): Promise<TaskEventMessage> {
   const { recordset } = await new sql.Request(transaction)
     .input('taskId', sql.BigInt, BigInt(taskId))
     .input('type', sql.NVarChar(64), type)
     .input('summary', sql.NVarChar(2000), summary)
     .input('payload', sql.NVarChar(sql.MAX), JSON.stringify(payload))
+    .input('source', sql.NVarChar(16), source)
     .query<EventRow>(`INSERT dbo.task_events (task_id, type, summary, payload, source)
       OUTPUT CAST(inserted.id AS varchar(19)) AS id, CAST(inserted.task_id AS varchar(19)) AS taskId,
         inserted.type, inserted.summary, inserted.payload, CAST(0 AS bit) AS payloadTruncated,
         inserted.source, inserted.at
-      VALUES (@taskId, @type, @summary, @payload, N'backend');
+      VALUES (@taskId, @type, @summary, @payload, @source);
       INSERT dbo.activity (area, kind, title, link)
       VALUES (N'factory', @type, @summary, CONCAT(N'task:', @taskId));`);
   const row = recordset[0];
@@ -168,11 +171,11 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
               AND (t.next_attempt_at IS NULL OR t.next_attempt_at <= @now)
               AND (t.lease_owner IS NULL OR t.lease_until <= @now)
               AND (SELECT COUNT_BIG(*) FROM dbo.tasks AS active
-                WHERE active.state = N'Running'
+                WHERE active.state IN (N'Running', N'PauseRequested')
                   OR (active.state = N'Ready' AND active.lease_until > @now)) < @globalLimit
               AND (SELECT COUNT_BIG(*) FROM dbo.tasks AS projectActive
                 WHERE projectActive.project_id = t.project_id
-                  AND (projectActive.state = N'Running'
+                  AND (projectActive.state IN (N'Running', N'PauseRequested')
                     OR (projectActive.state = N'Ready' AND projectActive.lease_until > @now))) < p.max_parallel_tasks
             ORDER BY t.priority DESC, t.created_at, t.id;
             UPDATE t SET attempt_count = t.attempt_count + 1,
@@ -311,6 +314,129 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
       }
     },
 
+    async getControlTarget(taskId): Promise<TaskControlTarget | null> {
+      const { recordset } = await pool.request()
+        .input('taskId', sql.BigInt, BigInt(taskId))
+        .query<TaskControlTarget>(`SELECT CAST(t.id AS varchar(19)) AS taskId,
+          t.agent, t.request, t.model_override AS modelOverride, t.reasoning_override AS reasoningOverride,
+          CAST(s.id AS varchar(19)) AS sandboxSessionId, s.foundry_session_id AS foundrySessionId,
+          s.agent_name AS agentName, s.size AS sandboxSize, s.image, s.status AS sessionStatus,
+          CASE WHEN s.status = N'Active' THEN activeTurn.invocation_id ELSE latestTurn.invocation_id END AS invocationId
+          FROM dbo.tasks AS t
+          OUTER APPLY (
+            SELECT TOP (1) * FROM dbo.sandbox_sessions
+            WHERE task_id = t.id AND status IN (N'Active', N'Idle')
+            ORDER BY started_at DESC, id DESC
+          ) AS s
+          OUTER APPLY (
+            SELECT TOP (1) invocation_id FROM dbo.sandbox_turns
+            WHERE sandbox_session_id = s.id AND status = N'running'
+            ORDER BY started_at DESC, id DESC
+          ) AS activeTurn
+          OUTER APPLY (
+            SELECT TOP (1) invocation_id FROM dbo.sandbox_turns
+            WHERE sandbox_session_id = s.id
+            ORDER BY started_at DESC, id DESC
+          ) AS latestTurn
+          WHERE t.id = @taskId;`);
+      const target = recordset[0];
+      return target?.sandboxSessionId ? target : null;
+    },
+
+    async recordControlTurn(target, accepted, message) {
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        const current = await new sql.Request(transaction)
+          .input('taskId', sql.BigInt, BigInt(target.taskId))
+          .input('sessionId', sql.BigInt, BigInt(target.sandboxSessionId))
+          .input('invocationId', sql.NVarChar(255), target.invocationId)
+          .query<{ invocationId: string }>(`SELECT turn.invocation_id AS invocationId
+            FROM dbo.tasks AS task WITH (UPDLOCK, ROWLOCK)
+            INNER JOIN dbo.sandbox_sessions AS session WITH (UPDLOCK, ROWLOCK)
+              ON session.task_id = task.id AND session.id = @sessionId AND session.status = N'Active'
+            INNER JOIN dbo.sandbox_turns AS turn WITH (UPDLOCK, ROWLOCK)
+              ON turn.sandbox_session_id = session.id AND turn.status = N'running'
+            WHERE task.id = @taskId AND task.state = N'Running' AND turn.invocation_id = @invocationId;`);
+        if (!current.recordset[0]) {
+          await transaction.rollback();
+          return false;
+        }
+        await new sql.Request(transaction)
+          .input('sessionId', sql.BigInt, BigInt(target.sandboxSessionId))
+          .input('invocationId', sql.NVarChar(255), target.invocationId)
+          .query(`UPDATE dbo.sandbox_turns SET status = N'cancelled', ended_at = SYSUTCDATETIME()
+            WHERE sandbox_session_id = @sessionId AND invocation_id = @invocationId AND status = N'running';`);
+        await new sql.Request(transaction)
+          .input('sessionId', sql.BigInt, BigInt(target.sandboxSessionId))
+          .input('invocationId', sql.NVarChar(255), accepted.invocationId)
+          .input('acpSessionId', sql.NVarChar(255), accepted.sessionId)
+          .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+            VALUES (@sessionId, @invocationId, N'steer', @acpSessionId, N'running');`);
+        const messageCharacters = Array.from(message);
+        const summary = messageCharacters.slice(0, 1_990).join('') + (messageCharacters.length > 1_990 ? '…' : '');
+        const event = await insertEvent(transaction, target.taskId, 'steered', summary, { message }, 'dan');
+        await transaction.commit();
+        const payloadTruncated = event.payload !== null && Buffer.byteLength(JSON.stringify(event.payload)) > 4096;
+        eventHub.publish({
+          ...event,
+          payload: payloadTruncated ? null : event.payload,
+          payloadTruncated,
+        });
+        return true;
+      } catch {
+        await rollback(transaction);
+        throw new Error('Dispatcher could not persist the steering turn');
+      }
+    },
+
+    async recordResumedTurn(target, accepted): Promise<RunningSandbox> {
+      if (accepted.sessionId !== target.foundrySessionId) {
+        throw new Error('Foundry resumed a different session');
+      }
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        const current = await new sql.Request(transaction)
+          .input('taskId', sql.BigInt, BigInt(target.taskId))
+          .input('sessionId', sql.BigInt, BigInt(target.sandboxSessionId))
+          .input('foundrySessionId', sql.NVarChar(255), target.foundrySessionId)
+          .query<{ id: string }>(`SELECT CAST(session.id AS varchar(19)) AS id
+            FROM dbo.tasks AS task WITH (UPDLOCK, ROWLOCK)
+            INNER JOIN dbo.sandbox_sessions AS session WITH (UPDLOCK, ROWLOCK)
+              ON session.task_id = task.id AND session.id = @sessionId
+                AND session.foundry_session_id = @foundrySessionId AND session.status = N'Idle'
+            WHERE task.id = @taskId AND task.state = N'Running';`);
+        if (!current.recordset[0]) throw new Error();
+        const reopened = await new sql.Request(transaction)
+          .input('sessionId', sql.BigInt, BigInt(target.sandboxSessionId))
+          .query(`UPDATE dbo.sandbox_sessions SET status = N'Active', started_at = SYSUTCDATETIME(),
+            ended_at = NULL, end_reason = NULL WHERE id = @sessionId AND status = N'Idle';`);
+        if ((reopened.rowsAffected[0] ?? 0) !== 1) throw new Error();
+        const sandboxSessionId = target.sandboxSessionId;
+        await new sql.Request(transaction)
+          .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+          .input('invocationId', sql.NVarChar(255), accepted.invocationId)
+          .input('acpSessionId', sql.NVarChar(255), accepted.sessionId)
+          .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+            VALUES (@sandboxSessionId, @invocationId, N'resume', @acpSessionId, N'running');`);
+        const event = await insertEvent(transaction, target.taskId, 'sandbox_resumed', 'Sandbox session resumed', {
+          sandboxSessionId, foundrySessionId: accepted.sessionId, invocationId: accepted.invocationId,
+        });
+        await transaction.commit();
+        eventHub.publish(event);
+        return {
+          sandboxSessionId,
+          foundrySessionId: accepted.sessionId,
+          agentName: target.agentName,
+          invocationId: accepted.invocationId,
+        };
+      } catch {
+        await rollback(transaction);
+        throw new Error('Dispatcher could not persist the resumed session');
+      }
+    },
+
     async endTaskSessions(taskId, state) {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
@@ -332,14 +458,25 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
             IF @state = N'NeedsAttention'
               INSERT @ended (id, task_id, started_at, ended_at, size)
               SELECT s.id, s.task_id, s.started_at, s.ended_at, s.size
-              FROM dbo.sandbox_sessions AS s
+              FROM dbo.sandbox_sessions AS s WITH (UPDLOCK, ROWLOCK)
               WHERE s.task_id = @taskId AND s.status = N'Crashed'
+                AND NOT EXISTS (SELECT 1 FROM dbo.usage AS u WITH (UPDLOCK, HOLDLOCK)
+                  WHERE u.sandbox_session_id = s.id AND u.source = N'sandbox'
+                    AND u.metric = N'minutes' AND u.at = s.ended_at)
                 AND NOT EXISTS (SELECT 1 FROM @ended WHERE id = s.id);
-            UPDATE s SET cost_estimate_dkk = CONVERT(decimal(12,4), ROUND(
+            UPDATE s SET cost_estimate_dkk = CONVERT(decimal(12,4), ROUND(s.cost_estimate_dkk +
               DATEDIFF_BIG(millisecond, ended.started_at, ended.ended_at) / 3600000.0 *
                 CASE ended.size WHEN N'1x2' THEN 0.8901 ELSE 1.7802 END, 4))
             FROM dbo.sandbox_sessions AS s
             INNER JOIN @ended AS ended ON ended.id = s.id;
+            UPDATE u SET
+              quantity = u.quantity + CONVERT(decimal(19,6),
+                DATEDIFF_BIG(millisecond, ended.started_at, ended.ended_at) / 60000.0),
+              cost_dkk = session.cost_estimate_dkk, at = ended.ended_at
+            FROM dbo.usage AS u
+            INNER JOIN @ended AS ended ON u.sandbox_session_id = ended.id
+              AND u.source = N'sandbox' AND u.metric = N'minutes'
+            INNER JOIN dbo.sandbox_sessions AS session ON session.id = ended.id;
             INSERT dbo.usage
               (task_id, project_id, sandbox_session_id, source, metric, quantity, cost_dkk, at)
             SELECT ended.task_id, task.project_id, ended.id, N'sandbox', N'minutes',
@@ -350,6 +487,9 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
             INNER JOIN dbo.sandbox_sessions AS session ON session.id = ended.id
             WHERE NOT EXISTS (SELECT 1 FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
               WHERE sandbox_session_id = ended.id AND source = N'sandbox' AND metric = N'minutes');
+            UPDATE dbo.sandbox_sessions SET status = N'Ended',
+              end_reason = CASE WHEN @state = N'Done' THEN N'done' ELSE N'cancelled' END
+            WHERE task_id = @taskId AND status = N'Idle' AND @state NOT IN (N'Paused', N'NeedsAttention');
             UPDATE dbo.sandbox_turns SET
               status = CASE WHEN @state = N'Done' THEN N'completed'
                 WHEN @state = N'NeedsAttention' THEN N'failed' ELSE N'cancelled' END,

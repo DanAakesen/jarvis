@@ -160,6 +160,7 @@ try {
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
       taskStore,
+      ...(dispatcher ? { taskController: dispatcher } : {}),
       nowFeedStore: createNowFeedStore(database.pool),
     } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),

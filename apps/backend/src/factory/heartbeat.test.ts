@@ -34,6 +34,7 @@ function setup(records: { status_code: number; body: unknown }[]) {
     listRunning: vi.fn(async () => [sandbox]),
     recordHeartbeat: vi.fn(async () => {}),
     markNeedsAttention: vi.fn(async () => true),
+    resolvePause: vi.fn(async () => true),
   };
   const heartbeat = new SandboxHeartbeat(store, () => client);
   return { heartbeat, store, fetch };
@@ -78,6 +79,19 @@ describe('sandbox heartbeat', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(store.markNeedsAttention).toHaveBeenCalledOnce();
+    await heartbeat.stop();
+  });
+
+  it('moves a task to Paused after Foundry confirms the invocation has stopped', async () => {
+    vi.useFakeTimers();
+    const running = recording.records['status_running']!;
+    const body = { ...(running.body as Record<string, unknown>), status: 'paused' };
+    const { heartbeat, store } = setup([{ status_code: running.status_code, body }]);
+
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(store.resolvePause).toHaveBeenCalledWith('7', 'Paused');
     await heartbeat.stop();
   });
 

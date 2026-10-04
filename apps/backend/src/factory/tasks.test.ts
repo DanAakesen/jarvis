@@ -3,7 +3,9 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { createEventHub } from '../core/event-hub.js';
-import type { RunningTaskContextSnapshot, TaskDetail, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
+import type {
+  RunningTaskContextSnapshot, TaskController, TaskDetail, TaskEventMessage, TaskRecord, TaskStore,
+} from './task-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' ') };
@@ -67,6 +69,7 @@ function fixture(
   auth: TokenVerifier = async () => ({
     objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan',
   }),
+  taskController?: TaskController,
 ) {
   const eventHub = createEventHub<TaskEventMessage>();
   const store: TaskStore = {
@@ -94,6 +97,7 @@ function fixture(
   };
   const app = buildApp(config, undefined, {
     taskStore: store,
+    ...(taskController ? { taskController } : {}),
     eventHub,
     auth,
   });
@@ -176,6 +180,48 @@ describe('factory tasks API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(detail);
     expect(store.get).toHaveBeenCalledWith('42', 20, 2);
+  });
+
+  it('routes validated controls to the dispatcher and maps state conflicts', async () => {
+    const controller: TaskController = {
+      control: vi.fn(async () => ({ kind: 'ok', task })),
+    };
+    const { app } = fixture({}, undefined, controller);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/factory/tasks/42/controls',
+      headers,
+      payload: { action: 'steer', message: 'Keep the current approach.' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(task);
+    expect(controller.control).toHaveBeenCalledWith('42', {
+      action: 'steer', message: 'Keep the current approach.',
+    });
+
+    vi.mocked(controller.control).mockResolvedValue({ kind: 'invalid-transition' });
+    const conflict = await app.inject({
+      method: 'POST', url: '/factory/tasks/42/controls', headers, payload: { action: 'pause' },
+    });
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json()).toEqual({ error: 'Task state does not allow this action' });
+    expect((await app.inject({
+      method: 'POST', url: '/factory/tasks/42/controls', headers, payload: { action: 'steer', message: '   ' },
+    })).statusCode).toBe(400);
+    expect((await app.inject({
+      method: 'POST', url: '/factory/tasks/42/controls', headers, payload: { action: 'delete' },
+    })).statusCode).toBe(400);
+  });
+
+  it('keeps controls authenticated and unavailable without dispatcher wiring', async () => {
+    const { app } = fixture();
+    expect((await app.inject({
+      method: 'POST', url: '/factory/tasks/42/controls', payload: { action: 'cancel' },
+    })).statusCode).toBe(401);
+    const unavailable = await app.inject({
+      method: 'POST', url: '/factory/tasks/42/controls', headers, payload: { action: 'cancel' },
+    });
+    expect(unavailable.statusCode).toBe(503);
   });
 
   it('authenticates the event stream and validates resume IDs', async () => {

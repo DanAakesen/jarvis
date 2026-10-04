@@ -188,6 +188,19 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
 .task-card-details dt { margin-bottom: 2px; color: var(--text-muted); font-size: 13px; }
 .task-card-details dd { overflow-wrap: anywhere; font-size: 14px; }
 .task-card-details code { font: inherit; }
+.task-controls { margin-top: 16px; }
+.task-controls .action-row { margin-top: 0; }
+.task-control-form { display: grid; gap: 8px; margin-top: 12px; }
+.task-control-form label { font-weight: 600; }
+.task-control-form textarea {
+  width: 100%; min-height: 88px; padding: 8px 12px; border: 1px solid var(--control-rule);
+  border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; resize: vertical;
+}
+.task-control-form textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.task-control-form .secondary-button { justify-self: start; }
+.task-control-confirmation, .task-control-feedback, .task-control-guidance { color: var(--text-muted); font-size: 14px; }
+.task-control-feedback, .task-control-error, .task-control-guidance { margin-top: 8px; }
+.task-control-error { color: var(--error); font-size: 14px; }
 .task-state { display: inline-flex; min-height: 28px; align-items: center; padding: 2px 8px; border: 1px solid var(--rule); border-radius: 999px; background: var(--disabled-surface); font-size: 13px; font-weight: 650; }
 .task-state-needsattention { color: var(--error); }
 .task-state-done { color: #216e39; }

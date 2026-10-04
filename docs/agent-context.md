@@ -222,7 +222,7 @@ origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). With a
 backend URL, MSAL signs in against the configured tenant and calls authenticated
 `/me`; only the backend-approved display name is shown. The main-page sleep
 switch reads and updates the backend's configured replica count; the API refuses
-to sleep while tasks are Ready or Running.
+to sleep while tasks are Ready, Running, or PauseRequested.
 `Web CI` checks lint, tests, and root builds as part of the aggregate `CI`
 workflow (below). Local tests use signed fixture tokens and do not verify a live
 Entra tenant or Azure deployment.
@@ -251,10 +251,15 @@ focus return worked; the page had no horizontal overflow, controls were at least
 own region. Mocks do not verify live Entra, Azure SQL, or deployed SSE.
 P1-09 was inspected at 390 and 1280 px with a scratch-only `./useSignIn` stub
 and project/task/conversation/SSE mocks. The source message, project and branch
-links, live SSE event, event filter, and expanded payload worked; actions stayed
-disabled as described. Neither width overflowed, interactive controls were at
-least 44 px high, and no console errors occurred. Live Entra, Azure SQL/Blob
-archive reads, and deployed SSE remain unverified.
+links, live SSE event, event filter, and expanded payload worked; P1-09 task
+controls remained disabled until P2-07. Neither width overflowed, interactive
+controls were at least 44 px high, and no console errors occurred. P2-07 was
+inspected at 390 and 1280 px in Chromium with scratch-only auth and task API
+mocks; steer, pause, resume, cancellation confirmation, and cancellation worked,
+with no horizontal overflow or console errors. The live acceptance still
+requires both agents on `DanAakesen/jarvis-test-target`, including intermediate
+commits on the task branch; the coordinator runs it post-merge. Live Entra, Azure
+SQL/Blob archive reads, deployed SSE, and live Foundry controls remain unverified.
 Never commit the stub or weaken sign-in in the app.
 
 Backend commands:
@@ -263,13 +268,17 @@ Backend commands:
 | --- | --- |
 | Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
 | SQL Server migration and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
+| Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
+| Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
 | Start compiled backend | `npm start --workspace @jarvis/backend` (after its build) |
 | Build then start backend | `npm run dev --workspace @jarvis/backend` |
 | Health request | `curl --fail http://localhost:3000/health` → `{"status":"ok"}` |
 | Production container (GitHub Actions only; no Docker in an agent sandbox) | `docker build --file apps/backend/Dockerfile --tag jarvis-backend .` from the repository root |
 
-The factory tasks API provides authenticated create, filtered list, and detail
-routes. Task list filters are `projectId`, `agent`, `state`, `createdAfter`,
+The factory tasks API provides authenticated create, filtered list, detail, and
+state-aware control routes. The controls route accepts only `steer`, `pause`,
+`resume`, or `cancel`; it never accepts a client-supplied task state. Task list
+filters are `projectId`, `agent`, `state`, `createdAfter`,
 `createdBefore`, and `search`; `limit`/`offset` and `eventLimit`/`eventOffset`
 bound result pages. Responses are capped at 1 MiB; event payloads above 4 KiB
 are marked truncated. State is backend-owned; do not add a client state update.

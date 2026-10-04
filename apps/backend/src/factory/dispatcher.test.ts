@@ -3,8 +3,8 @@ import { createEventHub } from '../core/event-hub.js';
 import type { SettingsStore } from '../core/settings.js';
 import { FoundryClientError } from '../foundry/client.js';
 import type { SandboxHeartbeat } from './heartbeat.js';
-import { TaskDispatcher, type DispatchClaim, type DispatcherStore } from './dispatcher.js';
-import type { TaskEventHub, TaskEventMessage, TaskStore } from './task-store.js';
+import { TaskDispatcher, type DispatchClaim, type DispatcherStore, type TaskControlTarget } from './dispatcher.js';
+import type { TaskEventHub, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
 
 const task: DispatchClaim = {
   taskId: '42',
@@ -20,21 +20,73 @@ const task: DispatchClaim = {
   tech: 'node',
 };
 
+const controlTask: TaskRecord = {
+  id: '42',
+  projectId: '7',
+  originMessageId: null,
+  title: 'Fix the bug',
+  request: 'Find and fix it',
+  source: 'board',
+  agent: 'codex',
+  modelOverride: 'gpt-5.4',
+  reasoningOverride: 'high',
+  state: 'Running',
+  activity: null,
+  priority: 0,
+  attemptCount: 1,
+  nextAttemptAt: null,
+  branch: null,
+  createdAt: '2026-10-03T12:00:00.000Z',
+  startedAt: '2026-10-03T12:00:00.000Z',
+  finishedAt: null,
+};
+
+const controlTarget: TaskControlTarget = {
+  taskId: '42',
+  agent: 'codex',
+  request: 'Find and fix it',
+  modelOverride: 'gpt-5.4',
+  reasoningOverride: 'high',
+  sandboxSessionId: '53',
+  foundrySessionId: 'session-1',
+  agentName: 'jarvis-runner-base-1x2',
+  invocationId: 'invocation-1',
+  sandboxSize: '1x2',
+  image: 'jarvis-runner:latest',
+  sessionStatus: 'Active',
+};
+
 function harness(store: DispatcherStore, startTask = vi.fn(async () => ({
   invocationId: 'invocation-1', sessionId: 'session-1', status: 'queued' as const, agent: 'codex' as const,
-}))) {
+})), taskRecord: TaskRecord = controlTask) {
   const events: TaskEventHub = createEventHub<TaskEventMessage>();
-  const transition = vi.fn(async () => ({ kind: 'ok' as const, task: {} as never }));
-  const tasks = { transition } as unknown as TaskStore;
+  const transition = vi.fn(async (_id: string, state: TaskRecord['state']) => ({
+    kind: 'ok' as const, task: { ...taskRecord, state },
+  }));
+  const tasks = {
+    get: vi.fn(async () => ({ ...taskRecord, events: [], usage: [] })),
+    transition,
+  } as unknown as TaskStore;
   const settings: SettingsStore = { read: vi.fn(async () => ({
     'codex.model': '"gpt-5.5"', 'codex.reasoning_effort': '"medium"',
   })), write: vi.fn(async () => {}) };
   const track = vi.fn();
   const untrack = vi.fn();
   const heartbeat = { track, untrack } as unknown as SandboxHeartbeat;
-  const clientFor = vi.fn(() => ({ startTask, deleteSession: vi.fn(async () => {}) }));
+  const steer = vi.fn(async () => ({
+    invocationId: 'invocation-steer', sessionId: 'session-1', status: 'queued' as const, agent: 'codex' as const,
+  }));
+  const pause = vi.fn(async () => ({
+    sessionId: 'session-1', status: 'pausing' as const, pausedInvocationId: 'invocation-1',
+  }));
+  const resume = vi.fn(async () => ({
+    invocationId: 'invocation-resume', sessionId: 'session-1', status: 'queued' as const, agent: 'codex' as const,
+  }));
+  const cancel = vi.fn(async (invocationId: string) => ({ invocationId, status: 'cancelled' as const }));
+  const deleteSession = vi.fn(async () => {});
+  const clientFor = vi.fn(() => ({ startTask, steer, pause, resume, cancel, deleteSession }));
   const dispatcher = new TaskDispatcher(store, tasks, settings, clientFor, heartbeat, events);
-  return { dispatcher, events, settings, startTask, transition, track, untrack, clientFor };
+  return { dispatcher, events, settings, startTask, transition, track, untrack, clientFor, steer, pause, resume, cancel, deleteSession };
 }
 
 function idleStore(nextAttemptAt: string | null = null): DispatcherStore {
@@ -43,6 +95,14 @@ function idleStore(nextAttemptAt: string | null = null): DispatcherStore {
     deferClaim: vi.fn(async () => {}),
     failStart: vi.fn(async () => {}),
     recordStarted: vi.fn(async () => '53'),
+    getControlTarget: vi.fn(async () => null),
+    recordControlTurn: vi.fn(async () => true),
+    recordResumedTurn: vi.fn(async () => ({
+      sandboxSessionId: '54',
+      foundrySessionId: 'session-1',
+      agentName: 'jarvis-runner-base-1x2',
+      invocationId: 'invocation-resume',
+    })),
     endTaskSessions: vi.fn(async () => []),
   };
 }
@@ -170,5 +230,115 @@ describe('task dispatcher', () => {
     );
     expect(startTask).toHaveBeenCalledTimes(3);
     await dispatcher.stop();
+  });
+
+  it('steers only a running task and tracks the accepted continuation turn', async () => {
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => controlTarget),
+    };
+    const { dispatcher, steer, track } = harness(store);
+
+    const result = await dispatcher.control('42', { action: 'steer', message: 'Keep the existing API.' });
+
+    expect(steer).toHaveBeenCalledWith('session-1', 'codex', 'Keep the existing API.', { taskId: '42' });
+    expect(store.recordControlTurn).toHaveBeenCalledWith(controlTarget, expect.objectContaining({
+      invocationId: 'invocation-steer',
+    }), 'Keep the existing API.');
+    expect(track).toHaveBeenCalledWith(expect.objectContaining({ invocationId: 'invocation-steer' }));
+    expect(result).toMatchObject({ kind: 'ok', task: { state: 'Running' } });
+  });
+
+  it('cancels an accepted steering turn when persistence fails', async () => {
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => controlTarget),
+      recordControlTurn: vi.fn(async () => { throw new Error('database unavailable'); }),
+    };
+    const { dispatcher, cancel, track } = harness(store);
+
+    const result = await dispatcher.control('42', { action: 'steer', message: 'Keep the existing API.' });
+
+    expect(result).toEqual({ kind: 'failed' });
+    expect(cancel).toHaveBeenCalledWith('invocation-steer');
+    expect(track).not.toHaveBeenCalled();
+  });
+
+  it('leaves a task PauseRequested until Foundry confirms the turn has stopped', async () => {
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => controlTarget),
+    };
+    const { dispatcher, pause, transition } = harness(store);
+
+    const result = await dispatcher.control('42', { action: 'pause' });
+
+    expect(pause).toHaveBeenCalledWith('session-1');
+    expect(transition).toHaveBeenCalledWith('42', 'PauseRequested');
+    expect(result).toMatchObject({ kind: 'ok', task: { state: 'PauseRequested' } });
+  });
+
+  it('resumes a paused task in the existing Foundry session and registers its new turn', async () => {
+    const pausedTarget = { ...controlTarget, sessionStatus: 'Idle' as const };
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => pausedTarget),
+    };
+    const { dispatcher, resume, track, transition } = harness(store, undefined, { ...controlTask, state: 'Paused' });
+
+    const result = await dispatcher.control('42', { action: 'resume' });
+
+    expect(resume).toHaveBeenCalledWith('session-1', {
+      agent: 'codex', task: 'Find and fix it', model: 'gpt-5.4', reasoning: 'high',
+    });
+    expect(store.recordResumedTurn).toHaveBeenCalledWith(pausedTarget, expect.objectContaining({
+      invocationId: 'invocation-resume',
+    }));
+    expect(transition).toHaveBeenCalledWith('42', 'Running');
+    expect(track).toHaveBeenCalledWith(expect.objectContaining({ invocationId: 'invocation-resume' }));
+    expect(result).toMatchObject({ kind: 'ok', task: { state: 'Running' } });
+  });
+
+  it('cancels a paused task and deletes its Foundry session', async () => {
+    const pausedTarget = { ...controlTarget, sessionStatus: 'Idle' as const };
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => pausedTarget),
+    };
+    const { dispatcher, cancel, deleteSession } = harness(store, undefined, { ...controlTask, state: 'Paused' });
+
+    const result = await dispatcher.control('42', { action: 'cancel' });
+
+    expect(result).toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+    expect(cancel).not.toHaveBeenCalled();
+    expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Cancelled');
+    expect(deleteSession).toHaveBeenCalledWith('session-1');
+  });
+
+  it('reports a failed Foundry session deletion after cancelling the task', async () => {
+    const pausedTarget = { ...controlTarget, sessionStatus: 'Idle' as const };
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => pausedTarget),
+    };
+    const { dispatcher, deleteSession, transition } = harness(store, undefined, { ...controlTask, state: 'Paused' });
+    deleteSession.mockRejectedValue(new Error('Foundry unavailable'));
+
+    await expect(dispatcher.control('42', { action: 'cancel' })).resolves.toEqual({ kind: 'failed' });
+
+    expect(transition).toHaveBeenCalledWith('42', 'Cancelled');
+    expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Cancelled');
+  });
+
+  it('cancels a Ready task without contacting Foundry and rejects disallowed states', async () => {
+    const store = idleStore();
+    const readyHarness = harness(store, undefined, { ...controlTask, state: 'Ready' });
+    const result = await readyHarness.dispatcher.control('42', { action: 'cancel' });
+    expect(result).toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+    expect(readyHarness.cancel).not.toHaveBeenCalled();
+
+    const doneHarness = harness(store, undefined, { ...controlTask, state: 'Done' });
+    expect(await doneHarness.dispatcher.control('42', { action: 'pause' }))
+      .toEqual({ kind: 'invalid-transition' });
   });
 });

@@ -369,7 +369,7 @@ export function createTaskStore(
         await acquireSleepSwitchLock(transaction, 'Exclusive');
         const active = await new sql.Request(transaction)
           .query<{ hasActiveTask: boolean }>(`SELECT CONVERT(bit, CASE WHEN EXISTS (
-            SELECT 1 FROM dbo.tasks WHERE state IN (N'Ready', N'Running')
+            SELECT 1 FROM dbo.tasks WHERE state IN (N'Ready', N'Running', N'PauseRequested')
           ) THEN 1 ELSE 0 END) AS hasActiveTask;`);
         if (active.recordset[0]?.hasActiveTask) {
           await transaction.rollback();

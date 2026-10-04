@@ -13,7 +13,7 @@ export type TaskState = typeof taskStates[number];
 const transitions: Readonly<Record<TaskState, readonly TaskState[]>> = {
   Ready: ['Running', 'Cancelled'],
   Running: ['PauseRequested', 'NeedsAttention', 'Done', 'Cancelled'],
-  PauseRequested: ['Paused'],
+  PauseRequested: ['Running', 'Paused', 'NeedsAttention'],
   Paused: ['Running', 'Cancelled'],
   NeedsAttention: ['Running'],
   Done: [],
