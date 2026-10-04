@@ -146,7 +146,7 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('radio', { name: 'Dark' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('button', {
       name: 'Edit theme variables',
-      description: /supported names, value types, and settings path are defined/,
+      description: /validated settings and tool update path is implemented/,
     })).toHaveProperty('disabled', true);
 
     await user.click(screen.getByRole('radio', { name: 'Dark' }));

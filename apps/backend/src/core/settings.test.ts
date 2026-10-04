@@ -50,6 +50,7 @@ describe('settings API', () => {
       settings: {
         appearance: { theme: 'light' },
         jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
+        personality: { tone: 'british_butler', responseStyle: 'concise', customInstructions: '' },
         voice: { defaultLanguage: 'da' },
         codex: { model: 'default' },
         copilot: { model: 'default' },
@@ -102,6 +103,74 @@ describe('settings API', () => {
     });
     const readBack = await app.inject({ url: '/settings', headers: authorization });
     expect(readBack.json().settings.appearance).toEqual({ theme: 'dark' });
+  });
+
+  it('persists bounded personality preferences and supports restoring their defaults', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const customInstructions = 'Use a warmer tone and explain technical terms.';
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: '/settings',
+      headers: authorization,
+      payload: {
+        settings: {
+          personality: {
+            tone: 'warm',
+            responseStyle: 'detailed',
+            customInstructions,
+          },
+        },
+      },
+    });
+
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().settings.personality).toEqual({
+      tone: 'warm',
+      responseStyle: 'detailed',
+      customInstructions,
+    });
+    expect(values).toEqual({
+      'personality.tone': '"warm"',
+      'personality.response_style': '"detailed"',
+      'personality.custom_instructions': JSON.stringify(customInstructions),
+    });
+    expect((await app.inject({ url: '/settings', headers: authorization })).json().settings.personality)
+      .toEqual(updated.json().settings.personality);
+
+    const reset = await app.inject({
+      method: 'PATCH',
+      url: '/settings',
+      headers: authorization,
+      payload: {
+        settings: {
+          personality: {
+            tone: 'british_butler',
+            responseStyle: 'concise',
+            customInstructions: '',
+          },
+        },
+      },
+    });
+    expect(reset.statusCode).toBe(200);
+    expect(reset.json().settings.personality).toEqual({
+      tone: 'british_butler',
+      responseStyle: 'concise',
+      customInstructions: '',
+    });
+  });
+
+  it('accepts custom instructions at the configured limit', async () => {
+    const app = fixture(createStore().store);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/settings',
+      headers: authorization,
+      payload: { settings: { personality: { customInstructions: 'x'.repeat(2_000) } } },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().settings.personality.customInstructions).toHaveLength(2_000);
   });
 
   it('saves and reads New projects defaults', async () => {
@@ -180,7 +249,14 @@ describe('settings API', () => {
 
   it('returns only effective Jarvis model settings to the agent identity', async () => {
     const { store } = createStore();
-    await store.write({ jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' } });
+    await store.write({
+      jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
+      personality: {
+        tone: 'direct',
+        responseStyle: 'balanced',
+        customInstructions: 'Prefer plain language.',
+      },
+    });
     const app = fixture(store, async () => ({
       kind: 'jarvis-agent',
       objectId: '00000000-0000-0000-0000-000000000001',
@@ -190,7 +266,15 @@ describe('settings API', () => {
     const response = await app.inject({ url: '/agent/settings', headers: authorization });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ model: 'gpt-5.6-luna', reasoningEffort: 'high' });
+    expect(response.json()).toEqual({
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'high',
+      personality: {
+        tone: 'direct',
+        responseStyle: 'balanced',
+        customInstructions: 'Prefer plain language.',
+      },
+    });
   });
 
   it('does not expose agent settings to Dan or when persistence is unavailable', async () => {
@@ -212,6 +296,10 @@ describe('settings API', () => {
     { settings: { appearance: { theme: 'system' } } },
     { settings: { jarvis: { model: 'not-available' } } },
     { settings: { jarvis: { reasoning: 'unsupported' } } },
+    { settings: { personality: { tone: 'unbounded' } } },
+    { settings: { personality: { responseStyle: 'unbounded' } } },
+    { settings: { personality: { customInstructions: 'x'.repeat(2_001) } } },
+    { settings: { personality: { customInstructions: '\u0000' } } },
     { settings: { global: { maxParallelTasks: 101 } } },
     { settings: { global: { maxCheckAttempts: 11 } } },
     { settings: { global: { maxCheckAttempts: -1 } } },
@@ -264,6 +352,8 @@ describe('settings API', () => {
         'global.max_parallel_tasks': '1000',
         'new_projects.visibility': '"internal"',
         'new_projects.default_branch': '"invalid branch"',
+        'personality.tone': '"unbounded"',
+        'personality.custom_instructions': JSON.stringify('x'.repeat(2_001)),
         'internal.secret': '"never-return-this"',
       }),
       write: async () => {},
@@ -275,6 +365,7 @@ describe('settings API', () => {
     expect(response.json()).toMatchObject({
       settings: {
         jarvis: { model: 'gpt-5.6-luna' },
+        personality: { tone: 'british_butler', customInstructions: '' },
         global: { maxParallelTasks: 1 },
         newProjects: { visibility: 'private', defaultBranch: 'main' },
       },

@@ -342,7 +342,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
             <button className="secondary-button theme-variable-button" type="button" disabled
               aria-describedby="theme-variables-help">Edit theme variables</button>
             <p className="settings-explanation" id="theme-variables-help">
-              Custom and Jarvis-directed variable changes are unavailable until their supported names, value types, and settings path are defined.
+              Custom and Jarvis-directed variable changes are unavailable until their validated settings and tool update path is implemented.
             </p>
           </section>
 
