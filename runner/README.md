@@ -112,8 +112,8 @@ Actions because sandbox disk is limited (L23).
 
 `runner-deploy.yml` runs only on `main` with the bootstrap OIDC identity. It
 queues under `jarvis-production-deploy`; #11's infrastructure/backend deploy
-workflow must use that same concurrency group. It builds both images in ACR with Dockerfile paths relative to the uploaded
-`runner/` context (`Dockerfile` and `Dockerfile.dotnet`), checks their manifests, deploys immutable digest references, selects the active
+workflow must use that same concurrency group. It builds both images in ACR from the `runner/` context, passing Dockerfile paths from the
+repository root (`runner/Dockerfile` and `runner/Dockerfile.dotnet`, L53), checks their manifests, deploys immutable digest references, selects the active
 Invocations version, grants each dedicated agent identity secret-specific read
 access and write access only to `codex-login`, then probes both providers from
 a session it deletes in `finally`. Existing resources, credentials, and task
