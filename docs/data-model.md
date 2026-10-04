@@ -28,15 +28,13 @@ before restoring the prior constraint.
 P6-02 adds nullable `activity.alert_key` and a filtered unique index in
 `0011_alert_deduplication.sql`; each event condition has one activity row and
 can be safely retried. Its down migration removes the index and column.
-<<<<<<< HEAD
 P7-06 uses the existing `activity` row keyed by `pc_bridge_status` to publish the
 bridge's latest online/offline state to Now; no migration or retained command data
 is added.
-=======
+
 P7-03 adds the Teams conversation and confirmation tables in
 `0014_teams_notifications.sql`; its down migration removes both tables and the
 confirmation expiry index.
->>>>>>> origin/main
 
 ## Overview
 

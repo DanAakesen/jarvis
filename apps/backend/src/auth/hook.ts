@@ -14,19 +14,15 @@ declare module 'fastify' {
     runnerPrincipal: RunnerPrincipal | null;
     pcBridgePrincipal: PcBridgePrincipal | null;
   }
-<<<<<<< HEAD
   // Service identities may call only the routes that explicitly opt in.
-  interface FastifyContextConfig { jarvisAgent?: boolean; jarvisRunner?: boolean; jarvisPcBridge?: boolean; githubWebhook?: boolean }
-=======
-  // Routes the hosted Jarvis agent identity may call. Everything else is Dan-only.
   interface FastifyContextConfig {
     jarvisAgent?: boolean;
     jarvisRunner?: boolean;
+    jarvisPcBridge?: boolean;
     githubWebhook?: boolean;
     teamsBot?: boolean;
     teamsAudio?: boolean;
   }
->>>>>>> origin/main
 }
 
 const VOICE_PROTOCOL = 'jarvis.voice.v1';
