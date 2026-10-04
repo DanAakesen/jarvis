@@ -20,6 +20,7 @@ export interface TeamsNotificationStore {
     conversationId: string,
     decision: ConfirmationDecision,
   ): Promise<ConfirmationStatus | null>;
+  expireConfirmation(id: string, ownerObjectId: string): Promise<boolean>;
   expirePendingConfirmations(): Promise<void>;
   cancelConfirmation(id: string, ownerObjectId: string): Promise<void>;
   consumeApproval(id: string, ownerObjectId: string): Promise<boolean>;
@@ -130,9 +131,19 @@ export function createTeamsNotificationStore(pool: sql.ConnectionPool): TeamsNot
             AND conversation_id = @conversationId AND status = 'pending';`);
       return recordset[0]?.status ?? null;
     },
+    async expireConfirmation(id, ownerObjectId) {
+      const { rowsAffected } = await pool.request()
+        .input('confirmationId', sql.Char(43), id)
+        .input('ownerObjectId', sql.Char(36), ownerObjectId)
+        .query(`UPDATE dbo.teams_confirmations
+          SET status = 'expired', resolved_at = SYSUTCDATETIME()
+          WHERE confirmation_id = @confirmationId AND owner_object_id = @ownerObjectId
+            AND status = 'pending' AND expires_at <= SYSUTCDATETIME();`);
+      return (rowsAffected[0] ?? 0) > 0;
+    },
     async expirePendingConfirmations() {
       await pool.request().query(`UPDATE dbo.teams_confirmations SET status = 'expired', resolved_at = SYSUTCDATETIME()
-        WHERE status = 'pending' AND expires_at <= SYSUTCDATETIME();`);
+        WHERE status = 'pending';`);
     },
     async cancelConfirmation(id, ownerObjectId) {
       await pool.request()

@@ -20,6 +20,12 @@ export interface BackendConfig {
   foundryProjectEndpoint?: string;
   githubAppId?: string;
   monthlyBudgetResourceId?: string;
+  teams?: {
+    botAppId: string;
+    tenantId: string;
+    audioOrigin: string;
+    speechRegion: string;
+  };
   auth: AuthConfig;
 }
 
@@ -129,9 +135,46 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     !/^\/subscriptions\/[\da-f-]+\/resourceGroups\/[a-z\d._()-]+\/providers\/Microsoft\.Consumption\/budgets\/[a-z\d._()-]+$/iu.test(monthlyBudgetResourceId)) {
     throw new ConfigurationError('JARVIS_MONTHLY_BUDGET_RESOURCE_ID must be an Azure budget resource ID');
   }
+  const botAppId = env.TEAMS_BOT_APP_ID;
+  const botTenantId = env.TEAMS_BOT_TENANT_ID;
+  const teamsAudioOrigin = env.TEAMS_AUDIO_ORIGIN;
+  const speechRegion = env.SPEECH_REGION;
+  const teamsSettings = [botAppId, botTenantId, teamsAudioOrigin, speechRegion];
+  const hasTeamsSettings = teamsSettings.some((value) => value !== undefined);
+  if (hasTeamsSettings && teamsSettings.some((value) => value === undefined)) {
+    throw new ConfigurationError('Teams bot, audio origin, and Speech region settings must be configured together');
+  }
+  const auth = loadAuthConfig(env);
+  let teams: BackendConfig['teams'];
+  if (hasTeamsSettings) {
+    const uuid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu;
+    if (!uuid.test(botAppId!) || !uuid.test(botTenantId!)) {
+      throw new ConfigurationError('TEAMS_BOT_APP_ID and TEAMS_BOT_TENANT_ID must be UUIDs');
+    }
+    if (botTenantId!.toLowerCase() !== auth.tenantId) {
+      throw new ConfigurationError('TEAMS_BOT_TENANT_ID must match ENTRA_TENANT_ID');
+    }
+    let validOrigin = false;
+    try {
+      const url = new URL(teamsAudioOrigin!);
+      validOrigin = url.protocol === 'https:' && url.origin === teamsAudioOrigin;
+    } catch { /* Report only the setting name, never its value. */ }
+    if (!validOrigin) {
+      throw new ConfigurationError('TEAMS_AUDIO_ORIGIN must be an HTTPS origin without a path');
+    }
+    if (!/^[a-z0-9-]{2,64}$/iu.test(speechRegion!)) {
+      throw new ConfigurationError('SPEECH_REGION must be a valid Azure region name');
+    }
+    teams = {
+      botAppId: botAppId!,
+      tenantId: botTenantId!.toLowerCase(),
+      audioOrigin: teamsAudioOrigin!,
+      speechRegion: speechRegion!.toLowerCase(),
+    };
+  }
 
   return {
-    auth: loadAuthConfig(env),
+    auth,
     port: Number(port),
     logLevel: logLevel as Level,
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),
@@ -146,6 +189,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(githubAppId === undefined ? {} : { githubAppId }),
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
+    ...(teams ? { teams } : {}),
   };
 }
 

@@ -37,6 +37,7 @@ export interface TeamsConnector {
 
 export interface TeamsNotificationService {
   notify(kind: NotificationKind, text: string, actions?: readonly NotificationAction[]): Promise<void>;
+  expirePendingConfirmations(): Promise<void>;
   requestConfirmation(
     actionKind: ConfirmationActionKind,
     summary: string,
@@ -96,7 +97,10 @@ function adaptiveAttachment(card: AdaptiveCard) {
 function validateActions(actions: readonly NotificationAction[] | undefined): OpenUrlAction[] {
   if (actions === undefined) return [];
   if (!Array.isArray(actions) || actions.length > 3) throw new TypeError('Invalid notification actions');
-  return actions.map(({ title, url }) => {
+  return actions.map((action) => {
+    const value = record(action);
+    const title = value?.title;
+    const url = value?.url;
     if (typeof title !== 'string' || !title.trim() || title.length > 64 ||
       typeof url !== 'string' || url.length > 2048) throw new TypeError('Invalid notification actions');
     let parsed: URL;
@@ -198,7 +202,6 @@ export function createTeamsNotificationService({
 
   async function waitForDecision(
     id: string,
-    conversationId: string,
     signal?: AbortSignal,
   ): Promise<WaitResult> {
     let finish!: (result: WaitResult) => void;
@@ -211,8 +214,8 @@ export function createTeamsNotificationService({
       };
     });
     const expire = () => {
-      void store.resolveConfirmation(id, ownerObjectId, conversationId, 'reject')
-        .catch(() => undefined)
+      void store.expireConfirmation(id, ownerObjectId)
+        .catch(() => false)
         .finally(() => finish('expired'));
     };
     const abort = () => {
@@ -255,8 +258,13 @@ export function createTeamsNotificationService({
     } catch {
       throw new ToolRefusal('Teams confirmation is unavailable.');
     }
-    const decision = waitForDecision(id, conversationId, signal);
+    const waiterController = new AbortController();
+    const waitSignal = signal
+      ? AbortSignal.any([signal, waiterController.signal])
+      : waiterController.signal;
+    const decision = waitForDecision(id, waitSignal);
     try {
+      signal?.throwIfAborted();
       await send(reference, {
         type: 'message',
         attachments: [adaptiveAttachment(confirmationCard(id, actionKind, summary))],
@@ -274,13 +282,18 @@ export function createTeamsNotificationService({
       catch { consumed = false; }
       if (!consumed) throw new ToolRefusal('The confirmation expired or was already used.');
     } catch (error) {
+      waiterController.abort();
       await store.cancelConfirmation(id, ownerObjectId).catch(() => undefined);
+      if (signal?.aborted) signal.throwIfAborted();
       if (error instanceof ToolRefusal) throw error;
       throw new ToolRefusal('Teams confirmation could not be delivered.');
     }
   }
 
   return {
+    async expirePendingConfirmations() {
+      await store.expirePendingConfirmations();
+    },
     async notify(kind, text, actions) {
       if (!notificationKinds.has(kind) || !validText(text)) throw new TypeError('Invalid notification');
       const cardActions = validateActions(actions);
@@ -298,6 +311,7 @@ export function createTeamsNotificationService({
     },
     requestConfirmation,
     async runConfirmed(actionKind, summary, action, signal) {
+      if (typeof action !== 'function') throw new ToolRefusal('A confirmed action is required.');
       await requestConfirmation(actionKind, summary, signal);
       signal?.throwIfAborted();
       return action();
@@ -315,6 +329,7 @@ export function createTeamsNotificationService({
       const decision = data?.decision;
       if (data?.action !== 'confirmation' || typeof id !== 'string' || !confirmationIdPattern.test(id) ||
         (decision !== 'approve' && decision !== 'reject')) return false;
+      if (!waiters.has(id)) return false;
       const status: ConfirmationStatus | null = await store.resolveConfirmation(
         id,
         ownerObjectId,
