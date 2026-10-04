@@ -87,7 +87,7 @@ async function request(
 
 function pullRequest(value: unknown, repository: string, branch: string, baseBranch: string): PullRequest | null {
   if (!object(value) || !object(value.head) || !object(value.head.repo) || !object(value.base) ||
-    value.state !== 'open' || value.merged !== false ||
+    value.state !== 'open' || value.merged === true ||
     !Number.isSafeInteger(value.number) || (value.number as number) < 1 ||
     value.head.ref !== branch || value.head.repo.full_name !== repository || value.base.ref !== baseBranch) {
     return null;

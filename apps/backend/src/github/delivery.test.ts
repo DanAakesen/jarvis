@@ -11,7 +11,6 @@ const task = { id: '42', title: 'Fix the bug' };
 const pullRequest = {
   number: 73,
   state: 'open',
-  merged: false,
   head: { ref: workspace.branch, repo: { full_name: workspace.repository } },
   base: { ref: workspace.defaultBranch },
 };
