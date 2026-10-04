@@ -328,7 +328,7 @@ erDiagram
     releases ||--o{ deployments : "deployed as"
     pull_requests {
         bigint id PK
-        bigint task_id FK
+        bigint task_id FK "nullable"
         bigint project_id FK
         int number
         string branch
@@ -341,22 +341,22 @@ erDiagram
     workflow_runs {
         bigint id PK
         bigint project_id FK
-        bigint github_run_id
-        string workflow "ci | release"
-        string trigger "pull_request | push | tag"
+        bigint github_run_id UK "unique per project"
+        string workflow "GitHub workflow name"
+        string trigger "GitHub event"
         string head_sha
         bigint pull_request_id FK "nullable"
         bigint release_id FK "nullable"
         string status "queued | in_progress | completed"
         string conclusion "success | failure | cancelled"
         string log_artifact "blob path of the failing log"
-        datetime started_at
-        datetime completed_at
+        datetime started_at "nullable until started"
+        datetime completed_at "nullable until completed"
     }
     releases {
         bigint id PK
         bigint project_id FK
-        string version "build number of the merge"
+        string version "Release workflow run number, initially the merge SHA"
         string sha
         string status "building | deploying | released | failed"
         datetime created_at
@@ -365,6 +365,7 @@ erDiagram
     deployments {
         bigint id PK
         bigint release_id FK
+        bigint github_deployment_id UK
         string environment "production, ..."
         string status "queued | in_progress | success | failure"
         datetime at
@@ -372,7 +373,9 @@ erDiagram
 
 ```
 
-- **One release = one merge to `main`** (no tags). Filled from GitHub webhooks (`pull_request`, `check_run`, `workflow_run`, `deployment_status`, `push`), never by polling.
+- **One release = one push of a merge to the project's default branch** (no tags). A `push` creates it by project and SHA; a `Release` workflow run supplies the build number. `pull_request` updates its record, `check_run` updates the PR check summary, `workflow_run` upserts by GitHub run ID, and `deployment_status` upserts by GitHub deployment ID. The release view is filled from the subscribed GitHub webhooks, never by polling.
+- PRs are upserted by project and PR number; their task link is derived from a matching task branch. Workflow runs link to a matching PR and release by project/SHA. A deployment status is retained only when its SHA already identifies a release.
+- A delivery row and its mapped records commit in one serializable SQL transaction. A duplicate delivery ID leaves every mapped record unchanged. The receiver verifies the raw-body signature, then keeps only these mapped fields in memory; it never stores or logs webhook payloads or secrets.
 - **Commits are not stored.** The release area shows a horizontal git graph per project (branches as lines, commits as dots): commits and branches come from the GitHub API when the page opens or when Dan asks Jarvis; the dots are coloured from `pull_requests`, `workflow_runs`, `releases` and `deployments`.
 - A failed PR check stores the log in Blob, and the backend steers the task with it.
 - The release view reads `releases`, `workflow_runs` and `deployments`, plus commits from GitHub on demand.
@@ -398,8 +401,8 @@ erDiagram
     }
 ```
 
-- `webhook_deliveries` makes webhook handling idempotent: GitHub may deliver the same event twice. P3-03 verifies the signature before atomically storing the delivery ID, event, processing time, and outcome (`ok` for the five subscribed event types, `ignored` for other valid events such as `ping`); duplicate IDs leave the existing row unchanged.
-- No webhook payload or secret is stored here. P3-04 owns mapping signed event payloads into project records; no such mapping is performed by the receiver.
+- `webhook_deliveries` makes webhook handling idempotent: GitHub may deliver the same event twice. P3-03 verifies the signature before atomically storing the delivery ID, event, processing time, and outcome (`ok` for mapped events, `ignored` for other valid events such as `ping`); duplicate IDs leave the existing row unchanged.
+- No webhook payload or secret is stored here. P3-04 maps only the fields listed in group 5 to project records in the same transaction as the delivery row.
 - `credential_status` stores expiry/last-updated dates and status only, never secret values. Codex and Copilot start as `unknown`; Key Vault metadata and Codex renewal populate dates. A paired owner/expiry lease serializes Codex renewal against Codex task starts; unknown status alone does not block tasks, while a failed Codex renewal does.
 - Container App sleep state is read from Azure's configured minimum replicas; it is not persisted in `settings` or another SQL table. The sleep refusal check takes an exclusive transaction-owned application lock while task creation and state transitions take the shared lock, so no Ready, Running, or PauseRequested task can be introduced between the check and scale request. This adds no schema object.
 
@@ -489,7 +492,7 @@ migration; the history API accepts and displays all three outcomes.
 
 - `bigint` identity keys; UTC `datetime2` timestamps; states as short strings with check constraints.
 - JSON only for event payloads, tool arguments and settings values; never as the domain model.
-- Indexes: `tasks(state, next_attempt_at)` for the dispatcher; `task_events(task_id, at)`; `workflow_runs(head_sha)`; `usage(task_id)`, `usage(project_id, at)`; and an index supporting each foreign key.
+- Indexes: `tasks(state, next_attempt_at)` for the dispatcher; `task_events(task_id, at)`; `pull_requests(project_id, head_sha)`; `workflow_runs(project_id, head_sha)`; `releases(project_id, created_at)`; `deployments(release_id, at)`; `usage(task_id)`, `usage(project_id, at)`; and an index supporting each foreign key.
 - Every migration ships a reverse script in `db/migrations/down/`; CI applies, reverts and reapplies all of them.
 - Thousands of tasks over time are no concern; `task_events` is the only table that grows fast and can be archived by age.
 
