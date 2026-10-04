@@ -145,8 +145,50 @@ describe('App shell', () => {
     await renderSignedIn();
 
     const areas = screen.getByRole('navigation', { name: 'Areas' });
-    expect(within(areas).getAllByRole('link').map((link) => link.textContent)).toEqual(['Software Factory', 'Usage']);
+    expect(within(areas).getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
+      'Conversation',
+      'Software Factory',
+      'Usage',
+    ]);
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
+  });
+
+  it('opens and closes the area navigation with keyboard focus returning to its toggle', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    const collapse = screen.getByRole('button', { name: 'Close area navigation' });
+    collapse.focus();
+    await user.keyboard('{Enter}');
+    const expand = screen.getByRole('button', { name: 'Expand area navigation' });
+    expect(expand.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(expand);
+    expect(screen.queryByRole('navigation', { name: 'Jarvis' })).toBeNull();
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
+  });
+
+  it('keeps Screen sharing and Camera visibly unavailable until their features are built', async () => {
+    await renderSignedIn();
+
+    expect(screen.getByRole('button', { name: 'Share screen' })).toHaveProperty('disabled', true);
+    expect(screen.getByText('Unavailable until screen sharing is built.')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Camera' })).toHaveProperty('disabled', true);
+    expect(screen.getByText('Unavailable until camera support is built.')).not.toBeNull();
+  });
+
+  it('opens and closes the contextual shell panel without replacing page content', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    await user.click(screen.getByRole('button', { name: 'Toggle contextual panel' }));
+    expect(screen.getByRole('heading', { name: 'Context' })).not.toBeNull();
+    expect(screen.getByText('No contextual information is available for this page yet.')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Welcome, Dan Aakesen' })).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Close context panel' }));
+    expect(screen.queryByRole('heading', { name: 'Context' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Toggle contextual panel' }));
   });
 
   it('enables chat and explains the other unavailable main-page actions', async () => {
