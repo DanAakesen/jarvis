@@ -19,7 +19,7 @@ interface TaskEvent {
 }
 
 const usageSources = ['sandbox', 'jarvis_model', 'voice', 'codex', 'copilot'] as const;
-const usageMetrics = ['minutes', 'input_tokens', 'output_tokens', 'turns', 'premium_requests'] as const;
+const usageMetrics = ['minutes', 'input_tokens', 'output_tokens', 'turns', 'premium_requests', 'screen_frames'] as const;
 
 interface TaskUsageRecord {
   id: string | null;
@@ -160,6 +160,7 @@ function usageLabel(metric: TaskUsageRecord['metric']): string {
     output_tokens: 'Output tokens',
     turns: 'Agent turns',
     premium_requests: 'Premium requests',
+    screen_frames: 'Screen frames',
   }[metric];
 }
 

@@ -340,7 +340,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
           {taskError && <p className="projects-feedback" role="status">{taskError}</p>}
           {manageMessage && <p className="projects-feedback" role="status">{manageMessage}</p>}
           {manageError && <p className="projects-feedback" role="alert">{manageError}</p>}
-          <p className="projects-freshness">Running task counts update when you refresh this page. Last release data will appear when release tracking is connected.</p>
+          <p className="projects-freshness">Running task counts update when you refresh this page. Open a project&apos;s release view for its latest recorded build and deployment state.</p>
           {projects.length === 0 ? (
             <section className="project-empty" aria-labelledby="empty-projects-heading">
               <h2 id="empty-projects-heading">No managed projects</h2>
@@ -364,7 +364,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
                       <div><dt>Policy</dt><dd>{policyLabel(project.policy)}</dd></div>
                       <div><dt>Tech</dt><dd><code>{project.tech}</code></dd></div>
                       <div><dt>Running tasks</dt><dd>{taskError ? 'Unavailable' : runningCounts[project.id] ?? 0}</dd></div>
-                      <div><dt>Last release</dt><dd>Not available yet</dd></div>
+                      <div><dt>Last release</dt><dd><Link to={`/factory/projects/${project.id}/releases`}>View releases</Link></dd></div>
                     </dl>
                   </article>
                 </li>

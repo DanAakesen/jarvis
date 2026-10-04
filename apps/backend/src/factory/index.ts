@@ -15,6 +15,7 @@ import type {
   CreateTaskInput, RecordTaskEventInput, TaskControlCommand, TaskEventMessage, TaskListFilters,
 } from './task-store.js';
 import { factoryTools } from './tools.js';
+import { registerReleaseViewRoutes } from './release-view.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxResponseBytes = 1024 * 1024;
@@ -78,6 +79,7 @@ export const factoryModule: BackendModule = {
     },
   }],
   registerRoutes: async (app) => {
+    registerReleaseViewRoutes(app);
     app.get<{ Querystring: { refresh?: boolean } }>('/factory/repositories', {
       schema: {
         querystring: {
