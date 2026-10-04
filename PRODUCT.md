@@ -111,7 +111,7 @@ stateDiagram-v2
 
 Dan never fills in a project form. He gives Jarvis, by voice or chat, a project name and a short description; everything else comes from the **New projects** settings.
 
-1. Jarvis creates a private repository `<owner>/<name>` with the backend-only `jarvis-repo-admin` token. The token never enters a sandbox.
+1. Jarvis creates `<owner>/<name>` with the configured visibility and the backend-only `jarvis-repo-admin` token. The token never enters a sandbox.
 2. Jarvis registers the project with the New projects defaults and starts the first task in a sandbox: clone the templates repository, run its initializer (`cpinit`) with the modules the agent chooses from the description, fill `PRODUCT.md` and `PLAN.md` from the description, add the repository's PR-check and release workflow templates (P3-09), and open a pull request.
 3. When the description is not enough to choose modules or fill the documents, the task moves to Needs attention with a question for Dan instead of guessing.
 4. The project's tech identifier is detected from the repository (for example `*.csproj` means .NET); Dan can change any project setting afterwards.
@@ -220,6 +220,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Voice: speech-to-text model, voice per language, default language | Change; play a voice sample |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
+| New projects: owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | Change (applies to projects Jarvis registers) |
 | Credentials: name, expiry, last renewal, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
 
 The backend checks Codex daily and renews only when the access token has three

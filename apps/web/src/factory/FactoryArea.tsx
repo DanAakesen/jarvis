@@ -39,9 +39,6 @@ export function FactoryArea({ backendUrl, getAccessToken }: AreaProps) {
         <Route path="tasks" element={<TasksPage backendUrl={backendUrl} getAccessToken={getAccessToken} />} />
         <Route path="tasks/:taskId" element={<TaskPage backendUrl={backendUrl} getAccessToken={getAccessToken} />} />
         <Route path="projects" element={<ProjectsPage backendUrl={backendUrl} getAccessToken={getAccessToken} />} />
-        <Route path="projects/new" element={
-          <ProjectSettingsPage backendUrl={backendUrl} getAccessToken={getAccessToken} />
-        } />
         <Route path="projects/:projectId" element={
           <ProjectSettingsPage backendUrl={backendUrl} getAccessToken={getAccessToken} />
         } />

@@ -12,6 +12,15 @@ interface Settings {
   codex: { model: string; reasoning: string };
   copilot: { model: string };
   global: { maxParallelTasks: number };
+  newProjects: {
+    owner: string;
+    visibility: 'private' | 'public';
+    templatesRepository: string;
+    defaultAgent: 'codex' | 'copilot';
+    policy: 'deliver_pr' | 'complete_without_deployment';
+    maxParallelTasks: number;
+    defaultBranch: string;
+  };
 }
 
 type SettingsPatch = { [Area in keyof Settings]?: Partial<Settings[Area]> };
@@ -27,6 +36,9 @@ interface SettingsOptions {
   codexModels: string[];
   codexReasoningEfforts: string[];
   copilotModels: string[];
+  projectVisibilities: string[];
+  projectAgents: string[];
+  projectPolicies: string[];
 }
 
 interface CredentialStatus {
@@ -52,6 +64,12 @@ const optionLabels: Record<string, string> = {
   low: 'Low',
   medium: 'Medium',
   high: 'High',
+  private: 'Private',
+  public: 'Public',
+  codex: 'Codex',
+  copilot: 'Copilot',
+  deliver_pr: 'Deliver a pull request',
+  complete_without_deployment: 'Complete without deployment',
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -66,7 +84,8 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
   const optionKeys: (keyof SettingsOptions)[] = [
     'jarvisModels', 'reasoningEfforts', 'speechToTextModels', 'englishModels',
     'englishVoices', 'danishVoices', 'languages', 'codexModels',
-    'codexReasoningEfforts', 'copilotModels',
+    'codexReasoningEfforts', 'copilotModels', 'projectVisibilities', 'projectAgents',
+    'projectPolicies',
   ];
   const validOptions = optionKeys.every((key) =>
     Array.isArray(options[key]) && (options[key] as unknown[]).every((item) => typeof item === 'string'));
@@ -76,7 +95,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     (item.expiresAt === null || (typeof item.expiresAt === 'string' && Number.isFinite(Date.parse(item.expiresAt)))) &&
     (item.lastRenewedAt === null || (typeof item.lastRenewedAt === 'string' && Number.isFinite(Date.parse(item.lastRenewedAt)))));
   return isObject(settings.jarvis) && isObject(settings.voice) && isObject(settings.codex) &&
-    isObject(settings.copilot) && isObject(settings.global) &&
+    isObject(settings.copilot) && isObject(settings.global) && isObject(settings.newProjects) &&
     typeof settings.jarvis.model === 'string' && typeof settings.jarvis.reasoning === 'string' &&
     typeof settings.voice.speechToTextModel === 'string' && typeof settings.voice.englishModel === 'string' &&
     typeof settings.voice.englishVoice === 'string' && typeof settings.voice.danishVoice === 'string' &&
@@ -85,6 +104,15 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     typeof settings.copilot.model === 'string' && typeof settings.global.maxParallelTasks === 'number' &&
     Number.isSafeInteger(settings.global.maxParallelTasks) &&
     settings.global.maxParallelTasks >= 1 && settings.global.maxParallelTasks <= 100 &&
+    typeof settings.newProjects.owner === 'string' &&
+    (settings.newProjects.visibility === 'private' || settings.newProjects.visibility === 'public') &&
+    typeof settings.newProjects.templatesRepository === 'string' &&
+    (settings.newProjects.defaultAgent === 'codex' || settings.newProjects.defaultAgent === 'copilot') &&
+    (settings.newProjects.policy === 'deliver_pr' || settings.newProjects.policy === 'complete_without_deployment') &&
+    typeof settings.newProjects.maxParallelTasks === 'number' &&
+    Number.isSafeInteger(settings.newProjects.maxParallelTasks) &&
+    settings.newProjects.maxParallelTasks >= 1 && settings.newProjects.maxParallelTasks <= 100 &&
+    typeof settings.newProjects.defaultBranch === 'string' &&
     validOptions && validCredentials;
 }
 
@@ -258,6 +286,8 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
     Object.keys(changedSettings(savedSettings, settings)).length > 0;
   const maxTasksValid = settings !== null && Number.isSafeInteger(settings.global.maxParallelTasks) &&
     settings.global.maxParallelTasks >= 1 && settings.global.maxParallelTasks <= 100;
+  const newProjectMaxTasksValid = settings !== null && Number.isSafeInteger(settings.newProjects.maxParallelTasks) &&
+    settings.newProjects.maxParallelTasks >= 1 && settings.newProjects.maxParallelTasks <= 100;
 
   return (
     <section className="settings-page" aria-labelledby="settings-heading">
@@ -339,6 +369,47 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
             <a className="home-link" href="/" aria-describedby="sleep-switch-help">Open the Jarvis main page</a>
           </section>
 
+          <section className="settings-section" aria-labelledby="new-projects-settings-heading">
+            <h2 id="new-projects-settings-heading">New projects</h2>
+            <div className="settings-grid">
+              <div className="settings-field">
+                <label htmlFor="new-project-owner">Owner</label>
+                <input id="new-project-owner" maxLength={39} value={settings.newProjects.owner} disabled={saving}
+                  onChange={(event) => update('newProjects', 'owner', event.target.value)} />
+              </div>
+              <SelectField id="new-project-visibility" label="Visibility" value={settings.newProjects.visibility}
+                options={options.projectVisibilities} disabled={saving}
+                onChange={(value) => update('newProjects', 'visibility', value as 'private' | 'public')} />
+              <div className="settings-field">
+                <label htmlFor="new-project-templates">Templates repository (owner/name)</label>
+                <input id="new-project-templates" maxLength={140} value={settings.newProjects.templatesRepository} disabled={saving}
+                  onChange={(event) => update('newProjects', 'templatesRepository', event.target.value)} />
+              </div>
+              <SelectField id="new-project-agent" label="Default agent" value={settings.newProjects.defaultAgent}
+                options={options.projectAgents} disabled={saving}
+                onChange={(value) => update('newProjects', 'defaultAgent', value as 'codex' | 'copilot')} />
+              <SelectField id="new-project-policy" label="Policy" value={settings.newProjects.policy}
+                options={options.projectPolicies} disabled={saving}
+                onChange={(value) => update('newProjects', 'policy', value as Settings['newProjects']['policy'])} />
+              <div className="settings-field">
+                <label htmlFor="new-project-max-tasks">New project maximum parallel tasks</label>
+                <input id="new-project-max-tasks" type="number" min="1" max="100" step="1"
+                  value={settings.newProjects.maxParallelTasks} disabled={saving}
+                  onChange={(event) => update('newProjects', 'maxParallelTasks', Number(event.target.value))} />
+              </div>
+              <div className="settings-field">
+                <label htmlFor="new-project-branch">Default branch</label>
+                <input id="new-project-branch" maxLength={255} value={settings.newProjects.defaultBranch} disabled={saving}
+                  onChange={(event) => update('newProjects', 'defaultBranch', event.target.value)} />
+              </div>
+            </div>
+            <p className="settings-explanation">
+              These defaults are used when Jarvis registers a new project. Use a GitHub account or organization name,
+              a templates repository in owner/name format, and a valid branch name.
+            </p>
+            <p className="settings-explanation">New project task limits must be whole numbers from 1 to 100.</p>
+          </section>
+
           <section className="settings-section" aria-labelledby="credentials-heading">
             <h2 id="credentials-heading">Credentials</h2>
             <p className="settings-explanation" id="credential-actions-help">
@@ -365,7 +436,8 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
           </section>
 
           <div className="settings-save">
-            <button className="primary-button" type="submit" disabled={!dirty || !maxTasksValid || saving}>
+            <button className="primary-button" type="submit"
+              disabled={!dirty || !maxTasksValid || !newProjectMaxTasksValid || saving}>
               {saving ? 'Saving…' : 'Save settings'}
             </button>
             <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">

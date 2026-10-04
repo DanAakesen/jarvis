@@ -53,6 +53,15 @@ describe('settings API', () => {
         codex: { model: 'default' },
         copilot: { model: 'default' },
         global: { maxParallelTasks: 1 },
+        newProjects: {
+          owner: 'DanAakesen',
+          visibility: 'private',
+          templatesRepository: 'DanAakesen/templates',
+          defaultAgent: 'copilot',
+          policy: 'deliver_pr',
+          maxParallelTasks: 1,
+          defaultBranch: 'main',
+        },
       },
     });
   });
@@ -86,6 +95,51 @@ describe('settings API', () => {
       'voice.default_language': '"en"',
       'global.max_parallel_tasks': '4',
     });
+  });
+
+  it('saves and reads New projects defaults', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/settings',
+      headers: authorization,
+      payload: {
+        settings: {
+          newProjects: {
+            owner: 'jarvis-org',
+            visibility: 'public',
+            templatesRepository: 'jarvis-org/templates',
+            defaultAgent: 'codex',
+            policy: 'complete_without_deployment',
+            maxParallelTasks: 3,
+            defaultBranch: 'develop',
+          },
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().settings.newProjects).toEqual({
+      owner: 'jarvis-org',
+      visibility: 'public',
+      templatesRepository: 'jarvis-org/templates',
+      defaultAgent: 'codex',
+      policy: 'complete_without_deployment',
+      maxParallelTasks: 3,
+      defaultBranch: 'develop',
+    });
+    expect(values).toEqual({
+      'new_projects.owner': '"jarvis-org"',
+      'new_projects.visibility': '"public"',
+      'new_projects.templates_repository': '"jarvis-org/templates"',
+      'new_projects.default_agent': '"codex"',
+      'new_projects.policy': '"complete_without_deployment"',
+      'new_projects.max_parallel_tasks': '3',
+      'new_projects.default_branch': '"develop"',
+    });
+    const readBack = await app.inject({ url: '/settings', headers: authorization });
+    expect(readBack.json().settings.newProjects).toEqual(response.json().settings.newProjects);
   });
 
   it('returns only non-secret credential status dates', async () => {
@@ -152,6 +206,13 @@ describe('settings API', () => {
     { settings: { jarvis: { reasoning: 'unsupported' } } },
     { settings: { global: { maxParallelTasks: 101 } } },
     { settings: { voice: { unknown: 'value' } } },
+    { settings: { newProjects: { owner: '-invalid' } } },
+    { settings: { newProjects: { visibility: 'internal' } } },
+    { settings: { newProjects: { templatesRepository: 'not/a/valid/repository/extra' } } },
+    { settings: { newProjects: { defaultAgent: 'unknown' } } },
+    { settings: { newProjects: { policy: 'unknown' } } },
+    { settings: { newProjects: { maxParallelTasks: 0 } } },
+    { settings: { newProjects: { defaultBranch: 'invalid branch' } } },
     { settings: {} },
   ])('rejects invalid settings without persisting them: %j', async (payload) => {
     const { store } = createStore();
@@ -171,6 +232,8 @@ describe('settings API', () => {
       read: async () => ({
         'jarvis.model': '"unsupported-model"',
         'global.max_parallel_tasks': '1000',
+        'new_projects.visibility': '"internal"',
+        'new_projects.default_branch': '"invalid branch"',
         'internal.secret': '"never-return-this"',
       }),
       write: async () => {},
@@ -183,6 +246,7 @@ describe('settings API', () => {
       settings: {
         jarvis: { model: 'gpt-5.6-luna' },
         global: { maxParallelTasks: 1 },
+        newProjects: { visibility: 'private', defaultBranch: 'main' },
       },
     });
     expect(response.body).not.toContain('never-return-this');
