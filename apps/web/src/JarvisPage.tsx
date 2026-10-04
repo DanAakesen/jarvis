@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import { BackendSleepControl } from './BackendSleepControl';
@@ -17,6 +18,7 @@ export function JarvisPage({
   config: PublicConfig;
   getAccessToken: () => Promise<string>;
 }) {
+  const [historyRefresh, setHistoryRefresh] = useState(0);
   return (
     <div className="jarvis-page">
       <h1>Welcome, {name}</h1>
@@ -27,12 +29,16 @@ export function JarvisPage({
             Chat messages are saved across sessions. Jarvis streams each reply; if a reply is interrupted, check task
             status before sending another request.
           </p>
-          <ConversationHistory client={client} config={config} />
+          <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
 
           <section aria-labelledby="voice-heading">
             <h3 id="voice-heading">Voice</h3>
             <p>Speak to Jarvis through a live voice session. You can interrupt Jarvis by speaking.</p>
-            <VoiceControls client={client} config={config} />
+            <VoiceControls
+              client={client}
+              config={config}
+              onSessionEnded={() => setHistoryRefresh((value) => value + 1)}
+            />
           </section>
         </section>
 

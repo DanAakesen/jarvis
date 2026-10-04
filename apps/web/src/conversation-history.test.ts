@@ -16,6 +16,7 @@ const history = {
     role: 'jarvis',
     text: 'That action was refused.',
     model: null,
+    voiceMinutes: null,
     at: '2026-10-03T12:00:00.000Z',
     toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'refused', taskId: null }],
   }],

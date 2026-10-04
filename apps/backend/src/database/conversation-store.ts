@@ -35,6 +35,7 @@ interface MessageRow {
 interface HistoryRow extends MessageRow {
   channel: ConversationChannel;
   language: ConversationLanguage;
+  voice_minutes: number | null;
 }
 
 interface ToolCallRow {
@@ -94,12 +95,37 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
     async endSession(sessionId) {
       const result = await pool.request()
         .input('sessionId', sql.BigInt, BigInt(sessionId))
-        .query<{ session_exists: number }>(`UPDATE dbo.jarvis_sessions
-          SET ended_at = SYSUTCDATETIME()
-          WHERE id = @sessionId AND ended_at IS NULL;
-          SELECT CONVERT(int, CASE WHEN EXISTS (
-            SELECT 1 FROM dbo.jarvis_sessions WHERE id = @sessionId
-          ) THEN 1 ELSE 0 END) AS session_exists;`);
+        .query<{ session_exists: number }>(`DECLARE @ended TABLE (
+            id bigint NOT NULL,
+            channel nvarchar(16) NOT NULL,
+            started_at datetime2(7) NOT NULL,
+            ended_at datetime2(7) NOT NULL
+          );
+          BEGIN TRY
+            BEGIN TRANSACTION;
+            UPDATE dbo.jarvis_sessions
+            SET ended_at = SYSUTCDATETIME()
+            OUTPUT INSERTED.id, INSERTED.channel, DELETED.started_at, INSERTED.ended_at
+              INTO @ended (id, channel, started_at, ended_at)
+            WHERE id = @sessionId AND ended_at IS NULL;
+
+            INSERT INTO dbo.usage (jarvis_session_id, source, metric, quantity, source_event_id, at)
+            SELECT id, N'voice', N'minutes',
+              CONVERT(decimal(19,6), DATEDIFF_BIG(MILLISECOND, started_at, ended_at)) / 60000.0,
+              CONVERT(nvarchar(300), id), ended_at
+            FROM @ended
+            WHERE channel = N'voice';
+
+            DECLARE @session_exists int = CONVERT(int, CASE WHEN EXISTS (
+              SELECT 1 FROM dbo.jarvis_sessions WHERE id = @sessionId
+            ) THEN 1 ELSE 0 END);
+            COMMIT TRANSACTION;
+            SELECT @session_exists AS session_exists;
+          END TRY
+          BEGIN CATCH
+            IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+            THROW;
+          END CATCH;`);
       return result.recordset[0]?.session_exists === 1;
     },
 
@@ -132,17 +158,25 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
             role nvarchar(16) NOT NULL,
             text nvarchar(max) NOT NULL,
             model nvarchar(100) NULL,
+            voice_minutes decimal(19,6) NULL,
             at datetime2(7) NOT NULL
           );
-          INSERT INTO @history (id, session_id, channel, language, role, text, model, at)
-          SELECT TOP (@take) m.id, m.jarvis_session_id, s.channel, s.language, m.role, m.text, m.model, m.at
+          INSERT INTO @history (id, session_id, channel, language, role, text, model, voice_minutes, at)
+          SELECT TOP (@take) m.id, m.jarvis_session_id, s.channel, s.language, m.role, m.text, m.model,
+            voice_usage.voice_minutes, m.at
           FROM dbo.messages AS m
           INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id
+          OUTER APPLY (
+            SELECT SUM(u.quantity) AS voice_minutes
+            FROM dbo.usage AS u
+            WHERE u.jarvis_session_id = s.id AND u.source = N'voice' AND u.metric = N'minutes'
+          ) AS voice_usage
           WHERE @beforeId IS NULL OR m.id < @beforeId
           ORDER BY m.id DESC;
 
           SELECT CONVERT(varchar(20), id) AS id,
-            CONVERT(varchar(20), session_id) AS session_id, channel, language, role, text, model, at
+            CONVERT(varchar(20), session_id) AS session_id, channel, language, role, text, model,
+            voice_minutes, at
           FROM @history
           ORDER BY id;
 
@@ -166,6 +200,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
         ...messageFromRow(row),
         channel: row.channel,
         language: row.language,
+        voiceMinutes: row.voice_minutes,
         toolCalls: callsByMessage.get(row.id) ?? [],
       }));
       return {

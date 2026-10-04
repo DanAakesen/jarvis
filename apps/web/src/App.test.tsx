@@ -98,6 +98,7 @@ describe('Jarvis routes', () => {
         role: 'dan',
         text: 'Please start the task.',
         model: null,
+        voiceMinutes: null,
         at: '2026-10-03T12:00:00.000Z',
         toolCalls: [],
       }],

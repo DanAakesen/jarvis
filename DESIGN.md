@@ -162,7 +162,8 @@ order across chat and voice sessions. Each message has its speaker and time;
 tool calls show the tool and outcome, with a task link when available.
 History loads in bounded pages, with older entries requested explicitly. Loading,
 empty, and retryable failure states remain within the conversation panel. This is
-an interim implementation, not a selected visual direction.
+an interim implementation, not a selected visual direction. Completed voice
+sessions show their total voice minutes once beside the session's first message.
 
 ## Chat (P4-06)
 
@@ -188,4 +189,6 @@ button and visible-focus styles. Language selection and voice settings remain
 with P5-05; no new visual direction is chosen. A headless Chromium check at
 390 px and 1280 px verified the layout and start, speaking, interruption,
 reconnect, mute, and stop states with mocked relay/audio APIs. Physical
-microphone and speaker behavior remains unverified.
+microphone and speaker behavior remains unverified. Stop shows "Saving voice
+session…" until the backend has recorded usage, then refreshes conversation
+history.
