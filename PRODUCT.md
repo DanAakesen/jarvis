@@ -131,6 +131,7 @@ Global defaults on the settings page; a task can override the coding-agent model
 | Area | Setting | Default |
 | --- | --- | --- |
 | Jarvis | Model and reasoning effort | `gpt-5.6-luna`, reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
+| Personality | Tone, response style, and custom instructions (up to 2,000 characters) | British butler, concise, no custom instructions |
 | Voice | Speech to text | MAI Transcribe |
 | Voice | Voice per language | English: Ryan HD (British butler persona, addresses Dan as "sir"); Danish: Harper (MAI-Voice-2) |
 | Voice | Default language | Danish |
@@ -143,6 +144,8 @@ Global defaults on the settings page; a task can override the coding-agent model
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
 Danish voice uses the authenticated backend `/voice/da` WebSocket to a provisioned Foundry Voice Live agent. The agent bridges to the hosted Jarvis agent, uses MAI Transcribe with language `da` and the Danish phrase list, and fixes Harper to `da-DK`.
+
+Personality preferences are validated and persisted in Settings. They apply to new chat and voice sessions; changing or resetting them does not interrupt an active voice session. Reset restores the current British-butler, concise defaults and clears custom instructions. Preferences affect response style only, not Jarvis's identity, available tools, permissions, selected language, model or voice, or truthful reporting of action outcomes.
 
 ### Page requirements
 
@@ -238,6 +241,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Data points | Actions |
 | --- | --- |
 | Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
+| Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset (applies to new sessions) |
 | Voice: speech-to-text model, voice per language, default language | Change; play a voice sample |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |

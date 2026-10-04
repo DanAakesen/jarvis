@@ -62,6 +62,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   implements it as a responsive form for Jarvis, voice, coding-agent defaults
   and the global task limit; remaining voice samples, sleep and credential
   controls are visibly disabled until their owning services exist.
+- P7-16 extends the same authenticated, validated `dbo.settings` key/value store
+  with bounded personality preferences. Hosted chat and Danish voice read them
+  for each new agent invocation/session; the backend snapshots them when it
+  configures each new English voice relay. Active voice connections keep their
+  original snapshot.
 - P1-10 passes the backend URL and MSAL token provider into the Software Factory
   area. The projects list and settings page call the authenticated project CRUD
   routes; running counts are derived from `GET /factory/tasks?state=Running`
@@ -827,7 +832,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | --- | --- | --- |
 | Browser connection | Browser connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. It captures and sends mono 24 kHz PCM only after the relay is ready; provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, interruption, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
 | Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then captures audio. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
-| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | The client waits for the backend-configured session before opening the microphone. Local mock tests verify server-owned session settings and client event handling; real browser audio and live Voice Live behavior remain unverified pending P0-16. |
+| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Completed voice transcripts are persisted as messages; voice tool calls are not stored as `tool_calls`. |
 | Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
@@ -846,10 +851,13 @@ The Danish backend connector uses the Foundry project endpoint from `FOUNDRY_PRO
 
 `agents/jarvis` (P4-01) is the ported voice-prototype agent: the Voice Live Bridge
 runtime, response coordinator, strict action rules for spoken Danish replies and
-a per-session model tool loop over the Responses API. At session start it reads
-effective model and reasoning settings from the agent-only `GET /agent/settings`
-route, then uses the immutable snapshot for each model request in that session.
-It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
+a per-session model tool loop over the Responses API. At voice session start and
+for each new chat invocation, it reads effective model, reasoning, and personality
+settings from the agent-only `GET /agent/settings` route. The voice runtime keeps
+that immutable snapshot for the session; chat uses a per-invocation snapshot.
+Tone, response style, and JSON-quoted custom instructions modify presentation
+only, with identity, backend tool permissions, and truthful action outcomes
+remaining fixed. It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
 (cached for 60 seconds) and sends each model tool call to `POST /tools/{name}`.
 The agent gets a token for `api://<jarvis-api>/.default`
 from its platform identity through `DefaultAzureCredential`; the same credential
