@@ -565,6 +565,29 @@ const FLOWS = [
     ],
   },
   {
+    name: "Alerts",
+    summary: "Four condition types appear once in the Now feed; the email-only Azure Monitor action group handles deployment, sandbox, credential and budget notifications.",
+    nodes: [
+      { id: "ctx", lane: "data", col: 1, s: "context", t: "Existing source records" },
+      { id: "deploy", lane: "backend", col: 2, s: "docs", t: "Failed deployment", d: "GitHub deployment_status is persisted and checked for failure.", ev: "P3-07 supplies deployment records; P6-02 adds a transactional alert insert. SQL integration remains unverified." },
+      { id: "crash", lane: "backend", col: 3, s: "docs", t: "Confirmed sandbox crash", d: "Heartbeat moves the task to Needs attention and records an alert.", ev: "P2-06 confirms a crash before transition; P6-02 adds the alert to that transaction. SQL integration remains unverified." },
+      { id: "credential", lane: "backend", col: 4, s: "docs", t: "Credential expiry metadata", d: "P2-08 status/expiry metadata triggers one alert per expiry timestamp." },
+      { id: "budget", lane: "insights", col: 2, s: "docs", t: "80% budget threshold", d: "Azure Budget action group email; backend identity polls actual spend every 15 minutes for Now.", ev: "Fake reader tests cover threshold and monthly deduplication; live ARM access and Azure Budget notifications remain unverified." },
+      { id: "activity", lane: "data", col: 5, s: "docs", t: "Unique alert activity", d: "Insert `activity.alert_key` once; emit a hashed trace after commit.", ev: "The filtered unique index and transactional writers are authored; local SQL integration could not run without isolated SQL Server configuration." },
+      { id: "monitor", lane: "insights", col: 6, s: "docs", t: "Azure Monitor stateful rules", d: "Query alert traces and group on the hashed condition key; use the shared email-only action group.", ev: "Bicep build/lint validates the rule configuration, not live Azure evaluation or email delivery." },
+      { id: "now", lane: "board", col: 7, s: "docs", t: "Now feed: Alerts", d: "Dismissible alert activity refreshes through authenticated Now events." },
+      { id: "email", lane: "user", col: 8, s: "docs", t: "Dan receives email", d: "Recipients come from the protected `JARVIS_BUDGET_CONTACT_EMAILS` deployment secret; no SMS or voice actions." },
+    ],
+    edges: [
+      ["ctx", "deploy", "docs", "deployment_status"], ["ctx", "crash", "docs", "heartbeat"],
+      ["ctx", "credential", "docs", "credential metadata"], ["ctx", "budget", "docs", "Azure Cost Management"],
+      ["deploy", "activity", "docs", "same transaction"], ["crash", "activity", "docs", "same transaction"],
+      ["credential", "activity", "docs", "same transaction"], ["budget", "activity", "docs", "budget month"],
+      ["activity", "now", "docs", "SSE refresh"], ["activity", "monitor", "docs", "hashed trace after commit"],
+      ["monitor", "email", "docs", "app alert rules"], ["budget", "email", "docs", "native budget threshold"],
+    ],
+  },
+  {
     name: "Operate",
     summary: "Scripts set up, check and remove the whole environment; cost stays visible throughout.",
     nodes: [
