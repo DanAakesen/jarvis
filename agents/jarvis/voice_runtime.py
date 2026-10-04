@@ -31,7 +31,7 @@ from azure.ai.agentserver.invocations.voice import (
     VoiceAgentServerHost,
 )
 
-from chat_runtime import ChatContextLoader, load_verified_history, register_chat_route
+from chat_runtime import ChatContextLoader, load_verified_history, register_chat_invocation
 from jarvis_tools import current_conversation, current_turn
 from model_contract import StreamingModelClient
 from response_coordinator import ResponseCoordinator
@@ -405,6 +405,6 @@ def create_app(
     runtime = VoiceRuntime(model_client)
     app = VoiceAgentServerHost(**host_options)
     runtime.bind(app)
-    register_chat_route(app, model_client, chat_context_loader)
+    register_chat_invocation(app, model_client, chat_context_loader)
     app.state.voice_runtime = runtime
     return app

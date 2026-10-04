@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Authenticated HTTP chat route for the hosted Jarvis agent."""
+"""Authenticated Foundry Invocations handler for hosted Jarvis chat."""
 
 from __future__ import annotations
 
@@ -100,11 +100,12 @@ async def load_verified_history(
     return context
 
 
-def register_chat_route(
+def register_chat_invocation(
     app: VoiceAgentServerHost,
     model_client: StreamingModelClient,
     context_loader: ChatContextLoader = load_verified_history,
 ) -> None:
+    @app.invoke_handler
     async def chat(request: Request):
         try:
             body = bytearray()
@@ -116,8 +117,14 @@ def register_chat_route(
         except (json.JSONDecodeError, UnicodeDecodeError):
             return JSONResponse({"error": "Invalid request"}, status_code=400)
 
-        authorization = request.headers.get("authorization", "")
-        match = re.fullmatch(r"Bear" + r"er ([\w.-]+)", authorization)
+        delegated_authorization = (
+            payload.get("delegatedAuthorization") if isinstance(payload, dict) else None
+        )
+        match = (
+            re.fullmatch(r"Bear" + r"er ([\w.-]+)", delegated_authorization)
+            if isinstance(delegated_authorization, str)
+            else None
+        )
         if match is None:
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
         message_id = payload.get("messageId") if isinstance(payload, dict) else None
@@ -131,7 +138,7 @@ def register_chat_route(
             or not text.strip()
             or len(text) > 20_000
             or language not in {"da", "en"}
-            or set(payload) != {"messageId", "text", "language"}
+            or set(payload) != {"messageId", "text", "language", "delegatedAuthorization"}
         ):
             return JSONResponse({"error": "Invalid request"}, status_code=400)
         try:
@@ -174,5 +181,3 @@ def register_chat_route(
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
         )
-
-    app.add_route("/chat", chat, methods=["POST"])

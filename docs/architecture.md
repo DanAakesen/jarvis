@@ -22,9 +22,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Images | Azure Container Registry: backend and sandbox images | Decided |
 | Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-16 |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
-| Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (application role `Jarvis.Tools`) is accepted only on the agent-enabled routes: tools (P4-01), turn context (P4-04) and its effective Jarvis-settings read (P4-07) | Browser and backend contracts checked offline in #9; agent policy checked offline in P4-01/P4-04/P4-07; real Entra sign-in, agent tokens and deployed origin remain unverified pending the P4-08 main deployment and bootstrap |
+| Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (application role `Jarvis.Tools`) is accepted only on the agent-enabled routes: tools (P4-01), turn context (P4-04) and its effective Jarvis-settings read (P4-07) | Browser and backend contracts checked offline in #9; agent policy checked offline in P4-01/P4-04/P4-07; the P4-08 main deployment and bootstrap succeeded. Live Dan sign-in and deployed chat invocation remain to verify |
 | Board updates | Authenticated server-sent events (SSE) over `fetch`, so the bearer token can be sent. Reconnects resume from `Last-Event-ID`; persisted task events replay before buffered live hub events, with duplicate IDs suppressed. A comment heartbeat is sent every 25 seconds. | Implemented and tested offline; SQL Server integration and deployed streaming remain unverified |
-| Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment is P4-08 |
+| Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
 | Voice | Danish: Voice Live voice bridge, MAI Transcribe, Harper. English: `gpt-realtime-2.1` speech to speech, Ryan HD. Browser traffic uses an authenticated backend WebSocket relay; provider credentials stay server-side. | Relay design selected; local mock spike verified, Azure interoperability unverified |
@@ -315,25 +315,32 @@ continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
 
-When `JARVIS_CHAT_AGENT_URL` is configured, the backend forwards the caller's
-delegated token and the stored source-message ID to the hosted agent's `/chat`
-route, then relays its text stream. The agent verifies the caller through the
-backend's `/me` route, confirms the exact source message in stored history, and
-uses at most 20 earlier messages / 32,000 characters as context. Its existing
-Responses tool loop records calls against Dan's message ID using the agent
-identity. The backend persists only a completed assistant response; an
-interrupted turn leaves Dan's message visible and the UI warns that an action may
-have completed. The browser never receives agent credentials.
+When `JARVIS_CHAT_AGENT_NAME` is configured, the backend uses its managed
+identity to call
+`POST {FOUNDRY_PROJECT_ENDPOINT}/agents/{agent_name}/endpoint/protocols/invocations?api-version=v1`
+with the `https://ai.azure.com/.default` scope. The application payload contains
+the caller's delegated authorization and the stored source-message ID; it is not
+forwarded as the Foundry HTTP `Authorization` header. The hosted agent registers
+the chat handler with the Invocations protocol and returns the application-defined
+text SSE stream. The agent verifies the caller through the backend's `/me` route,
+confirms the exact source message in stored history, and uses at most 20 earlier
+messages / 32,000 characters as context. Its existing Responses tool loop records
+calls against Dan's message ID using the agent identity. The backend persists
+only a completed assistant response; an interrupted turn leaves Dan's message
+visible and the UI warns that an action may have completed. The browser never
+receives agent credentials.
 
 The conversation store shares the process-owned SQL pool and uses the existing
 group-one schema; no migration or new service is required. Tool calls continue to
 be written by the P4-02 dispatcher against their source message. The task schema
 already requires `origin_message_id` for non-board tasks; task-creation write
 paths remain in P1-04/P4-01. The global authentication hook keeps these routes
-restricted to Dan. Store, API, agent route and web behavior are tested offline;
-Azure SQL, live Entra and the configured Foundry agent URL remain unverified.
-The store also passes a disposable SQL Server integration test, not a production
-Azure SQL test. P4-08 must deploy the custom route and configure the backend URL.
+restricted to Dan. Store, API, agent handler and web behavior are tested offline.
+The agent name is set by Bicep and the main Deploy workflow; the backend project
+endpoint already comes from Bicep. No schema migration or custom `/chat` route is
+needed. The store passes a disposable SQL Server integration test, not a
+production Azure SQL test. Live Foundry chat streaming and a tool-call row linked
+to its stored message remain a post-merge Azure acceptance check.
 
 ```mermaid
 flowchart LR
@@ -363,6 +370,7 @@ flowchart LR
     BR <-->|"API + SSE"| BE
     BR <-->|"audio"| VL
     VL <--> JA
+    BE <-->|"Foundry Invocations: streamed chat + delegated auth payload"| JA
     JA -->|"tool calls"| BE
     BE <--> DB
     BE --> BL
@@ -572,7 +580,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Area | Design | Evidence |
 | --- | --- | --- |
 | Browser connection | Browser connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. It captures and sends mono 24 kHz PCM only after the relay is ready; provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, interruption, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
-| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then captures audio. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live deployment, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
+| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then captures audio. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
 | English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | The client waits for the backend-configured session before opening the microphone. Local mock tests verify server-owned session settings and client event handling; real browser audio and live Voice Live behavior remain unverified pending P0-16. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Voice calls are not yet persisted as messages/tool-call rows; P4-03/P5-06 own conversation and voice history. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
@@ -620,10 +628,11 @@ than answering with stale status. The existing connection history is bounded to
 12 messages, 24,000 characters total, and 8,000 characters per message.
 
 Each call sends `X-Jarvis-Message-ID` from the turn's `current_message_id` context.
-Nothing sets it until P4-03 stores conversation messages, so the agent refuses tool
-calls locally instead of inventing an ID. The prototype's English instructions
-(P5-03) and Azure Table tool log were not ported; the backend's `tool_calls` is the
-record. Deployment to Foundry and live agent tokens are P4-08.
+P4-09 forwards the stored chat message ID through the Invocations payload, so the
+agent can set it for tool calls rather than invent an ID. The prototype's English
+instructions (P5-03) and Azure Table tool log were not ported; the backend's
+`tool_calls` is the record. The hosted agent is deployed; live invocation and tool
+call linkage remain the post-merge P4-09 acceptance check.
 
 ## Identity and security
 
