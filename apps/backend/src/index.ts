@@ -53,14 +53,24 @@ import { createGitHubDeliveryHandler } from './github/delivery.js';
 import { createAlertNotifier } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
+import { createGraphClient } from './graph/client.js';
+import { createNotesModule } from './notes/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
+import { createTeamsNotificationStore } from './database/teams-notification-store.js';
+import { createEphemeralAudioStore } from './teams/audio-store.js';
+import { createAzureSpeechSynthesizer } from './teams/speech.js';
+import { createTeamsBotModule, createTeamsConnector } from './teams/bot.js';
+import { createTeamsNotificationService } from './teams/service.js';
 
 try {
   const config = loadConfig();
   const databaseConfig = loadDatabaseConfig();
+  if (config.teams && !databaseConfig) {
+    throw new ConfigurationError('SQL is required for Teams conversations and confirmations');
+  }
   const archiveStorageAccount = loadTaskEventArchiveStorageAccount();
   if (databaseConfig && !archiveStorageAccount) {
     throw new ConfigurationError('TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT is required when SQL is configured');
@@ -77,10 +87,19 @@ try {
   const nowEventHub = createEventHub<NowFeedUpdate>();
   const alertNotifier = createAlertNotifier(telemetry);
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
-    config.foundryEndpoints || config.githubAppId || sleepResourceId
+    config.foundryEndpoints || config.githubAppId || config.teams || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
+    : undefined;
+  const graphClient = credential
+    ? createGraphClient({
+      getToken: async (signal) => {
+        const token = await credential.getToken('https://graph.microsoft.com/.default', { abortSignal: signal });
+        if (!token) throw new Error('Microsoft Graph credentials are unavailable');
+        return token.token;
+      },
+    })
     : undefined;
   const projectRepositoryCreator = config.keyVaultUri && credential
     ? createRepoAdminRepositoryCreator(
@@ -175,6 +194,7 @@ try {
   };
   const sandboxHeartbeat = database && config.foundryEndpoints
     ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub, alertNotifier), clientFor, {
+      onDecision: (decision) => logger.info(decision, 'sandbox_heartbeat.decision'),
       onError: (error) => {
         const details = error instanceof FoundryClientError
           ? { kind: error.kind, statusCode: error.statusCode, operation: error.operation }
@@ -195,12 +215,38 @@ try {
     : null;
   const projectStore = database ? createProjectStore(database.pool) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
+  const teamsAudioStore = config.teams ? createEphemeralAudioStore() : undefined;
+  const teamsSpeech = config.teams && credential
+    ? createAzureSpeechSynthesizer(
+      config.teams.speechRegion,
+      async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Speech identity unavailable');
+        return token.token;
+      },
+    )
+    : undefined;
+  const teamsNotifications = config.teams && database && credential && teamsAudioStore
+    ? createTeamsNotificationService({
+      ownerObjectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+      publicOrigin: config.teams.audioOrigin,
+      store: createTeamsNotificationStore(database.pool),
+      connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
+      audioStore: teamsAudioStore,
+      ...(teamsSpeech ? { speech: teamsSpeech } : {}),
+    })
+    : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;
   const projectPolicyEvaluator = database && taskStore && githubAppTokenIssuer
     ? createProjectPolicyEvaluator({
       store: createProjectPolicyStore(database.pool),
       tasks: taskStore,
       tokenIssuer: githubAppTokenIssuer,
+      ...(teamsNotifications ? {
+        runConfirmed: (summary, action) => teamsNotifications.runConfirmed('merge', summary, action),
+      } : {}),
+      onConfirmationError: () => logger.warn('project_policy.confirmation_failed'),
     })
     : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
@@ -268,6 +314,13 @@ try {
       createScreenFrameUsageStore(database.pool),
     )));
   }
+  if (graphClient) {
+    modules.push(createNotesModule({
+      graph: graphClient,
+      ownerObjectId: config.auth.ownerObjectId,
+      folderPath: config.notesFolderPath,
+    }));
+  }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
       getToken: async (scope, signal) => {
@@ -279,6 +332,14 @@ try {
       ...(config.foundryProjectEndpoint
         ? { connectDanish: createDanishVoiceConnector(config.foundryProjectEndpoint) }
         : {}),
+    }));
+  }
+  if (config.teams && teamsNotifications && teamsAudioStore) {
+    modules.push(await createTeamsBotModule({
+      clientId: config.teams.botAppId,
+      tenantId: config.teams.tenantId,
+      notificationService: teamsNotifications,
+      audioStore: teamsAudioStore,
     }));
   }
   const credentialStatusStore = database ? createCredentialStatusStore(database.pool, {
@@ -319,6 +380,7 @@ try {
     eventHub,
     nowEventHub,
     ...(conversationAgent ? { conversationAgent } : {}),
+    ...(teamsNotifications ? { teamsNotifications } : {}),
   });
   if (checksLoop) app.addHook('onClose', async () => { await checksLoop.stop(); });
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
@@ -369,6 +431,7 @@ try {
       await database.initialize();
       logger.info('database.ready');
     }
+    await teamsNotifications?.expirePendingConfirmations();
     if (!stopping) {
       await sandboxHeartbeat?.start();
       dispatcher?.start();

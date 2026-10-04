@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -145,8 +145,75 @@ describe('App shell', () => {
     await renderSignedIn();
 
     const areas = screen.getByRole('navigation', { name: 'Areas' });
-    expect(within(areas).getAllByRole('link').map((link) => link.textContent)).toEqual(['Software Factory', 'Usage']);
+    expect(within(areas).getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
+      'Conversation',
+      'Software Factory',
+      'Usage',
+    ]);
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
+  });
+
+  it('restores the accepted appearance across signed-in app routes', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/settings') {
+        return new Response(JSON.stringify({ settings: { appearance: { theme: 'dark' } } }));
+      }
+      if (path === '/now') {
+        return new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }));
+      }
+      if (path === '/database/status') return new Response(JSON.stringify({ waking: false }));
+      return new Response('{}');
+    });
+    await renderSignedIn();
+
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
+    await user.click(screen.getByRole('link', { name: 'Software Factory' }));
+    expect(await screen.findByRole('heading', { name: 'Tasks' })).not.toBeNull();
+    expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  it('opens and closes the area navigation with keyboard focus returning to its toggle', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    const collapse = screen.getByRole('button', { name: 'Close area navigation' });
+    collapse.focus();
+    await user.keyboard('{Enter}');
+    const expand = screen.getByRole('button', { name: 'Expand area navigation' });
+    expect(expand.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(expand);
+    expect(screen.queryByRole('navigation', { name: 'Jarvis' })).toBeNull();
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
+  });
+
+  it('keeps Camera unavailable while screen sharing is available in the conversation', async () => {
+    await renderSignedIn();
+
+    const camera = screen.getByRole('button', { name: 'Camera' });
+    expect(camera).toHaveProperty('disabled', true);
+    expect(camera.getAttribute('aria-describedby')).not.toBeNull();
+    expect(document.getElementById(camera.getAttribute('aria-describedby')!)?.textContent)
+      .toBe('Unavailable until camera support is built.');
+    expect(camera.parentElement?.getAttribute('title')).toBe('Unavailable until camera support is built.');
+    expect(within(screen.getByRole('region', { name: 'Conversation' }))
+      .getByRole('button', { name: 'Share screen' })).toHaveProperty('disabled', false);
+  });
+
+  it('opens and closes the contextual shell panel without replacing page content', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    await user.click(screen.getByRole('button', { name: 'Toggle contextual panel' }));
+    expect(screen.getByRole('heading', { name: 'Context' })).not.toBeNull();
+    expect(screen.getByText('No contextual information is available for this page yet.')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Welcome, Dan Aakesen' })).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Close context panel' }));
+    expect(screen.queryByRole('heading', { name: 'Context' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Toggle contextual panel' }));
   });
 
   it('enables chat and explains the other unavailable main-page actions', async () => {

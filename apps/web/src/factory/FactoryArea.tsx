@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Route, Routes, useParams } from 'react-router-dom';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { NotFoundPage, PendingPage } from '../pages';
 import type { AreaProps } from '../areas';
 import { ProjectSettingsPage, ProjectsPage } from './ProjectsPage';
@@ -30,10 +30,6 @@ const projectsLink = { to: '/factory/projects', label: 'Back to projects' };
 export function FactoryArea({ backendUrl, getAccessToken }: AreaProps) {
   return (
     <div className="area">
-      <nav className="area-nav" aria-label="Software Factory">
-        <NavLink className="nav-link" to="/factory/tasks">Tasks</NavLink>
-        <NavLink className="nav-link" to="/factory/projects">Projects</NavLink>
-      </nav>
       <Routes>
         <Route index element={<Navigate to="tasks" replace />} />
         <Route path="tasks" element={<TasksPage backendUrl={backendUrl} getAccessToken={getAccessToken} />} />

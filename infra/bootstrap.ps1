@@ -112,7 +112,7 @@ Write-Host "   Azure and Graph as $($me.userPrincipalName); GitHub CLI signed in
 Step 'Registering resource providers'
 $providers = 'Microsoft.App', 'Microsoft.Web', 'Microsoft.Sql', 'Microsoft.Storage', 'Microsoft.KeyVault',
     'Microsoft.ContainerRegistry', 'Microsoft.CognitiveServices', 'Microsoft.OperationalInsights',
-    'Microsoft.Insights', 'Microsoft.ManagedIdentity', 'Microsoft.Consumption'
+    'Microsoft.Insights', 'Microsoft.ManagedIdentity', 'Microsoft.Consumption', 'Microsoft.BotService'
 foreach ($p in $providers) { Invoke-Az provider register --namespace $p --subscription $SubscriptionId -o none | Out-Null }
 Write-Host "   requested: $($providers.Count) providers"
 

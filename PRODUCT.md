@@ -38,17 +38,18 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | **Agent choice** | Codex or GitHub Copilot per task, regardless of project. |
 | **Subscriptions** | Codex uses Dan's ChatGPT Pro plan (Jarvis-only login); Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. No per-use billing for either. |
 | **Voice** | An open browser is enough. Danish and English with a language toggle; status requests and follow-ups. Voice Live credentials stay on the backend; the browser connects through an authenticated backend WebSocket relay. |
+| **Notes** | Dan can ask what he wrote about; Jarvis searches the configured OneDrive notes folder and grounds its answer in returned snippets and links. |
 | **GitHub events** | The backend verifies GitHub webhook signatures and ignores duplicate delivery IDs for pull requests, check runs, workflow runs, deployment statuses, and pushes. Delivery payloads are mapped into project records separately. |
 | **Continuity** | Work continues when the browser or voice session closes. |
 | **Sandbox** | One sandbox per task: starts when work begins, closes after delivery or cancel. The agent runs targeted builds and tests only; no Docker. |
 | **Build and release** | Full builds, all tests, and releases run in GitHub Actions, as in Dan's normal workflow; never in the sandbox. Managed projects can copy the repository's PR-check and OIDC-release workflow templates and adapt their build and deployment commands. |
 | **Project settings** | Per project: how far agents may go (deliver a PR, or complete without deployment), merge rules, sandbox size. |
-| **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models; updates affect new sessions and tasks, not running work. |
+| **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models, plus the app-wide light/dark appearance; updates affect new sessions and tasks, not running work. |
 | **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. |
 | **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. For chat, the backend calls the hosted agent through Foundry Invocations with its managed identity; the agent verifies Dan's delegated token and stored source message through `/me` and conversation history. The agent has its own identity for reading model settings and listing/calling tools; coding runners use a separate app-only role restricted to task-event ingestion. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Database wake** | SQL connection acquisition and explicitly read-only queries retry resume errors 40613, 40197, 40501 and connection timeouts with backoff for up to 90 seconds. Signed-in pages show “Waking Jarvis…” only while the backend reports a database wait. An ambiguous write failure is never automatically replayed. |
-| **Memory** | One continuous conversation will need compaction and memory over time; the memory design is deferred. |
+| **Memory** | One continuous conversation will need compaction and memory over time; long-term memory is now an accepted planned capability (P7-13); storage, retrieval and retention choices remain open. |
 | **Turn context** | Each model turn receives current running-task status and recent events plus a bounded recent-message window, so typical status questions do not need a separate task-list model round. |
 
 ### App structure
@@ -87,7 +88,7 @@ stateDiagram-v2
     Paused --> Cancelled: Cancel
 ```
 
-- **Steer** submits a bounded text correction to the current turn. **Pause** requests a safe stop and remains `PauseRequested` until the backend confirms the turn has stopped; the heartbeat resolves an unsuccessful pause to `Running` or `NeedsAttention`. **Resume** continues the same Foundry session after a clean pause; **cancel** ends the task and requests deletion of its Foundry session.
+- **Steer** submits a bounded text correction to the current turn, or starts a new session on the task branch when the completed turn's session has expired. **Pause** requests a safe stop and remains `PauseRequested` until the backend confirms the turn has stopped; the heartbeat resolves an unsuccessful pause to `Running` or `NeedsAttention`. **Resume** continues the same Foundry session after a clean pause; **cancel** ends the task and requests deletion of its Foundry session.
 - Task controls are offered only for valid task states, with pending and failure feedback beside the action. The backend enforces every transition; a browser cannot set task state directly.
 - If writable disk falls below the configured threshold, the runner reports `disk_low`, stops the current turn, and the backend moves the task to Needs attention with reason `disk_low`.
 - If Codex rejects a turn because the Jarvis login's usage limit is reached, the runner reports the failure as `Codex usage limit reached` (reason `codex_usage_limit`) instead of a generic runner error. The task moves to Needs attention, and other tasks keep running.
@@ -128,6 +129,8 @@ Dan never fills in a project form. He gives Jarvis, by voice or chat, a project 
 
 Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered.
 
+Dan can also change Jarvis's model or reasoning by chat or voice for the next session, and change the agent or verified model options on a Ready coding task. Running-task model changes are refused with a reason; they never alter an active turn.
+
 | Area | Setting | Default |
 | --- | --- | --- |
 | Jarvis | Model and reasoning effort | `gpt-5.6-luna`, reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
@@ -148,6 +151,14 @@ Danish voice uses the authenticated backend `/voice/da` WebSocket to a provision
 
 Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity. The vision description is separate, untrusted context for the active chat or voice reply; frames are held in memory only and never enter transcripts, logs, or task events. Stopping voice or leaving the page releases the shared stream.
 
+### Phone notifications and confirmations (P7-03)
+
+Jarvis sends Dan short text updates and Adaptive Card approval requests in a personal Teams chat. The backend stores only Dan's validated conversation reference after his first interaction; Bot Service activities must be from Dan's Entra object ID in the Novaro tenant. Confirmation cards offer Approve and Reject and expire after five minutes. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action.
+
+Azure Speech F0 may add a voice note to a notification or confirmation. If synthesis fails or the free allowance is exhausted, Jarvis still sends the text and never falls back to a paid tier. Speech audio is temporary and served through a short-lived opaque link.
+
+These actions always require Dan's confirmation: merge, delete, send mail, calendar changes, repository creation, computer use outside the browser, and anything that spends money. The backend must refuse a gated operation if Teams confirmation is unavailable. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
+
 Personality preferences are validated and persisted in Settings. They apply to new chat and voice sessions; changing or resetting them does not interrupt an active voice session. Reset restores the current British-butler, concise defaults and clears custom instructions. Preferences affect response style only, not Jarvis's identity, available tools, permissions, selected language, model or voice, or truthful reporting of action outcomes.
 
 ### Page requirements
@@ -164,7 +175,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings, and alerts for failed deployments, sandbox crashes, credential expiry, and the 80% monthly budget threshold | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready, Running, or PauseRequested |
 
-The "Now" panel reads current running tasks and the latest non-dismissed task-attention, release/deployment, credential-warning, and alert activity. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes, and expiring credentials are emailed through stateful Azure Monitor rules; the monthly Azure budget sends its 80% threshold through the same email-only action group. The backend reads actual budget spend on a bounded 15-minute schedule for the Now item. No SMS or voice notifications are sent; phone delivery is P7-03. Task changes, alerts, dismissals, and credential/budget alert writes refresh the panel through authenticated server-sent events; reconnecting states identify when the displayed snapshot may be stale.
+The "Now" panel reads current running tasks and the latest non-dismissed task-attention, release/deployment, credential-warning, and alert activity. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes, and expiring credentials are emailed through stateful Azure Monitor rules; the monthly Azure budget sends its 80% threshold through the same email-only action group. The backend reads actual budget spend on a bounded 15-minute schedule for the Now item. These existing activity alerts remain email-only; direct phone notifications and confirmations use Teams through P7-03. Task changes, alerts, dismissals, and credential/budget alert writes refresh the panel through authenticated server-sent events; reconnecting states identify when the displayed snapshot may be stale.
 
 The voice orb follows status transitions reported by the browser voice client and includes a text alternative. Unknown states are reported as unavailable, and motion is disabled when reduced motion is preferred. Tool-call activity remains explicitly unavailable until the runtime publishes that state (P8-16); the UI does not infer it from thinking or speech.
 
@@ -244,6 +255,7 @@ the last-release field is explicitly unavailable rather than inferred.
 
 | Data points | Actions |
 | --- | --- |
+| Appearance: light or dark mode across all signed-in pages | Change; persist across visits |
 | Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
 | Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset (applies to new sessions) |
 | Voice: speech-to-text model, voice per language, default language | Change; play a voice sample |
@@ -296,7 +308,7 @@ The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-l
 
 - Conflicts between pull requests in one repository (Decision 5).
 - Changing the provider on a running task (Decision 4).
-- Memory design (Decision 6).
+- Long-term memory implementation choices (Decision 6; P7-13).
 - What usage Codex and Copilot report per turn ([data model](docs/data-model.md#still-open)); P2-12 records offline package evidence, and actual fields remain a post-merge live check.
 - Whether Foundry sandboxes can get the documented 20 GiB disk (Decision 9).
 
@@ -312,3 +324,30 @@ listen. Desktop and phone layouts follow the mode/window rules in ui.md. Theme
 variables can be changed on demand and persist until changed again. Banking and
 Fitness and Health are future areas; their detailed integrations remain deferred.
 This is planned behaviour, not a claim that the existing frontend implements it.
+
+## Accepted capability additions (4 October 2026; planned)
+
+Dan accepted four additions after reviewing the supplied video transcript:
+
+- **Long-term memory:** recall preferences, decisions and unfinished work across
+  sessions and restarts using durable, relevant retrieval outside the model's
+  context window. This extends saved history and is distinct from searching Dan's
+  notes. Storage, retention and capture policy remain open; temporary UI windows
+  stay unsaved. Source-linked inspection, correction and forgetting are part of
+  the implementation task. No literally unlimited capacity is promised.
+- **Web research:** search and retrieve sources, synthesise findings with links
+  and supply results to existing dynamic-view consumers. Provider and cost limits
+  remain open; no service has been selected or provisioned.
+- **Image and video generation:** generate both kinds of assets on request,
+  expose truthful pending/completed/failed/cancelled state and return artifacts
+  to the workspace. Provider, costs and artifact retention remain open. Creating
+  assets is distinct from creating their temporary presentation views.
+- **Editable personality:** persist Dan's tone/response-style preferences and
+  custom instructions, applying the same configuration to new chat and voice
+  sessions. Keep the current butler default until changed; personality does not
+  change tool permissions or honest reporting. Settings placement and form
+  details are proposed in DESIGN.md and ui.md.
+
+Tasks: P7-13–P7-16 and the P8-19 Personality settings UI. These are planned
+requirements, not claims of implemented behaviour. The existing Microsoft-first
+service and cost constraints remain in force.

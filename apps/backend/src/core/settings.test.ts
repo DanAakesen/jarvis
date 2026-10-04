@@ -48,6 +48,7 @@ describe('settings API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       settings: {
+        appearance: { theme: 'light' },
         jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
         personality: { tone: 'british_butler', responseStyle: 'concise', customInstructions: '' },
         voice: { defaultLanguage: 'da' },
@@ -76,6 +77,7 @@ describe('settings API', () => {
       headers: authorization,
       payload: {
         settings: {
+          appearance: { theme: 'dark' },
           jarvis: { reasoning: 'high' },
           voice: { defaultLanguage: 'en' },
           global: { maxParallelTasks: 4, maxCheckAttempts: 2, screenShareDailyFrameCap: 270 },
@@ -86,18 +88,22 @@ describe('settings API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       settings: {
+        appearance: { theme: 'dark' },
         jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
         voice: { defaultLanguage: 'en' },
         global: { maxParallelTasks: 4, maxCheckAttempts: 2, screenShareDailyFrameCap: 270 },
       },
     });
     expect(values).toEqual({
+      'appearance.theme': '"dark"',
       'jarvis.reasoning_effort': '"high"',
       'voice.default_language': '"en"',
       'global.max_parallel_tasks': '4',
       'global.max_check_attempts': '2',
       'global.screen_share_daily_frame_cap': '270',
     });
+    const readBack = await app.inject({ url: '/settings', headers: authorization });
+    expect(readBack.json().settings.appearance).toEqual({ theme: 'dark' });
   });
 
   it('persists bounded personality preferences and supports restoring their defaults', async () => {
@@ -288,6 +294,7 @@ describe('settings API', () => {
   });
 
   it.each([
+    { settings: { appearance: { theme: 'system' } } },
     { settings: { jarvis: { model: 'not-available' } } },
     { settings: { jarvis: { reasoning: 'unsupported' } } },
     { settings: { personality: { tone: 'unbounded' } } },
@@ -319,6 +326,26 @@ describe('settings API', () => {
 
     expect(response.statusCode).toBe(400);
     expect(write).not.toHaveBeenCalled();
+  });
+
+  it('preserves the accepted theme when a later theme update is rejected', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const accepted = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { appearance: { theme: 'dark' } } },
+    });
+    expect(accepted.statusCode).toBe(200);
+
+    const rejected = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { appearance: { theme: 'system' } } },
+    });
+
+    expect(rejected.statusCode).toBe(400);
+    expect(values['appearance.theme']).toBe('"dark"');
+    const readBack = await app.inject({ url: '/settings', headers: authorization });
+    expect(readBack.json().settings.appearance).toEqual({ theme: 'dark' });
   });
 
   it('ignores persisted keys and values outside the current catalog', async () => {

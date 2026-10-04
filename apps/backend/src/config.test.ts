@@ -4,7 +4,21 @@ import { loadAuthConfig } from './auth/config.js';
 
 describe('backend configuration', () => {
   it('defaults to the infrastructure port and offline logs', () => {
-    expect(loadConfig({})).toEqual({ port: 3000, logLevel: 'info', auth: loadAuthConfig({}) });
+    expect(loadConfig({})).toEqual({
+      port: 3000, logLevel: 'info', notesFolderPath: '/Jarvis/Notes', auth: loadAuthConfig({}),
+    });
+  });
+  it('accepts a configured OneDrive notes folder and rejects unsafe paths', () => {
+    expect(loadConfig({ JARVIS_NOTES_FOLDER_PATH: '/Work Notes/Research/' }).notesFolderPath)
+      .toBe('/Work Notes/Research');
+    for (const JARVIS_NOTES_FOLDER_PATH of [
+      '', '/', 'Jarvis/Notes', '/Jarvis//Notes', '/Jarvis/../Private', '/Jarvis\\Notes',
+      '/Jarvis/Notes?token=secret', '/Jarvis/Notes#fragment', '/Jarvis/Notes\u0000',
+    ]) {
+      expect(() => loadConfig({ JARVIS_NOTES_FOLDER_PATH })).toThrow(
+        /^JARVIS_NOTES_FOLDER_PATH must be an absolute OneDrive folder path$/,
+      );
+    }
   });
   it('accepts only a secure Key Vault origin', () => {
     expect(loadConfig({ KEY_VAULT_URI: 'https://kv-jarvis.vault.azure.net/' }).keyVaultUri)
@@ -27,6 +41,7 @@ describe('backend configuration', () => {
       FOUNDRY_RUNNER_AGENT_NAME: 'jarvis-runner-node-1x2',
     })).toEqual({
       auth: loadAuthConfig({}), port: 4000, logLevel: 'debug', staticWebAppOrigin: 'https://fixture.azurestaticapps.net', applicationInsightsConnectionString: connectionString,
+      notesFolderPath: '/Jarvis/Notes',
       foundryEndpoints: {
         admin: foundryAdminEndpoint,
         runtime: foundryRuntimeEndpoint,
@@ -56,6 +71,40 @@ describe('backend configuration', () => {
       expect(() => loadConfig({ FOUNDRY_PROJECT_ENDPOINT, JARVIS_CHAT_AGENT_NAME }))
         .toThrow('JARVIS_CHAT_AGENT_NAME');
     }
+  });
+  it('accepts a complete bot, audio-origin, and Speech F0 configuration', () => {
+    expect(loadConfig({
+      TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      TEAMS_BOT_TENANT_ID: '802efa29-17f2-4a79-8f5f-38f087aed96a',
+      TEAMS_AUDIO_ORIGIN: 'https://jarvis.example',
+      SPEECH_REGION: 'westeurope',
+    }).teams).toEqual({
+      botAppId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      tenantId: '802efa29-17f2-4a79-8f5f-38f087aed96a',
+      audioOrigin: 'https://jarvis.example',
+      speechRegion: 'westeurope',
+    });
+  });
+  it('rejects partial, cross-tenant, or unsafe Teams and Speech settings', () => {
+    expect(() => loadConfig({ TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }))
+      .toThrow('must be configured together');
+    const complete = {
+      TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      TEAMS_BOT_TENANT_ID: '802efa29-17f2-4a79-8f5f-38f087aed96a',
+      TEAMS_AUDIO_ORIGIN: 'https://jarvis.example',
+      SPEECH_REGION: 'westeurope',
+    };
+    expect(() => loadConfig({ ...complete, TEAMS_BOT_TENANT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }))
+      .toThrow('must match ENTRA_TENANT_ID');
+    for (const TEAMS_AUDIO_ORIGIN of [
+      'http://jarvis.example',
+      'https://jarvis.example/',
+      'https://jarvis.example/path',
+      'https://user@jarvis.example',
+    ]) {
+      expect(() => loadConfig({ ...complete, TEAMS_AUDIO_ORIGIN })).toThrow('TEAMS_AUDIO_ORIGIN');
+    }
+    expect(() => loadConfig({ ...complete, SPEECH_REGION: 'https://example.com' })).toThrow('SPEECH_REGION');
   });
   it('accepts a GitHub App ID only with a secure Key Vault origin', () => {
     expect(loadConfig({

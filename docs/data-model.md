@@ -1,11 +1,11 @@
 # Data model
 
-Version 1, updated 4 October 2026 for P6-02. Scope: the Jarvis core and the Software Factory only. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 4 October 2026 for P7-03. Scope: the Jarvis core and the Software Factory only. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
 Issue #7 adds `dbo.schema_migrations`, an internal deployment ledger separate
-from the seven domain groups: `name nvarchar(255)` primary key, `checksum char(64)`
+from the eight domain groups: `name nvarchar(255)` primary key, `checksum char(64)`
 (SHA-256 of committed file bytes), and `applied_at datetime2(7)` defaulting to
 `SYSUTCDATETIME()`. The backend creates and writes it only while holding the
 transaction-owned `jarvis.schema-migrations` app lock. Its rows must remain an
@@ -28,10 +28,13 @@ before restoring the prior constraint.
 P6-02 adds nullable `activity.alert_key` and a filtered unique index in
 `0011_alert_deduplication.sql`; each event condition has one activity row and
 can be safely retried. Its down migration removes the index and column.
+P7-03 adds the Teams conversation and confirmation tables in
+`0014_teams_notifications.sql`; its down migration removes both tables and the
+confirmation expiry index.
 
 ## Overview
 
-Seven groups. Arrows show the main references between groups.
+Eight groups. Arrows show the main references between groups.
 
 ```mermaid
 flowchart LR
@@ -67,6 +70,10 @@ flowchart LR
         webhook_deliveries
         credential_status
     end
+    subgraph PHONE["8 · Phone notifications"]
+        teams_conversations
+        teams_confirmations
+    end
     tool_calls --> tasks
     tasks --> projects
     sandbox_sessions --> tasks
@@ -87,10 +94,11 @@ flowchart LR
 | 5 | GitHub and release | Pull requests, checks, the release view (commits fetched from GitHub on demand) | `pull_requests`, `workflow_runs`, `releases`, `deployments` |
 | 6 | Operations | Safe webhook handling, credential expiry warnings | `webhook_deliveries`, `credential_status` |
 | 7 | Usage and cost | Transparency per task and project: sandbox time, model tokens, voice, Codex and Copilot usage | `usage` |
+| 8 | Phone notifications | Dan's validated Teams personal conversation and expiring one-time approvals | `teams_conversations`, `teams_confirmations` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
-P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. P7-05 adds `screen_frames` to the Jarvis-model usage metrics in migration `0012_screen_frame_usage.sql`; the matching down migration removes those rows before restoring the prior constraint. Realtime voice tool calls are not stored in `tool_calls`.
+P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. P7-05 adds `screen_frames` to the Jarvis-model usage metrics in migration `0015_screen_frame_usage.sql`; the matching down migration removes those rows before restoring the prior constraint. Realtime voice tool calls are not stored in `tool_calls`.
 
 ## 1 · Jarvis core
 
@@ -152,7 +160,7 @@ erDiagram
 - P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language, voice minutes when recorded, and tool name, outcome, and task ID, not tool arguments or results. The main page reads history; P4-06 sends chat turns through the session turn endpoint, while the authenticated voice relay creates voice sessions and stores completed transcript events. No schema migration was needed.
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
 - P4-04's agent-only turn context reads up to 20 running tasks and their three latest `task_events` from the existing tables. It selects task status/activity and event type, summary, source, and time; it excludes task requests and event payloads, and clips summaries to 400 characters. No schema or migration change is needed.
-- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; any other failure is stored as a generic error. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. P4-06 stores the source message before P4-09 sends its ID and the delegated token in the application payload to the hosted agent through Foundry Invocations. The agent registers its chat handler with that protocol, verifies the caller and message through the backend, and sets the message ID in the per-turn context used by tool calls. P4-04's running-task context is fetched by the model client on every turn. No data-model or migration change is required.
+- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; `ToolFailure` stores a bounded safe explanation with an `error` outcome, while unexpected failures stay generic. P7-10 stores its bounded query and returned title/snippet/link values in this existing table; no new table or migration is needed. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. P4-06 stores the source message before P4-09 sends its ID and the delegated token in the application payload to the hosted agent through Foundry Invocations. The agent registers its chat handler with that protocol, verifies the caller and message through the backend, and sets the message ID in the per-turn context used by tool calls. P4-04's running-task context is fetched by the model client on every turn. No data-model or migration change is required.
 - P3-12 `create_project` reuses `dbo.projects`, `dbo.tasks`, `dbo.messages`, and `dbo.tool_calls`: tool arguments/results contain the requested name/description and project/task identifiers, while the task uses `source = 'chat'` and references the calling message. The backend-only repository token is never persisted; the project starts with the `node`/`1x2` base defaults. No schema or migration change is required.
 - Session, message, history, task-origin, and tool-call behavior is covered by offline and disposable SQL Server tests; live Azure SQL writes have not been verified.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
@@ -270,6 +278,7 @@ erDiagram
 - **Retries:** `attempt_count` increments for each leased start. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; `next_attempt_at` gates each retry. Ambiguous Foundry start outcomes are not replayed and move to `NeedsAttention`.
 - P2-13 sets the existing `tasks.branch` to `jarvis/task-<id>` on dispatch when absent and preserves it for retries, resume, and recovery. No schema migration is needed. A runner `session_question` event stores the last agent message; its transaction moves a Running or PauseRequested task to NeedsAttention with reason `session_question` and releases its lease before publishing the events.
 - `task_events` stores **every** task event (Dan's choice: maximum freedom for the UI). It is append-only, drives the card's live updates (via SSE) and the task's history, and is the only fast-growing table; archive by age: a backend job moves events older than 90 days to private Blob Storage in bounded batches. The SQL rows are deleted only after their archive blobs upload successfully, and `task_event_archives` records the blob references in the same SQL transaction as deletion. Task-detail pages read only the indexed archived chunks they need and keep the same bounded pagination. The live `recordEvent` write path remains unchanged. Each event also creates a `factory` activity row with its type as `kind`, its summary (or type) as title, and `task:<id>` as link.
+- P7-11 updates the existing task agent/model/reasoning fields only when the task is Ready, then writes a bounded `model_changed` event and activity row in the same transaction. The committed event is published through the existing hub so task detail refreshes; no table or migration is added.
 - `origin_message_id` links a task to the message in Jarvis's conversation that created it. The existing schema requires this reference for non-board tasks; board tasks may omit it.
 - P1-04 creates a board task only for an active project, using the project's default agent unless the request selects one. Task creation and its `created` event share a transaction. Backend state transitions lock the task row, enforce the product lifecycle, and write a `state_changed` event in that transaction; `Done` requires GitHub verification of the task branch and a pull request in the configured repository. There is no client state-update route.
 - P3-12 creates its initial scaffold task through the same store and transaction, linked to the chat message that invoked `create_project`; a runner clarification becomes a normal `NeedsAttention` state-change event with a bounded question and ends the sandbox session as `Ended`/`done`, not `Crashed`.
@@ -328,6 +337,7 @@ erDiagram
 
 - A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22). The unique `foundry_session_id` row is reused after a clean pause: resume resets `started_at`, clears `ended_at`, and adds the completed active interval to that session's existing sandbox usage row. Cancelling a paused task marks its idle session Ended. The dispatcher records `agent_name` for heartbeat routing. `agent_version = 'active'` and `image` records the selected Foundry runner route (for example `jarvis-runner-base-1x2`); the Invocations start response does not expose the resolved version number or container digest.
 - The sandbox heartbeat updates `last_heartbeat_at`; it needs the session's `agent_name` to address the Foundry runtime. Runner completion events mark the matching `sandbox_turns` row completed. If Foundry later confirms that this invocation's session expired, the session ends with `idle_expired` while task state remains unchanged; the task API exposes the latest session end reason for Continue versus Recover. Live runner events update `last_event_at` and add `task_events`.
+- Heartbeat-observed completion also persists the matching turn's terminal status. Expiry and generic NeedsAttention cleanup check the latest turn and its matching committed runner completion events, so an event arriving before turn insertion cannot become a false crash. An old invocation's poll cannot end a newer turn. These guards require no schema migration.
 - Large content (logs, CI logs, transcripts) lives in Blob; SQL keeps only the path.
 - The schema checks sandbox sizes, statuses, turn modes, end reasons and artifact kinds against these vocabularies. UTC `datetime2` end and heartbeat/event timestamps cannot precede their start.
 - `sandbox_sessions` is indexed by task and status; turns and artifacts are indexed by their parent and timestamp for the session/task timelines.
@@ -491,6 +501,34 @@ Global Standard Global rates in
 2026 (1.3157 DKK/input million, 7.8941 DKK/output million), rounded to four
 decimal places. Usage marks screen-frame rows as estimated. The frame and its
 base64 request buffer are transient; neither is represented in the data model.
+
+## 8 · Phone notifications
+
+```mermaid
+erDiagram
+   teams_conversations {
+       string owner_object_id PK
+       string conversation_id
+       json reference_json
+       datetime updated_at
+   }
+   teams_confirmations {
+       string confirmation_id PK
+       string owner_object_id
+       string conversation_id
+       string action_kind
+       string status "pending | approved | rejected | expired | cancelled | executing"
+       datetime expires_at
+       datetime resolved_at
+   }
+```
+
+P7-03 stores one validated personal Teams conversation reference for Dan and
+single-use confirmation state bound to his object ID and conversation ID.
+`IX_teams_confirmations_expiry` supports expiry cleanup. Cards and message text
+are not persisted in these tables; voice bytes live only in a bounded in-memory
+store with five-minute links. Startup expires pending confirmations, and an
+approval is atomically consumed before the backend invokes its action.
 
 ## Physical schema (groups 1–3)
 

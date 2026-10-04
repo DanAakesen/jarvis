@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { backendFetch } from './backend-request';
+import { useThemePreference } from './theme-preference-context';
 
 interface Settings {
+  appearance: { theme: 'light' | 'dark' };
   jarvis: { model: string; reasoning: string };
   voice: {
     speechToTextModel: string;
@@ -27,6 +29,7 @@ interface Settings {
 type SettingsPatch = { [Area in keyof Settings]?: Partial<Settings[Area]> };
 
 interface SettingsOptions {
+  themes: string[];
   jarvisModels: string[];
   reasoningEfforts: string[];
   speechToTextModels: string[];
@@ -83,7 +86,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
   const options = value.options;
   const credentials = value.credentials;
   const optionKeys: (keyof SettingsOptions)[] = [
-    'jarvisModels', 'reasoningEfforts', 'speechToTextModels', 'englishModels',
+    'themes', 'jarvisModels', 'reasoningEfforts', 'speechToTextModels', 'englishModels',
     'englishVoices', 'danishVoices', 'languages', 'codexModels',
     'codexReasoningEfforts', 'copilotModels', 'projectVisibilities', 'projectAgents',
     'projectPolicies',
@@ -95,7 +98,9 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     (item.status === 'ok' || item.status === 'renew_soon' || item.status === 'failed' || item.status === 'unknown') &&
     (item.expiresAt === null || (typeof item.expiresAt === 'string' && Number.isFinite(Date.parse(item.expiresAt)))) &&
     (item.lastRenewedAt === null || (typeof item.lastRenewedAt === 'string' && Number.isFinite(Date.parse(item.lastRenewedAt)))));
-  return isObject(settings.jarvis) && isObject(settings.voice) && isObject(settings.codex) &&
+  return isObject(settings.appearance) &&
+    (settings.appearance.theme === 'light' || settings.appearance.theme === 'dark') &&
+    isObject(settings.jarvis) && isObject(settings.voice) && isObject(settings.codex) &&
     isObject(settings.copilot) && isObject(settings.global) && isObject(settings.newProjects) &&
     typeof settings.jarvis.model === 'string' && typeof settings.jarvis.reasoning === 'string' &&
     typeof settings.voice.speechToTextModel === 'string' && typeof settings.voice.englishModel === 'string' &&
@@ -204,6 +209,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
 }) {
+  const themePreference = useThemePreference();
   const [state, setState] = useState<LoadState>(backendUrl ? 'loading' : 'error');
   const [savedSettings, setSavedSettings] = useState<Settings | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -304,6 +310,45 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       )}
       {state === 'ready' && settings && options && (
         <form onSubmit={(event) => { void save(event); }}>
+          <section className="settings-section" aria-labelledby="appearance-settings-heading">
+            <h2 id="appearance-settings-heading">Appearance</h2>
+            <p className="settings-explanation">Choose a light or dark appearance for every page. The accepted theme is saved separately from other settings.</p>
+            <fieldset className="choice-group theme-choice-group"
+              disabled={themePreference.state !== 'ready' || themePreference.saving}>
+              <legend>Theme</legend>
+              <label className="choice" htmlFor="theme-light">
+                <input id="theme-light" name="theme" type="radio" value="light"
+                  checked={themePreference.theme === 'light'}
+                  onChange={() => { void themePreference.saveTheme('light'); }} />
+                Light
+              </label>
+              <label className="choice" htmlFor="theme-dark">
+                <input id="theme-dark" name="theme" type="radio" value="dark"
+                  checked={themePreference.theme === 'dark'}
+                  onChange={() => { void themePreference.saveTheme('dark'); }} />
+                Dark
+              </label>
+            </fieldset>
+            {themePreference.state === 'loading' && <p className="settings-feedback" role="status">Loading saved theme…</p>}
+            {themePreference.state === 'error' && (
+              <div className="settings-feedback" role="alert">
+                <p>{themePreference.error}</p>
+                <button className="secondary-button" type="button" onClick={themePreference.retry}>Retry theme</button>
+              </div>
+            )}
+            {themePreference.state === 'ready' && themePreference.saving &&
+              <p className="settings-feedback" role="status">Saving theme…</p>}
+            {themePreference.state === 'ready' && themePreference.error &&
+              <p className="settings-feedback" role="alert">{themePreference.error}</p>}
+            {themePreference.state === 'ready' && !themePreference.error && themePreference.message &&
+              <p className="settings-feedback" role="status">{themePreference.message}</p>}
+            <button className="secondary-button theme-variable-button" type="button" disabled
+              aria-describedby="theme-variables-help">Edit theme variables</button>
+            <p className="settings-explanation" id="theme-variables-help">
+              Custom and Jarvis-directed variable changes are unavailable until their validated settings and tool update path is implemented.
+            </p>
+          </section>
+
           <section className="settings-section" aria-labelledby="jarvis-settings-heading">
             <h2 id="jarvis-settings-heading">Jarvis</h2>
             <div className="settings-grid">
