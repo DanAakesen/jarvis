@@ -435,6 +435,15 @@ Verified locally for issue #30 (no Azure access required):
 
 The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and an injected `getToken(scope, signal)` identity provider. These are module options, not new environment variables. See the [module guide](../apps/backend/src/foundry/README.md) for operation ownership and fixture provenance. Recorded runner responses are captured locally with ACP stubbed; these checks establish the offline contract, not live Azure readiness. The dedicated `Foundry contract CI` workflow checks this module on the current skeleton without depending on the server implementation.
 
+P2-13 task starts require `repository` (`owner/name`), `defaultBranch`, and
+`branch` in addition to the task identifier. The runner prepares the Git
+checkout before starting ACP; provider probes and Codex renewal do not clone a
+repository. Keep the existing Git credential-helper interface when changing
+token acquisition (P3-02). After merge, the coordinator must run one Copilot and
+one Codex task on `DanAakesen/jarvis-test-target`, verify pushes to their
+`jarvis/task-<id>` branches, and verify that a commit-free agent question appears
+as Needs attention.
+
 ### Database access and migrations (#7)
 
 - Configure `SQL_SERVER=<host>.database.windows.net`, `SQL_DATABASE=jarvis` and

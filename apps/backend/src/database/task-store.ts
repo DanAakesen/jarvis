@@ -646,7 +646,8 @@ export function createTaskStore(
       await transaction.begin();
       try {
         let currentState: TaskState | undefined;
-        if (event.type === 'disk_low') {
+        const isQuestion = event.source === 'runner' && event.type === 'session_question';
+        if (event.type === 'disk_low' || isQuestion) {
           const task = await new sql.Request(transaction)
             .input('taskId', sql.BigInt, BigInt(event.taskId))
             .query<{ state: TaskState }>(
@@ -656,16 +657,17 @@ export function createTaskStore(
         const publishedEvent = await insertTaskEvent(transaction, event, payload);
         await recordRunnerUsage(transaction, event, event.payload);
         let stateChangedEvent: TaskEventMessage | undefined;
-        if (currentState === 'Running') {
+        if (currentState === 'Running' || (isQuestion && currentState === 'PauseRequested')) {
           await new sql.Request(transaction)
             .input('taskId', sql.BigInt, BigInt(event.taskId))
+            .input('currentState', sql.NVarChar(32), currentState)
             .query(`UPDATE dbo.tasks SET state = N'NeedsAttention', lease_owner = NULL, lease_until = NULL
-              WHERE id = @taskId AND state = N'Running';`);
+              WHERE id = @taskId AND state = @currentState;`);
           const stateChanged: RecordTaskEventInput = {
             taskId: event.taskId,
             type: 'state_changed',
-            summary: 'Low sandbox disk; task needs attention',
-            payload: { from: 'Running', to: 'NeedsAttention', reason: 'disk_low' },
+            summary: isQuestion ? 'Agent needs input; task needs attention' : 'Low sandbox disk; task needs attention',
+            payload: { from: currentState, to: 'NeedsAttention', reason: isQuestion ? 'session_question' : 'disk_low' },
             source: 'backend',
           };
           stateChangedEvent = await insertTaskEvent(

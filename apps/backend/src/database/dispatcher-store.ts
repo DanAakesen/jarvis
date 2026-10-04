@@ -15,6 +15,9 @@ interface DispatchTaskRow {
   nextAttemptAt: Date | string | null;
   sandboxSize: '1x2' | '2x4';
   tech: string;
+  repository: string;
+  defaultBranch: string;
+  branch: string;
 }
 
 interface EventRow extends Omit<TaskEventMessage, 'at' | 'payload'> {
@@ -172,11 +175,12 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
               task_id bigint NOT NULL PRIMARY KEY, project_id bigint NOT NULL, title nvarchar(200) NOT NULL,
               request nvarchar(max) NOT NULL, agent nvarchar(16) NOT NULL, model_override nvarchar(100) NULL,
               reasoning_override nvarchar(32) NULL, attempt_count int NOT NULL,
-              sandbox_size nvarchar(8) NOT NULL, tech nvarchar(32) NOT NULL
+              sandbox_size nvarchar(8) NOT NULL, tech nvarchar(32) NOT NULL,
+              repository nvarchar(140) NOT NULL, default_branch nvarchar(255) NOT NULL
             );
             INSERT @candidate
             SELECT TOP (1) t.id, t.project_id, t.title, t.request, t.agent, t.model_override,
-              t.reasoning_override, t.attempt_count, p.sandbox_size, p.tech
+              t.reasoning_override, t.attempt_count, p.sandbox_size, p.tech, p.repo, p.default_branch
             FROM dbo.tasks AS t WITH (UPDLOCK, READPAST, ROWLOCK)
             INNER JOIN dbo.projects AS p ON p.id = t.project_id AND p.active = 1
             WHERE t.state = N'Ready'
@@ -192,12 +196,14 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
                     OR (projectActive.state = N'Ready' AND projectActive.lease_until > @now))) < p.max_parallel_tasks
             ORDER BY t.priority DESC, t.created_at, t.id;
             UPDATE t SET attempt_count = t.attempt_count + 1,
-              lease_owner = @owner, lease_until = DATEADD(second, @leaseSeconds, @now)
+              lease_owner = @owner, lease_until = DATEADD(second, @leaseSeconds, @now),
+              branch = COALESCE(t.branch, CONCAT(N'jarvis/task-', t.id))
             FROM dbo.tasks AS t INNER JOIN @candidate AS c ON c.task_id = t.id;
             SELECT CAST(c.task_id AS varchar(19)) AS taskId, CAST(c.project_id AS varchar(19)) AS projectId,
               c.title, c.request, c.agent, c.model_override AS modelOverride,
               c.reasoning_override AS reasoningOverride, c.attempt_count + 1 AS attemptCount,
-              t.next_attempt_at AS nextAttemptAt, c.sandbox_size AS sandboxSize, c.tech
+              t.next_attempt_at AS nextAttemptAt, c.sandbox_size AS sandboxSize, c.tech,
+              c.repository, c.default_branch AS defaultBranch, t.branch
             FROM @candidate AS c INNER JOIN dbo.tasks AS t ON t.id = c.task_id;
             SELECT MIN(next_attempt_at) AS nextAttemptAt FROM dbo.tasks
             WHERE state = N'Ready' AND next_attempt_at > @now
@@ -332,10 +338,12 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
         .input('taskId', sql.BigInt, BigInt(taskId))
         .query<TaskControlTarget>(`SELECT CAST(t.id AS varchar(19)) AS taskId,
           t.agent, t.request, t.model_override AS modelOverride, t.reasoning_override AS reasoningOverride,
+          p.repo AS repository, p.default_branch AS defaultBranch, t.branch,
           CAST(s.id AS varchar(19)) AS sandboxSessionId, s.foundry_session_id AS foundrySessionId,
           s.agent_name AS agentName, s.size AS sandboxSize, s.image, s.status AS sessionStatus,
           CASE WHEN s.status = N'Active' THEN activeTurn.invocation_id ELSE latestTurn.invocation_id END AS invocationId
           FROM dbo.tasks AS t
+          INNER JOIN dbo.projects AS p ON p.id = t.project_id
           OUTER APPLY (
             SELECT TOP (1) * FROM dbo.sandbox_sessions
             WHERE task_id = t.id AND status IN (N'Active', N'Idle')

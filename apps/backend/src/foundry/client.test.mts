@@ -2,11 +2,12 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FoundryClient, FoundryClientError, FOUNDRY_SCOPE } from "./client.js";
 
-const recording = JSON.parse(readFileSync(new URL("./fixtures/runner-responses.json", import.meta.url), "utf8")) as { records: Record<string, { status_code: number; body: unknown }> };
+const recording = JSON.parse(readFileSync(new URL("./fixtures/runner-responses.json", import.meta.url), "utf8")) as { records: Record<string, { status_code: number; body: unknown; request?: Record<string, unknown> }> };
 const fixtures = Object.fromEntries(Object.entries(recording.records).map(([name, record]) => [name, record.body]));
 const runtimeEndpoint = "https://example.cognitiveservices.azure.com/api/projects/jarvis";
 const adminEndpoint = "https://example.services.ai.azure.com/api/projects/jarvis";
 const token = "test-only-credential";
+const workspace = { repository: "DanAakesen/jarvis", defaultBranch: "main", branch: "jarvis/task-42" };
 
 function setup(body: unknown = fixtures["task_start"], status = 200, extra = {}) {
   const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async () =>
@@ -25,13 +26,42 @@ function request(fetch: ReturnType<typeof setup>["fetch"], call = 0) {
 afterEach(() => { vi.useRealTimers() });
 
 describe("Foundry runner wire contract", () => {
+  it.each(["task_start", "resume"])("records required workspace fields accepted by the runner: %s", (name) => {
+    expect(recording.records[name]?.status_code).toBe(200);
+    expect(recording.records[name]?.request).toMatchObject(workspace);
+  });
+  it.each([
+    { repository: undefined }, { repository: "https://github.com/owner/repo" },
+    { repository: "owner/../repo" }, { defaultBranch: undefined },
+    { defaultBranch: "main;command " }, { branch: undefined },
+    { branch: "-option" }, { branch: "refs/../main" }, { branch: "topic.lock" },
+    { branch: "topic\nname" }, { branch: "a//b" },
+    { branch: "HEAD" }, { branch: "main" }, { branch: "master" },
+    { branch: "develop", defaultBranch: "develop" },
+    { repository: `${"a".repeat(40)}/repo` }, { repository: `owner/${"a".repeat(101)}` },
+    { defaultBranch: "main\n" }, { branch: "topic\u0000name" },
+  ])("rejects invalid required workspace fields before network calls: %j", async (invalid) => {
+    const { client, fetch, getToken } = setup();
+    await expect(client.startTask({
+      ...workspace, agent: "copilot", task: "Work", ...invalid,
+    } as Parameters<FoundryClient["startTask"]>[0])).rejects.toBeInstanceOf(TypeError);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(getToken).not.toHaveBeenCalled();
+  });
+
+  it.each(["release/æøå", "release/v1+patch", "release/ready;next", "foo./bar", "@"])("preserves Git-valid default branch %s", async (defaultBranch) => {
+    const { client, fetch } = setup();
+    await client.startTask({ ...workspace, defaultBranch, agent: "copilot", task: "Work" });
+    expect(request(fetch).body).toMatchObject({ defaultBranch });
+  });
+
   it("starts a new session with the recorded task body and identity scope", async () => {
     const { client, fetch, getToken } = setup();
-    const accepted = await client.startTask({ agent: "copilot", task: "Implement issue #30" });
+    const accepted = await client.startTask({ ...workspace, agent: "copilot", task: "Implement issue #30" });
     expect(accepted).toEqual({ invocationId: "capture-task", sessionId: "capture-session", status: "queued", agent: "copilot" });
     const sent = request(fetch);
     expect(sent.url.href).toBe(`${runtimeEndpoint}/agents/jarvis-runner/endpoint/protocols/invocations?api-version=v1`);
-    expect(sent.body).toEqual({ agent: "copilot", task: "Implement issue #30" });
+    expect(sent.body).toEqual({ ...workspace, agent: "copilot", task: "Implement issue #30" });
     expect(sent.init).toMatchObject({ method: "POST", redirect: "error", headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" } });
     expect(getToken).toHaveBeenCalledWith(FOUNDRY_SCOPE, expect.any(AbortSignal));
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -47,25 +77,25 @@ describe("Foundry runner wire contract", () => {
   it("passes effective model and Codex reasoning to new runner sessions", async () => {
     const { client, fetch } = setup({ ...(fixtures["task_start"] as object), agent: "codex" });
     await client.startTask({
-      agent: "codex", task: "Implement issue #37", model: "gpt-5.4", reasoning: "high",
+      ...workspace, agent: "codex", task: "Implement issue #37", model: "gpt-5.4", reasoning: "high",
     });
     expect(request(fetch).body).toEqual({
-      agent: "codex", task: "Implement issue #37", model: "gpt-5.4", reasoning: "high",
+      ...workspace, agent: "codex", task: "Implement issue #37", model: "gpt-5.4", reasoning: "high",
     });
   });
 
   it("passes the SQL task ID for runner event attribution", async () => {
     const { client, fetch } = setup();
-    await client.startTask({ agent: "copilot", task: "Work", taskId: "42" });
-    expect(request(fetch).body).toEqual({ agent: "copilot", task: "Work", task_id: "42" });
-    await expect(client.startTask({ agent: "copilot", task: "Work", taskId: "9223372036854775808" }))
+    await client.startTask({ ...workspace, agent: "copilot", task: "Work", taskId: "42" });
+    expect(request(fetch).body).toEqual({ ...workspace, agent: "copilot", task: "Work", task_id: "42" });
+    await expect(client.startTask({ ...workspace, agent: "copilot", task: "Work", taskId: "9223372036854775808" }))
       .rejects.toBeInstanceOf(TypeError);
   });
 
   it("omits provider defaults and reasoning for Copilot", async () => {
     const { client, fetch } = setup();
-    await client.startTask({ agent: "copilot", task: "Work", model: "default" });
-    expect(request(fetch).body).toEqual({ agent: "copilot", task: "Work" });
+    await client.startTask({ ...workspace, agent: "copilot", task: "Work", model: "default" });
+    expect(request(fetch).body).toEqual({ ...workspace, agent: "copilot", task: "Work" });
   });
 
   it("steers the existing session through runner mode=steer", async () => {
@@ -97,24 +127,24 @@ describe("Foundry runner wire contract", () => {
 
   it("resumes cleanly paused work on the same session without a made-up resume mode", async () => {
     const { client, fetch } = setup(fixtures["resume"]);
-    expect((await client.resume("capture-session", { agent: "copilot", task: "Continue" })).sessionId).toBe("capture-session");
-    expect(request(fetch).body).toEqual({ agent: "copilot", task: "Continue" });
+    expect((await client.resume("capture-session", { ...workspace, agent: "copilot", task: "Continue" })).sessionId).toBe("capture-session");
+    expect(request(fetch).body).toEqual({ ...workspace, agent: "copilot", task: "Continue" });
     expect(request(fetch).url.searchParams.get("agent_session_id")).toBe("capture-session");
   });
 
   it("passes the task ID when resuming runner events", async () => {
     const { client, fetch } = setup(fixtures["resume"]);
-    await client.resume("capture-session", { agent: "copilot", task: "Continue", taskId: "42" });
-    expect(request(fetch).body).toEqual({ agent: "copilot", task: "Continue", task_id: "42" });
+    await client.resume("capture-session", { ...workspace, agent: "copilot", task: "Continue", taskId: "42" });
+    expect(request(fetch).body).toEqual({ ...workspace, agent: "copilot", task: "Continue", task_id: "42" });
   });
 
   it("forwards Codex model and reasoning when resuming", async () => {
     const { client, fetch } = setup({ ...(fixtures["resume"] as object), agent: "codex" });
     await client.resume("capture-session", {
-      agent: "codex", task: "Continue", model: "gpt-5.4", reasoning: "high",
+      ...workspace, agent: "codex", task: "Continue", model: "gpt-5.4", reasoning: "high",
     });
     expect(request(fetch).body).toEqual({
-      agent: "codex", task: "Continue", model: "gpt-5.4", reasoning: "high",
+      ...workspace, agent: "codex", task: "Continue", model: "gpt-5.4", reasoning: "high",
     });
   });
 
@@ -165,9 +195,9 @@ describe("Foundry runner wire contract", () => {
   it("supports Codex using the same contract and refuses a mismatched response agent", async () => {
     const body = { ...(fixtures["task_start"] as object), agent: "codex" };
     const { client, fetch } = setup(body);
-    expect((await client.startTask({ agent: "codex", task: "Work" })).agent).toBe("codex");
+    expect((await client.startTask({ ...workspace, agent: "codex", task: "Work" })).agent).toBe("codex");
     fetch.mockResolvedValue(new Response(JSON.stringify(fixtures["task_start"])));
-    await expect(client.startTask({ agent: "codex", task: "Work" })).rejects.toMatchObject({ kind: "protocol" });
+    await expect(client.startTask({ ...workspace, agent: "codex", task: "Work" })).rejects.toMatchObject({ kind: "protocol" });
   });
 
   it.each(["completed", "failed", "paused", "interrupted", "cancelled", "unknown"])("reports provider %s unchanged", async (status) => {
@@ -217,14 +247,14 @@ describe("bounded failures and validation", () => {
   it("does not retry ambiguous failed creation", async () => {
     const { client, fetch } = setup();
     fetch.mockRejectedValue(new Error(`transport leaked ${token}`));
-    await expect(client.startTask({ agent: "copilot", task: "Work" })).rejects.toMatchObject({ kind: "transport", message: "Foundry start: transport" });
+    await expect(client.startTask({ ...workspace, agent: "copilot", task: "Work" })).rejects.toMatchObject({ kind: "transport", message: "Foundry start: transport" });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("sanitizes auth errors and never fetches without a token", async () => {
     const { client, getToken, fetch } = setup();
     getToken.mockRejectedValue(new Error(`credential ${token}`));
-    await expect(client.startTask({ agent: "copilot", task: "Work" })).rejects.toMatchObject({ kind: "auth", message: "Foundry start: auth" });
+    await expect(client.startTask({ ...workspace, agent: "copilot", task: "Work" })).rejects.toMatchObject({ kind: "auth", message: "Foundry start: auth" });
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -307,17 +337,17 @@ describe("bounded failures and validation", () => {
 
   it("refuses a control response for a different session", async () => {
     const { client } = setup(fixtures["resume"]);
-    await expect(client.resume("another", { agent: "copilot", task: "Continue" })).rejects.toMatchObject({ kind: "protocol" });
+    await expect(client.resume("another", { ...workspace, agent: "copilot", task: "Continue" })).rejects.toMatchObject({ kind: "protocol" });
   });
 
   it("rejects blank identifiers, unsupported agents and oversized task input before auth", async () => {
     const { client, fetch, getToken } = setup();
     await expect(client.pause(" ")).rejects.toBeInstanceOf(TypeError);
     await expect(client.deleteSession("..")).rejects.toBeInstanceOf(TypeError);
-    await expect(client.startTask({ agent: "other" as "copilot", task: "Work" })).rejects.toBeInstanceOf(TypeError);
-    await expect(client.startTask({ agent: "copilot", task: "x".repeat(65_537) })).rejects.toBeInstanceOf(TypeError);
-    await expect(client.startTask({ agent: "copilot", task: "Work", model: "x".repeat(101) })).rejects.toBeInstanceOf(TypeError);
-    await expect(client.startTask({ agent: "codex", task: "Work", reasoning: "x".repeat(33) })).rejects.toBeInstanceOf(TypeError);
+    await expect(client.startTask({ ...workspace, agent: "other" as "copilot", task: "Work" })).rejects.toBeInstanceOf(TypeError);
+    await expect(client.startTask({ ...workspace, agent: "copilot", task: "x".repeat(65_537) })).rejects.toBeInstanceOf(TypeError);
+    await expect(client.startTask({ ...workspace, agent: "copilot", task: "Work", model: "x".repeat(101) })).rejects.toBeInstanceOf(TypeError);
+    await expect(client.startTask({ ...workspace, agent: "codex", task: "Work", reasoning: "x".repeat(33) })).rejects.toBeInstanceOf(TypeError);
     expect(fetch).not.toHaveBeenCalled();
     expect(getToken).not.toHaveBeenCalled();
   });
