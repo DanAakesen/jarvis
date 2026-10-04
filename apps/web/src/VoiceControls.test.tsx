@@ -20,8 +20,13 @@ vi.mock('./voice-client', () => ({
     constructor(options: unknown) {
       const onStatus = (options as {
         onStatus?: (status: 'stopped', message: string) => void;
+        onSessionEnded?: () => void;
       }).onStatus;
-      this.stop = vi.fn(() => onStatus?.('stopped', 'Voice is off.'));
+      const onSessionEnded = (options as { onSessionEnded?: () => void }).onSessionEnded;
+      this.stop = vi.fn(() => {
+        onStatus?.('stopped', 'Voice is off.');
+        onSessionEnded?.();
+      });
       clients.instances.push({ options, client: this });
     }
   },
@@ -38,11 +43,13 @@ beforeEach(() => {
 
 describe('VoiceControls', () => {
   it('starts the selected language, mutes and stops the active session', () => {
+    const onSessionEnded = vi.fn();
     render(
       <VoiceControls
         client={{} as PublicClientApplication}
         config={config}
         language="en"
+        onSessionEnded={onSessionEnded}
       />,
     );
 
@@ -68,6 +75,7 @@ describe('VoiceControls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Stop voice' }));
     expect(instance.client.stop).toHaveBeenCalledOnce();
+    expect(onSessionEnded).toHaveBeenCalledOnce();
     expect(screen.queryByRole('button', { name: 'Start voice' })).not.toBeNull();
   });
 });

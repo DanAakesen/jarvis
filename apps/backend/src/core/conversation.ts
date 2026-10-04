@@ -47,6 +47,7 @@ const historySchema = {
           role: { type: 'string', enum: ['dan', 'jarvis'] },
           text: { type: 'string' },
           model: { type: ['string', 'null'] },
+          voiceMinutes: { type: ['number', 'null'], minimum: 0 },
           at: { type: 'string', format: 'date-time' },
           toolCalls: {
             type: 'array',
@@ -63,7 +64,7 @@ const historySchema = {
             },
           },
         },
-        required: ['id', 'sessionId', 'channel', 'language', 'role', 'text', 'model', 'at', 'toolCalls'],
+        required: ['id', 'sessionId', 'channel', 'language', 'role', 'text', 'model', 'voiceMinutes', 'at', 'toolCalls'],
         additionalProperties: false,
       },
     },

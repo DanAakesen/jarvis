@@ -21,6 +21,7 @@ class MockSocket extends EventTarget {
     this.sent.push(event);
     if (event.type === 'session.start') this.receive({ type: 'session.ready' });
     if (event.type === 'response.create') this.receive({ type: 'response.done' });
+    if (event.type === 'jarvis.session.end') this.receive({ type: 'jarvis.session.ended' });
   }
 
   close() {
@@ -101,6 +102,33 @@ describe('BrowserVoiceClient', () => {
     });
     expect(audio.open).toHaveBeenCalledOnce();
     client.stop();
+  });
+
+  it('waits for persisted session completion before reporting stop', async () => {
+    const statuses: string[] = [];
+    const onSessionEnded = vi.fn();
+    let socket: MockSocket | undefined;
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      onStatus: (status) => statuses.push(status),
+      onSessionEnded,
+      createAudio: () => audioAdapter(),
+      createSocket: (url, protocols) => {
+        socket = new MockSocket(url, protocols);
+        return socket;
+      },
+    });
+    clients.push(client);
+
+    client.start();
+    await until(() => statuses.includes('listening'));
+    client.stop();
+
+    expect(socket?.sent.at(-1)).toEqual({ type: 'jarvis.session.end' });
+    expect(statuses).toContain('stopping');
+    expect(statuses.at(-1)).toBe('stopped');
+    expect(onSessionEnded).toHaveBeenCalledOnce();
   });
 
   it('stops current playback when speech starts', async () => {

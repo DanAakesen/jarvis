@@ -10,11 +10,14 @@ import {
   type RealtimeFunctionCall,
 } from './realtime.js';
 import type { BackendModule } from '../modules.js';
+import type { ConversationRole } from '../core/conversation-store.js';
 
 export const VOICE_LIVE_SCOPE = 'https://ai.azure.com/.default';
 export const VOICE_SUBPROTOCOL = 'jarvis.voice.v1';
 export const DANISH_VOICE_AGENT_NAME = 'jarvis-voice-mai';
 const MAX_MESSAGE_BYTES = 1_048_576;
+const MAX_TRANSCRIPT_CHARACTERS = 20_000;
+const MAX_TRANSCRIPTS_PER_SESSION = 1_000;
 const TOKEN_TIMEOUT_MS = 10_000;
 const CONNECTION_TIMEOUT_MS = 10_000;
 
@@ -138,11 +141,17 @@ function registerVoiceRoute(
   path: string,
   connect: VoiceConnectionFactory,
   english: boolean,
+  language: 'da' | 'en',
   getToken: VoiceRelayOptions['getToken'],
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
     if (request.principal === null) {
       browser.close(1008, 'Unauthorized');
+      return;
+    }
+    const store = app.conversationStore;
+    if (!store) {
+      browser.close(1011, 'Conversation storage unavailable');
       return;
     }
     const controller = new AbortController();
@@ -155,11 +164,94 @@ function registerVoiceRoute(
     let toolCallsInResponse = false;
     let responseDone = false;
     let toolQueue = Promise.resolve();
+    let sessionId: string | undefined;
+    let transcriptQueue = Promise.resolve();
+    let transcriptPersistenceFailed = false;
+    let finalization: Promise<void> | undefined;
+    let endRequested = false;
+    const savedTranscripts = new Set<string>();
+    const sessionReady = store.createSession({ channel: 'voice', language })
+      .then((session) => { sessionId = session.id; });
+
+    const persistTranscript = (event: Record<string, unknown>) => {
+      const type = event.type;
+      let role: ConversationRole | undefined;
+      let text: string | undefined;
+      let itemId: unknown;
+      if (type === 'user.message' && Array.isArray(event.content)) {
+        role = 'dan';
+        text = event.content.flatMap((part) =>
+          part !== null && typeof part === 'object' && !Array.isArray(part) &&
+          (part as Record<string, unknown>).type === 'input_text' &&
+          typeof (part as Record<string, unknown>).text === 'string'
+            ? [(part as Record<string, unknown>).text as string]
+            : []).join('');
+        itemId = event.item_id;
+      } else if (type === 'conversation.item.input_audio_transcription.completed') {
+        role = 'dan';
+        text = typeof event.transcript === 'string' ? event.transcript : undefined;
+        itemId = event.item_id;
+      } else if (type === 'response.output_text.done' || type === 'response.audio_transcript.done' ||
+          type === 'response.output_audio_transcript.done') {
+        role = 'jarvis';
+        text = typeof event.text === 'string'
+          ? event.text
+          : typeof event.transcript === 'string' ? event.transcript : undefined;
+        itemId = event.item_id;
+      }
+      if (!role || !text || !text.trim() || text.length > MAX_TRANSCRIPT_CHARACTERS ||
+          savedTranscripts.size >= MAX_TRANSCRIPTS_PER_SESSION) return;
+      const stableId = typeof itemId === 'string' && itemId.length <= 128
+        ? itemId
+        : typeof event.event_id === 'string' && event.event_id.length <= 128
+          ? event.event_id
+          : undefined;
+      if (!stableId) return;
+      const key = `${role}:${stableId}`;
+      if (typeof event.content_index === 'number' && Number.isSafeInteger(event.content_index)) {
+        const indexedKey = `${key}:${event.content_index}`;
+        if (savedTranscripts.has(indexedKey)) return;
+        savedTranscripts.add(indexedKey);
+      } else if (savedTranscripts.has(key)) {
+        return;
+      }
+      if (!savedTranscripts.has(key)) savedTranscripts.add(key);
+      transcriptQueue = transcriptQueue.then(async () => {
+        const message = await store.addMessage({
+          sessionId: sessionId!,
+          role,
+          text: text.trim(),
+          model: role === 'jarvis' && english ? ENGLISH_REALTIME_MODEL : null,
+        });
+        if (!message) throw new Error('Voice transcript was not stored');
+      }).catch(() => {
+        transcriptPersistenceFailed = true;
+        request.log.warn('voice.transcript_persistence_failed');
+      });
+    };
+
+    const finalizeSession = () => {
+      finalization ??= (async () => {
+        await sessionReady;
+        await transcriptQueue;
+        if (!sessionId || !await store.endSession(sessionId)) {
+          throw new Error('Voice session was not ended');
+        }
+        if (transcriptPersistenceFailed) throw new Error('Voice transcripts were not fully stored');
+      })();
+      return finalization;
+    };
 
     const close = (code: number, reason: string) => {
       controller.abort();
       if (upstream) closeSocket(upstream, code, reason);
-      closeSocket(browser, code, reason);
+      void finalizeSession().then(
+        () => closeSocket(browser, code, reason),
+        () => {
+          request.log.warn('voice.session_persistence_failed');
+          closeSocket(browser, 1011, 'Voice session could not be saved');
+        },
+      );
     };
 
     const sendUpstream = (message: unknown, sent?: () => void) => {
@@ -216,6 +308,22 @@ function registerVoiceRoute(
 
     browser.on('message', (data, binary) => {
       const event = parseVoiceEvent(data, binary);
+      if (event?.type === 'jarvis.session.end') {
+        if (endRequested) return;
+        endRequested = true;
+        void finalizeSession().then(() => {
+          if (browser.readyState !== WebSocket.OPEN) return;
+          browser.send(JSON.stringify({ type: 'jarvis.session.ended' }), (error) => {
+            if (error) closeSocket(browser, 1011, 'Voice session could not be saved');
+            else close(1000, 'Voice session ended');
+          });
+        }).catch(() => {
+          request.log.warn('voice.session_persistence_failed');
+          closeSocket(browser, 1011, 'Voice session could not be saved');
+        });
+        return;
+      }
+      if (endRequested) return;
       if (event?.type === 'session.update' || isBrowserControlledToolOutput(event)) {
         close(1008, 'Voice session is configured by the server');
         return;
@@ -236,14 +344,17 @@ function registerVoiceRoute(
     browser.once('close', () => {
       controller.abort();
       if (upstream) closeSocket(upstream, 1000, 'Browser disconnected');
+      void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
     });
     browser.once('error', () => {
       controller.abort();
       if (upstream) closeSocket(upstream, 1011, 'Voice connection failed');
+      void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
     });
 
     void (async () => {
       try {
+        await sessionReady;
         const token = await credential(getToken, controller.signal);
         if (controller.signal.aborted || browser.readyState !== WebSocket.OPEN) return;
         upstream = connect(token, controller.signal);
@@ -261,6 +372,7 @@ function registerVoiceRoute(
             responseDone = true;
             resumeAfterTools();
           }
+          if (event) persistTranscript(event);
           if (browser.readyState === WebSocket.OPEN) {
             browser.send(data, { binary }, (error) => {
               if (error) close(1011, 'Voice connection failed');
@@ -268,8 +380,8 @@ function registerVoiceRoute(
           }
         });
         upstream.once('close', (code) => {
-          if (browser.readyState === WebSocket.OPEN) {
-            browser.close(code === 1000 ? 1000 : 1011, 'Voice connection ended');
+          if (!endRequested && browser.readyState === WebSocket.OPEN) {
+            close(code === 1000 ? 1000 : 1011, 'Voice connection ended');
           }
         });
         upstream.once('error', () => close(1011, 'Voice connection failed'));
@@ -293,9 +405,9 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           handleProtocols: (protocols) => protocols.has(VOICE_SUBPROTOCOL) ? VOICE_SUBPROTOCOL : false,
         },
       });
-      if (options.connect) registerVoiceRoute(app, '/voice', options.connect, true, options.getToken);
+      if (options.connect) registerVoiceRoute(app, '/voice', options.connect, true, 'en', options.getToken);
       if (options.connectDanish) {
-        registerVoiceRoute(app, '/voice/da', options.connectDanish, false, options.getToken);
+        registerVoiceRoute(app, '/voice/da', options.connectDanish, false, 'da', options.getToken);
       }
     },
   };

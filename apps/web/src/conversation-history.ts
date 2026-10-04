@@ -16,6 +16,7 @@ export interface ConversationHistoryMessage {
   role: 'dan' | 'jarvis';
   text: string;
   model: string | null;
+  voiceMinutes?: number | null;
   at: string;
   toolCalls: ConversationHistoryToolCall[];
 }
@@ -51,6 +52,8 @@ function isHistoryPage(value: unknown): value is ConversationHistoryPage {
         !['chat', 'voice'].includes(String(message.channel)) || !['da', 'en'].includes(String(message.language)) ||
         !['dan', 'jarvis'].includes(String(message.role)) || typeof message.text !== 'string' ||
         !(message.model === null || typeof message.model === 'string') ||
+        !(message.voiceMinutes === undefined || message.voiceMinutes === null ||
+          (typeof message.voiceMinutes === 'number' && Number.isFinite(message.voiceMinutes) && message.voiceMinutes >= 0)) ||
         typeof message.at !== 'string' || Number.isNaN(Date.parse(message.at)) ||
         !Array.isArray(message.toolCalls)) return false;
     return message.toolCalls.every((call) =>

@@ -117,4 +117,40 @@ describe('SQL conversation store', () => {
       model: null,
     })).resolves.toBeNull();
   });
+
+  it('stores voice transcripts and one idempotent voice-minute usage row per session', async () => {
+    const store = createConversationStore(pool);
+    const session = await store.createSession({ channel: 'voice', language: 'en' });
+    const dan = await store.addMessage({
+      sessionId: session.id,
+      role: 'dan',
+      text: 'How is the task going?',
+      model: null,
+    });
+    const jarvis = await store.addMessage({
+      sessionId: session.id,
+      role: 'jarvis',
+      text: 'The task is complete.',
+      model: 'gpt-realtime-2.1',
+    });
+    if (!dan || !jarvis) throw new Error('Voice transcript fixture was not created');
+
+    expect(await store.endSession(session.id)).toBe(true);
+    expect(await store.endSession(session.id)).toBe(true);
+
+    const usage = await pool.request()
+      .input('sessionId', sql.BigInt, BigInt(session.id))
+      .query<{ count: number; source: string; metric: string; quantity: number }>(`SELECT COUNT(*) AS count,
+        MAX(source) AS source, MAX(metric) AS metric, MAX(quantity) AS quantity
+        FROM dbo.usage WHERE jarvis_session_id = @sessionId;`);
+    expect(usage.recordset[0]).toMatchObject({ count: 1, source: 'voice', metric: 'minutes' });
+    expect(usage.recordset[0]?.quantity).toBeGreaterThanOrEqual(0);
+
+    // Earlier tests in this database leave their own messages; check only this session's.
+    const history = await store.getHistory({ limit: 10 });
+    expect(history.messages.filter((message) => message.sessionId === session.id)).toMatchObject([
+      { id: dan.id, channel: 'voice', language: 'en', text: 'How is the task going?', voiceMinutes: usage.recordset[0]?.quantity },
+      { id: jarvis.id, channel: 'voice', language: 'en', text: 'The task is complete.', voiceMinutes: usage.recordset[0]?.quantity },
+    ]);
+  });
 });

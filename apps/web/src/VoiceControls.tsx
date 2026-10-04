@@ -21,17 +21,19 @@ export function VoiceControls({
   client: authClient,
   config,
   language = 'da',
+  onSessionEnded,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
   language?: VoiceLanguage;
+  onSessionEnded?: () => void;
 }) {
   const client = useRef<BrowserVoiceClient | null>(null);
   const [status, setStatus] = useState<VoiceStatus>('stopped');
   const [message, setMessage] = useState(initialMessage);
   const [muted, setMuted] = useState(false);
   const active = status !== 'stopped' && status !== 'error';
-  const pending = status === 'connecting' || status === 'reconnecting';
+  const pending = status === 'connecting' || status === 'reconnecting' || status === 'stopping';
 
   useEffect(() => () => {
     client.current?.stop();
@@ -43,6 +45,7 @@ export function VoiceControls({
       backendUrl: config.backendUrl,
       getAccessToken: () => accessToken(authClient, config),
       language,
+      ...(onSessionEnded ? { onSessionEnded } : {}),
       onStatus: (nextStatus, nextMessage) => {
         setStatus(nextStatus);
         setMessage(nextMessage);
@@ -75,7 +78,7 @@ export function VoiceControls({
       </p>
       <div className="action-row">
         {active
-          ? <button className="secondary-button" type="button" onClick={stop}>Stop voice</button>
+          ? <button className="secondary-button" type="button" onClick={stop} disabled={status === 'stopping'}>Stop voice</button>
           : <button className="primary-button" type="button" onClick={start} disabled={pending}>Start voice</button>}
         <button
           className="secondary-button"

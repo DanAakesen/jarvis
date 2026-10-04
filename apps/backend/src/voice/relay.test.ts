@@ -10,6 +10,7 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
 import { coreModule } from '../core/index.js';
+import type { ConversationStore } from '../core/conversation-store.js';
 import { factoryModule } from '../factory/index.js';
 import type { BackendModule } from '../modules.js';
 import {
@@ -56,6 +57,26 @@ function appFor(
   records: string[] = [],
   toolModules: readonly BackendModule[] = [],
   connectDanish?: (token: string, signal: AbortSignal) => WebSocket,
+  conversationStore = {
+    createSession: vi.fn(async ({ language }: { language: 'da' | 'en' }) => ({
+      id: '41',
+      channel: 'voice' as const,
+      language,
+      startedAt: new Date('2026-10-03T12:00:00Z'),
+      endedAt: null,
+    })),
+    getSession: vi.fn(async () => null),
+    endSession: vi.fn(async () => true),
+    addMessage: vi.fn<ConversationStore['addMessage']>(async (input) => ({
+      id: '42',
+      sessionId: input.sessionId,
+      role: input.role,
+      text: input.text,
+      model: input.model,
+      at: new Date('2026-10-03T12:00:01Z'),
+    })),
+    getHistory: vi.fn(async () => ({ messages: [], nextCursor: null })),
+  } satisfies ConversationStore,
 ) {
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
   const app = buildApp(config, createLogger(config, undefined, output), {
@@ -73,10 +94,11 @@ function appFor(
       if (token !== browserToken) throw new AuthenticationDenied(401);
       return { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId };
     },
+    conversationStore,
   });
   app.server.on('connection', (socket) => appSockets.push(socket));
   apps.push(app);
-  return { app, getToken };
+  return { app, getToken, conversationStore };
 }
 
 async function openBrowser(url: string, protocols = [VOICE_SUBPROTOCOL, `jarvis.auth.${browserToken}`]) {
@@ -119,6 +141,69 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(getToken).toHaveBeenCalledOnce();
     expect(records.join('')).not.toContain(browserToken);
     expect(records.join('')).not.toContain(voiceToken);
+  });
+
+  it('stores completed voice transcripts, records a voice session, and waits for its final usage row', async () => {
+    const forwarded: string[] = [];
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        forwarded.push(String(event.type));
+        if (event.type !== 'input_audio_buffer.append') return;
+        socket.send(JSON.stringify({
+          type: 'conversation.item.input_audio_transcription.completed',
+          item_id: 'input_1',
+          transcript: 'How is the task going?',
+        }));
+        socket.send(JSON.stringify({
+          type: 'response.output_text.done',
+          item_id: 'output_1',
+          text: 'The task is complete.',
+        }));
+        socket.send(JSON.stringify({
+          type: 'response.audio_transcript.done',
+          item_id: 'output_1',
+          transcript: 'The task is complete.',
+        }));
+      });
+    });
+    const { app, conversationStore } = appFor((token, signal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    }));
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    const saved = new Promise<void>((resolve) => {
+      conversationStore.addMessage.mockImplementation(async (input) => {
+        const message = {
+          id: '42',
+          sessionId: input.sessionId,
+          role: input.role,
+          text: input.text,
+          model: input.model,
+          at: new Date('2026-10-03T12:00:01Z'),
+        };
+        if (conversationStore.addMessage.mock.calls.length === 2) resolve();
+        return message;
+      });
+      browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
+    });
+    await saved;
+    const ended = new Promise<void>((resolve) => {
+      browser.on('message', (data) => {
+        if ((JSON.parse(data.toString()) as { type?: string }).type === 'jarvis.session.ended') resolve();
+      });
+    });
+    browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
+
+    await ended;
+    expect(conversationStore.createSession).toHaveBeenCalledWith({ channel: 'voice', language: 'en' });
+    expect(conversationStore.addMessage.mock.calls.map(([input]) => [input.role, input.text])).toEqual([
+      ['dan', 'How is the task going?'],
+      ['jarvis', 'The task is complete.'],
+    ]);
+    expect(conversationStore.endSession).toHaveBeenCalledWith('41');
+    expect(forwarded).not.toContain('jarvis.session.end');
   });
 
   it('rejects invalid browser credentials before requesting the upstream token', async () => {

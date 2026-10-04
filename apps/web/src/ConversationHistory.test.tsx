@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ConversationHistory } from './ConversationHistory';
@@ -20,21 +20,22 @@ const message = {
   role: 'jarvis' as const,
   text: 'I started the task.',
   model: 'gpt-5.6-luna',
+  voiceMinutes: 2.5,
   at: '2026-10-03T12:00:00.000Z',
   toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'ok' as const, taskId: '77' }],
 };
 const session = { id: '41', language: 'da' as const };
 const userMessage = {
-  id: '51', sessionId: '41', role: 'dan' as const, text: 'Hello Jarvis', model: null, at: '2026-10-03T12:01:00.000Z',
+  id: '51', sessionId: '41', role: 'dan' as const, text: 'Hello Jarvis', model: null, voiceMinutes: null, at: '2026-10-03T12:01:00.000Z',
 };
 const assistantMessage = {
-  id: '52', sessionId: '41', role: 'jarvis' as const, text: 'I am ready.', model: null, at: '2026-10-03T12:02:00.000Z',
+  id: '52', sessionId: '41', role: 'jarvis' as const, text: 'I am ready.', model: null, voiceMinutes: null, at: '2026-10-03T12:02:00.000Z',
 };
 
-function renderConversation() {
+function renderConversation(historyRefresh = 0) {
   return render(
     <MemoryRouter>
-      <ConversationHistory client={client} config={config} />
+      <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
     </MemoryRouter>,
   );
 }
@@ -47,10 +48,16 @@ beforeEach(() => {
 
 describe('ConversationHistory', () => {
   it('shows persisted tool outcomes and task links', async () => {
-    loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });
+    loadConversationHistory.mockResolvedValue({
+      messages: [message, { ...message, id: '43', role: 'dan', text: 'Sure.', toolCalls: [] }],
+      nextCursor: null,
+    });
     renderConversation();
 
     expect(await screen.findByText('I started the task.')).not.toBeNull();
+    expect(screen.getByText('Sure.')).not.toBeNull();
+    expect(screen.getByText('Voice · English · 2.5 voice minutes')).not.toBeNull();
+    expect(screen.getAllByText(/voice minutes/u)).toHaveLength(1);
     expect(screen.getByText('factory_create_task · ok')).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Task #77' }).getAttribute('href')).toBe('/factory/tasks/77');
   });
@@ -91,6 +98,20 @@ describe('ConversationHistory', () => {
     expect(renderedMessages[0]?.textContent).toContain('An earlier message.');
     expect(renderedMessages[1]?.textContent).toContain('I started the task.');
     expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config, '40');
+  });
+
+  it('reloads persisted history after a voice session ends', async () => {
+    loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });
+    const view = renderConversation();
+    expect(await screen.findByText('I started the task.')).not.toBeNull();
+
+    view.rerender(
+      <MemoryRouter>
+        <ConversationHistory client={client} config={config} historyRefresh={1} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
   });
 
   it('streams a reply while keeping the send control pending', async () => {
