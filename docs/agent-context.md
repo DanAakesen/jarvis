@@ -244,6 +244,11 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
+P1-08 was inspected at 390 and 1280 px with scratch-only auth and project/task/SSE
+mocks. All six columns, task creation, filter submission, modal dismissal, and
+focus return worked; the page had no horizontal overflow, controls were at least
+44 px high, and no console errors occurred. The wide board scrolls within its
+own region. Mocks do not verify live Entra, Azure SQL, or deployed SSE.
 Never commit the stub or weaken sign-in in the app.
 
 Backend commands:
