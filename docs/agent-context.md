@@ -214,6 +214,8 @@ Verified in Codex cloud for P0-02:
 | Both workspace tests (single run) | `npm test` in the repository root (P0-03 adds backend tests) |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
+| Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
+| Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |
 
@@ -255,6 +257,13 @@ links, live SSE event, event filter, and expanded payload worked; actions stayed
 disabled as described. Neither width overflowed, interactive controls were at
 least 44 px high, and no console errors occurred. Live Entra, Azure SQL/Blob
 archive reads, and deployed SSE remain unverified.
+P6-01 was inspected at 390 and 1280 px using the scratch `./auth` stub, a
+placeholder backend origin, and a mocked `/usage` response. Project/agent/source
+grouping, period selection, task links, 503 recovery, and the empty state worked;
+the page had no horizontal overflow, selects measured 44 px, and only the table
+scrolls horizontally. The expected mocked 503 produced a browser network log;
+there were no other console errors or page exceptions. Live SQL and provider or
+voice usage remain unverified.
 Never commit the stub or weaken sign-in in the app.
 
 Backend commands:

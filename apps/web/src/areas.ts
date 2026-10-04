@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { FactoryArea } from './factory/FactoryArea';
+import { UsagePage } from './usage/UsagePage';
 
 export interface AreaProps {
   backendUrl: string | null;
@@ -17,4 +18,5 @@ export interface Area {
 /** Phase 1 has one area. A later area adds its folder and one entry here; the shell is unchanged. */
 export const areas: readonly Area[] = [
   { id: 'factory', label: 'Software Factory', path: 'factory', Component: FactoryArea },
+  { id: 'usage', label: 'Usage', path: 'usage', Component: UsagePage },
 ];

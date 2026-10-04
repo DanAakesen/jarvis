@@ -155,6 +155,25 @@ payloads scroll within the page. Existing 44 px controls and focus styles are
 reused. The usage section is an explicit P2-12 slot; disk values remain based on
 recorded events rather than a live filesystem estimate.
 
+## Usage and cost (P6-01)
+
+The page uses the existing neutral app shell, with one page heading followed by
+labelled period and grouping controls. Project, agent, and source groups contain
+semantic tables of task-linked usage; rows show the source, metric, quantity,
+available DKK, and last-used time. Codex/Copilot costs stay absent, while
+sandbox and voice amounts are labelled estimates. The page identifies partial
+results when the 1,000-row API cap applies.
+
+Controls stack on narrow screens and only the table region can scroll
+horizontally. Loading, empty, and retryable failure states keep the selected
+filters visible. Task links open the existing task-detail route.
+
+Chromium inspection at 390 and 1280 px verified all three groupings, period
+changes, task links, and retry/empty states with scratch-only auth and API mocks.
+The page had no horizontal overflow, controls measured 44 px high, and the table
+kept its own horizontal scrolling region. Live SQL and provider/voice data remain
+unverified.
+
 ## Conversation history (P4-03)
 
 After sign-in, the main page shows the persisted conversation in chronological

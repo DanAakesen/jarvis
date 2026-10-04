@@ -438,7 +438,14 @@ P5-06 writes one `voice`/`minutes` row when a voice session ends, linked by
 usage insertion share one SQL transaction. The history query returns that
 session total with its messages, and the main page displays it once per sitting.
 
-- Views sum `usage` per task, per project and per period, so Dan sees when Codex and Copilot were used and what each task cost.
+- P6-01 reads `usage` without changing its writers. The authenticated usage report
+  sums rows by task, project, agent, source and metric for 7-, 30-, 90-day or
+  all-time periods; the page groups the breakdown by project, agent or source.
+  Codex/Copilot cost is always null. Active sandbox estimates are calculated
+  read-only and clipped to the selected period. The API returns at most 1,000
+  grouped breakdowns and marks partial results so displayed subtotals are not
+  mistaken for full-period totals. Existing voice rows are included when P5-06
+  has written them.
 
 ## Physical schema (groups 1–3)
 

@@ -384,7 +384,7 @@ const FLOWS = [
   },
   {
     name: "Follow",
-    summary: "The backend checks each running task, stores its events and usage, archives old history, and updates the board, task detail, and voice.",
+    summary: "The backend checks running tasks, stores events and usage, archives history, and updates task, voice, and period usage views.",
     nodes: [
       { id: "ctx", lane: "runner", col: 1, s: "context", from: [[5, "work"]], t: "From 5: agent working", d: "Events recorded per invocation." },
       { id: "live", lane: "runner", col: 2, s: "proven", t: "Runner pushes live events", d: "Task-scoped events include turn-start disk readings and periodic low-disk warnings.", ev: "P2-03 provides authenticated POST /factory/sandbox-events. P6-07 tests fake-filesystem snapshots and disk_low handling; the backend moves the task to Needs attention with reason disk_low, and task detail shows recorded readings. Azure role assignment and live Foundry measurement remain post-merge checks." },
@@ -396,13 +396,16 @@ const FLOWS = [
       { id: "usageView", lane: "board", col: 5, s: "proven", t: "Show usage on task detail", d: "Sandbox minutes and estimated DKK per session; agent turns and any reported usage.", ev: "P2-12 adds loading, empty, error/retry, and populated usage states on the task detail route. Local web tests pass; rendered browser and live API checks remain pending." },
       { id: "history", lane: "board", col: 7, s: "proven", t: "Show task detail", d: "Page archived and SQL events, then merge authenticated live events by ID.", ev: "P1-09 reads 100 events at a time, loads further pages on demand, and merges the task-scoped SSE stream without duplicates. Vitest and mocked Chromium cover the page; live Entra, Azure SQL/Blob, and deployed streaming remain unverified." },
       { id: "card", lane: "board", col: 6, s: "proven", t: "Card shows activity", d: "Refresh activity and last update from task events.", ev: "P1-08 streams nonterminal task cards through the P1-06 authenticated fetch client, resumes at the last event ID, and refreshes task snapshots. Focused SSE/UI tests pass; live Entra and deployed streaming remain unverified." },
+      { id: "usageApi", lane: "backend", col: 5, s: "proven", t: "Read a bounded usage report", d: "Authenticated GET /usage filters a selected period, suppresses Codex/Copilot costs, and includes read-only active-sandbox estimates.", ev: "P6-01 route and SQL-store tests cover period bounds, result caps, and cost rules. Live SQL remains unverified." },
+      { id: "usageReport", lane: "board", col: 8, s: "proven", t: "Compare usage by period", d: "Choose a period and group by project, agent, or source; open task rows.", ev: "P6-01 adds loading, empty, error/retry, truncated-result, and populated states. Focused web tests and desktop/mobile browser inspection verify local behavior; live API and real provider/voice rows remain unverified." },
       { id: "sum", lane: "jarvis", col: 5, s: "proven", t: "Summarize status in Danish", d: "“Hvordan går det med Codex-opgaven?”", ev: "Voice prototype V4: 4/4 Danish status answers matched the task data in every configuration.", href: VR },
       { id: "say", lane: "voice", col: 7, s: "proven", t: "Speak the answer", d: "Ryan HD in English, Harper in Danish.", ev: "Voice prototype: replies spoken in Danish (Harper) and English (Ryan HD, British butler persona) through Voice Live.", href: VR },
     ],
     edges: [
       ["ctx", "live", "proven", ""], ["live", "store", "proven", "event"], ["live", "usage", "proven", "turn and usage report"],
       ["ctx", "poll", "proven", "heartbeat"], ["poll", "store", "docs", ""], ["poll", "usage", "docs", "session end"],
-      ["usage", "usageView", "proven", "per-task entries"], ["store", "push", "proven", "publish"],
+      ["usage", "usageView", "proven", "per-task entries"], ["usage", "usageApi", "proven", "read-only aggregate"],
+      ["usageApi", "usageReport", "proven", "usage entries"], ["store", "push", "proven", "publish"],
       ["store", "archive", "docs", "90 days"], ["archive", "history", "docs", "on demand"],
       ["push", "card", "proven", "event"], ["push", "history", "proven", "live event"],
       ["store", "sum", "docs", "read"], ["sum", "say", "proven", "text"],
