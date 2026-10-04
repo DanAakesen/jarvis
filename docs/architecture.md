@@ -539,7 +539,7 @@ live Foundry disk measurement remains post-merge.
 P2-13 compares task-branch commits before and after each agent turn. An
 `end_turn` without a new task-branch commit emits `session_question` with the
 last agent message. The backend records the question and moves a Running or
-PauseRequested task to NeedsAttention with reason `agent_question` in the same
+PauseRequested task to NeedsAttention with reason `session_question` in the same
 transaction, then publishes committed events.
 Repository-access and Git failures remain failures, not successful turns.
 Local Git/ACP and backend contracts cover this flow; live Copilot and Codex
