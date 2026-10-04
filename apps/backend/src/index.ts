@@ -10,6 +10,7 @@ import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
+import { createDispatcherStore } from './database/dispatcher-store.js';
 import { createSandboxHeartbeatStore } from './database/sandbox-heartbeat-store.js';
 import { createEventHub } from './core/event-hub.js';
 import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
@@ -27,6 +28,7 @@ import { createSleepModule } from './operations/sleep.js';
 import { createHttpConversationAgent } from './core/chat-agent.js';
 import { FoundryClient, FoundryClientError } from './foundry/client.js';
 import { SandboxHeartbeat } from './factory/heartbeat.js';
+import { TaskDispatcher } from './factory/dispatcher.js';
 
 try {
   const config = loadConfig();
@@ -87,6 +89,19 @@ try {
       },
     })
     : undefined;
+  const taskStore = database ? createTaskStore(database.pool, eventHub) : undefined;
+  const settingsStore = database ? createSettingsStore(database.pool) : undefined;
+  const dispatcher = database && taskStore && settingsStore && sandboxHeartbeat && config.foundryEndpoints
+    ? new TaskDispatcher(
+      createDispatcherStore(database.pool, eventHub),
+      taskStore,
+      settingsStore,
+      clientFor,
+      sandboxHeartbeat,
+      eventHub,
+      { onError: () => logger.warn('dispatcher.operation_failed') },
+    )
+    : undefined;
   const modules: BackendModule[] = [coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler)];
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
@@ -103,17 +118,18 @@ try {
   }
   const app = buildApp(config, logger, {
     modules,
-    ...(database ? {
+    ...(database && taskStore && settingsStore ? {
       projectStore: createProjectStore(database.pool),
       toolCallStore: createToolCallStore(database.pool),
-      settingsStore: createSettingsStore(database.pool),
+      settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
-      taskStore: createTaskStore(database.pool, eventHub),
+      taskStore,
     } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
     eventHub,
     ...(config.chatAgentUrl ? { conversationAgent: createHttpConversationAgent(config.chatAgentUrl) } : {}),
   });
+  if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
   if (database && !sandboxHeartbeat) logger.warn('sandbox_heartbeat.configuration_missing');
@@ -137,6 +153,7 @@ try {
     }
     if (!stopping) {
       await sandboxHeartbeat?.start();
+      dispatcher?.start();
       await app.listen({ port: config.port, host: '0.0.0.0' });
       logger.info({ port: config.port }, 'server.listening');
     }
