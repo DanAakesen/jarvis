@@ -151,6 +151,8 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 The backend persists each task event and state change to the task history and activity feed together, then publishes the committed event for live clients.
 
+The task timeline remains complete as older events move from SQL to private Blob Storage. The detail API restores those events on demand within its existing paginated response.
+
 #### Software Factory — release view (per project)
 
 | Data points | Actions |

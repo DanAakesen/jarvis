@@ -385,7 +385,9 @@ The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and
   same name; an offline test requires one for every migration, and
   `schema.integration.test.ts` reverts all of them newest first and reapplies.
   `0001_core_tables.sql` contains groups 1–3; `0002_sandbox_operations.sql`
-  contains groups 4 and 6.
+  contains groups 4 and 6; `0003_sandbox_agent_name.sql` adds the heartbeat's
+  Foundry routing field, and P6-03's `0004_task_event_archives.sql` indexes
+  committed Blob chunks for on-demand task-history reads.
   See [migration guide](../db/migrations/README.md).
 - Offline checks: `npm test --workspace @jarvis/backend`,
   `npm run lint --workspace @jarvis/backend`,
@@ -398,6 +400,11 @@ The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and
   production credential. See [database guide](../apps/backend/src/database/README.md).
 - Real Azure managed-identity exchange and applying/restarting a deployed revision
   remain #11. Offline contracts never establish live Azure readiness.
+- P6-03 adds the Bicep-created private `task-events` Blob container. Bicep supplies
+  `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`; the backend requires it when SQL is enabled
+  and authenticates with its existing managed identity. No local credential or
+  manual Azure setup is needed. Archive/restore contracts use a fake Blob store;
+  the live Azure archive/restore check must happen after merge.
 
 Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 

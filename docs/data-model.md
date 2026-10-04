@@ -16,6 +16,9 @@ reverse script in `db/migrations/down/`; see [Physical schema](#physical-schema-
 Groups 4–7 follow in P2-01, P2-12 and P3-04. P2-06 adds the nullable
 `sandbox_sessions.agent_name` column in `0003_sandbox_agent_name.sql`; new
 sessions must populate it so the heartbeat can address the correct Foundry agent.
+P6-03 adds `task_event_archives` in `0004_task_event_archives.sql`, indexing each
+committed event blob so interrupted uploads remain invisible and task history
+pages can locate the required blobs without listing the container.
 
 ## Overview
 
@@ -194,6 +197,7 @@ erDiagram
 erDiagram
     projects ||--o{ tasks : has
     tasks ||--o{ task_events : logs
+    tasks ||--o{ task_event_archives : indexes
     tasks {
         bigint id PK
         bigint project_id FK
@@ -225,11 +229,20 @@ erDiagram
         string source "runner | backend | github | dan"
         datetime at
     }
+    task_event_archives {
+        bigint id PK
+        bigint task_id FK
+        datetime first_at
+        bigint first_event_id
+        string blob_name
+        int event_count
+        datetime archived_at
+    }
 ```
 
 - **The queue is `tasks` itself (Decision 3, option A).** The dispatcher takes the oldest `Ready` task within the project's and the global limit, sets `lease_owner` and `lease_until`, and starts a sandbox. A lease that expires means the dispatcher died, and another may take over.
 - **Retries:** `attempt_count` and `next_attempt_at`; after the limit the task moves to `NeedsAttention`.
-- `task_events` stores **every** task event (Dan's choice: maximum freedom for the UI). It is append-only, drives the card's live updates (via SSE) and the task's history, and is the only fast-growing table; archive by age. Each event also creates a `factory` activity row with its type as `kind`, its summary (or type) as title, and `task:<id>` as link.
+- `task_events` stores **every** task event (Dan's choice: maximum freedom for the UI). It drives the card's live updates (via SSE) and the task's history; a backend job moves events older than 90 days to private Blob Storage in bounded batches. The SQL rows are deleted only after their archive blobs upload successfully, and `task_event_archives` records the blob references in the same SQL transaction as deletion. Task-detail pages read only the indexed archived chunks they need and keep the same bounded pagination. The live `recordEvent` write path remains unchanged. Each event also creates a `factory` activity row with its type as `kind`, its summary (or type) as title, and `task:<id>` as link.
 - `origin_message_id` links a task to the message in Jarvis's conversation that created it. The existing schema requires this reference for non-board tasks; board tasks may omit it.
 - P1-04 creates a board task only for an active project, using the project's default agent unless the request selects one. Task creation and its `created` event share a transaction. Backend state transitions lock the task row, enforce the product lifecycle, and write a `state_changed` event in that transaction; `Done` requires a trusted, verified-completion call. There is no client state-update route.
 - P1-05 writes each task event and its activity row in the same transaction. `TaskStore.recordEvent` is the producer API for future runner and backend event sources; JSON payloads are capped at 1 MiB. The in-process hub publishes only after commit; payloads over 4 KiB are omitted from the published event and marked truncated. The P1-06 SSE endpoint adds authenticated streaming, heartbeat and reconnect replay.
@@ -415,7 +428,9 @@ erDiagram
 | Foreign keys | No cascades. Projects are archived (`active = 0`), not deleted |
 | Indexes | Dispatcher `IX_tasks_state_next_attempt_at`; timeline `IX_task_events_task_id_at`; plus one per foreign key: `IX_messages_jarvis_session_id_at`, `IX_tasks_project_id_state` (also the per-project running count), filtered `IX_tasks_origin_message_id`, `IX_tool_calls_message_id`, filtered `IX_tool_calls_task_id` |
 
-The API still validates every field (P1-03, P1-04); these checks are the last line of defence.
+P6-03's `0004_task_event_archives.sql` adds the archive index table without changing
+the `task_events` producer schema. The API still validates every field (P1-03,
+P1-04); these checks are the last line of defence.
 
 P4-05 adds `refused` to the runtime tool-call outcomes, but the current
 `CK_tool_calls_outcome` constraint in `0001_core_tables.sql` still permits only

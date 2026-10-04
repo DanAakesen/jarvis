@@ -142,6 +142,14 @@ resource logsContainer 'Microsoft.Storage/storageAccounts/blobServices/container
   }
 }
 
+resource taskEventsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: 'task-events'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
 resource blobDataAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(storage.id, backendIdentity.id, blobDataContributorRoleId)
   scope: storage
@@ -479,6 +487,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: sqlDatabase.name
             }
             {
+              name: 'TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT'
+              value: storage.name
+            }
+            {
               name: 'SQL_MANAGED_IDENTITY_CLIENT_ID'
               value: backendIdentity.properties.clientId
             }
@@ -536,6 +548,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
   }
   dependsOn: [
     acrPullAssignment
+    taskEventsContainer
   ]
 }
 

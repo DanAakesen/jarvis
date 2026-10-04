@@ -1,5 +1,6 @@
 import { buildApp } from './app.js';
 import { DefaultAzureCredential, ManagedIdentityCredential } from '@azure/identity';
+import { BlobServiceClient } from '@azure/storage-blob';
 import { ConfigurationError, loadConfig } from './config.js';
 import { createLogger, createTelemetry } from './logging.js';
 import { shutdown } from './shutdown.js';
@@ -11,6 +12,9 @@ import { createProjectStore } from './database/project-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createSandboxHeartbeatStore } from './database/sandbox-heartbeat-store.js';
+import { loadTaskEventArchiveStorageAccount } from './database/task-event-archive-config.js';
+import { createTaskEventArchiveBlobStore } from './database/task-event-archive-blob.js';
+import { createTaskEventArchive, createTaskEventArchiveJob } from './database/task-event-archive.js';
 import { createEventHub } from './core/event-hub.js';
 import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
 import { coreModule } from './core/index.js';
@@ -31,6 +35,10 @@ import { SandboxHeartbeat } from './factory/heartbeat.js';
 try {
   const config = loadConfig();
   const databaseConfig = loadDatabaseConfig();
+  const archiveStorageAccount = loadTaskEventArchiveStorageAccount();
+  if (databaseConfig && !archiveStorageAccount) {
+    throw new ConfigurationError('TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT is required when SQL is configured');
+  }
   const sleepResourceId = process.env.BACKEND_CONTAINER_APP_RESOURCE_ID;
   const sleepIdentityClientId = process.env.SQL_MANAGED_IDENTITY_CLIENT_ID;
   if (sleepResourceId && !sleepIdentityClientId) {
@@ -53,12 +61,26 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
-  const credential = config.voiceLiveEndpoint || config.foundryProjectEndpoint || config.foundryEndpoints
+  const credential = archiveStorageAccount || config.voiceLiveEndpoint || config.foundryProjectEndpoint || config.foundryEndpoints
     ? new DefaultAzureCredential(process.env.SQL_MANAGED_IDENTITY_CLIENT_ID
       ? { managedIdentityClientId: process.env.SQL_MANAGED_IDENTITY_CLIENT_ID }
       : {})
     : undefined;
   const foundryClients = new Map<string, FoundryClient>();
+  const taskEventArchive = database && archiveStorageAccount && credential
+    ? createTaskEventArchive(
+      database.pool,
+      createTaskEventArchiveBlobStore(
+        new BlobServiceClient(
+          `https://${archiveStorageAccount}.blob.core.windows.net`,
+          credential,
+        ).getContainerClient('task-events'),
+      ),
+    )
+    : undefined;
+  const taskEventArchiveJob = taskEventArchive
+    ? createTaskEventArchiveJob(taskEventArchive, () => logger.warn('task_event_archive.failed'))
+    : undefined;
   const clientFor = (agentName: string) => {
     if (!config.foundryEndpoints || !credential) throw new Error('Foundry heartbeat is not configured');
     let client = foundryClients.get(agentName);
@@ -108,7 +130,7 @@ try {
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: createSettingsStore(database.pool),
       conversationStore: createConversationStore(database.pool),
-      taskStore: createTaskStore(database.pool, eventHub),
+      taskStore: createTaskStore(database.pool, eventHub, taskEventArchive),
     } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
     eventHub,
@@ -123,7 +145,10 @@ try {
   const stop = async () => {
     if (stopping) return;
     stopping = true;
-    try { await shutdown(app, telemetry); }
+    try {
+      await taskEventArchiveJob?.stop();
+      await shutdown(app, telemetry);
+    }
     catch { logger.error('telemetry.close_failed'); process.exitCode = 1; }
     // Enforce the shutdown deadline even if an SDK/network handle remains open.
     process.exit(process.exitCode ?? 0);
@@ -138,6 +163,7 @@ try {
     if (!stopping) {
       await sandboxHeartbeat?.start();
       await app.listen({ port: config.port, host: '0.0.0.0' });
+      taskEventArchiveJob?.start();
       logger.info({ port: config.port }, 'server.listening');
     }
   } catch {
