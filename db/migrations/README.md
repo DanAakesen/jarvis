@@ -29,7 +29,7 @@ needs a backup and Dan's approval first, and the backend revision that expects
 the reverted schema must not be running.
 
 `setup/*.sql` contains idempotent, non-ledger setup batches that run after the
-numbered migrations commit. For example, P7-13's `setup/0012_long_term_memory.sql`
+numbered migrations commit. For example, P7-13's `setup/0015_long_term_memory.sql`
 creates the optional full-text catalog/index when supported. This must run outside
 the migration transaction because Azure SQL does not allow `CREATE FULLTEXT INDEX`
 inside an explicit user transaction. Reverting P7-13 drops the memory table and its

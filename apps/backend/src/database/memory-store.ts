@@ -71,7 +71,7 @@ const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const sqlId = /^[1-9]\d{0,18}$/;
 const vectorDimensions = 1536;
 const fullTextSetupPath = fileURLToPath(
-  new URL('../../../../db/migrations/setup/0012_long_term_memory.sql', import.meta.url),
+  new URL('../../../../db/migrations/setup/0015_long_term_memory.sql', import.meta.url),
 );
 
 function toSqlId(value: string): bigint {

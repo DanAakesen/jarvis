@@ -28,10 +28,10 @@ before restoring the prior constraint.
 P6-02 adds nullable `activity.alert_key` and a filtered unique index in
 `0011_alert_deduplication.sql`; each event condition has one activity row and
 can be safely retried. Its down migration removes the index and column.
-P7-13 adds group 8 in `0012_long_term_memory.sql`: source-linked memories,
+P7-13 adds group 8 in `0015_long_term_memory.sql`: source-linked memories,
 revision history, a content-free deletion audit and nullable voice source-item IDs.
 The migration adds `vector(1536)` only when SQL exposes that type. After the
-transaction commits, the idempotent `setup/0012_long_term_memory.sql` creates the
+transaction commits, the idempotent `setup/0015_long_term_memory.sql` creates the
 full-text catalog/index when installed; its paired down script removes memory tables
 and the voice source-item index/column.
 
@@ -527,7 +527,7 @@ migration; the history API accepts and displays all three outcomes.
 
 ## Long-term memory schema (group 8)
 
-`0012_long_term_memory.sql` adds:
+`0015_long_term_memory.sql` adds:
 
 | Table/column | Contract |
 | --- | --- |

@@ -538,9 +538,9 @@ falls back to full-text search when embeddings or vector search are unavailable,
 then uses bounded substring matching when SQL full-text is not installed. Each
 response identifies its search method and whether more results may exist.
 
-`0012_long_term_memory.sql` conditionally adds the `vector(1536)` column. The
+`0015_long_term_memory.sql` conditionally adds the `vector(1536)` column. The
 memory-store startup runs the idempotent
-`db/migrations/setup/0012_long_term_memory.sql` after migrations commit; this
+`db/migrations/setup/0015_long_term_memory.sql` after migrations commit; this
 creates the full-text catalog/index when installed, outside Azure SQL's required
 migration transaction. Bicep deploys a sequential
 Global Standard capacity-1 `text-embedding-3-small` model alongside the existing

@@ -520,7 +520,7 @@ as Needs attention.
   contains groups 4 and 6; `0003_sandbox_agent_name.sql` adds the heartbeat's
   Foundry routing field, and P6-03's `0005_task_event_archives.sql` indexes
   committed Blob chunks for on-demand task-history reads. P7-13's
-  `0012_long_term_memory.sql` adds durable source-linked memories and conditional
+  `0015_long_term_memory.sql` adds durable source-linked memories and conditional
   vector/full-text capabilities; startup applies it through the existing locked,
   checksummed migration runner.
   See [migration guide](../db/migrations/README.md).
@@ -541,9 +541,9 @@ as Needs attention.
   manual Azure setup is needed. Archive/restore contracts use a fake Blob store;
   the live Azure archive/restore check must happen after merge.
 - P7-13 needs no separate portal or bootstrap action. The existing Deploy workflow
-  reapplies Bicep and the backend startup migration applies `0012` through the
+  reapplies Bicep and the backend startup migration applies `0015` through the
   idempotent migration runner. Memory-store startup executes the idempotent
-  `db/migrations/setup/0012_long_term_memory.sql` after the migration transaction
+  `db/migrations/setup/0015_long_term_memory.sql` after the migration transaction
   commits. After merge, the coordinator checks that Deploy creates the
   `text-embedding-3-small` deployment and that the backend is healthy;
   then verify a harmless memory through chat and voice, a later session after a
