@@ -254,10 +254,27 @@ describe('App shell', () => {
   it.each([
     ['/factory/tasks/42', 'Task 42'],
     ['/factory/projects/3', 'Project settings'],
-    ['/factory/releases/7', 'Release 7'],
   ])('opens %s as the page that activity links target', async (path, heading) => {
     await renderSignedIn(path);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(heading);
+  });
+
+  it('resolves release activity links to the owning project release view', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/factory/releases/7') return new Response(JSON.stringify({ projectId: '42' }));
+      if (path === '/factory/projects/42/releases') {
+        return new Response(JSON.stringify({
+          project: { id: '42', name: 'Jarvis', repo: 'DanAakesen/jarvis', defaultBranch: 'main' },
+          releases: [], pullRequests: [], workflowRuns: [], deployments: [], graph: null,
+        }));
+      }
+      return new Response(JSON.stringify({ state: 'awake' }));
+    });
+
+    await renderSignedIn('/factory/releases/7');
+
+    expect(await screen.findByRole('heading', { name: 'Jarvis releases' })).not.toBeNull();
   });
 
   it.each(['/factory/tasks/abc', '/factory/tasks/0', '/factory/unknown'])('treats %s as an unknown page', async (path) => {

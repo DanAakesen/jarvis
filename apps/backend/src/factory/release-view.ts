@@ -51,6 +51,7 @@ export interface ReleaseViewRecords {
 
 export interface ReleaseViewStore {
   read(projectId: string): Promise<ReleaseViewRecords>;
+  projectForRelease(releaseId: string): Promise<string | null>;
 }
 
 export interface GitGraphCommit {
@@ -96,6 +97,28 @@ function boundedResponse(reply: {
 }
 
 export function registerReleaseViewRoutes(app: FastifyInstance) {
+  app.get<{ Params: { id: string } }>('/factory/releases/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        properties: { id: { type: 'string', pattern: '^[1-9][0-9]{0,18}$' } },
+        required: ['id'],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    if (!isValidId(request.params.id)) return reply.code(400).send({ error: 'Invalid request' });
+    if (!app.releaseViewStore) return reply.code(503).send({ error: 'Release data unavailable' });
+    try {
+      const projectId = await app.releaseViewStore.projectForRelease(request.params.id);
+      if (!projectId) return reply.code(404).send({ error: 'Not found' });
+      return reply.header('Cache-Control', 'no-store').send({ projectId });
+    } catch {
+      request.log.warn('factory.release_project_lookup_failed');
+      return reply.code(503).send({ error: 'Release data unavailable' });
+    }
+  });
+
   app.get<{ Params: { id: string } }>('/factory/projects/:id/releases', {
     schema: {
       params: {

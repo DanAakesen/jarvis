@@ -28,6 +28,15 @@ function iso(value: Date | null): string | null {
 
 export function createReleaseViewStore(pool: sql.ConnectionPool): ReleaseViewStore {
   return {
+    async projectForRelease(releaseId) {
+      const { recordset } = await databaseReadRequest(pool)
+        .input('releaseId', sql.BigInt, BigInt(releaseId))
+        .query<{ projectId: string }>(`SELECT CONVERT(varchar(19), p.id) AS projectId
+          FROM dbo.releases AS r
+          INNER JOIN dbo.projects AS p ON p.id = r.project_id
+          WHERE r.id = @releaseId AND p.active = 1;`);
+      return recordset[0]?.projectId ?? null;
+    },
     async read(projectId) {
       const requests = () => databaseReadRequest(pool).input('projectId', sql.BigInt, BigInt(projectId));
       const [releases, pullRequests, workflowRuns, deployments] = await Promise.all([

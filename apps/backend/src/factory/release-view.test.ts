@@ -44,7 +44,10 @@ function fixture(options: {
       update: vi.fn(),
       archive: vi.fn(),
     },
-    releaseViewStore: options.releaseViewStore ?? { read: vi.fn(async () => records) },
+    releaseViewStore: options.releaseViewStore ?? {
+      read: vi.fn(async () => records),
+      projectForRelease: vi.fn(async () => '42'),
+    },
     releaseGraphReader: options.releaseGraphReader ?? { read: vi.fn(async () => graph) },
     auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
   });
@@ -54,7 +57,7 @@ function fixture(options: {
 
 describe('project release view API', () => {
   it('returns stored release records and fetches the graph on demand', async () => {
-    const releaseViewStore = { read: vi.fn(async () => records) };
+    const releaseViewStore = { read: vi.fn(async () => records), projectForRelease: vi.fn(async () => '42') };
     const releaseGraphReader = { read: vi.fn(async () => graph) };
     const app = fixture({ releaseViewStore, releaseGraphReader });
 
@@ -69,6 +72,18 @@ describe('project release view API', () => {
     });
     expect(releaseViewStore.read).toHaveBeenCalledWith('42');
     expect(releaseGraphReader.read).toHaveBeenCalledWith('DanAakesen/jarvis', 'main');
+  });
+
+  it('resolves a release activity link to its owning project', async () => {
+    const releaseViewStore = { read: vi.fn(async () => records), projectForRelease: vi.fn(async () => '42') };
+    const app = fixture({ releaseViewStore });
+
+    const response = await app.inject({ url: '/factory/releases/7', headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ projectId: '42' });
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(releaseViewStore.projectForRelease).toHaveBeenCalledWith('7');
   });
 
   it('requires authentication, validates project IDs, and hides unregistered projects', async () => {

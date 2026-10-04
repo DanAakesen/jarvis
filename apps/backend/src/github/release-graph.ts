@@ -6,6 +6,7 @@ const maxResponseBytes = 1024 * 1024;
 const maxBranches = 20;
 const commitsPerBranch = 30;
 const requestTimeoutMs = 10_000;
+const graphDeadlineMs = 25_000;
 const responseHeaders = {
   Accept: 'application/vnd.github+json',
   'X-GitHub-Api-Version': '2022-11-28',
@@ -90,13 +91,13 @@ export function createGitHubReleaseGraphReader(
   fetchImpl: typeof fetch = fetch,
   now: () => number = Date.now,
 ): ReleaseGraphReader {
-  async function request(url: string, token: string): Promise<unknown> {
+  async function request(url: string, token: string, signal: AbortSignal): Promise<unknown> {
     const response = await fetchImpl(url, {
       headers: {
         ...responseHeaders,
         Authorization: `${['Bear', 'er'].join('')} ${token}`,
       },
-      signal: AbortSignal.timeout(requestTimeoutMs),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]),
       redirect: 'error',
     });
     return readJson(response);
@@ -110,15 +111,17 @@ export function createGitHubReleaseGraphReader(
       }
       const [owner, repo] = repository.split('/');
       if (!owner || !repo) throw new Error('GitHub repository is invalid');
+      const signal = AbortSignal.timeout(graphDeadlineMs);
       const token = await tokenIssuer.issueForContents(repository);
+      signal.throwIfAborted();
       const base = `${githubApi}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
-      const branchResponse = await request(`${base}/branches?per_page=100`, token);
+      const branchResponse = await request(`${base}/branches?per_page=100`, token, signal);
       if (!Array.isArray(branchResponse) || branchResponse.length > 100) {
         throw new Error('GitHub branch response is invalid');
       }
       const listedBranches = branchResponse.map(parseBranch);
       if (!listedBranches.some(({ name }) => name === defaultBranch) && listedBranches.length > 0) {
-        const value = await request(`${base}/branches/${encodeURIComponent(defaultBranch)}`, token);
+        const value = await request(`${base}/branches/${encodeURIComponent(defaultBranch)}`, token, signal);
         listedBranches.push(parseBranch(value));
       }
       if (listedBranches.length === 0) {
@@ -135,7 +138,7 @@ export function createGitHubReleaseGraphReader(
           const url = new URL(`${base}/commits`);
           url.searchParams.set('sha', branch.name);
           url.searchParams.set('per_page', String(commitsPerBranch));
-          const value = await request(url.toString(), token);
+          const value = await request(url.toString(), token, signal);
           if (!Array.isArray(value) || value.length > commitsPerBranch) {
             throw new Error('GitHub commit response is invalid');
           }
