@@ -220,6 +220,7 @@ Verified in Codex cloud for P0-02:
 | Both workspace tests (single run) | `npm test` in the repository root (P0-03 adds backend tests) |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
+| Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
@@ -265,6 +266,14 @@ src/database/config.test.ts` and `npm test --workspace @jarvis/web -- --run
 src/DatabaseWakeStatus.test.tsx src/App.test.tsx src/task-events.test.tsx`.
 P3-11 rechecked Settings and Projects at 390 and 1280 px: New projects defaults
 load and save, and the Projects page retains edit/archive but has no create form.
+The backend project POST route remains available to Jarvis for P3-12. Live Entra
+and Azure SQL behavior remain unverified.
+P3-13 was checked at 390 and 1280 px with scratch-only auth and API mocks:
+managed projects appeared first, managing a repository needed no form and removed
+it from the unmanaged list, and explicit refresh loaded the updated list. Neither
+width overflowed, the management buttons were 44 px high, and no browser errors
+occurred. Live GitHub App, Key Vault, Entra, and Azure SQL behavior remains
+unverified.
 P3-12 adds the authenticated `create_project` tool and backend-only Key Vault
 repository creation. Backend and runner contract tests are local/offline; live
 Entra, Key Vault, Azure SQL, private template access and the throwaway end-to-end

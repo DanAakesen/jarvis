@@ -166,11 +166,16 @@ erDiagram
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
 - P1-11 stores global defaults in the existing key/value table; missing keys use
   the documented defaults. Current keys are `jarvis.model`,
-  `jarvis.reasoning_effort`, `voice.stt.model`, `voice.en.model`,
+  `jarvis.reasoning_effort`, `personality.tone`, `personality.response_style`,
+  `personality.custom_instructions`, `voice.stt.model`, `voice.en.model`,
   `voice.en.voice`, `voice.da.voice`, `voice.default_language`, `codex.model`,
   `codex.reasoning_effort`, `copilot.model`, `global.max_parallel_tasks`, and
   `global.max_check_attempts` (default 3; integer range 0–10, where 0 disables
   automatic check repair).
+  P7-16 adds the three `personality.*` JSON string settings to that same
+  key/value scope; tone and response style use closed catalogs, and custom
+  instructions are limited to 2,000 characters. The existing `dbo.settings`
+  schema already supports these keys, so no migration is required.
   P3-11 adds `new_projects.owner`, `new_projects.visibility`,
   `new_projects.templates_repository`, `new_projects.default_agent`,
   `new_projects.policy`, `new_projects.max_parallel_tasks`, and

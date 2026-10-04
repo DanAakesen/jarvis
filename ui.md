@@ -520,3 +520,15 @@ The separately discussed PC vendor integration was explicitly excluded by Dan;
 do not create a new issue for it from this UI discussion.
 
 Planning issues: [UI breakdown #230](https://github.com/DanAakesen/jarvis/issues/230) and [enabling logic #231](https://github.com/DanAakesen/jarvis/issues/231).
+
+## Initial allowlists (P8-18, decided 4 October 2026)
+
+No generated code ever runs: views are declarative JSON validated against these lists.
+
+| Kind | Allowed |
+| --- | --- |
+| Renderers | table (max 500 rows), list, detail (key-value), text (plain text plus a sanitised markdown subset: headings, lists, emphasis, links, code; no HTML), timeline, chart (line, bar or area; max 5 series and 1,000 points), task-card, status, image (HTTPS on allowlisted hosts: GitHub and the Jarvis Blob account; max 10 per view) |
+| Actions | open-route (Jarvis routes), open-link (github.com, *.azure.com, learn.microsoft.com), call-tool (registered backend tools through the existing tool route and confirmation rules), window operations (focus, minimise, restore, close, move, resize) |
+| Theme tokens | appearance (light, dark, system); accent and accent-secondary (sRGB hex); surface-tint (hex); background (a preset name from the visual system); glow (0 to 1); motion (full, calm, reduced; the OS reduced-motion setting always wins); radius (0 to 24 px); density (compact, comfortable) |
+
+The number of theme presets follows the visual-system work.
