@@ -3,6 +3,11 @@ export interface Settings {
     model: string;
     reasoning: string;
   };
+  personality: {
+    tone: 'british_butler' | 'warm' | 'direct' | 'playful';
+    responseStyle: 'concise' | 'balanced' | 'detailed';
+    customInstructions: string;
+  };
   voice: {
     speechToTextModel: string;
     englishModel: string;
@@ -44,6 +49,11 @@ export interface SettingsStore {
 
 export const defaultSettings: Settings = {
   jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
+  personality: {
+    tone: 'british_butler',
+    responseStyle: 'concise',
+    customInstructions: '',
+  },
   voice: {
     speechToTextModel: 'mai-transcribe',
     englishModel: 'gpt-realtime-2.1',
@@ -68,6 +78,8 @@ export const defaultSettings: Settings = {
 export const settingsOptions = {
   jarvisModels: ['gpt-5.6-luna'],
   reasoningEfforts: ['none', 'low', 'medium', 'high'],
+  personalityTones: ['british_butler', 'warm', 'direct', 'playful'],
+  personalityResponseStyles: ['concise', 'balanced', 'detailed'],
   speechToTextModels: ['mai-transcribe'],
   englishModels: ['gpt-realtime-2.1'],
   englishVoices: ['en-GB-Ryan:DragonHDLatestNeural'],
@@ -83,6 +95,11 @@ export const settingsOptions = {
 
 const settingKeys = {
   jarvis: { model: 'jarvis.model', reasoning: 'jarvis.reasoning_effort' },
+  personality: {
+    tone: 'personality.tone',
+    responseStyle: 'personality.response_style',
+    customInstructions: 'personality.custom_instructions',
+  },
   voice: {
     speechToTextModel: 'voice.stt.model',
     englishModel: 'voice.en.model',
@@ -116,6 +133,17 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
   if (area === 'jarvis') {
     if (key === 'model') return isOption(value, settingsOptions.jarvisModels);
     if (key === 'reasoning') return isOption(value, settingsOptions.reasoningEfforts);
+  }
+  if (area === 'personality') {
+    if (key === 'tone') return isOption(value, settingsOptions.personalityTones);
+    if (key === 'responseStyle') return isOption(value, settingsOptions.personalityResponseStyles);
+    if (key === 'customInstructions') {
+      return typeof value === 'string' && value.length <= 2_000 &&
+        ![...value].some((character) => {
+          const code = character.charCodeAt(0);
+          return code < 0x20 && character !== '\n' && character !== '\r' && character !== '\t';
+        });
+    }
   }
   if (area === 'voice') {
     if (key === 'speechToTextModel') return isOption(value, settingsOptions.speechToTextModels);
@@ -180,6 +208,14 @@ const settingsPatchSchema = {
           properties: {
             model: selectSchema(settingsOptions.jarvisModels),
             reasoning: selectSchema(settingsOptions.reasoningEfforts),
+          },
+        },
+        personality: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: {
+            tone: selectSchema(settingsOptions.personalityTones),
+            responseStyle: selectSchema(settingsOptions.personalityResponseStyles),
+            customInstructions: { type: 'string', maxLength: 2_000 },
           },
         },
         voice: {
@@ -309,8 +345,21 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       response: {
         200: {
           type: 'object',
-          properties: { model: { type: 'string' }, reasoningEffort: { type: 'string' } },
-          required: ['model', 'reasoningEffort'],
+          properties: {
+            model: { type: 'string' },
+            reasoningEffort: { type: 'string' },
+            personality: {
+              type: 'object',
+              properties: {
+                tone: selectSchema(settingsOptions.personalityTones),
+                responseStyle: selectSchema(settingsOptions.personalityResponseStyles),
+                customInstructions: { type: 'string', maxLength: 2_000 },
+              },
+              required: ['tone', 'responseStyle', 'customInstructions'],
+              additionalProperties: false,
+            },
+          },
+          required: ['model', 'reasoningEffort', 'personality'],
           additionalProperties: false,
         },
         403: {
@@ -331,7 +380,11 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const settings = await readSettings(app.settingsStore);
-    return { model: settings.jarvis.model, reasoningEffort: settings.jarvis.reasoning };
+    return {
+      model: settings.jarvis.model,
+      reasoningEffort: settings.jarvis.reasoning,
+      personality: settings.personality,
+    };
   });
 
   app.patch('/settings', { schema: { body: settingsPatchSchema } }, async (request, reply) => {

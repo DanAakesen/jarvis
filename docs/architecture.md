@@ -62,6 +62,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   implements it as a responsive form for Jarvis, voice, coding-agent defaults
   and the global task limit; remaining voice samples, sleep and credential
   controls are visibly disabled until their owning services exist.
+- P7-16 extends the same authenticated, validated `dbo.settings` key/value store
+  with bounded personality preferences. Hosted chat and Danish voice read them
+  for each new agent invocation/session; the backend snapshots them when it
+  configures each new English voice relay. Active voice connections keep their
+  original snapshot.
 - P1-10 passes the backend URL and MSAL token provider into the Software Factory
   area. The projects list and settings page call the authenticated project CRUD
   routes; running counts are derived from `GET /factory/tasks?state=Running`
@@ -743,6 +748,28 @@ GitHub host and path before returning credentials. The runner retries a 404
 session lookup with bounded delays to cover the interval before the backend
 persists the newly started Foundry session.
 
+P3-13 adds a backend-only `GitHubRepositoryCatalog` alongside the task token
+issuer. It finds the active App installation matching `new_projects.owner`,
+requests an installation token limited to `contents: read`, and reads every
+page of `/installation/repositories` (100 per page, at most 10,000 entries).
+Per-owner results are cached in memory for five minutes; authenticated
+`GET /factory/repositories?refresh=true` bypasses that cache on demand and
+returns only repository metadata, never a token. The Projects page receives
+`fullName`, name, default branch, last push, and language with
+`Cache-Control: no-store`.
+
+`POST /factory/projects/manage` and the backend `manage_repository` tool share
+the same registration operation. It confirms the canonical repository is in
+the configured installation before reading its default-branch Git tree and
+detecting tech from project marker files, falling back to the normalized
+primary-language identifier or `unknown`. It creates a row in the existing
+`projects` table using the repository's actual default branch plus configured
+New projects agent, policy, and task limit; no schema change is needed. The
+user route retains Dan-only authentication, the tool uses the existing
+Jarvis-agent role, and neither route exposes the private key or installation
+token. Contracts are tested offline; live GitHub, Key Vault, Entra, and Azure
+SQL behavior remain unverified.
+
 App-token mode is explicitly opt-in through the Runner deploy Actions variable `JARVIS_GITHUB_APP_TOKEN_ENABLED` (default `false`); enabling it also requires `GITHUB_APP_ID`. Keep the legacy `jarvis-github` secret and runner read grant until the live post-merge push check against `DanAakesen/jarvis-test-target` succeeds. The same backend identity reads the separate `github-app-webhook-secret` for P3-03 webhook signature verification; Bicep supplies the vault URI. After raw-body signature verification, P3-04 maps only allowlisted fields from `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. A serializable SQL transaction commits the delivery ID and mapped group 5 rows together, so duplicate deliveries cannot replay writes; no payload or secret is stored or logged. P3-05 reacts to a failed `pull_request` workflow after persistence, uses a repository-scoped installation token with only Actions read access to retrieve bounded job logs, and writes them to the existing private `logs` container. A bounded, sanitized excerpt and the Blob path go through the P2-07 task controller; the token remains backend-only. `global.max_check_attempts` defaults to 3 (validated range 0–10); on exhaustion or an unavailable log/steer, the task moves to NeedsAttention. SQL reuses `workflow_runs.log_artifact` and task-event markers; no migration is required. `push` to a registered project's default branch creates the release row, and the `Release` workflow's run number fills its version. The App does not subscribe to GitHub's `release` event because releases represent merges, not tags. The App ID is configuration, not a secret.
 For task completion, the backend uses the same repository-scoped App issuer to
 read the task branch and find a pull request with that branch as its head. A
@@ -756,6 +783,7 @@ run; workflow runs and deployments link to releases by project and SHA.
 When a task turn completes, P3-14 uses the repository-scoped GitHub App token to verify the task branch, reuse an open PR for the configured base if present, or compare the branch with the default branch and create a PR only when it is ahead. Branch/PR reads happen outside the task policy lock; the backend rechecks that the task is Running under the lock before the bounded PR create, reconciles an ambiguous create response with a matching-PR lookup, and records `pull_request_opened` before releasing it. This serializes the side effect with cancellation without holding the lock across the GitHub preflight. The new PR uses the task title and links to its Jarvis task through the configured Static Web App origin. The backend ends the completed sandbox without marking the task Done; GitHub's signed PR/check webhooks continue the P3-06 policy flow. A missing branch, no new commits, or GitHub API refusal records a clear task event and moves the task to Needs attention. Duplicate completions reuse the PR, including a second lookup after GitHub reports a duplicate create. The GitHub App token stays backend-side.
 
 P3-06 joins the task-linked PR record to its project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. `deliver_pr` marks a verified green, non-draft PR Done without merging. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then requests a squash merge with the expected head SHA. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. GitHub rate limits remain retryable webhook failures. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, and refusal reasons; live App installation and test-repository acceptance remain unverified.
+
 
 **Codex login rules** (Pro login only; no API key):
 
@@ -804,7 +832,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | --- | --- | --- |
 | Browser connection | Browser connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. It captures and sends mono 24 kHz PCM only after the relay is ready; provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, interruption, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
 | Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then captures audio. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
-| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | The client waits for the backend-configured session before opening the microphone. Local mock tests verify server-owned session settings and client event handling; real browser audio and live Voice Live behavior remain unverified pending P0-16. |
+| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Completed voice transcripts are persisted as messages; voice tool calls are not stored as `tool_calls`. |
 | Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |
 | Screen inspection (P7-05) | The browser captures a JPEG from the user-selected `getDisplayMedia` stream only on an explicit button or recognized voice request. Authenticated `POST /screen/frames` checks Dan's identity, active `jarvis_sessions` row, JPEG/1 MiB limit, 3-second interval and `global.screen_share_daily_frame_cap` (default 300, range 1–300). It reserves the frame in `dbo.usage`, calls the configured vision deployment using the backend managed identity, then sends only the bounded description to chat context or Voice Live response instructions. No image is persisted or logged; chat messages, voice transcripts and task events do not contain the synthetic context. | Backend/web/agent contract tests exercise a fake model and transient context. Frame count and token usage are recorded; screen-frame DKK is a four-decimal estimate for `gpt-5.6-luna` at the documented short-context Global Standard input/output rates. Live deployment SKU, model image acceptance and billed cost remain to verify. Voice stop and page teardown stop sharing. |
@@ -826,10 +854,13 @@ P7-05 reuses that Foundry endpoint, backend managed identity and `Foundry User` 
 
 `agents/jarvis` (P4-01) is the ported voice-prototype agent: the Voice Live Bridge
 runtime, response coordinator, strict action rules for spoken Danish replies and
-a per-session model tool loop over the Responses API. At session start it reads
-effective model and reasoning settings from the agent-only `GET /agent/settings`
-route, then uses the immutable snapshot for each model request in that session.
-It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
+a per-session model tool loop over the Responses API. At voice session start and
+for each new chat invocation, it reads effective model, reasoning, and personality
+settings from the agent-only `GET /agent/settings` route. The voice runtime keeps
+that immutable snapshot for the session; chat uses a per-invocation snapshot.
+Tone, response style, and JSON-quoted custom instructions modify presentation
+only, with identity, backend tool permissions, and truthful action outcomes
+remaining fixed. It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
 (cached for 60 seconds) and sends each model tool call to `POST /tools/{name}`.
 The agent gets a token for `api://<jarvis-api>/.default`
 from its platform identity through `DefaultAzureCredential`; the same credential
