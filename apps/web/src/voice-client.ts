@@ -1,5 +1,5 @@
 export type VoiceLanguage = 'da' | 'en';
-export type VoiceStatus = 'stopped' | 'connecting' | 'listening' | 'speaking' | 'reconnecting' | 'error';
+export type VoiceStatus = 'stopped' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'reconnecting' | 'error';
 
 type VoiceSocket = Pick<WebSocket, 'addEventListener' | 'removeEventListener' | 'send' | 'close'>;
 
@@ -8,6 +8,8 @@ export interface VoiceAudio {
   open(sendAudio: (audio: string) => void): Promise<void>;
   play(audio: string): void;
   stopPlayback(): void;
+  hasPlayback(): boolean;
+  setPlaybackEndedHandler(handler: () => void): void;
   setMuted(muted: boolean): void;
   closeInput(): void;
   dispose(): void;
@@ -189,9 +191,12 @@ function browserAudio(): VoiceAudio {
   let mute: GainNode | undefined;
   let muted = false;
   let scheduledUntil = 0;
+  let playbackGeneration = 0;
+  let playbackEnded = () => {};
   const playing = new Set<AudioBufferSourceNode>();
 
   const stopPlayback = () => {
+    playbackGeneration += 1;
     for (const sourceNode of playing) {
       try { sourceNode.stop(); } catch { /* Playback may have ended already. */ }
     }
@@ -272,13 +277,22 @@ function browserAudio(): VoiceAudio {
       const sourceNode = context.createBufferSource();
       sourceNode.buffer = buffer;
       sourceNode.connect(context.destination);
-      sourceNode.onended = () => playing.delete(sourceNode);
+      const generation = playbackGeneration;
+      sourceNode.onended = () => {
+        if (generation !== playbackGeneration) return;
+        playing.delete(sourceNode);
+        if (playing.size === 0) playbackEnded();
+      };
       const startAt = Math.max(context.currentTime, scheduledUntil);
       sourceNode.start(startAt);
       scheduledUntil = startAt + buffer.duration;
       playing.add(sourceNode);
     },
     stopPlayback,
+    hasPlayback: () => playing.size > 0,
+    setPlaybackEndedHandler(handler) {
+      playbackEnded = handler;
+    },
     setMuted(value) {
       muted = value;
     },
@@ -302,12 +316,19 @@ export class BrowserVoiceClient {
   private running = false;
   private muted = false;
   private microphoneOpen = false;
+  private playbackAllowed = false;
+  private responseFinished = false;
 
   constructor(private readonly options: VoiceClientOptions) {
     this.language = options.language ?? 'da';
     this.audio = options.createAudio?.() ?? browserAudio();
     this.makeSocket = options.createSocket ?? createSocket;
     this.delay = options.delay ?? abortableDelay;
+    this.audio.setPlaybackEndedHandler(() => {
+      if (this.running && this.microphoneOpen && this.responseFinished) {
+        this.publish('listening', 'Listening for your voice.');
+      }
+    });
   }
 
   start(): void {
@@ -396,6 +417,7 @@ export class BrowserVoiceClient {
             break;
           }
           this.microphoneOpen = true;
+          this.playbackAllowed = true;
           this.audio.setMuted(this.muted);
           this.publish('listening', 'Listening for your voice.');
           await waitForClose(socket, signal);
@@ -411,6 +433,8 @@ export class BrowserVoiceClient {
             socket.close();
           }
           this.microphoneOpen = false;
+          this.playbackAllowed = false;
+          this.responseFinished = false;
           this.audio.stopPlayback();
           this.audio.closeInput();
         }
@@ -435,14 +459,21 @@ export class BrowserVoiceClient {
     if (!event || typeof event.type !== 'string') return;
     if (event.type === 'input_audio_buffer.speech_started' || event.type === 'speech_started') {
       this.audio.stopPlayback();
+      this.playbackAllowed = false;
+      this.responseFinished = false;
       if (this.running && this.microphoneOpen) this.publish('listening', 'Listening for your voice.');
+    } else if (event.type === 'response.created') {
+      this.playbackAllowed = true;
+      this.responseFinished = false;
+      if (this.running && this.microphoneOpen) this.publish('thinking', 'Jarvis is thinking.');
     } else if (event.type === 'response.audio.delta' || event.type === 'response.output_audio.delta') {
-      if (typeof event.delta === 'string' && this.running && this.microphoneOpen) {
+      if (typeof event.delta === 'string' && this.running && this.microphoneOpen && this.playbackAllowed) {
         this.audio.play(event.delta);
         this.publish('speaking', 'Jarvis is speaking.');
       }
     } else if (event.type === 'response.done' && this.running && this.microphoneOpen) {
-      this.publish('listening', 'Listening for your voice.');
+      this.responseFinished = true;
+      if (!this.audio.hasPlayback()) this.publish('listening', 'Listening for your voice.');
     }
   }
 }

@@ -39,14 +39,18 @@ class MockSocket extends EventTarget {
 }
 
 function audioAdapter(onOpen?: () => void) {
+  let playbackEnded = () => {};
   return {
     prepare: vi.fn(async () => {}),
     open: vi.fn(async () => { onOpen?.(); }),
     play: vi.fn(),
     stopPlayback: vi.fn(),
+    hasPlayback: vi.fn(() => false),
+    setPlaybackEndedHandler: vi.fn((handler: () => void) => { playbackEnded = handler; }),
     setMuted: vi.fn(),
     closeInput: vi.fn(),
     dispose: vi.fn(),
+    finishPlayback: () => playbackEnded(),
   };
 }
 
@@ -101,12 +105,13 @@ describe('BrowserVoiceClient', () => {
 
   it('stops current playback when speech starts', async () => {
     const audio = audioAdapter();
+    const statuses: string[] = [];
     let socket: MockSocket | undefined;
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com',
       getAccessToken: async () => 'token',
       language: 'en',
-      onStatus: () => {},
+      onStatus: (status) => statuses.push(status),
       createAudio: () => audio,
       createSocket: (url, protocols) => {
         socket = new MockSocket(url, protocols);
@@ -117,11 +122,46 @@ describe('BrowserVoiceClient', () => {
 
     client.start();
     await until(() => audio.open.mock.calls.length === 1);
+    socket?.receive({ type: 'response.created' });
+    expect(statuses.at(-1)).toBe('thinking');
     socket?.receive({ type: 'response.audio.delta', delta: 'AQID' });
     socket?.receive({ type: 'input_audio_buffer.speech_started' });
+    socket?.receive({ type: 'response.audio.delta', delta: 'BAUG' });
 
     expect(audio.play).toHaveBeenCalledWith('AQID');
+    expect(audio.play).toHaveBeenCalledOnce();
     expect(audio.stopPlayback).toHaveBeenCalledOnce();
+    client.stop();
+  });
+
+  it('keeps the speaking state until queued audio playback ends', async () => {
+    const audio = audioAdapter();
+    const statuses: string[] = [];
+    let socket: MockSocket | undefined;
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      language: 'en',
+      onStatus: (status) => statuses.push(status),
+      createAudio: () => audio,
+      createSocket: (url, protocols) => {
+        socket = new MockSocket(url, protocols);
+        return socket;
+      },
+    });
+    clients.push(client);
+
+    client.start();
+    await until(() => audio.open.mock.calls.length === 1);
+    socket?.receive({ type: 'response.created' });
+    socket?.receive({ type: 'response.audio.delta', delta: 'AQID' });
+    audio.hasPlayback.mockReturnValue(true);
+    socket?.receive({ type: 'response.done' });
+    expect(statuses.at(-1)).toBe('speaking');
+
+    audio.hasPlayback.mockReturnValue(false);
+    audio.finishPlayback();
+    expect(statuses.at(-1)).toBe('listening');
     client.stop();
   });
 
