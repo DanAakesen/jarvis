@@ -188,7 +188,7 @@ Dan's manual setup checklist:
 
    Configure that same secret in GitHub's App settings and remove the temporary local copy. Do not put either copy in source control or logs.
 
-Status, 3 October 2026: Dan registered the App and installed it on selected repositories (step 2). No private key exists yet; steps 3–6 follow P0-16 and step 7 follows P3-03 (task P3-10). Key Vault storage and webhook delivery are unverified until then. The manifest and instructions do not claim they have happened.
+Status, 3 October 2026: Dan registered the App and installed it on all repositories of his account (step 2), so new repositories such as `DanAakesen/jarvis-test-target` are covered automatically. No private key exists yet; steps 3–6 follow P0-16 and step 7 follows P3-03 (task P3-10). Key Vault storage and webhook delivery are unverified until then. The manifest and instructions do not claim they have happened.
 
 ## Setup and commands
 
