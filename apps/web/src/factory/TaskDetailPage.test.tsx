@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -200,7 +200,9 @@ describe('task detail page', () => {
     expect(screen.getByText('Monitor writable disk')).not.toBeNull();
     expect(screen.getByText('Needs attention')).not.toBeNull();
     expect(screen.getAllByText('disk_low').length).toBeGreaterThan(0);
-    expect(screen.getByText('Copilot')).not.toBeNull();
+    const agentRow = screen.getByText('Agent').closest('div');
+    if (!agentRow) throw new Error('Agent metadata row is missing');
+    expect(within(agentRow).getByText('Copilot')).not.toBeNull();
     expect(screen.getByText('gpt-5.6-luna')).not.toBeNull();
     expect(await screen.findByText('Please monitor writable disk.')).not.toBeNull();
     expect((await screen.findByRole('link', { name: 'Jarvis' })).getAttribute('href')).toBe('/factory/projects/7');
