@@ -332,6 +332,15 @@ phone screenshots are
 `docs/ui/screenshots/p3-08-release-view-desktop.png` and
 `docs/ui/screenshots/p3-08-release-view-phone.png`; their fixture data is mocked.
 Live Entra, Azure SQL, and GitHub behavior remain unverified.
+P7-08 was inspected in Chromium at 1280×900 and 390×844 using scratch-only auth,
+fake camera media, and mocked API/vision responses. The camera turned on and off,
+one frame was sent through the existing screen-vision request, and the camera
+track stopped; neither viewport overflowed and there were no browser errors.
+Screenshots are
+`docs/ui/screenshots/p7-08-camera-desktop.png` and
+`docs/ui/screenshots/p7-08-camera-phone.png`; their account, camera stream, and
+vision response are fixtures. Live camera hardware, Entra, backend, and deployed
+Foundry image support remain unverified.
 Never commit the stub or weaken sign-in in the app.
 
 Backend commands:
