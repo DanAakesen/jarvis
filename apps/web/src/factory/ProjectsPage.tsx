@@ -128,14 +128,14 @@ function validateProjectValues(values: ProjectValues): string | null {
   return null;
 }
 
-function projectError(method: string, status: number): Error {
+function projectError(operation: 'load' | 'save' | 'manage', status: number): Error {
   if (status === 401) return new Error('Your Microsoft sign-in needs attention. Sign in again.');
   if (status === 503) return new Error('Project or repository data is unavailable until its backend service is connected.');
   if (status === 502) return new Error('GitHub repository data is unavailable. Try again.');
   if (status === 409) return new Error('This repository is already assigned to a project. Archived repositories remain reserved.');
-  if (status === 404 && method === 'POST') return new Error('This repository is no longer available through the GitHub App.');
+  if (status === 404 && operation === 'manage') return new Error('This repository is no longer available through the GitHub App.');
   if (status === 404) return new Error('This project is no longer available.');
-  return new Error(`Jarvis could not ${method} project data (HTTP ${status}).`);
+  return new Error(`Jarvis could not ${operation} project data (HTTP ${status}).`);
 }
 
 async function request(
@@ -161,7 +161,10 @@ async function request(
     if (cause instanceof Error && cause.message === 'Your Microsoft sign-in needs attention. Sign in again.') throw cause;
     throw new Error('Jarvis could not reach the project service. Try again.', { cause });
   }
-  if (!response.ok) throw projectError(method === 'GET' ? 'load' : 'save', response.status);
+  if (!response.ok) {
+    const operation = path === '/factory/projects/manage' ? 'manage' : method === 'GET' ? 'load' : 'save';
+    throw projectError(operation, response.status);
+  }
   if (response.status === 204) return null;
   try {
     return await response.json();

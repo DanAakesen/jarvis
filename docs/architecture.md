@@ -658,6 +658,28 @@ GitHub host and path before returning credentials. The runner retries a 404
 session lookup with bounded delays to cover the interval before the backend
 persists the newly started Foundry session.
 
+P3-13 adds a backend-only `GitHubRepositoryCatalog` alongside the task token
+issuer. It finds the active App installation matching `new_projects.owner`,
+requests an installation token limited to `contents: read`, and reads every
+page of `/installation/repositories` (100 per page, at most 10,000 entries).
+Per-owner results are cached in memory for five minutes; authenticated
+`GET /factory/repositories?refresh=true` bypasses that cache on demand and
+returns only repository metadata, never a token. The Projects page receives
+`fullName`, name, default branch, last push, and language with
+`Cache-Control: no-store`.
+
+`POST /factory/projects/manage` and the backend `manage_repository` tool share
+the same registration operation. It confirms the canonical repository is in
+the configured installation before reading its default-branch Git tree and
+detecting tech from project marker files, falling back to the normalized
+primary-language identifier or `unknown`. It creates a row in the existing
+`projects` table using the repository's actual default branch plus configured
+New projects agent, policy, and task limit; no schema change is needed. The
+user route retains Dan-only authentication, the tool uses the existing
+Jarvis-agent role, and neither route exposes the private key or installation
+token. Contracts are tested offline; live GitHub, Key Vault, Entra, and Azure
+SQL behavior remain unverified.
+
 App-token mode is explicitly opt-in through the Runner deploy Actions variable `JARVIS_GITHUB_APP_TOKEN_ENABLED` (default `false`); enabling it also requires `GITHUB_APP_ID`. Keep the legacy `jarvis-github` secret and runner read grant until the live post-merge push check against `DanAakesen/jarvis-test-target` succeeds. The same backend identity reads the separate `github-app-webhook-secret` for P3-03 webhook signature verification; Bicep supplies the vault URI. The App ID is configuration, not a secret.
 
 **Codex login rules** (Pro login only; no API key):

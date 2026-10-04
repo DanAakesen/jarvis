@@ -145,6 +145,22 @@ describe('Projects page', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/factory/repositories?refresh=true'))).toBe(true);
   });
 
+  it('explains when an existing repository is no longer available to manage', async () => {
+    const user = userEvent.setup();
+    const fallback = fetchMock.getMockImplementation();
+    fetchMock.mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/factory/projects/manage')) return response({ error: 'not found' }, 404);
+      return fallback!(input, init);
+    });
+    renderFactory();
+
+    const repository = await screen.findByRole('article', { name: 'DanAakesen/second-project' });
+    await user.click(within(repository).getByRole('button', { name: 'Manage with Jarvis' }));
+
+    expect((await screen.findByRole('alert')).textContent)
+      .toContain('This repository is no longer available through the GitHub App.');
+  });
+
   it('does not expose a project creation form or link', async () => {
     renderFactory();
     await screen.findByRole('heading', { name: 'Projects' });

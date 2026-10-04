@@ -157,6 +157,34 @@ describe('GitHub App installation tokens', () => {
     expect((fetchImpl.mock.calls[2]?.[1]?.headers as Record<string, string>).Authorization).toContain(readOnlyToken);
   });
 
+  it.each([
+    ['missing', new Response('{}', { status: 404 })],
+    ['oversized', new Response('x'.repeat(1024 * 1024 + 1))],
+  ])('falls back to a normalized primary language when the tree is %s', async (_reason, treeResponse) => {
+    const now = Date.parse('2026-10-04T09:00:00.000Z');
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        id: 123, account: { login: 'DanAakesen' }, suspended_at: null,
+      }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        token: 'ghs_language-fallback-token',
+        expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
+      }), { status: 201 }))
+      .mockResolvedValueOnce(treeResponse);
+    const catalog = createGitHubAppRepositoryCatalog({
+      appId: '123456',
+      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      fetch: fetchImpl,
+      now: () => now,
+    });
+
+    await expect(catalog.detectTech({
+      fullName: 'DanAakesen/repository', name: 'repository', defaultBranch: 'main',
+      pushedAt: null, language: 'Visual Basic',
+    })).resolves.toBe('visual-basic');
+  });
+
   it('rejects invalid repositories and non-one-hour or failed GitHub responses', async () => {
     const { privateKey } = generateKeyPairSync('rsa', {
       modulusLength: 2048,

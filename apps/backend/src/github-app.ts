@@ -227,7 +227,10 @@ function detectTech(paths: readonly string[], language: string | null): string {
     Kotlin: 'kotlin',
     'C++': 'cpp',
   };
-  return language ? languageIdentifiers[language] ?? 'unknown' : 'unknown';
+  if (!language) return 'unknown';
+  const identifier = languageIdentifiers[language] ??
+    language.toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '').slice(0, 32);
+  return /^[a-z][a-z0-9_.-]{0,31}$/u.test(identifier) ? identifier : 'unknown';
 }
 
 export function createGitHubAppTokenIssuer({
@@ -363,7 +366,10 @@ export function createGitHubAppRepositoryCatalog({
           return typeof entry?.path === 'string' ? [entry.path] : [];
         });
       } catch (error) {
-        if (!(error instanceof GitHubAppRequestError && error.status === 404)) throw error;
+        if (error instanceof GitHubAppRequestError && error.status === 404) {
+          return detectTech(paths, repository.language);
+        }
+        if (!(error instanceof Error && error.message === 'GitHub App response is too large')) throw error;
       }
       return detectTech(paths, repository.language);
     },

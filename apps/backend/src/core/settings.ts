@@ -314,7 +314,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
   }, async (request, reply) => {
     if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
-  const settings = await loadEffectiveSettings(app.settingsStore);
+    const settings = await loadEffectiveSettings(app.settingsStore);
     return { model: settings.jarvis.model, reasoningEffort: settings.jarvis.reasoning };
   });
 
