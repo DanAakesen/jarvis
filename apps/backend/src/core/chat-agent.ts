@@ -4,6 +4,7 @@ export interface ConversationAgentInput {
   readonly messageId: string;
   readonly text: string;
   readonly language: 'da' | 'en';
+  readonly screenContext?: string;
 }
 
 export interface ConversationAgent {

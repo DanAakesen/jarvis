@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -153,6 +153,27 @@ describe('App shell', () => {
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
   });
 
+  it('restores the accepted appearance across signed-in app routes', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/settings') {
+        return new Response(JSON.stringify({ settings: { appearance: { theme: 'dark' } } }));
+      }
+      if (path === '/now') {
+        return new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }));
+      }
+      if (path === '/database/status') return new Response(JSON.stringify({ waking: false }));
+      return new Response('{}');
+    });
+    await renderSignedIn();
+
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
+    await user.click(screen.getByRole('link', { name: 'Software Factory' }));
+    expect(await screen.findByRole('heading', { name: 'Tasks' })).not.toBeNull();
+    expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
   it('opens and closes the area navigation with keyboard focus returning to its toggle', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
@@ -169,19 +190,17 @@ describe('App shell', () => {
     expect(screen.getByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
   });
 
-  it('keeps Screen sharing and Camera visibly unavailable until their features are built', async () => {
+  it('keeps Camera unavailable while screen sharing is available in the conversation', async () => {
     await renderSignedIn();
 
-    for (const [name, explanation] of [
-      ['Share screen', 'Unavailable until screen sharing is built.'],
-      ['Camera', 'Unavailable until camera support is built.'],
-    ] as const) {
-      const button = screen.getByRole('button', { name });
-      expect(button).toHaveProperty('disabled', true);
-      expect(button.getAttribute('aria-describedby')).not.toBeNull();
-      expect(document.getElementById(button.getAttribute('aria-describedby')!)?.textContent).toBe(explanation);
-      expect(button.parentElement?.getAttribute('title')).toBe(explanation);
-    }
+    const camera = screen.getByRole('button', { name: 'Camera' });
+    expect(camera).toHaveProperty('disabled', true);
+    expect(camera.getAttribute('aria-describedby')).not.toBeNull();
+    expect(document.getElementById(camera.getAttribute('aria-describedby')!)?.textContent)
+      .toBe('Unavailable until camera support is built.');
+    expect(camera.parentElement?.getAttribute('title')).toBe('Unavailable until camera support is built.');
+    expect(within(screen.getByRole('region', { name: 'Conversation' }))
+      .getByRole('button', { name: 'Share screen' })).toHaveProperty('disabled', false);
   });
 
   it('opens and closes the contextual shell panel without replacing page content', async () => {
@@ -257,10 +276,27 @@ describe('App shell', () => {
   it.each([
     ['/factory/tasks/42', 'Task 42'],
     ['/factory/projects/3', 'Project settings'],
-    ['/factory/releases/7', 'Release 7'],
   ])('opens %s as the page that activity links target', async (path, heading) => {
     await renderSignedIn(path);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(heading);
+  });
+
+  it('resolves release activity links to the owning project release view', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/factory/releases/7') return new Response(JSON.stringify({ projectId: '42' }));
+      if (path === '/factory/projects/42/releases') {
+        return new Response(JSON.stringify({
+          project: { id: '42', name: 'Jarvis', repo: 'DanAakesen/jarvis', defaultBranch: 'main' },
+          releases: [], pullRequests: [], workflowRuns: [], deployments: [], graph: null,
+        }));
+      }
+      return new Response(JSON.stringify({ state: 'awake' }));
+    });
+
+    await renderSignedIn('/factory/releases/7');
+
+    expect(await screen.findByRole('heading', { name: 'Jarvis releases' })).not.toBeNull();
   });
 
   it.each(['/factory/tasks/abc', '/factory/tasks/0', '/factory/unknown'])('treats %s as an unknown page', async (path) => {

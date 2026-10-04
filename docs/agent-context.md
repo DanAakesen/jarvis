@@ -124,6 +124,8 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Bootstrap IDs | [`infra/bootstrap.output.json`](../infra/bootstrap.output.json); also Actions variables in `DanAakesen/jarvis` |
 
 - `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
+- `infra/bootstrap.ps1` registers `Microsoft.BotService`; `Microsoft.CognitiveServices` is already registered there. When a backend image exists, Bicep provisions Azure Bot Service F0 with its Teams channel, plus Azure Speech F0 and a **Cognitive Services Speech User** assignment to `id-jarvis-backend`. The bot uses that user-assigned identity; no client secret, speech key, additional app registration, or new deployment secret is required.
+- Bicep sets backend `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, and `SPEECH_REGION` from the identity, subscription, Container Apps environment, and Speech resource. Speech is F0-only: if the free allowance is exhausted or synthesis fails, delivery remains text-only. Local build/lint and fake service tests do not prove the resource role, deployed endpoint, free allowance, Teams installation, or live phone approval.
 - The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
 - Bicep sets `BACKEND_CONTAINER_APP_RESOURCE_ID` and grants `id-jarvis-backend` a custom role limited to Container App read/write on that app. The sleep API uses this fixed target and the existing `SQL_MANAGED_IDENTITY_CLIENT_ID` for ARM authentication. Local tests inject the scaler; a local app without an Azure managed identity cannot perform live scaling, and the Bicep build/lint checks do not verify the deployed role.
 - `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Deploy requires the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub secret, a comma-separated list including Dan's email. It passes the values through a mode-0600 temporary parameters file to the required Bicep `budgetContactEmails` parameter, then deletes the file. Do not commit email addresses. The first Azure deployment and real resource behavior are verified by Deploy, not by local Bicep build/lint.
@@ -255,6 +257,17 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
+
+P8-13 was inspected in Chromium at 1440×1000 and 390×844 using the scratch auth
+stub and Vite settings mock. The mock rejected the first dark-mode PATCH with
+HTTP 400, after which the prior light appearance remained selected; retry
+accepted dark, and reloading Settings restored it. Keyboard navigation reached
+the dark radio with a visible native focus outline; the phone layout had no
+horizontal overflow. Muted-text contrast against the page/surface was at least
+6.25:1 in light mode and 8.99:1 in dark mode. The only browser console/network
+error was the intentionally rejected mock request; no page exceptions occurred.
+Screenshots are in `docs/ui/screenshots/p8-13-theme-settings-*.png`. These mocks
+do not verify live Entra, API authorization, or Azure SQL persistence.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal
@@ -306,6 +319,14 @@ the page had no horizontal overflow, selects measured 44 px, and only the table
 scrolls horizontally. The expected mocked 503 produced a browser network log;
 there were no other console errors or page exceptions. Live SQL and provider or
 voice usage remain unverified.
+P3-08 was inspected at 390×844 (dark theme) and 1280×1300 (light theme) in
+Chromium using scratch-only auth and mocked release/graph/API responses: opening
+a release, refresh, and keyboard focus on a commit link worked; its hit area was
+44×44 px and the document did not overflow either viewport. The desktop and
+phone screenshots are
+`docs/ui/screenshots/p3-08-release-view-desktop.png` and
+`docs/ui/screenshots/p3-08-release-view-phone.png`; their fixture data is mocked.
+Live Entra, Azure SQL, and GitHub behavior remain unverified.
 Never commit the stub or weaken sign-in in the app.
 
 Backend commands:
@@ -314,10 +335,12 @@ Backend commands:
 | --- | --- |
 | Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
 | Focused P3-07 release webhook contract | `npm test --workspace @jarvis/backend -- --run src/database/webhook-delivery-store.test.ts` |
+| Focused P3-08 release API and GitHub graph tests | `npm test --workspace @jarvis/backend -- --run src/factory/release-view.test.ts src/github/release-graph.test.ts src/github-app.test.ts` |
 | SQL Server migration, webhook mapping, and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
 | Focused P2-14 completion/expiry regressions | `npm test --workspace @jarvis/backend -- src/factory/heartbeat.test.ts src/factory/dispatcher.test.ts src/database/sandbox-heartbeat-store.test.ts` |
 | Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
+| Focused P3-08 release view and project navigation tests | `npm test --workspace @jarvis/web -- --run src/factory/ReleasePage.test.tsx src/factory/ProjectsPage.test.tsx src/App.test.tsx` |
 | P6-05 SQL Server parallel load test (CI `Database` job; prints a `P6-05 load:` summary line) | `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher-load.integration.test.ts` (isolated loopback SQL Server only) |
 | Focused P6-05 runner Codex limit test | `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_usage_limit` |
 | Start compiled backend | `npm start --workspace @jarvis/backend` (after its build) |
@@ -699,11 +722,39 @@ infrastructure deployments. Cloud agents cannot run bootstrap or verify Azure;
 Dan verifies the hosted deployment and tools after this local step. Tool calls
 also need the stored message ID from P4-03, supplied by the caller in P4-06.
 
+### Screen sharing (P7-05)
+
+The backend uses the existing `FOUNDRY_PROJECT_ENDPOINT` and managed identity;
+Bicep already grants that identity `Foundry User`, so this feature adds no Azure
+resource, credential, or provisioning script. The migration runs at backend
+startup after merge. `global.screen_share_daily_frame_cap` defaults to 300 and
+is editable in Settings (1–300).
+
+After merge, Dan/coordinator should:
+
+1. Run the main `Deploy` workflow and confirm migration `0015_screen_frame_usage`
+   applied and the backend revision is ready.
+2. Confirm the configured `gpt-5.6-luna` deployment accepts image input and is
+   Global Standard. The DKK estimate uses the 2 October 2026 price snapshot
+   (1.3157 input and 7.8941 output DKK per million short-context tokens); update
+   the rate table if the live SKU or current price differs.
+3. In a signed-in browser, share a window, verify the persistent sharing status
+   and Stop control, request an inspection from chat and voice, and check that
+   Jarvis describes the visible content. Stop voice and leave the page to verify
+   stream cleanup. Confirm the three-second limit, configurable daily cap, usage
+   count, estimated DKK and absence of frame/message content in logs and history.
+
+Cloud agents cannot access the Azure tenant or verify billed usage. The screen
+bridge's fake-model tests prove the offline contract only; the live model,
+managed-identity exchange, SQL migration and browser screen capture remain
+unverified until this coordinator check.
+
 ## Release procedure
 
 - Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, web, and the Jarvis agent; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).
 - After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>/redirect.html'` so sign-in works there (the redirect URI is MSAL's redirect bridge page, L63) (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
-- No manual portal changes.
+- No manual infrastructure portal changes.
+- **P7-03 coordinator check after merge:** wait for Deploy to finish, open the Azure Bot resource `bot-jarvis-{suffix}` and use its Teams/Open in Teams entry to install it for Dan. Send the first message in a personal chat from Dan's Novaro account so the backend can persist the conversation reference. Then use Teams on Dan's phone to verify a text notification, an optional voice note, Approve continues a test action, Reject does not, and a card left unanswered for five minutes cannot run its action. Do not enable a paid Speech tier.
 - Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.
 
 ## Documentation rules
