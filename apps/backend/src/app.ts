@@ -25,6 +25,7 @@ import type { UsageStore } from './core/usage.js';
 import type { SandboxHeartbeat } from './factory/heartbeat.js';
 import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
+import type { TeamsNotificationService } from './teams/service.js';
 
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
@@ -47,6 +48,7 @@ export interface BuildAppOptions {
   readonly sandboxHeartbeat?: SandboxHeartbeat;
   readonly conversationAgent?: ConversationAgent;
   readonly containerAppScaler?: ContainerAppScaler | null;
+  readonly teamsNotifications?: TeamsNotificationService | null;
 }
 
 declare module 'fastify' {
@@ -68,6 +70,7 @@ declare module 'fastify' {
     conversationStore: ConversationStore | null;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
+    teamsNotifications: TeamsNotificationService | null;
   }
 }
 
@@ -137,6 +140,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     app.addHook('onClose', async () => { await options.sandboxHeartbeat!.stop(); });
   }
   app.decorate('conversationAgent', options.conversationAgent ?? null);
+  app.decorate('teamsNotifications', options.teamsNotifications ?? null);
   registerModules(app, options.modules ?? [
     coreModule,
     conversationModule,

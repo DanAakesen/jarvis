@@ -86,6 +86,40 @@ describe('backend configuration', () => {
         .toThrow('JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME');
     }
   });
+  it('accepts a complete bot, audio-origin, and Speech F0 configuration', () => {
+    expect(loadConfig({
+      TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      TEAMS_BOT_TENANT_ID: '802efa29-17f2-4a79-8f5f-38f087aed96a',
+      TEAMS_AUDIO_ORIGIN: 'https://jarvis.example',
+      SPEECH_REGION: 'westeurope',
+    }).teams).toEqual({
+      botAppId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      tenantId: '802efa29-17f2-4a79-8f5f-38f087aed96a',
+      audioOrigin: 'https://jarvis.example',
+      speechRegion: 'westeurope',
+    });
+  });
+  it('rejects partial, cross-tenant, or unsafe Teams and Speech settings', () => {
+    expect(() => loadConfig({ TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }))
+      .toThrow('must be configured together');
+    const complete = {
+      TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      TEAMS_BOT_TENANT_ID: '802efa29-17f2-4a79-8f5f-38f087aed96a',
+      TEAMS_AUDIO_ORIGIN: 'https://jarvis.example',
+      SPEECH_REGION: 'westeurope',
+    };
+    expect(() => loadConfig({ ...complete, TEAMS_BOT_TENANT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }))
+      .toThrow('must match ENTRA_TENANT_ID');
+    for (const TEAMS_AUDIO_ORIGIN of [
+      'http://jarvis.example',
+      'https://jarvis.example/',
+      'https://jarvis.example/path',
+      'https://user@jarvis.example',
+    ]) {
+      expect(() => loadConfig({ ...complete, TEAMS_AUDIO_ORIGIN })).toThrow('TEAMS_AUDIO_ORIGIN');
+    }
+    expect(() => loadConfig({ ...complete, SPEECH_REGION: 'https://example.com' })).toThrow('SPEECH_REGION');
+  });
   it('accepts a GitHub App ID only with a secure Key Vault origin', () => {
     expect(loadConfig({
       GITHUB_APP_ID: '123456',

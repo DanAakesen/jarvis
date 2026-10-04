@@ -181,6 +181,8 @@ const LANES = {
   graph:    { name: "Microsoft Graph",  tech: "OneDrive · Microsoft Search" },
   backend:  { name: "Backend",          tech: "Node.js · Container Apps" },
   data:     { name: "SQL data",         tech: "Azure SQL · tasks, settings, events" },
+  teams:    { name: "Microsoft Teams",  tech: "Teams personal chat · Adaptive Cards" },
+  speech:   { name: "Azure Speech",     tech: "Speech F0 · text-to-speech" },
   blob:     { name: "Blob Storage",     tech: "Private logs · artifacts · task events" },
   vault:    { name: "Secrets",          tech: "Key Vault" },
   foundry:  { name: "Sandbox platform", tech: "Foundry Hosted Agents" },
@@ -250,16 +252,16 @@ const FLOWS = [
   },
   {
     name: "Settings",
-    summary: "A signed-in user edits global defaults, or Jarvis uses its authenticated tool. The backend validates each value against its catalog and stores partial changes; future sessions and tasks read the defaults, including personality preferences for new chat and voice sessions.",
+    summary: "A signed-in user edits global defaults or appearance, or Jarvis uses its authenticated model-setting tool. The backend validates partial changes and stores them; the client applies only an accepted theme, and future sessions/tasks read their applicable defaults.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "context", t: "Dan opens Settings", d: "The app shell already has a verified sign-in." },
-      { id: "page", lane: "board", col: 2, s: "docs", t: "Load settings and choices", d: "The browser silently gets a delegated API token and calls `/settings`." },
-      { id: "read", lane: "backend", col: 3, s: "docs", t: "GET /settings", d: "Root authentication protects the settings route; unavailable SQL returns 503.", ev: "P1-11: route and browser tests cover authenticated reads and the unavailable state." },
-      { id: "edit", lane: "board", col: 4, s: "docs", t: "Change supported defaults", d: "The Settings UI for personality is P8-19. The API supports tone, response style, and up to 2,000 characters of custom instructions, alongside New projects defaults." },
-      { id: "validate", lane: "backend", col: 5, s: "proven", t: "Validate and whitelist", d: "Reject unknown keys, unsupported choices, invalid custom instructions, invalid project defaults, and out-of-range task limits.", ev: "P7-16 backend tests cover tone/style catalogs, instruction bounds, invalid updates, and no write on rejection." },
-      { id: "save", lane: "backend", col: 6, s: "proven", t: "PATCH /settings", d: "Persist only changed keys in one SQL transaction.", ev: "P7-16 route tests verify persistence/readback and reset through the existing SettingsStore; the SQL adapter uses parameterized settings keys/values." },
-      { id: "rows", lane: "data", col: 7, s: "docs", t: "Global rows in dbo.settings", d: "Reuses the P1-01 key/value table; no settings history." },
-      { id: "next", lane: "backend", col: 8, s: "proven", t: "Next session reads defaults", d: "Hosted chat reads settings per invocation; hosted voice snapshots them at session start; English realtime snapshots them when the backend configures a new relay. `set_jarvis_model` updates validated model/reasoning defaults for the next session. Personality changes response style only, not identity, tools, permissions, language, model, voice, or action truth. Tasks resolve overrides before saved provider settings.", ev: "P4-07 and P7-16 tests verify per-session settings and isolation; P7-11 tests verify model catalog validation and next-session updates. P2-11 verifies provider option forwarding offline. Live Azure session and provider behavior remain unverified." },
+      { id: "page", lane: "board", col: 2, s: "proven", t: "Load settings and theme", d: "The browser silently gets a delegated API token and calls `/settings`; the shell hydrates the saved appearance.", ev: "P1-11 and P8-13 tests cover authenticated settings reads, saved theme hydration, and the unavailable state." },
+      { id: "read", lane: "backend", col: 3, s: "proven", t: "GET /settings", d: "Root authentication protects the settings route; unavailable SQL returns 503." },
+      { id: "edit", lane: "board", col: 4, s: "proven", t: "Choose supported defaults", d: "The form offers catalog values, validated New projects defaults, personality preferences (P8-19), and light/dark appearance. `set_jarvis_model` updates validated model/reasoning defaults for the next session. Custom theme-variable editing stays disabled until its validated update path is implemented.", ev: "P8-13 web tests exercise mode controls and the disabled token editor; P7-16 supplies the personality settings contract; P7-11 tests cover model-setting updates." },
+      { id: "validate", lane: "backend", col: 5, s: "proven", t: "Validate and whitelist", d: "Reject unknown keys, unsupported models and choices, invalid reasoning/personality/project defaults, invalid custom instructions, out-of-range task limits, and themes other than light/dark.", ev: "P1-11 and P3-11 tests reject unsupported settings without writing; P7-16 covers personality bounds/catalogs; P7-11 covers model catalog validation; P8-13 verifies rejected themes preserve the accepted value." },
+      { id: "save", lane: "backend", col: 6, s: "proven", t: "PATCH /settings", d: "Persist only changed keys in one SQL transaction; return the effective accepted theme.", ev: "P7-16 route tests verify personality persistence/readback and reset through SettingsStore; P7-11 tests cover model-setting writes; P8-13 applies light/dark only after an accepted response, retaining the prior theme on rejection." },
+      { id: "rows", lane: "data", col: 7, s: "proven", t: "Global rows in dbo.settings", d: "Reuses the P1-01 key/value table; `appearance.theme` and personality preferences need no migration or settings history.", ev: "P8-13 API tests verify theme readback; P7-16 covers personality persistence through the existing store." },
+      { id: "next", lane: "backend", col: 8, s: "proven", t: "New session reads defaults", d: "Hosted chat reads personality settings per invocation; hosted Danish voice snapshots them at session start; English realtime snapshots them when the backend configures a new relay. Existing voice keeps its snapshot. Personality changes response style only, not identity, tools, permissions, language, model, voice, or action truth. Tasks continue to resolve overrides before saved defaults.", ev: "P7-16 backend and agent tests verify setting reads, per-session isolation, prompt precedence, and unchanged server-owned tool schemas. P4-07 and P7-11 cover model/reasoning reads and next-session updates; P2-05 handles task model overrides. Live Azure session and provider behavior remain unverified." },
     ],
     edges: [
       ["start", "page", "docs", "open"], ["page", "read", "docs", "token + GET"],
@@ -566,6 +568,32 @@ const FLOWS = [
     ],
   },
   {
+    name: "Teams notifications",
+    summary: "After Dan starts a personal Teams chat, the backend can deliver proactive text, optional Speech F0 audio, and expiring approval cards. Only a verified one-time approval resumes a gated action.",
+    nodes: [
+      { id: "resources", lane: "actions", col: 1, s: "assumed", t: "Provision F0 services", d: "Deploy Azure Bot Service F0, its Teams channel, Speech F0 and the backend identity's Speech User role.", ev: "Bicep build/lint checks local resource shape only. Azure deployment, role propagation and free-tier quota remain unverified." },
+      { id: "install", lane: "user", col: 2, s: "assumed", t: "Start a personal chat", d: "Dan installs the bot and sends the first message using his Novaro account.", ev: "Required before a proactive conversation reference exists; coordinator phone setup remains pending." },
+      { id: "receive", lane: "backend", col: 3, s: "proven", t: "Verify bot activity", d: "Teams SDK verifies Bot Service authentication; the backend checks the personal channel, Dan's object ID and tenant.", ev: "Identity and channel checks are covered by fake-activity tests; live Bot Service authentication is unverified." },
+      { id: "reference", lane: "data", col: 4, s: "proven", t: "Persist safe conversation reference", d: "Save only the validated personal reference needed for proactive messages.", ev: "Parameterized store contracts and service tests cover owner binding and bounded reference fields; live Azure SQL is unverified." },
+      { id: "send", lane: "backend", col: 5, s: "proven", t: "Send a notification or card", d: "The backend sends short text, optional safe links, or an Adaptive Card with Approve, Reject and a five-minute expiry.", ev: "Fake-connector tests cover notification, card, approval and rejection behavior." },
+      { id: "teams", lane: "teams", col: 6, s: "assumed", t: "Deliver to Dan's phone", d: "Teams delivers the proactive message to Dan's installed personal chat.", ev: "Bot resource and Teams channel are authored in Bicep; live Teams installation and phone delivery remain unverified." },
+      { id: "speech", lane: "speech", col: 6, s: "proven", t: "Optionally synthesize a voice note", d: "Speech F0 returns bounded MP3 bytes; failure or exhausted free allowance keeps text delivery.", ev: "Fake synthesizer tests cover text fallback and an ephemeral audio URL; real F0 quota and playback remain unverified." },
+      { id: "response", lane: "backend", col: 7, s: "proven", t: "Validate and consume response", d: "The backend verifies Dan and the conversation, then atomically consumes an unexpired approval once.", ev: "Fake-store round trips cover approve, reject, expiry, unknown identity and replay; the action is not run for any refusal." },
+      { id: "action", lane: "backend", col: 8, s: "proven", t: "Resume the approved action", d: "Repository creation or automatic merge runs only after the confirmed wrapper returns approval.", ev: "Repository-creation and project-policy tests verify approval gating and fail-closed behavior when confirmation is unavailable." },
+    ],
+    edges: [
+      ["resources", "install", "assumed", "Teams channel"],
+      ["install", "receive", "assumed", "first personal message"],
+      ["receive", "reference", "proven", "Dan-only reference"],
+      ["reference", "send", "proven", "proactive send"],
+      ["send", "teams", "assumed", "text/card"],
+      ["send", "speech", "proven", "optional TTS"],
+      ["speech", "teams", "proven", "temporary audio URL"],
+      ["teams", "response", "assumed", "card submit"],
+      ["response", "action", "proven", "approved and consumed"],
+    ],
+  },
+  {
     name: "Alerts",
     summary: "Four condition types appear once in the Now feed; the email-only Azure Monitor action group handles deployment, sandbox, credential and budget notifications.",
     nodes: [
@@ -797,7 +825,7 @@ function buildOverview() {
   return {
     name: "Complete flow", overview: true, offScale: OV.offScale, nodes, edges, segments, cols: offset,
     ordered: [...nodes].sort(byPosition),
-    summary: "All fourteen flows in one swimlane, in tab order. Arrows between segments show where each flow picks up; 11–14 run alongside. Select a box for details, or a segment title to open its tab.",
+    summary: "All flows in one swimlane, in tab order. Arrows between segments show where each flow picks up. Select a box for details, or a segment title to open its tab.",
   };
 }
 

@@ -124,6 +124,8 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Bootstrap IDs | [`infra/bootstrap.output.json`](../infra/bootstrap.output.json); also Actions variables in `DanAakesen/jarvis` |
 
 - `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
+- `infra/bootstrap.ps1` registers `Microsoft.BotService`; `Microsoft.CognitiveServices` is already registered there. When a backend image exists, Bicep provisions Azure Bot Service F0 with its Teams channel, plus Azure Speech F0 and a **Cognitive Services Speech User** assignment to `id-jarvis-backend`. The bot uses that user-assigned identity; no client secret, speech key, additional app registration, or new deployment secret is required.
+- Bicep sets backend `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, and `SPEECH_REGION` from the identity, subscription, Container Apps environment, and Speech resource. Speech is F0-only: if the free allowance is exhausted or synthesis fails, delivery remains text-only. Local build/lint and fake service tests do not prove the resource role, deployed endpoint, free allowance, Teams installation, or live phone approval.
 - The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
 - Bicep sets `BACKEND_CONTAINER_APP_RESOURCE_ID` and grants `id-jarvis-backend` a custom role limited to Container App read/write on that app. The sleep API uses this fixed target and the existing `SQL_MANAGED_IDENTITY_CLIENT_ID` for ARM authentication. Local tests inject the scaler; a local app without an Azure managed identity cannot perform live scaling, and the Bicep build/lint checks do not verify the deployed role.
 - `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Deploy requires the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub secret, a comma-separated list including Dan's email. It passes the values through a mode-0600 temporary parameters file to the required Bicep `budgetContactEmails` parameter, then deletes the file. Do not commit email addresses. The first Azure deployment and real resource behavior are verified by Deploy, not by local Bicep build/lint.
@@ -257,6 +259,17 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
+
+P8-13 was inspected in Chromium at 1440×1000 and 390×844 using the scratch auth
+stub and Vite settings mock. The mock rejected the first dark-mode PATCH with
+HTTP 400, after which the prior light appearance remained selected; retry
+accepted dark, and reloading Settings restored it. Keyboard navigation reached
+the dark radio with a visible native focus outline; the phone layout had no
+horizontal overflow. Muted-text contrast against the page/surface was at least
+6.25:1 in light mode and 8.99:1 in dark mode. The only browser console/network
+error was the intentionally rejected mock request; no page exceptions occurred.
+Screenshots are in `docs/ui/screenshots/p8-13-theme-settings-*.png`. These mocks
+do not verify live Entra, API authorization, or Azure SQL persistence.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal
@@ -520,7 +533,7 @@ as Needs attention.
   contains groups 4 and 6; `0003_sandbox_agent_name.sql` adds the heartbeat's
   Foundry routing field, and P6-03's `0005_task_event_archives.sql` indexes
   committed Blob chunks for on-demand task-history reads. P7-13's
-  `0015_long_term_memory.sql` adds durable source-linked memories and conditional
+  `0016_long_term_memory.sql` adds durable source-linked memories and conditional
   vector/full-text capabilities; startup applies it through the existing locked,
   checksummed migration runner.
   See [migration guide](../db/migrations/README.md).
@@ -541,9 +554,9 @@ as Needs attention.
   manual Azure setup is needed. Archive/restore contracts use a fake Blob store;
   the live Azure archive/restore check must happen after merge.
 - P7-13 needs no separate portal or bootstrap action. The existing Deploy workflow
-  reapplies Bicep and the backend startup migration applies `0015` through the
+  reapplies Bicep and the backend startup migration applies `0016` through the
   idempotent migration runner. Memory-store startup executes the idempotent
-  `db/migrations/setup/0015_long_term_memory.sql` after the migration transaction
+  `db/migrations/setup/0016_long_term_memory.sql` after the migration transaction
   commits. After merge, the coordinator checks that Deploy creates the
   `text-embedding-3-small` deployment and that the backend is healthy;
   then verify a harmless memory through chat and voice, a later session after a
@@ -725,7 +738,8 @@ also need the stored message ID from P4-03, supplied by the caller in P4-06.
 
 - Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, web, and the Jarvis agent; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).
 - After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>/redirect.html'` so sign-in works there (the redirect URI is MSAL's redirect bridge page, L63) (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
-- No manual portal changes.
+- No manual infrastructure portal changes.
+- **P7-03 coordinator check after merge:** wait for Deploy to finish, open the Azure Bot resource `bot-jarvis-{suffix}` and use its Teams/Open in Teams entry to install it for Dan. Send the first message in a personal chat from Dan's Novaro account so the backend can persist the conversation reference. Then use Teams on Dan's phone to verify a text notification, an optional voice note, Approve continues a test action, Reject does not, and a card left unanswered for five minutes cannot run its action. Do not enable a paid Speech tier.
 - Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.
 
 ## Documentation rules
