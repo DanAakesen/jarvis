@@ -6,15 +6,15 @@ describe('VoiceOrb', () => {
   it('shows distinct live states with a text alternative', () => {
     const { container, rerender } = render(<VoiceOrb status="listening" message="Listening for your voice." />);
 
-    expect(screen.getByRole('status').textContent).toContain('Listening');
+    expect(screen.getByRole('status').textContent).toContain('Listening for your voice.');
     expect((container.firstChild as HTMLElement).getAttribute('data-state')).toBe('listening');
 
     rerender(<VoiceOrb status="thinking" message="Jarvis is thinking." />);
-    expect(screen.getByRole('status').textContent).toContain('Thinking');
+    expect(screen.getByRole('status').textContent).toContain('Jarvis is thinking.');
     expect((container.firstChild as HTMLElement).getAttribute('data-state')).toBe('thinking');
 
     rerender(<VoiceOrb status="speaking" message="Jarvis is speaking." />);
-    expect(screen.getByRole('status').textContent).toContain('Speaking');
+    expect(screen.getByRole('status').textContent).toContain('Jarvis is speaking.');
     expect((container.firstChild as HTMLElement).getAttribute('data-state')).toBe('speaking');
   });
 
@@ -38,7 +38,7 @@ describe('VoiceOrb', () => {
   it('maps a published tool-call state and keeps unknown states unavailable', () => {
     const { container, rerender } = render(<VoiceOrb status="tool_call" message="Jarvis is using a tool." />);
 
-    expect(screen.getByRole('status').textContent).toContain('Tool call');
+    expect(screen.getByRole('status').textContent).toContain('Jarvis is using a tool.');
     expect((container.firstChild as HTMLElement).getAttribute('data-state')).toBe('tool-call');
 
     rerender(<VoiceOrb status="future-runtime-state" message="Unexpected state." />);
@@ -50,6 +50,22 @@ describe('VoiceOrb', () => {
   it('marks a stopped voice session as off', () => {
     render(<VoiceOrb status="stopped" message="Voice is off." />);
 
-    expect(screen.getByRole('status').textContent).toContain('Voice off');
+    expect(screen.getByRole('status').textContent).toContain('Voice is off.');
+  });
+
+  it('distinguishes connecting, stopping and failed states', () => {
+    const { container, rerender } = render(<VoiceOrb status="connecting" message="Connecting to Jarvis voice…" />);
+
+    expect(screen.getByRole('status').textContent).toContain('Connecting');
+    expect((container.firstChild as HTMLElement).getAttribute('data-state')).toBe('connecting');
+
+    rerender(<VoiceOrb status="stopping" message="Saving voice session…" />);
+    expect(screen.getByRole('status').textContent).toContain('Saving voice session');
+    expect((container.firstChild as HTMLElement).getAttribute('data-state')).toBe('stopping');
+
+    rerender(<VoiceOrb status="error" message="Voice could not reconnect." />);
+    expect(screen.getByRole('alert').textContent).toContain('Voice unavailable');
+    expect(screen.getByRole('alert').textContent).toContain('Voice could not reconnect.');
+    expect((container.firstChild as HTMLElement).getAttribute('data-state')).toBe('unavailable');
   });
 });

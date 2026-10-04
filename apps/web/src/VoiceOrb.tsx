@@ -1,29 +1,28 @@
 import type { VoiceStatus } from './voice-client';
 
 type VoiceOrbState = {
-  name: string;
   className: string;
   message: string;
 };
 
 const voiceOrbStates: Record<VoiceStatus | 'tool_call', VoiceOrbState> = {
-  stopped: { name: 'Voice off', className: 'off', message: '' },
-  connecting: { name: 'Connecting', className: 'connecting', message: '' },
-  stopping: { name: 'Ending voice', className: 'stopping', message: '' },
-  listening: { name: 'Listening', className: 'listening', message: '' },
-  thinking: { name: 'Thinking', className: 'thinking', message: '' },
-  speaking: { name: 'Speaking', className: 'speaking', message: '' },
-  reconnecting: { name: 'Reconnecting', className: 'reconnecting', message: '' },
-  error: { name: 'Voice unavailable', className: 'unavailable', message: '' },
-  tool_call: { name: 'Tool call', className: 'tool-call', message: '' },
+  stopped: { className: 'off', message: '' },
+  connecting: { className: 'connecting', message: '' },
+  stopping: { className: 'stopping', message: '' },
+  listening: { className: 'listening', message: '' },
+  thinking: { className: 'thinking', message: '' },
+  speaking: { className: 'speaking', message: '' },
+  reconnecting: { className: 'reconnecting', message: '' },
+  error: { className: 'unavailable', message: '' },
+  tool_call: { className: 'tool-call', message: '' },
 };
 
 export function VoiceOrb({ status, message }: { status: string; message: string }) {
   const state = voiceOrbStates[status as keyof typeof voiceOrbStates] ?? {
-    name: 'Voice status unavailable',
     className: 'unavailable',
-    message: 'The voice runtime reported an unrecognized status.',
+    message: 'Voice status unavailable. The runtime reported an unrecognized status.',
   };
+  const statusMessage = state.message || (status === 'error' ? `Voice unavailable. ${message}` : message);
 
   return (
     <div className={`voice-orb-presentation voice-orb-${state.className}`} data-state={state.className}>
@@ -36,8 +35,7 @@ export function VoiceOrb({ status, message }: { status: string; message: string 
           aria-live="polite"
           aria-atomic="true"
         >
-          <span className="voice-orb-label">{state.name}</span>
-          {state.message || message}
+          {statusMessage}
         </p>
         <p className="voice-orb-limitation">
           Tool-call activity is unavailable because the voice runtime does not publish that state yet.
