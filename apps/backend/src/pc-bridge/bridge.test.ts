@@ -1,4 +1,3 @@
-import { once } from 'node:events';
 import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
@@ -149,6 +148,29 @@ describe('authenticated PC bridge protocol', () => {
     });
   });
 
+  it('waits for the final status write before backend shutdown completes', async () => {
+    let finishStatusWrite!: () => void;
+    const statusWrite = new Promise<void>((resolve) => { finishStatusWrite = resolve; });
+    const statuses: boolean[] = [];
+    const { app } = fixture({
+      onStatusChange: (online) => {
+        statuses.push(online);
+        if (!online) return statusWrite;
+      },
+    });
+    await app.ready();
+
+    let closed = false;
+    const closing = app.close().then(() => { closed = true; });
+    await Promise.resolve();
+    expect(closed).toBe(false);
+    finishStatusWrite();
+    await closing;
+
+    expect(statuses).toEqual([false]);
+    expect(closed).toBe(true);
+  });
+
   it('refuses Dan and the hosted agent as bridge clients', async () => {
     const { app } = fixture();
     await app.ready();
@@ -166,8 +188,7 @@ describe('authenticated PC bridge protocol', () => {
     const { app } = fixture({ timeoutMs: 30 });
     const url = await listen(app);
     const bridge = await connectBridge(url);
-    bridge.on('message', (data) => {
-      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+    bridge.on('message', () => {
       bridge.send(JSON.stringify({
         id: '00000000-0000-4000-8000-000000000000',
         type: 'result',

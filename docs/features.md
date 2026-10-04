@@ -109,7 +109,7 @@ Status as of 4 October 2026.
 | Away mode | "I'm leaving": updates and confirmations go to the phone | Both | Main page, Phone | Planned (needs decision) | P7-02 |
 | Phone confirmations | Approve or reject actions from Teams, with a voice note | Phone | Teams | Planned (needs decision) | P7-03 |
 | Screen sharing | Share a screen or window; Jarvis sees it | Both | Main page | Planned (needs decision) | P7-05 |
-| Local PC bridge | Jarvis opens apps, URLs and allowed commands on Dan's PC | Voice/chat | PC companion | Planned (needs decision) | P7-06 |
+| Local PC bridge | Jarvis opens allow-listed apps, HTTP(S) URLs and folders under `C:\Repo` in VS Code, reports the active window title, and focuses an exact-title window | Voice/chat | PC companion | Built (offline; live Windows/Entra check unverified) | P7-06 |
 | Computer use | Jarvis clicks and types on Dan's PC while he talks | Voice/chat | PC companion | Planned (needs decision) | P7-07 |
 | Camera | Jarvis sees through the webcam on request | Both | Main page | Planned | P7-08 |
 | Calendar and mail | Agenda, free slots, move meetings, search and draft mail | Voice/chat | — | Planned (needs decision) | P7-09 |

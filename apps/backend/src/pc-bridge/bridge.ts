@@ -36,6 +36,7 @@ export class PcBridgeConnection {
   private socket: WebSocket | undefined;
   private readonly pending = new Map<string, PendingCommand>();
   private status: boolean | undefined;
+  private statusUpdate = Promise.resolve();
   private readonly timeoutMs: number;
 
   constructor(private readonly options: PcBridgeConnectionOptions = {}) {
@@ -59,12 +60,13 @@ export class PcBridgeConnection {
     this.setStatus(true);
   }
 
-  close(): void {
+  async close(): Promise<void> {
     const socket = this.socket;
     this.socket = undefined;
     if (socket && socket.readyState === WebSocket.OPEN) socket.close(1001, 'Backend shutting down');
     this.rejectPending(new Error('PC bridge disconnected'));
     this.setStatus(false);
+    await this.statusUpdate;
   }
 
   execute(command: PcCommand, signal: AbortSignal): Promise<Record<string, unknown>> {
@@ -166,14 +168,18 @@ export class PcBridgeConnection {
     this.status = online;
     try {
       const update = this.options.onStatusChange?.(online);
-      if (update instanceof Promise) void update.catch(() => this.options.onStatusError?.());
+      if (update) {
+        this.statusUpdate = Promise.all([this.statusUpdate, update]).then(() => {}).catch(() => {
+          this.options.onStatusError?.();
+        });
+      }
     } catch {
       this.options.onStatusError?.();
     }
   }
 }
 
-export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {}
+export type PcBridgeModuleOptions = PcBridgeConnectionOptions;
 
 export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): BackendModule {
   const bridge = new PcBridgeConnection(options);
@@ -268,7 +274,7 @@ async function runPcOpen(
 }
 
 function validateUrl(value: string): string | undefined {
-  if (value.length > 2048 || /[\u0000-\u001f\u007f]/u.test(value)) return undefined;
+  if (value.length > 2048 || hasControlCharacters(value)) return undefined;
   try {
     const url = new URL(value);
     if ((url.protocol !== 'http:' && url.protocol !== 'https:') ||
@@ -280,7 +286,7 @@ function validateUrl(value: string): string | undefined {
 }
 
 function validateRepoPath(value: string): string | undefined {
-  if (!value.trim() || value.length > 512 || /[\u0000-\u001f\u007f:*?"<>|]/u.test(value) ||
+  if (!value.trim() || value.length > 512 || hasControlCharacters(value) || /[:*?"<>|]/u.test(value) ||
       value.startsWith('/') || value.startsWith('\\') || value.includes(':')) return undefined;
   const segments = value.replaceAll('/', '\\').split('\\');
   if (segments.length > 16 || segments.some((segment) =>
@@ -297,7 +303,14 @@ function isReservedWindowsName(segment: string): boolean {
 
 function isValidWindowTitle(value: string): boolean {
   return value.trim().length > 0 && value.length <= 200 &&
-    !/[\u0000-\u001f\u007f]/u.test(value) && value === value.trim();
+    !hasControlCharacters(value) && value === value.trim();
+}
+
+function hasControlCharacters(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 32 || code === 127;
+  });
 }
 
 function validResult(command: PcCommand['name'], value: unknown): value is Record<string, unknown> {

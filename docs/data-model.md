@@ -28,6 +28,9 @@ before restoring the prior constraint.
 P6-02 adds nullable `activity.alert_key` and a filtered unique index in
 `0011_alert_deduplication.sql`; each event condition has one activity row and
 can be safely retried. Its down migration removes the index and column.
+P7-06 uses the existing `activity` row keyed by `pc_bridge_status` to publish the
+bridge's latest online/offline state to Now; no migration or retained command data
+is added.
 
 ## Overview
 
@@ -91,6 +94,11 @@ flowchart LR
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
 P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. Realtime voice tool calls are not stored in `tool_calls`. The existing group-one and group-seven schemas support this; no migration is needed.
+
+P7-06 records only the bridge's current status in the existing `activity` table.
+The refresh is published after the status transaction commits. Commands, window
+titles, URLs, paths, access tokens, and message contents are not persisted as
+bridge activity.
 
 ## 1 · Jarvis core
 
