@@ -79,7 +79,7 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
 .area-sidebar[hidden], .context-panel[hidden] { display: none; }
 .sidebar-heading, .context-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sidebar-heading { min-height: 44px; margin: 0 4px 10px; font-weight: 650; overflow-wrap: anywhere; }
-.sidebar-close { width: 40px; min-width: 40px; min-height: 40px; }
+.sidebar-close { width: 44px; min-width: 44px; min-height: 44px; }
 .area-sidebar nav { display: grid; gap: 4px; }
 .sidebar-link {
   display: flex;
@@ -463,15 +463,15 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
   .area-rail { grid-row: 1 / 4; padding: 6px 4px; }
   .rail-button, .rail-link { width: 44px; min-width: 44px; }
   .app-topbar { grid-column: 2; grid-row: 1; display: grid; justify-items: stretch; gap: 2px; padding: 6px 8px; }
-  .topbar-context { min-height: 38px; justify-content: flex-end; }
+  .topbar-context { min-height: 44px; justify-content: flex-end; }
   .topbar-context .brand { margin-right: auto; }
   .topbar-actions { flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
   .topbar-feature-button { min-height: 38px; gap: 4px; padding: 2px 4px; font-size: 12px; }
   .topbar-feature-button svg { width: 17px; height: 17px; }
   .topbar-feature-note { max-width: 104px; font-size: 9px; }
-  .settings-link { min-height: 40px; gap: 4px; padding-inline: 6px; font-size: 12px; }
+  .settings-link { min-height: 44px; gap: 4px; padding-inline: 6px; font-size: 12px; }
   .settings-link svg { width: 17px; height: 17px; }
-  .topbar-icon-button { width: 40px; min-width: 40px; min-height: 40px; }
+  .topbar-icon-button { width: 44px; min-width: 44px; min-height: 44px; }
   .area-sidebar { grid-column: 2; grid-row: 2; padding: 8px 12px; overflow: visible; background: #eef0f3; border-right: 0; border-bottom: 1px solid var(--rule); }
   .sidebar-heading { min-height: 36px; margin: 0 0 4px; }
   .area-sidebar nav { display: flex; flex-wrap: wrap; }
@@ -479,9 +479,10 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
   .shell-main { grid-column: 2; grid-row: 2; padding: 28px 16px 36px; overflow: visible; }
   .context-panel { grid-column: 2; grid-row: 2; padding: 10px 16px; overflow: visible; background: #eef0f3; border: 0; border-bottom: 1px solid var(--rule); }
   .context-panel-heading { min-height: 36px; margin-bottom: 4px; }
-  .context-panel .sidebar-close { width: 36px; min-width: 36px; min-height: 36px; }
   .bottom-bar { grid-column: 2; grid-row: 3; min-height: 30px; padding-inline: 10px; }
   .app-shell[data-navigation-open="true"]:not([data-context-open="true"]) { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .app-shell[data-navigation-open="true"]:not([data-context-open="true"]) .area-rail,
+  .app-shell[data-navigation-open="false"][data-context-open="true"] .area-rail { grid-row: 1 / 5; }
   .app-shell[data-navigation-open="true"]:not([data-context-open="true"]) .shell-main { grid-row: 3; }
   .app-shell[data-navigation-open="true"]:not([data-context-open="true"]) .bottom-bar { grid-row: 4; }
   .app-shell[data-navigation-open="false"][data-context-open="true"] { grid-template-rows: auto auto minmax(0, 1fr) auto; }
