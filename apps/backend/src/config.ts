@@ -77,7 +77,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (env.KEY_VAULT_URI !== undefined) {
     try {
       const url = new URL(env.KEY_VAULT_URI);
-      if (url.protocol !== 'https:' || !url.hostname.endsWith('.vault.azure.net') ||
+      if (url.protocol !== 'https:' || !/^[a-z0-9][a-z0-9-]{1,22}[a-z0-9]\.vault\.azure\.net$/iu.test(url.hostname) ||
           url.port || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
         throw new Error();
       }

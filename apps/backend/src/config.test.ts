@@ -28,8 +28,8 @@ describe('backend configuration', () => {
     expect(loadConfig({ KEY_VAULT_URI: 'https://fixture.vault.azure.net/' }).keyVaultUri)
       .toBe('https://fixture.vault.azure.net/');
     for (const KEY_VAULT_URI of [
-      '', 'http://fixture.vault.azure.net/', 'https://vault.example/', 'https://fixture.vault.azure.net/path',
-      'https://fixture.vault.azure.net/?secret=hidden',
+      '', 'http://fixture.vault.azure.net/', 'https://vault.example/', 'https://.vault.azure.net/',
+      'https://subdomain.fixture.vault.azure.net/', 'https://fixture.vault.azure.net/path', 'https://fixture.vault.azure.net/?secret=hidden',
     ]) {
       expect(() => loadConfig({ KEY_VAULT_URI })).toThrow('KEY_VAULT_URI');
     }
