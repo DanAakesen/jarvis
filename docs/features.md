@@ -163,7 +163,7 @@ This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell c
 | Long-term memory | Recall preferences, decisions and unfinished work across sessions; inspect, correct and forget retained memories | Voice/chat | Existing conversation; dedicated management UI undecided | Planned (storage, capture and retention decisions open) | P7-13 |
 | Web research | Search and retrieve web sources, synthesise findings with links and show results through dynamic views | Both | Conversation and dynamic workspace | Planned (provider and cost decision open) | P7-14; existing P8-06/P8-14/P8-15 consumers |
 | Image and video generation | Generate visual assets, inspect truthful job status and view the resulting artifacts | Both | Conversation and dynamic workspace | Planned (providers, cost and retention decisions open) | P7-15; existing P8-06/P8-14/P8-15 consumers |
-| Editable personality | Configure tone/response style and custom instructions consistently for chat and voice; reset to the current default | Both | Settings → Jarvis → Personality | Built offline; live Azure behavior unverified | P7-16, P8-19 |
+| Editable personality | Set tone/response-style and custom-instruction defaults for new sessions; reset to the current default | Screen | Settings → Jarvis → Personality | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 
 Dan accepted these features on 4 October 2026. No new provider or paid service
 was selected, and no implementation was started by this planning change. Notes

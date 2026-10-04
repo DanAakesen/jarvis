@@ -317,12 +317,13 @@ the page had no horizontal overflow, selects measured 44 px, and only the table
 scrolls horizontally. The expected mocked 503 produced a browser network log;
 there were no other console errors or page exceptions. Live SQL and provider or
 voice usage remain unverified.
-P8-19 was inspected in Chromium at 1280×900 and 390×844 with scratch-only auth
-and `/settings` API mocks. Personality loaded, saved, recovered after a mocked
-HTTP 500 without losing edits, and reset to defaults; keyboard focus was visible,
-the page had no horizontal overflow, and interactive controls measured at least
-44 px. The expected mocked failure was the only browser console error. Screenshots
-are in `docs/ui/screenshots/p8-19-personality-{desktop,phone}.png`; live Entra and
+P8-19 was re-inspected alongside P8-13 Appearance in Chromium at 1280×900 and
+390×844 with scratch-only auth and `/settings` API mocks. Personality loaded,
+saved, recovered after a mocked HTTP 500 without losing edits, and reset to
+defaults; keyboard focus was visible, the page had no horizontal overflow, and
+interactive controls measured at least 44 px. The expected mocked failure was
+the only browser console error. Screenshots are in
+`docs/ui/screenshots/p8-19-personality-{desktop,phone}.png`; live Entra and
 Azure settings behavior remain unverified.
 Never commit the stub or weaken sign-in in the app.
 
