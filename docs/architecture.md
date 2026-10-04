@@ -425,7 +425,7 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | --- | --- |
 | Host | Foundry Hosted Agents, one session per task. Container Apps Jobs is the fallback behind the same runner contract. |
 | Size | 1 vCPU / 2 GiB default; 2 vCPU / 4 GiB for .NET (3.5× faster restore). Never 0.5 / 1 (L3). |
-| Disk | Measured 6 GiB writable at every size (Microsoft documents a budget of up to 20 GiB at ≥1 vCPU with about 20 % reserved, not configurable), shared by image, `$HOME`, `/files`, and `/tmp`; about 3 GiB free with a .NET image. The runner reports disk per session (P6-07). The agent builds single projects and keeps package caches small; full builds run in GitHub Actions (L23). |
+| Disk | Measured 6 GiB writable at every size (Microsoft documents a budget of up to 20 GiB at ≥1 vCPU with about 20 % reserved, not configurable), shared by image, `$HOME`, `/files`, and `/tmp`; about 3 GiB free with a .NET image. The runner reports total, used and free bytes at task-turn start and checks free space every 15 seconds; below the configurable `JARVIS_DISK_LOW_THRESHOLD_BYTES` (default 1 GiB), it reports `disk_low`, stops the turn, and the backend moves the task to NeedsAttention. The live measurement remains a post-merge check (P6-07). The agent builds single projects and keeps package caches small; full builds run in GitHub Actions (L23). |
 | Runner contract | Start, steer, pause, resume, cancel, and events. The host can change without changing the backend. |
 | Adapter | Python; lives only in the sandbox image. The backend stays Node. |
 | Steer and pause | ACP `session/cancel` stops the current turn; the next turn continues the same conversation with `session/load` (L4, L5). |
@@ -440,6 +440,13 @@ Issue #28 ports the adapter to `runner/` with task, steer, pause, resume, cancel
 credential probe, and Codex renewal handlers. Prototype crash-test mode is removed.
 Local Python tests exercise ACP subprocess fixtures; production Azure acceptance
 remains pending #11 and the main-branch runner workflow.
+
+P6-07 reports writable-filesystem disk snapshots through the P2-03 runner event
+route, checks for low headroom during each active task turn, and stops work before
+a build can exhaust disk. `disk_low` and the NeedsAttention transition commit
+together with reason `disk_low`; the deployment setting defaults to 1 GiB. The
+runner event, SQL Server integration, and task-detail display are locally covered;
+live Foundry disk measurement remains post-merge.
 
 P2-11 extends the invocation body with the effective model and optional Codex
 reasoning effort. Copilot receives a non-default model as a separate `--model`

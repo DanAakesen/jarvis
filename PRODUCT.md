@@ -73,7 +73,7 @@ stateDiagram-v2
     Running --> PauseRequested: Pause
     PauseRequested --> Paused: Turn stopped and saved
     Paused --> Running: Resume
-    Running --> NeedsAttention: Blocked, failed, or sandbox crashed
+    Running --> NeedsAttention: Blocked, failed, sandbox crashed, or disk_low
     NeedsAttention --> Running: Continue or recover
     Running --> Done: Project policy satisfied
     Ready --> Cancelled: Cancel
@@ -82,6 +82,7 @@ stateDiagram-v2
 ```
 
 - **Steer and pause** stop the current turn at a safe point; **resume** continues the agent's conversation.
+- If writable disk falls below the configured threshold, the runner reports `disk_low`, stops the current turn, and the backend moves the task to Needs attention with reason `disk_low`.
 - **Sandbox heartbeat:** while a task runs, the backend checks its active invocation about once a minute and updates the session heartbeat timestamp. HTTP 424/404/5xx on two polls (or persisting for 30 seconds) moves the task to Needs attention; a gap in runner events alone never signals a crash. **Recover** restarts it in a new sandbox from the task branch, with the task and its history.
 - **Dispatch:** the backend leases Ready tasks only when both global and project concurrency limits allow them. It retries safe start failures up to three attempts (15-second, then 30-second delays); an ambiguous Foundry start or exhausted attempts moves the task to Needs attention. The dispatcher reacts to committed task events and retry deadlines rather than polling SQL while idle.
 - The authenticated tasks API creates board tasks only for active projects, lists tasks with project, agent, state, period and search filters, and returns task details with a bounded, pageable event history. API responses are capped at 1 MiB; oversized event payloads are explicitly marked truncated. New tasks always start Ready and record their creation event.
@@ -147,7 +148,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | --- | --- |
 | Header: title, request, project, agent, model, state, branch, PR, checks, timestamps, the message in the conversation that created it | Steer, pause, resume, cancel, recover; open PR or branch on GitHub |
 | Timeline: every runner event, steering messages, check results, state changes | Filter event types; expand payloads; open artifacts (logs, CI logs) |
-| Sandbox sessions: start, end, size, end reason, heartbeat state | — |
+| Sandbox sessions: start, end, size, end reason, heartbeat state, timestamped writable-disk total/free readings and low-disk threshold | — |
 | Usage: sandbox minutes and DKK; Codex/Copilot turns and any reported usage | — |
 
 The backend persists each task event and state change to the task history and activity feed together, then publishes the committed event for live clients. The authenticated live feed resumes from the last delivered event after reconnect so updates missed while disconnected are replayed without duplicate timeline entries.
@@ -158,6 +159,9 @@ The runner sends each task-scoped event to authenticated `POST /factory/sandbox-
 using its managed identity. The backend accepts only the separately assigned runner
 events role and records the event through `TaskStore.recordEvent`, which persists it
 with activity before publishing the committed event.
+At the start of each task turn the runner reports disk total, used and free bytes.
+It checks free space every 15 seconds; below the configurable threshold it reports
+`disk_low`, and the backend atomically records the attention transition and reason.
 
 #### Software Factory — release view (per project)
 

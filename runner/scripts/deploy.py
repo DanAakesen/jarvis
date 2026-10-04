@@ -17,6 +17,17 @@ READ_SECRET_ROLE = "4633458b-17de-408a-b874-0445c86b69e6"
 WRITE_SECRET_ROLE = "b86a8fe4-44ce-4948-aee5-eccb2c155cd7"
 METRICS_ROLE = "3913510d-42f4-4e42-8a64-420c390055eb"
 TIERS = {"1x2": ("1", "2Gi"), "2x4": ("2", "4Gi")}
+DEFAULT_DISK_LOW_THRESHOLD_BYTES = 1024**3
+
+
+def _disk_low_threshold_bytes(configured: str | None = None) -> int:
+    if configured is None:
+        configured = os.environ.get("JARVIS_DISK_LOW_THRESHOLD_BYTES")
+    if configured is None:
+        return DEFAULT_DISK_LOW_THRESHOLD_BYTES
+    if not re.fullmatch(r"[0-9]+", configured) or int(configured) < 1:
+        raise ValueError("JARVIS_DISK_LOW_THRESHOLD_BYTES must be a positive integer")
+    return int(configured)
 
 
 def az(subscription: str, *arguments: str):
@@ -30,7 +41,16 @@ def az(subscription: str, *arguments: str):
     return json.loads(result.stdout) if result.stdout.strip() else None
 
 
-def definition(image: str, tier: str, vault_uri: str, backend_url: str, api_scope: str) -> dict:
+def definition(
+    image: str,
+    tier: str,
+    vault_uri: str,
+    backend_url: str,
+    api_scope: str,
+    disk_low_threshold_bytes: int = DEFAULT_DISK_LOW_THRESHOLD_BYTES,
+) -> dict:
+    if type(disk_low_threshold_bytes) is not int or disk_low_threshold_bytes < 1:
+        raise ValueError("JARVIS_DISK_LOW_THRESHOLD_BYTES must be a positive integer")
     cpu, memory = TIERS[tier]
     return {
         "kind": "hosted", "cpu": cpu, "memory": memory,
@@ -41,6 +61,7 @@ def definition(image: str, tier: str, vault_uri: str, backend_url: str, api_scop
             "JARVIS_WORK_ROOT": "/files/jarvis",
             "JARVIS_BACKEND_URL": backend_url,
             "JARVIS_API_SCOPE": api_scope,
+            "JARVIS_DISK_LOW_THRESHOLD_BYTES": str(disk_low_threshold_bytes),
         },
         "session_configuration": {"idle_timeout_seconds": 120},
     }
@@ -140,6 +161,7 @@ def deploy(
     tier: str,
     backend_url: str,
     api_scope: str,
+    disk_low_threshold_bytes: int = DEFAULT_DISK_LOW_THRESHOLD_BYTES,
 ) -> dict:
     admin = outputs["foundryAdminEndpoint"]["value"]
     runtime = outputs["foundryRuntimeEndpoint"]["value"]
@@ -155,6 +177,7 @@ def deploy(
     version = foundry.request("POST", f"{versions}?api-version=v1",
                               {"definition": definition(
                                   image, tier, vault["properties"]["vaultUri"], backend_url, api_scope,
+                                  disk_low_threshold_bytes,
                               )})
     version_number = version.get("version")
     if version_number is None:
@@ -214,6 +237,7 @@ def main() -> None:
     outputs = json.loads(args.outputs.read_text())
     bootstrap = json.loads(Path("infra/bootstrap.output.json").read_text())
     backend_url, api_scope = backend_settings(outputs, bootstrap)
+    disk_low_threshold_bytes = _disk_low_threshold_bytes()
     for key, suffix in (("foundryAdminEndpoint", ".services.ai.azure.com"),
                         ("foundryRuntimeEndpoint", ".cognitiveservices.azure.com")):
         endpoint = urlparse(outputs[key]["value"])
@@ -243,7 +267,7 @@ def main() -> None:
             for tier in TIERS:
                 result = deploy(
                     foundry, args.subscription, outputs, image, f"jarvis-runner-{tech}-{tier}",
-                    tier, backend_url, api_scope,
+                    tier, backend_url, api_scope, disk_low_threshold_bytes,
                 )
                 results.append(result)
                 args.state.write_text(json.dumps(results, indent=2) + "\n")

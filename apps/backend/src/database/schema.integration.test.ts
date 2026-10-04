@@ -373,6 +373,55 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     ]);
   });
 
+  it('moves a running task to NeedsAttention atomically when runner disk is low', async () => {
+    const projectResult = await pool.request()
+      .input('repo', sql.NVarChar(140), `DanAakesen/disk-low-${randomUUID().slice(0, 8)}`)
+      .query<{ id: string }>(`INSERT dbo.projects (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+        OUTPUT CAST(inserted.id AS varchar(19)) AS id
+        VALUES (N'Disk low fixture', @repo, N'main', N'copilot', N'deliver_pr', N'1x2', N'node');`);
+    const projectId = projectResult.recordset[0]?.id;
+    if (!projectId) throw new Error('Disk low fixture project was not created');
+
+    const hub = createEventHub<TaskEventMessage>();
+    const delivered: TaskEventMessage[] = [];
+    hub.subscribe((event) => delivered.push(event));
+    const store = createTaskStore(pool, hub);
+    const task = await store.create({ projectId, title: 'Disk low fixture', request: 'Exercise low disk handling' });
+    if (!task) throw new Error('Disk low fixture task was not created');
+    expect((await store.transition(task.id, 'Running')).kind).toBe('ok');
+    const eventsBeforeLowDisk = delivered.length;
+
+    const lowDiskEvent = await store.recordEvent({
+      taskId: task.id,
+      type: 'disk_low',
+      summary: 'Writable disk is below the configured threshold',
+      payload: { disk_total_bytes: 6 * 1024 ** 3, disk_free_bytes: 512 * 1024 ** 2, threshold_bytes: 1024 ** 3 },
+      source: 'runner',
+    });
+
+    expect(lowDiskEvent.type).toBe('disk_low');
+    expect(delivered.slice(eventsBeforeLowDisk).map(({ type }) => type)).toEqual(['disk_low', 'state_changed']);
+    const detail = await store.get(task.id, 20, 0);
+    expect(detail?.state).toBe('NeedsAttention');
+    expect(detail?.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'state_changed',
+        payload: { from: 'Running', to: 'NeedsAttention', reason: 'disk_low' },
+      }),
+    ]));
+
+    await store.recordEvent({
+      taskId: task.id,
+      type: 'disk_low',
+      summary: 'Writable disk remains below the configured threshold',
+      payload: { disk_free_bytes: 512 * 1024 ** 2, threshold_bytes: 1024 ** 3 },
+      source: 'runner',
+    });
+    expect(delivered.slice(eventsBeforeLowDisk).map(({ type }) => type)).toEqual([
+      'disk_low', 'state_changed', 'disk_low',
+    ]);
+  });
+
   it('archives old events only after Blob upload and restores paged task history', async () => {
     const projectResult = await pool.request()
       .input('repo', sql.NVarChar(140), `DanAakesen/archive-${randomUUID().slice(0, 8)}`)
