@@ -319,10 +319,11 @@ the page had no horizontal overflow, selects measured 44 px, and only the table
 scrolls horizontally. The expected mocked 503 produced a browser network log;
 there were no other console errors or page exceptions. Live SQL and provider or
 voice usage remain unverified.
-P3-08 was inspected at 390×844 and 1280×1300 in Chromium using scratch-only auth
-and mocked release/graph/API responses: opening a release, refresh, and keyboard
-focus on a commit link worked; its hit area was 44×44 px and the document did not
-overflow either viewport. The desktop and phone screenshots are
+P3-08 was inspected at 390×844 (dark theme) and 1280×1300 (light theme) in
+Chromium using scratch-only auth and mocked release/graph/API responses: opening
+a release, refresh, and keyboard focus on a commit link worked; its hit area was
+44×44 px and the document did not overflow either viewport. The desktop and
+phone screenshots are
 `docs/ui/screenshots/p3-08-release-view-desktop.png` and
 `docs/ui/screenshots/p3-08-release-view-phone.png`; their fixture data is mocked.
 Live Entra, Azure SQL, and GitHub behavior remain unverified.

@@ -38,8 +38,8 @@ refresh reloads persisted records and the on-demand GitHub graph; graph failures
 leave release, run, and deployment records visible.
 
 Inspected with scratch-only auth and mocked API responses in Chromium at 1280×1300
-and 390×844: release selection, refresh, keyboard focus, 44 px commit targets,
-and zero page-width overflow. Screenshots:
+(light theme) and 390×844 (dark theme): release selection, refresh, keyboard
+focus, 44 px commit targets, and zero page-width overflow. Screenshots:
 [desktop](docs/ui/screenshots/p3-08-release-view-desktop.png) and
 [phone](docs/ui/screenshots/p3-08-release-view-phone.png). Fixture content is
 mocked; live Entra, Azure SQL, and GitHub data remain unverified.
