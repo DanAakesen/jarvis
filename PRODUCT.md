@@ -49,7 +49,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. For chat, the backend calls the hosted agent through Foundry Invocations with its managed identity; the agent verifies Dan's delegated token and stored source message through `/me` and conversation history. The agent has its own identity for reading model settings and listing/calling tools; coding runners use a separate app-only role restricted to task-event ingestion. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Database wake** | SQL connection acquisition and explicitly read-only queries retry resume errors 40613, 40197, 40501 and connection timeouts with backoff for up to 90 seconds. Signed-in pages show “Waking Jarvis…” only while the backend reports a database wait. An ambiguous write failure is never automatically replayed. |
-| **Memory** | One continuous conversation will need compaction and memory over time; the memory design is deferred. |
+| **Memory** | One continuous conversation will need compaction and memory over time; long-term memory is now an accepted planned capability (P7-13); storage, retrieval and retention choices remain open. |
 | **Turn context** | Each model turn receives current running-task status and recent events plus a bounded recent-message window, so typical status questions do not need a separate task-list model round. |
 
 ### App structure
@@ -295,7 +295,7 @@ The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-l
 
 - Conflicts between pull requests in one repository (Decision 5).
 - Changing the provider on a running task (Decision 4).
-- Memory design (Decision 6).
+- Long-term memory implementation choices (Decision 6; P7-13).
 - What usage Codex and Copilot report per turn ([data model](docs/data-model.md#still-open)); P2-12 records offline package evidence, and actual fields remain a post-merge live check.
 - Whether Foundry sandboxes can get the documented 20 GiB disk (Decision 9).
 
@@ -311,3 +311,30 @@ listen. Desktop and phone layouts follow the mode/window rules in ui.md. Theme
 variables can be changed on demand and persist until changed again. Banking and
 Fitness and Health are future areas; their detailed integrations remain deferred.
 This is planned behaviour, not a claim that the existing frontend implements it.
+
+## Accepted capability additions (4 October 2026; planned)
+
+Dan accepted four additions after reviewing the supplied video transcript:
+
+- **Long-term memory:** recall preferences, decisions and unfinished work across
+  sessions and restarts using durable, relevant retrieval outside the model's
+  context window. This extends saved history and is distinct from searching Dan's
+  notes. Storage, retention and capture policy remain open; temporary UI windows
+  stay unsaved. Source-linked inspection, correction and forgetting are part of
+  the implementation task. No literally unlimited capacity is promised.
+- **Web research:** search and retrieve sources, synthesise findings with links
+  and supply results to existing dynamic-view consumers. Provider and cost limits
+  remain open; no service has been selected or provisioned.
+- **Image and video generation:** generate both kinds of assets on request,
+  expose truthful pending/completed/failed/cancelled state and return artifacts
+  to the workspace. Provider, costs and artifact retention remain open. Creating
+  assets is distinct from creating their temporary presentation views.
+- **Editable personality:** persist Dan's tone/response-style preferences and
+  custom instructions, applying the same configuration to new chat and voice
+  sessions. Keep the current butler default until changed; personality does not
+  change tool permissions or honest reporting. Settings placement and form
+  details are proposed in DESIGN.md and ui.md.
+
+Tasks: P7-13–P7-16 and the P8-19 Personality settings UI. These are planned
+requirements, not claims of implemented behaviour. The existing Microsoft-first
+service and cost constraints remain in force.
