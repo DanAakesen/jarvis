@@ -52,11 +52,42 @@ var costManagementReaderRoleId = '72fafb9e-0641-4937-9268-a91bfd8191a3'
 // Custom role created by infra/bootstrap.ps1: the deploy identity cannot create role definitions (L54).
 var backendAppScaleRoleId = '985158cb-2c3c-5b9b-bd65-897ed9be3e36'
 var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
+var speechUserRoleId = 'f2dc8367-1007-4938-bd23-fe263f013447'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
+var speechAccountName = 'speechjarvis${suffix}'
+var teamsBotName = 'bot-jarvis-${suffix}'
+var backendAppName = 'ca-jarvis-backend-${suffix}'
 var deployBackendApp = !empty(backendImage)
 
 resource backendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: last(split(backendIdentityResourceId, '/'))
+}
+
+resource speechAccount 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
+  name: speechAccountName
+  location: resourceGroup().location
+  kind: 'SpeechServices'
+  sku: {
+    name: 'F0'
+  }
+  tags: {
+    project: 'jarvis'
+  }
+  properties: {
+    customSubDomainName: speechAccountName
+    disableLocalAuth: true
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource speechUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(speechAccount.id, backendIdentity.id, speechUserRoleId)
+  scope: speechAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', speechUserRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
 }
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
@@ -522,7 +553,7 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
 }
 
 resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackendApp) {
-  name: 'ca-jarvis-backend-${suffix}'
+  name: backendAppName
   location: resourceGroup().location
   identity: {
     type: 'UserAssigned'
@@ -628,6 +659,22 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               name: 'FOUNDRY_RUNNER_AGENT_NAME'
               value: 'jarvis-runner-node-1x2'
             }
+            {
+              name: 'TEAMS_BOT_APP_ID'
+              value: backendIdentity.properties.clientId
+            }
+            {
+              name: 'TEAMS_BOT_TENANT_ID'
+              value: subscription().tenantId
+            }
+            {
+              name: 'TEAMS_AUDIO_ORIGIN'
+              value: 'https://${backendAppName}.${containerAppsEnvironment.properties.defaultDomain}'
+            }
+            {
+              name: 'SPEECH_REGION'
+              value: resourceGroup().location
+            }
           ], empty(jarvisAgentObjectId) ? [] : [
             {
               name: 'ENTRA_JARVIS_AGENT_OBJECT_ID'
@@ -689,7 +736,41 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
   dependsOn: [
     acrPullAssignment
     taskEventsContainer
+    speechUserAssignment
   ]
+}
+
+resource teamsBot 'Microsoft.BotService/botServices@2022-09-15' = if (deployBackendApp) {
+  name: teamsBotName
+  location: 'global'
+  kind: 'azurebot'
+  sku: {
+    name: 'F0'
+  }
+  tags: {
+    project: 'jarvis'
+  }
+  properties: {
+    displayName: 'Jarvis'
+    endpoint: 'https://${backendApp!.properties.configuration.ingress.fqdn}/api/messages'
+    msaAppId: backendIdentity.properties.clientId
+    msaAppType: 'UserAssignedMSI'
+    msaAppMSIResourceId: backendIdentity.id
+    msaAppTenantId: subscription().tenantId
+  }
+}
+
+resource teamsChannel 'Microsoft.BotService/botServices/channels@2022-09-15' = if (deployBackendApp) {
+  parent: teamsBot
+  name: 'MsTeamsChannel'
+  location: 'global'
+  properties: {
+    channelName: 'MsTeamsChannel'
+    properties: {
+      isEnabled: true
+      acceptedTerms: true
+    }
+  }
 }
 
 resource backendAppScaleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployBackendApp) {
@@ -754,6 +835,10 @@ resource monthlyBudget 'Microsoft.Consumption/budgets@2019-10-01' = {
 
 output backendAppName string = deployBackendApp ? backendApp.name : ''
 output backendFqdn string = deployBackendApp ? backendApp!.properties.configuration.ingress.fqdn : ''
+output teamsBotName string = deployBackendApp ? teamsBot!.name : ''
+output teamsBotAppId string = backendIdentity.properties.clientId
+output speechAccountName string = speechAccount.name
+output speechRegion string = speechAccount.location
 output applicationInsightsConnectionString string = appInsights.properties.ConnectionString
 output containerRegistryName string = registry.name
 output containerRegistryLoginServer string = registry.properties.loginServer

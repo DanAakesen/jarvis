@@ -31,7 +31,8 @@ const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'credential_status', 'deployments', 'jarvis_sessions', 'messages', 'projects',
   'pull_requests', 'releases', 'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives',
-  'task_events', 'tasks', 'tool_calls', 'usage', 'webhook_deliveries', 'workflow_runs',
+  'task_events', 'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage',
+  'webhook_deliveries', 'workflow_runs',
 ];
 
 async function tables(): Promise<string[]> {
