@@ -1,5 +1,8 @@
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
+import type { AlertNotifier, ActivityAlert } from '../alerts.js';
+import { notifyAlert } from '../alerts.js';
+import { insertActivityAlert } from './alert-store.js';
 import type { RunningSandbox, SandboxHeartbeatStore } from '../factory/heartbeat.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 
@@ -9,7 +12,11 @@ interface InsertedCrashEventRow extends Omit<TaskEventMessage, 'at' | 'payload'>
   payload: string | null;
 }
 
-export function createSandboxHeartbeatStore(pool: sql.ConnectionPool, eventHub: TaskEventHub): SandboxHeartbeatStore {
+export function createSandboxHeartbeatStore(
+  pool: sql.ConnectionPool,
+  eventHub: TaskEventHub,
+  alertNotifier?: AlertNotifier,
+): SandboxHeartbeatStore {
   return {
     async listRunning() {
       const { recordset } = await databaseReadRequest(pool).query<RunningSandboxRow>(`SELECT
@@ -140,12 +147,20 @@ export function createSandboxHeartbeatStore(pool: sql.ConnectionPool, eventHub: 
             VALUES (N'factory', @eventType, @summary, CONCAT(N'task:', @taskId));`);
         const row = event.recordset[0];
         if (!row) throw new Error('Sandbox crash event insert returned no row');
+        const crashAlert: ActivityAlert | undefined = attentionQuestion ? undefined : {
+          type: 'sandbox_crash',
+          dedupeKey: `sandbox:${sandboxSessionId}`,
+          title: 'Sandbox crashed',
+          link: `task:${taskId}`,
+        };
+        const alertInserted = crashAlert ? await insertActivityAlert(transaction, crashAlert) : false;
         await transaction.commit();
         eventHub.publish({
           ...row,
           payload,
           at: row.at instanceof Date ? row.at.toISOString() : new Date(row.at).toISOString(),
         });
+        if (alertInserted && crashAlert) notifyAlert(alertNotifier, crashAlert);
         return true;
       } catch (error) {
         try { await transaction.rollback(); }

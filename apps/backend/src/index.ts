@@ -44,6 +44,10 @@ import { createGitHubAppTokenIssuer } from './github-app.js';
 import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js';
 import { createGithubWebhookModule } from './github/webhook.js';
 import { createGitHubDeliveryVerifier } from './github/delivery.js';
+import { createAlertNotifier } from './alerts.js';
+import type { NowFeedUpdate } from './core/now.js';
+import { createAlertActivityStore } from './database/alert-store.js';
+import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 
 try {
   const config = loadConfig();
@@ -61,6 +65,8 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
+  const nowEventHub = createEventHub<NowFeedUpdate>();
+  const alertNotifier = createAlertNotifier(telemetry);
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
     config.foundryEndpoints || config.githubAppId || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
@@ -151,7 +157,7 @@ try {
     return client;
   };
   const sandboxHeartbeat = database && config.foundryEndpoints
-    ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub), clientFor, {
+    ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub, alertNotifier), clientFor, {
       onError: (error) => {
         const details = error instanceof FoundryClientError
           ? { kind: error.kind, statusCode: error.statusCode, operation: error.operation }
@@ -172,7 +178,7 @@ try {
     : null;
   const projectStore = database ? createProjectStore(database.pool) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
-  const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool) : null;
+  const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const dispatcher = database && taskStore && settingsStore && sandboxHeartbeat && config.foundryEndpoints
     ? new TaskDispatcher(
@@ -215,7 +221,23 @@ try {
         : {}),
     }));
   }
-  const credentialStatusStore = database ? createCredentialStatusStore(database.pool) : undefined;
+  const credentialStatusStore = database ? createCredentialStatusStore(database.pool, {
+    alertNotifier,
+    onAlert: () => nowEventHub.publish({ type: 'refresh' }),
+  }) : undefined;
+  const budgetAlertStore = database
+    ? createAlertActivityStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
+    : undefined;
+  const budgetReader = database && credential && config.monthlyBudgetResourceId
+    ? createArmBudgetReader({
+      resourceId: config.monthlyBudgetResourceId,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Azure budget identity unavailable');
+        return token.token;
+      },
+    })
+    : undefined;
   const app = buildApp(config, logger, {
     modules,
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
@@ -234,11 +256,23 @@ try {
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
     eventHub,
+    nowEventHub,
     ...(conversationAgent ? { conversationAgent } : {}),
   });
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
+  let stopBudgetMonitor: (() => Promise<void>) | undefined;
+  if (budgetReader && budgetAlertStore) {
+    app.addHook('onClose', async () => { await stopBudgetMonitor?.(); });
+    app.addHook('onReady', async () => {
+      stopBudgetMonitor = startBudgetAlertMonitor(
+        budgetReader,
+        budgetAlertStore,
+        () => logger.warn('budget_alert.check_failed'),
+      );
+    });
+  }
   if (database && credential && config.foundryEndpoints && config.foundryRunnerAgentName) {
     const client = clientFor(config.foundryRunnerAgentName);
     let stopCodexRenewal: (() => void) | undefined;

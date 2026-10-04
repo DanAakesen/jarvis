@@ -80,6 +80,7 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
             outcome: mapping ? 'ok' : 'ignored',
             ...(mapping ? { mapping } : {}),
           });
+          if (inserted) app.nowEventHub.publish({ type: 'refresh' });
           return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
         } catch {
           request.log.error('github.webhook_delivery_store_failed');

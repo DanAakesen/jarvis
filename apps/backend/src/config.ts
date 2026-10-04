@@ -19,6 +19,7 @@ export interface BackendConfig {
   foundryChatAgentName?: string;
   foundryProjectEndpoint?: string;
   githubAppId?: string;
+  monthlyBudgetResourceId?: string;
   auth: AuthConfig;
 }
 
@@ -123,6 +124,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (githubAppId !== undefined && keyVaultUri === undefined) {
     throw new ConfigurationError('KEY_VAULT_URI is required when GITHUB_APP_ID is configured');
   }
+  const monthlyBudgetResourceId = env.JARVIS_MONTHLY_BUDGET_RESOURCE_ID;
+  if (monthlyBudgetResourceId !== undefined &&
+    !/^\/subscriptions\/[\da-f-]+\/resourceGroups\/[a-z\d._()-]+\/providers\/Microsoft\.Consumption\/budgets\/[a-z\d._()-]+$/iu.test(monthlyBudgetResourceId)) {
+    throw new ConfigurationError('JARVIS_MONTHLY_BUDGET_RESOURCE_ID must be an Azure budget resource ID');
+  }
 
   return {
     auth: loadAuthConfig(env),
@@ -139,6 +145,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(githubAppId === undefined ? {} : { githubAppId }),
+    ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
   };
 }
 

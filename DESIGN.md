@@ -89,12 +89,17 @@ sign-in; the header wraps on narrow screens.
   stays visible but disabled, and is linked to that explanation with
   `aria-describedby`. No sample messages, tasks or states are shown.
 - **Activity panel:** Running tasks, Needs attention, Releases and deployments,
-  and Credential warnings, each with an empty state. Item titles open their
+  Credential warnings, and Alerts, each with an empty state. Item titles open their
   task, release or project. Dismiss shows "Dismissing…", keeps the item and
   explains a failure, and returns focus to the Now heading after removal.
   The panel loads its backend snapshot, offers retry when unavailable, and
   labels reconnecting or unavailable live updates while keeping the last
   snapshot visible.
+- **Alerts (P6-02):** Keep alerts in the existing Now activity panel as a
+  separate, dismissible "Alerts" group; retain the condition title, timestamp,
+  and task/release/project link where one exists. Budget alerts have no invented
+  page or cost estimate. The group uses the shell's existing neutral list and
+  responsive layout; no new palette or alert-only visual language is needed.
 - **Area pages:** the Software Factory has its own Tasks and Projects
   navigation. Unbuilt task and release pages explain what is unavailable.
   Project management is implemented below; record pages link back to their list.

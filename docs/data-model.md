@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, 3 October 2026 (after sparring with Dan). Scope: the Jarvis core and the Software Factory only. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 4 October 2026 for P6-02. Scope: the Jarvis core and the Software Factory only. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -22,6 +22,9 @@ pages can locate the required blobs without listing the container.
 P1-13 adds nullable `activity.dismissed_at` in `0008_activity_dismissals.sql`;
 the feed omits dismissed activity while retaining it for history and supports
 reverting the column with the paired down migration.
+P6-02 adds nullable `activity.alert_key` and a filtered unique index in
+`0010_alert_deduplication.sql`; each event condition has one activity row and
+can be safely retried. Its down migration removes the index and column.
 
 ## Overview
 
@@ -138,6 +141,7 @@ erDiagram
         string link "task:42, release:7"
         datetime at
         datetime dismissed_at "nullable; hidden from the main-page feed"
+        string alert_key "nullable; unique per alert condition"
     }
 ```
 
@@ -173,7 +177,7 @@ erDiagram
   for future sessions/tasks, not live updates or history. At the start of a hosted Jarvis
   session, the agent keeps the effective model and reasoning effort in memory for
   that session; the snapshot is not persisted.
-- `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes. The authenticated Now-feed read excludes `dismissed_at` rows; dismissing sets the UTC timestamp without deleting the activity record.
+- `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes. The authenticated Now-feed read excludes `dismissed_at` rows; dismissing sets the UTC timestamp without deleting the activity record. P6-02 writes alerts in the same transaction as the condition where available, with a unique filtered `alert_key` index to suppress repeats. Keys identify deployment, sandbox session, credential expiry timestamp, or budget month; the feed never displays the key.
 
 ## 2 · Projects
 
