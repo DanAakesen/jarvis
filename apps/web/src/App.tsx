@@ -35,7 +35,11 @@ function RequireSignIn({ session }: { session: SignInSession }) {
   return session.state === 'signed-in' && session.profile ? <Outlet /> : <SignInPage session={session} />;
 }
 
-export function App({ config = __JARVIS_CONFIG__ }: { config?: PublicConfig }) {
+// Vite inlines __JARVIS_CONFIG__ as an object literal. Read it once: a new object per render
+// recreated the MSAL client and re-ran sign-in restore in a loop (L65).
+const defaultConfig: PublicConfig = __JARVIS_CONFIG__;
+
+export function App({ config = defaultConfig }: { config?: PublicConfig }) {
   const session = useSignIn(config);
   const signedIn = session.state === 'signed-in' && session.profile !== null;
 
