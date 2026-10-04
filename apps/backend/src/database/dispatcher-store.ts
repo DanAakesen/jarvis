@@ -459,7 +459,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
       }
     },
 
-    async endTaskSessions(taskId, state) {
+    async endTaskSessions(taskId, state, invocationCompleted = false) {
       // Concurrent session ends can deadlock on the usage upsert's range locks (L61). Each attempt is
       // one transaction that rolls back completely, so retrying cannot double-count usage.
       for (let attempt = 1; ; attempt += 1) {
@@ -470,18 +470,21 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
           const { recordset } = await new sql.Request(transaction)
             .input('taskId', sql.BigInt, BigInt(taskId))
             .input('state', sql.NVarChar(32), state)
+            .input('invocationCompleted', sql.Bit, invocationCompleted)
             .query<{ sandboxSessionId: string }>(`DECLARE @ended TABLE (
                 id bigint NOT NULL PRIMARY KEY, task_id bigint NOT NULL,
                 started_at datetime2(7) NOT NULL, ended_at datetime2(7) NOT NULL, size nvarchar(8) NOT NULL
               );
               UPDATE dbo.sandbox_sessions SET
-                status = CASE WHEN @state = N'Paused' THEN N'Idle' WHEN @state = N'NeedsAttention' THEN N'Crashed' ELSE N'Ended' END,
-                end_reason = CASE WHEN @state = N'Paused' THEN N'idle' WHEN @state = N'NeedsAttention' THEN N'crashed'
-                  WHEN @state = N'Done' THEN N'done' ELSE N'cancelled' END,
+                status = CASE WHEN @state = N'Paused' THEN N'Idle'
+                  WHEN @state = N'NeedsAttention' AND @invocationCompleted = 0 THEN N'Crashed' ELSE N'Ended' END,
+                end_reason = CASE WHEN @state = N'Paused' THEN N'idle'
+                  WHEN @state = N'NeedsAttention' AND @invocationCompleted = 0 THEN N'crashed'
+                  WHEN @state = N'Done' OR @invocationCompleted = 1 THEN N'done' ELSE N'cancelled' END,
                 ended_at = SYSUTCDATETIME()
               OUTPUT inserted.id, inserted.task_id, inserted.started_at, inserted.ended_at, inserted.size INTO @ended
               WHERE task_id = @taskId AND status = N'Active';
-              IF @state = N'NeedsAttention'
+              IF @state = N'NeedsAttention' AND @invocationCompleted = 0
                 INSERT @ended (id, task_id, started_at, ended_at, size)
                 SELECT s.id, s.task_id, s.started_at, s.ended_at, s.size
                 FROM dbo.sandbox_sessions AS s WITH (UPDLOCK, ROWLOCK)
@@ -517,7 +520,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
                 end_reason = CASE WHEN @state = N'Done' THEN N'done' ELSE N'cancelled' END
               WHERE task_id = @taskId AND status = N'Idle' AND @state NOT IN (N'Paused', N'NeedsAttention');
               UPDATE dbo.sandbox_turns SET
-                status = CASE WHEN @state = N'Done' THEN N'completed'
+                status = CASE WHEN @state = N'Done' OR @invocationCompleted = 1 THEN N'completed'
                   WHEN @state = N'NeedsAttention' THEN N'failed' ELSE N'cancelled' END,
                 ended_at = SYSUTCDATETIME()
               WHERE status = N'running' AND sandbox_session_id IN (SELECT id FROM @ended);
