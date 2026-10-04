@@ -142,8 +142,10 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
     }
     if (key === 'defaultBranch') {
       return typeof value === 'string' && value.length > 0 && value.length <= 255 &&
-        !/[\x00-\x20~^:?*\\[\]]/.test(value) && !value.includes('..') && !value.includes('@{') &&
-        !value.startsWith('/') && !value.endsWith('/') && !value.endsWith('.') &&
+        [...value].every((character) => character.charCodeAt(0) > 0x20) &&
+        !/[~^:?*\\[\]]/.test(value) && !value.includes('..') && !value.includes('@{') &&
+        value !== '@' && !value.startsWith('-') && !value.startsWith('/') && !value.endsWith('/') &&
+        !value.includes('//') && !value.endsWith('.') &&
         !value.split('/').some((part) => part.startsWith('.') || part.endsWith('.lock'));
     }
   }

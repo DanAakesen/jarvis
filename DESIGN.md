@@ -100,7 +100,8 @@ sign-in; the header wraps on narrow screens.
 
 Keep the Settings route within the shell's neutral foundation. Use one page
 headline and distinct form sections for Jarvis, Voice, Coding agents, Global,
-and Credentials. Two columns make related controls easy to scan on wide screens;
+New projects, and Credentials. New-project controls use the documented defaults
+and the same labelled field grid as the other sections. Two columns make related controls easy to scan on wide screens;
 the form stacks on narrow screens. Save feedback stays beside the save action,
 and loading, recovery, and unavailable actions remain explicit. Credentials show text status, expiry, and last-updated dates without secret
 values; manual renewal and reseed controls remain disabled with an explanation.
@@ -115,14 +116,20 @@ unverified.
 Keep the neutral foundation. The list uses one compact project panel per
 repository, with its settings, running-task count, last-release availability,
 and edit action grouped for scanning. Project settings use labelled form
-sections; create, save, archive confirmation, loading, retry, conflict, and
-success feedback stay close to the relevant actions. Archive messaging explains
+sections; save, archive confirmation, loading, retry, conflict, and
+success feedback stay close to the relevant actions. The Projects page has no
+creation form; an empty list points users to New projects defaults in Settings.
+Archive messaging explains
 that history remains and the repository stays reserved. Counts refresh manually
 until live updates exist; missing release data is stated, not fabricated.
 Checked in Chromium 154 at 390 and 1280 px with scratch-only auth and API mocks:
 list, create, update, and archive worked; neither width overflowed, controls
 were at least 44 px high, and the project form stacked on mobile. Live Entra and
 Azure SQL behavior remains unverified.
+P3-11 rechecked Settings and Projects in Chromium 154 at 390 and 1280 px with
+scratch-only auth and API mocks. New-project settings save, the Projects page has
+no create link or form, and neither width overflows; controls remain at least
+44 px high. Live Entra and Azure SQL behavior remains unverified.
 
 ## Task view (P1-08)
 

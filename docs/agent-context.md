@@ -213,6 +213,7 @@ Verified in Codex cloud for P0-02:
 | Both workspace lint checks | `npm run lint` in the repository root (P0-03 adds backend lint) |
 | Both workspace tests (single run) | `npm test` in the repository root (P0-03 adds backend tests) |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
+| Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
@@ -246,6 +247,10 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
+P3-11 rechecked Settings and Projects at 390 and 1280 px: New projects defaults
+load and save, and the Projects page retains edit/archive but has no create form.
+The backend project POST route remains for P3-12. Live Entra and Azure SQL
+behavior remain unverified.
 P1-08 was inspected at 390 and 1280 px with scratch-only auth and project/task/SSE
 mocks. All six columns, task creation, filter submission, modal dismissal, and
 focus return worked; the page had no horizontal overflow, controls were at least

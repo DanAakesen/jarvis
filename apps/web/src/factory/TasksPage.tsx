@@ -407,7 +407,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
       <p id="create-task-help" className="tasks-help">
         {visibleProjectState === 'loading' ? 'Loading projects before task creation is available.' :
           visibleProjectState === 'error' ? 'Retry project loading before creating a task.' :
-            projects.length === 0 ? <>Create an active <Link to="/factory/projects/new">project</Link> before adding a task.</> :
+            projects.length === 0 ? 'No active projects are available. Project registration is managed by Jarvis.' :
               'Create a task on an active project. Model and reasoning overrides apply to this task only.'}
       </p>
       {visibleProjectState === 'error' && (

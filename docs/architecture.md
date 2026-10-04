@@ -87,6 +87,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   authentication. The backend returns effective defaults with the validated
   model catalog, rejects unknown keys and unsupported values, and writes a
   partial update transactionally to whitelisted `global` rows in `dbo.settings`.
+  The `newProjects` settings area validates owner, visibility, templates
+  repository, default agent, policy, per-project task limit, and default branch;
+  these defaults reuse the existing settings table and are available to future
+  project registration without changing the project API.
   The SQL adapter is injected only when database configuration exists; the API
   returns 503 without it. The model catalog offers deployed Jarvis models and
   only provider defaults for Codex and Copilot because their available-model

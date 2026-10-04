@@ -138,6 +138,8 @@ describe('settings API', () => {
       'new_projects.max_parallel_tasks': '3',
       'new_projects.default_branch': '"develop"',
     });
+    const readBack = await app.inject({ url: '/settings', headers: authorization });
+    expect(readBack.json().settings.newProjects).toEqual(response.json().settings.newProjects);
   });
 
   it('returns only non-secret credential status dates', async () => {
@@ -230,6 +232,8 @@ describe('settings API', () => {
       read: async () => ({
         'jarvis.model': '"unsupported-model"',
         'global.max_parallel_tasks': '1000',
+        'new_projects.visibility': '"internal"',
+        'new_projects.default_branch': '"invalid branch"',
         'internal.secret': '"never-return-this"',
       }),
       write: async () => {},
@@ -242,6 +246,7 @@ describe('settings API', () => {
       settings: {
         jarvis: { model: 'gpt-5.6-luna' },
         global: { maxParallelTasks: 1 },
+        newProjects: { visibility: 'private', defaultBranch: 'main' },
       },
     });
     expect(response.body).not.toContain('never-return-this');
