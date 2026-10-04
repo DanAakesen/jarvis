@@ -35,8 +35,8 @@ CREATE TABLE dbo.memory_deletions (
 );
 
 ALTER TABLE dbo.messages ADD source_item_id nvarchar(128) COLLATE Latin1_General_100_BIN2 NULL;
-CREATE INDEX IX_messages_source_item_id ON dbo.messages (source_item_id, id DESC)
-  WHERE source_item_id IS NOT NULL;
+EXEC(N'CREATE INDEX IX_messages_source_item_id ON dbo.messages (source_item_id, id DESC)
+  WHERE source_item_id IS NOT NULL;');
 
 IF TYPE_ID(N'vector') IS NOT NULL
   EXEC(N'ALTER TABLE dbo.memories ADD embedding vector(1536) NULL;');

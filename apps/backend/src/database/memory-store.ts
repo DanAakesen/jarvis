@@ -257,11 +257,19 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
       const result = await pool.request().query<{
         vector_search: boolean;
         fulltext_search: boolean;
-      }>(`SELECT CONVERT(bit, CASE
+      }>(`DECLARE @fullTextInstalled bit = 0;
+        BEGIN TRY
+          SET @fullTextInstalled = CASE
+            WHEN FULLTEXTSERVICEPROPERTY(N'IsFullTextInstalled') = 1 THEN 1 ELSE 0 END;
+        END TRY
+        BEGIN CATCH
+          SET @fullTextInstalled = 0;
+        END CATCH;
+        SELECT CONVERT(bit, CASE
           WHEN TYPE_ID(N'vector') IS NOT NULL
             AND COL_LENGTH(N'dbo.memories', N'embedding') IS NOT NULL THEN 1 ELSE 0 END) AS vector_search,
         CONVERT(bit, CASE
-          WHEN FULLTEXTSERVICEPROPERTY(N'IsFullTextInstalled') = 1
+          WHEN @fullTextInstalled = 1
             AND EXISTS (SELECT 1 FROM sys.fulltext_indexes
               WHERE object_id = OBJECT_ID(N'dbo.memories')) THEN 1 ELSE 0 END) AS fulltext_search;`);
       vectorSearchAvailable = result.recordset[0]?.vector_search === true;

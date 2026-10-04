@@ -31,8 +31,8 @@ const administrator = new sql.ConnectionPool({ ...configuration, database: 'mast
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
-  'activity', 'artifacts', 'credential_status', 'deployments', 'jarvis_sessions', 'messages', 'projects',
-  'memory_deletions', 'memory_history', 'memories', 'pull_requests', 'releases', 'sandbox_sessions',
+  'activity', 'artifacts', 'credential_status', 'deployments', 'jarvis_sessions', 'memories',
+  'memory_deletions', 'memory_history', 'messages', 'projects', 'pull_requests', 'releases', 'sandbox_sessions',
   'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks', 'tool_calls', 'usage',
   'webhook_deliveries', 'workflow_runs',
 ];
@@ -131,11 +131,18 @@ describe('committed domain schema (groups 1-8)', () => {
     const searchSetup = await pool.request().query<{
       fulltext_installed: boolean;
       fulltext_indexed: boolean;
-    }>(`SELECT CONVERT(bit, CASE WHEN FULLTEXTSERVICEPROPERTY(N'IsFullTextInstalled') = 1
-          THEN 1 ELSE 0 END) AS fulltext_installed,
+    }>(`DECLARE @fullTextInstalled bit = 0;
+      BEGIN TRY
+        SET @fullTextInstalled = CASE
+          WHEN FULLTEXTSERVICEPROPERTY(N'IsFullTextInstalled') = 1 THEN 1 ELSE 0 END;
+      END TRY
+      BEGIN CATCH
+        SET @fullTextInstalled = 0;
+      END CATCH;
+      SELECT @fullTextInstalled AS fulltext_installed,
         CONVERT(bit, CASE WHEN EXISTS (
           SELECT 1 FROM sys.fulltext_indexes WHERE object_id = OBJECT_ID(N'dbo.memories')
-        ) THEN 1 ELSE 0 END) AS fulltext_indexed;`);
+        ) AND @fullTextInstalled = 1 THEN 1 ELSE 0 END) AS fulltext_indexed;`);
     if (searchSetup.recordset[0]?.fulltext_installed) {
       expect(searchSetup.recordset[0]?.fulltext_indexed).toBe(true);
     }
