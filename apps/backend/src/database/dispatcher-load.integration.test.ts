@@ -179,7 +179,10 @@ describe('dispatcher parallel load', () => {
         drained,
         new Promise<never>((_resolve, reject) => {
           timeout = setTimeout(() => reject(new Error(
-            `Timed out with ${finishedStates.size}/${tasks.length} tasks finished`)), 90_000);
+            `Timed out with ${finishedStates.size}/${tasks.length} tasks finished; ` +
+            `unfinished ${tasks.filter((task) => !finishedStates.has(task.id)).map((task) => task.id).join(', ')}; ` +
+            `dispatcher errors: ${errors.map((error) => (error instanceof Error ? error.message : String(error))).join(' | ') || 'none'}; ` +
+            `violations: ${violations.join(' | ') || 'none'}`)), 90_000);
         }),
       ]);
     } finally {
