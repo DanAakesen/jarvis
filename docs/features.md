@@ -82,7 +82,7 @@ Status as of 4 October 2026.
 | Webhook receiver | GitHub events are verified and recorded once | Background | — | Built (live webhook setup pending) | P3-03 |
 | PR, run, release and deploy records | Webhook events stored as pull requests, workflow runs, releases, deployments | Background | — | Built (live webhook setup pending) | P3-04 |
 | Checks loop | A failed task-PR check is stored in private Blob and sent to the same task; bounded repairs move to Needs attention when exhausted | Background | Task detail | Built | P3-05 |
-| Project policy and merge | Open a PR for completed branch commits when none is open; stop at a verified green PR or squash-merge via the GitHub App when checks, branch freshness and protection rules pass | Background | Project settings | Built (fake-tested; live test-repository acceptance pending) | P3-06 |
+| Project policy and merge | On task completion, open or reuse an App-backed PR only when the task branch is ahead of the default branch; record refusals as Needs attention, then stop at a verified green PR or squash-merge via the GitHub App when checks, branch freshness and protection rules pass | Background | Project settings; task detail | Built offline with fake GitHub coverage; coordinator live test-repository acceptance pending | P3-06, P3-14 |
 | Release records | One release per merge to `main`, linked to runs and deployments by SHA | Background | — | Built (live webhook setup pending) | P3-07 |
 | Release view | Git graph, releases, runs and deployments per project | Screen | Release view | Planned | P3-08 |
 | Workflow templates | Managed projects copy PR-check and release workflows | Background | — | Built | P3-09 |
@@ -93,11 +93,12 @@ Status as of 4 October 2026.
 | --- | --- | --- | --- | --- | --- |
 | Settings | Jarvis, voice and coding-agent defaults; global limits | Screen | Settings | Built | P1-11 |
 | Jarvis model per session | Model and reasoning for new Jarvis sessions | Both | Settings; by voice with P7-11 | Built | P4-07 |
+| Personality preferences | Choose a tone and response style, and add bounded instructions for new chat and voice sessions | Both | Settings, chat and voice | Backend built; Settings UI pending | P7-16, P8-19 |
 | Credentials status | See credential expiry and renewal status (never values) | Screen | Settings | Built | P2-08 |
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |
 | Usage and cost | Sandbox, model, voice, Codex and Copilot usage per task, project, period | Screen | Usage | Built | P2-12, P6-01 |
 | Event archive | Old task events move to Blob and load on demand | Background | Task detail | Built | P6-03 |
-| Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Phone | — | Planned | P6-02 |
+| Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Now + email | Main page; email-only Azure Monitor action group | Built (offline; live Azure delivery unverified) | P6-02 |
 | Backup drill | Database restore documented | Background | — | Planned | P6-04 |
 | Runbook | Deploy, rollback, key rotation, task recovery, sleep, and temporary SQL access | — | [Operations runbook](runbook.md) | In progress | P6-06 |
 
@@ -125,7 +126,7 @@ Status as of 4 October 2026.
 | Dynamic workspace views | View accessible information in temporary, question-relevant windows; ask Jarvis or move/resize/reorder views | Screen | Main workspace | Planned | P8-06 |
 | Window tabs and restore | Minimise a view without closing or saving it, then restore it from its tab or by asking Jarvis | Both | Main/voice workspace | Planned | P8-07 |
 | Contextual right panel | Open, close, or change relevant information without replacing the main content | Both | Main workspace | Planned | P8-08 |
-| Runtime-state orb | See listening, thinking, tool-call, and speaking activity reflected from actual voice state | Screen | Voice workspace | Planned | P8-09 |
+| Runtime-state orb | See listening, thinking, speaking, reconnect, and unavailable states from the actual voice client; tool-call activity is stated unavailable until its runtime event exists | Screen | Voice workspace | Built | P8-09, P8-16 |
 | Desktop voice workspace | Enter full-page voice, carry open views across modes, and restore the typing layout; optionally minimise windows on entry (off by default) | Voice/chat | Main page | Planned | P8-10 |
 | Phone workspace | Show one main view, switch by swipe or request, and dock the active voice orb while content is foreground | Phone | Jarvis on phone | Planned | P8-11 |
 | Manual voice-end affordance | Choose the manual end control and Escape-key behavior without changing natural spoken ending | Both | Voice workspace | Planned (needs decision) | P8-12 |

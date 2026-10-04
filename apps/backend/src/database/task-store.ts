@@ -610,7 +610,12 @@ export function createTaskStore(
       };
     },
 
-    async transition(id: string, state: TaskState, completionVerified = false): Promise<TaskTransitionResult> {
+    async transition(
+      id: string,
+      state: TaskState,
+      completionVerified = false,
+      eventReason?: string,
+    ): Promise<TaskTransitionResult> {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
@@ -664,7 +669,7 @@ export function createTaskStore(
           taskId: id,
           type: 'state_changed',
           summary: 'Task state changed',
-          payload: { from: current, to: state },
+          payload: { from: current, to: state, ...(eventReason ? { reason: eventReason } : {}) },
           source: 'backend',
         };
         const serializedPayload = validateEvent(event);

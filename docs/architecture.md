@@ -4,7 +4,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 - Requirements: [PRODUCT.md](../PRODUCT.md). Feature summaries: [features.md](features.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L36): [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
-- **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–15 show each flow as swimlanes, coloured by evidence (prototype/offline-tested, documented, assumed). Open it in a browser.
+- **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–20 show each flow as swimlanes, coloured by evidence (prototype/offline-tested, documented, assumed). Open it in a browser.
 
 ## Stack overview
 
@@ -13,14 +13,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces for the two apps, one root lockfile | Implemented in P0-01; empty app builds verified in Codex cloud |
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
-| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions and verifies GitHub delivery before Done; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; live Azure behavior remains unverified |
+| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions; P3-14 opens or reuses an App-token PR after completed task work and leaves policy completion to P3-06; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; live Azure behavior remains unverified |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton, core/factory module registration and P1-03 projects API implemented; remaining domain APIs and SSE are in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
 | Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, group 5 in #42, heartbeat agent routing in #32, and `idle_expired` session end reason in #226; deployed heartbeat verification remains open |
 | Files | Azure Blob Storage for artifacts, logs, and archived task events | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
-| Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-16 |
+| Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); stateful Azure Monitor email alerts and 300 DKK budget thresholds | Alert contracts, deduplication and Bicep compile offline; SQL Server integration, live ingestion, budget reads and email delivery remain unverified |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
 | Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (application role `Jarvis.Tools`) is accepted only on the agent-enabled routes: tools (P4-01), turn context (P4-04) and its effective Jarvis-settings read (P4-07) | Browser and backend contracts checked offline in #9; agent policy checked offline in P4-01/P4-04/P4-07; the P4-08 main deployment and bootstrap succeeded. Live Dan sign-in and deployed chat invocation remain to verify |
 | Board updates | Authenticated server-sent events (SSE) over `fetch`, so the bearer token can be sent. Reconnects resume from `Last-Event-ID`; persisted task events replay before buffered live hub events, with duplicate IDs suppressed. A comment heartbeat is sent every 25 seconds. | Implemented and tested offline; SQL Server integration and deployed streaming remain unverified |
@@ -62,6 +62,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   implements it as a responsive form for Jarvis, voice, coding-agent defaults
   and the global task limit; remaining voice samples, sleep and credential
   controls are visibly disabled until their owning services exist.
+- P7-16 extends the same authenticated, validated `dbo.settings` key/value store
+  with bounded personality preferences. Hosted chat and Danish voice read them
+  for each new agent invocation/session; the backend snapshots them when it
+  configures each new English voice relay. Active voice connections keep their
+  original snapshot.
 - P1-10 passes the backend URL and MSAL token provider into the Software Factory
   area. The projects list and settings page call the authenticated project CRUD
   routes; running counts are derived from `GET /factory/tasks?state=Running`
@@ -79,6 +84,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `POST /now/activity/:id/dismiss`, and refreshes snapshots from authenticated
   `/now/events`. The panel identifies unavailable data and reconnecting or
   unavailable live updates rather than claiming a stale snapshot is current.
+  P6-02 adds a dismissible Alerts group backed by `activity.alert_key`. Failed
+  deployment, confirmed sandbox crash and credential-expiry activity is inserted
+  transactionally with its source change and emits a hashed Application Insights
+  trace only after commit. A unique filtered index suppresses repeated conditions.
+  Stateful Azure Monitor rules query those traces and email through the configured
+  action group. Budget actual spend is read with the backend managed identity every
+  15 minutes; a unique monthly threshold activity refreshes Now. The native Azure
+  Budget 80% threshold also uses the email action group. Failures remain visible in
+  backend logs; no SMS or voice actions are configured.
 - `/me` inherits the root authentication hook. The verifier accepts only
   Dan's signed delegated API token and returns a bounded display name from its
   validated `name` claim, falling back to `Dan` if that optional claim is absent
@@ -493,7 +507,7 @@ flowchart LR
         BL["Blob Storage<br/>artifacts, logs"]
         KV["Key Vault<br/>Codex login, Copilot token, GitHub App key"]
         ACR["Container Registry<br/>backend + sandbox images"]
-        AI["Application Insights + Log Analytics<br/>traces, budget alert"]
+        AI["Application Insights + Log Analytics<br/>alert traces + Azure Monitor"]
     end
     subgraph GH["GitHub"]
         REPO["Repositories + PRs"]
@@ -706,7 +720,7 @@ Every GitHub credential Jarvis uses, checked with Dan on 4 October 2026. Each to
 
 | Credential | Type and scope | Stored in | Used by | Lifetime |
 | --- | --- | --- | --- | --- |
-| Jarvis Software Factory | GitHub App, installed on all of Dan's repositories. Repository permissions: Contents and Pull requests read/write; Actions, Checks and Deployments read; Metadata read; nothing else | Private key as Key Vault `github-app-private-key` (backend only) | Backend: one-hour, single-repository installation tokens (P3-02 to P3-06) | Permanent; rotate the key if exposed |
+| Jarvis Software Factory | GitHub App, installed on all of Dan's repositories. Repository permissions: Contents and Pull requests read/write; Actions, Checks and Deployments read; Metadata read; nothing else | Private key as Key Vault `github-app-private-key` (backend only) | Backend: one-hour, single-repository installation tokens (P3-02 to P3-06 and P3-14) | Permanent; rotate the key if exposed |
 | `jarvis-github` | Fine-grained token: Contents and Pull requests read/write on all repositories | Key Vault `jarvis-github` | Legacy sandbox Git credential path while App-token mode is disabled | Keep until the post-merge App-token push check succeeds; then revoke/remove in a follow-up |
 | `jarvis-copilot` | Fine-grained token: only the Copilot Requests account permission; no repository access | Key Vault `jarvis-copilot` | Copilot CLI sign-in inside the sandbox | Until revoked |
 | `jarvis-repo-admin` | Fine-grained token: Administration read/write on all repositories (creates repositories) | Key Vault `jarvis-repo-admin` | Backend only, when creating a new project repository | Until revoked |
@@ -734,6 +748,28 @@ GitHub host and path before returning credentials. The runner retries a 404
 session lookup with bounded delays to cover the interval before the backend
 persists the newly started Foundry session.
 
+P3-13 adds a backend-only `GitHubRepositoryCatalog` alongside the task token
+issuer. It finds the active App installation matching `new_projects.owner`,
+requests an installation token limited to `contents: read`, and reads every
+page of `/installation/repositories` (100 per page, at most 10,000 entries).
+Per-owner results are cached in memory for five minutes; authenticated
+`GET /factory/repositories?refresh=true` bypasses that cache on demand and
+returns only repository metadata, never a token. The Projects page receives
+`fullName`, name, default branch, last push, and language with
+`Cache-Control: no-store`.
+
+`POST /factory/projects/manage` and the backend `manage_repository` tool share
+the same registration operation. It confirms the canonical repository is in
+the configured installation before reading its default-branch Git tree and
+detecting tech from project marker files, falling back to the normalized
+primary-language identifier or `unknown`. It creates a row in the existing
+`projects` table using the repository's actual default branch plus configured
+New projects agent, policy, and task limit; no schema change is needed. The
+user route retains Dan-only authentication, the tool uses the existing
+Jarvis-agent role, and neither route exposes the private key or installation
+token. Contracts are tested offline; live GitHub, Key Vault, Entra, and Azure
+SQL behavior remain unverified.
+
 App-token mode is explicitly opt-in through the Runner deploy Actions variable `JARVIS_GITHUB_APP_TOKEN_ENABLED` (default `false`); enabling it also requires `GITHUB_APP_ID`. Keep the legacy `jarvis-github` secret and runner read grant until the live post-merge push check against `DanAakesen/jarvis-test-target` succeeds. The same backend identity reads the separate `github-app-webhook-secret` for P3-03 webhook signature verification; Bicep supplies the vault URI. After raw-body signature verification, P3-04 maps only allowlisted fields from `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. A serializable SQL transaction commits the delivery ID and mapped group 5 rows together, so duplicate deliveries cannot replay writes; no payload or secret is stored or logged. P3-05 reacts to a failed `pull_request` workflow after persistence, uses a repository-scoped installation token with only Actions read access to retrieve bounded job logs, and writes them to the existing private `logs` container. A bounded, sanitized excerpt and the Blob path go through the P2-07 task controller; the token remains backend-only. `global.max_check_attempts` defaults to 3 (validated range 0–10); on exhaustion or an unavailable log/steer, the task moves to NeedsAttention. SQL reuses `workflow_runs.log_artifact` and task-event markers; no migration is required. `push` to a registered project's default branch creates the release row, and the `Release` workflow's run number fills its version. The App does not subscribe to GitHub's `release` event because releases represent merges, not tags. The App ID is configuration, not a secret.
 For task completion, the backend uses the same repository-scoped App issuer to
 read the task branch and find a pull request with that branch as its head. A
@@ -744,7 +780,10 @@ P3-07 creates one release per project and default-branch SHA even when a `Releas
 workflow run arrives before its matching push event. The later push reconciles the
 run; workflow runs and deployments link to releases by project and SHA.
 
-When completed task work has commits on its branch but no open PR, P3-06 opens one with the repository-scoped GitHub App token, using the task branch as head, project default branch as base, task title, and a link to the Jarvis task. Policy evaluation waits for the PR webhook to persist that record. It then joins the task-linked PR record to its project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. `deliver_pr` marks a verified green, non-draft PR Done without merging. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then requests a squash merge with the expected head SHA. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. GitHub rate limits remain retryable webhook failures. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Policy and merge tests use fake stores and GitHub responses; live App installation and test-repository merge acceptance remain unverified.
+When a task turn completes, P3-14 uses the repository-scoped GitHub App token to verify the task branch, reuse an open PR for the configured base if present, or compare the branch with the default branch and create a PR only when it is ahead. Branch/PR reads happen outside the task policy lock; the backend rechecks that the task is Running under the lock before the bounded PR create, reconciles an ambiguous create response with a matching-PR lookup, and records `pull_request_opened` before releasing it. This serializes the side effect with cancellation without holding the lock across the GitHub preflight. The new PR uses the task title and links to its Jarvis task through the configured Static Web App origin. The backend ends the completed sandbox without marking the task Done; GitHub's signed PR/check webhooks continue the P3-06 policy flow. A missing branch, no new commits, or GitHub API refusal records a clear task event and moves the task to Needs attention. Duplicate completions reuse the PR, including a second lookup after GitHub reports a duplicate create. The GitHub App token stays backend-side.
+
+P3-06 joins the task-linked PR record to its project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. `deliver_pr` marks a verified green, non-draft PR Done without merging. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then requests a squash merge with the expected head SHA. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. GitHub rate limits remain retryable webhook failures. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, and refusal reasons; live App installation and test-repository acceptance remain unverified.
+
 
 **Codex login rules** (Pro login only; no API key):
 
@@ -793,7 +832,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | --- | --- | --- |
 | Browser connection | Browser connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. It captures and sends mono 24 kHz PCM only after the relay is ready; provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, interruption, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
 | Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then captures audio. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
-| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | The client waits for the backend-configured session before opening the microphone. Local mock tests verify server-owned session settings and client event handling; real browser audio and live Voice Live behavior remain unverified pending P0-16. |
+| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Completed voice transcripts are persisted as messages; voice tool calls are not stored as `tool_calls`. |
 | Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
@@ -812,10 +851,13 @@ The Danish backend connector uses the Foundry project endpoint from `FOUNDRY_PRO
 
 `agents/jarvis` (P4-01) is the ported voice-prototype agent: the Voice Live Bridge
 runtime, response coordinator, strict action rules for spoken Danish replies and
-a per-session model tool loop over the Responses API. At session start it reads
-effective model and reasoning settings from the agent-only `GET /agent/settings`
-route, then uses the immutable snapshot for each model request in that session.
-It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
+a per-session model tool loop over the Responses API. At voice session start and
+for each new chat invocation, it reads effective model, reasoning, and personality
+settings from the agent-only `GET /agent/settings` route. The voice runtime keeps
+that immutable snapshot for the session; chat uses a per-invocation snapshot.
+Tone, response style, and JSON-quoted custom instructions modify presentation
+only, with identity, backend tool permissions, and truthful action outcomes
+remaining fixed. It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
 (cached for 60 seconds) and sends each model tool call to `POST /tools/{name}`.
 The agent gets a token for `api://<jarvis-api>/.default`
 from its platform identity through `DefaultAzureCredential`; the same credential
@@ -872,15 +914,17 @@ call linkage remain the post-merge P4-09 acceptance check.
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
 | Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (the SSE hub and dispatcher run in one process; more copies need Web PubSub, see Ideas in PLAN.md); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID` |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
-| Monthly budget | `jarvis-monthly` | Resource-group scoped; 300 in the subscription billing currency, monthly from 1 October 2026 (fixed start date; Azure rejects changing it), actual-cost alerts above 80 % and 100 % to resource group owners |
+| Azure Monitor action group | `jarvis-alerts` | Email receivers from required `budgetContactEmails`; no SMS/voice receivers |
+| Log alert rules | Deployment failure, sandbox crash, credential expiry | Stateful scheduled-query rules on `AppTraces`; group by hashed alert condition and send through `jarvis-alerts` |
+| Monthly budget | `jarvis-monthly` | Resource-group scoped; 300 in the subscription billing currency, monthly from 1 October 2026 (fixed start date; Azure rejects changing it), actual-cost alerts above 80 % and 100 % to `jarvis-alerts` |
 
-The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling and the Danish voice agent), and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live sleep-switch role assignment and ARM behavior remain unverified until the change is deployed.
+The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling and the Danish voice agent), **Cost Management Reader** at the resource group for budget reads, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live role assignment and ARM behavior remain unverified until the change is deployed.
 
-Required deployment parameters are the full `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` and `jarvisAgentObjectId` are optional. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed.
+Required deployment parameters are `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `foundryNameTimestamp`, and `budgetContactEmails`; the comma-separated email list comes from protected GitHub secret `JARVIS_BUDGET_CONTACT_EMAILS`. `backendImage` and `jarvisAgentObjectId` are optional. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed.
 
 PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. Both `gpt-5.6-luna` and `gpt-realtime-2.1` use Global Standard capacity 1, configured independently. Dan accepted this starting allocation; adjust it if testing demonstrates rate limits. Exact model-specific limits and regional quota availability remain to be verified in P0-16. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
 
-`sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, `budgetStartDate` to `2026-10-01T00:00:00Z`, and budget notification emails to an empty array (the Owner role is also notified). The amount is interpreted in the subscription billing currency; confirm that currency is DKK.
+`sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, and `budgetStartDate` to `2026-10-01T00:00:00Z`. Budget notification emails are required through `budgetContactEmails`; actual cost is interpreted in the subscription billing currency, which remains to be confirmed as DKK.
 
 ## Cost
 

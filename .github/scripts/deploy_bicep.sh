@@ -11,6 +11,21 @@ outputs="$1"
 image="${2:-}"
 identity=$(jq -er '.backendIdentity.resourceId' infra/bootstrap.output.json)
 sql_group=$(jq -er '.sqlAdminGroup.objectId' infra/bootstrap.output.json)
+if [[ -z "${JARVIS_BUDGET_CONTACT_EMAILS:-}" ]]; then
+  echo "::error::Set JARVIS_BUDGET_CONTACT_EMAILS to the comma-separated alert recipients, including Dan."
+  exit 1
+fi
+budget_emails=$(jq -cn --arg value "$JARVIS_BUDGET_CONTACT_EMAILS" \
+  '$value | split(",") | map(gsub("^\\s+|\\s+$"; ""))')
+if ! jq -e 'length > 0 and all(.[]; test("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$"))' <<<"$budget_emails" >/dev/null; then
+  echo "::error::JARVIS_BUDGET_CONTACT_EMAILS must contain valid comma-separated email addresses."
+  exit 1
+fi
+budget_parameters=$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/jarvis-budget-parameters.XXXXXX")
+chmod 600 "$budget_parameters"
+trap 'rm -f "$budget_parameters"' EXIT
+jq -n --argjson emails "$budget_emails" \
+  '{parameters: {budgetContactEmails: {value: $emails}}}' >"$budget_parameters"
 
 if [[ -z "$image" ]]; then
   image=$(az containerapp list --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
@@ -37,7 +52,7 @@ fi
 
 az deployment group create --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" \
   --subscription "$SUBSCRIPTION_ID" --template-file infra/main.bicep \
-  --parameters @infra/main.parameters.json --parameters "${parameters[@]}" \
+  --parameters @infra/main.parameters.json --parameters "@$budget_parameters" --parameters "${parameters[@]}" \
   --output none --only-show-errors
 az deployment group show --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" \
   --subscription "$SUBSCRIPTION_ID" --query properties.outputs --output json --only-show-errors >"$outputs"

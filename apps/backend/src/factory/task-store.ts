@@ -125,7 +125,7 @@ export interface TaskStore {
   getActiveRepository(id: string, foundrySessionId: string): Promise<string | null>;
   getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]>;
   getRunningContext(): Promise<RunningTaskContextSnapshot>;
-  transition(id: string, state: TaskState, completionVerified?: boolean): Promise<TaskTransitionResult>;
+  transition(id: string, state: TaskState, completionVerified?: boolean, eventReason?: string): Promise<TaskTransitionResult>;
   withNoActiveTasks<T>(operation: () => Promise<T>): Promise<ActiveTaskGuardResult<T>>;
   /** Persist the timeline and activity entries atomically, then publish the committed event. */
   recordEvent(event: RecordTaskEventInput): Promise<TaskEventMessage>;

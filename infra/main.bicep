@@ -24,8 +24,8 @@ param monthlyBudgetAmount int = 300
 @description('Start of the budget period. Fixed, because Azure rejects changing the start date of an existing budget.')
 param budgetStartDate string = '2026-10-01T00:00:00Z'
 
-@description('Email addresses to notify at 80 % and 100 % of the budget, in addition to resource group owners.')
-param budgetContactEmails array = []
+@description('Email addresses for Azure Monitor alerts and budget thresholds. Include Dan’s address; no phone actions are configured.')
+param budgetContactEmails array
 
 @description('14-digit UTC timestamp (yyyyMMddHHmmss); keep it unchanged for redeployments and choose a new value if the Foundry account is deleted.')
 @minLength(14)
@@ -37,6 +37,7 @@ var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
+var costManagementReaderRoleId = '72fafb9e-0641-4937-9268-a91bfd8191a3'
 // Custom role created by infra/bootstrap.ps1: the deploy identity cannot create role definitions (L54).
 var backendAppScaleRoleId = '985158cb-2c3c-5b9b-bd65-897ed9be3e36'
 var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
@@ -73,6 +74,92 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   properties: {
     Application_Type: 'web'
     WorkspaceResourceId: logAnalytics.id
+  }
+}
+
+resource alertActionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = {
+  name: 'jarvis-alerts'
+  location: 'global'
+  tags: {
+    project: 'jarvis'
+  }
+  properties: {
+    groupShortName: 'Jarvis'
+    enabled: true
+    emailReceivers: [for (emailAddress, index) in budgetContactEmails: {
+      name: 'Recipient ${index + 1}'
+      emailAddress: emailAddress
+      useCommonAlertSchema: true
+    }]
+  }
+}
+
+var appAlertTypes = [
+  'deployment_failure'
+  'sandbox_crash'
+  'credential_expiry'
+]
+
+resource appAlertRules 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = [for alertType in appAlertTypes: {
+  name: 'jarvis-${alertType}'
+  location: resourceGroup().location
+  tags: {
+    project: 'jarvis'
+  }
+  kind: 'LogAlert'
+  properties: {
+    displayName: 'Jarvis ${replace(alertType, '_', ' ')}'
+    description: 'One stateful notification for each distinct Jarvis alert condition.'
+    enabled: true
+    evaluationFrequency: 'PT5M'
+    windowSize: 'PT10M'
+    severity: 2
+    autoMitigate: true
+    scopes: [
+      logAnalytics.id
+    ]
+    criteria: {
+      allOf: [
+        {
+          query: '''
+            AppTraces
+            | where TimeGenerated >= ago(10m)
+            | where Message == "jarvis.alert"
+            | extend alertType = tostring(Properties.alertType), alertKey = tostring(Properties.alertKey)
+            | where alertType == "${alertType}"
+            | summarize alertCount = count() by alertKey
+          '''
+          timeAggregation: 'Total'
+          metricMeasureColumn: 'alertCount'
+          operator: 'GreaterThan'
+          threshold: 0
+          dimensions: [
+            {
+              name: 'alertKey'
+              operator: 'Include'
+              values: [
+                '*'
+              ]
+            }
+          ]
+        }
+      ]
+    }
+    actions: {
+      actionGroups: [
+        alertActionGroup.id
+      ]
+    }
+  }
+}]
+
+resource budgetReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(resourceGroup().id, backendIdentity.id, costManagementReaderRoleId)
+  scope: resourceGroup()
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', costManagementReaderRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
   }
 }
 
@@ -519,6 +606,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: resourceId('Microsoft.App/containerApps', 'ca-jarvis-backend-${suffix}')
             }
             {
+              name: 'JARVIS_MONTHLY_BUDGET_RESOURCE_ID'
+              value: monthlyBudget.id
+            }
+            {
               name: 'FOUNDRY_RUNNER_AGENT_NAME'
               value: 'jarvis-runner-node-1x2'
             }
@@ -616,20 +707,22 @@ resource monthlyBudget 'Microsoft.Consumption/budgets@2019-10-01' = {
         operator: 'GreaterThan'
         threshold: 80
         thresholdType: 'Actual'
-        contactEmails: budgetContactEmails
-        contactRoles: [
-          'Owner'
+        contactEmails: []
+        contactGroups: [
+          alertActionGroup.id
         ]
+        contactRoles: []
       }
       Actual_GreaterThan_100_Percent: {
         enabled: true
         operator: 'GreaterThan'
         threshold: 100
         thresholdType: 'Actual'
-        contactEmails: budgetContactEmails
-        contactRoles: [
-          'Owner'
+        contactEmails: []
+        contactGroups: [
+          alertActionGroup.id
         ]
+        contactRoles: []
       }
     }
   }

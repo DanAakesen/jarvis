@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, 3 October 2026 (after sparring with Dan). Scope: the Jarvis core and the Software Factory only. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 4 October 2026 for P6-02. Scope: the Jarvis core and the Software Factory only. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -25,6 +25,9 @@ reverting the column with the paired down migration.
 P2-14 adds `idle_expired` to the `sandbox_sessions.end_reason` check in
 `0010_idle_expired_sessions.sql`; its down migration maps that value to `idle`
 before restoring the prior constraint.
+P6-02 adds nullable `activity.alert_key` and a filtered unique index in
+`0011_alert_deduplication.sql`; each event condition has one activity row and
+can be safely retried. Its down migration removes the index and column.
 
 ## Overview
 
@@ -141,6 +144,7 @@ erDiagram
         string link "task:42, release:7"
         datetime at
         datetime dismissed_at "nullable; hidden from the main-page feed"
+        string alert_key "nullable; unique per alert condition"
     }
 ```
 
@@ -154,11 +158,16 @@ erDiagram
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
 - P1-11 stores global defaults in the existing key/value table; missing keys use
   the documented defaults. Current keys are `jarvis.model`,
-  `jarvis.reasoning_effort`, `voice.stt.model`, `voice.en.model`,
+  `jarvis.reasoning_effort`, `personality.tone`, `personality.response_style`,
+  `personality.custom_instructions`, `voice.stt.model`, `voice.en.model`,
   `voice.en.voice`, `voice.da.voice`, `voice.default_language`, `codex.model`,
   `codex.reasoning_effort`, `copilot.model`, `global.max_parallel_tasks`, and
   `global.max_check_attempts` (default 3; integer range 0–10, where 0 disables
   automatic check repair).
+  P7-16 adds the three `personality.*` JSON string settings to that same
+  key/value scope; tone and response style use closed catalogs, and custom
+  instructions are limited to 2,000 characters. The existing `dbo.settings`
+  schema already supports these keys, so no migration is required.
   P3-11 adds `new_projects.owner`, `new_projects.visibility`,
   `new_projects.templates_repository`, `new_projects.default_agent`,
   `new_projects.policy`, `new_projects.max_parallel_tasks`, and
@@ -178,7 +187,7 @@ erDiagram
   for future sessions/tasks, not live updates or history. At the start of a hosted Jarvis
   session, the agent keeps the effective model and reasoning effort in memory for
   that session; the snapshot is not persisted.
-- `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes. The authenticated Now-feed read excludes `dismissed_at` rows; dismissing sets the UTC timestamp without deleting the activity record.
+- `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes. The authenticated Now-feed read excludes `dismissed_at` rows; dismissing sets the UTC timestamp without deleting the activity record. P6-02 writes alerts in the same transaction as the condition where available, with a unique filtered `alert_key` index to suppress repeats. Keys identify deployment, sandbox session, credential expiry timestamp, or budget month; the feed never displays the key.
 
 ## 2 · Projects
 

@@ -18,6 +18,12 @@ const payload = {
     title: 'Release complete',
     link: 'release:7',
     at: '2026-10-03T23:30:00.000Z',
+  }, {
+    id: '43',
+    category: 'alert',
+    title: 'Sandbox crashed',
+    link: 'task:42',
+    at: '2026-10-03T23:45:00.000Z',
   }],
   updatedAt: '2026-10-04T00:00:00.000Z',
 };
@@ -48,7 +54,7 @@ describe('Now feed client', () => {
 
     await expect(loadNowFeed('https://api.example.com/', getAccessToken)).resolves.toMatchObject({
       status: 'ready',
-      items: [{ id: '9223372036854775807' }],
+      items: [{ id: '9223372036854775807' }, { id: '43', category: 'alert' }],
     });
     expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/now', expect.objectContaining({
       headers: { Authorization: `${['Bear', 'er'].join('')} test-access-token`, Accept: 'application/json' },

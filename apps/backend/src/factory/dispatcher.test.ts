@@ -200,7 +200,7 @@ describe('task dispatcher', () => {
       payloadTruncated: false, source: 'backend', at: new Date().toISOString(),
     });
     await vi.waitFor(() => expect(untrack).toHaveBeenCalledWith('53'));
-    expect(store.endTaskSessions).toHaveBeenCalledWith('42', state);
+    expect(store.endTaskSessions).toHaveBeenCalledWith('42', state, false);
     await dispatcher.stop();
   });
 
@@ -433,6 +433,61 @@ describe('task dispatcher', () => {
 });
 
 describe('task crash recovery', () => {
+  it('skips delivery when cancellation already changed the task state', async () => {
+    const recoveryStore: TaskRecoveryStore = {
+      getRunningTaskForSession: vi.fn(async () => '42'),
+      claimRecovery: vi.fn(async () => ({ kind: 'invalid-transition' })),
+    };
+    const cancelledTask = { ...controlTask, state: 'Cancelled' as const };
+    const tasks = {
+      get: vi.fn(async () => ({ ...cancelledTask, events: [], usage: [] })),
+      transition: vi.fn(),
+      recordEvent: vi.fn(),
+    } as unknown as TaskStore;
+    const lock = vi.fn(async (_taskId: string, operation: () => Promise<unknown>) => operation());
+    const store = { ...idleStore(), withTaskPolicyLock: lock };
+    const settings: SettingsStore = { read: vi.fn(async () => ({})), write: vi.fn(async () => {}) };
+    let completionHandler: ((sandbox: {
+      sandboxSessionId: string;
+      foundrySessionId: string;
+      agentName: string;
+      invocationId: string;
+    }) => Promise<boolean>) | undefined;
+    const heartbeat = {
+      setCompletionHandler: vi.fn((handler: typeof completionHandler) => { completionHandler = handler; }),
+      untrack: vi.fn(),
+    } as unknown as SandboxHeartbeat;
+    const verifyDelivery = vi.fn(async () => ({ kind: 'awaiting_policy' as const }));
+    new TaskDispatcher(
+      store,
+      tasks,
+      settings,
+      () => ({ startTask: vi.fn(), steer: vi.fn(), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn(), deleteSession: vi.fn() }),
+      heartbeat,
+      createEventHub<TaskEventMessage>(),
+      {
+        recoveryStore,
+        workspaceFor: vi.fn(async () => ({
+          repository: 'DanAakesen/jarvis',
+          defaultBranch: 'main',
+          branch: 'jarvis/task-42',
+        })),
+        verifyDelivery,
+      },
+    );
+
+    await expect(completionHandler?.({
+      sandboxSessionId: '53',
+      foundrySessionId: 'session-1',
+      agentName: 'runner',
+      invocationId: 'invocation-1',
+    })).resolves.toBe(true);
+
+    expect(lock).not.toHaveBeenCalled();
+    expect(tasks.get).toHaveBeenCalledOnce();
+    expect(verifyDelivery).not.toHaveBeenCalled();
+  });
+
   it('continues an idle-expired Running task in a new sandbox on its existing branch', async () => {
     const idleExpiredTask: TaskRecord = {
       ...controlTask, state: 'Running', latestSessionEndReason: 'idle_expired',
@@ -490,9 +545,9 @@ describe('task crash recovery', () => {
       },
     ];
     const events = createEventHub<TaskEventMessage>();
-    const publishState = (from: TaskRecord['state'], to: TaskRecord['state']) => events.publish({
+    const publishState = (from: TaskRecord['state'], to: TaskRecord['state'], reason?: string) => events.publish({
       id: String(Date.now()), taskId: '42', type: 'state_changed',
-      summary: 'Task state changed', payload: { from, to }, payloadTruncated: false,
+      summary: 'Task state changed', payload: { from, to, ...(reason ? { reason } : {}) }, payloadTruncated: false,
       source: 'backend', at: '2026-10-04T12:02:00.000Z',
     });
     let target: TaskControlTarget = {
@@ -502,11 +557,17 @@ describe('task crash recovery', () => {
     const activeTasks = {
       get: vi.fn(async () => ({ ...record, state, events: timeline, usage: [] })),
       list: vi.fn(async () => state === 'Running' ? [{ ...record, state }] : []),
-      transition: vi.fn(async (_id: string, next: TaskRecord['state'], completionVerified = false) => {
+      recordEvent: vi.fn(async () => ({ id: '3' } as never)),
+      transition: vi.fn(async (
+        _id: string,
+        next: TaskRecord['state'],
+        completionVerified = false,
+        eventReason?: string,
+      ) => {
         if (next === 'Done' && !completionVerified) return { kind: 'invalid-transition' as const };
         const previous = state;
         state = next;
-        publishState(previous, next);
+        publishState(previous, next, eventReason);
         return { kind: 'ok' as const, task: { ...record, state } };
       }),
     } as unknown as TaskStore;
@@ -582,7 +643,9 @@ describe('task crash recovery', () => {
       }),
       { intervalMs: 60_000, failureConfirmMs: 30 },
     );
-    const verifyDelivery = vi.fn(async () => deliveryVerified);
+    const verifyDelivery = vi.fn(async () => deliveryVerified
+      ? { kind: 'awaiting_policy' as const }
+      : { kind: 'refused' as const, reason: 'GitHub could not open the task pull request.' });
     const options: DispatcherOptions = {
       recoveryStore,
       workspaceFor: vi.fn(async (current) => ({
@@ -621,9 +684,26 @@ describe('task crash recovery', () => {
     expect((startedRequests[0] as { task: string }).task).toContain('The branch contains the initial fix.');
     expect(verifyDelivery).toHaveBeenCalledWith({
       repository: 'DanAakesen/jarvis', defaultBranch: 'main', branch,
-    });
-    expect(state).toBe(deliveryVerified ? 'Done' : 'NeedsAttention');
-    expect(activeTasks.transition).toHaveBeenCalledWith('42', deliveryVerified ? 'Done' : 'NeedsAttention', deliveryVerified);
+    }, expect.objectContaining({ id: '42', title: 'Fix the bug' }), expect.any(Function));
+    expect(state).toBe(deliveryVerified ? 'Running' : 'NeedsAttention');
+    if (deliveryVerified) {
+      expect(activeTasks.transition).not.toHaveBeenCalled();
+    } else {
+      expect(activeTasks.transition).toHaveBeenCalledWith('42', 'NeedsAttention', false, 'pull_request_open_refused');
+      expect(activeTasks.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'pull_request_open_refused',
+        summary: 'GitHub could not open the task pull request.',
+        payload: { reason: 'GitHub could not open the task pull request.' },
+      }));
+      const refusalCleanup = vi.mocked(store.endTaskSessions).mock.calls
+        .filter(([id, sessionState]) => id === '42' && sessionState === 'NeedsAttention');
+      expect(refusalCleanup.slice(-2).map(([, , invocationCompleted]) => invocationCompleted)).toEqual([true, true]);
+    }
+    expect(store.endTaskSessions).toHaveBeenCalledWith(
+      '42',
+      deliveryVerified ? 'Done' : 'NeedsAttention',
+      true,
+    );
 
     await Promise.all([dispatcher.stop(), heartbeat.stop()]);
   });
