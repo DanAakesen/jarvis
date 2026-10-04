@@ -496,6 +496,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: backendIdentity.properties.clientId
             }
             {
+              name: 'KEY_VAULT_URI'
+              value: 'https://${keyVault.name}.${environment().suffixes.keyvaultDns}/'
+            }
+            {
               name: 'FOUNDRY_PROJECT_ENDPOINT'
               value: 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
             }

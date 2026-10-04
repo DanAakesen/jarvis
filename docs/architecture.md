@@ -117,11 +117,22 @@ handles SIGTERM/SIGINT with a five-second close and telemetry flush deadline.
 Browser requests allow only the exact configured `STATIC_WEB_APP_ORIGIN` and
 `http://localhost:5173`; other Origin values receive 403. A root `onRequest`
 authentication hook runs before CORS and protects current and future nested routes.
-Only the registered `/health` GET/HEAD and CORS-generated preflight route are
-public; explicit business OPTIONS handlers require authentication. The server
-generates request IDs and records only approved event names,
-methods, route templates, statuses and timings. A final output allowlist covers
-child logger bindings as well as log arguments, dropping request/provider secrets.
+Only the registered `/health` GET/HEAD, GitHub's signed webhook route, and
+CORS-generated preflight are public; explicit business OPTIONS handlers require
+authentication. `POST /github/webhooks` is the sole public business route and opts
+out of Entra authentication through its route configuration only. It accepts
+GitHub's JSON bytes unchanged, verifies `X-Hub-Signature-256` with the Key Vault
+secret `github-app-webhook-secret`, and records the `X-GitHub-Delivery` ID and
+event in `dbo.webhook_deliveries`. An atomic, serialized insert returns 202 for
+new and duplicate deliveries. The five subscribed event types are marked `ok`;
+valid unhandled events such as GitHub's setup `ping` are marked `ignored`.
+Only delivery metadata is stored; event-to-domain mapping belongs to P3-04.
+`KEY_VAULT_URI` is supplied by Bicep, and the backend managed identity reads and
+caches the secret after its first successful Key Vault lookup. Missing Key Vault
+configuration or secret fails webhook requests with 503, not an unsigned fallback.
+The server generates request IDs and records only approved event names, methods,
+route templates, statuses and timings. A final output allowlist covers child
+logger bindings as well as log arguments, dropping request/provider secrets.
 
 The factory module exposes authenticated `POST /factory/tasks`, filtered and
 paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event
@@ -625,7 +636,7 @@ Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The 
 
 [`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02 and P3-03; repository metadata read is GitHub's required baseline.
 
-The backend will store the private key in Key Vault as `github-app-private-key` and use its managed identity to mint one-hour, repository-scoped installation tokens. The key must never enter a sandbox. A separate `github-app-webhook-secret` is needed once P3-03 deploys the webhook receiver. The App ID is configuration, not a secret. The registration, selected-repository installation, and Key Vault secret are pending Dan's manual setup after P0-16; the webhook URL and secret await P3-03.
+The backend stores the private key in Key Vault as `github-app-private-key` and uses its managed identity to mint one-hour, repository-scoped installation tokens. The key must never enter a sandbox. The same backend identity reads `github-app-webhook-secret` for signature verification; Bicep supplies the vault URI. P3-10 completed App registration, permission trimming, and private-key storage on 4 October 2026. The webhook URL and secret are Dan's post-merge setup for P3-03. The App ID is configuration, not a secret.
 
 **Codex login rules** (Pro login only; no API key):
 

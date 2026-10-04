@@ -24,6 +24,16 @@ describe('backend configuration', () => {
       foundryRunnerAgentName: 'jarvis-runner-node-1x2',
     });
   });
+  it('accepts only an HTTPS Azure Key Vault URI', () => {
+    expect(loadConfig({ KEY_VAULT_URI: 'https://fixture.vault.azure.net/' }).keyVaultUri)
+      .toBe('https://fixture.vault.azure.net/');
+    for (const KEY_VAULT_URI of [
+      '', 'http://fixture.vault.azure.net/', 'https://vault.example/', 'https://.vault.azure.net/',
+      'https://subdomain.fixture.vault.azure.net/', 'https://fixture.vault.azure.net/path', 'https://fixture.vault.azure.net/?secret=hidden',
+    ]) {
+      expect(() => loadConfig({ KEY_VAULT_URI })).toThrow('KEY_VAULT_URI');
+    }
+  });
   it('validates the configured hosted chat-agent name', () => {
     const FOUNDRY_PROJECT_ENDPOINT = 'https://resource.services.ai.azure.com/api/projects/jarvis';
     expect(loadConfig({
