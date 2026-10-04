@@ -228,6 +228,7 @@ Verified in Codex cloud for P0-02:
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
+| Focused P7-08 camera, shell, chat and voice checks | `npm test --workspace @jarvis/web -- --run src/camera-capture.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/App.test.tsx src/voice-client.test.tsx`; `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/vision/screen.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
 | Focused P3-05 failed-check tests | `npm test --workspace @jarvis/backend -- src/database/checks-loop-blob.test.ts src/database/checks-loop-store.test.ts src/github/checks-loop.test.ts src/github/actions-logs.test.ts src/github/webhook.test.ts src/core/settings.test.ts src/github-app.test.ts` |
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
@@ -726,13 +727,14 @@ infrastructure deployments. Cloud agents cannot run bootstrap or verify Azure;
 Dan verifies the hosted deployment and tools after this local step. Tool calls
 also need the stored message ID from P4-03, supplied by the caller in P4-06.
 
-### Screen sharing (P7-05)
+### Screen sharing and camera (P7-05/P7-08)
 
 The backend uses the existing `FOUNDRY_PROJECT_ENDPOINT` and managed identity;
-Bicep already grants that identity `Foundry User`, so this feature adds no Azure
-resource, credential, or provisioning script. The migration runs at backend
-startup after merge. `global.screen_share_daily_frame_cap` defaults to 300 and
-is editable in Settings (1–300).
+Bicep already grants that identity `Foundry User`, so these features add no Azure
+resource, credential, or provisioning script. Migration `0015_screen_frame_usage`
+adds the shared usage metric. `global.screen_share_daily_frame_cap` defaults to
+300 and is editable in Settings (1–300); screen and camera requests share that
+cap, the three-second per-session interval, and the same usage rows.
 
 After merge, Dan/coordinator should:
 
@@ -742,16 +744,21 @@ After merge, Dan/coordinator should:
    Global Standard. The DKK estimate uses the 2 October 2026 price snapshot
    (1.3157 input and 7.8941 output DKK per million short-context tokens); update
    the rate table if the live SKU or current price differs.
-3. In a signed-in browser, share a window, verify the persistent sharing status
-   and Stop control, request an inspection from chat and voice, and check that
-   Jarvis describes the visible content. Stop voice and leave the page to verify
-   stream cleanup. Confirm the three-second limit, configurable daily cap, usage
-   count, estimated DKK and absence of frame/message content in logs and history.
+3. In a signed-in browser, share a window and verify its persistent status/Stop
+   control. Turn on Camera from the top bar, grant permission, verify its On
+   indicator and Stop action, then ask by chat and voice for one frame. Confirm
+   the camera stops at voice/app-session end and after five minutes. Check the
+   shared three-second limit, daily cap, usage count, estimated DKK and absence of
+   frame/message content in logs, transcripts, task events and history.
 
-Cloud agents cannot access the Azure tenant or verify billed usage. The screen
-bridge's fake-model tests prove the offline contract only; the live model,
-managed-identity exchange, SQL migration and browser screen capture remain
-unverified until this coordinator check.
+P7-08 adds no backend endpoint or migration: browser webcam frames use authenticated
+`POST /screen/frames` and the existing `screen_frames` usage reservation, model
+and token/cost accounting. Camera permission is requested only from the signed-in
+top-bar action; camera frames are captured only on demand and the track is stopped
+on voice end, sign-out/unmount, or after five minutes. Fake stream/model tests cover
+the offline path. Cloud agents cannot access the Azure tenant or verify billed
+usage; live camera hardware, model image support, managed-identity exchange, SQL
+usage and billed cost remain unverified.
 
 ## Release procedure
 

@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 4 October 2026 for P7-03 and P7-09. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, and headless Outlook tools. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 4 October 2026 for P7-03, P7-08 and P7-09. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, and headless Outlook tools. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -98,7 +98,7 @@ flowchart LR
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
-P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. P7-05 adds `screen_frames` to the Jarvis-model usage metrics in migration `0015_screen_frame_usage.sql`; the matching down migration removes those rows before restoring the prior constraint. Realtime voice tool calls are not stored in `tool_calls`.
+P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. P7-05 adds `screen_frames` to the Jarvis-model usage metrics in migration `0015_screen_frame_usage.sql`; P7-08 camera requests reuse the same frame reservations, token rows and rate/day cap, with no new migration or usage metric. The matching down migration removes those rows before restoring the prior constraint. Realtime voice tool calls are not stored in `tool_calls`.
 
 P7-09 adds no Outlook tables or migration. Pending calendar/mail writes are held only in the single backend process for up to ten minutes and are discarded on expiry or restart; a later verified Dan message must match the exact confirmation phrase before the backend executes the write. Outlook tool arguments and results are redacted from persisted tool-call records. Mail bodies are passed to the model only for the current bounded search result and are not recorded as tool-call data.
 

@@ -112,7 +112,7 @@ Status as of 4 October 2026.
 | Screen sharing | Share a screen or window; request an in-memory vision description in chat or voice | Both | Main page | Built (live acceptance pending) | P7-05 |
 | Local PC bridge | Jarvis opens apps, URLs and allowed commands on Dan's PC | Voice/chat | PC companion | Planned (needs decision) | P7-06 |
 | Computer use | Jarvis clicks and types on Dan's PC while he talks | Voice/chat | PC companion | Planned (needs decision) | P7-07 |
-| Camera | Jarvis sees through the webcam on request | Both | Main page | Planned | P7-08 |
+| Camera | Turn on the webcam from the shared shell and ask Jarvis by chat or voice to inspect a single frame; camera state times out and stops with the session | Both | Shared top bar, main conversation | Built offline; live camera/model check pending | P7-08 |
 | Calendar and mail | Agenda, free slots, create/move meetings, search and summarise mail, draft replies and send after exact confirmation | Voice/chat | Backend tools; no new page | Built offline; Graph/RBAC setup and live acceptance pending | P7-09 |
 | Second brain | Search Dan's configured OneDrive notes folder and quote snippets with links | Voice/chat | — | Implemented offline; Graph setup and live search pending | P7-10 |
 
@@ -121,7 +121,7 @@ Status as of 4 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Complete Jarvis front end | One designed UI for all features above | Screen | All pages | Planned | P8-01, P8-04–P8-13 |
-| Shared app shell and area navigation | Navigate areas from the rail/sidebar; open Settings from the top-right; see Screen sharing and Camera controls disabled until their capabilities are built | Screen | All pages | Built | P8-04 |
+| Shared app shell and area navigation | Navigate areas from the rail/sidebar; open Settings from the top-right; toggle the camera with an accessible on/off state | Screen | All pages | Built | P8-04, P7-08 |
 | Conversation opening and voice entry | See the conversation on arrival, type from the bottom-centred composer, and explicitly start voice from the small orb | Both | Main page | Planned | P8-05 |
 | Dynamic workspace views | View accessible information in temporary, question-relevant windows; ask Jarvis or move/resize/reorder views | Screen | Main workspace | Planned | P8-06 |
 | Window tabs and restore | Minimise a view without closing or saving it, then restore it from its tab or by asking Jarvis | Both | Main/voice workspace | Planned | P8-07 |
