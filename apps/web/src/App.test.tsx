@@ -83,7 +83,7 @@ describe('Jarvis routes', () => {
     render(<MemoryRouter><App config={config} /></MemoryRouter>);
 
     expect(await screen.findByRole('heading', { name: 'Welcome, Dan Aakesen' })).not.toBeNull();
-    expect(await screen.findByRole('heading', { name: 'Conversation history' })).not.toBeNull();
+    expect(await screen.findByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
     expect(restoreProfile).toHaveBeenCalledWith(expect.anything(), config);
   });
 
@@ -132,7 +132,7 @@ describe('App shell', () => {
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
   });
 
-  it('shows every main-page data area and explains each unavailable action', async () => {
+  it('enables chat and explains the other unavailable main-page actions', async () => {
     await renderSignedIn();
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Welcome, Dan Aakesen');
@@ -141,11 +141,12 @@ describe('App shell', () => {
     }
     expect(screen.getByText(/Activity isn't available yet/)).not.toBeNull();
 
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('radio', { name: 'Danish' })).toHaveProperty('checked', true);
+    expect(screen.getByRole('radio', { name: 'English' })).toHaveProperty('disabled', false);
+
     const explained = [
-      ['textbox', 'Message Jarvis', /Chat isn't connected yet/],
-      ['button', 'Send', /Chat isn't connected yet/],
-      ['radio', 'Danish', /Switching between Danish and English/],
-      ['radio', 'English', /Switching between Danish and English/],
       ['button', 'Start voice', /Voice isn't available yet/],
       ['button', 'Mute', /Voice isn't available yet/],
     ] as const;

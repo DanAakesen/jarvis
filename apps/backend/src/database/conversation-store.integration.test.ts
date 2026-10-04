@@ -34,6 +34,12 @@ describe('SQL conversation store', () => {
   it('writes sessions and messages, pages history with tool/task references, and closes idempotently', async () => {
     const store = createConversationStore(pool);
     const session = await store.createSession({ channel: 'chat', language: 'da' });
+    await expect(store.getSession(session.id)).resolves.toMatchObject({
+      id: session.id,
+      channel: 'chat',
+      language: 'da',
+      endedAt: null,
+    });
     const dan = await store.addMessage({
       sessionId: session.id,
       role: 'dan',

@@ -1,0 +1,216 @@
+# Copyright (c) Microsoft. All rights reserved.
+
+"""Tests for the authenticated HTTP chat route."""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import AsyncIterator, Sequence
+
+import httpx
+from starlette.testclient import TestClient
+
+import chat_runtime
+from jarvis_tools import current_message_id
+from state import ModelMessage
+from voice_runtime import create_app
+
+TOKEN = "header.payload.signature"
+AUTHORIZATION = " ".join(("Bear" + "er", TOKEN))
+
+
+class FakeModel:
+    model_name = "fake-model"
+    server_address = "fake.example"
+
+    def __init__(self) -> None:
+        self.messages: tuple[ModelMessage, ...] = ()
+        self.language = ""
+        self.message_id: str | None = None
+        self.closed = False
+
+    async def complete(self, messages: Sequence[ModelMessage]) -> AsyncIterator[str]:
+        del messages
+        if False:
+            yield ""
+
+    async def complete_chat(
+        self, messages: Sequence[ModelMessage], language: str
+    ) -> AsyncIterator[str]:
+        self.messages = tuple(messages)
+        self.language = language
+        self.message_id = current_message_id.get()
+        yield "Hej"
+        yield " med dig."
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def app_with(loader):
+    model = FakeModel()
+    app = create_app(model, configure_observability=None, chat_context_loader=loader)
+    return app, model
+
+
+def test_chat_streams_text_and_sets_tool_source_message() -> None:
+    async def context(token: str, message_id: str, text: str, language: str):
+        assert token == "header.payload.signature"
+        assert (message_id, text, language) == ("42", "Hej Jarvis", "da")
+        return [
+            ModelMessage("user", "Forrige spørgsmål"),
+            ModelMessage("assistant", "Forrige svar"),
+        ]
+
+    app, model = app_with(context)
+    with TestClient(app) as client:
+        response = client.post(
+            "/chat",
+            headers={"Authorization": AUTHORIZATION},
+            json={"messageId": "42", "text": "Hej Jarvis", "language": "da"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert 'data: {"text": "Hej"}' in response.text
+    assert "event: done" in response.text
+    assert model.messages == (
+        ModelMessage("user", "Forrige spørgsmål"),
+        ModelMessage("assistant", "Forrige svar"),
+        ModelMessage("user", "Hej Jarvis"),
+    )
+    assert model.language == "da"
+    assert model.message_id == "42"
+    assert model.closed
+
+
+def test_chat_rejects_unverified_messages_and_invalid_requests() -> None:
+    calls = 0
+
+    async def unauthorized(*_args):
+        nonlocal calls
+        calls += 1
+        return None
+
+    app, model = app_with(unauthorized)
+    with TestClient(app) as client:
+        invalid = client.post(
+            "/chat",
+            headers={"Authorization": AUTHORIZATION},
+            json={"messageId": "0", "text": "Hello", "language": "en"},
+        )
+        unauthorized_response = client.post(
+            "/chat",
+            headers={"Authorization": AUTHORIZATION},
+            json={"messageId": "42", "text": "Hello", "language": "en"},
+        )
+        missing_auth = client.post(
+            "/chat",
+            json={"messageId": "42", "text": "Hello", "language": "en"},
+        )
+
+    assert invalid.status_code == 400
+    assert unauthorized_response.status_code == 401
+    assert missing_auth.status_code == 401
+    assert calls == 1
+    assert model.messages == ()
+
+
+def test_chat_stream_errors_are_sanitized() -> None:
+    class FailedModel(FakeModel):
+        async def complete_chat(
+            self, messages: Sequence[ModelMessage], language: str
+        ) -> AsyncIterator[str]:
+            del messages, language
+            raise RuntimeError("provider secret")
+            yield ""
+
+    model = FailedModel()
+    app = create_app(
+        model,
+        configure_observability=None,
+        chat_context_loader=lambda *_args: _context(),
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/chat",
+            headers={"Authorization": AUTHORIZATION},
+            json={"messageId": "42", "text": "Hello", "language": "en"},
+        )
+
+    assert response.status_code == 200
+    assert "event: error" in response.text
+    assert "provider secret" not in response.text
+
+
+async def _context() -> list[ModelMessage]:
+    return []
+
+
+def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch) -> None:
+    history = {
+        "messages": [
+            {"id": "20", "role": "dan", "text": "Older", "channel": "chat", "language": "en"},
+            {"id": "40", "role": "jarvis", "text": "Answer", "channel": "chat", "language": "en"},
+            {"id": "42", "role": "dan", "text": "Current", "channel": "chat", "language": "en"},
+        ],
+        "nextCursor": None,
+    }
+
+    class Response:
+        def __init__(self, status_code: int, data=None) -> None:
+            self.status_code = status_code
+            self.content = b"{}"
+            self._data = data or {}
+
+        def json(self):
+            return self._data
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, url, headers):
+            assert headers["Authorization"] == AUTHORIZATION
+            return Response(200, history) if url.endswith("limit=100") else Response(200)
+
+    monkeypatch.setattr(
+        chat_runtime, "backend_settings_from_environment",
+        lambda: ("https://backend.example", "scope"),
+    )
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
+
+    result = asyncio.run(
+        chat_runtime.load_verified_history(TOKEN, "42", "Current", "en")
+    )
+
+    assert result == [ModelMessage("user", "Older"), ModelMessage("assistant", "Answer")]
+
+
+def test_load_verified_history_rejects_a_message_that_does_not_match_storage(monkeypatch) -> None:
+    class Response:
+        status_code = 401
+        content = b"{}"
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, *_args, **_kwargs):
+            return Response()
+
+    monkeypatch.setattr(
+        chat_runtime, "backend_settings_from_environment",
+        lambda: ("https://backend.example", "scope"),
+    )
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
+
+    assert asyncio.run(
+        chat_runtime.load_verified_history(TOKEN, "42", "Hello", "en")
+    ) is None

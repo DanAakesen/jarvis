@@ -108,7 +108,18 @@ Azure SQL behavior remains unverified.
 
 After sign-in, the main page shows the persisted conversation in chronological
 order across chat and voice sessions. Each message has its speaker and time;
-tool calls show the tool and outcome, with a task reference when available.
+tool calls show the tool and outcome, with a task link when available.
 History loads in bounded pages, with older entries requested explicitly. Loading,
 empty, and retryable failure states remain within the conversation panel. This is
 an interim implementation, not a selected visual direction.
+
+## Chat (P4-06)
+
+The conversation panel keeps one message list, a Danish/English selector, and a
+labelled text composer. Sending saves Dan's message first, then streams Jarvis's
+reply in place. Pending state keeps the Send control disabled; failures remain
+beside the composer, preserve partial text as interrupted, and warn that a task
+action may have completed. A delivered reply is saved and history refreshes so
+tool outcomes and valid task IDs appear as labelled chips and links. The list and
+composer stay in the existing single-column conversation panel at mobile widths;
+the selected visual direction remains open. Live agent access awaits P4-08.

@@ -213,6 +213,7 @@ Verified in Codex cloud for P0-02:
 | Both workspace lint checks | `npm run lint` in the repository root (P0-03 adds backend lint) |
 | Both workspace tests (single run) | `npm test` in the repository root (P0-03 adds backend tests) |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
+| Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |
 
@@ -280,6 +281,14 @@ Voice Live WebSocket endpoint without credentials in its URL. The backend pins
 `DefaultAzureCredential`, and owns session settings and tool execution. P0-16
 must configure this endpoint and provider identity before live use. Local voice
 tests use a mock WebSocket and do not verify Azure access or browser audio.
+
+The optional `JARVIS_CHAT_AGENT_URL` is the full HTTPS URL of the hosted agent's
+`/chat` route (no credentials, query, or fragment). Until P4-08 configures it,
+chat turns return a visible 503 rather than a placeholder reply. The backend
+forwards Dan's delegated token only to this server-side endpoint; the agent
+validates it through `/me` and verifies the source message through
+`/conversation/history`. Never expose the authorization header to the browser
+or log it.
 
 Backend authentication defaults to the nonsecret identities in
 `infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and

@@ -80,6 +80,11 @@ P5-03 does not create `jarvis_sessions`, `messages`, or `tool_calls`; the realti
 
 ## 1 · Jarvis core
 
+P4-06 uses the existing `jarvis_sessions`, `messages`, and `tool_calls` tables:
+each chat sitting is a chat session, the user message is the tool-call source,
+and the completed assistant reply is another message. Task links come from the
+stored `tool_calls.task_id`; no columns or migrations are added.
+
 ```mermaid
 erDiagram
     jarvis_sessions ||--o{ messages : contains
@@ -128,10 +133,10 @@ erDiagram
 ```
 
 - **One continuous conversation.** Jarvis has a single thread; each chat or voice sitting is a `jarvis_session` within it. Over time the thread needs compaction and memory (Decision 6, deferred); `messages` keeps the full record either way.
-- P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language and tool name, outcome, and task ID, not tool arguments or results. The current main page reads history; chat/voice clients will call the session/message write endpoints in P4-06/P5-03/P5-04. No schema migration was needed.
+- P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language and tool name, outcome, and task ID, not tool arguments or results. The main page reads history; P4-06 sends chat turns through the session turn endpoint, while voice clients use the session/message write endpoints in P5-03/P5-04. No schema migration was needed.
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
 - P4-04's agent-only turn context reads up to 20 running tasks and their three latest `task_events` from the existing tables. It selects task status/activity and event type, summary, source, and time; it excludes task requests and event payloads, and clips summaries to 400 characters. No schema or migration change is needed.
-- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; any other failure is stored as a generic error. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. The hosted Jarvis agent (P4-01) sends the stored message ID of the turn that triggered the call; P4-03 stores messages, but no caller passes that ID to the agent yet, so the agent makes no tool call.
+- The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; any other failure is stored as a generic error. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. P4-06 passes the stored source-message ID to the hosted Jarvis agent, which sets it in the per-turn context used by tool calls. The agent's chat route loads the verified history through `chat_context_loader`; P4-04's running-task context is fetched by the model client on every turn.
 - Session, message, history, task-origin, and tool-call behavior is covered by offline and disposable SQL Server tests; live Azure SQL writes have not been verified.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
 - P1-11 stores global defaults in the existing key/value table; missing keys use

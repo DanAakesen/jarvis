@@ -42,6 +42,7 @@ export interface ConversationStore {
     readonly channel: ConversationChannel;
     readonly language: ConversationLanguage;
   }): Promise<ConversationSession>;
+  getSession(sessionId: string): Promise<ConversationSession | null>;
   endSession(sessionId: string): Promise<boolean>;
   addMessage(input: {
     readonly sessionId: string;

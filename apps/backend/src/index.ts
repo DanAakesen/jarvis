@@ -23,6 +23,7 @@ import {
 } from './voice/relay.js';
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
+import { createHttpConversationAgent } from './core/chat-agent.js';
 
 try {
   const config = loadConfig();
@@ -74,6 +75,7 @@ try {
       taskStore: createTaskStore(database.pool, eventHub),
     } : {}),
     eventHub,
+    ...(config.chatAgentUrl ? { conversationAgent: createHttpConversationAgent(config.chatAgentUrl) } : {}),
   });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');

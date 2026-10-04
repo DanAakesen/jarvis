@@ -29,7 +29,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 
 | Area | Requirement |
 | --- | --- |
-| **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice). |
+| **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. |
 | **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
 | **Updates** | Events update state and progress live, without manual refresh. |
 | **Assignment** | One active coding agent per task. |
@@ -127,7 +127,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 | Data points | Actions |
 | --- | --- |
-| Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
+| Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, streamed replies, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
 | Voice state: listening, thinking, speaking; what Jarvis heard; latency | Interrupt by speaking; mute |
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready or Running |

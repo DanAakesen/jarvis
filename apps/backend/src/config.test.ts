@@ -10,7 +10,19 @@ describe('backend configuration', () => {
     const connectionString = 'InstrumentationKey=00000000-0000-0000-0000-000000000001;IngestionEndpoint=https://swedencentral-0.in.applicationinsights.azure.com/';
     expect(loadConfig({ NODE_ENV: 'production', PORT: '4000', STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net', APPLICATIONINSIGHTS_CONNECTION_STRING: connectionString, LOG_LEVEL: 'debug' })).toEqual({
       auth: loadAuthConfig({}), port: 4000, logLevel: 'debug', staticWebAppOrigin: 'https://fixture.azurestaticapps.net', applicationInsightsConnectionString: connectionString,
-    });
+  });
+  });
+  it('validates the optional hosted chat-agent URL', () => {
+    expect(loadConfig({ JARVIS_CHAT_AGENT_URL: 'https://agent.example/chat/' }).chatAgentUrl)
+      .toBe('https://agent.example/chat');
+    for (const JARVIS_CHAT_AGENT_URL of [
+      'http://agent.example/chat',
+      '******agent.example/chat',
+      'https://agent.example/chat?token=secret',
+      'https://agent.example/chat#fragment',
+    ]) {
+      expect(() => loadConfig({ JARVIS_CHAT_AGENT_URL })).toThrow('JARVIS_CHAT_AGENT_URL');
+    }
   });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {
     expect(() => loadConfig({ PORT })).toThrow('PORT');
