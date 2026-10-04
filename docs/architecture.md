@@ -28,7 +28,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
 | Voice | Danish: Voice Live voice bridge, MAI Transcribe, Harper. English: `gpt-realtime-2.1` speech to speech, Ryan HD. Browser traffic uses an authenticated backend WebSocket relay; provider credentials stay server-side. | Relay design selected; local mock spike verified, Azure interoperability unverified |
-| Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks and P3-04 maps them to group 5 |
+| Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, and P3-07 creates one default-branch release per project/SHA with runs and deployments linked by SHA. |
 | Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest, future Playwright board checks and SQL container tests | Web/backend implemented in P0-02/P0-03; remaining checks in their tasks |
 
 ## Web skeleton and configuration
@@ -133,7 +133,7 @@ secret `github-app-webhook-secret`, and records the `X-GitHub-Delivery` ID and
 event in `dbo.webhook_deliveries`. An atomic, serialized insert returns 202 for
 new and duplicate deliveries. The five subscribed event types are marked `ok`;
 valid unhandled events such as GitHub's setup `ping` are marked `ignored`.
-Only delivery metadata is stored; event-to-domain mapping belongs to P3-04.
+Only delivery metadata is stored; P3-04 and P3-07 map allowlisted event fields to the project records.
 `KEY_VAULT_URI` is supplied by Bicep, and the backend managed identity reads and
 caches the secret after its first successful Key Vault lookup. Missing Key Vault
 configuration or secret fails webhook requests with 503, not an unsigned fallback.
@@ -737,7 +737,7 @@ read the task branch and find a pull request with that branch as its head. A
 provider `completed` status cannot transition a task to Done if either GitHub
 record is missing; failed or malformed API responses fail closed.
 
-App-token mode is explicitly opt-in through the Runner deploy Actions variable `JARVIS_GITHUB_APP_TOKEN_ENABLED` (default `false`); enabling it also requires `GITHUB_APP_ID`. Keep the legacy `jarvis-github` secret and runner read grant until the live post-merge push check against `DanAakesen/jarvis-test-target` succeeds. The same backend identity reads the separate `github-app-webhook-secret` for P3-03 webhook signature verification; Bicep supplies the vault URI. After raw-body signature verification, P3-04 maps only allowlisted fields from `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. A serializable SQL transaction commits the delivery ID and mapped group 5 rows together, so duplicate deliveries cannot replay writes; no payload or secret is stored or logged. `push` to a registered project's default branch creates the release row, and the `Release` workflow's run number fills its version. The App does not subscribe to GitHub's `release` event because releases represent merges, not tags. The App ID is configuration, not a secret.
+App-token mode is explicitly opt-in through the Runner deploy Actions variable `JARVIS_GITHUB_APP_TOKEN_ENABLED` (default `false`); enabling it also requires `GITHUB_APP_ID`. Keep the legacy `jarvis-github` secret and runner read grant until the live post-merge push check against `DanAakesen/jarvis-test-target` succeeds. The same backend identity reads the separate `github-app-webhook-secret` for P3-03 webhook signature verification; Bicep supplies the vault URI. After raw-body signature verification, P3-04/P3-07 map only allowlisted fields from `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. A serializable SQL transaction commits the delivery ID and mapped group 5 rows together, so duplicate deliveries cannot replay writes; no payload or secret is stored or logged. A push to a registered project's default branch creates one release row per SHA; if the matching `Release` workflow run arrives first, it creates that same row and supplies the run number. Later push events reconcile matching workflow runs, and both workflow runs and deployments link to releases by project/SHA. The App does not subscribe to GitHub's `release` event because releases represent merges, not tags. The App ID is configuration, not a secret.
 
 **Codex login rules** (Pro login only; no API key):
 
