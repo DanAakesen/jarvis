@@ -24,7 +24,8 @@ type Gesture = {
   geometry: Geometry;
 };
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const clamp = (value: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, value)) * 1000) / 1000;
+const percent = (value: number) => `${Number((value * 100).toFixed(2))}%`;
 
 function defaultGeometry(index: number): Geometry {
   return {
@@ -75,16 +76,24 @@ export function Workspace({ views }: { views: readonly WorkspaceView[] }) {
     return geometry[id] ?? defaultGeometry(index);
   }
 
-  function reorder(id: string, offset: number, label: string) {
+  function reorder(id: string, offset: number, label: string): boolean {
     const ids = orderedViews.map(({ id: viewId }) => viewId);
     const from = ids.indexOf(id);
     const to = clamp(from + offset, 0, ids.length - 1);
-    if (from === to) return;
+    if (from === to) return false;
     const [moved] = ids.splice(from, 1);
-    if (!moved) return;
+    if (!moved) return false;
     ids.splice(to, 0, moved);
     setOrder(ids);
     setAnnouncement(`${views.find((view) => view.id === id)?.title} ${label}.`);
+    return true;
+  }
+
+  function raiseView(event: { target: EventTarget }, id: string) {
+    if (arrangement !== 'layered' || narrow) return;
+    if (event.target instanceof Element && event.target.closest('.workspace-window-order button:not(.workspace-move-handle)')) return;
+    const index = orderedViews.findIndex((view) => view.id === id);
+    if (index >= 0) reorder(id, orderedViews.length - index - 1, 'brought forward');
   }
 
   function updateGeometry(id: string, update: (current: Geometry) => Geometry, index: number) {
@@ -150,7 +159,7 @@ export function Workspace({ views }: { views: readonly WorkspaceView[] }) {
         if (gesture.kind === 'move') return current;
         return {
           ...current,
-          columns: narrow ? gesture.geometry.columns : clamp(gesture.geometry.columns + Math.round(dx * 2), 1, 2),
+          columns: narrow ? gesture.geometry.columns : clamp(gesture.geometry.columns + Math.round(dx * 4), 1, 2),
           rows: clamp(gesture.geometry.rows + Math.round(dy * 2), 1, 2),
         };
       }
@@ -175,6 +184,13 @@ export function Workspace({ views }: { views: readonly WorkspaceView[] }) {
     const gesture = gestures.current.get(event.pointerId);
     if (!gesture) return;
     gestures.current.delete(event.pointerId);
+    if ((arrangement === 'tiled' || narrow) && gesture.kind === 'move') {
+      const dx = event.clientX - gesture.x;
+      const dy = event.clientY - gesture.y;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > 24) {
+        if (reorder(gesture.id, dx < 0 || (dx === 0 && dy < 0) ? -1 : 1, 'reordered')) return;
+      }
+    }
     setAnnouncement(`${views.find((view) => view.id === gesture.id)?.title} ${gesture.kind === 'move' ? 'moved' : 'resized'}.`);
   }
 
@@ -286,10 +302,10 @@ export function Workspace({ views }: { views: readonly WorkspaceView[] }) {
           const titleId = `${workspaceId}-view-${index}`;
           const currentGeometry = geometryFor(view.id, index);
           const style = {
-            '--workspace-x': `${currentGeometry.x * 100}%`,
-            '--workspace-y': `${currentGeometry.y * 100}%`,
-            '--workspace-width': `${currentGeometry.width * 100}%`,
-            '--workspace-height': `${currentGeometry.height * 100}%`,
+            '--workspace-x': percent(currentGeometry.x),
+            '--workspace-y': percent(currentGeometry.y),
+            '--workspace-width': percent(currentGeometry.width),
+            '--workspace-height': percent(currentGeometry.height),
             '--workspace-columns': currentGeometry.columns,
             '--workspace-rows': currentGeometry.rows,
             '--workspace-depth': index + 1,
@@ -307,6 +323,8 @@ export function Workspace({ views }: { views: readonly WorkspaceView[] }) {
               style={style}
               role="group"
               aria-labelledby={titleId}
+              onFocusCapture={(event) => raiseView(event, view.id)}
+              onPointerDownCapture={(event) => raiseView(event, view.id)}
             >
               <header className="workspace-window-heading">
                 <h3 id={titleId}>{view.title}</h3>

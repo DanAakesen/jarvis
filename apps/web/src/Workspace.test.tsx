@@ -32,10 +32,10 @@ describe('Workspace', () => {
     move.focus();
     await user.keyboard('{ArrowRight}');
     expect(screen.getByText('Research summary moved.').getAttribute('role')).toBe('status');
-    expect(within(canvas).getByRole('group', { name: 'Research summary' }).getAttribute('style')).toContain('--workspace-x: 12%');
+    expect(within(canvas).getByRole('group', { name: 'Research summary' }).getAttribute('style')).toContain('--workspace-x: 18%');
 
-    await user.click(screen.getByRole('button', { name: 'Bring forward Research summary' }));
-    expect(within(canvas).getAllByRole('group')[1]?.getAttribute('aria-labelledby')).toContain('view-1');
+    await user.click(screen.getByRole('button', { name: 'Send backward Research summary' }));
+    expect(within(canvas).getAllByRole('group')[0]?.getAttribute('aria-labelledby')).toContain('view-0');
   });
 
   it('reorders tiled views and resizes with the keyboard', async () => {
