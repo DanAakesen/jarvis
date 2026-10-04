@@ -14,6 +14,7 @@ export interface BackendConfig {
     admin: string;
     runtime: string;
   };
+  foundryRunnerAgentName?: string;
   chatAgentUrl?: string;
   foundryProjectEndpoint?: string;
   auth: AuthConfig;
@@ -100,6 +101,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
       throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT must be a secure Azure AI project URL');
     }
   }
+  const foundryRunnerAgentName = env.FOUNDRY_RUNNER_AGENT_NAME;
+  if (foundryRunnerAgentName !== undefined && !/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName)) {
+    throw new ConfigurationError('FOUNDRY_RUNNER_AGENT_NAME must be a valid agent name');
+  }
 
   return {
     auth: loadAuthConfig(env),
@@ -111,6 +116,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryAdminEndpoint === undefined || foundryRuntimeEndpoint === undefined ? {} : {
       foundryEndpoints: { admin: foundryAdminEndpoint, runtime: foundryRuntimeEndpoint },
     }),
+    ...(foundryRunnerAgentName === undefined ? {} : { foundryRunnerAgentName }),
     ...(chatAgentUrl === undefined ? {} : { chatAgentUrl }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
   };
