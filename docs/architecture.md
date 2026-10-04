@@ -766,6 +766,28 @@ GitHub host and path before returning credentials. The runner retries a 404
 session lookup with bounded delays to cover the interval before the backend
 persists the newly started Foundry session.
 
+P3-13 adds a backend-only `GitHubRepositoryCatalog` alongside the task token
+issuer. It finds the active App installation matching `new_projects.owner`,
+requests an installation token limited to `contents: read`, and reads every
+page of `/installation/repositories` (100 per page, at most 10,000 entries).
+Per-owner results are cached in memory for five minutes; authenticated
+`GET /factory/repositories?refresh=true` bypasses that cache on demand and
+returns only repository metadata, never a token. The Projects page receives
+`fullName`, name, default branch, last push, and language with
+`Cache-Control: no-store`.
+
+`POST /factory/projects/manage` and the backend `manage_repository` tool share
+the same registration operation. It confirms the canonical repository is in
+the configured installation before reading its default-branch Git tree and
+detecting tech from project marker files, falling back to the normalized
+primary-language identifier or `unknown`. It creates a row in the existing
+`projects` table using the repository's actual default branch plus configured
+New projects agent, policy, and task limit; no schema change is needed. The
+user route retains Dan-only authentication, the tool uses the existing
+Jarvis-agent role, and neither route exposes the private key or installation
+token. Contracts are tested offline; live GitHub, Key Vault, Entra, and Azure
+SQL behavior remain unverified.
+
 App-token mode is explicitly opt-in through the Runner deploy Actions variable `JARVIS_GITHUB_APP_TOKEN_ENABLED` (default `false`); enabling it also requires `GITHUB_APP_ID`. Keep the legacy `jarvis-github` secret and runner read grant until the live post-merge push check against `DanAakesen/jarvis-test-target` succeeds. The same backend identity reads the separate `github-app-webhook-secret` for P3-03 webhook signature verification; Bicep supplies the vault URI. After raw-body signature verification, P3-04 maps only allowlisted fields from `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. A serializable SQL transaction commits the delivery ID and mapped group 5 rows together, so duplicate deliveries cannot replay writes; no payload or secret is stored or logged. P3-05 reacts to a failed `pull_request` workflow after persistence, uses a repository-scoped installation token with only Actions read access to retrieve bounded job logs, and writes them to the existing private `logs` container. A bounded, sanitized excerpt and the Blob path go through the P2-07 task controller; the token remains backend-only. `global.max_check_attempts` defaults to 3 (validated range 0–10); on exhaustion or an unavailable log/steer, the task moves to NeedsAttention. SQL reuses `workflow_runs.log_artifact` and task-event markers; no migration is required. `push` to a registered project's default branch creates the release row, and the `Release` workflow's run number fills its version. The App does not subscribe to GitHub's `release` event because releases represent merges, not tags. The App ID is configuration, not a secret.
 For task completion, the backend uses the same repository-scoped App issuer to
 read the task branch and find a pull request with that branch as its head. A
@@ -779,6 +801,7 @@ run; workflow runs and deployments link to releases by project and SHA.
 When a task turn completes, P3-14 uses the repository-scoped GitHub App token to verify the task branch, reuse an open PR for the configured base if present, or compare the branch with the default branch and create a PR only when it is ahead. Branch/PR reads happen outside the task policy lock; the backend rechecks that the task is Running under the lock before the bounded PR create, reconciles an ambiguous create response with a matching-PR lookup, and records `pull_request_opened` before releasing it. This serializes the side effect with cancellation without holding the lock across the GitHub preflight. The new PR uses the task title and links to its Jarvis task through the configured Static Web App origin. The backend ends the completed sandbox without marking the task Done; GitHub's signed PR/check webhooks continue the P3-06 policy flow. A missing branch, no new commits, or GitHub API refusal records a clear task event and moves the task to Needs attention. Duplicate completions reuse the PR, including a second lookup after GitHub reports a duplicate create. The GitHub App token stays backend-side.
 
 P3-06 joins the task-linked PR record to its project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. `deliver_pr` marks a verified green, non-draft PR Done without merging. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then requests a squash merge with the expected head SHA. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. GitHub rate limits remain retryable webhook failures. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, and refusal reasons; live App installation and test-repository acceptance remain unverified.
+
 
 **Codex login rules** (Pro login only; no API key):
 

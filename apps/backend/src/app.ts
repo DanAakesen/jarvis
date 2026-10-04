@@ -14,7 +14,7 @@ import type { ConversationStore } from './core/conversation-store.js';
 import type { ConversationAgent } from './core/chat-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskController, TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
-import type { GitHubAppTokenIssuer } from './github-app.js';
+import type { GitHubAppTokenIssuer, GitHubRepositoryCatalog } from './github-app.js';
 import type { ProjectStore } from './factory/projects.js';
 import type { RepositoryCreator } from './factory/new-project.js';
 import { registerModules, type BackendModule } from './modules.js';
@@ -35,6 +35,7 @@ export interface BuildAppOptions {
   readonly toolCallStore?: ToolCallStore;
   readonly taskStore?: TaskStore;
   readonly githubAppTokenIssuer?: GitHubAppTokenIssuer;
+  readonly githubRepositoryCatalog?: GitHubRepositoryCatalog;
   readonly taskController?: TaskController;
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
@@ -56,6 +57,7 @@ declare module 'fastify' {
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
     githubAppTokenIssuer: GitHubAppTokenIssuer | null;
+    githubRepositoryCatalog: GitHubRepositoryCatalog | null;
     taskController: TaskController | null;
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
@@ -119,6 +121,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);
   app.decorate('githubAppTokenIssuer', options.githubAppTokenIssuer ?? null);
+  app.decorate('githubRepositoryCatalog', options.githubRepositoryCatalog ?? null);
   app.decorate('taskController', options.taskController ?? null);
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
