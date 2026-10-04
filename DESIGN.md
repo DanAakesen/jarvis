@@ -42,6 +42,7 @@ event timeline.
 ## Interactions to design
 
 - **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.
+- **Teams confirmation cards (P7-03):** one Adaptive Card headline names the action, body text gives its bounded summary, and ordinary supporting text states the five-minute expiry. Approve and Reject are explicit, distinct buttons; optional speech is a separate, non-autostarting audio attachment. This interaction lives in Teams and does not add browser UI.
 - **Language toggle:** Danish ↔ English, visible wherever voice is active.
 - **Task controls:** steer, pause, resume, cancel, recover after a crash, and continue after a completed turn's session expires. Show a clear pending state (for example, "Continuing…" while a fresh session starts).
 - **Sleep switch:** the main page shows configured awake/asleep state (minimum replicas 1/0), pending and failure feedback, and explains a refusal while any task is Ready or Running. Settings links to the main-page control.
@@ -120,7 +121,7 @@ sign-in; the header wraps on narrow screens.
 ## Settings (P1-11)
 
 Keep the Settings route within the shell's neutral foundation. Use one page
-headline and distinct form sections for Jarvis, Voice, Coding agents, Global,
+headline and distinct form sections for Appearance, Jarvis, Voice, Coding agents, Global,
 New projects, and Credentials. New-project controls use the documented defaults
 and the same labelled field grid as the other sections. Two columns make related controls easy to scan on wide screens;
 the form stacks on narrow screens. Save feedback stays beside the save action,
@@ -131,6 +132,22 @@ new visual direction or palette is introduced. Checked in Chromium at
 390 and 1280 px with mock auth/settings: no horizontal overflow, controls at
 least 44 px high, and save/disabled states visible. Live backend behavior remains
 unverified.
+
+P8-13 keeps the existing neutral visual foundation and adds light/dark palettes
+through semantic CSS variables in `apps/web/src/styles.css`. The Appearance
+section saves the selected mode immediately and applies only the accepted
+settings response across the shared shell. Both modes retain visible focus and
+high-contrast text, controls, feedback and surfaces. Custom and Jarvis-directed
+variable editing stays disabled with an explanation until P8-17 implements the
+validated settings/tool path using the token allowlist recorded in P8-18.
+Checked in Chromium at 1440px and 390px with scratch auth/settings mocks: a
+rejected update kept the current mode, retry and reload restored dark, and
+there was no horizontal overflow. Muted-text contrast against the page/surface
+was at least 6.25:1 in light mode and 8.99:1 in dark mode. Screenshots:
+[desktop light](docs/ui/screenshots/p8-13-theme-settings-desktop-light.png),
+[desktop dark](docs/ui/screenshots/p8-13-theme-settings-desktop-dark.png), and
+[phone dark](docs/ui/screenshots/p8-13-theme-settings-phone-dark.png). Live
+Entra and API/SQL behavior remain unverified.
 
 ## Projects (P1-10)
 
@@ -254,20 +271,50 @@ microphone and speaker behavior remains unverified. Stop shows "Saving voice
 session…" until the backend has recorded usage, then refreshes conversation
 history.
 
-## Next-generation shared shell (design agreed, not implemented)
+## Next-generation shared shell (structure agreed; P8-04 implemented)
 
 [ui.md](ui.md) records the confirmed structure, open questions, feature-placement
-proposals and eight static wireframes. Typing uses a thin left icon rail,
-expandable left navigation, thin top/bottom bars, a contextual right panel and
-a central tabbed workspace. Settings is top-right. Voice hides the shell and
-composer, using a full-page background and a state-driven orb: centred alone,
-left of content windows on desktop, bottom-docked behind one main phone view.
-Windows can tile, overlap, minimise into tabs and be restored by Dan or Jarvis.
+proposals and eight static wireframes. P8-04 routes the existing pages through a
+thin left icon rail, expandable area navigation, top and bottom bars, and a
+toggleable contextual panel. The top bar spans edge to edge above the shell;
+its height matches the area rail's width, and the rail begins beneath it.
+Settings stays at the top-right. Screen sharing and Camera are the only
+confirmed feature controls in the top bar; each is an icon-only, disabled
+control with an accessible explanation and tooltip until its P7 capability is
+built. The top bar remains one line at phone and desktop widths. Other suggested
+top-bar controls remain out of scope.
+
+The bottom bar carries the existing database-wake status when configured. The
+context panel has an honest empty state until P8-08 supplies contextual content.
+The existing neutral theme remains; the specific placement and responsive
+proportions above are confirmed while other shell styling and the contents of
+these bars and panels remain open.
+
+Voice hides the shell and composer, using a full-page background and a
+state-driven orb: centred alone, left of content windows on desktop,
+bottom-docked behind one main phone view. Windows can tile, overlap, minimise
+into tabs and be restored by Dan or Jarvis. Those behaviors belong to later P8
+tasks, not P8-04.
 
 Existing windows carry between modes by default. The optional minimise-on-voice
 setting defaults off; when enabled, voice begins with only the orb and windows
 remain docked on return to typing. Otherwise the earlier shell layout returns.
 Generated views are temporary; theme values persist. Small-orb input controls
 start voice explicitly. Glass/transparency and futuristic styling are exploratory;
-white wireframe windows are not a selected final treatment. Existing screen
-documentation below/above describes current implementation, not this future shell.
+white wireframe windows are not a selected final treatment.
+
+## Proposed surfaces for accepted capability additions
+
+Editable personality should live in **Settings → Jarvis → Personality**, reached
+through the agreed top-right Settings entry. Proposed fields are tone/response
+style and custom instructions, with Save and Reset to the current default and
+clear new-session application feedback. This placement is a recommendation, not
+a newly reviewed screen design. P8-19 owns the form; P7-16 owns its validated
+persistence and chat/voice application. Visual themes remain separate.
+
+Research and generated image/video results use the existing dynamic workspace,
+with source links or artifact references and honest progress/error states.
+Memory can be queried, corrected and forgotten through registered tools; a
+dedicated memory-management screen has not been selected. Reuse the agreed shell
+and view contracts rather than adding permanent rail/top-bar controls for each
+new capability.

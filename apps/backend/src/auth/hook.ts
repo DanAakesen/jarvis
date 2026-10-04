@@ -14,8 +14,19 @@ declare module 'fastify' {
     runnerPrincipal: RunnerPrincipal | null;
     pcBridgePrincipal: PcBridgePrincipal | null;
   }
+<<<<<<< HEAD
   // Service identities may call only the routes that explicitly opt in.
   interface FastifyContextConfig { jarvisAgent?: boolean; jarvisRunner?: boolean; jarvisPcBridge?: boolean; githubWebhook?: boolean }
+=======
+  // Routes the hosted Jarvis agent identity may call. Everything else is Dan-only.
+  interface FastifyContextConfig {
+    jarvisAgent?: boolean;
+    jarvisRunner?: boolean;
+    githubWebhook?: boolean;
+    teamsBot?: boolean;
+    teamsAudio?: boolean;
+  }
+>>>>>>> origin/main
 }
 
 const VOICE_PROTOCOL = 'jarvis.voice.v1';
@@ -45,6 +56,7 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
   app.addHook('onRequest', async (request, reply) => {
     if (request.routeOptions.url === '/health' && ['GET', 'HEAD'].includes(request.method)) return;
     if (request.routeOptions.config?.githubWebhook === true) return;
+    if (request.routeOptions.config?.teamsBot === true || request.routeOptions.config?.teamsAudio === true) return;
     // Only the CORS plugin's generated OPTIONS route may run without a token.
     // Explicit business OPTIONS endpoints still require authentication.
     const origin = request.headers.origin;
