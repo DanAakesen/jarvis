@@ -94,10 +94,20 @@ Renew only while no Codex task runs; the backend scheduler in #34 owns that
 coordination across sandboxes.
 
 The runner reads Key Vault secrets `jarvis-github`, `jarvis-copilot` and
-`codex-login`; each GitHub token's secret has the same name as the token in GitHub
-(L62). `jarvis-copilot` authenticates the CLI seat; `jarvis-github` is separate Git access. The GitHub App installation-token flow
-in #40 will replace the prototype's static Git-token path. This workflow never
-seeds or copies credentials; the workspace `GH_TOKEN` is not a runner input.
+`codex-login`; `jarvis-copilot` authenticates the CLI seat, while `jarvis-github`
+is the legacy Git credential path. P3-02 adds GitHub App installation tokens:
+the backend keeps the App private key and mints a one-hour token for the active
+task's repository only when the request's Foundry session matches that task. The
+Git credential helper requests a fresh token on each Git credential lookup. Set
+repository Actions variable
+`JARVIS_GITHUB_APP_TOKEN_ENABLED=true` only after deploying/configuring the backend;
+it defaults to `false`, preserving the legacy path. Actions variable
+`JARVIS_GITHUB_APP_ID` configures the backend's `GITHUB_APP_ID`; neither value is
+sent to the sandbox. Keep the legacy secret and runner
+read grant until the post-merge live push to `DanAakesen/jarvis-test-target`
+succeeds, then remove them and the fallback in a follow-up. The workflow never
+seeds or copies credentials; workspace `GH_TOKEN` comes from the runner's
+task-scoped credential response, not an external runner input.
 Dan's personal Codex login must never be used. See the
 [Codex login rules](../docs/architecture.md#sandbox-credentials).
 

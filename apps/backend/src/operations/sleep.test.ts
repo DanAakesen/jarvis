@@ -47,6 +47,7 @@ const taskStore: TaskStore = {
   create: vi.fn(async () => task),
   list: vi.fn(async () => []),
   get: vi.fn(async () => detail),
+  getActiveRepository: vi.fn(async () => null),
   getEventsAfter: vi.fn(async () => []),
   transition: vi.fn(async () => ({ kind: 'ok' as const, task })),
   withNoActiveTasks,

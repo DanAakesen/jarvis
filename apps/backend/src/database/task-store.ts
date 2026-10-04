@@ -492,6 +492,20 @@ export function createTaskStore(
       }
     },
 
+    async getActiveRepository(id: string, foundrySessionId: string): Promise<string | null> {
+      const result = await pool.request()
+        .input('taskId', sql.BigInt, BigInt(id))
+        .input('foundrySessionId', sql.NVarChar(255), foundrySessionId)
+        .query<{ repo: string }>(`SELECT p.repo
+          FROM dbo.tasks AS t
+          INNER JOIN dbo.projects AS p ON p.id = t.project_id
+          INNER JOIN dbo.sandbox_sessions AS s ON s.task_id = t.id
+          WHERE t.id = @taskId AND t.state IN (N'Running', N'PauseRequested')
+            AND s.foundry_session_id = @foundrySessionId AND s.status IN (N'Starting', N'Active', N'Idle')
+            AND s.ended_at IS NULL;`);
+      return result.recordset[0]?.repo ?? null;
+    },
+
     async getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]> {
       const result = await databaseReadRequest(pool)
         .input('taskId', sql.BigInt, BigInt(taskId))

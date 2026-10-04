@@ -30,6 +30,16 @@ def _disk_low_threshold_bytes(configured: str | None = None) -> int:
     return int(configured)
 
 
+def _github_app_tokens_enabled(app_id: str, configured: str | None = None) -> bool:
+    if configured is None:
+        configured = os.environ.get("JARVIS_GITHUB_APP_TOKEN_ENABLED", "false")
+    if configured not in {"true", "false"}:
+        raise ValueError("JARVIS_GITHUB_APP_TOKEN_ENABLED must be true or false")
+    if configured == "true" and not app_id:
+        raise ValueError("GITHUB_APP_ID is required when GitHub App tokens are enabled")
+    return configured == "true"
+
+
 def az(subscription: str, *arguments: str):
     result = subprocess.run(
         ["az", *arguments, "--subscription", subscription, "--only-show-errors", "--output", "json"],
@@ -48,6 +58,7 @@ def definition(
     backend_url: str,
     api_scope: str,
     disk_low_threshold_bytes: int = DEFAULT_DISK_LOW_THRESHOLD_BYTES,
+    github_app_tokens_enabled: bool = False,
 ) -> dict:
     if type(disk_low_threshold_bytes) is not int or disk_low_threshold_bytes < 1:
         raise ValueError("JARVIS_DISK_LOW_THRESHOLD_BYTES must be a positive integer")
@@ -62,6 +73,7 @@ def definition(
             "JARVIS_BACKEND_URL": backend_url,
             "JARVIS_API_SCOPE": api_scope,
             "JARVIS_DISK_LOW_THRESHOLD_BYTES": str(disk_low_threshold_bytes),
+            **({"JARVIS_GITHUB_APP_TOKEN_ENABLED": "true"} if github_app_tokens_enabled else {}),
         },
         "session_configuration": {"idle_timeout_seconds": 120},
     }
@@ -163,6 +175,7 @@ def deploy(
     backend_url: str,
     api_scope: str,
     disk_low_threshold_bytes: int = DEFAULT_DISK_LOW_THRESHOLD_BYTES,
+    github_app_tokens_enabled: bool = False,
 ) -> dict:
     admin = outputs["foundryAdminEndpoint"]["value"]
     runtime = outputs["foundryRuntimeEndpoint"]["value"]
@@ -179,6 +192,7 @@ def deploy(
                               {"definition": definition(
                                   image, tier, vault["properties"]["vaultUri"], backend_url, api_scope,
                                   disk_low_threshold_bytes,
+                                  github_app_tokens_enabled,
                               )})
     version_number = version.get("version")
     if version_number is None:
@@ -239,6 +253,10 @@ def main() -> None:
     bootstrap = json.loads(Path("infra/bootstrap.output.json").read_text())
     backend_url, api_scope = backend_settings(outputs, bootstrap)
     disk_low_threshold_bytes = _disk_low_threshold_bytes()
+    github_app_id = os.environ.get("GITHUB_APP_ID", "")
+    if github_app_id and not re.fullmatch(r"[1-9][0-9]{0,19}", github_app_id):
+        raise ValueError("GITHUB_APP_ID must be a positive decimal identifier")
+    github_app_tokens_enabled = _github_app_tokens_enabled(github_app_id)
     for key, suffix in (("foundryAdminEndpoint", ".services.ai.azure.com"),
                         ("foundryRuntimeEndpoint", ".cognitiveservices.azure.com")):
         endpoint = urlparse(outputs[key]["value"])
@@ -269,6 +287,7 @@ def main() -> None:
                 result = deploy(
                     foundry, args.subscription, outputs, image, f"jarvis-runner-{tech}-{tier}",
                     tier, backend_url, api_scope, disk_low_threshold_bytes,
+                    github_app_tokens_enabled,
                 )
                 results.append(result)
                 args.state.write_text(json.dumps(results, indent=2) + "\n")

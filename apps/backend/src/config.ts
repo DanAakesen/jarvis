@@ -9,6 +9,7 @@ export interface BackendConfig {
   staticWebAppOrigin?: string;
   logLevel: Level;
   applicationInsightsConnectionString?: string;
+  keyVaultUri?: string;
   voiceLiveEndpoint?: string;
   foundryEndpoints?: {
     admin: string;
@@ -17,6 +18,7 @@ export interface BackendConfig {
   foundryRunnerAgentName?: string;
   foundryChatAgentName?: string;
   foundryProjectEndpoint?: string;
+  githubAppId?: string;
   auth: AuthConfig;
 }
 
@@ -72,6 +74,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     if (!valid) throw new ConfigurationError('APPLICATIONINSIGHTS_CONNECTION_STRING is invalid');
   }
 
+  let keyVaultUri: string | undefined;
+  if (env.KEY_VAULT_URI !== undefined) {
+    try {
+      const url = new URL(env.KEY_VAULT_URI);
+      if (url.protocol !== 'https:' || !/^[a-z0-9][a-z0-9-]{1,22}[a-z0-9]\.vault\.azure\.net$/iu.test(url.hostname) ||
+          url.port || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+        throw new Error();
+      }
+      keyVaultUri = url.origin + '/';
+    } catch {
+      throw new ConfigurationError('KEY_VAULT_URI must be a secure Azure Key Vault URL');
+    }
+  }
+
   let voiceLiveEndpoint: string | undefined;
   if (env.VOICE_LIVE_ENDPOINT !== undefined) {
     try {
@@ -100,6 +116,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (foundryRunnerAgentName !== undefined && !/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName)) {
     throw new ConfigurationError('FOUNDRY_RUNNER_AGENT_NAME must be a valid agent name');
   }
+  const githubAppId = env.GITHUB_APP_ID;
+  if (githubAppId !== undefined && !/^[1-9][0-9]{0,19}$/u.test(githubAppId)) {
+    throw new ConfigurationError('GITHUB_APP_ID must be a positive decimal identifier');
+  }
+  if (githubAppId !== undefined && keyVaultUri === undefined) {
+    throw new ConfigurationError('KEY_VAULT_URI is required when GITHUB_APP_ID is configured');
+  }
 
   return {
     auth: loadAuthConfig(env),
@@ -107,6 +130,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     logLevel: logLevel as Level,
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),
     ...(connectionString === undefined ? {} : { applicationInsightsConnectionString: connectionString }),
+    ...(keyVaultUri === undefined ? {} : { keyVaultUri }),
     ...(voiceLiveEndpoint === undefined ? {} : { voiceLiveEndpoint }),
     ...(foundryAdminEndpoint === undefined || foundryRuntimeEndpoint === undefined ? {} : {
       foundryEndpoints: { admin: foundryAdminEndpoint, runtime: foundryRuntimeEndpoint },
@@ -114,6 +138,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryRunnerAgentName === undefined ? {} : { foundryRunnerAgentName }),
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
+    ...(githubAppId === undefined ? {} : { githubAppId }),
   };
 }
 

@@ -31,6 +31,8 @@ jobs:
       INFRA_DEPLOYMENT: ${{ vars.JARVIS_INFRA_DEPLOYMENT_NAME }}
       IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
       JARVIS_DISK_LOW_THRESHOLD_BYTES: ${{ vars.JARVIS_DISK_LOW_THRESHOLD_BYTES || '1073741824' }}
+      GITHUB_APP_ID: ${{ vars.JARVIS_GITHUB_APP_ID }}
+      JARVIS_GITHUB_APP_TOKEN_ENABLED: ${{ vars.JARVIS_GITHUB_APP_TOKEN_ENABLED || 'false' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
