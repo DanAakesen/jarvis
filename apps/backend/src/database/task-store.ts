@@ -704,6 +704,7 @@ export function createTaskStore(
               INNER JOIN dbo.sandbox_sessions AS session ON session.id = turn.sandbox_session_id
               WHERE session.task_id = @taskId AND turn.invocation_id = @invocationId
                 AND turn.status = N'running';`);
+        }
         let stateChangedEvent: TaskEventMessage | undefined;
         if (currentState === 'Running' || (isQuestion && currentState === 'PauseRequested')) {
           await new sql.Request(transaction)

@@ -78,7 +78,7 @@ stateDiagram-v2
     PauseRequested --> Running: Pause did not stop the active turn
     PauseRequested --> NeedsAttention: Pause outcome cannot be confirmed
     Paused --> Running: Resume
-    Running --> NeedsAttention: Blocked, failed, sandbox crashed, or disk_low
+    Running --> NeedsAttention: Blocked, failed, active sandbox crashed, or disk_low
     NeedsAttention --> Running: Continue or recover
     Running --> Done: Project policy satisfied
     Ready --> Cancelled: Cancel
@@ -90,7 +90,7 @@ stateDiagram-v2
 - Task controls are offered only for valid task states, with pending and failure feedback beside the action. The backend enforces every transition; a browser cannot set task state directly.
 - If writable disk falls below the configured threshold, the runner reports `disk_low`, stops the current turn, and the backend moves the task to Needs attention with reason `disk_low`.
 - If Codex rejects a turn because the Jarvis login's usage limit is reached, the runner reports the failure as `Codex usage limit reached` (reason `codex_usage_limit`) instead of a generic runner error. The task moves to Needs attention, and other tasks keep running.
-- **Sandbox heartbeat:** while a task runs, the backend checks its active invocation about once a minute and updates the session heartbeat timestamp. HTTP 424/404/5xx on two polls (or persisting for 30 seconds) moves the task to Needs attention; a gap in runner events alone never signals a crash. **Recover** starts a new sandbox from the task branch with the original task, recorded steering messages, and a bounded event summary. A provider `completed` result marks the task Done only after GitHub confirms that the task branch and a pull request exist.
+- **Sandbox heartbeat:** while a task runs, the backend checks its active invocation about once a minute and updates the session heartbeat timestamp. HTTP 424/404/5xx on two polls (or persisting for 30 seconds) signals failure only while the invocation is active; a gap in runner events alone never signals a crash. If that invocation already completed, confirmed session expiry ends the sandbox as `Ended`/`idle_expired` without changing task state. **Continue** starts a fresh sandbox from the existing task branch with the original task, recorded steering messages, and a bounded event summary. **Recover** remains for actual crashes. A provider `completed` result marks the task Done only after GitHub confirms that the task branch and a pull request exist.
 - **Dispatch:** the backend leases Ready tasks only when both global and project concurrency limits allow them. It retries safe start failures up to three attempts (15-second, then 30-second delays); an ambiguous Foundry start or exhausted attempts moves the task to Needs attention. The dispatcher reacts to committed task events and retry deadlines rather than polling SQL while idle.
 - **Task workspace:** each start carries the project's repository and default branch plus the persisted task branch `jarvis/task-<id>`. The runner clones through its Git credential helper and uses the remote task branch when present, otherwise creates it from the default branch. Resume and recovery keep the same task branch.
 - An agent `end_turn` without a new commit on the task branch moves the task to Needs attention with the agent's last message as its question. A new commit alone does not mark a task Done; verified GitHub/project-policy completion is still required.
@@ -161,7 +161,7 @@ The "Now" panel reads current running tasks and the latest non-dismissed task-at
 | Data points | Actions |
 | --- | --- |
 | Columns by state: Ready, Running, Paused, Needs attention, Done, Cancelled | Create task (project, agent, text, optional model/reasoning override) |
-| Card: title, project, agent, state, current activity, last update, duration, attempt count, PR number and checks state, usage so far | Open; steer; pause; resume; cancel; recover (Needs attention) |
+| Card: title, project, agent, state, current activity, last update, duration, attempt count, PR number and checks state, usage so far | Open; steer; pause; resume; cancel; continue after idle expiry; recover after crash |
 | Filters: project, agent, state, period | Filter; search |
 
 The board shows up to 100 newest matching tasks. Pull request, checks, and usage are marked "Not reported" until their data sources are connected; the board does not infer values.
@@ -170,7 +170,7 @@ The board shows up to 100 newest matching tasks. Pull request, checks, and usage
 
 | Data points | Actions |
 | --- | --- |
-| Header: title, request, project, agent, model, state, branch, PR, checks, timestamps, the message in the conversation that created it | Steer, pause, resume, cancel, recover; open PR or branch on GitHub |
+| Header: title, request, project, agent, model, state, branch, PR, checks, timestamps, the message in the conversation that created it | Steer, pause, resume, cancel, continue after idle expiry, recover after crash; open PR or branch on GitHub |
 | Timeline: every runner event, steering messages, check results, state changes | Filter event types; expand payloads; open artifacts (logs, CI logs) |
 | Sandbox sessions: start, end, size, end reason, heartbeat state, timestamped writable-disk total/free readings and low-disk threshold | — |
 | Usage: sandbox minutes and DKK; Codex/Copilot turns and any reported usage | — |

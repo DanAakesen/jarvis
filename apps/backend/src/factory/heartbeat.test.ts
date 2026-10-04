@@ -87,7 +87,7 @@ describe('sandbox heartbeat', () => {
     vi.useFakeTimers();
     const completed = recording.records['status_completed']!;
     const missing = recording.records['status_not_found']!;
-    const { heartbeat, store, fetch } = setup([completed, missing, missing]);
+    const { heartbeat, store } = setup([completed, missing, missing]);
     const onCompleted = vi.fn(async () => false);
     heartbeat.setCompletionHandler(onCompleted);
 

@@ -22,6 +22,9 @@ pages can locate the required blobs without listing the container.
 P1-13 adds nullable `activity.dismissed_at` in `0008_activity_dismissals.sql`;
 the feed omits dismissed activity while retaining it for history and supports
 reverting the column with the paired down migration.
+P2-14 adds `idle_expired` to the `sandbox_sessions.end_reason` check in
+`0010_idle_expired_sessions.sql`; its down migration maps that value to `idle`
+before restoring the prior constraint.
 
 ## Overview
 
@@ -288,7 +291,7 @@ erDiagram
         datetime last_heartbeat_at
         datetime last_event_at
         datetime ended_at
-        string end_reason "done | cancelled | crashed | idle"
+        string end_reason "done | cancelled | crashed | idle | idle_expired"
         decimal cost_estimate_dkk
     }
     sandbox_turns {
@@ -312,7 +315,7 @@ erDiagram
 ```
 
 - A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22). The unique `foundry_session_id` row is reused after a clean pause: resume resets `started_at`, clears `ended_at`, and adds the completed active interval to that session's existing sandbox usage row. Cancelling a paused task marks its idle session Ended. The dispatcher records `agent_name` for heartbeat routing. `agent_version = 'active'` and `image` records the selected Foundry runner route (for example `jarvis-runner-base-1x2`); the Invocations start response does not expose the resolved version number or container digest.
-- The sandbox heartbeat updates `last_heartbeat_at`; it needs the session's `agent_name` to address the Foundry runtime. Live runner events update `last_event_at` and add `task_events`.
+- The sandbox heartbeat updates `last_heartbeat_at`; it needs the session's `agent_name` to address the Foundry runtime. Runner completion events mark the matching `sandbox_turns` row completed. If Foundry later confirms that this invocation's session expired, the session ends with `idle_expired` while task state remains unchanged; the task API exposes the latest session end reason for Continue versus Recover. Live runner events update `last_event_at` and add `task_events`.
 - Large content (logs, CI logs, transcripts) lives in Blob; SQL keeps only the path.
 - The schema checks sandbox sizes, statuses, turn modes, end reasons and artifact kinds against these vocabularies. UTC `datetime2` end and heartbeat/event timestamps cannot precede their start.
 - `sandbox_sessions` is indexed by task and status; turns and artifacts are indexed by their parent and timestamp for the session/task timelines.

@@ -281,6 +281,12 @@ with no horizontal overflow or console errors. The live acceptance still
 requires both agents on `DanAakesen/jarvis-test-target`, including intermediate
 commits on the task branch; the coordinator runs it post-merge. Live Entra, Azure
 SQL/Blob archive reads, deployed SSE, and live Foundry controls remain unverified.
+P2-14's actual `TaskControls` component and styles were inspected in Chromium at
+390 and 1280 px from a scratch Vite harness with only the controls POST mocked.
+Continue showed a disabled pending state and success feedback; an active-crash
+fixture still showed Recover. The button measured 44 px, neither viewport
+overflowed, and there were no page errors. Live backend/Foundry expiry remains
+unverified.
 P6-01 was inspected at 390 and 1280 px using the scratch `./auth` stub, a
 placeholder backend origin, and a mocked `/usage` response. Project/agent/source
 grouping, period selection, task links, 503 recovery, and the empty state worked;

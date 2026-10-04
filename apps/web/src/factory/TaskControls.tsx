@@ -32,7 +32,7 @@ export function TaskControls({
   getAccessToken: () => Promise<string>;
   taskId: string;
   state: TaskState;
-  latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
+  latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null | undefined;
   onComplete: (state: TaskState) => void;
 }) {
   const [busy, setBusy] = useState<Action | null>(null);
