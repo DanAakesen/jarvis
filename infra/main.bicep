@@ -15,6 +15,11 @@ param backendImage string = ''
 @description('The Entra object ID of the hosted Jarvis agent. Empty keeps agent access disabled.')
 param jarvisAgentObjectId string = ''
 
+@description('Absolute path of the notes folder in Dan’s OneDrive.')
+@minLength(2)
+@maxLength(1024)
+param notesFolderPath string = '/Jarvis/Notes'
+
 @description('The non-secret GitHub App ID used by the backend to mint installation tokens.')
 param githubAppId string = ''
 
@@ -562,6 +567,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'STATIC_WEB_APP_ORIGIN'
               value: 'https://${staticWebApp.properties.defaultHostname}'
+            }
+            {
+              name: 'JARVIS_NOTES_FOLDER_PATH'
+              value: notesFolderPath
             }
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'

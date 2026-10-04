@@ -49,6 +49,8 @@ describe('English realtime session', () => {
       description: 'Echo a string.',
       parameters: tool.inputSchema,
     }]);
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use notes_search');
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('include a note');
   });
 
   it('applies style preferences without replacing identity or truthful action rules', () => {

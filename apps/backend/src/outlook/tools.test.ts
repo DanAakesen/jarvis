@@ -129,7 +129,7 @@ describe('Outlook tools', () => {
     ]);
   });
 
-  it('reports Graph throttling with a safe retry hint', async () => {
+  it('reports Graph throttling with a safe retry hint in the tool result', async () => {
     const graph = { request: vi.fn(async () => { throw new GraphClientError('throttled', 429); }) };
     const { app, records } = appFor(graph);
     const response = await app.inject({
@@ -141,8 +141,8 @@ describe('Outlook tools', () => {
 
     expect(response.json()).toMatchObject({
       outcome: 'error',
-      result: { failure: 'Microsoft Graph is rate-limiting requests. Try again shortly.' },
-      confirmation: expect.stringContaining('Try again shortly.'),
+      result: { error: 'Microsoft Graph is rate-limiting requests. Try again shortly.' },
+      confirmation: 'Not done: calendar_today_agenda failed.',
     });
     expect(records[0]).toMatchObject({
       arguments: { redacted: true },

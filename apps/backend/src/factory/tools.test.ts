@@ -70,6 +70,10 @@ function fixture() {
     create: vi.fn(async () => task),
     list: vi.fn(async () => [task]),
     get: vi.fn(async () => detail),
+    updateModelConfig: vi.fn(async (_id, config) => ({
+      kind: 'ok' as const,
+      task: { ...task, ...config },
+    })),
   } as unknown as TaskStore;
   const taskController: TaskController = {
     control: vi.fn(async () => ({ kind: 'ok' as const, task })),
@@ -99,15 +103,16 @@ describe('Software Factory Jarvis tools', () => {
   it('registers every project and task tool for discovery and English voice', async () => {
     const names = [
       'list_projects', 'list_tasks', 'get_task', 'create_task',
-      'steer_task', 'pause_task', 'resume_task', 'cancel_task', 'create_project', 'manage_repository',
+      'set_task_model', 'steer_task', 'pause_task', 'resume_task', 'cancel_task', 'create_project', 'manage_repository',
     ];
     expect(factoryModule.tools.map(({ name }) => name)).toEqual(names);
     for (const name of names) expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain(name);
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('set_jarvis_model');
 
     const { app } = fixture();
     const response = await app.inject({ url: '/tools', headers });
     expect(response.statusCode).toBe(200);
-    expect(response.json().map(({ name }: { name: string }) => name)).toEqual(names);
+    expect(response.json().map(({ name }: { name: string }) => name)).toEqual(['set_jarvis_model', ...names]);
     expect(response.json().every(({ inputSchema }: { inputSchema: { type: string } }) =>
       inputSchema.type === 'object')).toBe(true);
   });
@@ -119,8 +124,9 @@ describe('Software Factory Jarvis tools', () => {
       ['list_tasks', { projectId: '7', agent: 'codex', state: 'Ready', limit: 10, offset: 2 }],
       ['get_task', { taskId: '42', eventLimit: 20, eventOffset: 1 }],
       ['create_task', {
-        projectId: '7', prompt: 'Fix the bug\nMore details', agent: 'copilot', model: 'gpt-5', reasoning: 'high',
+        projectId: '7', prompt: 'Fix the bug\nMore details', agent: 'codex', model: 'default', reasoning: 'default',
       }],
+      ['set_task_model', { taskId: '42', model: 'default', reasoning: 'default' }],
       ['steer_task', { taskId: '42', message: 'Keep the current approach.' }],
       ['pause_task', { taskId: '42' }],
       ['resume_task', { taskId: '42' }],
@@ -151,10 +157,19 @@ describe('Software Factory Jarvis tools', () => {
       projectId: '7',
       title: 'Fix the bug',
       request: 'Fix the bug\nMore details',
-      agent: 'copilot',
-      modelOverride: 'gpt-5',
-      reasoningOverride: 'high',
+      agent: 'codex',
+      modelOverride: 'default',
+      reasoningOverride: 'default',
     });
+    expect(taskStore.updateModelConfig).toHaveBeenCalledWith('42', {
+      agent: 'codex', modelOverride: 'default', reasoningOverride: 'default',
+    });
+    const modelChange = record.mock.calls.find(([call]) => call.tool === 'set_task_model')?.[0];
+    expect(modelChange?.result).toEqual({
+      taskId: '42', state: 'Ready', agent: 'codex', model: 'default', reasoning: 'default',
+      applies: 'next task turn',
+    });
+    expect(JSON.stringify(modelChange?.result)).not.toContain(task.request);
     expect(taskController.control).toHaveBeenCalledTimes(4);
     expect(record).toHaveBeenCalledTimes(calls.length);
     expect(record.mock.calls.map(([call]) => call.messageId)).toEqual(
@@ -174,6 +189,7 @@ describe('Software Factory Jarvis tools', () => {
       ['list_tasks', { state: 'running' }],
       ['get_task', { taskId: '0' }],
       ['create_task', { projectId: '7', prompt: '' }],
+      ['set_task_model', { taskId: '42' }],
       ['steer_task', { taskId: '42', message: '   ' }],
       ['pause_task', {}],
       ['resume_task', {}],
@@ -191,6 +207,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(taskStore.list).not.toHaveBeenCalled();
     expect(taskStore.get).not.toHaveBeenCalled();
     expect(taskStore.create).not.toHaveBeenCalled();
+    expect(taskStore.updateModelConfig).not.toHaveBeenCalled();
     expect(taskController.control).not.toHaveBeenCalled();
   });
 
@@ -228,5 +245,87 @@ describe('Software Factory Jarvis tools', () => {
     });
     expect(taskController.control).toHaveBeenCalledWith('42', { action: 'pause' });
     expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['refused', 'refused', 'refused']);
+  });
+
+  it('refuses unverified task models and running-task changes with valid options', async () => {
+    const { app, taskStore, record } = fixture();
+    const invalid = await app.inject({
+      method: 'POST', url: '/tools/set_task_model', headers,
+      payload: { taskId: '42', agent: 'copilot', model: 'unverified' },
+    });
+    expect(invalid.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'Unsupported copilot model. Valid models: default.' },
+    });
+    expect(taskStore.updateModelConfig).not.toHaveBeenCalled();
+
+    vi.mocked(taskStore.get).mockResolvedValue({ ...detail, state: 'Running' });
+    const running = await app.inject({
+      method: 'POST', url: '/tools/set_task_model', headers,
+      payload: { taskId: '42', model: 'default' },
+    });
+    expect(running.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('running tasks are refused') },
+    });
+    expect(taskStore.updateModelConfig).not.toHaveBeenCalled();
+    expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['refused', 'refused']);
+  });
+
+  it('refuses unknown reasoning and reports the verified Codex options', async () => {
+    const { app, taskStore } = fixture();
+    const response = await app.inject({
+      method: 'POST', url: '/tools/set_task_model', headers,
+      payload: { taskId: '42', agent: 'codex', reasoning: 'high' },
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'Unsupported codex reasoning. Valid Codex reasoning levels: default.' },
+    });
+    expect(taskStore.updateModelConfig).not.toHaveBeenCalled();
+  });
+
+  it('clears provider-specific overrides when switching the agent', async () => {
+    const { app, taskStore } = fixture();
+    vi.mocked(taskStore.get).mockResolvedValue({
+      ...detail, modelOverride: 'default', reasoningOverride: 'default',
+    });
+    const response = await app.inject({
+      method: 'POST', url: '/tools/set_task_model', headers,
+      payload: { taskId: '42', agent: 'copilot' },
+    });
+
+    expect(response.json()).toMatchObject({ outcome: 'ok' });
+    expect(taskStore.updateModelConfig).toHaveBeenCalledWith('42', {
+      agent: 'copilot', modelOverride: null, reasoningOverride: null,
+    });
+  });
+
+  it('refuses a model update if the task stopped being Ready before persistence', async () => {
+    const { app, taskStore } = fixture();
+    vi.mocked(taskStore.updateModelConfig).mockResolvedValue({ kind: 'not-ready' });
+    const response = await app.inject({
+      method: 'POST', url: '/tools/set_task_model', headers,
+      payload: { taskId: '42', model: 'default' },
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'Task is no longer Ready. Model changes are accepted only while a task is Ready; the current turn is unchanged.' },
+    });
+  });
+
+  it('refuses unverified model options when creating a task', async () => {
+    const { app, taskStore } = fixture();
+    const response = await app.inject({
+      method: 'POST', url: '/tools/create_task', headers,
+      payload: { projectId: '7', prompt: 'Fix a bug', agent: 'codex', model: 'gpt-5' },
+    });
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'Unsupported coding-agent model. Valid models: default.' },
+    });
+    expect(taskStore.create).not.toHaveBeenCalled();
   });
 });

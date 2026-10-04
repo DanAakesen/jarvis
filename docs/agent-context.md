@@ -134,6 +134,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - After the approved core deployment, Dan runs `./infra/setup-outlook.ps1 -MailboxUpn <Dan's mailbox UPN>` from a PowerShell 7 session with the Azure CLI on the bootstrap subscription, GitHub CLI authenticated to the repository, and `ExchangeOnlineManagement` connected-capable. The signed-in operator needs permission to register an Entra app, create Exchange app scopes/assignments, write the backend Key Vault secret, and update GitHub Actions variables. No agent runs this script or accesses the tenant.
 - The setup script creates/reuses `jarvis-outlook`, creates the exact `PrimarySmtpAddress` scope, assigns only `Application Calendars.ReadWrite`, `Application Mail.ReadWrite`, and `Application Mail.Send`, stores the one-year client credential as Key Vault secret `jarvis-outlook-client-secret`, and sets nonsecret `JARVIS_GRAPH_APP_ID` and `JARVIS_GRAPH_TIME_ZONE` GitHub variables. Keep Entra `requiredResourceAccess` empty. `-RotateCredential` updates Key Vault and removes older credentials created by this script; afterward run Deploy on `main` so the single backend replica reloads the credential/configuration.
 - After deployment and Exchange propagation (allow up to 30 minutes), verify the app can read Dan's agenda and test mailbox items, and is denied access to a different mailbox. Then create and move a test event only after the exact later-message confirmation; verify no change occurs for a wrong, expired, or same-turn code. Do not use real mail recipients for send tests. These live checks remain the coordinator's post-merge responsibility.
+- P7-10 deploys `JARVIS_NOTES_FOLDER_PATH` from the `notesFolderPath` Bicep parameter (default `/Jarvis/Notes`). After merge, the coordinator must review and approve the broad Graph `Files.Read.All` application permission before running `./infra/setup-notes-search.ps1` with an administrator-authorized Azure CLI session. The script is idempotent and assigns the permission to `id-jarvis-backend`; Graph Search does not support `Sites.Selected`. The backend fixes the user to Dan and scopes queries and returned links to the configured folder. Live tenant consent and a known-note search remain unverified.
 - `az` runs through a `.cmd` file: avoid `&`, parentheses, and pipes inside arguments such as `--query` (L20); filter JSON in PowerShell instead.
 - Never reuse a deleted Foundry account or project name; generate timestamped names (L2).
 - `FOUNDRY_*` and `AGENT_*` environment variables are reserved in hosted agents (L18).
@@ -319,6 +320,7 @@ Backend commands:
 | Focused P3-07 release webhook contract | `npm test --workspace @jarvis/backend -- --run src/database/webhook-delivery-store.test.ts` |
 | SQL Server migration, webhook mapping, and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
+| Focused P2-14 completion/expiry regressions | `npm test --workspace @jarvis/backend -- src/factory/heartbeat.test.ts src/factory/dispatcher.test.ts src/database/sandbox-heartbeat-store.test.ts` |
 | Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
 | P6-05 SQL Server parallel load test (CI `Database` job; prints a `P6-05 load:` summary line) | `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher-load.integration.test.ts` (isolated loopback SQL Server only) |
 | Focused P6-05 runner Codex limit test | `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_usage_limit` |
@@ -380,6 +382,11 @@ new sessions, calls `track()` after the SQL commit, and `untrack()` when session
 end. The dispatcher wakes on task events and retry deadlines, not SQL polling;
 expired start leases go to Needs attention rather than replaying a possibly
 accepted Foundry start. Offline tests do not verify live Foundry access.
+Every heartbeat poll emits `sandbox_heartbeat.decision` with the SQL session ID,
+invocation ID, HTTP status (null before any response), and a controlled decision.
+Use these fields to distinguish confirmation retries, committed crashes,
+`idle_expired`, unchanged state, and soft/persistence failures; no provider body,
+question, prompt, or credential is included.
 
 The optional `VOICE_LIVE_ENDPOINT` enables `/voice`; it must be a secure Azure
 Voice Live WebSocket endpoint without credentials in its URL. The backend pins

@@ -4,10 +4,11 @@ import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
 import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
+import { setJarvisModelTool } from './model-tools.js';
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [],
+  tools: [setJarvisModelTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);
@@ -75,7 +76,7 @@ export const coreModule: BackendModule = {
             result = { refused: error.message };
           } else if (error instanceof ToolFailure && !controller.signal.aborted) {
             outcome = 'error';
-            result = { failure: error.message };
+            result = { error: error.message };
           } else {
             outcome = 'error';
             result = { error: 'Tool execution failed' };

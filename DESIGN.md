@@ -255,20 +255,50 @@ microphone and speaker behavior remains unverified. Stop shows "Saving voice
 session…" until the backend has recorded usage, then refreshes conversation
 history.
 
-## Next-generation shared shell (design agreed, not implemented)
+## Next-generation shared shell (structure agreed; P8-04 implemented)
 
 [ui.md](ui.md) records the confirmed structure, open questions, feature-placement
-proposals and eight static wireframes. Typing uses a thin left icon rail,
-expandable left navigation, thin top/bottom bars, a contextual right panel and
-a central tabbed workspace. Settings is top-right. Voice hides the shell and
-composer, using a full-page background and a state-driven orb: centred alone,
-left of content windows on desktop, bottom-docked behind one main phone view.
-Windows can tile, overlap, minimise into tabs and be restored by Dan or Jarvis.
+proposals and eight static wireframes. P8-04 routes the existing pages through a
+thin left icon rail, expandable area navigation, top and bottom bars, and a
+toggleable contextual panel. The top bar spans edge to edge above the shell;
+its height matches the area rail's width, and the rail begins beneath it.
+Settings stays at the top-right. Screen sharing and Camera are the only
+confirmed feature controls in the top bar; each is an icon-only, disabled
+control with an accessible explanation and tooltip until its P7 capability is
+built. The top bar remains one line at phone and desktop widths. Other suggested
+top-bar controls remain out of scope.
+
+The bottom bar carries the existing database-wake status when configured. The
+context panel has an honest empty state until P8-08 supplies contextual content.
+The existing neutral theme remains; the specific placement and responsive
+proportions above are confirmed while other shell styling and the contents of
+these bars and panels remain open.
+
+Voice hides the shell and composer, using a full-page background and a
+state-driven orb: centred alone, left of content windows on desktop,
+bottom-docked behind one main phone view. Windows can tile, overlap, minimise
+into tabs and be restored by Dan or Jarvis. Those behaviors belong to later P8
+tasks, not P8-04.
 
 Existing windows carry between modes by default. The optional minimise-on-voice
 setting defaults off; when enabled, voice begins with only the orb and windows
 remain docked on return to typing. Otherwise the earlier shell layout returns.
 Generated views are temporary; theme values persist. Small-orb input controls
 start voice explicitly. Glass/transparency and futuristic styling are exploratory;
-white wireframe windows are not a selected final treatment. Existing screen
-documentation below/above describes current implementation, not this future shell.
+white wireframe windows are not a selected final treatment.
+
+## Proposed surfaces for accepted capability additions
+
+Editable personality should live in **Settings → Jarvis → Personality**, reached
+through the agreed top-right Settings entry. Proposed fields are tone/response
+style and custom instructions, with Save and Reset to the current default and
+clear new-session application feedback. This placement is a recommendation, not
+a newly reviewed screen design. P8-19 owns the form; P7-16 owns its validated
+persistence and chat/voice application. Visual themes remain separate.
+
+Research and generated image/video results use the existing dynamic workspace,
+with source links or artifact references and honest progress/error states.
+Memory can be queried, corrected and forgotten through registered tools; a
+dedicated memory-management screen has not been selected. Reuse the agreed shell
+and view contracts rather than adding permanent rail/top-bar controls for each
+new capability.
