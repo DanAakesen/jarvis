@@ -53,6 +53,10 @@ describe('web authentication', () => {
     const msal = client({ loginPopup: vi.fn().mockRejectedValue(new Error('provider-secret detail')) });
 
     await expect(signIn(msal, config)).rejects.toThrow('Microsoft sign-in did not complete. Try again.');
+    vi.mocked(msal.loginPopup).mockRejectedValueOnce(Object.assign(new Error('busy'), { errorCode: 'interaction_in_progress' }));
+    await expect(signIn(msal, config)).rejects.toThrow('A previous sign-in is still open in this tab.');
+    vi.mocked(msal.loginPopup).mockRejectedValueOnce(Object.assign(new Error('x'), { errorCode: 'user_cancelled' }));
+    await expect(signIn(msal, config)).rejects.toThrow('Microsoft sign-in did not complete (user_cancelled). Try again.');
   });
 
   it('silently restores a cached account and returns null when no account is cached', async () => {
