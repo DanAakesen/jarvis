@@ -38,6 +38,8 @@ APP_VERSION = "0.2.0"
 WORK_ROOT = Path(os.environ.get("JARVIS_WORK_ROOT", "/files/jarvis"))
 MAX_EVENTS = 500
 MAX_EVENT_PAYLOAD_BYTES = 256 * 1024
+DEFAULT_DISK_LOW_THRESHOLD_BYTES = 1024**3
+DISK_CHECK_INTERVAL_SECONDS = 15
 TASK_STATE_FILE = "task-state.json"
 TASK_STATE_DIR = "invocations"
 ACP_SESSION_FILE = "acp-session.json"
@@ -225,6 +227,10 @@ class TaskState:
             )
 
 
+class DiskLowExceeded(Exception):
+    pass
+
+
 tasks: dict[str, TaskState] = {}
 session_clients: dict[str, ACPClient] = {}
 session_locks: dict[str, asyncio.Lock] = {}
@@ -253,16 +259,34 @@ def _write_json(path: Path, value: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
-def _capacity_snapshot() -> dict[str, Any]:
-    """Return non-secret process and session-disk capacity evidence."""
-    snapshot: dict[str, Any] = {"cpu_count": os.cpu_count() or 0}
+def _disk_snapshot() -> dict[str, int | None]:
     try:
         usage = shutil.disk_usage(WORK_ROOT)
-        snapshot["disk_used_bytes"] = usage.used
-        snapshot["disk_free_bytes"] = usage.free
+        return {
+            "disk_total_bytes": usage.total,
+            "disk_used_bytes": usage.used,
+            "disk_free_bytes": usage.free,
+        }
     except OSError:
-        snapshot["disk_used_bytes"] = None
-        snapshot["disk_free_bytes"] = None
+        return {
+            "disk_total_bytes": None,
+            "disk_used_bytes": None,
+            "disk_free_bytes": None,
+        }
+
+
+def _disk_low_threshold_bytes() -> int:
+    configured = os.environ.get("JARVIS_DISK_LOW_THRESHOLD_BYTES")
+    if configured is None:
+        return DEFAULT_DISK_LOW_THRESHOLD_BYTES
+    if not re.fullmatch(r"[0-9]+", configured) or int(configured) < 1:
+        raise RuntimeError("JARVIS_DISK_LOW_THRESHOLD_BYTES must be a positive integer")
+    return int(configured)
+
+
+def _capacity_snapshot() -> dict[str, Any]:
+    """Return non-secret process and session-disk capacity evidence."""
+    snapshot: dict[str, Any] = {"cpu_count": os.cpu_count() or 0, **_disk_snapshot()}
     try:
         status = Path("/proc/self/status").read_text(encoding="utf-8")
         for line in status.splitlines():
@@ -272,6 +296,47 @@ def _capacity_snapshot() -> dict[str, Any]:
     except (OSError, ValueError, IndexError):
         snapshot["peak_memory_kib"] = None
     return snapshot
+
+
+async def _watch_disk(state: TaskState, threshold_bytes: int) -> None:
+    while True:
+        await asyncio.sleep(DISK_CHECK_INTERVAL_SECONDS)
+        snapshot = _disk_snapshot()
+        free_bytes = snapshot["disk_free_bytes"]
+        if free_bytes is not None and free_bytes < threshold_bytes:
+            state.event("disk_low", **snapshot, threshold_bytes=threshold_bytes)
+            return
+
+
+async def _run_with_disk_watch(state: TaskState, client: "ACPClient", threshold_bytes: int) -> dict[str, Any]:
+    watcher = asyncio.create_task(_watch_disk(state, threshold_bytes))
+    turn = asyncio.create_task(client.run(state.task))
+    try:
+        done, _ = await asyncio.wait({watcher, turn}, return_when=asyncio.FIRST_COMPLETED)
+        if watcher in done:
+            await watcher
+            if not turn.done():
+                try:
+                    if not await client.cancel_turn():
+                        await client.stop()
+                    else:
+                        try:
+                            await asyncio.wait_for(turn, timeout=STOP_WAIT_SECONDS)
+                        except asyncio.TimeoutError:
+                            await client.stop()
+                            turn.cancel()
+                    await asyncio.gather(turn, return_exceptions=True)
+                except Exception:
+                    await client.stop()
+                    if not turn.done():
+                        turn.cancel()
+                    await asyncio.gather(turn, return_exceptions=True)
+            raise DiskLowExceeded
+        return await turn
+    finally:
+        if not watcher.done():
+            watcher.cancel()
+        await asyncio.gather(watcher, return_exceptions=True)
 
 
 def _persist_task(state: TaskState) -> None:
@@ -896,6 +961,13 @@ async def _run_task(
             state.event("steer_after", stopped_invocation=stopped_invocation)
         state.event("started", agent=state.agent)
         state.event("runner_instance", **RUNNER_INSTANCE)
+        threshold_bytes = _disk_low_threshold_bytes()
+        disk = _disk_snapshot()
+        state.event("disk_snapshot", **disk, threshold_bytes=threshold_bytes)
+        free_bytes = disk["disk_free_bytes"]
+        if free_bytes is not None and free_bytes < threshold_bytes:
+            state.event("disk_low", **disk, threshold_bytes=threshold_bytes)
+            raise DiskLowExceeded
         await session_lock.acquire()
         lock_acquired = True
         if state.cancel_requested:
@@ -942,7 +1014,7 @@ async def _run_task(
             session_clients[state.session_id] = client
         if state.cancel_requested:
             return
-        state.result = await client.run(state.task)
+        state.result = await _run_with_disk_watch(state, client, threshold_bytes)
         if state.stop_requested:
             state.status = STOPPED_STATUS[state.stop_requested]
             state.event(state.status, result=state.result)
@@ -953,6 +1025,8 @@ async def _run_task(
         state.status = "cancelled"
         state.event("cancelled")
         raise
+    except DiskLowExceeded:
+        state.status = "cancelled"
     except Exception as exc:  # sanitized: exception text never includes credentials
         if state.stop_requested:
             # A forced stop after the cancel timeout closes the ACP stream.

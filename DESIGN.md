@@ -15,7 +15,7 @@ No visual direction is chosen yet. Dan designs each page by giving an image gene
 | --- | --- |
 | Jarvis (main) | Conversation, voice state, "now" activity, sleep switch |
 | Task view | Kanban columns by task state |
-| Task detail | Header, complete paginated event timeline, sandbox sessions, usage |
+| Task detail | Header, complete paginated event timeline, sandbox sessions, usage, and timestamped writable-disk total/free readings with low-disk threshold |
 | Release view | Horizontal git graph per project (branches as lines, commits as dots), releases, workflow runs, deployments |
 | Projects | Project list and settings |
 | Settings | Models, reasoning, voices, limits, credential status |
@@ -24,6 +24,9 @@ No visual direction is chosen yet. Dan designs each page by giving an image gene
 The repository `PLAN.md` status workflow is GitHub metadata; it does not add a Jarvis UI control or visual state.
 
 Events archived after 90 days load through the same task-detail timeline and pagination; the archive is invisible to the user.
+The disk section uses recorded task events, not a live filesystem estimate; show
+each reading's time and byte-derived human-readable values without implying that
+the current filesystem state is available.
 
 ## Task usage (P2-12)
 
@@ -32,8 +35,9 @@ summary tiles. Each sandbox session has its own minutes and estimated DKK; agent
 turns and any provider-reported metrics remain separate rows, with no fabricated
 cost for subscription use. The neutral shell carries explicit loading, empty,
 failure/retry, and populated states. On narrow screens only the table scrolls
-horizontally; the page itself stays within the viewport. This is an interim
-task-detail surface until P1-09 builds the complete header and event timeline.
+horizontally; the page itself stays within the viewport. Usage is part of the
+task detail response and appears alongside the task metadata, disk readings, and
+event timeline.
 
 ## Interactions to design
 
@@ -116,6 +120,22 @@ Checked in Chromium 154 at 390 and 1280 px with scratch-only auth and API mocks:
 list, create, update, and archive worked; neither width overflowed, controls
 were at least 44 px high, and the project form stacked on mobile. Live Entra and
 Azure SQL behavior remains unverified.
+
+## Task view (P1-08)
+
+Continue the neutral foundation and put the create action and filters before the
+board. Keep the six task states as distinct columns; columns stack on narrow
+screens, use two columns at tablet widths, and scroll horizontally on wide
+screens. Cards group task facts as labelled details, with the state always
+written as text. The create dialog uses labelled fields and keeps pending and
+failure feedback beside its actions. Pull request, checks, and usage remain
+explicitly "Not reported" until the backend provides those values.
+
+Checked in Chromium at 1280 and 390 px with scratch-only auth and API mocks:
+task creation, SSE-driven card refresh, Escape dismissal with focus return, and
+filters worked. Neither width overflowed the page, modal content fit on mobile,
+and controls were at least 44 px high. Live Entra, Azure SQL, and deployed SSE
+behavior remain unverified.
 
 ## Conversation history (P4-03)
 

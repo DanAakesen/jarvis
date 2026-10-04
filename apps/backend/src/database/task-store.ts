@@ -645,10 +645,38 @@ export function createTaskStore(
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
+        let currentState: TaskState | undefined;
+        if (event.type === 'disk_low') {
+          const task = await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(event.taskId))
+            .query<{ state: TaskState }>(
+              'SELECT state FROM dbo.tasks WITH (UPDLOCK, ROWLOCK) WHERE id = @taskId;');
+          currentState = task.recordset[0]?.state;
+        }
         const publishedEvent = await insertTaskEvent(transaction, event, payload);
         await recordRunnerUsage(transaction, event, event.payload);
+        let stateChangedEvent: TaskEventMessage | undefined;
+        if (currentState === 'Running') {
+          await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(event.taskId))
+            .query(`UPDATE dbo.tasks SET state = N'NeedsAttention', lease_owner = NULL, lease_until = NULL
+              WHERE id = @taskId AND state = N'Running';`);
+          const stateChanged: RecordTaskEventInput = {
+            taskId: event.taskId,
+            type: 'state_changed',
+            summary: 'Low sandbox disk; task needs attention',
+            payload: { from: 'Running', to: 'NeedsAttention', reason: 'disk_low' },
+            source: 'backend',
+          };
+          stateChangedEvent = await insertTaskEvent(
+            transaction,
+            stateChanged,
+            validateEvent(stateChanged),
+          );
+        }
         await transaction.commit();
         eventHub.publish(publishedEvent);
+        if (stateChangedEvent) eventHub.publish(stateChangedEvent);
         return publishedEvent;
       } catch {
         await rollback(transaction);
