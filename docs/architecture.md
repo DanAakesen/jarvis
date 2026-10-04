@@ -83,6 +83,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Dan's signed delegated API token and returns a bounded display name from its
   validated `name` claim, falling back to `Dan` if that optional claim is absent
   or malformed. The route exposes only that name, never token claims or IDs.
+- P1-14 tracks pending data requests in `src/backend-request.ts`. The signed-in
+  shell probes authenticated `GET /database/status` while foreground requests
+  are pending and displays “Waking Jarvis…” only for `{ waking: true }`.
+  The endpoint reads process-local retry state, never SQL, and is not cached.
+  Data requests allow 120 seconds; status probes stop when requests settle or
+  the page is hidden. Task SSE sends `event: ready` after replay so heartbeat
+  comments cannot falsely indicate the database wait has finished.
 - `GET /settings` and `PATCH /settings` inherit the same Dan-only delegated
   authentication. The backend returns effective defaults with the validated
   model catalog, rejects unknown keys and unsupported values, and writes a
@@ -265,13 +272,26 @@ No SQL settings selects the offline skeleton; partial settings stop startup.
 Password authentication is permitted only for isolated loopback CI in test mode.
 
 `index.ts` awaits database initialization before listening, outside Fastify's
-10-second ready-hook limit. Connection/request timeouts are 120 seconds; a
+10-second ready-hook limit. Connection and pool acquisition/creation attempts
+are bounded at 30 seconds; executed query timeouts remain 120 seconds. A
 300-second overall startup deadline includes auto-resume, the 60-second app-lock
 wait and all migrations. Cancellation stops active requests, rolls back the
 transaction and closes the pool. If cancellation occurs during connect, its owner
 closes the late connection before any migration can begin. Process shutdown has
 the existing five-second final deadline. Database logs expose fixed event names,
 never raw errors, tokens or SQL text.
+
+P1-14's shared wake handler retries startup connection and pool acquisition
+with 1-, 2-, 4-, 8-, then 10-second backoff within a 90-second deadline,
+including attempts. Resume errors 40613, 40197, 40501 and connection timeouts
+qualify; unrelated errors fail normally. Acquisition happens before statements
+or transaction BEGIN, so writes can safely wait there. Explicitly read-only,
+nontransactional queries opt into `databaseReadRequest`; acquisition and read
+retries share the original deadline. Executed writes and transactions are never
+replayed, even for a resume-like error or an ambiguous commit. Cancellation
+releases late acquired connections and shutdown owns outstanding attempts.
+The waking flag counts concurrent waits and clears after success, failure or
+cancellation; there is no idle SQL polling and no SQL store contract change.
 
 The backend reads committed `db/migrations/NNNN_name.sql` batches, acquires
 `jarvis.schema-migrations` exclusively with `LockOwner=Transaction`, validates the

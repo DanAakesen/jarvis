@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { backendFetch } from '../backend-request';
 
 type TaskState = 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
 type Action = 'steer' | 'pause' | 'resume' | 'cancel';
@@ -57,7 +58,7 @@ export function TaskControls({
     try {
       let response: Response;
       try {
-        response = await fetch(
+        response = await backendFetch(
         `${backendUrl.replace(/\/+$/, '')}/factory/tasks/${taskId}/controls`,
         {
           method: 'POST',
@@ -69,7 +70,6 @@ export function TaskControls({
             action,
             ...(action === 'steer' ? { message: steeringMessage } : {}),
           }),
-          signal: AbortSignal.timeout(10_000),
         },
         );
       } catch {

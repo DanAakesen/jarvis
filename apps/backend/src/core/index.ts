@@ -12,6 +12,12 @@ export const coreModule: BackendModule = {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);
     await registerUsageRoutes(app);
+    app.get('/database/status', {
+      schema: { response: { 200: { type: 'object', properties: { waking: { type: 'boolean' } }, required: ['waking'], additionalProperties: false } } },
+    }, async (_request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      return { waking: app.databaseStatus() };
+    });
     app.get('/health', {
       schema: { response: { 200: { type: 'object', properties: { status: { type: 'string', const: 'ok' } }, required: ['status'], additionalProperties: false } } },
     }, async () => ({ status: 'ok' }));

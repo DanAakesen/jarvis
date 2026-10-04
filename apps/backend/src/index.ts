@@ -155,6 +155,7 @@ try {
   const credentialStatusStore = database ? createCredentialStatusStore(database.pool) : undefined;
   const app = buildApp(config, logger, {
     modules,
+    ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(database && taskStore && settingsStore ? {
       projectStore: createProjectStore(database.pool),
       toolCallStore: createToolCallStore(database.pool),

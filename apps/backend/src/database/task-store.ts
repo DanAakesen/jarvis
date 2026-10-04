@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import type {
   CreateTaskInput,
   RecordTaskEventInput,
@@ -268,7 +269,7 @@ async function recordRunnerUsage(
 }
 
 async function taskUsage(executor: sql.ConnectionPool | sql.Transaction, taskId: string): Promise<TaskUsageRecord[]> {
-  const request = executor instanceof sql.Transaction ? new sql.Request(executor) : new sql.Request(executor);
+  const request = executor instanceof sql.Transaction ? new sql.Request(executor) : databaseReadRequest(executor);
   const { recordset } = await request
     .input('taskId', sql.BigInt, BigInt(taskId))
     .query<UsageRow>(`SELECT CAST(NULL AS varchar(19)) AS id, source, metric, SUM(quantity) AS quantity,
@@ -385,7 +386,7 @@ export function createTaskStore(
     },
 
     async list(filters: TaskListFilters) {
-      const request = pool.request()
+      const request = databaseReadRequest(pool)
         .input('limit', sql.Int, filters.limit)
         .input('offset', sql.Int, filters.offset);
       const clauses: string[] = [];
@@ -421,12 +422,12 @@ export function createTaskStore(
 
     async get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null> {
       if (!eventArchive) {
-        const taskResult = await pool.request()
+        const taskResult = await databaseReadRequest(pool)
           .input('taskId', sql.BigInt, BigInt(id))
           .query<TaskRow>(`SELECT ${taskColumns} FROM dbo.tasks WHERE id = @taskId;`);
         const row = taskResult.recordset[0];
         if (!row) return null;
-        const eventsResult = await pool.request()
+        const eventsResult = await databaseReadRequest(pool)
           .input('taskId', sql.BigInt, BigInt(id))
           .input('eventLimit', sql.Int, eventLimit)
           .input('eventOffset', sql.Int, eventOffset)
@@ -492,7 +493,7 @@ export function createTaskStore(
     },
 
     async getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]> {
-      const result = await pool.request()
+      const result = await databaseReadRequest(pool)
         .input('taskId', sql.BigInt, BigInt(taskId))
         .input('eventId', sql.BigInt, BigInt(eventId))
         .input('limit', sql.Int, limit)
@@ -511,7 +512,7 @@ export function createTaskStore(
     },
 
     async getRunningContext() {
-      const result = await pool.request()
+      const result = await databaseReadRequest(pool)
         .input('taskLimit', sql.Int, runningContextTaskLimit + 1)
         .input('eventLimit', sql.Int, runningContextEventLimit)
         .query<RunningContextRow>(`WITH running_tasks AS (

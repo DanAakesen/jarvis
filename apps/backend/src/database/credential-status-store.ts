@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import type {
   CredentialName,
   CredentialStatus,
@@ -25,7 +26,7 @@ function rollback(transaction: sql.Transaction): Promise<void> {
 export function createCredentialStatusStore(pool: sql.ConnectionPool): CredentialStatusStore {
   return {
     async list(): Promise<CredentialStatus[]> {
-      const { recordset } = await pool.request().query<CredentialStatusRow>(`SELECT name,
+      const { recordset } = await databaseReadRequest(pool).query<CredentialStatusRow>(`SELECT name,
         expires_at AS expiresAt, last_renewed_at AS lastRenewedAt, status
         FROM dbo.credential_status WHERE name IN (N'codex-login', N'copilot-token')
         ORDER BY name;`);

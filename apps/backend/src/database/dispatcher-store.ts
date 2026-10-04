@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import type { DispatcherStore, DispatchClaimResult, TaskControlTarget } from '../factory/dispatcher.js';
 import type { RunningSandbox } from '../factory/heartbeat.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
@@ -328,7 +329,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
     },
 
     async getControlTarget(taskId): Promise<TaskControlTarget | null> {
-      const { recordset } = await pool.request()
+      const { recordset } = await databaseReadRequest(pool)
         .input('taskId', sql.BigInt, BigInt(taskId))
         .query<TaskControlTarget>(`SELECT CAST(t.id AS varchar(19)) AS taskId,
           t.agent, t.request, t.model_override AS modelOverride, t.reasoning_override AS reasoningOverride,

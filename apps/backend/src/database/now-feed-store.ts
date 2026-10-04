@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import type { NowFeed, NowFeedStore, NowRunningTask, NowActivityItem } from '../core/now.js';
 
 interface RunningTaskRow extends Omit<NowRunningTask, 'startedAt'> {
@@ -16,7 +17,7 @@ function iso(value: Date | string): string {
 export function createNowFeedStore(pool: sql.ConnectionPool): NowFeedStore {
   return {
     async read(): Promise<NowFeed> {
-      const running = await pool.request().query<RunningTaskRow>(`SELECT TOP (100)
+      const running = await databaseReadRequest(pool).query<RunningTaskRow>(`SELECT TOP (100)
         CAST(t.id AS varchar(19)) AS id, t.title, p.name AS project, t.agent,
         COALESCE(NULLIF(t.activity, N''), N'Running') AS activity,
         COALESCE(t.started_at, t.created_at) AS startedAt
@@ -24,7 +25,7 @@ export function createNowFeedStore(pool: sql.ConnectionPool): NowFeedStore {
         INNER JOIN dbo.projects AS p ON p.id = t.project_id
         WHERE t.state = N'Running'
         ORDER BY COALESCE(t.started_at, t.created_at) DESC, t.id DESC;`);
-      const items = await pool.request().query<ActivityRow>(`WITH attention AS (
+      const items = await databaseReadRequest(pool).query<ActivityRow>(`WITH attention AS (
           SELECT a.id, a.title, a.link, a.at, a.dismissed_at,
             ROW_NUMBER() OVER (PARTITION BY t.id ORDER BY a.at DESC, a.id DESC) AS item_order
           FROM dbo.activity AS a
