@@ -86,9 +86,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   partial update transactionally to whitelisted `global` rows in `dbo.settings`.
   The SQL adapter is injected only when database configuration exists; the API
   returns 503 without it. The model catalog offers deployed Jarvis models and
-  only verified provider defaults for Codex and Copilot until P2-11 verifies
-  their CLI model options. Future session/task creation reads these defaults;
-  existing sessions and tasks are not updated.
+  only provider defaults for Codex and Copilot because their available-model
+  catalog values have not been verified. Future session/task creation reads
+  these defaults; existing sessions and tasks are not updated.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
@@ -388,7 +388,7 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | Idle timeout | 2 minutes without requests shuts the sandbox down; files and the conversation survive an idle shutdown. |
 | Crash | Files and conversation since the last persist point are lost; a new agent version does not restart running sessions. Recovery starts a new session from the task branch with the task history from SQL; the agent pushes often (L22). |
 | Endpoints | Administration (connections, versions): `*.services.ai.azure.com`. Sessions and Invocations: `*.cognitiveservices.azure.com` (L10). |
-| Settings | Model and reasoning per task: `codex-acp` (`model`, `model_reasoning_effort`) and Copilot `--model`; **verify** in P2. |
+| Settings | The Foundry invocation carries the effective `model` and, for Codex, `reasoning`. Copilot CLI 1.0.91 accepts `--model`; `@agentclientprotocol/codex-acp` 2.1.1 applies `model` and `reasoning_effort` through `session/set_config_option`. The runner retains the effective values with the ACP session so steer/resume does not pick up changed defaults. The dispatcher (P2-05) still resolves task overrides over settings defaults. |
 
 ### Production runner implementation
 
@@ -396,6 +396,16 @@ Issue #28 ports the adapter to `runner/` with task, steer, pause, resume, cancel
 credential probe, and Codex renewal handlers. Prototype crash-test mode is removed.
 Local Python tests exercise ACP subprocess fixtures; production Azure acceptance
 remains pending #11 and the main-branch runner workflow.
+
+P2-11 extends the invocation body with the effective model and optional Codex
+reasoning effort. Copilot receives a non-default model as a separate `--model`
+argument; Codex receives non-default values with ACP `session/set_config_option`
+(`model`, then `reasoning_effort`) and the runner verifies the returned current
+value. The ACP session metadata preserves those choices across process recreation.
+The dispatcher must pass the task override when present, otherwise the settings
+default; its settings-store integration remains P2-05. No model catalog values
+beyond provider default have been enabled, and live provider selection remains
+unverified.
 
 - Node/Python use the small base image; a separate .NET image adds SDK 8.0.419.
   Both expose 1 vCPU / 2 GiB and 2 vCPU / 4 GiB variants. The default stays 1×2;

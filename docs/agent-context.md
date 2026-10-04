@@ -545,6 +545,14 @@ installation with `uv pip sync --require-hashes`, `python -m pytest -q` and
 Runner CI owns Docker builds and packaged CLI/HTTP checks because agents have no
 Docker runtime here. Production Key Vault/Foundry acceptance is still unverified.
 
+P2-11 provider option verification uses `npm ci --prefix runner/tools` and
+`runner/tools/node_modules/.bin/copilot --help` (the pinned Copilot CLI reports
+`--model` and `--reasoning-effort`). The pinned
+`@agentclientprotocol/codex-acp` 2.1.1 README/source exposes `model` and
+`reasoning_effort` via ACP `session/set_config_option`; no live provider
+credentials are needed for these checks. Runner and Foundry contract tests
+exercise the local wire behavior, not authenticated model availability.
+
 The main-only [runner deploy workflow](../.github/workflows/runner-deploy.yml)
 requires Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME`, set to `jarvis-infra` after
 the first successful Deploy run. It consumes that deployment's existing outputs and bootstrap
