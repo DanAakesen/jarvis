@@ -156,6 +156,7 @@ describe('ConversationHistory', () => {
       expect.any(Function),
       expect.any(Function),
       expect.any(Function),
+      undefined,
     );
   });
 

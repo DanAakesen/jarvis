@@ -84,7 +84,7 @@ Status as of 4 October 2026.
 | Checks loop | A failed task-PR check is stored in private Blob and sent to the same task; bounded repairs move to Needs attention when exhausted | Background | Task detail | Built | P3-05 |
 | Project policy and merge | On task completion, open or reuse an App-backed PR only when the task branch is ahead of the default branch; record refusals as Needs attention, then stop at a verified green PR or squash-merge via the GitHub App when checks, branch freshness and protection rules pass | Background | Project settings; task detail | Built offline with fake GitHub coverage; coordinator live test-repository acceptance pending | P3-06, P3-14 |
 | Release records | One release per merge to `main`, linked to runs and deployments by SHA | Background | — | Built (live webhook setup pending) | P3-07 |
-| Release view | Git graph, releases, runs and deployments per project | Screen | Release view | Planned | P3-08 |
+| Release view | Git graph, releases, runs and deployments per project | Screen | Release view | Built | P3-08 |
 | Workflow templates | Managed projects copy PR-check and release workflows | Background | — | Built | P3-09 |
 
 ## Settings, usage and operations
@@ -109,11 +109,11 @@ Status as of 4 October 2026.
 | Teams calling | Call Jarvis from the Teams app (no paid number at first) | Phone | Teams | Planned (needs decision) | P7-01 |
 | Away mode | "I'm leaving": updates and confirmations go to the phone | Both | Main page, Phone | Planned (needs decision) | P7-02 |
 | Phone confirmations | Receive Dan-only Teams notifications and approve or reject actions with optional Speech F0 voice notes | Phone | Teams | Built offline; live Azure/phone check pending | P7-03 |
-| Screen sharing | Share a screen or window; Jarvis sees it | Both | Main page | Planned (needs decision) | P7-05 |
+| Screen sharing | Share a screen or window; request an in-memory vision description in chat or voice | Both | Main page | Built (live acceptance pending) | P7-05 |
 | Local PC bridge | Jarvis opens apps, URLs and allowed commands on Dan's PC | Voice/chat | PC companion | Planned (needs decision) | P7-06 |
 | Computer use | Jarvis clicks and types on Dan's PC while he talks | Voice/chat | PC companion | Planned (needs decision) | P7-07 |
 | Camera | Jarvis sees through the webcam on request | Both | Main page | Planned | P7-08 |
-| Calendar and mail | Agenda, free slots, move meetings, search and draft mail | Voice/chat | — | Planned (needs decision) | P7-09 |
+| Calendar and mail | Agenda, free slots, create/move meetings, search and summarise mail, draft replies and send after exact confirmation | Voice/chat | Backend tools; no new page | Built offline; Graph/RBAC setup and live acceptance pending | P7-09 |
 | Second brain | Search Dan's configured OneDrive notes folder and quote snippets with links | Voice/chat | — | Implemented offline; Graph setup and live search pending | P7-10 |
 
 ## Jarvis UI enabling logic (P8-03)
@@ -125,7 +125,7 @@ Status as of 4 October 2026.
 | Conversation opening and voice entry | See the conversation on arrival, type from the bottom-centred composer, and explicitly start voice from the small orb | Both | Main page | Planned | P8-05 |
 | Dynamic workspace views | View accessible information in temporary, question-relevant windows; ask Jarvis or move/resize/reorder views | Screen | Main workspace | Planned | P8-06 |
 | Window tabs and restore | Minimise a view without closing or saving it, then restore it from its tab or by asking Jarvis | Both | Main/voice workspace | Planned | P8-07 |
-| Contextual right panel | Open, close, or change relevant information without replacing the main content | Both | Main workspace | Planned | P8-08 |
+| Contextual right panel | Open, close, or change relevant information without replacing the main content | Both | Main workspace | Client built; authenticated Jarvis command delivery pending P8-15 | P8-08, P8-15 |
 | Runtime-state orb | See listening, thinking, speaking, reconnect, and unavailable states from the actual voice client; tool-call activity is stated unavailable until its runtime event exists | Screen | Voice workspace | Built | P8-09, P8-16 |
 | Desktop voice workspace | Enter full-page voice, carry open views across modes, and restore the typing layout; optionally minimise windows on entry (off by default) | Voice/chat | Main page | Planned | P8-10 |
 | Phone workspace | Show one main view, switch by swipe or request, and dock the active voice orb while content is foreground | Phone | Jarvis on phone | Planned | P8-11 |

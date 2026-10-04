@@ -263,32 +263,33 @@ describe('App shell', () => {
     expect(screen.getByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
   });
 
-  it('keeps Screen sharing and Camera visibly unavailable until their features are built', async () => {
+  it('keeps Camera unavailable while screen sharing is available in the conversation', async () => {
     await renderSignedIn();
 
-    for (const [name, explanation] of [
-      ['Share screen', 'Unavailable until screen sharing is built.'],
-      ['Camera', 'Unavailable until camera support is built.'],
-    ] as const) {
-      const button = screen.getByRole('button', { name });
-      expect(button).toHaveProperty('disabled', true);
-      expect(button.getAttribute('aria-describedby')).not.toBeNull();
-      expect(document.getElementById(button.getAttribute('aria-describedby')!)?.textContent).toBe(explanation);
-      expect(button.parentElement?.getAttribute('title')).toBe(explanation);
-    }
+    const camera = screen.getByRole('button', { name: 'Camera' });
+    expect(camera).toHaveProperty('disabled', true);
+    expect(camera.getAttribute('aria-describedby')).not.toBeNull();
+    expect(document.getElementById(camera.getAttribute('aria-describedby')!)?.textContent)
+      .toBe('Unavailable until camera support is built.');
+    expect(camera.parentElement?.getAttribute('title')).toBe('Unavailable until camera support is built.');
+    expect(within(screen.getByRole('region', { name: 'Conversation' }))
+      .getByRole('button', { name: 'Share screen' })).toHaveProperty('disabled', false);
   });
 
   it('opens and closes the contextual shell panel without replacing page content', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
 
-    await user.click(screen.getByRole('button', { name: 'Toggle contextual panel' }));
+    const toggle = screen.getByRole('button', { name: 'Toggle contextual panel' });
+    await user.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByRole('heading', { name: 'Context' })).not.toBeNull();
-    expect(screen.getByText('No contextual information is available for this page yet.')).not.toBeNull();
+    expect(screen.getByText('No relevant information is available yet.')).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Welcome, Dan Aakesen' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Close context panel' }));
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('heading', { name: 'Context' })).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Toggle contextual panel' }));
+    expect(document.activeElement).toBe(toggle);
   });
 
   it('enables chat and explains the other unavailable main-page actions', async () => {
@@ -348,10 +349,27 @@ describe('App shell', () => {
   it.each([
     ['/factory/tasks/42', 'Task 42'],
     ['/factory/projects/3', 'Project settings'],
-    ['/factory/releases/7', 'Release 7'],
   ])('opens %s as the page that activity links target', async (path, heading) => {
     await renderSignedIn(path);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(heading);
+  });
+
+  it('resolves release activity links to the owning project release view', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/factory/releases/7') return new Response(JSON.stringify({ projectId: '42' }));
+      if (path === '/factory/projects/42/releases') {
+        return new Response(JSON.stringify({
+          project: { id: '42', name: 'Jarvis', repo: 'DanAakesen/jarvis', defaultBranch: 'main' },
+          releases: [], pullRequests: [], workflowRuns: [], deployments: [], graph: null,
+        }));
+      }
+      return new Response(JSON.stringify({ state: 'awake' }));
+    });
+
+    await renderSignedIn('/factory/releases/7');
+
+    expect(await screen.findByRole('heading', { name: 'Jarvis releases' })).not.toBeNull();
   });
 
   it.each(['/factory/tasks/abc', '/factory/tasks/0', '/factory/unknown'])('treats %s as an unknown page', async (path) => {

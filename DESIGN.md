@@ -8,6 +8,7 @@ The shared shell and voice-workspace structure were agreed with Dan on 4 October
 - **One app, many areas.** One app shell with area navigation. The Software Factory is the first area; later areas (Banking, Health and fitness, Calendar) must fit without redesigning the shell.
 - **Live and honest.** State changes appear without refresh. Stale or disconnected data is shown as such; progress uses observed milestones, not invented percentages.
 - **Full transparency.** Every task shows what the agent did, what it used, and what it cost.
+- **Headless Outlook tools (P7-09).** Calendar and mail actions are available through conversation only; P8 owns any future visual surface. A staged change must state exactly what will happen and how to confirm it; mail text is treated as untrusted content.
 
 ## Page set (phase 1)
 
@@ -27,6 +28,22 @@ Events archived after 90 days load through the same task-detail timeline and pag
 The disk section uses recorded task events, not a live filesystem estimate; show
 each reading's time and byte-derived human-readable values without implying that
 the current filesystem state is available.
+
+## Release view (P3-08)
+
+The per-project release page follows the existing shell and neutral surface tokens.
+The branch graph is a horizontally scrollable SVG; commit links expose state and
+commit details on hover or keyboard focus, with 44 px hit targets. Marker shape
+identifies record type and marker colour follows the linked record's status. A
+refresh reloads persisted records and the on-demand GitHub graph; graph failures
+leave release, run, and deployment records visible.
+
+Inspected with scratch-only auth and mocked API responses in Chromium at 1280×1300
+(light theme) and 390×844 (dark theme): release selection, refresh, keyboard
+focus, 44 px commit targets, and zero page-width overflow. Screenshots:
+[desktop](docs/ui/screenshots/p3-08-release-view-desktop.png) and
+[phone](docs/ui/screenshots/p3-08-release-view-phone.png). Fixture content is
+mocked; live Entra, Azure SQL, and GitHub data remain unverified.
 
 ## Task usage (P2-12)
 
@@ -97,6 +114,17 @@ sign-in; the header wraps on narrow screens.
 - **Main page:** the verified name is the headline. Conversation (chat,
   language, voice, and persisted history) is the wide column; "Now" and Backend
   sit beside it from 900 px and stack below it on narrower screens.
+- **Screen sharing (P7-05):** keep the browser-selected share/stop control and
+  live sharing status in the conversation workflow, with a separate, explicit
+  Look at screen action for chat and voice. Keep the status and Stop action
+  visible while sharing; reuse the shared button, focus, and narrow-screen
+  wrapping conventions. This is the minimal P7 integration; P8-04 owns moving
+  the confirmed share control into the shared shell's top bar. Do not add camera
+  controls or continuous capture here.
+  Scratch-auth Chromium checks at 390 and 1280 px exercised Share, the visible
+  status/Stop action, a mocked chat inspection, and stream cleanup; neither
+  viewport overflowed or reported console errors. Real display capture and the
+  live backend/model remain unverified.
 - **Unavailable features:** each data area says what it will show. Each action
   stays visible but disabled, and is linked to that explanation with
   `aria-describedby`. No sample messages, tasks or states are shown.
@@ -220,7 +248,7 @@ The page uses the existing neutral app shell, with one page heading followed by
 labelled period and grouping controls. Project, agent, and source groups contain
 semantic tables of task-linked usage; rows show the source, metric, quantity,
 available DKK, and last-used time. Codex/Copilot costs stay absent, while
-sandbox and voice amounts are labelled estimates. The page identifies partial
+sandbox, voice, and screen-frame amounts are labelled estimates. The page identifies partial
 results when the 1,000-row API cap applies.
 
 Controls stack on narrow screens and only the table region can scroll

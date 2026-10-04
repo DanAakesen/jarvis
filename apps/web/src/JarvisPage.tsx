@@ -5,6 +5,8 @@ import { BackendSleepControl } from './BackendSleepControl';
 import { ConversationHistory } from './ConversationHistory';
 import { NowFeedPanel } from './NowFeedPanel';
 import { VoiceControls } from './VoiceControls';
+import { ScreenShareControls } from './ScreenShareControls';
+import { useScreenShare } from './screen-sharing';
 import './ConversationHistory.css';
 
 export function JarvisPage({
@@ -19,6 +21,7 @@ export function JarvisPage({
   getAccessToken: () => Promise<string>;
 }) {
   const [historyRefresh, setHistoryRefresh] = useState(0);
+  const screenShare = useScreenShare(config, getAccessToken);
   return (
     <div className="jarvis-page">
       <h1>Welcome, {name}</h1>
@@ -29,7 +32,8 @@ export function JarvisPage({
             Chat messages are saved across sessions. Jarvis streams each reply; if a reply is interrupted, check task
             status before sending another request.
           </p>
-          <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
+          <ScreenShareControls screenShare={screenShare} />
+          <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} screenShare={screenShare} />
 
           <section aria-labelledby="voice-heading">
             <h3 id="voice-heading">Voice</h3>
@@ -37,7 +41,11 @@ export function JarvisPage({
             <VoiceControls
               client={client}
               config={config}
-              onSessionEnded={() => setHistoryRefresh((value) => value + 1)}
+              screenShare={screenShare}
+              onSessionEnded={() => {
+                screenShare.stop();
+                setHistoryRefresh((value) => value + 1);
+              }}
             />
           </section>
         </section>
