@@ -14,6 +14,7 @@ import pytest
 
 from jarvis_tools import BackendToolClient, BackendUnavailable, current_message_id
 from model_client import (
+    CHAT_INSTRUCTIONS,
     AzureOpenAIResponsesClient,
     parse_max_output_tokens,
     personalize_instructions,
@@ -37,8 +38,14 @@ class FakeStream:
         async def iterate() -> AsyncIterator[Any]:
             for event in self._events:
                 yield event
-
         return iterate()
+
+
+def test_chat_instructions_ground_note_answers_in_search_results() -> None:
+    for instructions in CHAT_INSTRUCTIONS.values():
+        assert "notes_search" in instructions
+        assert "returned snippets" in instructions
+        assert "returned note link" in instructions
 
 
 class FakeItem(SimpleNamespace):

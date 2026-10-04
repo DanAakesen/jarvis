@@ -56,6 +56,8 @@ import { createAlertActivityStore } from './database/alert-store.js';
 import { createMemoryStore } from './database/memory-store.js';
 import { createMemoryModule } from './core/memory.js';
 import { createFoundryMemoryEmbedder } from './core/memory-embeddings.js';
+import { createGraphClient } from './graph/client.js';
+import { createNotesModule } from './notes/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 
 try {
@@ -82,6 +84,15 @@ try {
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
+    : undefined;
+  const graphClient = credential
+    ? createGraphClient({
+      getToken: async (signal) => {
+        const token = await credential.getToken('https://graph.microsoft.com/.default', { abortSignal: signal });
+        if (!token) throw new Error('Microsoft Graph credentials are unavailable');
+        return token.token;
+      },
+    })
     : undefined;
   const projectRepositoryCreator = config.keyVaultUri && credential
     ? createRepoAdminRepositoryCreator(
@@ -188,6 +199,7 @@ try {
   };
   const sandboxHeartbeat = database && config.foundryEndpoints
     ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub, alertNotifier), clientFor, {
+      onDecision: (decision) => logger.info(decision, 'sandbox_heartbeat.decision'),
       onError: (error) => {
         const details = error instanceof FoundryClientError
           ? { kind: error.kind, statusCode: error.statusCode, operation: error.operation }
@@ -275,6 +287,13 @@ try {
     modules.push(createMemoryModule({
       store: memoryStore,
       ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
+    }));
+  }
+  if (graphClient) {
+    modules.push(createNotesModule({
+      graph: graphClient,
+      ownerObjectId: config.auth.ownerObjectId,
+      folderPath: config.notesFolderPath,
     }));
   }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {

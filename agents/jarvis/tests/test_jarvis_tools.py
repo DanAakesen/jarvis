@@ -12,6 +12,7 @@ import pytest
 
 from jarvis_tools import (
     CATALOGUE_TTL_SECONDS,
+    INSTRUCTIONS,
     MAX_RESPONSE_BYTES,
     MAX_TOOLS,
     BackendToolClient,
@@ -44,6 +45,11 @@ MEMORY_SEARCH = {
         "additionalProperties": False,
     },
 }
+
+def test_notes_search_instructions_require_grounded_quotes_and_links() -> None:
+    assert "notes_search" in INSTRUCTIONS
+    assert "returned snippets" in INSTRUCTIONS
+    assert "returned note link" in INSTRUCTIONS
 
 
 class Backend:
