@@ -23,7 +23,7 @@ it('uses configured defaults and keeps the repository secret out of task and rec
   const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const address = String(url);
     requests.push({ url: address, init: init ?? {} });
-    if (address.includes('vault.azure.net')) return Response.json({ value: repositoryToken });
+    if (new URL(address).hostname === 'kv-jarvis.vault.azure.net') return Response.json({ value: repositoryToken });
     if (address.endsWith('/user')) return Response.json({ login: 'DanAakesen' });
     if (address.endsWith('/user/repos')) {
       return Response.json({ full_name: 'DanAakesen/bright-app', default_branch: 'main' }, { status: 201 });

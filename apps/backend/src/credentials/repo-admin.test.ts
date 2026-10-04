@@ -10,7 +10,7 @@ describe('backend repository creation credential boundary', () => {
     const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
       const parsedUrl = String(url);
       calls.push({ url: parsedUrl, init: init ?? {} });
-      if (parsedUrl.includes('vault.azure.net')) {
+      if (new URL(parsedUrl).hostname === 'kv-jarvis.vault.azure.net') {
         return Response.json({ value: repositoryToken });
       }
       if (parsedUrl.endsWith('/user')) return Response.json({ login: 'DanAakesen' });
@@ -64,7 +64,7 @@ describe('backend repository creation credential boundary', () => {
 
   it('uses the organization endpoint and refuses conflicts without exposing provider details', async () => {
     const fetcher = vi.fn(async (url: string | URL | Request): Promise<Response> => {
-      if (String(url).includes('vault.azure.net')) return Response.json({ value: repositoryToken });
+      if (new URL(String(url)).hostname === 'kv-jarvis.vault.azure.net') return Response.json({ value: repositoryToken });
       if (String(url).endsWith('/user')) return Response.json({ login: 'DanAakesen' });
       return Response.json({ message: `duplicate ${repositoryToken}` }, { status: 422 });
     });
