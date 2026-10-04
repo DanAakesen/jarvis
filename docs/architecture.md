@@ -602,6 +602,20 @@ The agent can read everything in its sandbox, including environment variables, s
 | Codex | Jarvis-only ChatGPT Pro login, separate from Dan's own apps | Daily check; renews when 3 days or less remain and writes it back to Key Vault | Implemented offline; live renewal proof pending #11 and Dan's credential setup |
 | GitHub | GitHub App token for one repository: contents and pull requests | 1 hour; the Git credential helper fetches the current token for each push | Decided; the prototype used a fine-grained token |
 
+### GitHub credentials inventory
+
+Every GitHub credential Jarvis uses, checked with Dan on 4 October 2026. Anything not listed here is not used by Jarvis and should be deleted.
+
+| Credential | Type and scope | Stored in | Used by | Lifetime |
+| --- | --- | --- | --- | --- |
+| Jarvis Software Factory | GitHub App, installed on all of Dan's repositories. Repository permissions: Contents and Pull requests read/write; Actions, Checks and Deployments read; Metadata read; nothing else | Private key as Key Vault `github-app-private-key` (backend only) | Backend: one-hour, single-repository installation tokens (P3-02 to P3-06) | Permanent; rotate the key if exposed |
+| `jarvis-github` | Fine-grained token: Contents and Pull requests read/write on all repositories | Key Vault `github-token` | Sandbox clone, push and pull requests | Temporary: delete the token and the secret when P3-02 (#40) switches pushes to installation tokens |
+| `jarvis-copilot` | Fine-grained token: only the Copilot Requests account permission; no repository access | Key Vault `copilot-token` | Copilot CLI sign-in inside the sandbox | Until revoked |
+| `PROJECT_TOKEN` | Classic token: `project` and `repo` | GitHub environment `project-board` (only `main` can use it) | Project board sync workflow; user-owned boards accept no App or fine-grained token | Until revoked |
+| `GITHUB_TOKEN` | Automatic per workflow run | GitHub Actions | CI and repository workflows | One run |
+
+Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The Codex credential is a ChatGPT login (Key Vault `codex-login`), not a GitHub token. Removed on 4 October 2026: the unused `COPILOT_ASSIGNMENT_TOKEN` (former P0-12 coordinator) and an unused fine-grained token named `Jarvis`.
+
 ### GitHub App
 
 [`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02 and P3-03; repository metadata read is GitHub's required baseline.
