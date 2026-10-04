@@ -14,8 +14,8 @@ import pytest
 
 from jarvis_tools import BackendToolClient, BackendUnavailable, current_message_id
 from model_client import (
-    AzureOpenAIResponsesClient,
     CHAT_INSTRUCTIONS,
+    AzureOpenAIResponsesClient,
     parse_max_output_tokens,
     responses_base_url,
 )
