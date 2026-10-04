@@ -8,7 +8,7 @@ type VoiceSocket = Omit<Pick<WebSocket, 'addEventListener' | 'removeEventListene
 export interface VoiceAudio {
   prepare(): Promise<void>;
   open(sendAudio: (audio: string) => void): Promise<void>;
-  play(audio: string): void;
+  play(audio: string): number;
   stopPlayback(): void;
   hasPlayback(): boolean;
   setPlaybackEndedHandler(handler: () => void): void;
@@ -22,7 +22,10 @@ export interface VoiceClientOptions {
   getAccessToken: () => Promise<string>;
   language?: VoiceLanguage;
   onStatus: (status: VoiceStatus, message: string) => void;
+  onAudioLevel?: (level: number) => void;
   onSessionEnded?: () => void;
+  onSessionReady?: (sessionId: string) => void;
+  onScreenRequest?: (transcript: string) => void;
   createSocket?: (url: string, protocols: string[]) => VoiceSocket;
   createAudio?: () => VoiceAudio;
   delay?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -264,20 +267,23 @@ function browserAudio(): VoiceAudio {
       mute.connect(context.destination);
     },
     play(encoded) {
-      if (!context) return;
+      if (!context) return 0;
       let binary: string;
-      try { binary = atob(encoded); } catch { return; }
+      try { binary = atob(encoded); } catch { return 0; }
       const byteLength = binary.length - (binary.length % 2);
-      if (!byteLength) return;
+      if (!byteLength) return 0;
       const pcm = new DataView(new ArrayBuffer(byteLength));
       for (let index = 0; index < byteLength; index += 1) {
         pcm.setUint8(index, binary.charCodeAt(index));
       }
       const buffer = context.createBuffer(1, byteLength / 2, SAMPLE_RATE);
       const samples = buffer.getChannelData(0);
+      let energy = 0;
       for (let index = 0; index < samples.length; index += 1) {
         samples[index] = pcm.getInt16(index * 2, true) / 0x8000;
+        energy += samples[index]! * samples[index]!;
       }
+      const audioLevel = samples.length > 0 ? Math.min(1, Math.sqrt(energy / samples.length) * 4) : 0;
       const sourceNode = context.createBufferSource();
       sourceNode.buffer = buffer;
       sourceNode.connect(context.destination);
@@ -291,6 +297,7 @@ function browserAudio(): VoiceAudio {
       sourceNode.start(startAt);
       scheduledUntil = startAt + buffer.duration;
       playing.add(sourceNode);
+      return audioLevel;
     },
     stopPlayback,
     hasPlayback: () => playing.size > 0,
@@ -328,6 +335,7 @@ export class BrowserVoiceClient {
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
   private stopOpenSocket: VoiceSocket | undefined;
   private stopOpenHandler: (() => void) | undefined;
+  private screenSessionReady = false;
 
   constructor(private readonly options: VoiceClientOptions) {
     this.language = options.language ?? 'da';
@@ -335,6 +343,7 @@ export class BrowserVoiceClient {
     this.makeSocket = options.createSocket ?? createSocket;
     this.delay = options.delay ?? abortableDelay;
     this.audio.setPlaybackEndedHandler(() => {
+      this.options.onAudioLevel?.(0);
       if (this.running && this.microphoneOpen && this.responseFinished) {
         this.publish('listening', 'Listening for your voice.');
       }
@@ -391,6 +400,14 @@ export class BrowserVoiceClient {
   setMuted(muted: boolean): void {
     this.muted = muted;
     this.audio.setMuted(muted);
+  }
+
+  sendScreenContext(description: string): void {
+    if (!this.running || !this.screenSessionReady || description.trim().length === 0 ||
+        description.length > 5_000 || this.socket?.readyState !== WebSocket.OPEN) {
+      throw new Error('The active voice session is not ready for screen context.');
+    }
+    this.socket.send(JSON.stringify({ type: 'jarvis.screen.context', description }));
   }
 
   async enableMicrophone(): Promise<void> {
@@ -488,6 +505,7 @@ export class BrowserVoiceClient {
           }
           this.microphoneOpen = false;
           this.sessionReady = false;
+          this.screenSessionReady = false;
           this.playbackAllowed = false;
           this.responseFinished = false;
           this.audio.stopPlayback();
@@ -516,10 +534,20 @@ export class BrowserVoiceClient {
   private receive(data: unknown): void {
     const event = decodeEvent(data);
     if (!event || typeof event.type !== 'string') return;
-    if (event.type === 'jarvis.session.ended') {
+    if (event.type === 'jarvis.session.ready') {
+      if (typeof event.sessionId === 'string' && /^[1-9]\d{0,18}$/u.test(event.sessionId)) {
+        this.screenSessionReady = true;
+        this.options.onSessionReady?.(event.sessionId);
+      }
+    } else if (event.type === 'jarvis.session.ended') {
       this.finishStop(true);
+    } else if (event.type === 'conversation.item.input_audio_transcription.completed' &&
+        typeof event.transcript === 'string' &&
+        /\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen)\b/iu.test(event.transcript)) {
+      this.options.onScreenRequest?.(event.transcript);
     } else if (event.type === 'input_audio_buffer.speech_started' || event.type === 'speech_started') {
       this.audio.stopPlayback();
+      this.options.onAudioLevel?.(0);
       this.playbackAllowed = false;
       this.responseFinished = false;
       if (this.running && this.microphoneOpen) this.publish('listening', 'Listening for your voice.');
@@ -529,17 +557,22 @@ export class BrowserVoiceClient {
       if (this.running && this.microphoneOpen) this.publish('thinking', 'Jarvis is thinking.');
     } else if (event.type === 'response.audio.delta' || event.type === 'response.output_audio.delta') {
       if (typeof event.delta === 'string' && this.running && this.microphoneOpen && this.playbackAllowed) {
-        this.audio.play(event.delta);
+        this.options.onAudioLevel?.(this.audio.play(event.delta));
         this.publish('speaking', 'Jarvis is speaking.');
       }
     } else if (event.type === 'response.done' && this.running && this.microphoneOpen) {
       this.responseFinished = true;
-      if (!this.audio.hasPlayback()) this.publish('listening', 'Listening for your voice.');
+      if (!this.audio.hasPlayback()) {
+        this.options.onAudioLevel?.(0);
+        this.publish('listening', 'Listening for your voice.');
+      }
     }
   }
 
   private finishStop(sessionEnded: boolean, failed = false): void {
     this.running = false;
+    this.sessionReady = false;
+    this.screenSessionReady = false;
     this.stopping = false;
     if (this.stopTimer !== undefined) clearTimeout(this.stopTimer);
     this.stopTimer = undefined;
@@ -553,6 +586,7 @@ export class BrowserVoiceClient {
     this.socket?.close(1000, 'Voice stopped');
     this.socket = undefined;
     this.audio.dispose();
+    this.options.onAudioLevel?.(0);
     this.publish(
       failed ? 'error' : 'stopped',
       failed ? 'Voice session could not be saved. Stop voice and try again.' : 'Voice is off.',

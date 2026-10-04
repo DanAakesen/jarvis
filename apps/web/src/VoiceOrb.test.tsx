@@ -18,6 +18,20 @@ describe('VoiceOrb', () => {
     expect((container.firstChild as HTMLElement).getAttribute('data-state')).toBe('speaking');
   });
 
+  it('maps live audio level to a bounded visual intensity without hiding the state label', () => {
+    const { container, rerender } = render(
+      <VoiceOrb status="speaking" message="Jarvis is speaking." audioLevel={0.75} />,
+    );
+    const orb = container.firstChild as HTMLElement;
+
+    expect(orb.style.getPropertyValue('--voice-level')).toBe('0.06');
+    expect(screen.getByRole('status').textContent).toContain('Jarvis is speaking.');
+
+    rerender(<VoiceOrb status="speaking" message="Jarvis is speaking." audioLevel={4} />);
+    expect(orb.style.getPropertyValue('--voice-level')).toBe('0.08');
+    expect(screen.getByRole('status').textContent).toContain('Jarvis is speaking.');
+  });
+
   it('reflects interruption and reconnect transitions', () => {
     const { container, rerender } = render(<VoiceOrb status="speaking" message="Jarvis is speaking." />);
 

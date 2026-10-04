@@ -1,11 +1,16 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
+import { useJarvisActivity } from './activity-context';
+import { JarvisActivityProvider } from './activity-provider';
 import { areas } from './areas';
+import { ContextPanel, ContextPanelProvider } from './ContextPanel';
+import { useContextPanel } from './context-panel-state';
 import { DatabaseWakeStatus } from './DatabaseWakeStatus';
 import { JarvisPage } from './JarvisPage';
 import { NotFoundPage, SignInPage } from './pages';
 import { SettingsPage } from './SettingsPage';
+import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
 
 type ShellIconName = 'home' | 'factory' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close';
@@ -51,13 +56,21 @@ function UnavailableControl({ id, label, explanation, icon }: {
 }
 
 function Shell({ signedIn, config, session }: { signedIn: boolean; config: PublicConfig; session: SignInSession }) {
+  return (
+    <ContextPanelProvider>
+      <ShellLayout signedIn={signedIn} config={config} session={session} />
+    </ContextPanelProvider>
+  );
+}
+
+function ShellLayout({ signedIn, config, session }: { signedIn: boolean; config: PublicConfig; session: SignInSession }) {
   const { pathname } = useLocation();
+  const { working } = useJarvisActivity();
   const navigationToggle = useRef<HTMLButtonElement>(null);
-  const contextToggle = useRef<HTMLButtonElement>(null);
+  const contextPanel = useContextPanel();
   const [navigationOpen, setNavigationOpen] = useState(() => (
     typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches
   ));
-  const [contextOpen, setContextOpen] = useState(false);
   const activeArea = areas.find(({ path }) => pathname.startsWith(`/${path}`));
   const settingsActive = pathname.startsWith('/settings');
   const areaLabel = settingsActive ? 'Settings' : activeArea?.label ?? 'Jarvis';
@@ -68,13 +81,8 @@ function Shell({ signedIn, config, session }: { signedIn: boolean; config: Publi
     setNavigationOpen(false);
   }
 
-  function closeContext() {
-    contextToggle.current?.focus();
-    setContextOpen(false);
-  }
-
   return (
-    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && navigationOpen} data-context-open={signedIn && contextOpen}>
+    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && navigationOpen} data-context-open={signedIn && contextPanel.isOpen}>
       <a className="skip-link" href="#content">Skip to content</a>
       {signedIn && (
         <nav className="area-rail" aria-label="Areas">
@@ -125,16 +133,23 @@ function Shell({ signedIn, config, session }: { signedIn: boolean; config: Publi
         </div>
         {signedIn && (
           <div className="topbar-actions">
+            {working && (
+              <span className="topbar-working" role="status" aria-label="Jarvis is working" aria-live="polite">
+                <span className="topbar-working-mark" aria-hidden="true" />
+                <span className="topbar-working-wide" aria-hidden="true">Jarvis is working</span>
+                <span className="topbar-working-compact" aria-hidden="true">Working</span>
+              </span>
+            )}
             <UnavailableControl id="screen-share-status" label="Share screen" explanation="Unavailable until screen sharing is built." icon="screen" />
             <UnavailableControl id="camera-status" label="Camera" explanation="Unavailable until camera support is built." icon="camera" />
             <button
-              ref={contextToggle}
+              id="context-panel-toggle"
               className="topbar-icon-button"
               type="button"
               aria-label="Toggle contextual panel"
-              aria-expanded={contextOpen}
+              aria-expanded={contextPanel.isOpen}
               aria-controls="context-panel"
-              onClick={() => setContextOpen((open) => !open)}
+              onClick={contextPanel.toggle}
             >
               <ShellIcon name="context" />
             </button>
@@ -152,17 +167,7 @@ function Shell({ signedIn, config, session }: { signedIn: boolean; config: Publi
           <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
         )}
       </footer>
-      {signedIn && (
-        <aside id="context-panel" className="context-panel" hidden={!contextOpen} aria-labelledby="context-heading">
-          <div className="context-panel-heading">
-            <h2 id="context-heading">Context</h2>
-            <button className="sidebar-close" type="button" aria-label="Close context panel" onClick={closeContext}>
-              <ShellIcon name="close" />
-            </button>
-          </div>
-          <p>No contextual information is available for this page yet.</p>
-        </aside>
-      )}
+      {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} />}
     </div>
   );
 }
@@ -180,27 +185,50 @@ export function App({ config = defaultConfig }: { config?: PublicConfig }) {
   const session = useSignIn(config);
   const signedIn = session.state === 'signed-in' && session.profile !== null;
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const motionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    const syncPreferences = () => {
+      root.dataset.motionPreference = motionPreference?.matches ? 'reduced' : 'full';
+      root.dataset.documentVisibility = document.hidden ? 'hidden' : 'visible';
+    };
+    syncPreferences();
+    motionPreference?.addEventListener('change', syncPreferences);
+    document.addEventListener('visibilitychange', syncPreferences);
+    return () => {
+      motionPreference?.removeEventListener('change', syncPreferences);
+      document.removeEventListener('visibilitychange', syncPreferences);
+      delete root.dataset.documentVisibility;
+      delete root.dataset.motionPreference;
+    };
+  }, []);
+
   return (
-    <Routes>
-      <Route element={<Shell signedIn={signedIn} config={config} session={session} />}>
-        <Route element={<RequireSignIn session={session} />}>
-          <Route index element={
-            <JarvisPage
-              name={session.profile?.name ?? ''}
-              client={session.client}
-              config={config}
-              getAccessToken={session.getAccessToken}
-            />
-          } />
-          {areas.map(({ id, path, Component }) => (
-            <Route key={id} path={`${path}/*`} element={
-              <Component backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
-            } />
-          ))}
-          <Route path="settings" element={<SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />} />
-        </Route>
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    </Routes>
+    <JarvisActivityProvider>
+      <ThemePreferenceProvider key={signedIn ? 'signed-in' : 'signed-out'}
+        enabled={signedIn} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}>
+        <Routes>
+          <Route element={<Shell signedIn={signedIn} config={config} session={session} />}>
+            <Route element={<RequireSignIn session={session} />}>
+              <Route index element={
+                <JarvisPage
+                  name={session.profile?.name ?? ''}
+                  client={session.client}
+                  config={config}
+                  getAccessToken={session.getAccessToken}
+                />
+              } />
+              {areas.map(({ id, path, Component }) => (
+                <Route key={id} path={`${path}/*`} element={
+                  <Component backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+                } />
+              ))}
+              <Route path="settings" element={<SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />} />
+            </Route>
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
+      </ThemePreferenceProvider>
+    </JarvisActivityProvider>
   );
 }

@@ -44,7 +44,7 @@ function audioAdapter(onOpen?: () => void) {
   return {
     prepare: vi.fn(async () => {}),
     open: vi.fn(async () => { onOpen?.(); }),
-    play: vi.fn(),
+    play: vi.fn(() => 0.5),
     stopPlayback: vi.fn(),
     hasPlayback: vi.fn(() => false),
     setPlaybackEndedHandler: vi.fn((handler: () => void) => { playbackEnded = handler; }),
@@ -123,6 +123,7 @@ describe('BrowserVoiceClient', () => {
         return socket;
       },
     });
+
     clients.push(client);
 
     client.start();
@@ -135,15 +136,54 @@ describe('BrowserVoiceClient', () => {
     expect(onSessionEnded).toHaveBeenCalledOnce();
   });
 
+  it('exposes the active voice session and forwards only bounded screen context requests', async () => {
+    let socket: MockSocket | undefined;
+    const onSessionReady = vi.fn();
+    const onScreenRequest = vi.fn();
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      language: 'en',
+      onStatus: () => {},
+      onSessionReady,
+      onScreenRequest,
+      createAudio: () => audioAdapter(),
+      createSocket: (url, protocols) => {
+        socket = new MockSocket(url, protocols);
+        return socket;
+      },
+    });
+    clients.push(client);
+
+    client.start();
+    await until(() => socket?.readyState === 1);
+    socket?.receive({ type: 'jarvis.session.ready', sessionId: '41' });
+    socket?.receive({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'Could you look at my screen?',
+    });
+    client.sendScreenContext('A shared window shows a chart.');
+
+    expect(onSessionReady).toHaveBeenCalledWith('41');
+    expect(onScreenRequest).toHaveBeenCalledWith('Could you look at my screen?');
+    expect(socket?.sent.at(-1)).toEqual({
+      type: 'jarvis.screen.context',
+      description: 'A shared window shows a chart.',
+    });
+    expect(() => client.sendScreenContext('x'.repeat(5_001))).toThrow(/not ready/);
+  });
+
   it('stops current playback when speech starts', async () => {
     const audio = audioAdapter();
     const statuses: string[] = [];
+    const audioLevels: number[] = [];
     let socket: MockSocket | undefined;
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com',
       getAccessToken: async () => 'token',
       language: 'en',
       onStatus: (status) => statuses.push(status),
+      onAudioLevel: (level) => audioLevels.push(level),
       createAudio: () => audio,
       createSocket: (url, protocols) => {
         socket = new MockSocket(url, protocols);
@@ -159,7 +199,9 @@ describe('BrowserVoiceClient', () => {
     socket?.receive({ type: 'response.created' });
     expect(statuses.at(-1)).toBe('thinking');
     socket?.receive({ type: 'response.audio.delta', delta: 'AQID' });
+    expect(audioLevels).toContain(0.5);
     socket?.receive({ type: 'input_audio_buffer.speech_started' });
+    expect(audioLevels.at(-1)).toBe(0);
     socket?.receive({ type: 'response.audio.delta', delta: 'BAUG' });
 
     expect(audio.play).toHaveBeenCalledWith('AQID');
