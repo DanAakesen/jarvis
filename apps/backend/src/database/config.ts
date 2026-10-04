@@ -36,9 +36,9 @@ export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): SqlCon
   }
   return {
     server, database, port: Number(port),
-    connectionTimeout: 120_000,
+    connectionTimeout: 30_000,
     requestTimeout: 120_000,
-    pool: { min: 0, max: 5, idleTimeoutMillis: 30_000 },
+    pool: { min: 0, max: 5, idleTimeoutMillis: 30_000, acquireTimeoutMillis: 30_000, createTimeoutMillis: 30_000 },
     validateConnection: 'socket',
     options: { encrypt: true, trustServerCertificate: testLogin, abortTransactionOnError: true, appName: 'jarvis-backend' },
     ...(testLogin ? { user: env.SQL_USER!, password: env.SQL_PASSWORD! } : {

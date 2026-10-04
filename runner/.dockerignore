@@ -1,5 +1,7 @@
 *
 !app.py
+!github_token.py
+!git_credential_helper.py
 !requirements.txt
 !tools/
 !tools/package.json

@@ -1,4 +1,5 @@
 import type { ActivityItem, NowFeed } from './activity';
+import { backendFetch } from './backend-request';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxSseFrameLength = 64 * 1024;
@@ -56,7 +57,7 @@ async function authorizedRequest(
 ): Promise<Response> {
   const token = await getAccessToken();
   try {
-    return await fetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
+    return await backendFetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
       ...init,
       headers: {
         Authorization: `${['Bear', 'er'].join('')} ${token}`,

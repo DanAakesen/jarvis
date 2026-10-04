@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import { ProjectConflictError, type CreateProject, type Project, type ProjectStore, type UpdateProject } from '../factory/projects.js';
 
 type ProjectRow = Omit<Project, 'id'> & { id: string };
@@ -17,7 +18,7 @@ function isUniqueViolation(error: unknown): boolean {
 export function createProjectStore(pool: sql.ConnectionPool): ProjectStore {
   return {
     async list() {
-      const { recordset } = await pool.request().query<ProjectRow>(
+      const { recordset } = await databaseReadRequest(pool).query<ProjectRow>(
         `SELECT ${columns} FROM dbo.projects WHERE active = 1 ORDER BY name, id;`,
       );
       return recordset;

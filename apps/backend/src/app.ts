@@ -14,6 +14,7 @@ import type { ConversationStore } from './core/conversation-store.js';
 import type { ConversationAgent } from './core/chat-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskController, TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
+import type { GitHubAppTokenIssuer } from './github-app.js';
 import type { ProjectStore } from './factory/projects.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
@@ -25,11 +26,13 @@ import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
 
 export interface BuildAppOptions {
+  readonly databaseStatus?: () => boolean;
   readonly auth?: TokenVerifier;
   readonly modules?: readonly BackendModule[];
   readonly projectStore?: ProjectStore;
   readonly toolCallStore?: ToolCallStore;
   readonly taskStore?: TaskStore;
+  readonly githubAppTokenIssuer?: GitHubAppTokenIssuer;
   readonly taskController?: TaskController;
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
@@ -45,9 +48,11 @@ export interface BuildAppOptions {
 
 declare module 'fastify' {
   interface FastifyInstance {
+    databaseStatus: () => boolean;
     projectStore: ProjectStore | null;
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
+    githubAppTokenIssuer: GitHubAppTokenIssuer | null;
     taskController: TaskController | null;
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
@@ -105,9 +110,11 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     reply.code(statusCode).send({ error: statusCode < 500 ? 'Invalid request' : 'Internal server error' });
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));
+  app.decorate('databaseStatus', options.databaseStatus ?? (() => false));
   app.decorate('projectStore', options.projectStore ?? null);
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);
+  app.decorate('githubAppTokenIssuer', options.githubAppTokenIssuer ?? null);
   app.decorate('taskController', options.taskController ?? null);
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);

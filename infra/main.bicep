@@ -15,6 +15,9 @@ param backendImage string = ''
 @description('The Entra object ID of the hosted Jarvis agent. Empty keeps agent access disabled.')
 param jarvisAgentObjectId string = ''
 
+@description('The non-secret GitHub App ID used by the backend to mint installation tokens.')
+param githubAppId string = ''
+
 @description('The subscription currency amount for the monthly resource group budget (300 DKK).')
 param monthlyBudgetAmount int = 300
 
@@ -496,6 +499,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: backendIdentity.properties.clientId
             }
             {
+              name: 'KEY_VAULT_URI'
+              value: keyVault.properties.vaultUri
+            }
+            {
               name: 'FOUNDRY_PROJECT_ENDPOINT'
               value: 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
             }
@@ -515,6 +522,11 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'ENTRA_JARVIS_AGENT_OBJECT_ID'
               value: jarvisAgentObjectId
+            }
+          ], empty(githubAppId) ? [] : [
+            {
+              name: 'GITHUB_APP_ID'
+              value: githubAppId
             }
           ])
           // Startup applies migrations before listening and may wait for the serverless database to resume (300-second deadline).

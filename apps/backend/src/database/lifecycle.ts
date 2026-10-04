@@ -1,10 +1,12 @@
 import sql from 'mssql';
 import type { buildApp } from '../app.js';
 import { applyMigrations, readMigrations, defaultMigrationsDirectory } from './migrations.js';
+import { createDatabaseWakeRetry } from './wake-retry.js';
 
 export interface DatabaseLifecycle {
   initialize(): Promise<void>;
   close(): Promise<void>;
+  isWaking?(): boolean;
 }
 
 // The deadline includes SQL auto-resume, lock contention and every migration.
@@ -15,12 +17,14 @@ export function createDatabase(config: sql.config, directory = defaultMigrations
   // Driver errors can contain tokens/queries/provider details; never log them.
   pool.on('error', () => { /* Failed requests remain errors at their caller. */ });
   const controller = new AbortController();
+  const wake = createDatabaseWakeRetry(pool, controller.signal);
   let work: Promise<void> | undefined;
   let initialization: Promise<void> | undefined;
   let closing: Promise<void> | undefined;
   const closePool = () => closing ??= pool.close().then(() => {});
   return {
     pool,
+    isWaking: wake.isWaking,
     initialize() {
       if (initialization) return initialization;
       const signal = controller.signal;
@@ -31,12 +35,14 @@ export function createDatabase(config: sql.config, directory = defaultMigrations
           signal.throwIfAborted();
           const migrations = await readMigrations(directory);
           signal.throwIfAborted();
-          await pool.connect();
+          await wake.run(() => pool.connect());
           // mssql cannot close a connecting pool. If cancellation happened
           // during connect, this owner closes it as soon as connect settles.
           signal.throwIfAborted();
           await applyMigrations(pool, migrations, 60_000, signal);
         } catch {
+          controller.abort();
+          await wake.settle();
           await closePool();
           throw new Error('Database startup failed');
         }
@@ -60,6 +66,7 @@ export function createDatabase(config: sql.config, directory = defaultMigrations
       // Rollback releases the app lock before destroying the pool. The
       // process-level shutdown deadline separately bounds this wait.
       await work?.catch(() => {});
+      await wake.settle();
       await closePool();
     },
   };
