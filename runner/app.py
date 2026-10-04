@@ -12,6 +12,7 @@ import asyncio
 import base64
 import json
 import logging
+import math
 import os
 import re
 import shutil
@@ -45,6 +46,7 @@ ACTIVE_STATUSES = {"queued", "running"}
 STOP_WAIT_SECONDS = 90
 STOPPED_STATUS = {"steer": "interrupted", "pause": "paused"}
 CODEX_LOGIN_SECRET = "codex-login"
+COPILOT_TOKEN_SECRET = "copilot-token"
 # Codex renews its login itself only when the access token (valid 10 days) is
 # within 5 minutes of expiry, and each renewal invalidates every other copy.
 # Jarvis renews earlier, in one sandbox at a time, so tasks never renew mid-run.
@@ -70,6 +72,7 @@ class TaskState:
     session_id: str
     agent: str
     task: str
+    mode: str = "task"
     model: str | None = None
     reasoning: str | None = None
     status: str = "queued"
@@ -115,9 +118,10 @@ def _task_state_path(session_id: str, invocation_id: str) -> Path:
 def _write_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
+    with os.fdopen(os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as output:
+        os.fchmod(output.fileno(), 0o600)
+        json.dump(value, output, separators=(",", ":"))
     temporary.replace(path)
-    path.chmod(0o600)
 
 
 def _capacity_snapshot() -> dict[str, Any]:
@@ -142,17 +146,39 @@ def _capacity_snapshot() -> dict[str, Any]:
 
 
 def _persist_task(state: TaskState) -> None:
-    """Persist per-invocation metadata without prompts, results, or credentials."""
+    """Persist safe invocation metadata and only allowlisted Codex renewal results."""
+    saved: dict[str, Any] = {
+        "invocation_id": state.invocation_id,
+        "session_id": state.session_id,
+        "agent": state.agent,
+        "status": state.status,
+        "started_at": state.started_at,
+        "finished_at": state.finished_at,
+    }
+    if state.mode == "renew-codex":
+        saved["mode"] = state.mode
+        if isinstance(state.result, dict):
+            for key in ("renewed", "stored", "reply_ok"):
+                if isinstance(state.result.get(key), bool):
+                    saved.setdefault("result", {})[key] = state.result[key]
+            for key in ("last_refresh_before", "last_refresh_after", "expires_before", "expires_after", "expires"):
+                value = state.result.get(key)
+                if isinstance(value, str) and _LAST_REFRESH.match(value):
+                    saved.setdefault("result", {})[key] = value
+            if state.result.get("reason") == "fresh":
+                saved.setdefault("result", {})["reason"] = "fresh"
+            copilot = state.result.get("copilot")
+            if isinstance(copilot, dict):
+                saved["result"] = saved.get("result", {})
+                saved["result"]["copilot"] = {
+                    key: value
+                    for key, value in copilot.items()
+                    if key in {"expires", "last_renewed"}
+                    and (value is None or isinstance(value, str) and _LAST_REFRESH.match(value))
+                }
     _write_json(
         _task_state_path(state.session_id, state.invocation_id),
-        {
-            "invocation_id": state.invocation_id,
-            "session_id": state.session_id,
-            "agent": state.agent,
-            "status": state.status,
-            "started_at": state.started_at,
-            "finished_at": state.finished_at,
-        },
+        saved,
     )
 
 
@@ -174,10 +200,13 @@ def _load_task(invocation_id: str) -> TaskState | None:
             session_id=str(saved["session_id"]),
             agent=str(saved["agent"]),
             task="",
+            mode=str(saved.get("mode", "task")),
             status=str(saved.get("status", "unknown")),
             started_at=float(saved.get("started_at", time.time())),
             finished_at=saved.get("finished_at"),
         )
+        if state.mode == "renew-codex" and isinstance(saved.get("result"), dict):
+            state.result = saved["result"]
         return state
     return None
 
@@ -237,6 +266,11 @@ def _optional_config(payload: dict[str, Any], key: str, max_length: int) -> str 
 
 
 async def _key_vault_secret(name: str) -> str:
+    value, _, _ = await _key_vault_secret_details(name)
+    return value
+
+
+async def _key_vault_secret_details(name: str) -> tuple[str, str | None, str | None]:
     vault_uri = os.environ.get("KEY_VAULT_URI")
     if not vault_uri:
         raise RuntimeError("KEY_VAULT_URI is not configured")
@@ -260,7 +294,8 @@ async def _key_vault_secret(name: str) -> str:
             secret = await client.get_secret(name)
             if not secret.value:
                 raise RuntimeError(f"Key Vault secret '{name}' is empty")
-            return secret.value
+            properties = secret.properties
+            return secret.value, _iso(properties.expires_on), _iso(properties.updated_on)
         finally:
             await client.close()
     finally:
@@ -424,7 +459,7 @@ async def _credentials_for(agent: str) -> dict[str, str]:
     if agent == "copilot":
         return {
             "github_token": github_token,
-            "copilot_token": await _key_vault_secret("copilot-token"),
+            "copilot_token": await _key_vault_secret(COPILOT_TOKEN_SECRET),
         }
     if agent == "codex":
         return {
@@ -840,6 +875,39 @@ async def _steer_then_run(state: TaskState) -> None:
     await _run_task(state)
 
 
+async def _run_codex_renewal(state: TaskState, min_days_left: float, force: bool) -> None:
+    session_lock = session_locks.setdefault(state.session_id, asyncio.Lock())
+    lock_acquired = False
+    try:
+        await session_lock.acquire()
+        lock_acquired = True
+        if state.cancel_requested:
+            return
+        state.status = "running"
+        state.event("started", agent="codex", mode="renew-codex")
+        state.result = await _renew_codex_login(state.session_id, min_days_left, force)
+        try:
+            _, expires, updated = await _key_vault_secret_details(COPILOT_TOKEN_SECRET)
+            state.result["copilot"] = {"expires": expires, "last_renewed": updated}
+        except Exception:
+            pass
+        state.status = "completed"
+        state.event("completed", result=state.result)
+    except asyncio.CancelledError:
+        state.status = "cancelled"
+        state.event("cancelled")
+        raise
+    except Exception as exc:  # sanitized: exception text never includes credentials
+        state.status = "failed"
+        state.error = f"Codex renewal failed: {type(exc).__name__}"
+        state.event("failed", error=state.error)
+    finally:
+        state.finished_at = time.time()
+        _persist_task(state)
+        if lock_acquired:
+            session_lock.release()
+
+
 def _steering_prompt(message: str) -> str:
     return (
         "Correction from the user while you were working:\n"
@@ -872,15 +940,6 @@ async def invoke(request: Request) -> Response:
             {"error": "mode must be 'task', 'steer', 'pause', or 'renew-codex'"},
             status_code=400,
         )
-    if mode == "renew-codex":
-        try:
-            min_days_left = float(payload.get("min_days_left", CODEX_RENEW_MIN_DAYS_LEFT))
-            result = await _renew_codex_login(
-                request.state.session_id, min_days_left, force=payload.get("force") is True
-            )
-        except Exception as exc:  # sanitized: never includes the login document
-            return JSONResponse({"renewed": False, "error": type(exc).__name__}, status_code=500)
-        return JSONResponse({"session_id": request.state.session_id, **result})
     if mode == "pause":
         session_id = request.state.session_id
         running = next(
@@ -905,6 +964,30 @@ async def invoke(request: Request) -> Response:
 
     invocation_id = request.state.invocation_id
     session_id = request.state.session_id
+    if mode == "renew-codex":
+        if agent != "codex":
+            return JSONResponse({"error": "Codex renewal requires the codex agent"}, status_code=400)
+        try:
+            min_days_left = float(payload.get("min_days_left", CODEX_RENEW_MIN_DAYS_LEFT))
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "min_days_left must be between 0 and 30"}, status_code=400)
+        if not math.isfinite(min_days_left) or not 0 <= min_days_left <= 30:
+            return JSONResponse({"error": "min_days_left must be between 0 and 30"}, status_code=400)
+        state = TaskState(
+            invocation_id=invocation_id, session_id=session_id, agent=agent, task="", mode=mode,
+        )
+        async with tasks_lock:
+            tasks[invocation_id] = state
+        state.worker = asyncio.create_task(
+            _run_codex_renewal(state, min_days_left, force=payload.get("force") is True)
+        )
+        return JSONResponse({
+            "invocation_id": invocation_id,
+            "session_id": session_id,
+            "status": state.status,
+            "agent": agent,
+            "mode": mode,
+        })
     if payload.get("probe") == "key-vault":
         credentials: dict[str, str] = {}
         try:

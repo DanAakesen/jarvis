@@ -232,7 +232,7 @@ erDiagram
 - `task_events` stores **every** task event (Dan's choice: maximum freedom for the UI). It is append-only, drives the card's live updates (via SSE) and the task's history, and is the only fast-growing table; archive by age. Each event also creates a `factory` activity row with its type as `kind`, its summary (or type) as title, and `task:<id>` as link.
 - `origin_message_id` links a task to the message in Jarvis's conversation that created it. The existing schema requires this reference for non-board tasks; board tasks may omit it.
 - P1-04 creates a board task only for an active project, using the project's default agent unless the request selects one. Task creation and its `created` event share a transaction. Backend state transitions lock the task row, enforce the product lifecycle, and write a `state_changed` event in that transaction; `Done` requires a trusted, verified-completion call. There is no client state-update route.
-- P1-05 writes each task event and its activity row in the same transaction. `TaskStore.recordEvent` is the producer API for future runner and backend event sources; JSON payloads are capped at 1 MiB. The in-process hub publishes only after commit; payloads over 4 KiB are omitted from the published event and marked truncated. The P1-06 SSE endpoint adds authenticated streaming, heartbeat and reconnect replay.
+- P1-05 writes each task event and its activity row in the same transaction. `TaskStore.recordEvent` is the producer API for future runner and backend event sources; JSON payloads are capped at 1 MiB. The in-process hub publishes only after commit; payloads over 4 KiB are omitted from the published event and marked truncated. P1-06's authenticated SSE endpoint reads missed events from `task_events` by ascending ID in bounded pages, buffers live hub publications during replay, and suppresses overlapping IDs. The fetch client reconnects with the last delivered ID; the stream sends a heartbeat comment every 25 seconds. No schema change is needed.
 - `GET /factory/tasks` filters by project, agent, state, creation period and search, with bounded offset pagination. `GET /factory/tasks/:id` returns the task and a bounded, pageable event slice. Responses are capped at 1 MiB; event payloads over 4 KiB are omitted and marked truncated.
 
 ## 4 · Sandbox
@@ -359,13 +359,15 @@ erDiagram
         string name PK "codex-login, copilot-token, github-app-key"
         datetime expires_at
         datetime last_renewed_at
-        string status "ok | renew_soon | failed"
+        string status "ok | renew_soon | failed | unknown"
+        uuid renewal_lease_owner "nullable"
+        datetime renewal_lease_until "nullable"
     }
 ```
 
 - `webhook_deliveries` makes webhook handling idempotent: GitHub may deliver the same event twice.
 - A delivery is first stored with null outcome and processing time; those fields are set together to `ok`, `ignored` or `error` when handled. No webhook payload or secret is stored here.
-- `credential_status` stores expiry/renewal dates and status only, never secret values; it drives "renew soon" warnings on the board.
+- `credential_status` stores expiry/last-updated dates and status only, never secret values. Codex and Copilot start as `unknown`; Key Vault metadata and Codex renewal populate dates. A paired owner/expiry lease serializes Codex renewal against Codex task starts; unknown status alone does not block tasks, while a failed Codex renewal does.
 - Container App sleep state is read from Azure's configured minimum replicas; it is not persisted in `settings` or another SQL table. The sleep refusal check takes an exclusive transaction-owned application lock while task creation and state transitions take the shared lock, so no Ready or Running task can be introduced between the check and scale request. This adds no schema object.
 
 ## 7 · Usage and cost

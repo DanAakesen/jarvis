@@ -471,6 +471,129 @@ def test_renew_codex_login_renews_writes_back_and_cleans_up(tmp_path, monkeypatc
     assert "SECRET-RENEWED-TOKEN" not in json.dumps(result)
 
 
+def test_codex_renewal_invocation_returns_pollable_status(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    invocation_id = "renew-invocation"
+    session_id = "renew-session"
+
+    async def renew(session, min_days_left, force):
+        assert (session, min_days_left, force) == (session_id, 3, False)
+        return {"renewed": False, "reason": "fresh", "expires": "2030-01-01T00:00:00Z"}
+
+    monkeypatch.setattr(app, "_renew_codex_login", renew)
+    async def key_vault_details(name):
+        assert name == app.COPILOT_TOKEN_SECRET
+        return "hidden-token-value", "2030-01-01T00:00:00.000000Z", "2026-10-03T00:00:00.000000Z"
+
+    monkeypatch.setattr(app, "_key_vault_secret_details", key_vault_details)
+
+    async def exercise():
+        body = json.dumps({"agent": "codex", "mode": "renew-codex", "min_days_left": 3}).encode()
+
+        async def receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        request = Request({"type": "http", "method": "POST", "headers": [], "path": "/invocations"}, receive)
+        request.state.session_id = session_id
+        request.state.invocation_id = invocation_id
+        accepted = await app.invoke(request)
+        await app.tasks[invocation_id].worker
+
+        status_request = Request({"type": "http", "method": "GET", "headers": [], "path": "/invocations"})
+        status_request.state.invocation_id = invocation_id
+        status = await app.get_invocation(status_request)
+        return json.loads(accepted.body), json.loads(status.body)
+
+    try:
+        accepted, status = asyncio.run(exercise())
+        assert accepted == {
+            "invocation_id": invocation_id,
+            "session_id": session_id,
+            "status": "queued",
+            "agent": "codex",
+            "mode": "renew-codex",
+        }
+        assert status["status"] == "completed"
+        assert status["result"]["reason"] == "fresh"
+        assert status["result"]["copilot"] == {
+            "expires": "2030-01-01T00:00:00.000000Z",
+            "last_renewed": "2026-10-03T00:00:00.000000Z",
+        }
+        assert status["error"] is None
+    finally:
+        app.tasks.pop(invocation_id, None)
+
+
+def test_codex_renewal_survives_unavailable_copilot_metadata(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    state = app.TaskState(
+        invocation_id="renew-without-copilot-metadata",
+        session_id="renew-session",
+        agent="codex",
+        task="",
+        mode="renew-codex",
+    )
+
+    async def renew(session, min_days_left, force):
+        return {"renewed": False, "reason": "fresh", "expires": "2030-01-01T00:00:00Z"}
+
+    async def unavailable(name):
+        raise RuntimeError("Key Vault unavailable")
+
+    monkeypatch.setattr(app, "_renew_codex_login", renew)
+    monkeypatch.setattr(app, "_key_vault_secret_details", unavailable)
+
+    asyncio.run(app._run_codex_renewal(state, min_days_left=3, force=False))
+
+    assert state.status == "completed"
+    assert state.result["reason"] == "fresh"
+    assert "copilot" not in state.result
+
+
+def test_renewal_status_persists_only_allowlisted_metadata(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    state = app.TaskState(
+        invocation_id="renew-persisted",
+        session_id="renew-session",
+        agent="codex",
+        task="",
+        mode="renew-codex",
+        status="completed",
+        result={
+            "renewed": True,
+            "stored": True,
+            "last_refresh_after": "2026-10-03T12:00:00.000000Z",
+            "expires_after": "2026-10-13T12:00:00.000000Z",
+            "refresh_token": "must-not-persist",
+            "copilot": {
+                "expires": "2026-11-01T00:00:00.000000Z",
+                "last_renewed": "2026-10-01T00:00:00.000000Z",
+                "secret": "must-not-persist-either",
+            },
+        },
+    )
+
+    app._persist_task(state)
+    loaded = app._load_task("renew-persisted")
+
+    assert loaded is not None
+    assert loaded.result == {
+        "renewed": True,
+        "stored": True,
+        "last_refresh_after": "2026-10-03T12:00:00.000000Z",
+        "expires_after": "2026-10-13T12:00:00.000000Z",
+        "copilot": {
+            "expires": "2026-11-01T00:00:00.000000Z",
+            "last_renewed": "2026-10-01T00:00:00.000000Z",
+        },
+    }
+    state_path = app._task_state_path("renew-session", "renew-persisted")
+    assert state_path.stat().st_mode & 0o777 == 0o600
+    assert not state_path.with_suffix(".json.tmp").exists()
+    assert "must-not-persist" not in state_path.read_text()
+    assert "must-not-persist-either" not in state_path.read_text()
+
+
 def test_codex_auth_file_is_private_when_written(tmp_path, monkeypatch):
     codex_home = tmp_path / ".codex"
     auth_path = codex_home / "auth.json"

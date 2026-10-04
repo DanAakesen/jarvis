@@ -149,7 +149,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Sandbox sessions: start, end, size, end reason, heartbeat state | — |
 | Usage: sandbox minutes and DKK; Codex/Copilot turns and any reported usage | — |
 
-The backend persists each task event and state change to the task history and activity feed together, then publishes the committed event for live clients.
+The backend persists each task event and state change to the task history and activity feed together, then publishes the committed event for live clients. The authenticated live feed resumes from the last delivered event after reconnect so updates missed while disconnected are replayed without duplicate timeline entries.
 
 #### Software Factory — release view (per project)
 
@@ -187,6 +187,12 @@ the last-release field is explicitly unavailable rather than inferred.
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
 | Credentials: name, expiry, last renewal, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
+
+The backend checks Codex daily and renews only when the access token has three
+days or less remaining and no Codex task is running. Credential dates and
+status are non-secret Key Vault metadata; failed renewal is visible as
+"Action needed". Manual renewal and re-seed controls remain disabled until an
+operator workflow is available.
 
 The settings API validates choices against the server's available-model catalog.
 The coding-agent catalog currently offers only each provider's default. P2-11

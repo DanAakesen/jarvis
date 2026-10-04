@@ -293,12 +293,22 @@ must configure this endpoint and provider identity before live use. Local voice
 tests use a mock WebSocket and do not verify Azure access or browser audio.
 
 The optional `JARVIS_CHAT_AGENT_URL` is the full HTTPS URL of the hosted agent's
-`/chat` route (no credentials, query, or fragment). Until P4-08 configures it,
+`/chat` route (no credentials, query, or fragment). Until P4-09 (#157) configures it,
 chat turns return a visible 503 rather than a placeholder reply. The backend
 forwards Dan's delegated token only to this server-side endpoint; the agent
 validates it through `/me` and verifies the source message through
 `/conversation/history`. Never expose the authorization header to the browser
 or log it.
+
+Production runner calls use the optional paired `FOUNDRY_RUNTIME_ENDPOINT` and
+`FOUNDRY_ADMIN_ENDPOINT`, plus `FOUNDRY_RUNNER_AGENT_NAME`. Bicep supplies the
+project URLs and `jarvis-runner-node-1x2`; these are non-secret settings. When
+configured, the backend uses its shared `DefaultAzureCredential`, selected with
+`SQL_MANAGED_IDENTITY_CLIENT_ID`. The daily Codex renewal job requires database
+and Foundry runner configuration, and uses the SQL credential lease; the task
+dispatcher must start Codex work through `TaskStore.transition` so both
+operations serialize. Bicep retains one `Foundry User` assignment for the
+backend identity at project scope.
 
 Backend authentication defaults to the nonsecret identities in
 `infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and

@@ -43,10 +43,10 @@ describe('Fastify backend', () => {
   });
   it('supports authenticated API preflight from the web origin', async () => {
     const { app } = fixture();
-    const response = await app.inject({ method: 'OPTIONS', url: '/health', headers: { origin: staticOrigin, 'access-control-request-method': 'GET', 'access-control-request-headers': 'authorization,content-type' } });
+    const response = await app.inject({ method: 'OPTIONS', url: '/health', headers: { origin: staticOrigin, 'access-control-request-method': 'GET', 'access-control-request-headers': 'authorization,content-type,last-event-id' } });
     expect(response.statusCode).toBe(204);
     expect(response.headers['access-control-allow-origin']).toBe(staticOrigin);
-    expect(response.headers['access-control-allow-headers']).toBe('Authorization, Content-Type');
+    expect(response.headers['access-control-allow-headers']).toBe('Authorization, Content-Type, Last-Event-ID');
   });
   it('rejects disallowed or malformed preflight', async () => {
     const { app } = fixture();
