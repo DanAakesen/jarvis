@@ -1,3 +1,5 @@
+import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
+
 export interface ConversationAgentInput {
   readonly messageId: string;
   readonly text: string;
@@ -9,6 +11,8 @@ export interface ConversationAgent {
 }
 
 const maxStreamBytes = 1024 * 1024;
+const requestTimeoutMs = 120_000;
+export const FOUNDRY_AGENT_SCOPE = 'https://ai.azure.com/.default';
 
 function parseEvents(buffer: string): { events: { event: string; data: string }[]; pending: string } {
   const frames = buffer.split(/\r?\n\r?\n/u);
@@ -41,20 +45,40 @@ function deltaFromEvent(event: { event: string; data: string }): string | undefi
   return payload.text;
 }
 
-export function createHttpConversationAgent(endpoint: string): ConversationAgent {
-  const url = new URL(endpoint);
+export function createFoundryInvocationsEndpoint(projectEndpoint: string, agentName: string): URL {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(agentName)) {
+    throw new TypeError('Foundry chat agent name is invalid');
+  }
+  const url = new URL(normalizeFoundryProjectEndpoint(projectEndpoint));
+  url.pathname += `/agents/${agentName}/endpoint/protocols/invocations`;
+  url.searchParams.set('api-version', 'v1');
+  return url;
+}
+
+export function createFoundryInvocationConversationAgent(
+  projectEndpoint: string,
+  agentName: string,
+  getToken: (scope: string, signal: AbortSignal) => Promise<string>,
+  fetcher: typeof fetch = fetch,
+): ConversationAgent {
+  const url = createFoundryInvocationsEndpoint(projectEndpoint, agentName);
   return {
     async *stream(input, authorization, signal) {
-      const response = await fetch(url, {
+      const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
+      const token = await getToken(FOUNDRY_AGENT_SCOPE, requestSignal);
+      if (typeof token !== 'string' || !token.trim() || /[\r\n]/u.test(token)) {
+        throw new Error('Foundry authentication unavailable');
+      }
+      const response = await fetcher(url, {
         method: 'POST',
         redirect: 'error',
         headers: {
-          Authorization: authorization,
+          Authorization: 'Bearer ' + token,
           Accept: 'text/event-stream',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(input),
-        signal,
+        body: JSON.stringify({ ...input, delegatedAuthorization: authorization }),
+        signal: requestSignal,
       });
       if (!response.ok || !response.body ||
           !response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream')) {

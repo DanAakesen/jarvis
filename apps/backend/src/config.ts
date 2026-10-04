@@ -15,7 +15,7 @@ export interface BackendConfig {
     runtime: string;
   };
   foundryRunnerAgentName?: string;
-  chatAgentUrl?: string;
+  foundryChatAgentName?: string;
   foundryProjectEndpoint?: string;
   auth: AuthConfig;
 }
@@ -81,18 +81,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     }
   }
 
-  let chatAgentUrl: string | undefined;
-  if (env.JARVIS_CHAT_AGENT_URL !== undefined) {
-    try {
-      const url = new URL(env.JARVIS_CHAT_AGENT_URL.trim());
-      if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.search || url.hash) {
-        throw new Error();
-      }
-      chatAgentUrl = url.toString().replace(/\/+$/, '');
-    } catch {
-      throw new ConfigurationError('JARVIS_CHAT_AGENT_URL must be a secure HTTPS URL without credentials, query, or fragment');
-    }
-  }
   let foundryProjectEndpoint: string | undefined;
   if (env.FOUNDRY_PROJECT_ENDPOINT !== undefined) {
     try {
@@ -100,6 +88,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     } catch {
       throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT must be a secure Azure AI project URL');
     }
+  }
+  const foundryChatAgentName = env.JARVIS_CHAT_AGENT_NAME;
+  if (foundryChatAgentName !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(foundryChatAgentName)) {
+    throw new ConfigurationError('JARVIS_CHAT_AGENT_NAME must be a valid agent name');
+  }
+  if (foundryChatAgentName !== undefined && foundryProjectEndpoint === undefined) {
+    throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when JARVIS_CHAT_AGENT_NAME is configured');
   }
   const foundryRunnerAgentName = env.FOUNDRY_RUNNER_AGENT_NAME;
   if (foundryRunnerAgentName !== undefined && !/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName)) {
@@ -117,7 +112,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
       foundryEndpoints: { admin: foundryAdminEndpoint, runtime: foundryRuntimeEndpoint },
     }),
     ...(foundryRunnerAgentName === undefined ? {} : { foundryRunnerAgentName }),
-    ...(chatAgentUrl === undefined ? {} : { chatAgentUrl }),
+    ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
   };
 }

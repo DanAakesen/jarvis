@@ -30,7 +30,7 @@ import {
 } from './voice/relay.js';
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
-import { createHttpConversationAgent } from './core/chat-agent.js';
+import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
 import { FoundryClient, FoundryClientError } from './foundry/client.js';
 import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
@@ -56,6 +56,17 @@ try {
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
+    : undefined;
+  const conversationAgent = config.foundryProjectEndpoint && config.foundryChatAgentName && credential
+    ? createFoundryInvocationConversationAgent(
+      config.foundryProjectEndpoint,
+      config.foundryChatAgentName,
+      async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry chat identity unavailable');
+        return token.token;
+      },
+    )
     : undefined;
   const foundryClients = new Map<string, FoundryClient>();
   const taskEventArchive = database && archiveStorageAccount && credential
@@ -152,7 +163,7 @@ try {
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
     eventHub,
-    ...(config.chatAgentUrl ? { conversationAgent: createHttpConversationAgent(config.chatAgentUrl) } : {}),
+    ...(conversationAgent ? { conversationAgent } : {}),
   });
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
   if (database) registerDatabase(app, database);

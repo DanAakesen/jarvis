@@ -500,6 +500,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
             }
             {
+              name: 'JARVIS_CHAT_AGENT_NAME'
+              value: 'jarvis'
+            }
+            {
               name: 'BACKEND_CONTAINER_APP_RESOURCE_ID'
               value: resourceId('Microsoft.App/containerApps', 'ca-jarvis-backend-${suffix}')
             }
