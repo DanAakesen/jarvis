@@ -172,10 +172,16 @@ describe('App shell', () => {
   it('keeps Screen sharing and Camera visibly unavailable until their features are built', async () => {
     await renderSignedIn();
 
-    expect(screen.getByRole('button', { name: 'Share screen' })).toHaveProperty('disabled', true);
-    expect(screen.getByText('Unavailable until screen sharing is built.')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Camera' })).toHaveProperty('disabled', true);
-    expect(screen.getByText('Unavailable until camera support is built.')).not.toBeNull();
+    for (const [name, explanation] of [
+      ['Share screen', 'Unavailable until screen sharing is built.'],
+      ['Camera', 'Unavailable until camera support is built.'],
+    ] as const) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toHaveProperty('disabled', true);
+      expect(button.getAttribute('aria-describedby')).not.toBeNull();
+      expect(document.getElementById(button.getAttribute('aria-describedby')!)?.textContent).toBe(explanation);
+      expect(button.parentElement?.getAttribute('title')).toBe(explanation);
+    }
   });
 
   it('opens and closes the contextual shell panel without replacing page content', async () => {

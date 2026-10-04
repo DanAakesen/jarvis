@@ -41,12 +41,11 @@ function UnavailableControl({ id, label, explanation, icon }: {
   icon: 'screen' | 'camera';
 }) {
   return (
-    <div className="topbar-feature">
-      <button className="topbar-feature-button" type="button" disabled aria-describedby={id}>
+    <div className="topbar-feature" title={explanation}>
+      <button className="topbar-feature-button" type="button" disabled aria-label={label} aria-describedby={id}>
         <ShellIcon name={icon} />
-        {label}
       </button>
-      <span id={id} className="topbar-feature-note">{explanation}</span>
+      <span id={id} className="visually-hidden">{explanation}</span>
     </div>
   );
 }
@@ -122,7 +121,7 @@ function Shell({ signedIn, config, session }: { signedIn: boolean; config: Publi
       <header className="app-topbar">
         <div className="topbar-context">
           <Link className="brand" to="/" aria-label="Jarvis home">Jarvis</Link>
-          {signedIn && <><span aria-hidden="true">/</span><span>{areaLabel}</span></>}
+          {signedIn && <><span className="topbar-separator" aria-hidden="true">/</span><span className="topbar-area-label">{areaLabel}</span></>}
         </div>
         {signedIn && (
           <div className="topbar-actions">
@@ -140,7 +139,7 @@ function Shell({ signedIn, config, session }: { signedIn: boolean; config: Publi
               <ShellIcon name="context" />
             </button>
             <NavLink className="settings-link" to="/settings" aria-label="Settings">
-              <ShellIcon name="settings" /><span>Settings</span>
+              <ShellIcon name="settings" /><span className="settings-label">Settings</span>
             </NavLink>
           </div>
         )}

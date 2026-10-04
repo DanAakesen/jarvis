@@ -236,15 +236,19 @@ history.
 [ui.md](ui.md) records the confirmed structure, open questions, feature-placement
 proposals and eight static wireframes. P8-04 routes the existing pages through a
 thin left icon rail, expandable area navigation, top and bottom bars, and a
-toggleable contextual panel. Settings stays at the top-right. Screen sharing
-and Camera are the only confirmed feature controls in the top bar; each is
-visible but disabled with an explanation until its P7 capability is built.
-Other suggested top-bar controls remain out of scope.
+toggleable contextual panel. The top bar spans edge to edge above the shell;
+its height matches the area rail's width, and the rail begins beneath it.
+Settings stays at the top-right. Screen sharing and Camera are the only
+confirmed feature controls in the top bar; each is an icon-only, disabled
+control with an accessible explanation and tooltip until its P7 capability is
+built. The top bar remains one line at phone and desktop widths. Other suggested
+top-bar controls remain out of scope.
 
 The bottom bar carries the existing database-wake status when configured. The
 context panel has an honest empty state until P8-08 supplies contextual content.
-The existing neutral theme remains; final shell styling and the contents of
-these bars and panels are still open.
+The existing neutral theme remains; the specific placement and responsive
+proportions above are confirmed while other shell styling and the contents of
+these bars and panels remain open.
 
 Voice hides the shell and composer, using a full-page background and a
 state-driven orb: centred alone, left of content windows on desktop,
