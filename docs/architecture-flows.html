@@ -249,7 +249,7 @@ const FLOWS = [
   },
   {
     name: "Settings",
-    summary: "A signed-in user edits global defaults. The backend validates each value against its catalog and stores partial changes; future sessions and tasks read the defaults.",
+    summary: "A signed-in user edits global defaults, or Jarvis uses its authenticated tool. The backend validates each value against its catalog and stores partial changes; future sessions and tasks read the defaults.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "context", t: "Dan opens Settings", d: "The app shell already has a verified sign-in." },
       { id: "page", lane: "board", col: 2, s: "docs", t: "Load settings and choices", d: "The browser silently gets a delegated API token and calls `/settings`." },
@@ -258,7 +258,7 @@ const FLOWS = [
       { id: "validate", lane: "backend", col: 5, s: "docs", t: "Validate and whitelist", d: "Reject unknown keys, unsupported models, invalid reasoning, invalid project defaults, and out-of-range task limits.", ev: "P1-11 and P3-11 backend tests reject unsupported values without writing." },
       { id: "save", lane: "backend", col: 6, s: "docs", t: "PATCH /settings", d: "Persist only changed keys in one SQL transaction.", ev: "SQL adapter uses parameterized settings keys/values; isolated SQL Server integration runs in Database CI." },
       { id: "rows", lane: "data", col: 7, s: "docs", t: "Global rows in dbo.settings", d: "Reuses the P1-01 key/value table; no settings history." },
-      { id: "next", lane: "backend", col: 8, s: "docs", t: "Next session or task reads defaults", d: "Jarvis sessions: the agent reads validated model and reasoning values from `GET /agent/settings` before acknowledging a session and keeps that snapshot; if the read is unavailable it logs a warning and uses the defaults. Tasks: P2-05 resolves the task override before the saved setting and sends the effective options to the Foundry runner. Existing work keeps its original settings.", ev: "P4-07 backend and agent tests verify the agent-only read, per-session model selection, isolation across concurrent sessions, and fallback when settings are unavailable. The agent is deployed; live settings verification remains pending. P2-11 proves Foundry request forwarding and provider-specific runner application offline; settings-store-to-dispatcher wiring remains P2-05." },
+      { id: "next", lane: "backend", col: 8, s: "docs", t: "Next session or task reads defaults", d: "Jarvis sessions: the agent reads validated model and reasoning values from `GET /agent/settings` before acknowledging a session and keeps that snapshot; if the read is unavailable it logs a warning and uses the defaults. `set_jarvis_model` changes only future sessions. Tasks: P2-05 resolves the task override before the saved setting and sends the effective options to the Foundry runner.", ev: "P4-07 backend and agent tests verify the agent-only read and per-session model selection. P7-11 backend tests verify catalog validation and next-session updates. P2-11 proves Foundry forwarding and provider-specific runner application offline; live settings/provider verification remains pending." },
     ],
     edges: [
       ["start", "page", "docs", "open"], ["page", "read", "docs", "token + GET"],
@@ -271,7 +271,7 @@ const FLOWS = [
     name: "Task model configuration",
     summary: "The dispatcher supplies effective per-task model settings; the Foundry client forwards them and the runner applies/preserves provider-specific choices.",
     nodes: [
-      { id: "source", lane: "backend", col: 1, s: "assumed", t: "Resolve task override or setting", d: "P2-05 selects each task override first, otherwise the current provider setting; task settings currently configure reasoning only for Codex." },
+      { id: "source", lane: "backend", col: 1, s: "proven", t: "Resolve task override or setting", d: "P2-05 selects each task override first, otherwise the current provider setting. P7-11 lets Jarvis set a verified agent/model/reasoning override while the task is Ready; Running and other non-Ready changes are refused.", ev: "Backend tool tests cover accepted options and refusal paths; SQL Server integration verifies the state guard, committed event/activity, and detail fields. Live voice selection remains unverified." },
       { id: "wire", lane: "backend", col: 2, s: "proven", t: "POST effective options to Foundry", d: "FoundryClient sends model and optional Codex reasoning in the invocation body.", ev: "Foundry contract tests verify non-default values and omission of provider defaults." },
       { id: "provider", lane: "runner", col: 3, s: "proven", t: "Configure the provider", d: "Copilot gets --model at process launch; Codex receives model and reasoning_effort through ACP session/set_config_option.", ev: "Pinned provider versions checked; local ACP fixtures verify selected values. Authenticated provider execution remains unverified." },
       { id: "retain", lane: "runner", col: 4, s: "proven", t: "Retain options for the task", d: "Effective values are stored beside the ACP session ID and reused after process recreation for steer/resume." },

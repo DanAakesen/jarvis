@@ -107,6 +107,7 @@ describe('Software Factory Jarvis tools', () => {
     ];
     expect(factoryModule.tools.map(({ name }) => name)).toEqual(names);
     for (const name of names) expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain(name);
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('set_jarvis_model');
 
     const { app } = fixture();
     const response = await app.inject({ url: '/tools', headers });
@@ -163,6 +164,12 @@ describe('Software Factory Jarvis tools', () => {
     expect(taskStore.updateModelConfig).toHaveBeenCalledWith('42', {
       agent: 'codex', modelOverride: 'default', reasoningOverride: 'default',
     });
+    const modelChange = record.mock.calls.find(([call]) => call.tool === 'set_task_model')?.[0];
+    expect(modelChange?.result).toEqual({
+      taskId: '42', state: 'Ready', agent: 'codex', model: 'default', reasoning: 'default',
+      applies: 'next task turn',
+    });
+    expect(JSON.stringify(modelChange?.result)).not.toContain(task.request);
     expect(taskController.control).toHaveBeenCalledTimes(4);
     expect(record).toHaveBeenCalledTimes(calls.length);
     expect(record.mock.calls.map(([call]) => call.messageId)).toEqual(
@@ -263,6 +270,50 @@ describe('Software Factory Jarvis tools', () => {
     });
     expect(taskStore.updateModelConfig).not.toHaveBeenCalled();
     expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['refused', 'refused']);
+  });
+
+  it('refuses unknown reasoning and reports the verified Codex options', async () => {
+    const { app, taskStore } = fixture();
+    const response = await app.inject({
+      method: 'POST', url: '/tools/set_task_model', headers,
+      payload: { taskId: '42', agent: 'codex', reasoning: 'high' },
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'Unsupported codex reasoning. Valid Codex reasoning levels: default.' },
+    });
+    expect(taskStore.updateModelConfig).not.toHaveBeenCalled();
+  });
+
+  it('clears provider-specific overrides when switching the agent', async () => {
+    const { app, taskStore } = fixture();
+    vi.mocked(taskStore.get).mockResolvedValue({
+      ...detail, modelOverride: 'default', reasoningOverride: 'default',
+    });
+    const response = await app.inject({
+      method: 'POST', url: '/tools/set_task_model', headers,
+      payload: { taskId: '42', agent: 'copilot' },
+    });
+
+    expect(response.json()).toMatchObject({ outcome: 'ok' });
+    expect(taskStore.updateModelConfig).toHaveBeenCalledWith('42', {
+      agent: 'copilot', modelOverride: null, reasoningOverride: null,
+    });
+  });
+
+  it('refuses a model update if the task stopped being Ready before persistence', async () => {
+    const { app, taskStore } = fixture();
+    vi.mocked(taskStore.updateModelConfig).mockResolvedValue({ kind: 'not-ready' });
+    const response = await app.inject({
+      method: 'POST', url: '/tools/set_task_model', headers,
+      payload: { taskId: '42', model: 'default' },
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'Task is no longer Ready. Model changes are accepted only while a task is Ready; the current turn is unchanged.' },
+    });
   });
 
   it('refuses unverified model options when creating a task', async () => {

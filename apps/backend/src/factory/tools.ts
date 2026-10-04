@@ -265,7 +265,14 @@ export const factoryTools: readonly JarvisTool[] = [
       if (result.kind === 'not-ready') {
         throw new ToolRefusal('Task is no longer Ready. Model changes are accepted only while a task is Ready; the current turn is unchanged.');
       }
-      return result.task;
+      return {
+        taskId: result.task.id,
+        state: result.task.state,
+        agent: result.task.agent,
+        model: result.task.modelOverride,
+        reasoning: result.task.reasoningOverride,
+        applies: 'next task turn',
+      };
     },
   },
   {

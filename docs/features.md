@@ -37,8 +37,8 @@ Status as of 4 October 2026.
 | Voice transcripts | Read what was said in each voice sitting, with voice minutes | Screen | Main page | Built | P5-06 |
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built | P4-04 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built | P4-05 |
-| Software Factory tools | Ask Jarvis to list projects and tasks, create tasks, and steer, pause, resume or cancel tasks | Voice/chat | Main page | Built | P4-10 |
-| Model switching by voice | "Use Codex with high reasoning", "switch Jarvis to the faster model" | Voice/chat | — | In progress | P7-11 |
+| Software Factory tools | Ask Jarvis to list projects and tasks, create tasks, change the agent or model on a Ready task, and steer, pause, resume or cancel tasks | Voice/chat | Main page | Built | P4-10, P7-11 |
+| Model switching by voice | Change Jarvis for the next session or a Ready task using verified provider options; running-task changes are refused | Voice/chat | Main page | Built (offline) | P7-11 |
 | Live status by voice | Jarvis announces important task changes and answers "what's going on?" | Voice/chat | — | In progress | P7-12 |
 | Live voice test | Dan's verdict on Danish and English voice | Voice/chat | — | In progress | P5-07 |
 | Reflex layer | Instant acknowledgement and fast routing of simple commands (Jev) | Voice/chat | — | Planned | P7-04 |
