@@ -73,6 +73,53 @@ beforeEach(() => {
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
+describe('Task usage page', () => {
+  it('shows per-session sandbox estimates and reported agent usage', async () => {
+    fetchMock.mockResolvedValueOnce(response({
+      usage: [
+        {
+          id: '1', source: 'sandbox', metric: 'minutes', quantity: 3.5, costDkk: 0.0519,
+          sandboxSessionId: '9', at: '2026-10-04T01:00:00.000Z', estimated: true,
+        },
+        {
+          id: '2', source: 'codex', metric: 'turns', quantity: 1, costDkk: null,
+          sandboxSessionId: null, at: '2026-10-04T01:00:00.000Z', estimated: false,
+        },
+        {
+          id: '3', source: 'codex', metric: 'input_tokens', quantity: 500, costDkk: null,
+          sandboxSessionId: null, at: '2026-10-04T01:00:00.000Z', estimated: false,
+        },
+      ],
+    }));
+    renderFactory('/factory/tasks/42');
+
+    expect(await screen.findByRole('table', { name: 'Usage entries for task 42' })).not.toBeNull();
+    expect(screen.getByText('Sandbox session 9')).not.toBeNull();
+    expect(screen.getByText('3.50 min')).not.toBeNull();
+    expect(screen.getByText('Estimated · DKK 0.0519')).not.toBeNull();
+    expect(screen.getByText('Agent turns')).not.toBeNull();
+    expect(screen.getByText('Input tokens')).not.toBeNull();
+    expect(screen.getByText('500')).not.toBeNull();
+    expect(screen.getAllByText('—')).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/factory/tasks/42', expect.objectContaining({
+      headers: { Authorization: `${['Bear', 'er'].join('')} test-access-token` },
+    }));
+  });
+
+  it('shows an honest empty state and retries after a failed request', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(response({ error: 'unavailable' }, 503))
+      .mockResolvedValueOnce(response({ usage: [] }));
+    renderFactory('/factory/tasks/42');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Task usage is unavailable');
+    await user.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('No usage has been recorded for this task yet.')).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('Projects page', () => {
   it('lists project settings, running tasks, and honest release availability', async () => {
     renderFactory();
