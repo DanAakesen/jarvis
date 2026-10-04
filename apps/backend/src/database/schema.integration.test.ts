@@ -26,7 +26,7 @@ const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'credential_status', 'jarvis_sessions', 'messages', 'projects', 'sandbox_sessions',
-  'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks', 'tool_calls', 'webhook_deliveries',
+  'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks', 'tool_calls', 'usage', 'webhook_deliveries',
 ];
 
 async function tables(): Promise<string[]> {
@@ -78,7 +78,7 @@ afterAll(async () => {
   await administrator.close();
 });
 
-describe('committed domain schema (groups 1-4 and 6)', () => {
+describe('committed domain schema (groups 1-4, 6 and 7)', () => {
   it('boots the committed migration manifest twice without duplicate ledger rows', async () => {
     const committed = await readMigrations();
     expect(await applyMigrations(pool, committed)).toEqual(committed.map((migration) => migration.name));
