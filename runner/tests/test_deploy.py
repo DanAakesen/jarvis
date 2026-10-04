@@ -22,11 +22,34 @@ class FakeFoundry:
 
 @pytest.mark.parametrize("tier,cpu,memory", [("1x2", "1", "2Gi"), ("2x4", "2", "4Gi")])
 def test_definition_uses_small_tiers_and_nonsecret_settings(tier, cpu, memory):
-    definition = deploy.definition("registry/runner@sha256:digest", tier, "https://vault.vault.azure.net/")
+    definition = deploy.definition(
+        "registry/runner@sha256:digest", tier, "https://vault.vault.azure.net/",
+        "https://backend.example", "api://00000000-0000-4000-8000-000000000000/.default",
+    )
     assert (definition["cpu"], definition["memory"]) == (cpu, memory)
     assert definition["protocol_versions"] == [{"protocol": "invocations", "version": "2.0.0"}]
     assert definition["session_configuration"] == {"idle_timeout_seconds": 120}
-    assert set(definition["environment_variables"]) == {"KEY_VAULT_URI", "JARVIS_WORK_ROOT"}
+    assert definition["environment_variables"] == {
+        "KEY_VAULT_URI": "https://vault.vault.azure.net/",
+        "JARVIS_WORK_ROOT": "/files/jarvis",
+        "JARVIS_BACKEND_URL": "https://backend.example",
+        "JARVIS_API_SCOPE": "api://00000000-0000-4000-8000-000000000000/.default",
+    }
+
+
+def test_backend_settings_use_the_production_api_origin_and_scope():
+    assert deploy.backend_settings(
+        {"backendFqdn": {"value": "jarvis.example.azurecontainerapps.io"}},
+        {"api": {"identifierUri": "api://00000000-0000-4000-8000-000000000000"}},
+    ) == (
+        "https://jarvis.example.azurecontainerapps.io",
+        "api://00000000-0000-4000-8000-000000000000/.default",
+    )
+    with pytest.raises(ValueError, match="Invalid backend URL"):
+        deploy.backend_settings(
+            {"backendFqdn": {"value": "bad.example/path"}},
+            {"api": {"identifierUri": "api://00000000-0000-4000-8000-000000000000"}},
+        )
 
 
 def test_successful_probe_checks_both_providers_and_deletes_session():
@@ -111,15 +134,22 @@ def test_deploy_selects_version_grants_only_credential_scopes_and_probes(monkeyp
 
     outputs = {"foundryAdminEndpoint": {"value": "https://admin/api/projects/jarvis"},
                "foundryRuntimeEndpoint": {"value": "https://runtime/api/projects/jarvis"},
+               "backendFqdn": {"value": "backend.example"},
                "keyVaultName": {"value": "vault"}}
     foundry = DeployedFoundry({"key_vault_access": True})
-    result = deploy.deploy(foundry, "subscription", outputs, "registry/runner@sha256:digest", "runner", "2x4")
+    result = deploy.deploy(
+        foundry, "subscription", outputs, "registry/runner@sha256:digest", "runner", "2x4",
+        "https://backend.example", "api://00000000-0000-4000-8000-000000000000/.default",
+    )
     assert result["version"] == "7" and result["key_vault_probe"] is True
     assert {row[-1] for row in grants if row[-2] == deploy.READ_SECRET_ROLE} == {
         "vault/secrets/github-token", "vault/secrets/copilot-token", "vault/secrets/codex-login"}
     assert [row[-1] for row in grants if row[-2] == deploy.WRITE_SECRET_ROLE] == ["vault/secrets/codex-login"]
     patch = next(body for method, url, body in foundry.calls if method == "PATCH")
     assert patch["agent_endpoint"]["protocol_configuration"] == {"invocations": {}}
+    version_body = next(body for method, url, body in foundry.calls
+                        if method == "POST" and "/versions?" in url)
+    assert version_body["definition"]["environment_variables"]["JARVIS_BACKEND_URL"] == "https://backend.example"
     assert foundry.calls[-1][0] == "DELETE"
 
 

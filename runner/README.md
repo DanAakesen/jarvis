@@ -2,8 +2,9 @@
 
 Python Foundry Invocations adapter for Copilot CLI and Codex over ACP. Ported
 from the read-only [prototype](../docs/reference/coding-sandbox-prototype/runner/).
-Production has no crash-test command. Live event delivery and frequent branch
-pushes remain issues #29 and #35.
+Production has no crash-test command. P2-03 implements task-scoped event delivery;
+live Azure identity verification remains a post-merge step. Frequent branch pushes
+remain issue #35.
 
 ## Develop and check
 
@@ -47,8 +48,8 @@ session as `agent_session_id` to resume, steer, or pause.
 
 | Operation | JSON body |
 | --- | --- |
-| Start or resume | `{"agent":"copilot","task":"...","model":"gpt-5.4"}` (or `codex` with optional `"reasoning":"high"`) |
-| Steer | `{"agent":"copilot","mode":"steer","message":"..."}` |
+| Start or resume | `{"agent":"copilot","task":"...","task_id":"42","model":"gpt-5.4"}` (or `codex` with optional `"reasoning":"high"`) |
+| Steer | `{"agent":"copilot","mode":"steer","message":"...","task_id":"42"}` |
 | Pause | `{"mode":"pause"}` |
 | Credential probe | `{"agent":"copilot","probe":"key-vault"}` |
 | Codex renewal | `{"agent":"codex","mode":"renew-codex","min_days_left":3}` |
@@ -65,6 +66,13 @@ unchanged. P2-05 owns dispatch-time settings resolution. Copilot receives `--mod
 options `model` and `reasoning_effort`; the runner verifies the selected value
 and persists it with session metadata so resumed/steered turns keep the task's
 original choice. Reasoning is accepted only for Codex.
+When configured with `JARVIS_BACKEND_URL`, real task and steer invocations must
+include the positive SQL task ID as `task_id`. The runner obtains a token for
+`JARVIS_API_SCOPE`, sends each event in order to `/factory/sandbox-events`, and
+waits for delivery before reporting completion. Payloads are bounded to 256 KiB;
+a delivery failure marks the invocation failed. The backend's runner-only app
+role is assigned after Runner deploy using the principal IDs in its evidence
+artifact. Browser streaming remains P1-06.
 Every agent prompt, including resumed and recovered turns, is prefixed with
 instructions to commit and push small work-in-progress changes to the existing
 task branch after each meaningful step. Agents must not force-push or push to

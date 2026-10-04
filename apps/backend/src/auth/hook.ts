@@ -1,12 +1,19 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
 import { localWebOrigin, type BackendConfig } from '../config.js';
-import { AuthenticationDenied, createTokenVerifier, isAgentPrincipal, type AgentPrincipal, type TokenVerifier, type UserPrincipal } from './verify.js';
+import {
+  AuthenticationDenied, createTokenVerifier, isAgentPrincipal, isRunnerPrincipal,
+  type AgentPrincipal, type RunnerPrincipal, type TokenVerifier, type UserPrincipal,
+} from './verify.js';
 
 declare module 'fastify' {
-  interface FastifyRequest { principal: UserPrincipal | null; agentPrincipal: AgentPrincipal | null }
+  interface FastifyRequest {
+    principal: UserPrincipal | null;
+    agentPrincipal: AgentPrincipal | null;
+    runnerPrincipal: RunnerPrincipal | null;
+  }
   // Routes the hosted Jarvis agent identity may call. Everything else is Dan-only.
-  interface FastifyContextConfig { jarvisAgent?: boolean }
+  interface FastifyContextConfig { jarvisAgent?: boolean; jarvisRunner?: boolean }
 }
 
 const VOICE_PROTOCOL = 'jarvis.voice.v1';
@@ -31,6 +38,7 @@ function voiceWebsocketToken(request: FastifyRequest): string | undefined {
 export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth)) {
   app.decorateRequest('principal', null);
   app.decorateRequest('agentPrincipal', null);
+  app.decorateRequest('runnerPrincipal', null);
   app.addHook('onRequest', async (request, reply) => {
     if (request.routeOptions.url === '/health' && ['GET', 'HEAD'].includes(request.method)) return;
     // Only the CORS plugin's generated OPTIONS route may run without a token.
@@ -49,7 +57,11 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       if (isAgentPrincipal(principal)) {
         if (request.routeOptions.config?.jarvisAgent !== true) throw new AuthenticationDenied(403);
         request.agentPrincipal = principal;
+      } else if (isRunnerPrincipal(principal)) {
+        if (request.routeOptions.config?.jarvisRunner !== true) throw new AuthenticationDenied(403);
+        request.runnerPrincipal = principal;
       } else {
+        if (request.routeOptions.config?.jarvisRunner === true) throw new AuthenticationDenied(403);
         request.principal = principal;
       }
     } catch (error) {

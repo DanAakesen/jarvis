@@ -118,13 +118,15 @@ child logger bindings as well as log arguments, dropping request/provider secret
 
 The factory module exposes authenticated `POST /factory/tasks`, filtered and
 paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event
-history. It validates active projects and bounded request/query inputs. Clients
-cannot update task state directly; the task store serializes backend transitions,
-checks the lifecycle, and records state events atomically. Completion can reach
-Done only through a trusted call that confirms completion. The browser and hosted
-agent service identities do not receive a task-state bypass. Responses are capped
-at 1 MiB, and event payloads above 4 KiB are omitted with an explicit truncation
-flag.
+history. It validates active projects and bounded request/query inputs. Runner
+identities with the `Jarvis.Runner.Events` app role may only call
+`POST /factory/sandbox-events`; it validates task/event fields and records source
+`runner` through `TaskStore.recordEvent`. Clients cannot update task state directly;
+the task store serializes backend transitions, checks the lifecycle, and records
+state events atomically. Completion can reach Done only through a trusted call that
+confirms completion. The browser and hosted agent service identities do not receive
+a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
+are omitted with an explicit truncation flag.
 
 `GET /operations/sleep` reports the Container App's configured minimum replicas;
 `PUT /operations/sleep` accepts only awake (1) or asleep (0). Both routes use the
@@ -174,16 +176,18 @@ permission receive 403. These early denials retain CORS response headers only
 for the exact approved browser origins, so sign-in can inspect their status.
 ID tokens and other app-only tokens are not authorized here.
 
-The hosted Jarvis agent is the one service identity (P4-01). When
+The hosted Jarvis agent is the tools service identity (P4-01). When
 `ENTRA_JARVIS_AGENT_OBJECT_ID` is set, a verified token whose `oid` matches it must
 carry the `Jarvis.Tools` application role, no delegated `scp`, and `idtyp` absent
 or `app`; otherwise 403. Its principal goes to `request.agentPrincipal`, never
 `request.principal`, and only routes with `config: { jarvisAgent: true }` accept it:
-`GET /tools`, `GET /factory/context` and `POST /tools/{name}`. Every other route,
-including `/me` and the task APIs, returns 403. Unset or empty configuration
-denies the agent. The role is created by `infra/bootstrap.ps1`; `jarvis-api`
-already requires role assignment, so Entra issues the agent a token only after
-`-JarvisAgentPrincipalId` assigns the role (P4-08).
+`GET /tools`, `GET /factory/context`, and `POST /tools/{name}`. Coding runner
+identities receive a separate `Jarvis.Runner.Events` app role and are accepted only
+on `POST /factory/sandbox-events`; their principal is kept separately as
+`request.runnerPrincipal`. The bootstrap script assigns this role only to the
+runner principals supplied after Runner deploy. All other routes, including `/me`
+and task APIs, reject runner identities. `jarvis-api` requires role assignment, so
+Entra issues app-only tokens only to explicitly assigned principals.
 
 JWKS lookups have a five-second timeout, a 30-second refresh cooldown and a
 ten-minute key cache. Provider outages fail closed. Only object ID, tenant ID,
@@ -405,7 +409,7 @@ These boxes are responsibilities; they do not each need a separate service.
 | Retries | `attempt_count` and `next_attempt_at` on the task row. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; ambiguous Foundry starts and exhausted attempts move to Needs attention. Expired startup leases move to Needs attention rather than being replayed, avoiding duplicate remote sessions. |
 | Sandbox heartbeat | At startup, the backend loads active sandbox turns once; the dispatcher registers new turns. Each registered invocation is checked immediately and about once a minute, and `last_heartbeat_at` is updated after a valid response. The poller holds active sessions in memory and makes no recurring SQL reads while idle. |
 | Crash detection | Two consecutive HTTP 424/404/5xx responses, with a confirming poll after 30 s; the task and sandbox session are updated in one transaction, then the committed task event is published through the in-process hub. Event gaps alone never trigger it (L22). |
-| Live progress | The runner pushes sandbox events to the backend; every runner event is stored. |
+| Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. Browser streaming is P1-06. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`. No polling. |
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. The fetch client reconnects with its last delivered ID and ignores repeats. |
 | Idle | The dispatcher subscribes to committed task events and schedules only the next retry deadline. After its startup scan, it makes no recurring SQL queries while idle; there is no polling timer. |
@@ -464,6 +468,13 @@ live provider selection remains unverified.
   backward reads of earlier session records. Idle recreation retains earlier
   status lookups; prompts and credentials are omitted. Only allowlisted Codex
   expiry and Copilot Key Vault metadata survive runner recreation.
+- P2-03 sends runner events in order using an app-only token for
+  `api://<jarvis-api>/.default`. The runner deployment receives the backend origin
+  and API scope; `infra/bootstrap.ps1 -JarvisRunnerPrincipalIds ...` assigns the
+  separate events role to its four runner identities. Each event is bounded to
+  256 KiB; a failed delivery marks the invocation failed and is not silently
+  reported as success. Offline contracts pass; Azure identity assignment and live
+  event delivery remain unverified.
 - P2-08 adds a daily backend Codex renewal check, status dates in Settings, and
   a SQL lease shared with Codex task starts. The backend renews at three days or
   less, refreshes the lease while polling, and leaves uncertain invocations
