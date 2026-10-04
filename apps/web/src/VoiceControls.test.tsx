@@ -7,7 +7,7 @@ import { VoiceControls } from './VoiceControls';
 const clients = vi.hoisted(() => ({
   instances: [] as Array<{
     options: unknown;
-    client: { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; setMuted: ReturnType<typeof vi.fn> };
+    client: { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; setMuted: ReturnType<typeof vi.fn>; enableMicrophone: ReturnType<typeof vi.fn> };
   }>,
 }));
 
@@ -15,6 +15,7 @@ vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
     readonly start = vi.fn();
     readonly setMuted = vi.fn();
+    readonly enableMicrophone = vi.fn(async () => {});
     readonly stop: ReturnType<typeof vi.fn>;
 
     constructor(options: unknown) {
@@ -53,7 +54,8 @@ describe('VoiceControls', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Mute' })).toHaveProperty('disabled', true);
+    expect(clients.instances).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Mute' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
     const instance = clients.instances[0];
     if (!instance) throw new Error('Voice client was not created.');
@@ -64,8 +66,13 @@ describe('VoiceControls', () => {
     });
 
     const options = instance.options as {
-      onStatus: (status: 'listening', message: string) => void;
+      onStatus: (status: 'ready' | 'listening', message: string) => void;
     };
+    act(() => options.onStatus('ready', 'Microphone is off.'));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Stop voice' }));
+    expect(instance.client.enableMicrophone).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Enable microphone' }));
+    expect(instance.client.enableMicrophone).toHaveBeenCalledOnce();
     act(() => options.onStatus('listening', 'Listening for your voice.'));
     const mute = screen.getByRole('button', { name: 'Mute' });
     expect(mute).toHaveProperty('disabled', false);

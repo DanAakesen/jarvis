@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { Link } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
+import { VoiceControls } from './VoiceControls';
 import {
   createChatSession,
   loadConversationHistory,
@@ -31,10 +32,12 @@ export function ConversationHistory({
   client,
   config,
   historyRefresh = 0,
+  children,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
   historyRefresh?: number;
+  children?: ReactNode;
 }) {
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -49,6 +52,16 @@ export function ConversationHistory({
   const [streamedText, setStreamedText] = useState('');
   const [interruptedText, setInterruptedText] = useState('');
   const [turnError, setTurnError] = useState('');
+  const [voiceActive, setVoiceActive] = useState(false);
+  const [voiceRefresh, setVoiceRefresh] = useState(0);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const wasBusy = useRef(false);
+
+  useEffect(() => {
+    const busy = voiceActive || sending;
+    if (wasBusy.current && !busy) input.current?.focus();
+    wasBusy.current = busy;
+  }, [voiceActive, sending]);
 
   useEffect(() => {
     let active = true;
@@ -64,7 +77,7 @@ export function ConversationHistory({
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [client, config, historyRefresh, reload]);
+  }, [client, config, historyRefresh, voiceRefresh, reload]);
 
   function retry() {
     setLoading(true);
@@ -142,6 +155,7 @@ export function ConversationHistory({
 
   return (
     <section className="conversation-history" aria-label="Conversation messages and controls">
+      <div className="conversation-transcript" hidden={voiceActive} tabIndex={0} aria-label="Conversation history">
       {loading ? (
         <p role="status" aria-live="polite">Loading conversation history…</p>
       ) : historyError && messages.length === 0 ? (
@@ -210,8 +224,11 @@ export function ConversationHistory({
       )}
       {turnError && <p className="chat-error" role="alert">{turnError}</p>}
       {sending && <p className="chat-status" role="status" aria-live="polite">Jarvis is replying…</p>}
+      {children}
+      </div>
 
-      <form className="composer" onSubmit={(event) => void sendMessage(event)}>
+      <div className="conversation-input" data-voice-active={voiceActive}>
+      <form className="composer" hidden={voiceActive} onSubmit={(event) => void sendMessage(event)}>
         <fieldset className="choice-group" disabled={sending}>
           <legend>Reply language</legend>
           <label className="choice">
@@ -235,17 +252,24 @@ export function ConversationHistory({
         </fieldset>
         <label htmlFor="message">Message Jarvis</label>
         <textarea
+          ref={input}
           id="message"
           name="message"
-          rows={3}
+          rows={2}
           maxLength={20_000}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
           disabled={sending}
           aria-describedby="chat-guidance"
         />
         <p id="chat-guidance" className="chat-guidance">
-          If a reply is interrupted, check the conversation and task status before sending again.
+          Enter to send; Shift+Enter for a new line. If a reply is interrupted, check the conversation and task status before sending again.
         </p>
         <div className="action-row">
           <button className="primary-button" type="submit" disabled={sending || !draft.trim()}>
@@ -253,6 +277,15 @@ export function ConversationHistory({
           </button>
         </div>
       </form>
+      <VoiceControls
+        client={client}
+        config={config}
+        language={language}
+        disabled={sending}
+        onActiveChange={setVoiceActive}
+        onSessionEnded={() => setVoiceRefresh((value) => value + 1)}
+      />
+      </div>
     </section>
   );
 }
