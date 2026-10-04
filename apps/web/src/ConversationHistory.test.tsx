@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ConversationHistory } from './ConversationHistory';
+import type { CameraController } from './screen-sharing';
 
 const { loadConversationHistory, createChatSession, sendChatTurn } = vi.hoisted(() => ({
   loadConversationHistory: vi.fn(),
@@ -151,6 +152,69 @@ describe('ConversationHistory', () => {
       expect.any(Function),
       undefined,
     );
+  });
+
+  it('inspects the camera for a spoken-equivalent chat request and keeps the description transient', async () => {
+    const camera: CameraController = {
+      sharing: true,
+      starting: false,
+      inspecting: false,
+      error: '',
+      start: vi.fn(async () => {}),
+      stop: vi.fn(),
+      inspect: vi.fn(async () => 'A red mug in Dan’s hand.'),
+    };
+    sendChatTurn.mockResolvedValue(assistantMessage);
+    render(
+      <MemoryRouter>
+        <ConversationHistory client={client} config={config} camera={camera} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'What am I holding?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
+    expect(camera.inspect).toHaveBeenCalledWith(session.id);
+    expect(sendChatTurn).toHaveBeenCalledWith(
+      client,
+      config,
+      session,
+      'What am I holding?',
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+      'A red mug in Dan’s hand.',
+    );
+    expect(screen.queryByText('A red mug in Dan’s hand.')).toBeNull();
+  });
+
+  it('does not send a camera request while the camera is off', async () => {
+    render(
+      <MemoryRouter>
+        <ConversationHistory client={client} config={config} camera={{
+          sharing: false,
+          starting: false,
+          inspecting: false,
+          error: '',
+          start: vi.fn(async () => {}),
+          stop: vi.fn(),
+          inspect: vi.fn(async () => 'A red mug.'),
+        }} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'What am I holding?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect((await screen.findByRole('alert')).textContent)
+      .toBe('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
+    expect(createChatSession).not.toHaveBeenCalled();
+    expect(sendChatTurn).not.toHaveBeenCalled();
   });
 
   it('shows partial text and recovery guidance after an interrupted reply', async () => {

@@ -103,6 +103,12 @@ export function ConversationHistory({
     event.preventDefault();
     const text = draft.trim();
     if (!text || sending) return;
+    const currentCameraContext = session !== null && visionContext?.source === 'camera' &&
+      visionContext.sessionId === session.id && session.language === language;
+    if (isCameraRequest(text) && !camera?.sharing && !currentCameraContext) {
+      setTurnError('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
+      return;
+    }
     setSending(true);
     setTurnError('');
     setHistoryError('');

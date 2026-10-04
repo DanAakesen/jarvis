@@ -35,6 +35,7 @@ export function VoiceControls({
   camera?: CameraController;
 }) {
   const client = useRef<BrowserVoiceClient | null>(null);
+  const screenSessionIdRef = useRef<string | null>(null);
   const [status, setStatus] = useState<VoiceStatus>('stopped');
   const [message, setMessage] = useState(initialMessage);
   const [muted, setMuted] = useState(false);
@@ -49,19 +50,24 @@ export function VoiceControls({
   }, []);
 
   const start = () => {
+    screenSessionIdRef.current = null;
     setScreenSessionId(null);
     const voice = new BrowserVoiceClient({
       backendUrl: config.backendUrl,
       getAccessToken: () => accessToken(authClient, config),
       language,
       ...(onSessionEnded ? { onSessionEnded } : {}),
-      onSessionReady: setScreenSessionId,
+      onSessionReady: (sessionId) => {
+        screenSessionIdRef.current = sessionId;
+        setScreenSessionId(sessionId);
+      },
       onVisionRequest: (source) => { void inspectAndSendVision(source); },
       onStatus: (nextStatus, nextMessage) => {
         setStatus(nextStatus);
         setMessage(nextMessage);
         if (nextStatus === 'stopped' || nextStatus === 'error') {
           client.current = null;
+          screenSessionIdRef.current = null;
           setScreenSessionId(null);
           screenShare?.stop();
           camera?.stop();
@@ -75,10 +81,17 @@ export function VoiceControls({
 
   const inspectAndSendVision = async (source: 'camera' | 'screen') => {
     const capture = source === 'camera' ? camera : screenShare;
-    if (!capture || !capture.sharing || !screenSessionId || !client.current) return;
+    const sessionId = screenSessionIdRef.current;
+    if (!sessionId || !client.current) return;
     setScreenError('');
+    if (!capture?.sharing) {
+      setScreenError(source === 'camera'
+        ? 'Turn on the camera from the top bar before asking Jarvis to inspect a frame.'
+        : 'Start screen sharing before asking Jarvis to inspect a frame.');
+      return;
+    }
     try {
-      const description = await capture.inspect(screenSessionId);
+      const description = await capture.inspect(sessionId);
       client.current.sendScreenContext(description);
     } catch (reason) {
       setScreenError(reason instanceof Error ? reason.message : 'Jarvis could not inspect the visual frame.');
