@@ -10,6 +10,7 @@ import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
+import { createSandboxHeartbeatStore } from './database/sandbox-heartbeat-store.js';
 import { createEventHub } from './core/event-hub.js';
 import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
 import { coreModule } from './core/index.js';
@@ -24,6 +25,8 @@ import {
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
 import { createHttpConversationAgent } from './core/chat-agent.js';
+import { FoundryClient, FoundryClientError } from './foundry/client.js';
+import { SandboxHeartbeat } from './factory/heartbeat.js';
 
 try {
   const config = loadConfig();
@@ -50,9 +53,42 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
+  const credential = config.voiceLiveEndpoint || config.foundryProjectEndpoint || config.foundryEndpoints
+    ? new DefaultAzureCredential(process.env.SQL_MANAGED_IDENTITY_CLIENT_ID
+      ? { managedIdentityClientId: process.env.SQL_MANAGED_IDENTITY_CLIENT_ID }
+      : {})
+    : undefined;
+  const foundryClients = new Map<string, FoundryClient>();
+  const clientFor = (agentName: string) => {
+    if (!config.foundryEndpoints || !credential) throw new Error('Foundry heartbeat is not configured');
+    let client = foundryClients.get(agentName);
+    if (!client) {
+      client = new FoundryClient({
+        runtimeEndpoint: config.foundryEndpoints.runtime,
+        adminEndpoint: config.foundryEndpoints.admin,
+        agentName,
+        getToken: async (scope, signal) => {
+          const token = await credential.getToken(scope, { abortSignal: signal });
+          if (!token) throw new Error('Foundry identity unavailable');
+          return token.token;
+        },
+      });
+      foundryClients.set(agentName, client);
+    }
+    return client;
+  };
+  const sandboxHeartbeat = database && config.foundryEndpoints
+    ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub), clientFor, {
+      onError: (error) => {
+        const details = error instanceof FoundryClientError
+          ? { kind: error.kind, statusCode: error.statusCode, operation: error.operation }
+          : { kind: 'internal' };
+        logger.warn(details, 'sandbox_heartbeat.poll_failed');
+      },
+    })
+    : undefined;
   const modules: BackendModule[] = [coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler)];
-  if (config.voiceLiveEndpoint || config.foundryProjectEndpoint) {
-    const credential = new DefaultAzureCredential();
+  if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
@@ -74,11 +110,13 @@ try {
       conversationStore: createConversationStore(database.pool),
       taskStore: createTaskStore(database.pool, eventHub),
     } : {}),
+    ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
     eventHub,
     ...(config.chatAgentUrl ? { conversationAgent: createHttpConversationAgent(config.chatAgentUrl) } : {}),
   });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
+  if (database && !sandboxHeartbeat) logger.warn('sandbox_heartbeat.configuration_missing');
   if (!telemetry) logger.info('telemetry.stdout_only');
 
   let stopping = false;
@@ -98,6 +136,7 @@ try {
       logger.info('database.ready');
     }
     if (!stopping) {
+      await sandboxHeartbeat?.start();
       await app.listen({ port: config.port, host: '0.0.0.0' });
       logger.info({ port: config.port }, 'server.listening');
     }

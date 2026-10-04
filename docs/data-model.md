@@ -13,7 +13,9 @@ unchanged prefix of the committed migrations. Failed or cancelled startup rolls
 back schema, data and ledger together. Issue #7 introduced no domain schema or seed
 data. Groups 1–3 are `db/migrations/0001_core_tables.sql` (P1-01, #15), with a
 reverse script in `db/migrations/down/`; see [Physical schema](#physical-schema-groups-13).
-Groups 4–7 follow in P2-01, P2-12 and P3-04.
+Groups 4–7 follow in P2-01, P2-12 and P3-04. P2-06 adds the nullable
+`sandbox_sessions.agent_name` column in `0003_sandbox_agent_name.sql`; new
+sessions must populate it so the heartbeat can address the correct Foundry agent.
 
 ## Overview
 
@@ -245,6 +247,7 @@ erDiagram
         bigint task_id FK
         string foundry_session_id
         string agent_version
+        string agent_name "nullable for legacy sessions"
         string size "1x2 | 2x4"
         string image
         string status "Starting | Active | Idle | Crashed | Ended"
@@ -276,7 +279,7 @@ erDiagram
 ```
 
 - A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22).
-- The sandbox heartbeat updates `last_heartbeat_at`; live runner events update `last_event_at` and add `task_events`.
+- The sandbox heartbeat updates `last_heartbeat_at`; it needs the session's `agent_name` to address the Foundry runtime. Live runner events update `last_event_at` and add `task_events`.
 - Large content (logs, CI logs, transcripts) lives in Blob; SQL keeps only the path.
 - The schema checks sandbox sizes, statuses, turn modes, end reasons and artifact kinds against these vocabularies. UTC `datetime2` end and heartbeat/event timestamps cannot precede their start.
 - `sandbox_sessions` is indexed by task and status; turns and artifacts are indexed by their parent and timestamp for the session/task timelines.

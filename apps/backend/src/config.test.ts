@@ -8,9 +8,19 @@ describe('backend configuration', () => {
   });
   it('accepts a configured HTTPS origin and backend-only telemetry string', () => {
     const connectionString = 'InstrumentationKey=00000000-0000-0000-0000-000000000001;IngestionEndpoint=https://swedencentral-0.in.applicationinsights.azure.com/';
-    expect(loadConfig({ NODE_ENV: 'production', PORT: '4000', STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net', APPLICATIONINSIGHTS_CONNECTION_STRING: connectionString, LOG_LEVEL: 'debug' })).toEqual({
-      auth: loadAuthConfig({}), port: 4000, logLevel: 'debug', staticWebAppOrigin: 'https://fixture.azurestaticapps.net', applicationInsightsConnectionString: connectionString,
-  });
+    expect(loadConfig({
+      NODE_ENV: 'production', PORT: '4000', STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net',
+      FOUNDRY_ADMIN_ENDPOINT: 'https://resource.services.ai.azure.com/api/projects/jarvis',
+      FOUNDRY_RUNTIME_ENDPOINT: 'https://resource.cognitiveservices.azure.com/api/projects/jarvis',
+      APPLICATIONINSIGHTS_CONNECTION_STRING: connectionString, LOG_LEVEL: 'debug',
+    })).toEqual({
+      auth: loadAuthConfig({}), port: 4000, logLevel: 'debug', staticWebAppOrigin: 'https://fixture.azurestaticapps.net',
+      foundryEndpoints: {
+        admin: 'https://resource.services.ai.azure.com/api/projects/jarvis',
+        runtime: 'https://resource.cognitiveservices.azure.com/api/projects/jarvis',
+      },
+      applicationInsightsConnectionString: connectionString,
+    });
   });
   it('validates the optional hosted chat-agent URL', () => {
     expect(loadConfig({ JARVIS_CHAT_AGENT_URL: 'https://agent.example/chat/' }).chatAgentUrl)
@@ -32,6 +42,20 @@ describe('backend configuration', () => {
   });
   it('requires the static origin in production', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow('STATIC_WEB_APP_ORIGIN');
+  });
+  it('allows production startup without Foundry while validating configured endpoints', () => {
+    const env = {
+      NODE_ENV: 'production',
+      STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net',
+    };
+    expect(loadConfig(env).foundryEndpoints).toBeUndefined();
+    expect(() => loadConfig({
+      ...env, FOUNDRY_ADMIN_ENDPOINT: 'https://resource.services.ai.azure.com/api/projects/jarvis',
+    })).toThrow('configured together');
+    expect(() => loadConfig({
+      ...env, FOUNDRY_ADMIN_ENDPOINT: 'http://resource.services.ai.azure.com/api/projects/jarvis',
+      FOUNDRY_RUNTIME_ENDPOINT: 'https://resource.cognitiveservices.azure.com/api/projects/jarvis',
+    })).toThrow('secure Foundry project endpoint');
   });
   it('pins the English realtime model on the configured Voice Live endpoint', () => {
     expect(loadConfig({

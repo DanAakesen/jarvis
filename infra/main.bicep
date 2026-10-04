@@ -463,6 +463,14 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: appInsights.properties.ConnectionString
             }
             {
+              name: 'FOUNDRY_ADMIN_ENDPOINT'
+              value: 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
+            }
+            {
+              name: 'FOUNDRY_RUNTIME_ENDPOINT'
+              value: 'https://${foundryAccount.name}.cognitiveservices.azure.com/api/projects/${foundryProject.name}'
+            }
+            {
               name: 'SQL_SERVER'
               value: sqlServer.properties.fullyQualifiedDomainName
             }
