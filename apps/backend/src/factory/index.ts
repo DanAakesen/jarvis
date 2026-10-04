@@ -6,6 +6,7 @@ import { taskStates, type TaskState } from './task-lifecycle.js';
 import type {
   CreateTaskInput, RecordTaskEventInput, TaskControlCommand, TaskEventMessage, TaskListFilters,
 } from './task-store.js';
+import { factoryTools } from './tools.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxResponseBytes = 1024 * 1024;
@@ -46,7 +47,7 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 
 export const factoryModule: BackendModule = {
   id: 'factory',
-  tools: [createProjectTool],
+  tools: [...factoryTools, createProjectTool],
   registerRoutes: async (app) => {
     app.post<{ Body: CreateTaskInput }>('/factory/tasks', {
       schema: {
