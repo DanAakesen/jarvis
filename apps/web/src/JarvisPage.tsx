@@ -6,7 +6,7 @@ import { ConversationHistory } from './ConversationHistory';
 import { NowFeedPanel } from './NowFeedPanel';
 import { VoiceControls } from './VoiceControls';
 import { ScreenShareControls } from './ScreenShareControls';
-import { useScreenShare } from './screen-sharing';
+import { useScreenShare, type CameraController } from './screen-sharing';
 import './ConversationHistory.css';
 
 export function JarvisPage({
@@ -14,11 +14,13 @@ export function JarvisPage({
   client,
   config,
   getAccessToken,
+  camera,
 }: {
   name: string;
   client: PublicClientApplication;
   config: PublicConfig;
   getAccessToken: () => Promise<string>;
+  camera: CameraController;
 }) {
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const screenShare = useScreenShare(config, getAccessToken);
@@ -33,7 +35,7 @@ export function JarvisPage({
             status before sending another request.
           </p>
           <ScreenShareControls screenShare={screenShare} />
-          <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} screenShare={screenShare} />
+          <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} screenShare={screenShare} camera={camera} />
 
           <section aria-labelledby="voice-heading">
             <h3 id="voice-heading">Voice</h3>
@@ -42,8 +44,10 @@ export function JarvisPage({
               client={client}
               config={config}
               screenShare={screenShare}
+              camera={camera}
               onSessionEnded={() => {
                 screenShare.stop();
+                camera.stop();
                 setHistoryRefresh((value) => value + 1);
               }}
             />

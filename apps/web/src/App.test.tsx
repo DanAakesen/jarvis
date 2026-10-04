@@ -37,7 +37,13 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
 });
 
-afterEach(() => { vi.unstubAllGlobals(); });
+const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  if (mediaDevicesDescriptor) Object.defineProperty(navigator, 'mediaDevices', mediaDevicesDescriptor);
+  else Reflect.deleteProperty(navigator, 'mediaDevices');
+});
 
 describe('Jarvis routes', () => {
   it('disables sign-in until a backend is deployed', () => {
@@ -190,15 +196,37 @@ describe('App shell', () => {
     expect(screen.getByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
   });
 
-  it('keeps Camera unavailable while screen sharing is available in the conversation', async () => {
+  it('turns the camera on and off from the shared shell', async () => {
+    const user = userEvent.setup();
+    let stopped = false;
+    const track = {
+      get readyState() { return stopped ? 'ended' : 'live'; },
+      stop: vi.fn(() => { stopped = true; }),
+      addEventListener: vi.fn(),
+    } as unknown as MediaStreamTrack;
+    const stream = {
+      getTracks: () => [track],
+      getVideoTracks: () => [track],
+    } as unknown as MediaStream;
+    const getUserMedia = vi.fn(async () => stream);
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
     await renderSignedIn();
 
-    const camera = screen.getByRole('button', { name: 'Camera' });
-    expect(camera).toHaveProperty('disabled', true);
-    expect(camera.getAttribute('aria-describedby')).not.toBeNull();
-    expect(document.getElementById(camera.getAttribute('aria-describedby')!)?.textContent)
-      .toBe('Unavailable until camera support is built.');
-    expect(camera.parentElement?.getAttribute('title')).toBe('Unavailable until camera support is built.');
+    const camera = screen.getByRole('button', { name: 'Camera off. Turn camera on.' });
+    expect(camera).toHaveProperty('disabled', false);
+    expect(camera.getAttribute('aria-pressed')).toBe('false');
+    await user.click(camera);
+    const activeCamera = await screen.findByRole('button', { name: 'Camera on. Turn camera off.' });
+    expect(activeCamera.getAttribute('aria-pressed')).toBe('true');
+    expect(getUserMedia).toHaveBeenCalledWith({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    await user.click(activeCamera);
+    expect(track.stop).toHaveBeenCalledOnce();
     expect(within(screen.getByRole('region', { name: 'Conversation' }))
       .getByRole('button', { name: 'Share screen' })).toHaveProperty('disabled', false);
   });

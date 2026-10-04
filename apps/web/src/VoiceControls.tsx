@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PublicConfig } from '../config/public-config';
 import { VoiceOrb } from './VoiceOrb';
 import { BrowserVoiceClient, type VoiceLanguage, type VoiceStatus } from './voice-client';
-import type { ScreenShareController } from './screen-sharing';
+import type { CameraController, ScreenShareController } from './screen-sharing';
 
 const initialMessage = 'Start voice to speak with Jarvis. Your microphone opens after the voice session is ready.';
 
@@ -25,12 +25,14 @@ export function VoiceControls({
   language = 'da',
   onSessionEnded,
   screenShare,
+  camera,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
   language?: VoiceLanguage;
   onSessionEnded?: () => void;
   screenShare?: ScreenShareController;
+  camera?: CameraController;
 }) {
   const client = useRef<BrowserVoiceClient | null>(null);
   const [status, setStatus] = useState<VoiceStatus>('stopped');
@@ -54,7 +56,7 @@ export function VoiceControls({
       language,
       ...(onSessionEnded ? { onSessionEnded } : {}),
       onSessionReady: setScreenSessionId,
-      onScreenRequest: () => { void inspectAndSendScreen(); },
+      onVisionRequest: (source) => { void inspectAndSendVision(source); },
       onStatus: (nextStatus, nextMessage) => {
         setStatus(nextStatus);
         setMessage(nextMessage);
@@ -62,6 +64,7 @@ export function VoiceControls({
           client.current = null;
           setScreenSessionId(null);
           screenShare?.stop();
+          camera?.stop();
           setMuted(false);
         }
       },
@@ -70,14 +73,15 @@ export function VoiceControls({
     voice.start();
   };
 
-  const inspectAndSendScreen = async () => {
-    if (!screenShare || !screenSessionId || !client.current) return;
+  const inspectAndSendVision = async (source: 'camera' | 'screen') => {
+    const capture = source === 'camera' ? camera : screenShare;
+    if (!capture || !capture.sharing || !screenSessionId || !client.current) return;
     setScreenError('');
     try {
-      const description = await screenShare.inspect(screenSessionId);
+      const description = await capture.inspect(screenSessionId);
       client.current.sendScreenContext(description);
     } catch (reason) {
-      setScreenError(reason instanceof Error ? reason.message : 'Jarvis could not inspect the shared screen.');
+      setScreenError(reason instanceof Error ? reason.message : 'Jarvis could not inspect the visual frame.');
     }
   };
 
@@ -110,11 +114,19 @@ export function VoiceControls({
         >
           {muted ? 'Unmute' : 'Mute'}
         </button>
-        <button className="secondary-button" type="button" onClick={() => void inspectAndSendScreen()}
-          disabled={!active || !screenShare?.sharing || !screenSessionId || pending}>
+        <button className="secondary-button" type="button" onClick={() => void inspectAndSendVision('screen')}
+          disabled={!active || !screenShare?.sharing || !screenSessionId || pending || Boolean(screenShare.inspecting)}>
           Look at screen
         </button>
+        <button className="secondary-button" type="button" onClick={() => void inspectAndSendVision('camera')}
+          disabled={!active || !camera?.sharing || !screenSessionId || pending || Boolean(camera?.inspecting)}
+          aria-describedby="voice-camera-guidance">
+          Look at camera
+        </button>
       </div>
+      <span id="voice-camera-guidance" className="visually-hidden">
+        Turn on the camera from the top bar before asking Jarvis to inspect a frame.
+      </span>
       {screenError && <p role="alert">{screenError}</p>}
     </>
   );
