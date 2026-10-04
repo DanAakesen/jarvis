@@ -261,36 +261,14 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
-
-P8-13 was inspected in Chromium at 1440×1000 and 390×844 using the scratch auth
-stub and Vite settings mock. The mock rejected the first dark-mode PATCH with
-HTTP 400, after which the prior light appearance remained selected; retry
-accepted dark, and reloading Settings restored it. Keyboard navigation reached
-the dark radio with a visible native focus outline; the phone layout had no
-horizontal overflow. Muted-text contrast against the page/surface was at least
-6.25:1 in light mode and 8.99:1 in dark mode. The only browser console/network
-error was the intentionally rejected mock request; no page exceptions occurred.
-Screenshots are in `docs/ui/screenshots/p8-13-theme-settings-*.png`. These mocks
-do not verify live Entra, API authorization, or Azure SQL persistence.
-P8-20 was inspected in Chromium at 1440×900 and 390×844 across both appearances.
-The scratch harness returned empty task/project/usage data; its local WebSocket
-relay delivered PCM through the real P5-04 client for the speaking captures.
-Conversation, task board, projects, Settings, and Usage had no horizontal
-overflow at either width. Token contrast calculations passed AA for text and
-3:1 for focus/control outlines; muted text measured 5.71:1 light and 12.46:1
-dark against the page. Keyboard navigation revealed the skip link. Reduced
-motion left "Jarvis is speaking." visible, removed aurora/orb movement, and
-reduced transitions to 160 ms; the hidden-tab listener set animations to paused.
-The actual orb transform changed during normal speaking playback. Eight captures:
-[desktop light](ui/screenshots/p8-20-desktop-light.png),
-[desktop dark](ui/screenshots/p8-20-desktop-dark.png),
-[phone light](ui/screenshots/p8-20-phone-light.png),
-[phone dark](ui/screenshots/p8-20-phone-dark.png), and [desktop light speaking](ui/screenshots/p8-20-desktop-light-speaking.png),
-[desktop dark speaking](ui/screenshots/p8-20-desktop-dark-speaking.png),
-[phone light speaking](ui/screenshots/p8-20-phone-light-speaking.png),
-[phone dark speaking](ui/screenshots/p8-20-phone-dark-speaking.png).
-Local auth/API/voice fixtures do not verify live Entra, persisted settings,
-Azure SQL, provider audio, tool-call activity, or workspace windows.
+P8-05 conversation checks used the same scratch-only auth/API/audio fixtures at
+1440×900 and 390×844, plus 320/280 px overflow checks. Long history stays inside
+an independently scrolling transcript; the composer remains bottom-centred.
+Streaming, interruption, history retry, explicit voice entry, microphone
+permission denial, natural voice end, draft/focus restoration and reduced
+motion were exercised. Screenshots in `docs/ui/screenshots/p8-05-*` contain
+labelled local fixtures, not production conversations. A real phone keyboard,
+physical microphone/speakers and live Azure round-trip remain unverified.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

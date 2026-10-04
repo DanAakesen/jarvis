@@ -111,9 +111,9 @@ sign-in; the header wraps on narrow screens.
   Keep the current page and pending controls visible; do not infer this state
   from elapsed time or replace it with an invented progress indicator.
 
-- **Main page:** the verified name is the headline. Conversation (chat,
-  language, voice, and persisted history) is the wide column; "Now" and Backend
-  sit beside it from 900 px and stack below it on narrower screens.
+- **Main page:** P8-05 supersedes the initial wide-column layout with a
+  conversation-first opening screen and a bottom-centred composer. "Now" and
+  Backend remain available through the Activity and backend disclosure.
 - **Screen sharing (P7-05):** keep the browser-selected share/stop control and
   live sharing status in the conversation workflow, with a separate, explicit
   Look at screen action for chat and voice. Keep the status and Stop action
@@ -285,11 +285,12 @@ Invocations; live Azure streaming and tool-call linkage remain a post-merge chec
 
 ## Browser voice (P5-04)
 
-The Voice section uses the existing neutral panel and replaces unavailable
-actions with Start voice, Stop voice, and Mute/Unmute. Connection, listening,
-thinking, speaking, reconnecting, and failure feedback stays beside those controls; the
-mute action is unavailable until a session is ready. The microphone opens only
-after session setup and the Danish no-model warm-up complete. Speaking
+P8-05 moves Start voice into the composer's small orb. Active sessions retain
+Stop voice and Mute/Unmute while P8-12 supplies the final end-control placement.
+Connection, microphone-off readiness, listening, thinking, speaking,
+reconnecting, and failure feedback stays beside those controls.
+Enable microphone is a separate explicit action after session setup and the
+Danish no-model warm-up complete; reconnect also returns with capture off. Speaking
 interrupts playback. Controls wrap on narrow screens and use the shared 44 px
 button and visible-focus styles. Language selection and voice settings remain
 with P5-05; no new visual direction is chosen. A headless Chromium check at
@@ -298,6 +299,20 @@ reconnect, mute, and stop states with mocked relay/audio APIs. Physical
 microphone and speaker behavior remains unverified. Stop shows "Saving voice
 session…" until the backend has recorded usage, then refreshes conversation
 history.
+
+## Conversation opening and input (P8-05)
+
+The conversation fills the shared shell's main space using its existing neutral
+tokens; P8-20 still owns the selected aurora/daylight visual system. A bounded,
+independently scrolling transcript sits above the bottom-centred composer. New
+replies stay visible without moving the composer; loading older history does not
+jump to the latest reply. Activity and backend controls remain available under
+an expandable disclosure rather than competing with the opening conversation.
+Only the small, labelled input orb starts voice. Voice hides history and the
+composer without discarding the draft or language; stop, natural end and failure
+restore typing focus. The ready state says the microphone is off and offers a
+separate Enable microphone action. The shell/fullscreen transition, window
+carry-over and final end-control behavior remain P8-10–P8-12.
 
 ## Next-generation shared shell (structure agreed; P8-04 implemented)
 

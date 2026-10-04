@@ -1,5 +1,5 @@
 export type VoiceLanguage = 'da' | 'en';
-export type VoiceStatus = 'stopped' | 'connecting' | 'stopping' | 'listening' | 'thinking' | 'speaking' | 'reconnecting' | 'error';
+export type VoiceStatus = 'stopped' | 'connecting' | 'ready' | 'stopping' | 'listening' | 'thinking' | 'speaking' | 'reconnecting' | 'error';
 
 type VoiceSocket = Omit<Pick<WebSocket, 'addEventListener' | 'removeEventListener' | 'send' | 'close' | 'readyState'>, 'readyState'> & {
   readonly readyState: number;
@@ -327,13 +327,15 @@ export class BrowserVoiceClient {
   private running = false;
   private muted = false;
   private microphoneOpen = false;
+  private microphoneOpening = false;
+  private sessionReady = false;
   private playbackAllowed = false;
   private responseFinished = false;
   private stopping = false;
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
   private stopOpenSocket: VoiceSocket | undefined;
   private stopOpenHandler: (() => void) | undefined;
-  private sessionReady = false;
+  private screenSessionReady = false;
 
   constructor(private readonly options: VoiceClientOptions) {
     this.language = options.language ?? 'da';
@@ -401,11 +403,41 @@ export class BrowserVoiceClient {
   }
 
   sendScreenContext(description: string): void {
-    if (!this.running || !this.sessionReady || description.trim().length === 0 ||
+    if (!this.running || !this.screenSessionReady || description.trim().length === 0 ||
         description.length > 5_000 || this.socket?.readyState !== WebSocket.OPEN) {
       throw new Error('The active voice session is not ready for screen context.');
     }
     this.socket.send(JSON.stringify({ type: 'jarvis.screen.context', description }));
+  }
+
+  async enableMicrophone(): Promise<void> {
+    const socket = this.socket;
+    if (!socket || socket.readyState !== WebSocket.OPEN || !this.running || this.stopping ||
+        !this.sessionReady || this.microphoneOpen || this.microphoneOpening) return;
+    this.muted = false;
+    this.microphoneOpening = true;
+    try {
+      await this.audio.open((audio) => {
+        if (this.running && !this.stopping && socket === this.socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: 'input_audio_buffer.append', audio }));
+        }
+      });
+      if (!this.running || this.stopping || socket !== this.socket || socket.readyState !== WebSocket.OPEN) {
+        this.audio.closeInput();
+        return;
+      }
+      this.microphoneOpen = true;
+      this.playbackAllowed = true;
+      this.audio.setMuted(this.muted);
+      this.publish('listening', 'Listening for your voice.');
+    } catch {
+      this.audio.closeInput();
+      if (this.running && !this.stopping && socket === this.socket) {
+        this.publish('ready', 'Microphone access was not granted. Check browser permissions, then enable the microphone to retry.');
+      }
+    } finally {
+      this.microphoneOpening = false;
+    }
   }
 
   private publish(status: VoiceStatus, message: string): void {
@@ -453,28 +485,12 @@ export class BrowserVoiceClient {
             await waitForVoiceEvent(socket, ['session.updated'], signal, WARMUP_TIMEOUT_MS);
           }
           if (!this.running || signal.aborted) break;
-          try {
-            await this.audio.open((audio) => {
-              if (socket === this.socket && socket) {
-                socket.send(JSON.stringify({ type: 'input_audio_buffer.append', audio }));
-              }
-            });
-          } catch {
-            if (this.running && !signal.aborted) {
-              this.running = false;
-              this.publish('error', 'Microphone access was not granted. Check browser permissions and try again.');
-            }
-            break;
-          }
           if (this.stopping) {
-            this.audio.closeInput();
             await waitForClose(socket, signal);
             break;
           }
-          this.microphoneOpen = true;
-          this.playbackAllowed = true;
-          this.audio.setMuted(this.muted);
-          this.publish('listening', 'Listening for your voice.');
+          this.sessionReady = true;
+          this.publish('ready', 'Voice is ready. Microphone is off; enable it when you want to speak.');
           await waitForClose(socket, signal);
           reconnects += 1;
         } catch (error) {
@@ -488,6 +504,8 @@ export class BrowserVoiceClient {
             socket.close();
           }
           this.microphoneOpen = false;
+          this.sessionReady = false;
+          this.screenSessionReady = false;
           this.playbackAllowed = false;
           this.responseFinished = false;
           this.audio.stopPlayback();
@@ -518,7 +536,7 @@ export class BrowserVoiceClient {
     if (!event || typeof event.type !== 'string') return;
     if (event.type === 'jarvis.session.ready') {
       if (typeof event.sessionId === 'string' && /^[1-9]\d{0,18}$/u.test(event.sessionId)) {
-        this.sessionReady = true;
+        this.screenSessionReady = true;
         this.options.onSessionReady?.(event.sessionId);
       }
     } else if (event.type === 'jarvis.session.ended') {
@@ -554,6 +572,7 @@ export class BrowserVoiceClient {
   private finishStop(sessionEnded: boolean, failed = false): void {
     this.running = false;
     this.sessionReady = false;
+    this.screenSessionReady = false;
     this.stopping = false;
     if (this.stopTimer !== undefined) clearTimeout(this.stopTimer);
     this.stopTimer = undefined;

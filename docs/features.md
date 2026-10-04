@@ -29,7 +29,7 @@ Status as of 4 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Sign-in | Sign in with his Microsoft account; everyone else is refused | Screen | All pages | Live | P0-08, P0-09 |
-| Chat | Type to Jarvis and read streamed replies; one continuous saved conversation with history | Screen | Main page | Built | P4-03, P4-06, P4-09 |
+| Chat | Type from the bottom-centred composer and read streamed replies; one continuous saved conversation with history and interruption recovery | Screen | Main page | Built | P4-03, P4-06, P4-09, P8-05 |
 | English voice | Talk to Jarvis in English (gpt-realtime, Ryan HD, British butler persona) | Voice/chat | Main page | Built | P5-03, P5-04 |
 | Danish voice | Talk to Jarvis in Danish (MAI Transcribe, Harper) | Voice/chat | Main page | Built | P5-02, P5-04 |
 | Interrupt and reconnect | Interrupt Jarvis by speaking; voice reconnects automatically | Voice/chat | Main page | Built | P5-04 |
@@ -122,7 +122,7 @@ Status as of 4 October 2026.
 | --- | --- | --- | --- | --- | --- |
 | Complete Jarvis front end | One designed UI for all features above | Screen | All pages | Planned | P8-01, P8-04–P8-13 |
 | Shared app shell and area navigation | Navigate areas from the rail/sidebar; open Settings from the top-right; see Screen sharing and Camera controls disabled until their capabilities are built | Screen | All pages | Built | P8-04 |
-| Conversation opening and voice entry | See the conversation on arrival, type from the bottom-centred composer, and explicitly start voice from the small orb | Both | Main page | Planned | P8-05 |
+| Conversation opening and voice entry | See the conversation on arrival, type from the bottom-centred composer, and explicitly start voice from the small orb; separately enable the microphone, and restore the draft and typing focus on exit | Both | Main page | Built (offline/browser fixtures) | P8-05 |
 | Dynamic workspace views | View accessible information in temporary, question-relevant windows; ask Jarvis or move/resize/reorder views | Screen | Main workspace | Planned | P8-06 |
 | Window tabs and restore | Minimise a view without closing or saving it, then restore it from its tab or by asking Jarvis | Both | Main/voice workspace | Planned | P8-07 |
 | Contextual right panel | Open, close, or change relevant information without replacing the main content | Both | Main workspace | Client built; authenticated Jarvis command delivery pending P8-15 | P8-08, P8-15 |
