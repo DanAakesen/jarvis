@@ -18,6 +18,9 @@ const task: DispatchClaim = {
   nextAttemptAt: null,
   sandboxSize: '1x2',
   tech: 'node',
+  repository: 'DanAakesen/jarvis',
+  defaultBranch: 'main',
+  branch: 'jarvis/task-42',
 };
 
 const controlTask: TaskRecord = {
@@ -35,7 +38,7 @@ const controlTask: TaskRecord = {
   priority: 0,
   attemptCount: 1,
   nextAttemptAt: null,
-  branch: null,
+  branch: 'jarvis/task-42',
   createdAt: '2026-10-03T12:00:00.000Z',
   startedAt: '2026-10-03T12:00:00.000Z',
   finishedAt: null,
@@ -54,6 +57,9 @@ const controlTarget: TaskControlTarget = {
   sandboxSize: '1x2',
   image: 'jarvis-runner:latest',
   sessionStatus: 'Active',
+  repository: 'DanAakesen/jarvis',
+  defaultBranch: 'main',
+  branch: 'jarvis/task-42',
 };
 
 function harness(store: DispatcherStore, startTask = vi.fn(async () => ({
@@ -137,6 +143,7 @@ describe('task dispatcher', () => {
 
     expect(startTask).toHaveBeenCalledWith({
       agent: 'codex', task: 'Find and fix it', taskId: '42', model: 'gpt-5.4', reasoning: 'high',
+      repository: 'DanAakesen/jarvis', defaultBranch: 'main', branch: 'jarvis/task-42',
     });
     expect(first.track).toHaveBeenCalledOnce();
     expect(second.track).toHaveBeenCalledTimes(0);
@@ -173,18 +180,18 @@ describe('task dispatcher', () => {
     await dispatcher.stop();
   });
 
-  it('untracks active sessions when task state events end or pause work', async () => {
+  it.each(['Paused', 'NeedsAttention'])('ends and untracks active sessions on committed %s events', async (state) => {
     const store = idleStore();
     vi.mocked(store.endTaskSessions).mockResolvedValue(['53']);
     const { dispatcher, events, untrack } = harness(store);
     dispatcher.start();
     await vi.waitFor(() => expect(store.claimNext).toHaveBeenCalledOnce());
     events.publish({
-      id: '2', taskId: '42', type: 'state_changed', summary: null, payload: { from: 'Running', to: 'Paused' },
+      id: '2', taskId: '42', type: 'state_changed', summary: null, payload: { from: 'Running', to: state },
       payloadTruncated: false, source: 'backend', at: new Date().toISOString(),
     });
     await vi.waitFor(() => expect(untrack).toHaveBeenCalledWith('53'));
-    expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Paused');
+    expect(store.endTaskSessions).toHaveBeenCalledWith('42', state);
     await dispatcher.stop();
   });
 
@@ -229,6 +236,9 @@ describe('task dispatcher', () => {
       3, expect.any(String), expect.objectContaining({ attemptCount: 3 }), null, 'foundry_start_failed',
     );
     expect(startTask).toHaveBeenCalledTimes(3);
+    for (const [request] of startTask.mock.calls as unknown as [{ branch: string }][]) {
+      expect(request.branch).toBe('jarvis/task-42');
+    }
     await dispatcher.stop();
   });
 
@@ -290,13 +300,25 @@ describe('task dispatcher', () => {
 
     expect(resume).toHaveBeenCalledWith('session-1', {
       agent: 'codex', task: 'Find and fix it', taskId: '42', model: 'gpt-5.4', reasoning: 'high',
+      repository: 'DanAakesen/jarvis', defaultBranch: 'main', branch: 'jarvis/task-42',
     });
+
     expect(store.recordResumedTurn).toHaveBeenCalledWith(pausedTarget, expect.objectContaining({
       invocationId: 'invocation-resume',
     }));
     expect(transition).toHaveBeenCalledWith('42', 'Running');
     expect(track).toHaveBeenCalledWith(expect.objectContaining({ invocationId: 'invocation-resume' }));
     expect(result).toMatchObject({ kind: 'ok', task: { state: 'Running' } });
+  });
+
+  it('uses the persisted branch rather than regenerating it for resumed work', async () => {
+    const pausedTarget = { ...controlTarget, branch: 'jarvis/retained-task', defaultBranch: 'develop', sessionStatus: 'Idle' as const };
+    const store = { ...idleStore(), getControlTarget: vi.fn(async () => pausedTarget) };
+    const { dispatcher, resume } = harness(store, undefined, { ...controlTask, state: 'Paused' });
+    await expect(dispatcher.control('42', { action: 'resume' })).resolves.toMatchObject({ kind: 'ok' });
+    expect(resume).toHaveBeenCalledWith('session-1', expect.objectContaining({
+      repository: 'DanAakesen/jarvis', defaultBranch: 'develop', branch: 'jarvis/retained-task',
+    }));
   });
 
   it('cancels a paused task and deletes its Foundry session', async () => {

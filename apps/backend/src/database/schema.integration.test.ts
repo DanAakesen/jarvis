@@ -7,6 +7,7 @@ import { createTaskStore } from './task-store.js';
 import { createCredentialStatusStore } from './credential-status-store.js';
 import { createNowFeedStore } from './now-feed-store.js';
 import { createSettingsStore } from './settings-store.js';
+import { createWebhookDeliveryStore } from './webhook-delivery-store.js';
 import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
 import { createDispatcherStore } from './dispatcher-store.js';
@@ -102,6 +103,19 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
       'IX_artifacts_task_id_at', 'IX_sandbox_sessions_task_id_status', 'IX_sandbox_turns_sandbox_session_id_started_at',
       'IX_task_event_archives_task_first_at', 'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at',
     ]);
+  });
+
+  it('ignores a concurrently repeated webhook delivery ID', async () => {
+    const store = createWebhookDeliveryStore(pool);
+    const deliveryId = randomUUID();
+    const input = { deliveryId, event: 'push', outcome: 'ok' as const };
+    const inserted = await Promise.all([store.record(input), store.record(input)]);
+    expect(inserted.sort()).toEqual([false, true]);
+    const { recordset } = await pool.request()
+      .input('deliveryId', sql.NVarChar(100), deliveryId)
+      .query(`SELECT delivery_id AS deliveryId, event, outcome FROM dbo.webhook_deliveries
+        WHERE delivery_id = @deliveryId;`);
+    expect(recordset).toEqual([{ deliveryId, event: 'push', outcome: 'ok' }]);
   });
 
   it('reads running tasks and categorized activity and persists dismissals', async () => {
@@ -390,8 +404,22 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
 
     expect((await store.transition(created.id, 'Done')).kind).toBe('invalid-transition');
     await transition(created.id, 'Running');
+    const foundrySessionId = 'session-active-task';
+    await pool.request()
+      .input('taskId', sql.BigInt, BigInt(created.id))
+      .input('sessionId', sql.NVarChar(255), foundrySessionId)
+      .query(`INSERT dbo.sandbox_sessions
+        (task_id, foundry_session_id, agent_version, size, image, status)
+        VALUES (@taskId, @sessionId, N'runner', N'1x2', N'runner', N'Active');`);
+    expect(await store.getActiveRepository(created.id, foundrySessionId)).toBe(
+      (await pool.request().input('id', sql.BigInt, BigInt(projectId))
+        .query<{ repo: string }>('SELECT repo FROM dbo.projects WHERE id = @id;')).recordset[0]?.repo,
+    );
+    expect(await store.getActiveRepository(created.id, 'other-session')).toBeNull();
     await transition(created.id, 'PauseRequested');
+    expect(await store.getActiveRepository(created.id, foundrySessionId)).not.toBeNull();
     await transition(created.id, 'Paused');
+    expect(await store.getActiveRepository(created.id, foundrySessionId)).toBeNull();
     await transition(created.id, 'Running');
     await pool.request()
       .input('taskId', sql.BigInt, BigInt(created.id))

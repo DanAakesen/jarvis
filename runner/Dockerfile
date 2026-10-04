@@ -40,7 +40,7 @@ RUN useradd --create-home --shell /bin/bash runner
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --require-hashes -r requirements.txt
-COPY app.py ./
+COPY app.py github_token.py git_credential_helper.py ./
 RUN mkdir -p /files/jarvis && chown -R runner:runner /app /home/runner /files
 USER runner
 EXPOSE 8088

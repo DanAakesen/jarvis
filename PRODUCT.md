@@ -21,7 +21,7 @@ Keep implementation phases and progress in [PLAN.md](PLAN.md), visual choices in
 | **3 — Health and fitness (Daily)** | Clean up the existing Daily solution and migrate valuable functions, integrations, and history to Azure. |
 | **4 — Windows app** | The same core experience through the shared backend. Framework open. |
 
-Only phase 1 is in scope now. Banking, health and fitness, calendar, and other areas get no tables, pages, or code until their phase starts.
+Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, phone confirmations, screen and camera, PC control, calendar, mail and notes search) and P8 (the complete Jarvis UI) in [PLAN.md](PLAN.md). Banking, health and fitness, and other areas get no tables, pages, or code until their phase starts.
 
 ## Scope and core workflows
 
@@ -38,6 +38,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 | **Agent choice** | Codex or GitHub Copilot per task, regardless of project. |
 | **Subscriptions** | Codex uses Dan's ChatGPT Pro plan (Jarvis-only login); Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. No per-use billing for either. |
 | **Voice** | An open browser is enough. Danish and English with a language toggle; status requests and follow-ups. Voice Live credentials stay on the backend; the browser connects through an authenticated backend WebSocket relay. |
+| **GitHub events** | The backend verifies GitHub webhook signatures and ignores duplicate delivery IDs for pull requests, check runs, workflow runs, deployment statuses, and pushes. Delivery payloads are mapped into project records separately. |
 | **Continuity** | Work continues when the browser or voice session closes. |
 | **Sandbox** | One sandbox per task: starts when work begins, closes after delivery or cancel. The agent runs targeted builds and tests only; no Docker. |
 | **Build and release** | Full builds, all tests, and releases run in GitHub Actions, as in Dan's normal workflow; never in the sandbox. Managed projects can copy the repository's PR-check and OIDC-release workflow templates and adapt their build and deployment commands. |
@@ -46,6 +47,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 | **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. |
 | **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. For chat, the backend calls the hosted agent through Foundry Invocations with its managed identity; the agent verifies Dan's delegated token and stored source message through `/me` and conversation history. The agent has its own identity for reading model settings and listing/calling tools; coding runners use a separate app-only role restricted to task-event ingestion. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
+| **Database wake** | SQL connection acquisition and explicitly read-only queries retry resume errors 40613, 40197, 40501 and connection timeouts with backoff for up to 90 seconds. Signed-in pages show “Waking Jarvis…” only while the backend reports a database wait. An ambiguous write failure is never automatically replayed. |
 | **Memory** | One continuous conversation will need compaction and memory over time; the memory design is deferred. |
 | **Turn context** | Each model turn receives current running-task status and recent events plus a bounded recent-message window, so typical status questions do not need a separate task-list model round. |
 
@@ -89,9 +91,12 @@ stateDiagram-v2
 - If Codex rejects a turn because the Jarvis login's usage limit is reached, the runner reports the failure as `Codex usage limit reached` (reason `codex_usage_limit`) instead of a generic runner error. The task moves to Needs attention, and other tasks keep running.
 - **Sandbox heartbeat:** while a task runs, the backend checks its active invocation about once a minute and updates the session heartbeat timestamp. HTTP 424/404/5xx on two polls (or persisting for 30 seconds) moves the task to Needs attention; a gap in runner events alone never signals a crash. **Recover** restarts it in a new sandbox from the task branch, with the task and its history.
 - **Dispatch:** the backend leases Ready tasks only when both global and project concurrency limits allow them. It retries safe start failures up to three attempts (15-second, then 30-second delays); an ambiguous Foundry start or exhausted attempts moves the task to Needs attention. The dispatcher reacts to committed task events and retry deadlines rather than polling SQL while idle.
+- **Task workspace:** each start carries the project's repository and default branch plus the persisted task branch `jarvis/task-<id>`. The runner clones through its Git credential helper and uses the remote task branch when present, otherwise creates it from the default branch. Resume and recovery keep the same task branch.
+- An agent `end_turn` without a new commit on the task branch moves the task to Needs attention with the agent's last message as its question. A new commit alone does not mark a task Done; verified GitHub/project-policy completion is still required.
 - The authenticated tasks API creates board tasks only for active projects, lists tasks with project, agent, state, period and search filters, and returns task details with a bounded, pageable event history. API responses are capped at 1 MiB; oversized event payloads are explicitly marked truncated. New tasks always start Ready and record their creation event.
 - Task state belongs to the backend. State changes must follow this lifecycle; clients cannot write state directly, and Done requires verified project-policy/GitHub completion.
 - Coding agents push small work-in-progress commits to the existing task branch after each meaningful step. They never force-push or push to `main`, and report commit or push failures.
+- Git pushes use a one-hour GitHub App installation token scoped to the task's repository. The runner authenticates to the backend for each Git credential request; the App private key remains in Key Vault and is never sent to a sandbox. Keep the legacy GitHub token path available until the App flow passes its live sandbox push check.
 - **Checks loop:** when a pull request's checks fail, Jarvis sends the failing log back to the same task; the agent fixes and pushes again.
 - **Done** follows the project policy and verified GitHub results, never the agent's own report.
 - Show observed milestones; use percentages only when measurable. Show stale or disconnected status and reconcile after reconnect.

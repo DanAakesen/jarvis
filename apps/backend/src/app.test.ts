@@ -19,6 +19,28 @@ function fixture() {
 }
 
 describe('Fastify backend', () => {
+  it('reports the in-memory database wait without querying SQL or caching status', async () => {
+    let waking = true;
+    const databaseStatus = vi.fn(() => waking);
+    const app = buildApp(config, undefined, {
+      databaseStatus,
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan Aakesen' }),
+    });
+    apps.push(app);
+    const headers = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
+    const response = await app.inject({ url: '/database/status', headers });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ waking: true });
+    expect(response.headers['cache-control']).toBe('no-store');
+    waking = false;
+    expect((await app.inject({ url: '/database/status', headers })).json()).toEqual({ waking: false });
+    expect(databaseStatus).toHaveBeenCalledTimes(2);
+  });
+  it('does not expose database status to unauthenticated requests', async () => {
+    const { app } = fixture();
+    const response = await app.inject({ url: '/database/status' });
+    expect(response.statusCode).toBe(401);
+  });
   it('returns a real 200 health response without credentials', async () => {
     const { app } = fixture();
     const response = await app.inject({ method: 'GET', url: '/health' });

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -162,7 +163,7 @@ def test_disk_low_threshold_is_configurable(monkeypatch):
         app._disk_low_threshold_bytes()
 
 
-def test_low_disk_emits_snapshot_and_stops_the_turn(tmp_path, monkeypatch):
+def test_low_disk_emits_snapshot_and_stops_the_turn(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})
@@ -262,7 +263,7 @@ def test_task_events_are_pushed_in_order_with_task_and_invocation_identity(tmp_p
     ]
 
 
-def test_steer_after_event_is_delivered_before_the_new_turn(tmp_path, monkeypatch):
+def test_steer_after_event_is_delivered_before_the_new_turn(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})
@@ -381,6 +382,13 @@ def test_runner_event_publisher_uses_identity_and_bounds_event_payload(monkeypat
             3,
             {"at": 1.0, "kind": "agent_output", "data": {"text": "x" * (app.MAX_EVENT_PAYLOAD_BYTES + 1)}},
         )
+        await publisher.publish(
+            "42", "invocation", 4,
+            {"at": 2.0, "kind": "session_question", "data": {
+                "question": "Which behaviour do you want?",
+                "result": {"response": {"usage": {"input_tokens": 123, "premium_requests": 1}}},
+            }},
+        )
         await publisher.close()
 
     asyncio.run(exercise())
@@ -392,6 +400,11 @@ def test_runner_event_publisher_uses_identity_and_bounds_event_payload(monkeypat
     assert len(request_options["json"]["summary"]) == 2000
     assert request_options["json"]["payload"] == {
         "invocationId": "invocation", "eventIndex": 3, "truncated": True,
+    }
+    assert sent[1][1]["json"]["summary"] == "Which behaviour do you want?"
+    assert sent[1][1]["json"]["payload"]["data"]["question"] == "Which behaviour do you want?"
+    assert sent[1][1]["json"]["payload"]["data"]["result"]["response"]["usage"] == {
+        "input_tokens": 123, "premium_requests": 1,
     }
 
 
@@ -499,7 +512,10 @@ def test_invoke_accepts_effective_provider_options(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "tasks", {})
     monkeypatch.setattr(app, "tasks_lock", asyncio.Lock())
     monkeypatch.setattr(app.asyncio, "create_task", lambda coroutine: coroutine.close())
-    payload = {"agent": "codex", "task": "Work", "task_id": "42", "model": "gpt-5.4", "reasoning": "high"}
+    payload = {
+        "agent": "codex", "task": "Work", "task_id": "42", "model": "gpt-5.4", "reasoning": "high",
+        "repository": "owner/project", "defaultBranch": "main", "branch": "jarvis/task-42",
+    }
     body = json.dumps(payload).encode()
 
     async def receive():
@@ -553,12 +569,90 @@ def test_configured_live_events_require_valid_task_ids(tmp_path, monkeypatch, ta
 
 def test_git_credential_helper_uses_process_environment(tmp_path):
     helper = app._credential_helper(tmp_path)
-    assert helper.read_text() == (
-        "#!/bin/sh\n"
-        "printf 'username=x-access-token\\npassword=%s\\n' \"$GH_TOKEN\"\n"
-    )
+    content = helper.read_text()
+    assert content.startswith("#!/bin/sh\nexec ")
+    assert str(Path(app.__file__).with_name("git_credential_helper.py")) in content
+    assert content.endswith(' "$@"\n')
     if os.name != "nt":
         assert helper.stat().st_mode & 0o777 == 0o700
+
+
+def test_app_token_tasks_do_not_read_the_legacy_github_secret(monkeypatch):
+    requested = []
+
+    async def read_secret(name):
+        requested.append(name)
+        return f"not-a-real-{name}"
+
+    monkeypatch.setattr(app, "_key_vault_secret", read_secret)
+    credentials = asyncio.run(app._credentials_for("copilot", include_github_token=False))
+    assert credentials == {"copilot_token": "not-a-real-jarvis-copilot"}
+    assert requested == ["jarvis-copilot"]
+
+
+def test_task_uses_an_app_token_and_configures_per_push_credentials(tmp_path, monkeypatch, local_workspace):
+    work_root = tmp_path / "work root"
+    monkeypatch.setattr(app, "WORK_ROOT", work_root)
+    monkeypatch.setattr(app, "session_clients", {})
+    monkeypatch.setattr(app, "session_locks", {})
+    monkeypatch.setenv("JARVIS_BACKEND_URL", "https://backend.example")
+    monkeypatch.setenv("JARVIS_API_SCOPE", "api://00000000-0000-4000-8000-000000000000/.default")
+    monkeypatch.setenv("JARVIS_GITHUB_APP_TOKEN_ENABLED", "true")
+    token_requests = []
+    monkeypatch.setattr(
+        app, "get_installation_token",
+        lambda *args: (token_requests.append(args) or "ghs_app-token", "DanAakesen/jarvis-test-target"),
+    )
+    captured_env = {}
+
+    class Publisher:
+        async def publish(self, *_args):
+            pass
+
+        async def close(self):
+            pass
+
+    class Client:
+        def __init__(self, _command, _cwd, _state, env, **_kwargs):
+            captured_env.update(env)
+
+        async def start(self):
+            pass
+
+        async def run(self, _task):
+            return {"text": "done"}
+
+        async def stop(self):
+            pass
+
+    async def credentials(agent, *, include_github_token=True):
+        assert agent == "copilot"
+        assert include_github_token is False
+        return {"copilot_token": "not-a-real-seat-token"}
+
+    monkeypatch.setattr(app, "RunnerEventPublisher", lambda *_args: Publisher())
+    monkeypatch.setattr(app, "ACPClient", Client)
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    state = app.TaskState("app-token-task", "app-token-session", "copilot", "Work", task_id="42")
+
+    asyncio.run(app._run_task(state))
+
+    assert state.status == "completed"
+    assert token_requests == [(
+        "https://backend.example",
+        "api://00000000-0000-4000-8000-000000000000/.default",
+        "42",
+        "app-token-session",
+    )]
+    assert captured_env["GH_TOKEN"] == "ghs_app-token"
+    assert captured_env["GIT_CONFIG_COUNT"] == "2"
+    assert captured_env["GIT_CONFIG_VALUE_0"] == (
+        f"!{shlex.quote(str(work_root / 'app-token-session' / '.git-credential-helper'))}"
+    )
+    assert captured_env["GIT_CONFIG_KEY_1"] == "credential.useHttpPath"
+    assert captured_env["GIT_CONFIG_VALUE_1"] == "true"
+    assert captured_env["JARVIS_TASK_ID"] == "42"
+    assert captured_env["JARVIS_SESSION_ID"] == "app-token-session"
 
 
 def test_acp_loads_a_persisted_session_with_protocol_fixture(tmp_path, monkeypatch):
@@ -998,7 +1092,7 @@ def test_client_redacts_credential_values_in_nested_output(tmp_path):
         "content": ["token=[redacted]", {"text": "[redacted]"}]}
 
 
-def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch):
+def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})
@@ -1041,7 +1135,7 @@ def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch):
     ],
 )
 def test_codex_usage_limit_failure_is_reported_distinctly(
-    tmp_path, monkeypatch, codex_error_info, expected_error, expected_reason
+    tmp_path, monkeypatch, local_workspace, codex_error_info, expected_error, expected_reason
 ):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
@@ -1138,7 +1232,7 @@ def test_cancel_queued_turn_prevents_work_after_session_lock(tmp_path, monkeypat
     asyncio.run(exercise())
 
 
-def test_next_turn_waits_for_provider_cleanup(tmp_path, monkeypatch):
+def test_next_turn_waits_for_provider_cleanup(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})

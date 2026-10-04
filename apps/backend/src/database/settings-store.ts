@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import { defaultSettings, flattenSettings, type SettingsPatch, type SettingsStore } from '../core/settings.js';
 
 export function createSettingsStore(pool: sql.ConnectionPool): SettingsStore {
@@ -6,7 +7,7 @@ export function createSettingsStore(pool: sql.ConnectionPool): SettingsStore {
   const keyParameters = keys.map((_key, index) => `@key${index}`);
   return {
     async read() {
-      const request = pool.request().input('scope', sql.NVarChar(64), 'global');
+      const request = databaseReadRequest(pool).input('scope', sql.NVarChar(64), 'global');
       keys.forEach((key, index) => { request.input(`key${index}`, sql.NVarChar(128), key); });
       const result = await request.query<{ key: string; value: string }>(
         `SELECT [key], value FROM dbo.settings WHERE scope = @scope AND [key] IN (${keyParameters.join(', ')});`,

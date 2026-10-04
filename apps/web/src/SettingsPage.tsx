@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { backendFetch } from './backend-request';
 
 interface Settings {
   jarvis: { model: string; reasoning: string };
@@ -155,14 +156,13 @@ async function requestSettings(
   let response: Response;
   try {
     const bearerScheme = ['Bear', 'er'].join('');
-    response = await fetch(`${backendUrl}/settings`, {
+    response = await backendFetch(`${backendUrl}/settings`, {
       method,
       headers: {
         Authorization: `${bearerScheme} ${await getAccessToken()}`,
         ...(settings ? { 'Content-Type': 'application/json' } : {}),
       },
       ...(settings ? { body: JSON.stringify({ settings }) } : {}),
-      signal: AbortSignal.timeout(10_000),
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'Your Microsoft sign-in needs attention. Sign in again.') throw error;

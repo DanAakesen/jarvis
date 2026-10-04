@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { backendFetch } from './backend-request';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 
@@ -32,7 +33,7 @@ async function requestSleepState(
   let response: Response;
   try {
     const bearerScheme = ['Bear', 'er'].join('');
-    response = await fetch(url, {
+    response = await backendFetch(url, {
       method,
       headers: {
         Authorization: `${bearerScheme} ${await accessToken(client, config)}`,
@@ -40,7 +41,6 @@ async function requestSleepState(
       },
       ...(state ? { body: JSON.stringify({ state }) } : {}),
       redirect: 'error',
-      signal: AbortSignal.timeout(10_000),
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'Your Microsoft sign-in needs attention. Sign in again.') throw error;

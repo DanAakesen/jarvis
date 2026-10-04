@@ -96,9 +96,10 @@ Before marking the PR ready, update the repository in the same PR so the next ag
 | Added or verified a command, environment variable, secret name, or setup step | this file |
 | Built or proved a step in a flow | [architecture-flows.html](architecture-flows.html): the box status |
 | Settled a visual direction or found a UI issue | [DESIGN.md](../DESIGN.md) |
+| Added, changed, removed or verified a feature (including new planned tasks) | [features.md](features.md): its row's status, surface and tasks |
 | Found work outside the task | `PLAN.md`: a new task (next free ID in its phase, Depends on filled in, Not started) or an entry under Ideas. Update the Depends on column of any task this changes. Never drop it silently. |
 
-The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; never merge a draft.
+The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; never merge a draft, and never merge a PR whose diff against `main` is empty or whose only commits are a plan or merges from `main` (L69).
 
 Every task issue ends with the same "Before you start" and "Definition of done" checklist that summarises these rules. New task issues get it too.
 
@@ -159,7 +160,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 
 Subscribe to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. GitHub requires repository metadata read access automatically. Install only on the repositories Dan selects for Jarvis; do not grant access to all repositories by default.
 
-Do not configure a webhook URL or secret until P0-16 has deployed the backend and P3-03 has implemented its receiver. The manifest intentionally has no webhook URL because neither endpoint is available yet. A GitHub App ID is not a secret; the private key is.
+Do not configure a webhook URL or secret until P0-16 has deployed the backend and P3-03 has implemented its receiver. The manifest intentionally has no webhook URL. A GitHub App ID is not a secret; the private key and webhook secret are.
 
 Dan's manual setup checklist:
 
@@ -179,16 +180,18 @@ Dan's manual setup checklist:
    az keyvault secret show --subscription <subscription-id> --vault-name <key-vault-name> --name github-app-private-key --query "{id:id,enabled:attributes.enabled}" --output json
    ```
 
-6. Remove the temporary local PEM copy. The backend managed identity reads the key from Key Vault for app authentication; never pass the key to a runner. Record only the non-secret App ID for the later P3-02 backend configuration.
-7. When P3-03 provides a deployed webhook endpoint, set that URL in the App, generate a separate random webhook secret with a password manager, and temporarily stage it outside the repository and synced folders. Import it into Key Vault without displaying the value:
+6. Remove the temporary local PEM copy. The backend managed identity reads the key from Key Vault for app authentication; never pass the key to a runner. The App ID is not secret: set repository Actions variable `JARVIS_GITHUB_APP_ID`; the Deploy workflow maps it to backend configuration `GITHUB_APP_ID`, not to the sandbox.
+7. P3-02 rollout: leave `JARVIS_GITHUB_APP_TOKEN_ENABLED` unset (defaults to `false`) while deploying the backend and confirming the Key Vault secret is available. Then set that repository Actions variable to `true` and manually dispatch **Runner deploy** from `main`; the workflow requires `JARVIS_GITHUB_APP_ID` and configures new runner versions for App tokens. Run a live sandbox push to `DanAakesen/jarvis-test-target`. Keep the existing `jarvis-github` secret/token and runner read grant until that check passes; remove them and the legacy fallback in a follow-up only after success.
+8. After P3-03 is merged and deployed, read the `backendFqdn` and `keyVaultName` outputs from the `jarvis-infra` deployment. Generate a separate random webhook secret with a password manager and temporarily stage it outside the repository and synced folders. Import it into Key Vault without displaying the value:
 
    ```powershell
+   az deployment group show --subscription <subscription-id> --resource-group <resource-group> --name jarvis-infra --query "properties.outputs.{backendFqdn:backendFqdn.value,keyVaultName:keyVaultName.value}" --output json
    az keyvault secret set --subscription <subscription-id> --vault-name <key-vault-name> --name github-app-webhook-secret --file <webhook-secret.txt> --encoding utf-8 --output none
    ```
 
-   Configure that same secret in GitHub's App settings and remove the temporary local copy. Do not put either copy in source control or logs.
+   In **GitHub → Settings → Developer settings → GitHub Apps → Jarvis Software Factory → Webhook**, set the URL to `https://<backendFqdn>/github/webhooks`, choose `application/json`, paste the same secret, enable the webhook, and subscribe to `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. Save the settings, remove the temporary local copy, and inspect **Recent Deliveries** for a successful 2xx response to GitHub's initial `ping`. The receiver records that signed but unsupported event as ignored. Never put either copy in source control or logs.
 
-Status, 3 October 2026: Dan registered the App and installed it on all repositories of his account (step 2), so new repositories such as `DanAakesen/jarvis-test-target` are covered automatically. No private key exists yet; steps 3–6 follow P0-16 and step 7 follows P3-03 (task P3-10). Key Vault storage and webhook delivery are unverified until then. The manifest and instructions do not claim they have happened.
+Status, 4 October 2026: Dan registered the App, installed it on all repositories of his account, trimmed its permissions, and stored `github-app-private-key` in Key Vault (P3-10). P3-02 code is merged but its live token issuance and sandbox push are not yet verified. The webhook receiver (P3-03) is implemented; webhook secret provisioning, App URL configuration, and live delivery remain Dan's post-merge steps. The receiver caches the secret after its first successful lookup, so restart the backend when rotating it.
 
 ## Setup and commands
 
@@ -197,7 +200,7 @@ lockfile, and shared strict TypeScript configuration. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
 Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3), and P2-01 (#27) adds sandbox and operations groups 4 and 6.
-P0-04 adds the Bicep template; its first Azure deployment is P0-16.
+P0-04 adds the Bicep template; its first Azure deployment is P0-16. Bicep sets backend `KEY_VAULT_URI`; the backend uses its managed identity to read `github-app-webhook-secret`. Locally, the URI can be omitted; webhook requests then fail with 503. The secret is cached in memory after a successful lookup and requires a backend restart to rotate.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
 and Python 3.12.14 (`.python-version`, for future Python work). Install from the
@@ -248,6 +251,14 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
+P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
+project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
+when requests settled, and status polling stopped while idle. No horizontal
+overflow or page exceptions occurred. This does not verify live SQL auto-resume.
+Focused P1-14 checks: `npm test --workspace @jarvis/backend -- src/app.test.ts
+src/factory/tasks.test.ts src/database/wake-retry.test.ts src/database/lifecycle.test.ts
+src/database/config.test.ts` and `npm test --workspace @jarvis/web -- --run
+src/DatabaseWakeStatus.test.tsx src/App.test.tsx src/task-events.test.tsx`.
 P3-11 rechecked Settings and Projects at 390 and 1280 px: New projects defaults
 load and save, and the Projects page retains edit/archive but has no create form.
 P3-12 adds the authenticated `create_project` tool and backend-only Key Vault
@@ -437,6 +448,15 @@ Verified locally for issue #30 (no Azure access required):
 | Run offline Foundry contract tests | `npx --no-install vitest run --config apps/backend/src/foundry/vitest.config.mts` |
 
 The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and an injected `getToken(scope, signal)` identity provider. These are module options, not new environment variables. See the [module guide](../apps/backend/src/foundry/README.md) for operation ownership and fixture provenance. Recorded runner responses are captured locally with ACP stubbed; these checks establish the offline contract, not live Azure readiness. The dedicated `Foundry contract CI` workflow checks this module on the current skeleton without depending on the server implementation.
+
+P2-13 task starts require `repository` (`owner/name`), `defaultBranch`, and
+`branch` in addition to the task identifier. The runner prepares the Git
+checkout before starting ACP; provider probes and Codex renewal do not clone a
+repository. Keep the existing Git credential-helper interface when changing
+token acquisition (P3-02). After merge, the coordinator must run one Copilot and
+one Codex task on `DanAakesen/jarvis-test-target`, verify pushes to their
+`jarvis/task-<id>` branches, and verify that a commit-free agent question appears
+as Needs attention.
 
 ### Database access and migrations (#7)
 
@@ -698,5 +718,16 @@ Azure variables, queues under `jarvis-production-deploy`, builds the two images
 in ACR, deploys both capacity tiers, and records identity-probe evidence. The main
 Deploy workflow uses the same group; both set `queue: max` so no queued deploy is dropped. The workflow never seeds secrets;
 `jarvis-github`, `jarvis-copilot`, and the Jarvis-only `codex-login` must already be
-in Key Vault. Installation tokens replace the prototype Git-token path in #40.
+in Key Vault. P3-02 adds the opt-in App-token path, but the legacy Git-token path
+remains available until the post-merge sandbox push check succeeds.
 See [runner/README.md](../runner/README.md) for commands and the contract.
+
+P3-02 uses repository Actions variable `JARVIS_GITHUB_APP_ID` to configure the
+backend's `GITHUB_APP_ID` setting;
+the private key stays in Key Vault as `github-app-private-key` and is read only by
+the backend identity. Runner App-token mode is separately controlled by
+`JARVIS_GITHUB_APP_TOKEN_ENABLED` (defaults to `false`), so deploying the backend
+does not turn off the legacy Git credential path. Set it to `true` only after the
+backend deployment and Key Vault setup are confirmed, then dispatch Runner deploy
+from `main`. Keep the legacy secret and runner read grant until the live sandbox
+push to `DanAakesen/jarvis-test-target` succeeds; remove them in a follow-up.
