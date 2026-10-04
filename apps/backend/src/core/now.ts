@@ -1,11 +1,12 @@
 import type { FastifyReply } from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import type { EventHub } from './event-hub.js';
+import { defaultAwayModeState } from './away-mode.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
 
-export type NowActivityCategory = 'attention' | 'release' | 'credential' | 'alert';
+export type NowActivityCategory = 'attention' | 'release' | 'credential' | 'alert' | 'mode';
 
 export interface NowRunningTask {
   id: string;
@@ -28,10 +29,13 @@ export interface NowFeed {
   running: NowRunningTask[];
   items: NowActivityItem[];
   updatedAt: string;
+  awayMode: boolean;
 }
 
+export type NowFeedSnapshot = Omit<NowFeed, 'awayMode'>;
+
 export interface NowFeedStore {
-  read(): Promise<NowFeed>;
+  read(): Promise<NowFeedSnapshot>;
   dismiss(id: string): Promise<boolean>;
 }
 
@@ -59,7 +63,11 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 export function registerNowRoutes(app: FastifyInstance) {
   app.get('/now', async (_request, reply) => {
     if (!app.nowFeedStore) return reply.code(503).send({ error: 'Now feed unavailable' });
-    return sendBounded(reply, await app.nowFeedStore.read());
+    const [feed, awayMode] = await Promise.all([
+      app.nowFeedStore.read(),
+      app.awayModeStore?.read() ?? Promise.resolve(defaultAwayModeState),
+    ]);
+    return sendBounded(reply, { ...feed, awayMode: awayMode.away });
   });
 
   app.post<{ Params: { id: string } }>('/now/activity/:id/dismiss', {

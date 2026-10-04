@@ -9,6 +9,7 @@ const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: `${['Bear', 'er'].join('')} ${['e30', 'e30', 'sig'].join('.')}` };
 const feed: NowFeed = {
   updatedAt: '2026-10-04T00:00:00.000Z',
+  awayMode: false,
   running: [{
     id: '42',
     title: 'Ship the feed',
@@ -52,6 +53,34 @@ describe('Now feed API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(feed);
     expect(store.read).toHaveBeenCalledOnce();
+  });
+
+  it('marks verified browser use as present and includes the current mode', async () => {
+    let away = true;
+    const awayModeStore = {
+      read: vi.fn(async () => ({ away, source: away ? 'manual' : 'browser', changedAt: null, presenceAwaySince: null })),
+      markPresent: vi.fn(async () => {
+        away = false;
+        return { away, source: 'browser', changedAt: null, presenceAwaySince: null };
+      }),
+      set: vi.fn(),
+      observePresence: vi.fn(),
+    };
+    const app = buildApp({ ...config, staticWebAppOrigin: 'https://fixture.azurestaticapps.net' }, undefined, {
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
+      nowFeedStore: { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) },
+      awayModeStore,
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      url: '/now',
+      headers: { ...headers, origin: 'https://fixture.azurestaticapps.net' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().awayMode).toBe(false);
+    expect(awayModeStore.markPresent).toHaveBeenCalledOnce();
   });
 
   it('protects the read and returns unavailable when its store is missing', async () => {

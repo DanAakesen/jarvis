@@ -128,7 +128,7 @@ describe('App shell', () => {
     });
     await renderSignedIn();
     expect((await screen.findByText('Waking Jarvis…')).getAttribute('role')).toBe('status');
-    resolveFeed(new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] })));
+    resolveFeed(new Response(JSON.stringify({ awayMode: false, updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] })));
     await screen.findByText('No tasks are running.');
     expect(screen.queryByText('Waking Jarvis…')).toBeNull();
   });
@@ -161,7 +161,7 @@ describe('App shell', () => {
         return new Response(JSON.stringify({ settings: { appearance: { theme: 'dark' } } }));
       }
       if (path === '/now') {
-        return new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }));
+        return new Response(JSON.stringify({ awayMode: false, updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }));
       }
       if (path === '/database/status') return new Response(JSON.stringify({ waking: false }));
       return new Response('{}');
@@ -234,7 +234,7 @@ describe('App shell', () => {
       expect(screen.getByRole('heading', { level: 2, name })).not.toBeNull();
     }
     expect(screen.getByText(/Loading current activity/)).not.toBeNull();
-    resolveFeed(new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }), {
+    resolveFeed(new Response(JSON.stringify({ awayMode: false, updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }), {
       status: 200, headers: { 'Content-Type': 'application/json' },
     }));
     expect(await screen.findByText('No tasks are running.')).not.toBeNull();

@@ -5,10 +5,11 @@ import { registerSettingsRoutes } from './settings.js';
 import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
 import { setJarvisModelTool } from './model-tools.js';
+import { setAwayModeTool } from './away-mode.js';
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setJarvisModelTool],
+  tools: [setJarvisModelTool, setAwayModeTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);

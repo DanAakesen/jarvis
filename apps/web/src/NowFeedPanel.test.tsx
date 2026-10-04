@@ -15,6 +15,7 @@ vi.mock('./now-feed', () => ({ loadNowFeed, dismissNowActivity, streamNowFeed })
 
 const feed: Extract<NowFeed, { status: 'ready' }> = {
   status: 'ready',
+  awayMode: false,
   updatedAt: '2026-10-04T00:00:00.000Z',
   running: [{
     id: '42', title: 'Ship the feed', project: 'Jarvis', agent: 'copilot',

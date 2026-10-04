@@ -66,6 +66,11 @@ export function ActivityPanel({ feed, onDismiss, onRetry, streamStatus }: {
       ) : (
         <>
           <p className="freshness">Updated <time dateTime={feed.updatedAt}>{formatTime(feed.updatedAt)}</time></p>
+          <p className="freshness" role="status">
+            {feed.awayMode
+              ? 'Away mode is on. Task updates and confirmations go to Teams; spoken replies are brief.'
+              : 'Away mode is off. Task updates appear in the browser.'}
+          </p>
           {streamStatus === 'connected' && <p className="freshness" role="status">Live updates connected.</p>}
           {streamStatus === 'reconnecting' && (
             <p className="freshness" role="status">Live updates are reconnecting; showing the last feed snapshot.</p>

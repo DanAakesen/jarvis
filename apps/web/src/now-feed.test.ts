@@ -4,6 +4,7 @@ import { dismissNowActivity, loadNowFeed, NowFeedStreamError, streamNowFeed } fr
 const fetchMock = vi.fn<typeof fetch>();
 const getAccessToken = vi.fn(async () => 'test-access-token');
 const payload = {
+  awayMode: false,
   running: [{
     id: '42',
     title: 'Ship the feed',

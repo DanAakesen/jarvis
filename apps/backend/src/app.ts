@@ -26,6 +26,7 @@ import type { SandboxHeartbeat } from './factory/heartbeat.js';
 import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
 import type { TeamsNotificationService } from './teams/service.js';
+import type { AwayModeStore } from './core/away-mode.js';
 
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
@@ -49,6 +50,7 @@ export interface BuildAppOptions {
   readonly conversationAgent?: ConversationAgent;
   readonly containerAppScaler?: ContainerAppScaler | null;
   readonly teamsNotifications?: TeamsNotificationService | null;
+  readonly awayModeStore?: AwayModeStore | null;
 }
 
 declare module 'fastify' {
@@ -71,6 +73,7 @@ declare module 'fastify' {
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
     teamsNotifications: TeamsNotificationService | null;
+    awayModeStore: AwayModeStore | null;
   }
 }
 
@@ -96,6 +99,17 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   });
   // Authenticate before CORS can finish OPTIONS requests in its onRequest hook.
   installAuthentication(app, config, options.auth);
+  app.decorate('awayModeStore', options.awayModeStore ?? null);
+  app.addHook('onRequest', async (request, reply) => {
+    const origin = request.headers.origin;
+    if (request.principal && origin !== undefined && origins.has(origin) && app.awayModeStore) {
+      try {
+        await app.awayModeStore.markPresent();
+      } catch {
+        return reply.code(503).send({ error: 'Presence could not be updated' });
+      }
+    }
+  });
   app.register(cors, {
     origin: (origin, callback) => callback(null, origin === undefined || origins.has(origin)),
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -129,7 +143,35 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
-  const unsubscribeTaskEvents = app.eventHub.subscribe(() => app.nowEventHub.publish({ type: 'refresh' }));
+  const unsubscribeTaskEvents = app.eventHub.subscribe((event) => {
+    void (async () => {
+      let away = false;
+      try {
+        away = (await app.awayModeStore?.read())?.away ?? false;
+      } catch {
+        app.log.warn('away_mode.task_route_failed');
+        return;
+      }
+      if (!away) {
+        app.nowEventHub.publish({ type: 'refresh' });
+        return;
+      }
+
+      const payload = event.payload;
+      const nextState = typeof payload === 'object' && payload !== null && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>).to
+        : undefined;
+      if (event.type !== 'state_changed' || typeof nextState !== 'string' ||
+        !['Ready', 'Running', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'].includes(nextState) ||
+        !app.teamsNotifications) return;
+      try {
+        const kind = nextState === 'NeedsAttention' ? 'warning' : nextState === 'Done' ? 'success' : 'info';
+        await app.teamsNotifications.notify(kind, `Task ${event.taskId} is now ${nextState}.`);
+      } catch {
+        app.log.warn('away_mode.task_notification_failed');
+      }
+    })();
+  });
   app.addHook('onClose', async () => { unsubscribeTaskEvents(); });
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);

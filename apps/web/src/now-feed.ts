@@ -34,13 +34,14 @@ function validTime(value: unknown): value is string {
 function isActivityItem(value: unknown): value is ActivityItem {
   return isRecord(value) && validId(value.id) &&
     (value.category === 'attention' || value.category === 'release' ||
-      value.category === 'credential' || value.category === 'alert') &&
+      value.category === 'credential' || value.category === 'alert' || value.category === 'mode') &&
     typeof value.title === 'string' && value.title.length > 0 && value.title.length <= 400 &&
     (value.link === null || typeof value.link === 'string') && validTime(value.at);
 }
 
 function isNowFeed(value: unknown): value is Extract<NowFeed, { status: 'ready' }> {
   return isRecord(value) && validTime(value.updatedAt) &&
+    typeof value.awayMode === 'boolean' &&
     Array.isArray(value.running) && value.running.length <= 100 &&
     value.running.every((task) => isRecord(task) && validId(task.id) &&
       typeof task.title === 'string' && task.title.length > 0 && task.title.length <= 200 &&
