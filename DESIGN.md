@@ -128,6 +128,14 @@ settings response across the shared shell. Both modes retain visible focus and
 high-contrast text, controls, feedback and surfaces. Custom and Jarvis-directed
 variable editing stays disabled with an explanation until P8-17 provides its
 settings/tool path and P8-18 defines the supported token names and value types.
+Checked in Chromium at 1440px and 390px with scratch auth/settings mocks: a
+rejected update kept the current mode, retry and reload restored dark, and
+there was no horizontal overflow. Muted-text contrast against the page/surface
+was at least 6.25:1 in light mode and 8.99:1 in dark mode. Screenshots:
+[desktop light](docs/ui/screenshots/p8-13-theme-settings-desktop-light.png),
+[desktop dark](docs/ui/screenshots/p8-13-theme-settings-desktop-dark.png), and
+[phone dark](docs/ui/screenshots/p8-13-theme-settings-phone-dark.png). Live
+Entra and API/SQL behavior remain unverified.
 
 ## Projects (P1-10)
 

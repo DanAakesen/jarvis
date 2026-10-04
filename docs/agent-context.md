@@ -253,6 +253,17 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
+
+P8-13 was inspected in Chromium at 1440×1000 and 390×844 using the scratch auth
+stub and Vite settings mock. The mock rejected the first dark-mode PATCH with
+HTTP 400, after which the prior light appearance remained selected; retry
+accepted dark, and reloading Settings restored it. Keyboard navigation reached
+the dark radio with a visible native focus outline; the phone layout had no
+horizontal overflow. Muted-text contrast against the page/surface was at least
+6.25:1 in light mode and 8.99:1 in dark mode. The only browser console/network
+error was the intentionally rejected mock request; no page exceptions occurred.
+Screenshots are in `docs/ui/screenshots/p8-13-theme-settings-*.png`. These mocks
+do not verify live Entra, API authorization, or Azure SQL persistence.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal
