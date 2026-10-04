@@ -82,7 +82,7 @@ Status as of 4 October 2026.
 | Webhook receiver | GitHub events are verified and recorded once | Background | — | Built (live webhook setup pending) | P3-03 |
 | PR, run, release and deploy records | Webhook events stored as pull requests, workflow runs, releases, deployments | Background | — | Built (live webhook setup pending) | P3-04 |
 | Checks loop | A failed task-PR check is stored in private Blob and sent to the same task; bounded repairs move to Needs attention when exhausted | Background | Task detail | Built | P3-05 |
-| Project policy and merge | Open a PR for completed branch commits when none is open; stop at a verified green PR or squash-merge via the GitHub App when checks, branch freshness and protection rules pass | Background | Project settings | Built (fake-tested; live test-repository acceptance pending) | P3-06 |
+| Project policy and merge | On task completion, open or reuse an App-backed PR only when the task branch is ahead of the default branch; record refusals as Needs attention, then stop at a verified green PR or squash-merge via the GitHub App when checks, branch freshness and protection rules pass | Background | Project settings; task detail | Built offline with fake GitHub coverage; coordinator live test-repository acceptance pending | P3-06, P3-14 |
 | Release records | One release per merge to `main`, linked to runs and deployments by SHA | Background | — | Built (live webhook setup pending) | P3-07 |
 | Release view | Git graph, releases, runs and deployments per project | Screen | Release view | Planned | P3-08 |
 | Workflow templates | Managed projects copy PR-check and release workflows | Background | — | Built | P3-09 |
