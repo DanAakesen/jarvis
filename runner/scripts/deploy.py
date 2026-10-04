@@ -118,7 +118,8 @@ def probe(foundry: Foundry, runtime_endpoint: str, agent: str) -> None:
     root = f"{runtime_endpoint}/agents/{agent}/endpoint"
     # Explicitly create the session so cleanup can run even if invocation fails.
     session = foundry.request("POST", f"{root}/sessions?api-version=v1", {})
-    session_id = session.get("session_id") or session.get("id")
+    # Foundry returns the platform session as agent_session_id (L59).
+    session_id = session.get("agent_session_id") or session.get("session_id") or session.get("id")
     if not isinstance(session_id, str) or not session_id:
         raise RuntimeError("Probe session response has no session identifier")
     escaped = quote(session_id, safe="")
