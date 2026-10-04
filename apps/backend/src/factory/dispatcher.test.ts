@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEventHub } from '../core/event-hub.js';
 import type { SettingsStore } from '../core/settings.js';
 import { FoundryClientError } from '../foundry/client.js';
-import type { SandboxHeartbeat } from './heartbeat.js';
-import { TaskDispatcher, type DispatchClaim, type DispatcherStore, type TaskControlTarget } from './dispatcher.js';
+import { SandboxHeartbeat } from './heartbeat.js';
+import { TaskDispatcher, type DispatchClaim, type DispatcherOptions, type DispatcherStore, type TaskControlTarget } from './dispatcher.js';
+import type { TaskRecoveryStore } from './recovery-store.js';
 import type { TaskEventHub, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
 
 const task: DispatchClaim = {
@@ -78,7 +79,8 @@ function harness(store: DispatcherStore, startTask = vi.fn(async () => ({
   })), write: vi.fn(async () => {}) };
   const track = vi.fn();
   const untrack = vi.fn();
-  const heartbeat = { track, untrack } as unknown as SandboxHeartbeat;
+  const setCompletionHandler = vi.fn();
+  const heartbeat = { track, untrack, setCompletionHandler } as unknown as SandboxHeartbeat;
   const steer = vi.fn(async () => ({
     invocationId: 'invocation-steer', sessionId: 'session-1', status: 'queued' as const, agent: 'codex' as const,
   }));
@@ -362,5 +364,162 @@ describe('task dispatcher', () => {
     const doneHarness = harness(store, undefined, { ...controlTask, state: 'Done' });
     expect(await doneHarness.dispatcher.control('42', { action: 'pause' }))
       .toEqual({ kind: 'invalid-transition' });
+  });
+});
+
+describe('task crash recovery', () => {
+  it.each([true, false])('restarts a crashed task from its branch and gates completion on GitHub evidence (%s)', async (deliveryVerified) => {
+    vi.useFakeTimers();
+    let state: TaskRecord['state'] = 'Running';
+    const branch = 'jarvis/task-42';
+    const record: TaskRecord = { ...controlTask, branch };
+    const timeline = [
+      {
+        id: '1', type: 'steered', summary: 'Keep the API compatible.',
+        payload: { message: 'Keep the API compatible.' }, payloadTruncated: false,
+        source: 'dan' as const, at: '2026-10-04T12:00:00.000Z',
+      },
+      {
+        id: '2', type: 'agent_output', summary: 'The branch contains the initial fix.',
+        payload: null, payloadTruncated: false, source: 'runner' as const, at: '2026-10-04T12:01:00.000Z',
+      },
+    ];
+    const events = createEventHub<TaskEventMessage>();
+    const publishState = (from: TaskRecord['state'], to: TaskRecord['state']) => events.publish({
+      id: String(Date.now()), taskId: '42', type: 'state_changed',
+      summary: 'Task state changed', payload: { from, to }, payloadTruncated: false,
+      source: 'backend', at: '2026-10-04T12:02:00.000Z',
+    });
+    let target: TaskControlTarget = {
+      ...controlTarget, taskId: '42', sandboxSessionId: 'old-sandbox',
+      foundrySessionId: 'old-session', invocationId: 'old-invocation',
+    };
+    const activeTasks = {
+      get: vi.fn(async () => ({ ...record, state, events: timeline, usage: [] })),
+      list: vi.fn(async () => state === 'Running' ? [{ ...record, state }] : []),
+      transition: vi.fn(async (_id: string, next: TaskRecord['state'], completionVerified = false) => {
+        if (next === 'Done' && !completionVerified) return { kind: 'invalid-transition' as const };
+        const previous = state;
+        state = next;
+        publishState(previous, next);
+        return { kind: 'ok' as const, task: { ...record, state } };
+      }),
+    } as unknown as TaskStore;
+    const store: DispatcherStore = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => target),
+      recordStarted: vi.fn(async (_owner, _task, runnerName, accepted) => {
+        target = {
+          ...controlTarget,
+          taskId: '42',
+          sandboxSessionId: 'recovered-sandbox',
+          foundrySessionId: accepted.sessionId,
+          agentName: runnerName,
+          invocationId: accepted.invocationId,
+        };
+        return 'recovered-sandbox';
+      }),
+      endTaskSessions: vi.fn(async () => [target.sandboxSessionId]),
+    };
+    const recoveryStore: TaskRecoveryStore = {
+      getRunningTaskForSession: vi.fn(async () => '42'),
+      claimRecovery: vi.fn(async () => {
+        state = 'Running';
+        publishState('NeedsAttention', 'Running');
+        return { kind: 'claimed', task };
+      }),
+    };
+    const startedRequests: unknown[] = [];
+    const startTask = vi.fn(async (request: unknown) => {
+      startedRequests.push(request);
+      return {
+        invocationId: 'recovered-invocation',
+        sessionId: 'recovered-session',
+        status: 'queued' as const,
+        agent: 'codex' as const,
+      };
+    });
+    const settings: SettingsStore = { read: vi.fn(async () => ({})), write: vi.fn(async () => {}) };
+    let statusCount = 0;
+    const heartbeatStore = {
+      listRunning: vi.fn(async () => [{
+        sandboxSessionId: 'old-sandbox', foundrySessionId: 'old-session',
+        agentName: 'jarvis-runner-base-1x2', invocationId: 'old-invocation',
+      }]),
+      recordHeartbeat: vi.fn(async () => {}),
+      markNeedsAttention: vi.fn(async () => {
+        state = 'NeedsAttention';
+        publishState('Running', 'NeedsAttention');
+        return true;
+      }),
+      resolvePause: vi.fn(async () => false),
+    };
+    const heartbeat = new SandboxHeartbeat(
+      heartbeatStore,
+      () => ({
+        status: vi.fn(async (invocationId: string) => {
+          if (invocationId === 'old-invocation') {
+            statusCount += 1;
+            throw new FoundryClientError('http', 'status', 404);
+          }
+          return {
+            invocationId: 'recovered-invocation',
+            sessionId: 'recovered-session',
+            status: 'completed' as const,
+            agent: 'codex' as const,
+            startedAt: 1,
+            finishedAt: 2,
+            events: [],
+            result: null,
+            error: null,
+          };
+        }),
+      }),
+      { intervalMs: 60_000, failureConfirmMs: 30 },
+    );
+    const verifyDelivery = vi.fn(async () => deliveryVerified);
+    const options: DispatcherOptions = {
+      recoveryStore,
+      workspaceFor: vi.fn(async (current) => ({
+        repository: 'DanAakesen/jarvis',
+        defaultBranch: 'main',
+        branch: current.branch!,
+      })),
+      verifyDelivery,
+    };
+    const dispatcher = new TaskDispatcher(
+      store, activeTasks, settings,
+      () => ({ startTask, steer: vi.fn(), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn(), deleteSession: vi.fn() }),
+      heartbeat, events, options,
+    );
+
+    dispatcher.start();
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(30);
+    expect(statusCount).toBe(2);
+    expect(state).toBe('NeedsAttention');
+
+    await expect(dispatcher.control('42', { action: 'recover' }))
+      .resolves.toMatchObject({ kind: 'ok', task: { state: 'Running' } });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(startTask).toHaveBeenCalledOnce();
+    expect(startedRequests[0]).toMatchObject({
+      repository: 'DanAakesen/jarvis',
+      defaultBranch: 'main',
+      branch,
+      taskId: '42',
+    });
+    expect((startedRequests[0] as { task: string }).task).toContain('Original task:\nFind and fix it');
+    expect((startedRequests[0] as { task: string }).task).toContain('Keep the API compatible.');
+    expect((startedRequests[0] as { task: string }).task).toContain('The branch contains the initial fix.');
+    expect(verifyDelivery).toHaveBeenCalledWith({
+      repository: 'DanAakesen/jarvis', defaultBranch: 'main', branch,
+    });
+    expect(state).toBe(deliveryVerified ? 'Done' : 'NeedsAttention');
+    expect(activeTasks.transition).toHaveBeenCalledWith('42', deliveryVerified ? 'Done' : 'NeedsAttention', deliveryVerified);
+
+    await Promise.all([dispatcher.stop(), heartbeat.stop()]);
   });
 });

@@ -102,15 +102,21 @@ function taskBody(request: TaskRequest): JsonObject {
   const model = option(request.model, "model", 100);
   const reasoning = request.agent === "codex" ? option(request.reasoning, "reasoning", 32) : undefined;
   const taskId = taskIdentifier(request.taskId);
-  const defaultBranch = branch(request.defaultBranch, "defaultBranch");
-  const taskBranch = branch(request.branch, "branch");
+  const workspaceInput = request as Partial<TaskWorkspace>;
+  if (workspaceInput.repository === undefined || workspaceInput.defaultBranch === undefined ||
+      workspaceInput.branch === undefined) {
+    throw new TypeError("repository, defaultBranch and branch must be provided together");
+  }
+  const repositoryName = repository(workspaceInput.repository);
+  const defaultBranch = branch(workspaceInput.defaultBranch, "defaultBranch");
+  const taskBranch = branch(workspaceInput.branch, "branch");
   if (taskBranch === defaultBranch || taskBranch === "main" || taskBranch === "master") {
     throw new TypeError("branch must be a separate task branch");
   }
   return {
     agent: agent(request.agent),
     task: text(request.task, "task"),
-    repository: repository(request.repository),
+    repository: repositoryName,
     defaultBranch,
     branch: taskBranch,
     ...(taskId === undefined ? {} : { task_id: taskId }),

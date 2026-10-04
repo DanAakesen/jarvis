@@ -303,6 +303,23 @@ describe('factory tasks API', () => {
     expect(unavailable.statusCode).toBe(503);
   });
 
+  it('accepts the authenticated recover control action', async () => {
+    const controller: TaskController = {
+      control: vi.fn(async () => ({ kind: 'ok', task: { ...task, state: 'Running' } })),
+    };
+    const { app } = fixture({}, undefined, controller);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/factory/tasks/42/controls',
+      headers,
+      payload: { action: 'recover' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ id: '42', state: 'Running' });
+    expect(controller.control).toHaveBeenCalledWith('42', { action: 'recover' });
+  });
+
   it('authenticates the event stream and validates resume IDs', async () => {
     const { app, store } = fixture();
     expect((await app.inject({ url: '/factory/tasks/42/events' })).statusCode).toBe(401);
