@@ -15,6 +15,15 @@ const settings = {
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
   global: { maxParallelTasks: 1 },
+  newProjects: {
+    owner: 'DanAakesen',
+    visibility: 'private' as 'private' | 'public',
+    templatesRepository: 'DanAakesen/templates',
+    defaultAgent: 'copilot' as 'codex' | 'copilot',
+    policy: 'deliver_pr' as 'deliver_pr' | 'complete_without_deployment',
+    maxParallelTasks: 1,
+    defaultBranch: 'main',
+  },
 };
 
 const options = {
@@ -28,6 +37,9 @@ const options = {
   codexModels: ['default'],
   codexReasoningEfforts: ['default'],
   copilotModels: ['default'],
+  projectVisibilities: ['private', 'public'],
+  projectAgents: ['codex', 'copilot'],
+  projectPolicies: ['deliver_pr', 'complete_without_deployment'],
 };
 
 const getAccessToken = vi.fn(async () => ['access', 'token', 'fixture'].join('.'));
@@ -125,6 +137,41 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Copilot token (jarvis-copilot)')).not.toBeNull();
     expect(screen.getByText('Expires: Not recorded')).not.toBeNull();
     expect(document.body.textContent).not.toContain('SECRET');
+  });
+
+  it('saves New projects defaults', async () => {
+    const user = userEvent.setup();
+    const updated = {
+      ...settings,
+      newProjects: {
+        owner: 'jarvis-org',
+        visibility: 'public' as const,
+        templatesRepository: 'jarvis-org/templates',
+        defaultAgent: 'codex' as const,
+        policy: 'complete_without_deployment' as const,
+        maxParallelTasks: 2,
+        defaultBranch: 'develop',
+      },
+    };
+    fetchMock.mockResolvedValueOnce(response(settingsResponse())).mockResolvedValueOnce(response(settingsResponse(updated)));
+    renderSettingsPage();
+
+    await user.clear(await screen.findByRole('textbox', { name: 'Owner' }));
+    await user.type(screen.getByRole('textbox', { name: 'Owner' }), 'jarvis-org');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Visibility' }), 'public');
+    await user.clear(screen.getByRole('textbox', { name: 'Templates repository (owner/name)' }));
+    await user.type(screen.getByRole('textbox', { name: 'Templates repository (owner/name)' }), 'jarvis-org/templates');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Default agent' }), 'codex');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Policy' }), 'complete_without_deployment');
+    await user.clear(screen.getByRole('spinbutton', { name: 'New project maximum parallel tasks' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'New project maximum parallel tasks' }), '2');
+    await user.clear(screen.getByRole('textbox', { name: 'Default branch' }));
+    await user.type(screen.getByRole('textbox', { name: 'Default branch' }), 'develop');
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    const [, request] = fetchMock.mock.calls[1]!;
+    expect(JSON.parse(String(request?.body))).toEqual({ settings: { newProjects: updated.newProjects } });
   });
 
   it('offers retry when settings cannot be loaded', async () => {

@@ -13,18 +13,34 @@ export function createAuthClient(config: PublicConfig): PublicClientApplication 
     auth: {
       clientId: config.webClientId,
       authority: `https://login.microsoftonline.com/${config.tenantId}`,
-      redirectUri: window.location.origin,
+      // MSAL v5 returns popup and silent sign-in through the redirect bridge page (L63).
+      redirectUri: `${window.location.origin}/redirect.html`,
+      postLogoutRedirectUri: `${window.location.origin}/redirect.html`,
     },
     cache: { cacheLocation: BrowserCacheLocation.SessionStorage },
   });
+}
+
+/** MSAL error codes are fixed identifiers (no tokens), so showing one makes failures diagnosable. */
+function signInFailureMessage(error: unknown): string {
+  const code = typeof error === 'object' && error !== null ? (error as { errorCode?: unknown }).errorCode : undefined;
+  if (code === 'interaction_in_progress') {
+    return 'A previous sign-in is still open in this tab. Close the tab, open Jarvis in a new tab and sign in.';
+  }
+  if (code === 'popup_window_error' || code === 'empty_window_error') {
+    return 'The sign-in window could not open. Allow pop-ups for Jarvis and try again.';
+  }
+  return typeof code === 'string' && /^[a-z_]{1,64}$/.test(code)
+    ? `Microsoft sign-in did not complete (${code}). Try again.`
+    : 'Microsoft sign-in did not complete. Try again.';
 }
 
 export async function signIn(client: PublicClientApplication, config: PublicConfig): Promise<UserProfile> {
   let result;
   try {
     result = await client.loginPopup({ scopes: [config.apiScope], prompt: 'select_account' });
-  } catch {
-    throw new Error('Microsoft sign-in did not complete. Try again.');
+  } catch (error) {
+    throw new Error(signInFailureMessage(error), { cause: error });
   }
   if (!result.account || !result.accessToken) throw new Error('Microsoft sign-in did not return an API token.');
   client.setActiveAccount(result.account);

@@ -51,10 +51,15 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
     const rawHeaders = request.raw.rawHeaders;
     const duplicate = rawHeaders.filter((_value, index) => index % 2 === 0 && rawHeaders[index]?.toLowerCase() === 'authorization').length > 1;
     const match = typeof header === 'string' && header.length <= 16_384 ? /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/i.exec(header) : null;
+    // Logged on denial so a refused request can be traced without logging any credential.
+    let reason = 'invalid_token';
     try {
       const token = header === undefined && !duplicate ? voiceWebsocketToken(request) : match?.[1];
+      if (duplicate) reason = 'duplicate_authorization';
+      else if (!token) reason = header === undefined ? 'missing_token' : 'malformed_authorization';
       if (duplicate || !token) throw new AuthenticationDenied(401);
       const principal = await verify(token);
+      reason = 'principal_not_allowed_on_route';
       if (isAgentPrincipal(principal)) {
         if (request.routeOptions.config?.jarvisAgent !== true) throw new AuthenticationDenied(403);
         request.agentPrincipal = principal;
@@ -67,7 +72,8 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       }
     } catch (error) {
       const statusCode = error instanceof AuthenticationDenied ? error.statusCode : 401;
-      request.log.warn({ statusCode }, 'request.auth_denied');
+      const path = (request.raw.url ?? '').split('?')[0]?.slice(0, 200);
+      request.log.warn({ statusCode, reason, method: request.method, route: path }, 'request.auth_denied');
       // Denials precede the CORS hook; let the approved browser read 401/403.
       if (origin === localWebOrigin || (config.staticWebAppOrigin !== undefined && origin === config.staticWebAppOrigin)) {
         reply.header('Access-Control-Allow-Origin', origin).header('Vary', 'Origin');
