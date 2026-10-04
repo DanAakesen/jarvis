@@ -49,7 +49,11 @@ event timeline.
 
 ## Visual direction
 
-Not chosen. Add the selected direction, reference images, and findings here.
+Dan's brief (4 October 2026): the UI should be stunning, with rich styling and motion, and feel alive when Jarvis is doing something, especially in voice mode. Three animated concepts are being prepared in `docs/ui/concepts/`; the selected direction, references and findings are recorded here once chosen.
+
+## Voice end (P8-12, decided 4 October 2026)
+
+Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop and inside the bottom dock, right of the orb, on phone. Ending voice collapses the orb back into the composer's small orb. A natural spoken ending also ends voice; the small composer orb only starts voice.
 
 ## Foundation shell (P0-02)
 
