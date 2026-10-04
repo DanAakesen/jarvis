@@ -60,13 +60,13 @@ Status as of 4 October 2026.
 | Task detail | See header, full event timeline, sandbox sessions, disk readings, usage | Screen | Task detail | Built | P1-09 |
 | Task controls | Steer, pause, resume, cancel, and continue after a completed turn's session expires | Both | Board, task detail; by voice once P4-10 lands | Built (screen) | P2-07, P2-14, P4-10 |
 | Recover crashed task | Restart a task after an active-turn crash from its branch in a new sandbox | Both | Task detail | Built (offline) | P2-10 |
-| Continue after idle expiry | Start a new session on the existing task branch without changing task state when a completed invocation's Foundry session expires | Both | Board, task detail | Built (offline) | P2-14 |
+| Continue after idle expiry | Expiry preserves task state; Continue or a steering correction starts a new session on the existing task branch | Both | Board, task detail; steering tool | Built (offline; regression fix) | P2-14 |
 | Sandbox per task | Each task runs Codex or Copilot in its own Foundry sandbox that closes after delivery or cancel | Background | — | Live (start and events); repo clone in progress | P2-02, P2-04, P2-05, P2-13 |
 | Agent and model per task | Choose Codex or Copilot, model and reasoning per task | Both | Create task | Built | P2-11 |
 | Repository workspace | Sandbox clones the project repo and works on `jarvis/task-…`; agent questions surface in Needs attention | Background | — | In progress | P2-13 |
 | Frequent pushes | Agents push work in progress after each step | Background | — | Built | P2-09 |
 | GitHub App tokens | Sandboxes push with one-hour tokens scoped to the task's repository | Background | — | Built (enabled; live push check after P2-13) | P3-02 |
-| Heartbeat and crash detection | Active invocation failures move the task to Needs attention; expiry after a completed invocation ends the session as idle-expired without changing task state | Background | — | Built (offline) | P2-06, P2-14 |
+| Heartbeat and crash detection | Active invocation failures move the task to Needs attention; completed-turn expiry preserves task state, including first-poll and cleanup races; every poll logs a secret-safe state decision | Background | Backend logs | Built (offline; regression fix) | P2-06, P2-14 |
 | Disk headroom | Low disk moves a task to Needs attention instead of failing | Background | Task detail | Built | P6-07 |
 | Codex limit handling | A Codex usage-limit stop is reported clearly; other tasks continue | Background | Task detail | Built | P6-05 |
 | Parallel tasks | Several tasks run within global and per-project limits | Background | Settings | Built (offline load test) | P2-05, P6-05, P6-08 |

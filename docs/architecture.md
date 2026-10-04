@@ -181,6 +181,8 @@ transaction as its turn, then publishes the event after commit; SSE payloads ove
 confirms the turn stopped; steering and resume register the accepted turn for heartbeat
 monitoring. `recover` starts a new session on the existing task branch and accepts
 `Running` only for a session ending `idle_expired`, first moving it to NeedsAttention.
+Steering after recorded idle expiry uses the same new-session recovery path and
+includes the new correction in the recovery prompt and task history.
 A stale or invalid transition returns 409, unavailable runtime state returns
 503, and remote failures are sanitized. The board and detail page share one state-aware
 controls component.
@@ -588,6 +590,22 @@ These boxes are responsibilities; they do not each need a separate service.
 | Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. Live state is visible; PR/check/usage values stay unavailable until their owning data integrations exist. |
 | Idle | The dispatcher subscribes to committed task events and schedules only the next retry deadline. After its startup scan, it makes no recurring SQL queries while idle; there is no polling timer. |
 | Always on | The backend normally runs with a minimum of 1 replica, so the heartbeat never stops. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. The backend does not query SQL while idle, so the database can still pause. |
+
+P2-14 also guards the dispatcher's generic NeedsAttention cleanup: a completed
+latest turn stays monitored rather than being marked Crashed. Completion evidence
+comes from the turn row or a matching committed runner `completed`/`session_question`
+event, including events delivered before the turn row was inserted. A valid
+heartbeat completion response persists the matching turn's completion before
+delivery verification; startup reloads that evidence. Terminal heartbeat decisions
+check the latest invocation under the session transaction so an old poll cannot end
+a newer turn. Each poll logs `sandbox_heartbeat.decision` with `sandboxSessionId`,
+`invocationId`, `httpStatus` (null when no HTTP response arrived), and `decision`.
+Confirmed failure logs the committed outcome (`crashed`, `idle_expired`, or
+`needs_attention`) or `unchanged`; prompts, questions, response bodies, and
+credentials are not logged. SQL Server CI and the production task-state/expiry
+check remain unverified locally.
+NeedsAttention cleanup locks and rechecks the current task state, so delayed
+state-event handling cannot close a session started by subsequent recovery.
 
 Scale settings are revision-scope in Container Apps, so the sleep switch creates a new revision; that is acceptable because it is used only when nothing runs. The SQL application lock blocks new active-task writes between the idle check and the ARM update.
 
