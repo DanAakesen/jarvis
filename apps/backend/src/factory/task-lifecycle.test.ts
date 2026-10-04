@@ -20,14 +20,14 @@ describe('task lifecycle', () => {
     expect(canTransitionTask(from, to)).toBe(true);
   });
 
-  it('allows Done only when completion has been verified', () => {
-    expect(canTransitionTask('Running', 'Done')).toBe(false);
-    expect(canTransitionTask('Running', 'Done', true)).toBe(true);
+  it.each(['Running', 'NeedsAttention'] as const)('allows %s → Done only when completion has been verified', (from) => {
+    expect(canTransitionTask(from, 'Done')).toBe(false);
+    expect(canTransitionTask(from, 'Done', true)).toBe(true);
   });
 
   it.each(taskStates.flatMap((from) => taskStates
     .filter((to) => !allowed.some(([allowedFrom, allowedTo]) => allowedFrom === from && allowedTo === to) &&
-      !(from === 'Running' && to === 'Done'))
+      !(['Running', 'NeedsAttention'].includes(from) && to === 'Done'))
     .map((to) => [from, to] as const)))('rejects %s → %s', (from, to) => {
     expect(canTransitionTask(from, to, true)).toBe(false);
   });

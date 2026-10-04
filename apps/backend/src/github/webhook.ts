@@ -14,7 +14,7 @@ const acceptedEvents = new Set([
 interface WebhookOptions {
   readonly deliveryStore: WebhookDeliveryStore | null;
   readonly getSecret: () => Promise<string | undefined>;
-  readonly onWorkflowRun?: (mapping: Extract<GithubWebhookMapping, { kind: 'workflow_run' }>) => Promise<void>;
+  readonly onMapping?: (mapping: GithubWebhookMapping) => Promise<void>;
 }
 
 function uniqueHeader(request: { raw: { rawHeaders: string[] }; headers: Record<string, unknown> }, name: string): string | undefined {
@@ -74,26 +74,25 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
           return reply.code(400).send({ error: 'Invalid webhook payload' });
         }
         const mapping = acceptedEvents.has(event) ? mapGithubWebhook(event, payload) : undefined;
+        let inserted: boolean;
         try {
-          const inserted = await options.deliveryStore.record({
+          inserted = await options.deliveryStore.record({
             deliveryId,
             event,
             outcome: mapping ? 'ok' : 'ignored',
             ...(mapping ? { mapping } : {}),
           });
-          if (mapping?.kind === 'workflow_run' && options.onWorkflowRun) {
-            try {
-              await options.onWorkflowRun(mapping);
-            } catch {
-              request.log.error('github.checks_loop_failed');
-              return reply.code(503).send({ error: 'Webhook processing unavailable' });
-            }
-          }
-          return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
         } catch {
           request.log.error('github.webhook_delivery_store_failed');
           return reply.code(503).send({ error: 'Webhook storage unavailable' });
         }
+        try {
+          if (mapping) await options.onMapping?.(mapping);
+        } catch {
+          request.log.error('github.webhook_mapping_failed');
+          return reply.code(503).send({ error: 'Webhook processing unavailable' });
+        }
+        return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
       });
     },
   };

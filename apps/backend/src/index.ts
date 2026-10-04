@@ -47,6 +47,8 @@ import { createChecksLoopBlobStore } from './database/checks-loop-blob.js';
 import { createGitHubActionsLogClient } from './github/actions-logs.js';
 import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
+import { createProjectPolicyStore } from './database/project-policy-store.js';
+import { createProjectPolicyEvaluator } from './github/project-policy.js';
 import { createGitHubDeliveryVerifier } from './github/delivery.js';
 
 try {
@@ -177,6 +179,13 @@ try {
   const projectStore = database ? createProjectStore(database.pool) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool) : null;
+  const projectPolicyEvaluator = database && taskStore && githubAppTokenIssuer
+    ? createProjectPolicyEvaluator({
+      store: createProjectPolicyStore(database.pool),
+      tasks: taskStore,
+      tokenIssuer: githubAppTokenIssuer,
+    })
+    : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const dispatcher = database && taskStore && settingsStore && sandboxHeartbeat && config.foundryEndpoints
     ? new TaskDispatcher(
@@ -224,7 +233,12 @@ try {
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
       getSecret: getWebhookSecret,
-      ...(checksLoop ? { onWorkflowRun: (mapping) => checksLoop.handleMapping(mapping) } : {}),
+      ...(checksLoop || projectPolicyEvaluator ? {
+        onMapping: async (mapping) => {
+          await checksLoop?.handleMapping(mapping);
+          await projectPolicyEvaluator?.handle(mapping);
+        },
+      } : {}),
     }),
   ];
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
