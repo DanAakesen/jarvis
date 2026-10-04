@@ -136,6 +136,18 @@ beforeEach(() => {
   fetchMock.mockReset().mockImplementation(async (input) => {
     const url = new URL(String(input));
     if (url.pathname === '/factory/projects') return response([project]);
+    if (url.pathname === '/conversation/history') {
+      return response({
+        messages: [{
+          id: '9',
+          sessionId: '3',
+          role: 'dan',
+          text: 'Please monitor writable disk.',
+          at: '2026-10-04T11:59:00.000Z',
+        }],
+        nextCursor: null,
+      });
+    }
     if (url.pathname === '/factory/tasks/42') {
       const offset = Number(url.searchParams.get('eventOffset') ?? 0);
       const limit = Number(url.searchParams.get('eventLimit') ?? 100);
@@ -158,7 +170,7 @@ describe('task detail page', () => {
     expect(screen.getAllByText('disk_low').length).toBeGreaterThan(0);
     expect(screen.getByText('Copilot')).not.toBeNull();
     expect(screen.getByText('gpt-5.6-luna')).not.toBeNull();
-    expect(screen.getByText('Message 9')).not.toBeNull();
+    expect(await screen.findByText('Please monitor writable disk.')).not.toBeNull();
     expect((await screen.findByRole('link', { name: 'Jarvis' })).getAttribute('href')).toBe('/factory/projects/7');
     expect(screen.getByRole('link', { name: 'task/disk-headroom' }).getAttribute('href'))
       .toBe('https://github.com/DanAakesen/jarvis/tree/task/disk-headroom');

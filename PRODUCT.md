@@ -157,6 +157,8 @@ The backend persists each task event and state change to the task history and ac
 
 The task timeline remains complete as older events move from SQL to private Blob Storage. The detail API restores those events on demand within its existing paginated response.
 
+The detail page initially loads a bounded event page and offers further pages on demand. It combines those records with authenticated live updates without duplicate timeline entries; event-type filtering starts with every event visible, and payloads can be expanded. Task controls remain visible but disabled until P2. Pull-request, check, artifact, and CI-log links stay unavailable until their integrations provide them; the Usage section is reserved for P2-12.
+
 The runner sends each task-scoped event to authenticated `POST /factory/sandbox-events`
 using its managed identity. The backend accepts only the separately assigned runner
 events role and records the event through `TaskStore.recordEvent`, which persists it

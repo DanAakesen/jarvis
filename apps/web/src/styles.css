@@ -226,6 +226,8 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
 }
 .task-meta { padding: 20px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
 .task-meta > div, .task-disk-meta > div { min-width: 0; }
+.task-origin-message { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-origin-meta { margin-top: 4px; font-size: 14px; }
 .task-detail-section { margin-top: 24px; padding: 24px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
 .task-detail-section h2 { margin-bottom: 12px; }
 .task-detail-section > p, .task-disk-time { font-size: 14px; }

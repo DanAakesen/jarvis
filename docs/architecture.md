@@ -136,6 +136,16 @@ Connection and reconnection state is visible. The list API does not yet return
 pull-request, check, or usage values; cards mark those data points unavailable
 instead of inferring them. No backend route or persistence change is required.
 
+P1-09's task detail page reads `GET /factory/tasks/:id` in 100-event pages using
+`eventOffset`; the backend merges archived and SQL rows transparently. It resumes
+the authenticated P1-06 SSE stream from the last event in the initial page and
+deduplicates live/replayed events with the same persisted IDs. Project links reuse
+the active-project API to form validated GitHub branch links. PR/check data,
+artifacts, usage, and task-control writes remain unavailable to this page until
+their owning integrations and P2 controls are ready. For tasks created from a
+conversation, it fetches the matching message with a one-row paginated history
+request. No schema or API write path changed.
+
 `GET /operations/sleep` reports the Container App's configured minimum replicas;
 `PUT /operations/sleep` accepts only awake (1) or asleep (0). Both routes use the
 root's Dan-only authentication. The backend targets only its Bicep-configured

@@ -126,6 +126,21 @@ filters worked. Neither width overflowed the page, modal content fit on mobile,
 and controls were at least 44 px high. Live Entra, Azure SQL, and deployed SSE
 behavior remain unverified.
 
+## Task detail (P1-09)
+
+The page extends the neutral Factory layout with a labelled task summary, a compact
+metadata grid, and separate sections for actions, recorded disk readings, usage,
+the originating conversation message, and the event timeline. The timeline remains chronological and shows all event
+sources by default; users can filter by event type, expand bounded event payloads,
+and request additional event pages. Its connection state stays visible beside the
+filter. Disabled task controls and unavailable PR/artifact links have adjacent
+explanations rather than implying an action is ready.
+
+At narrow widths the metadata and controls stack into one column and timeline
+payloads scroll within the page. Existing 44 px controls and focus styles are
+reused. The usage section is an explicit P2-12 slot; disk values remain based on
+recorded events rather than a live filesystem estimate.
+
 ## Conversation history (P4-03)
 
 After sign-in, the main page shows the persisted conversation in chronological

@@ -41,6 +41,13 @@ interface ProjectLink {
   repo: string;
 }
 
+interface OriginMessage {
+  id: string;
+  role: 'dan' | 'jarvis';
+  text: string;
+  at: string;
+}
+
 type LoadState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
@@ -54,6 +61,7 @@ const maxEventOffset = 10_000;
 const taskStates: TaskState[] = ['Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'];
 const taskSources: TaskEventSource[] = ['runner', 'backend', 'github', 'dan'];
 const repositoryPattern = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
+const maxSqlBigInt = 9_223_372_036_854_775_807n;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -63,8 +71,12 @@ function isDate(value: unknown): value is string {
   return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
+function isSqlId(value: unknown): value is string {
+  return typeof value === 'string' && /^[1-9]\d{0,18}$/.test(value) && BigInt(value) <= maxSqlBigInt;
+}
+
 function isTaskEvent(value: unknown): value is TaskEvent {
-  return isObject(value) && typeof value.id === 'string' && /^[1-9]\d{0,18}$/.test(value.id) &&
+  return isObject(value) && isSqlId(value.id) &&
     (value.taskId === undefined || typeof value.taskId === 'string') &&
     typeof value.type === 'string' && (typeof value.summary === 'string' || value.summary === null) &&
     typeof value.payloadTruncated === 'boolean' && taskSources.includes(value.source as TaskEventSource) &&
@@ -72,9 +84,9 @@ function isTaskEvent(value: unknown): value is TaskEvent {
 }
 
 function isTaskDetail(value: unknown): value is TaskDetail {
-  return isObject(value) && typeof value.id === 'string' && typeof value.title === 'string' &&
-    typeof value.request === 'string' && typeof value.projectId === 'string' &&
-    (value.originMessageId === null || typeof value.originMessageId === 'string') &&
+  return isObject(value) && isSqlId(value.id) && typeof value.title === 'string' &&
+    typeof value.request === 'string' && isSqlId(value.projectId) &&
+    (value.originMessageId === null || isSqlId(value.originMessageId)) &&
     ['board', 'voice', 'chat'].includes(String(value.source)) &&
     (value.agent === 'codex' || value.agent === 'copilot') &&
     (value.modelOverride === null || typeof value.modelOverride === 'string') &&
@@ -88,8 +100,13 @@ function isTaskDetail(value: unknown): value is TaskDetail {
 }
 
 function isProjectLink(value: unknown): value is ProjectLink {
-  return isObject(value) && typeof value.id === 'string' && typeof value.name === 'string' &&
+  return isObject(value) && isSqlId(value.id) && typeof value.name === 'string' &&
     typeof value.repo === 'string' && repositoryPattern.test(value.repo);
+}
+
+function isOriginMessage(value: unknown): value is OriginMessage {
+  return isObject(value) && isSqlId(value.id) && (value.role === 'dan' || value.role === 'jarvis') &&
+    typeof value.text === 'string' && isDate(value.at);
 }
 
 function formatDisk(bytes: unknown): string {
@@ -191,6 +208,21 @@ async function loadProject(
   return value.find((project) => project.id === projectId) ?? null;
 }
 
+async function loadOriginMessage(
+  backendUrl: string,
+  getAccessToken: () => Promise<string>,
+  messageId: string,
+): Promise<OriginMessage | null> {
+  const before = BigInt(messageId) + 1n;
+  if (before > maxSqlBigInt) return null;
+  const query = new URLSearchParams({ limit: '1', before: before.toString() });
+  const value = await fetchJson(backendUrl, getAccessToken, `/conversation/history?${query}`);
+  if (!isObject(value) || !Array.isArray(value.messages) || !value.messages.every(isOriginMessage)) {
+    throw new Error('Jarvis returned invalid conversation history.');
+  }
+  return value.messages.find((message) => message.id === messageId) ?? null;
+}
+
 function eventState(value: unknown): TaskState | null {
   return taskStates.find((state) => state === value) ?? null;
 }
@@ -207,6 +239,10 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
   });
   const [project, setProject] = useState<ProjectLink | null>(null);
   const [projectKey, setProjectKey] = useState('');
+  const [originMessage, setOriginMessage] = useState<{ key: string; value: OriginMessage | null }>({
+    key: '',
+    value: null,
+  });
   const [stream, setStream] = useState<{ key: string; status: StreamStatus }>({ key: '', status: 'connecting' });
   const [eventOffset, setEventOffset] = useState(0);
   const [hasMoreEvents, setHasMoreEvents] = useState(false);
@@ -227,6 +263,10 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
   const linkedProject = projectKey === projectRequestKey ? project : null;
   const currentStreamStatus = stream.key === requestKey ? stream.status : 'connecting';
   const taskProjectId = task?.projectId ?? '';
+  const taskOriginMessageId = task?.originMessageId ?? null;
+  const originMessageKey = `${requestKey}:${taskOriginMessageId ?? ''}`;
+  const sourceMessage = originMessage.key === originMessageKey ? originMessage.value : null;
+  const sourceMessageLoading = taskOriginMessageId !== null && originMessage.key !== originMessageKey;
   const taskBranchUrl = branchUrl(linkedProject, task?.branch ?? null);
 
   useEffect(() => {
@@ -313,6 +353,17 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
     return () => { active = false; };
   }, [backendUrl, getAccessToken, projectRequestKey, taskProjectId]);
 
+  useEffect(() => {
+    let active = true;
+    if (!backendUrl || !taskOriginMessageId) return () => { active = false; };
+    void loadOriginMessage(backendUrl, getAccessToken, taskOriginMessageId).then((value) => {
+      if (active) setOriginMessage({ key: originMessageKey, value });
+    }).catch(() => {
+      if (active) setOriginMessage({ key: originMessageKey, value: null });
+    });
+    return () => { active = false; };
+  }, [backendUrl, getAccessToken, originMessageKey, taskOriginMessageId]);
+
   async function loadMoreEvents() {
     if (!backendUrl || !task || loadingEvents || !hasMoreEvents || eventOffset > maxEventOffset) return;
     setLoadingEvents(true);
@@ -373,7 +424,19 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
             <div><dt>Finished</dt><dd>{formatDate(task.finishedAt)}</dd></div>
             <div><dt>Attempt</dt><dd>{task.attemptCount}</dd></div>
             <div><dt>Source</dt><dd>{task.source === 'board' ? 'Board' : task.source === 'voice' ? 'Voice' : 'Chat'}</dd></div>
-            {task.originMessageId && <div><dt>Conversation message</dt><dd>Message {task.originMessageId}</dd></div>}
+            {task.originMessageId && (
+              <div>
+                <dt>Conversation message</dt>
+                <dd>{sourceMessageLoading
+                  ? <span role="status">Loading message…</span>
+                  : sourceMessage
+                    ? <>
+                      <blockquote className="task-origin-message">{sourceMessage.text}</blockquote>
+                      <p className="task-origin-meta">{sourceMessage.role === 'dan' ? 'Dan' : 'Jarvis'} · {formatDate(sourceMessage.at)}</p>
+                    </>
+                    : `Message ${task.originMessageId} is unavailable.`}</dd>
+              </div>
+            )}
           </dl>
           <section className="task-detail-section task-actions" aria-labelledby="actions-heading">
             <h2 id="actions-heading">Task actions</h2>
