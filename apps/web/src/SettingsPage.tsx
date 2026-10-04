@@ -3,6 +3,11 @@ import { backendFetch } from './backend-request';
 
 interface Settings {
   jarvis: { model: string; reasoning: string };
+  personality: {
+    tone: 'british_butler' | 'warm' | 'direct' | 'playful';
+    responseStyle: 'concise' | 'balanced' | 'detailed';
+    customInstructions: string;
+  };
   voice: {
     speechToTextModel: string;
     englishModel: string;
@@ -29,6 +34,8 @@ type SettingsPatch = { [Area in keyof Settings]?: Partial<Settings[Area]> };
 interface SettingsOptions {
   jarvisModels: string[];
   reasoningEfforts: string[];
+  personalityTones: Settings['personality']['tone'][];
+  personalityResponseStyles: Settings['personality']['responseStyle'][];
   speechToTextModels: string[];
   englishModels: string[];
   englishVoices: string[];
@@ -56,6 +63,13 @@ const optionLabels: Record<string, string> = {
   'gpt-5.6-luna': 'GPT-5.6 Luna',
   'gpt-realtime-2.1': 'GPT Realtime 2.1',
   'mai-transcribe': 'MAI Transcribe',
+  british_butler: 'British butler',
+  warm: 'Warm',
+  direct: 'Direct',
+  playful: 'Playful',
+  concise: 'Concise',
+  balanced: 'Balanced',
+  detailed: 'Detailed',
   'en-GB-Ryan:DragonHDLatestNeural': 'Ryan HD (British English)',
   'da-DK-Harper:MAI-Voice-2': 'Harper (Danish)',
   da: 'Danish',
@@ -73,8 +87,21 @@ const optionLabels: Record<string, string> = {
   complete_without_deployment: 'Complete without deployment',
 };
 
+const defaultPersonality: Settings['personality'] = {
+  tone: 'british_butler',
+  responseStyle: 'concise',
+  customInstructions: '',
+};
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasUnsupportedControlCharacters(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 0x20 && character !== '\n' && character !== '\r' && character !== '\t';
+  });
 }
 
 function isSettingsResponse(value: unknown): value is SettingsResponse {
@@ -83,7 +110,8 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
   const options = value.options;
   const credentials = value.credentials;
   const optionKeys: (keyof SettingsOptions)[] = [
-    'jarvisModels', 'reasoningEfforts', 'speechToTextModels', 'englishModels',
+    'jarvisModels', 'reasoningEfforts', 'personalityTones', 'personalityResponseStyles',
+    'speechToTextModels', 'englishModels',
     'englishVoices', 'danishVoices', 'languages', 'codexModels',
     'codexReasoningEfforts', 'copilotModels', 'projectVisibilities', 'projectAgents',
     'projectPolicies',
@@ -95,9 +123,17 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     (item.status === 'ok' || item.status === 'renew_soon' || item.status === 'failed' || item.status === 'unknown') &&
     (item.expiresAt === null || (typeof item.expiresAt === 'string' && Number.isFinite(Date.parse(item.expiresAt)))) &&
     (item.lastRenewedAt === null || (typeof item.lastRenewedAt === 'string' && Number.isFinite(Date.parse(item.lastRenewedAt)))));
-  return isObject(settings.jarvis) && isObject(settings.voice) && isObject(settings.codex) &&
+  return validOptions && validCredentials &&
+    isObject(settings.jarvis) && isObject(settings.personality) && isObject(settings.voice) && isObject(settings.codex) &&
     isObject(settings.copilot) && isObject(settings.global) && isObject(settings.newProjects) &&
     typeof settings.jarvis.model === 'string' && typeof settings.jarvis.reasoning === 'string' &&
+    typeof settings.personality.tone === 'string' &&
+    (options.personalityTones as string[]).includes(settings.personality.tone) &&
+    typeof settings.personality.responseStyle === 'string' &&
+    (options.personalityResponseStyles as string[]).includes(settings.personality.responseStyle) &&
+    typeof settings.personality.customInstructions === 'string' &&
+    settings.personality.customInstructions.length <= 2_000 &&
+    !hasUnsupportedControlCharacters(settings.personality.customInstructions) &&
     typeof settings.voice.speechToTextModel === 'string' && typeof settings.voice.englishModel === 'string' &&
     typeof settings.voice.englishVoice === 'string' && typeof settings.voice.danishVoice === 'string' &&
     (settings.voice.defaultLanguage === 'da' || settings.voice.defaultLanguage === 'en') &&
@@ -113,8 +149,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     typeof settings.newProjects.maxParallelTasks === 'number' &&
     Number.isSafeInteger(settings.newProjects.maxParallelTasks) &&
     settings.newProjects.maxParallelTasks >= 1 && settings.newProjects.maxParallelTasks <= 100 &&
-    typeof settings.newProjects.defaultBranch === 'string' &&
-    validOptions && validCredentials;
+    typeof settings.newProjects.defaultBranch === 'string';
 }
 
 const credentialNames: Record<CredentialStatus['name'], string> = {
@@ -208,6 +243,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
   const [credentials, setCredentials] = useState<CredentialStatus[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [personalityResetMessage, setPersonalityResetMessage] = useState('');
   const [error, setError] = useState(backendUrl ? '' : 'Settings are unavailable until the backend is deployed.');
 
   const load = useCallback(async () => {
@@ -258,7 +294,16 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       ...current,
       [area]: { ...current[area], [key]: value },
     }) : current);
+    if (area === 'personality') setPersonalityResetMessage('');
     setMessage('');
+  };
+
+  const resetPersonality = () => {
+    if (!settings || saving) return;
+    setSettings((current) => current ? ({ ...current, personality: { ...defaultPersonality } }) : current);
+    setError('');
+    setMessage('');
+    setPersonalityResetMessage('Default personality selected. Save settings to apply it to new sessions.');
   };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
@@ -274,6 +319,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       setSavedSettings(result.settings);
       setSettings(result.settings);
       setOptions(result.options);
+      setPersonalityResetMessage('');
       setMessage('Saved. These are defaults for new sessions and tasks; running work keeps its current settings.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Settings could not be saved. Try again.');
@@ -288,6 +334,13 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
     settings.global.maxParallelTasks >= 1 && settings.global.maxParallelTasks <= 100;
   const newProjectMaxTasksValid = settings !== null && Number.isSafeInteger(settings.newProjects.maxParallelTasks) &&
     settings.newProjects.maxParallelTasks >= 1 && settings.newProjects.maxParallelTasks <= 100;
+  const personalityInstructionsValid = settings !== null &&
+    settings.personality.customInstructions.length <= 2_000 &&
+    !hasUnsupportedControlCharacters(settings.personality.customInstructions);
+  const personalityIsDefault = settings !== null &&
+    settings.personality.tone === defaultPersonality.tone &&
+    settings.personality.responseStyle === defaultPersonality.responseStyle &&
+    settings.personality.customInstructions === defaultPersonality.customInstructions;
 
   return (
     <section className="settings-page" aria-labelledby="settings-heading">
@@ -312,6 +365,45 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
                 onChange={(value) => update('jarvis', 'reasoning', value)} />
             </div>
             <p className="settings-explanation">Model choices are limited to deployments currently configured for Jarvis.</p>
+          </section>
+
+          <section className="settings-section" aria-labelledby="personality-settings-heading">
+            <h2 id="personality-settings-heading">Jarvis Personality</h2>
+            <p className="settings-explanation" id="personality-session-help">
+              Personality changes apply to new chat and voice sessions. Active sessions keep their current settings.
+            </p>
+            <div className="settings-grid">
+              <SelectField id="personality-tone" label="Tone" value={settings.personality.tone}
+                options={options.personalityTones} disabled={saving}
+                onChange={(value) => update('personality', 'tone', value as Settings['personality']['tone'])} />
+              <SelectField id="personality-response-style" label="Response style" value={settings.personality.responseStyle}
+                options={options.personalityResponseStyles} disabled={saving}
+                onChange={(value) => update('personality', 'responseStyle', value as Settings['personality']['responseStyle'])} />
+              <div className="settings-field">
+                <label htmlFor="personality-instructions">Custom instructions</label>
+                <textarea id="personality-instructions" rows={5} maxLength={2_000}
+                  value={settings.personality.customInstructions} disabled={saving}
+                  aria-describedby={`personality-instructions-help personality-instructions-count${personalityInstructionsValid ? '' : ' personality-instructions-error'}`}
+                  aria-invalid={!personalityInstructionsValid}
+                  onChange={(event) => update('personality', 'customInstructions', event.target.value)} />
+                <p className="settings-explanation" id="personality-instructions-help">
+                  Optional. Up to 2,000 characters. Keep instructions focused on tone and response style.
+                </p>
+                <p className="settings-explanation" id="personality-instructions-count">
+                  {settings.personality.customInstructions.length.toLocaleString()} / 2,000 characters
+                </p>
+                {!personalityInstructionsValid && (
+                  <p className="settings-validation-error" id="personality-instructions-error" role="alert">
+                    Remove control characters other than line breaks, tabs, and spaces.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="settings-actions">
+              <button className="secondary-button" type="button" disabled={saving || personalityIsDefault}
+                onClick={resetPersonality}>Reset personality</button>
+            </div>
+            {personalityResetMessage && <p className="settings-explanation" role="status">{personalityResetMessage}</p>}
           </section>
 
           <section className="settings-section" aria-labelledby="voice-settings-heading">
@@ -437,7 +529,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
 
           <div className="settings-save">
             <button className="primary-button" type="submit"
-              disabled={!dirty || !maxTasksValid || !newProjectMaxTasksValid || saving}>
+              disabled={!dirty || !maxTasksValid || !newProjectMaxTasksValid || !personalityInstructionsValid || saving}>
               {saving ? 'Saving…' : 'Save settings'}
             </button>
             <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
