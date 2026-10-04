@@ -5,7 +5,7 @@ import { loadConfig } from '../config.js';
 import type { ConversationHistoryPage, ConversationMessage, ConversationStore } from '../core/conversation-store.js';
 import { coreModule } from '../core/index.js';
 import type { ToolCallRecord } from '../core/tool-calls.js';
-import type { GraphClient } from './graph-client.js';
+import { GraphClientError, type GraphClient } from './graph-client.js';
 import { createOutlookModule } from './tools.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -101,6 +101,53 @@ describe('Outlook tools', () => {
       { start: '2026-10-05T09:00:00.000Z', end: '2026-10-05T10:00:00.000Z' },
       { start: '2026-10-05T11:00:00.000Z', end: '2026-10-05T12:00:00.000Z' },
     ]);
+  });
+
+  it('keeps free slots inside the requested interval and ignores events marked free', async () => {
+    const graph = {
+      request: vi.fn(async () => ({
+        value: [
+          { id: 'free', subject: 'Optional', showAs: 'free', start: { dateTime: '2026-10-05T09:00:00', timeZone: 'UTC' }, end: { dateTime: '2026-10-05T10:00:00', timeZone: 'UTC' } },
+          { id: 'outside', subject: 'After hours', showAs: 'busy', start: { dateTime: '2026-10-05T13:00:00', timeZone: 'UTC' }, end: { dateTime: '2026-10-05T14:00:00', timeZone: 'UTC' } },
+        ],
+      })),
+    };
+    const { app } = appFor(graph);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_find_free_slots',
+      headers: { ...graphHeaders, 'x-jarvis-message-id': '42' },
+      payload: {
+        startDateTime: '2026-10-05T09:00:00Z',
+        endDateTime: '2026-10-05T12:00:00Z',
+        durationMinutes: 30,
+      },
+    });
+
+    expect(response.json().result.slots).toEqual([
+      { start: '2026-10-05T09:00:00.000Z', end: '2026-10-05T12:00:00.000Z' },
+    ]);
+  });
+
+  it('reports Graph throttling with a safe retry hint', async () => {
+    const graph = { request: vi.fn(async () => { throw new GraphClientError('throttled', 429); }) };
+    const { app, records } = appFor(graph);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_today_agenda',
+      headers: { ...graphHeaders, 'x-jarvis-message-id': '42' },
+      payload: {},
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'error',
+      result: { failure: 'Microsoft Graph is rate-limiting requests. Try again shortly.' },
+      confirmation: expect.stringContaining('Try again shortly.'),
+    });
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
   });
 
   it('does not move a meeting until a later, exact Dan confirmation and redacts stored calls', async () => {
@@ -210,11 +257,13 @@ describe('Outlook tools', () => {
       payload: {
         to: ['dan@example.com'],
         subject: 'A test',
-        body: 'The private message body.',
+        body: 'The private message body.\nRegards,\nDan',
       },
     });
     const confirmationCode = staged.json().result.confirmationCode as string;
     expect(graph.request).not.toHaveBeenCalled();
+    expect(staged.json().result.summary).toContain('dan@example.com');
+    expect(staged.json().result.summary).toContain('The private message body.\nRegards,\nDan');
 
     setLatest(conversationMessage('43', `confirm ${confirmationCode}`, new Date(Date.now() + 10_000)));
     const confirmed = await app.inject({
@@ -227,5 +276,45 @@ describe('Outlook tools', () => {
     expect(graph.request).toHaveBeenCalledOnce();
     expect(graph.request.mock.calls[0]?.[0]).toContain('/sendMail');
     expect(graph.request.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' });
+  });
+
+  it('previews the original message and exact reply text before creating a draft', async () => {
+    const graph = {
+      request: vi.fn(async (path: string, options: { method?: string }) => options.method
+        ? {}
+        : {
+            id: 'message-1',
+            subject: 'Meeting',
+            from: { emailAddress: { address: 'sender@example.com' } },
+          }),
+    };
+    const { app, setLatest } = appFor(graph);
+    const staged = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_draft_reply',
+      headers: { ...graphHeaders, 'x-jarvis-message-id': '42' },
+      payload: { messageId: 'message-1', replyBody: 'Hello,\nI can attend.' },
+    });
+    const confirmationCode = staged.json().result.confirmationCode as string;
+
+    expect(staged.json().result.summary).toContain('Meeting');
+    expect(staged.json().result.summary).toContain('sender@example.com');
+    expect(staged.json().result.summary).toContain('Hello,\nI can attend.');
+    expect(graph.request).toHaveBeenCalledOnce();
+
+    setLatest(conversationMessage('43', `confirm ${confirmationCode}`, new Date(Date.now() + 10_000)));
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_confirm_action',
+      headers: { ...graphHeaders, 'x-jarvis-message-id': '43' },
+      payload: { confirmationCode },
+    });
+
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(graph.request).toHaveBeenCalledTimes(2);
+    expect(graph.request.mock.calls[1]?.[1]).toMatchObject({
+      method: 'POST',
+      body: { comment: 'Hello,\nI can attend.' },
+    });
   });
 });

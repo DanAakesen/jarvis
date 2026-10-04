@@ -22,6 +22,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    throw 'PowerShell 7 or later is required.'
+}
 $displayName = 'jarvis-outlook'
 $scopeName = 'JarvisOutlookDanMailbox'
 $secretName = 'jarvis-outlook-client-secret'
@@ -47,9 +50,11 @@ function Write-Step([string]$Message) {
 if ($MailboxUpn -match "['`r`n]") {
     throw 'MailboxUpn contains unsupported characters.'
 }
-if ($TimeZone -notmatch '^[A-Za-z_+-]+(/[A-Za-z0-9_+-]+)+$') {
+if ($TimeZone -notmatch '^(UTC|[A-Za-z_+-]+(/[A-Za-z0-9_+-]+)+)$') {
     throw 'TimeZone must be an IANA time zone, for example Europe/Copenhagen.'
 }
+try { [System.TimeZoneInfo]::FindSystemTimeZoneById($TimeZone) | Out-Null }
+catch { throw 'TimeZone must be a supported IANA time zone.' }
 if (-not (Get-Command Connect-ExchangeOnline -ErrorAction SilentlyContinue)) {
     throw 'Install the ExchangeOnlineManagement module and import it before running this script.'
 }
@@ -67,8 +72,9 @@ if (-not $tenantId -or -not $subscriptionId -or -not $resourceGroup) {
 }
 
 $activeSubscription = [string](Invoke-Az account show --query id --output tsv)
-if ($activeSubscription -ne $subscriptionId) {
-    throw 'The active Azure CLI subscription does not match infra/bootstrap.output.json.'
+$activeTenant = [string](Invoke-Az account show --query tenantId --output tsv)
+if ($activeSubscription -ne $subscriptionId -or $activeTenant -ne $tenantId) {
+    throw 'The active Azure CLI tenant/subscription does not match infra/bootstrap.output.json.'
 }
 $keyVaultName = [string](Invoke-Az deployment group show --name jarvis-infra `
     --resource-group $resourceGroup --subscription $subscriptionId `
@@ -104,6 +110,30 @@ if (-not $servicePrincipalId -or $servicePrincipalId -eq 'None') {
 }
 if ($servicePrincipalId -notmatch '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$') {
     throw 'Azure did not return a valid Outlook service-principal ID.'
+}
+$graphServicePrincipalId = [string](Invoke-Az ad sp list `
+    --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query '[0].id' --output tsv)
+if ($graphServicePrincipalId -notmatch '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$') {
+    throw 'Could not verify the Microsoft Graph service principal.'
+}
+$graphAppRoleAssignments = @(
+    Invoke-Az rest --method get `
+        --url "https://graph.microsoft.com/v1.0/servicePrincipals/$servicePrincipalId/appRoleAssignments" `
+        --output json |
+        ConvertFrom-Json |
+        Select-Object -ExpandProperty value |
+        Where-Object { $_.resourceId -eq $graphServicePrincipalId }
+)
+$graphDelegatedGrants = @(
+    Invoke-Az rest --method get `
+        --url "https://graph.microsoft.com/v1.0/oauth2PermissionGrants?`$filter=clientId%20eq%20%27$servicePrincipalId%27" `
+        --output json |
+        ConvertFrom-Json |
+        Select-Object -ExpandProperty value |
+        Where-Object { $_.resourceId -eq $graphServicePrincipalId }
+)
+if ($graphAppRoleAssignments.Count -gt 0 -or $graphDelegatedGrants.Count -gt 0) {
+    throw 'The Outlook app already has Microsoft Graph permissions in Entra. Remove those grants before using Exchange mailbox-scoped RBAC.'
 }
 
 Connect-ExchangeOnline -Organization $tenantId -ShowBanner:$false
@@ -153,9 +183,8 @@ finally {
 }
 
 Write-Step 'Checking the Key Vault client credential'
-$secretNames = @(Invoke-Az keyvault secret list --vault-name $keyVaultName `
-    --query "[?name=='$secretName'].name | [0]" --output tsv)
-$hasSecret = $secretNames.Count -gt 0 -and [string]$secretNames[0] -eq $secretName
+$vaultSecrets = @(Invoke-Az keyvault secret list --vault-name $keyVaultName --output json | ConvertFrom-Json)
+$hasSecret = @($vaultSecrets | Where-Object { $_.name -eq $secretName }).Count -gt 0
 if (-not $hasSecret -or $RotateCredential) {
     $oldCredentialIds = @(
         Invoke-Az ad app credential list --id $appId --output json |
@@ -168,7 +197,8 @@ if (-not $hasSecret -or $RotateCredential) {
     if ($LASTEXITCODE -ne 0) {
         throw 'Azure CLI could not create the Outlook app credential.'
     }
-    $credential = $credentialJson | ConvertFrom-Json
+    try { $credential = $credentialJson | ConvertFrom-Json }
+    catch { throw 'Azure CLI returned an invalid Outlook app credential response.' }
     $clientSecret = [string]$credential.password
     $newCredentialId = [string]$credential.keyId
     if (-not $clientSecret -or -not $newCredentialId) {
@@ -185,7 +215,7 @@ if (-not $hasSecret -or $RotateCredential) {
             )
         }
         & az keyvault secret set --vault-name $keyVaultName --name $secretName `
-            --file $secretFile --content-type text/plain --output none --only-show-errors
+            --file $secretFile --content-type text/plain --output none --only-show-errors 2>$null
         if ($LASTEXITCODE -ne 0) {
             throw 'Key Vault did not accept the Outlook app credential.'
         }

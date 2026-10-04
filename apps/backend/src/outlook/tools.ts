@@ -38,9 +38,13 @@ function object(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function string(value: unknown, name: string, min: number, max: number): string {
+function string(value: unknown, name: string, min: number, max: number, allowLineBreaks = false): string {
   if (typeof value !== 'string' || value.trim().length < min || value.length > max ||
-      [...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
+      [...value].some((character) => {
+        const code = character.charCodeAt(0);
+        return (code < 32 && !(allowLineBreaks && (code === 9 || code === 10 || code === 13))) ||
+          code === 127;
+      })) {
     throw new ToolRefusal(`${name} must be ${min === 1 ? 'nonempty' : `at least ${min} characters`} and at most ${max} characters.`);
   }
   return value.trim();
@@ -285,10 +289,11 @@ export function createOutlookModule(
         validateWindow(start, end, 31);
         try {
           const payload = await graph.request(
-            calendarViewPath(mailbox, start, end, 'id,subject,start,end', 50),
+            calendarViewPath(mailbox, start, end, 'id,subject,start,end,showAs', 50),
             { signal, headers: { Prefer: 'outlook.timezone="UTC"' } },
           );
           const events = eventList(payload)
+            .filter((event) => event.showAs !== 'free')
             .map((event) => ({ start: graphDateTime(event.start), end: graphDateTime(event.end) }))
             .filter((event): event is { start: Date; end: Date } =>
               event.start !== undefined && event.end !== undefined && event.end > event.start)
@@ -296,6 +301,7 @@ export function createOutlookModule(
           const free: { start: Date; end: Date }[] = [];
           let cursor = start.getTime();
           for (const event of events) {
+            if (event.start.getTime() >= end.getTime() || event.end.getTime() <= start.getTime()) continue;
             const eventStart = Math.max(start.getTime(), event.start.getTime());
             const eventEnd = Math.min(end.getTime(), event.end.getTime());
             if (eventStart > cursor && eventStart - cursor >= durationMinutes * 60_000) {
@@ -346,7 +352,7 @@ export function createOutlookModule(
         return pendingActions.stage({
           scope: 'calendar',
           sourceMessageId: source.id,
-          summary: `Create "${subject}" from ${start.toISOString()} to ${end.toISOString()}.`,
+          summary: `Create "${subject}" from ${start.toISOString()} to ${end.toISOString()}${attendees.length ? `; invite ${attendees.join(', ')}.` : '.'}`,
           execute: async (signal) => {
             try {
               await graph.request(`${mailbox}/events`, {
@@ -488,15 +494,28 @@ export function createOutlookModule(
         additionalProperties: false,
       },
       sensitive: true,
-      execute: async (raw, request) => {
+      execute: async (raw, request, signal) => {
         const input = object(raw);
         const messageId = string(input?.messageId, 'messageId', 1, 512);
-        const replyBody = string(input?.replyBody, 'replyBody', 1, 5000);
+        const replyBody = string(input?.replyBody, 'replyBody', 1, 5000, true);
         const source = await currentDanMessage(request);
+        let original: Record<string, unknown>;
+        try {
+          original = await graph.request(
+            `${mailbox}/messages/${encodeURIComponent(messageId)}?$select=id,subject,from`,
+            { signal },
+          );
+        } catch (error) { graphFailure(error); }
+        const originalSubject = typeof original.subject === 'string'
+          ? original.subject.slice(0, 300)
+          : '(no subject)';
+        const sender = object(object(original.from)?.emailAddress);
+        const senderAddress = typeof sender?.address === 'string' ? sender.address.slice(0, 254) : '';
+        if (!senderAddress) throw new ToolFailure('Outlook did not return the original sender.');
         return pendingActions.stage({
           scope: 'mail',
           sourceMessageId: source.id,
-          summary: 'Create the requested reply as an Outlook draft.',
+          summary: `Reply to "${originalSubject}" from ${senderAddress} with this exact text:\n${replyBody}`,
           execute: async (signal) => {
             try {
               await graph.request(`${mailbox}/messages/${encodeURIComponent(messageId)}/createReply`, {
@@ -528,7 +547,7 @@ export function createOutlookModule(
         const input = object(raw);
         const recipients = input?.to;
         const subject = string(input?.subject, 'subject', 1, 200);
-        const body = string(input?.body, 'body', 1, 5000);
+        const body = string(input?.body, 'body', 1, 5000, true);
         if (!Array.isArray(recipients) || recipients.length < 1 || recipients.length > 10 ||
             recipients.some((email) => typeof email !== 'string' || !validEmail(email))) {
           throw new ToolRefusal('to must contain between 1 and 10 valid email addresses.');
@@ -537,7 +556,7 @@ export function createOutlookModule(
         return pendingActions.stage({
           scope: 'mail',
           sourceMessageId: source.id,
-          summary: `Send "${subject}" to ${recipients.join(', ')}.`,
+          summary: `Send "${subject}" to ${recipients.join(', ')} with this exact text:\n${body}`,
           execute: async (signal) => {
             try {
               await graph.request(`${mailbox}/sendMail`, {
