@@ -13,7 +13,9 @@ export function createAuthClient(config: PublicConfig): PublicClientApplication 
     auth: {
       clientId: config.webClientId,
       authority: `https://login.microsoftonline.com/${config.tenantId}`,
-      redirectUri: window.location.origin,
+      // MSAL v5 returns popup and silent sign-in through the redirect bridge page (L63).
+      redirectUri: `${window.location.origin}/redirect.html`,
+      postLogoutRedirectUri: `${window.location.origin}/redirect.html`,
     },
     cache: { cacheLocation: BrowserCacheLocation.SessionStorage },
   });
