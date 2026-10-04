@@ -133,6 +133,7 @@ Dan can also change Jarvis's model or reasoning by chat or voice for the next se
 | Area | Setting | Default |
 | --- | --- | --- |
 | Jarvis | Model and reasoning effort | `gpt-5.6-luna`, reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
+| Personality | Tone, response style, and custom instructions (up to 2,000 characters) | British butler, concise, no custom instructions |
 | Voice | Speech to text | MAI Transcribe |
 | Voice | Voice per language | English: Ryan HD (British butler persona, addresses Dan as "sir"); Danish: Harper (MAI-Voice-2) |
 | Voice | Default language | Danish |
@@ -145,6 +146,8 @@ Dan can also change Jarvis's model or reasoning by chat or voice for the next se
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
 Danish voice uses the authenticated backend `/voice/da` WebSocket to a provisioned Foundry Voice Live agent. The agent bridges to the hosted Jarvis agent, uses MAI Transcribe with language `da` and the Danish phrase list, and fixes Harper to `da-DK`.
+
+Personality preferences are validated and persisted in Settings. They apply to new chat and voice sessions; changing or resetting them does not interrupt an active voice session. Reset restores the current British-butler, concise defaults and clears custom instructions. Preferences affect response style only, not Jarvis's identity, available tools, permissions, selected language, model or voice, or truthful reporting of action outcomes.
 
 ### Page requirements
 
@@ -221,6 +224,16 @@ policies are `deliver_pr` or `complete_without_deployment`, sandbox sizes are
 letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
 32-bit integer (default 1).
 
+The backend lists every repository in the GitHub App installation for the
+configured New projects owner. It caches the list and refreshes it when Dan asks
+from the Projects page. Managed projects appear first; each other repository
+shows its last push and primary language, with **Manage with Jarvis** registering
+it without a form. Jarvis can register the same installed repository through
+`manage_repository`. Registration uses the repository's actual default branch,
+the New projects agent, policy, and task-limit defaults, and a tech identifier
+detected from its default-branch files or primary language. The GitHub App token
+and private key stay in the backend.
+
 The projects page derives running-task counts from tasks in the `Running` state
 and refreshes them when Dan refreshes the page. Until release data is connected,
 the last-release field is explicitly unavailable rather than inferred.
@@ -230,6 +243,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Data points | Actions |
 | --- | --- |
 | Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
+| Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset (applies to new sessions) |
 | Voice: speech-to-text model, voice per language, default language | Change; play a voice sample |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
