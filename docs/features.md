@@ -98,7 +98,7 @@ Status as of 4 October 2026.
 | Event archive | Old task events move to Blob and load on demand | Background | Task detail | Built | P6-03 |
 | Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Phone | — | Planned | P6-02 |
 | Backup drill | Database restore documented | Background | — | Planned | P6-04 |
-| Runbook | Deploy, rollback, key rotation, recovery steps | — | docs | Planned | P6-06 |
+| Runbook | Deploy, rollback, key rotation, task recovery, sleep, and temporary SQL access | — | [Operations runbook](runbook.md) | In progress | P6-06 |
 
 ## Jarvis everywhere (P7)
 
