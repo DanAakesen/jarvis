@@ -57,7 +57,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   (`src/factory/`) owns `/factory/tasks`, `/factory/tasks/:id`,
   `/factory/projects`, `/factory/projects/new`, `/factory/projects/:id` and
   `/factory/releases/:id`;
-  invalid IDs show not found. `/settings` is the shared settings entry. P1-11
+  invalid IDs show not found. The Usage area (`src/usage/`) owns `/usage` and
+  reads the signed-in user's usage report. `/settings` is the shared settings entry. P1-11
   implements it as a responsive form for Jarvis, voice, coding-agent defaults
   and the global task limit; remaining voice samples, sleep and credential
   controls are visibly disabled until their owning services exist.
@@ -318,6 +319,16 @@ also calculates a live estimate for an open session. Rates use the documented
 Sweden Central vCPU/memory basis: 0.8901 DKK/hour for 1×2 and 1.7802 DKK/hour
 for 2×4; actual billed amounts may differ. SQL Server integration and live
 provider reporting remain post-merge checks.
+
+P6-01 adds an authenticated read-only `GET /usage?period=7d|30d|90d|all`.
+The SQL store groups existing `dbo.usage` rows by task, project, agent, source,
+and metric; it suppresses DKK for Codex/Copilot, includes period-clipped live
+sandbox estimates without writing rows, and caps the result at 1,000 groups with
+an explicit truncation flag. The Usage page groups those rows by project, agent,
+or source and links task rows to task detail. Existing voice rows are included
+when present; P5-06 remains the writer. Route/store/web contract tests pass, but
+Chromium inspection at 390/1280 px verifies local mocked interactions.
+Live Azure SQL and provider/voice report data remain unverified.
 
 P6-03's backend job checks for events older than 90 days hourly, in bounded SQL
 batches, and uploads deterministic per-task blobs before deleting each batch in
