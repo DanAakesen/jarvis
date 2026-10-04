@@ -12,7 +12,7 @@ class FakeFoundry:
     def request(self, method, url, body=None):
         self.calls.append((method, url, body))
         if url.endswith('/sessions?api-version=v1'):
-            return {"session_id": "probe-session"}
+            return {"agent_session_id": "probe-session", "status": "active"}
         if method == "DELETE":
             return {}
         if isinstance(self.result, Exception):
