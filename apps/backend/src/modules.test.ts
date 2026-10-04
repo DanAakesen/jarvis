@@ -128,7 +128,12 @@ describe('backend module composition', () => {
         title: 'Current tasks',
         renderer: 'list',
         source: { id: 'factory.tasks', status: 'complete' },
-        data: { items: [{ title: '<script>not code</script>', action: { type: 'open-route', route: '/factory/tasks/42' } }] },
+        data: {
+          items: [{
+            title: '<script>not code</script>',
+            action: { type: 'open-route', route: '/factory/tasks/9223372036854775807' },
+          }],
+        },
       },
     };
     const execute = vi.fn()

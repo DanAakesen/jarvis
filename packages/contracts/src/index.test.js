@@ -53,6 +53,7 @@ test('accepts each allowlisted renderer and action without interpreting its cont
   assert.equal(isGeneratedView(listView({
     actions: [
       { type: 'open-route', route: '/settings' },
+      { type: 'open-route', route: '/factory/tasks/9223372036854775807' },
       { type: 'open-link', url: 'https://management.azure.com/', label: 'Azure' },
       { type: 'call-tool', tool: 'list_tasks' },
       { type: 'window', operation: 'move', windowId: 'view-1', x: 10, y: 20 },
@@ -73,6 +74,9 @@ test('rejects malformed, unsupported, extra-field, and invalid-action payloads',
   assert.equal(isGeneratedView(listView({ renderer: 'script' })), false);
   assert.equal(isGeneratedView({ ...listView(), extra: true }), false);
   assert.equal(isGeneratedView(listView({ actions: [{ type: 'open-route', route: '//evil.example' }] })), false);
+  assert.equal(isGeneratedView(listView({
+    actions: [{ type: 'open-route', route: '/factory/tasks/9223372036854775808' }],
+  })), false);
   assert.equal(isGeneratedView(listView({ actions: [{ type: 'open-link', url: 'javascript:alert(1)', label: 'Open' }] })), false);
   assert.equal(isGeneratedView(listView({ actions: [{ type: 'call-tool', tool: 'unregistered tool' }] })), false);
 });

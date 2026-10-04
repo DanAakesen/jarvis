@@ -6,6 +6,7 @@ export const generatedViewActionTypes = Object.freeze(['open-route', 'open-link'
 
 const maxBytes = 256 * 1024;
 const rowLimit = 500;
+const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const dateTime = { type: 'string', format: 'date-time' };
 const string = (maxLength, minLength = 0) => ({ type: 'string', maxLength, ...(minLength ? { minLength } : {}) });
 const object = (properties, required = Object.keys(properties)) => ({
@@ -18,7 +19,7 @@ const routeActionSchema = object({
   type: { const: 'open-route' },
   route: {
     ...string(200, 1),
-    pattern: '^/(?:$|factory/(?:tasks|projects|releases)/[1-9][0-9]{0,15}|usage|settings)(?:\\?[^#]*)?$',
+    pattern: '^/(?:$|factory/tasks/[1-9][0-9]{0,18}|factory/(?:projects|releases)/[1-9][0-9]{0,15}|usage|settings)(?:\\?[^#]*)?$',
   },
 });
 const externalLinkActionSchema = object({
@@ -137,7 +138,8 @@ export const generatedViewSchema = Object.freeze({
   }, ['version', 'title', 'renderer', 'source', 'data'])),
 });
 
-const routePattern = /^\/(?:$|factory\/(?:tasks|projects|releases)\/[1-9]\d{0,15}|usage|settings)(?:\?[^#]*)?$/;
+const routePattern = /^\/(?:$|factory\/tasks\/[1-9]\d{0,18}|factory\/(?:projects|releases)\/[1-9]\d{0,15}|usage|settings)(?:\?[^#]*)?$/;
+const taskRoutePattern = /^\/factory\/tasks\/([1-9]\d{0,18})(?:\?[^#]*)?$/;
 const linkHosts = new Set(['github.com', 'learn.microsoft.com']);
 const imageHosts = new Set(['github.com', 'raw.githubusercontent.com', 'avatars.githubusercontent.com']);
 
@@ -168,9 +170,13 @@ function safeHttpsUrl(value, hosts, trustedBlobHost) {
 function validAction(value, registeredTools) {
   if (!isObject(value) || !generatedViewActionTypes.includes(value.type)) return false;
   switch (value.type) {
-    case 'open-route':
+    case 'open-route': {
+      if (!boundedString(value.route, 200, 1)) return false;
+      const taskRoute = taskRoutePattern.exec(value.route);
       return Object.keys(value).every((key) => ['type', 'route'].includes(key)) &&
-        boundedString(value.route, 200, 1) && routePattern.test(value.route) && !value.route.includes('\\');
+        routePattern.test(value.route) && !value.route.includes('\\') &&
+        (!taskRoute || BigInt(taskRoute[1]) <= maxSqlBigInt);
+    }
     case 'open-link':
       return Object.keys(value).every((key) => ['type', 'url', 'label'].includes(key)) &&
         safeHttpsUrl(value.url, linkHosts) && boundedString(value.label, 200, 1);
