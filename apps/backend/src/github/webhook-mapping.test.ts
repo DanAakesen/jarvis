@@ -48,6 +48,7 @@ describe('GitHub webhook mapping', () => {
         event: 'pull_request',
         head_branch: 'feature/change',
         head_sha: sha,
+        run_number: 7,
         status: 'completed',
         conclusion: 'success',
         run_started_at: timestamp,
@@ -55,7 +56,7 @@ describe('GitHub webhook mapping', () => {
         pull_requests: [{ number: 42 }],
       },
     })).toMatchObject({
-      kind: 'workflow_run', id: 1_900_000_000_001, name: 'CI', headSha: sha, pullRequestNumbers: [42],
+      kind: 'workflow_run', id: 1_900_000_000_001, name: 'CI', headSha: sha, runNumber: 7, pullRequestNumbers: [42],
     });
 
     expect(mapGithubWebhook('push', {

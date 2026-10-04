@@ -159,7 +159,8 @@ describe('committed domain schema (groups 1-7)', () => {
       deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok',
       mapping: {
         kind: 'workflow_run', repository: repo, id: 1_900_000_000_001, name: 'Release', event: 'push',
-        branch: 'main', headSha: releaseSha, pullRequestNumbers: [23], status: 'completed', conclusion: 'success',
+        branch: 'main', headSha: releaseSha, runNumber: 7, pullRequestNumbers: [23],
+        status: 'completed', conclusion: 'success',
         startedAt: now.toISOString(), completedAt: now.toISOString(),
       },
     });
@@ -190,7 +191,7 @@ describe('committed domain schema (groups 1-7)', () => {
     }]);
     const releases = await pool.request().input('projectId', sql.Int, projectId)
       .query(`SELECT version, sha, status FROM dbo.releases WHERE project_id = @projectId;`);
-    expect(releases.recordset).toEqual([{ version: releaseSha, sha: releaseSha, status: 'released' }]);
+    expect(releases.recordset).toEqual([{ version: '7', sha: releaseSha, status: 'released' }]);
     const deployments = await pool.request()
       .input('releaseId', sql.Int, releases.recordset.length ? runs.recordset[0]!.releaseId : null)
       .query(`SELECT github_deployment_id AS deploymentId, environment, status FROM dbo.deployments

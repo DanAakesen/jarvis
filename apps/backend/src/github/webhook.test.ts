@@ -29,7 +29,7 @@ function payloadFor(event: string) {
     repository,
     workflow_run: {
       id: 1_900_000_000_001, name: 'CI', event: 'pull_request', head_branch: 'feature/change', head_sha: sha,
-      status: 'completed', conclusion: 'success', run_started_at: timestamp, completed_at: timestamp,
+      run_number: 7, status: 'completed', conclusion: 'success', run_started_at: timestamp, completed_at: timestamp,
       pull_requests: [{ number: 42 }],
     },
   };

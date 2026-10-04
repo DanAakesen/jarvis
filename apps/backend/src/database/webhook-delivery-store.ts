@@ -77,7 +77,9 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
       .input('runId', sql.BigInt, mapping.id)
       .input('workflow', sql.NVarChar(255), mapping.name)
       .input('trigger', sql.NVarChar(32), mapping.event)
+      .input('branch', sql.NVarChar(255), mapping.branch)
       .input('headSha', sql.Char(40), mapping.headSha)
+      .input('runNumber', sql.Int, mapping.runNumber)
       .input('status', sql.NVarChar(16), mapping.status)
       .input('conclusion', sql.NVarChar(16), mapping.conclusion)
       .input('startedAt', sql.DateTime2, mapping.startedAt ? new Date(mapping.startedAt) : null)
@@ -93,6 +95,7 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
           ORDER BY id DESC);
         DECLARE @releaseId bigint = (
           SELECT id FROM dbo.releases WHERE project_id = @projectId AND sha = @headSha);
+        DECLARE @runChanged bit = 0;
         UPDATE dbo.workflow_runs SET
           workflow = @workflow, [trigger] = @trigger, head_sha = @headSha,
           pull_request_id = COALESCE(@pullRequestId, pull_request_id),
@@ -102,17 +105,29 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
           started_at = COALESCE(started_at, @startedAt),
           completed_at = COALESCE(@completedAt, completed_at)
         WHERE project_id = @projectId AND github_run_id = @runId
-          AND (status <> N'completed' OR @status = N'completed');
-        IF @@ROWCOUNT = 0 AND NOT EXISTS (
+          AND (status <> N'completed' OR @status = N'completed')
+          AND (status <> N'completed' OR @status <> N'completed' OR @completedAt IS NULL
+            OR completed_at IS NULL OR @completedAt >= completed_at);
+        DECLARE @affected int = @@ROWCOUNT;
+        IF @affected > 0 SET @runChanged = 1;
+        IF @runChanged = 0 AND NOT EXISTS (
           SELECT 1 FROM dbo.workflow_runs WHERE project_id = @projectId AND github_run_id = @runId)
+        BEGIN
           INSERT INTO dbo.workflow_runs
             (project_id, github_run_id, workflow, [trigger], head_sha, pull_request_id, release_id,
              status, conclusion, started_at, completed_at)
           VALUES (@projectId, @runId, @workflow, @trigger, @headSha, @pullRequestId, @releaseId,
             @status, @conclusion, @startedAt, @completedAt);
-        IF @releaseId IS NOT NULL AND @status = N'completed'
-          UPDATE dbo.releases SET status = CASE WHEN @conclusion = N'failure' THEN N'failed' ELSE N'building' END
-          WHERE id = @releaseId AND status <> N'released';
+          SET @runChanged = 1;
+        END;
+        IF @releaseId IS NOT NULL AND @status = N'completed' AND @runChanged = 1
+          UPDATE dbo.releases SET
+            version = CASE WHEN @workflow = N'Release' AND @trigger = N'push'
+              AND EXISTS (SELECT 1 FROM dbo.projects WHERE id = @projectId AND default_branch = @branch)
+              THEN CONVERT(nvarchar(100), @runNumber) ELSE version END,
+            status = CASE WHEN status = N'released' THEN status
+              WHEN @conclusion = N'failure' THEN N'failed' ELSE N'building' END
+          WHERE id = @releaseId;
       END;`);
     return;
   }

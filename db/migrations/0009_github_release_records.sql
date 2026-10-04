@@ -17,7 +17,8 @@ CREATE TABLE dbo.pull_requests (
   CONSTRAINT CK_pull_requests_head_sha CHECK (head_sha NOT LIKE '%[^0-9a-fA-F]%'),
   CONSTRAINT CK_pull_requests_state CHECK (state IN (N'open', N'merged', N'closed')),
   CONSTRAINT CK_pull_requests_checks CHECK (checks IN (N'pending', N'passed', N'failed')),
-  CONSTRAINT CK_pull_requests_merged_at CHECK ((state = N'merged' AND merged_at IS NOT NULL) OR state <> N'merged')
+  CONSTRAINT CK_pull_requests_merged_at CHECK ((state = N'merged' AND merged_at IS NOT NULL) OR state <> N'merged'),
+  CONSTRAINT CK_pull_requests_time CHECK (merged_at IS NULL OR merged_at >= opened_at)
 );
 CREATE INDEX IX_pull_requests_project_head_sha ON dbo.pull_requests (project_id, head_sha);
 CREATE INDEX IX_pull_requests_task_id ON dbo.pull_requests (task_id) WHERE task_id IS NOT NULL;

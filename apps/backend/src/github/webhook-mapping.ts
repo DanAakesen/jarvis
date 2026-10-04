@@ -26,6 +26,7 @@ type WorkflowRunMapping = {
   readonly event: string;
   readonly branch: string;
   readonly headSha: string;
+  readonly runNumber: number;
   readonly pullRequestNumbers: readonly number[];
   readonly status: 'queued' | 'in_progress' | 'completed';
   readonly conclusion: 'success' | 'failure' | 'cancelled' | null;
@@ -119,7 +120,7 @@ function runStatus(value: unknown): 'queued' | 'in_progress' | 'completed' | und
 function deploymentState(value: unknown): 'queued' | 'in_progress' | 'success' | 'failure' | undefined {
   if (value === 'queued' || value === 'pending') return 'queued';
   if (value === 'in_progress') return 'in_progress';
-  if (value === 'success' || value === 'inactive') return 'success';
+  if (value === 'success') return 'success';
   if (value === 'failure' || value === 'error') return 'failure';
   return undefined;
 }
@@ -176,11 +177,12 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
     const eventName = text(workflowRun?.event, 32);
     const branch = text(workflowRun?.head_branch, 255);
     const headSha = sha(workflowRun?.head_sha);
+    const runNumber = number(workflowRun?.run_number);
     const status = runStatus(workflowRun?.status);
     const result = conclusion(workflowRun?.conclusion);
     const startedAt = workflowRun?.run_started_at == null ? null : timestamp(workflowRun.run_started_at);
     const completedAt = workflowRun?.completed_at == null ? null : timestamp(workflowRun.completed_at);
-    if (!id || !name || !eventName || !branch || !headSha || !status || result === undefined ||
+    if (!id || !name || !eventName || !branch || !headSha || !runNumber || !status || result === undefined ||
         startedAt === undefined || completedAt === undefined) return undefined;
     return {
       kind: 'workflow_run',
@@ -190,6 +192,7 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
       event: eventName,
       branch,
       headSha,
+      runNumber,
       pullRequestNumbers: pullRequestNumbers(workflowRun?.pull_requests),
       status,
       conclusion: result,
