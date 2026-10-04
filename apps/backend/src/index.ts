@@ -49,7 +49,7 @@ import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
 import { createProjectPolicyEvaluator } from './github/project-policy.js';
-import { createGitHubDeliveryVerifier } from './github/delivery.js';
+import { createGitHubDeliveryHandler } from './github/delivery.js';
 import { createAlertNotifier } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
@@ -212,7 +212,7 @@ try {
             : null;
         },
         ...(githubAppTokenIssuer
-          ? { verifyDelivery: createGitHubDeliveryVerifier(githubAppTokenIssuer) }
+          ? { verifyDelivery: createGitHubDeliveryHandler(githubAppTokenIssuer, taskStore, config.staticWebAppOrigin) }
           : {}),
       },
     )
