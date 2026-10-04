@@ -220,6 +220,7 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
   .task-column { min-height: 160px; }
 }
 .task-detail > .home-link { margin-top: 0; }
+.task-request { margin: -8px 0 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-meta, .task-disk-meta {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 24px; margin: 0;
 }
@@ -228,12 +229,27 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
 .task-detail-section { margin-top: 24px; padding: 24px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
 .task-detail-section h2 { margin-bottom: 12px; }
 .task-detail-section > p, .task-disk-time { font-size: 14px; }
+.task-actions .action-row { margin-top: 16px; }
+.task-actions .secondary-button, .timeline-artifacts .secondary-button, .timeline-more { margin-top: 0; }
 .task-disk-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .task-disk-list > li { min-width: 0; padding: 16px; background: #f6f7f9; border: 1px solid var(--rule); border-radius: 6px; }
 .task-disk-list h3 { margin: 0 0 4px; }
 .task-disk-time { margin: 0; }
 .task-disk-meta { margin-top: 16px; }
 .task-detail-error { display: grid; justify-items: start; gap: 12px; }
+.timeline-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 0 0 12px; }
+.timeline-toolbar label { font-weight: 600; }
+.timeline-toolbar select { min-height: 44px; max-width: 100%; padding: 6px 32px 6px 10px; border: 1px solid var(--control-rule); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; }
+.timeline-toolbar select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.timeline-stream { color: var(--text-muted); font-size: 14px; }
+.task-timeline > li { min-width: 0; }
+.timeline-payload { margin-top: 10px; font-size: 14px; }
+.timeline-payload summary { min-height: 44px; width: fit-content; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+.timeline-payload pre { max-width: 100%; max-height: 28rem; overflow: auto; padding: 12px; background: #f6f7f9; border: 1px solid var(--rule); border-radius: 6px; font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.timeline-payload-note, .timeline-error, .timeline-artifacts p { margin-top: 8px; font-size: 14px; }
+.timeline-more { margin-top: 12px; }
+.timeline-error { color: var(--error); }
+.timeline-artifacts { display: grid; justify-items: start; gap: 4px; margin-top: 16px; }
 
 @media (min-width: 900px) {
   .jarvis-layout { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
@@ -260,6 +276,7 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
   .task-dialog { max-height: calc(100vh - 24px); padding: 20px 16px; }
   .task-meta, .task-disk-meta { grid-template-columns: minmax(0, 1fr); }
   .task-detail-section { padding: 20px 16px; }
+  .timeline-toolbar { align-items: flex-start; flex-direction: column; }
 }
 
 @media (max-width: 380px) {
