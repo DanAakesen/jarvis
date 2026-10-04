@@ -4,8 +4,11 @@ import { createAzureSpeechSynthesizer } from './speech.js';
 describe('Azure Speech F0 synthesizer', () => {
   it('requests a managed-identity token and safely encodes bounded SSML', async () => {
     const getToken = vi.fn(async () => 'speech-token');
-    const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) =>
-      new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+    const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe('https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1');
+      expect(init?.redirect).toBe('error');
+      return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+    });
     const speech = createAzureSpeechSynthesizer('westeurope', getToken, fetcher);
     await expect(speech.synthesize('Use <Jarvis> & "Dan".')).resolves.toEqual(Buffer.from([1, 2, 3]));
     expect(getToken).toHaveBeenCalledWith('https://cognitiveservices.azure.com/.default', expect.any(AbortSignal));

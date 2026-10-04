@@ -13,7 +13,12 @@ function xmlText(value: string): string {
     .replace(/>/gu, '&gt;')
     .replace(/"/gu, '&quot;')
     .replace(/'/gu, '&apos;')
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/gu, '');
+    .split('')
+    .filter((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return codePoint === 0x09 || codePoint === 0x0a || codePoint === 0x0d || codePoint >= 0x20;
+    })
+    .join('');
 }
 
 async function responseBytes(response: Response): Promise<Uint8Array> {

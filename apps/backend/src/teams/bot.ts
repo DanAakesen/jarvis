@@ -94,12 +94,14 @@ export async function createTeamsBotModule({
     };
   });
   await bot.initialize();
+  let closePromise: Promise<void> | undefined;
+  const close = (): Promise<void> => closePromise ??= (async () => {
+    audioStore.clear();
+    await bot.stop();
+  })();
 
   const registerRoutes: FastifyPluginAsync = async (app) => {
-    app.addHook('onClose', async () => {
-      audioStore.clear();
-      await bot.stop();
-    });
+    app.addHook('onClose', close);
     app.post('/api/messages', { config: { teamsBot: true } }, async (request, reply) => {
       const response = await adapter.dispatch({
         body: request.body,
@@ -130,5 +132,6 @@ export async function createTeamsBotModule({
     id: 'teams',
     registerRoutes,
     tools: [createAskDanToConfirmTool(notificationService)],
+    close,
   };
 }
