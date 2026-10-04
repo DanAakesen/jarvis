@@ -95,6 +95,8 @@ export interface TaskListFilters {
 export type TaskTransitionResult =
   | { kind: 'ok'; task: TaskRecord }
   | { kind: 'not-found' }
+  | { kind: 'credential-unavailable' }
+  | { kind: 'renewal-active' }
   | { kind: 'invalid-transition' };
 
 export type ActiveTaskGuardResult<T> =
