@@ -5,10 +5,11 @@ Board columns (the project's Status field):
   Ready        open, not blocked, no worker label, no open linked PR
   In progress  open issue with a worker label (Codex, Copilot, Dan, Jarvis) or an open draft PR
   In review    open issue with an open, non-draft linked PR
-  Done         set by the project's built-in "Item closed" workflow, not by this script
+  Done         closed issue; the project's built-in "Item closed" workflow sets it, and
+               this script restores it when a run raced with the close (L60)
 
-The script reconciles every open issue on each run, so it is idempotent and only
-writes items whose Status differs. Part of P0-13.
+The script reconciles every open issue and every closed issue already on the board
+on each run, so it is idempotent and only writes items whose Status differs. Part of P0-13.
 """
 
 from __future__ import annotations
@@ -42,6 +43,17 @@ def desired_status(issue: dict[str, Any], open_pulls: list[dict[str, Any]]) -> s
     if (issue.get("issue_dependencies_summary") or {}).get("blocked_by", 0) > 0:
         return "Backlog"
     return "Ready"
+
+
+def items_to_mark_done(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return board items for closed issues whose Status is not Done."""
+    stale = []
+    for item in items:
+        content = item.get("content") or {}
+        status = (item.get("fieldValueByName") or {}).get("name")
+        if content.get("state") == "CLOSED" and status != "Done":
+            stale.append(item)
+    return stale
 
 
 def _request(url: str, token: str, payload: dict[str, Any] | None = None) -> tuple[Any, str]:
@@ -109,6 +121,25 @@ mutation($project: ID!, $content: ID!) {
 }
 """
 
+ITEMS_QUERY = """
+query($project: ID!, $cursor: String) {
+  node(id: $project) {
+    ... on ProjectV2 {
+      items(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          fieldValueByName(name: "Status") {
+            ... on ProjectV2ItemFieldSingleSelectValue { name }
+          }
+          content { ... on Issue { number state } }
+        }
+      }
+    }
+  }
+}
+"""
+
 SET_STATUS = """
 mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
   updateProjectV2ItemFieldValue(input: {
@@ -132,7 +163,7 @@ def main() -> None:
     if project is None or not project.get("field"):
         raise SystemExit(f"Project {owner}/{number} or its Status field was not found.")
     options = {option["name"]: option["id"] for option in project["field"]["options"]}
-    missing = [status for status in STATUSES if status not in options]
+    missing = [status for status in (*STATUSES, "Done") if status not in options]
     if missing:
         raise SystemExit(f"Status field lacks options: {', '.join(missing)}")
 
@@ -155,6 +186,23 @@ def main() -> None:
             graphql(project_token, SET_STATUS, {
                 "project": project["id"], "item": item["id"],
                 "field": project["field"]["id"], "option": options[status],
+            })
+    items: list[dict[str, Any]] = []
+    cursor = None
+    while True:
+        page = graphql(project_token, ITEMS_QUERY, {"project": project["id"], "cursor": cursor})["node"]["items"]
+        items.extend(page["nodes"])
+        if not page["pageInfo"]["hasNextPage"]:
+            break
+        cursor = page["pageInfo"]["endCursor"]
+    for item in items_to_mark_done(items):
+        current = (item.get("fieldValueByName") or {}).get("name")
+        print(f"#{item['content']['number']}: {current or '(none)'} -> Done (closed)")
+        changed += 1
+        if not dry_run:
+            graphql(project_token, SET_STATUS, {
+                "project": project["id"], "item": item["id"],
+                "field": project["field"]["id"], "option": options["Done"],
             })
     print(f"{len(issues)} open issues checked, {changed} moved{' (dry run)' if dry_run else ''}.")
 

@@ -1,6 +1,6 @@
 import unittest
 
-from project_board import desired_status, linked_issue_numbers
+from project_board import desired_status, items_to_mark_done, linked_issue_numbers
 
 
 def issue(number=7, labels=(), blocked_by=0):
@@ -43,6 +43,14 @@ class ProjectBoardTests(unittest.TestCase):
     def test_linked_issue_numbers(self):
         self.assertEqual(linked_issue_numbers("fixes #1, Resolves #22\ncloses #3 refs #4"), {1, 22, 3})
         self.assertEqual(linked_issue_numbers(None), set())
+
+    def test_closed_issues_not_in_done_are_moved_to_done(self):
+        def item(number, state, status):
+            return {"id": f"item-{number}", "content": {"number": number, "state": state},
+                    "fieldValueByName": {"name": status} if status else None}
+        items = [item(1, "CLOSED", "In review"), item(2, "CLOSED", "Done"), item(3, "OPEN", "In review"),
+                 item(4, "CLOSED", None), {"id": "draft", "content": None, "fieldValueByName": None}]
+        self.assertEqual([entry["id"] for entry in items_to_mark_done(items)], ["item-1", "item-4"])
 
 
 if __name__ == "__main__":
