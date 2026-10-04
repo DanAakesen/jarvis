@@ -10,6 +10,7 @@ import { createDatabase, registerDatabase } from './database/lifecycle.js';
 import { createToolCallStore } from './database/tool-call-store.js';
 import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
+import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
@@ -45,6 +46,7 @@ import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js
 import { createChecksLoopStore } from './database/checks-loop-store.js';
 import { createChecksLoopBlobStore } from './database/checks-loop-blob.js';
 import { createGitHubActionsLogClient } from './github/actions-logs.js';
+import { createGitHubReleaseGraphReader } from './github/release-graph.js';
 import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
@@ -59,6 +61,9 @@ import { createFoundryMemoryEmbedder } from './core/memory-embeddings.js';
 import { createGraphClient } from './graph/client.js';
 import { createNotesModule } from './notes/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
+import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
+import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
+import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
 import { createEphemeralAudioStore } from './teams/audio-store.js';
 import { createAzureSpeechSynthesizer } from './teams/speech.js';
@@ -251,6 +256,10 @@ try {
     })
     : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;
+  const releaseViewStore = database ? createReleaseViewStore(database.pool) : undefined;
+  const releaseGraphReader = githubAppTokenIssuer
+    ? createGitHubReleaseGraphReader(githubAppTokenIssuer)
+    : undefined;
   const projectPolicyEvaluator = database && taskStore && githubAppTokenIssuer
     ? createProjectPolicyEvaluator({
       store: createProjectPolicyStore(database.pool),
@@ -323,6 +332,16 @@ try {
       ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
     }));
   }
+  if (database && settingsStore && config.foundryProjectEndpoint && credential) {
+    modules.push(createScreenVisionModule(new ScreenVisionService(
+      createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry screen identity unavailable');
+        return token.token;
+      }),
+      createScreenFrameUsageStore(database.pool),
+    )));
+  }
   if (graphClient) {
     modules.push(createNotesModule({
       graph: graphClient,
@@ -371,6 +390,8 @@ try {
   const app = buildApp(config, logger, {
     modules,
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
+    ...(releaseViewStore ? { releaseViewStore } : {}),
+    ...(releaseGraphReader ? { releaseGraphReader } : {}),
     ...(database && taskStore && settingsStore ? {
       ...(projectStore ? { projectStore } : {}),
       ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),

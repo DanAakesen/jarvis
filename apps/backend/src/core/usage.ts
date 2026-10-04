@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 
 export type UsagePeriod = '7d' | '30d' | '90d' | 'all';
 export type UsageSource = 'sandbox' | 'jarvis_model' | 'voice' | 'codex' | 'copilot';
-export type UsageMetric = 'minutes' | 'input_tokens' | 'output_tokens' | 'turns' | 'premium_requests';
+export type UsageMetric = 'minutes' | 'input_tokens' | 'output_tokens' | 'turns' | 'premium_requests' | 'screen_frames';
 
 export interface UsageEntry {
   taskId: string | null;
