@@ -373,7 +373,12 @@ export class TaskDispatcher implements TaskController {
       const state = typeof payload === 'object' && payload !== null && 'to' in payload
         ? (payload as { to?: unknown }).to
         : undefined;
-      if (state === 'Paused' || state === 'NeedsAttention' || state === 'Done' || state === 'Cancelled') {
+      const reason = typeof payload === 'object' && payload !== null && 'reason' in payload
+        ? (payload as { reason?: unknown }).reason
+        : undefined;
+      const keepCompletedQuestionSession = state === 'NeedsAttention' && reason === 'session_question';
+      if (!keepCompletedQuestionSession &&
+        (state === 'Paused' || state === 'NeedsAttention' || state === 'Done' || state === 'Cancelled')) {
         void this.store.endTaskSessions(event.taskId, state)
           .then((sessionIds) => sessionIds.forEach((id) => this.heartbeat.untrack(id)))
           .catch(this.onError);

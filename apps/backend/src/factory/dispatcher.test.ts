@@ -202,6 +202,23 @@ describe('task dispatcher', () => {
     await dispatcher.stop();
   });
 
+  it('keeps a completed session-question session monitored for idle expiry', async () => {
+    const store = idleStore();
+    const { dispatcher, events, untrack } = harness(store);
+    dispatcher.start();
+    await vi.waitFor(() => expect(store.claimNext).toHaveBeenCalledOnce());
+    events.publish({
+      id: '4', taskId: '42', type: 'state_changed', summary: null,
+      payload: { from: 'Running', to: 'NeedsAttention', reason: 'session_question' },
+      payloadTruncated: false, source: 'backend', at: new Date().toISOString(),
+    });
+    await flush();
+
+    expect(store.endTaskSessions).not.toHaveBeenCalled();
+    expect(untrack).not.toHaveBeenCalled();
+    await dispatcher.stop();
+  });
+
   it('retries a rejected Foundry start twice and then moves it to NeedsAttention', async () => {
     vi.useFakeTimers();
     let attempts = 0;
