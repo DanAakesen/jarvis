@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { backendFetch } from '../backend-request';
 import { Link } from 'react-router-dom';
 import { streamTaskEvents } from '../task-events';
 import { TaskControls } from './TaskControls';
@@ -114,14 +115,13 @@ async function request(
 
   let response: Response;
   try {
-    response = await fetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
+    response = await backendFetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
       method,
       headers: {
         Authorization: `${['Bear', 'er'].join('')} ${token}`,
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(10_000),
     });
   } catch (cause) {
     throw new Error('Jarvis could not reach the task service. Try again.', { cause });

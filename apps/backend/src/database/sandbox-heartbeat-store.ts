@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import type { RunningSandbox, SandboxHeartbeatStore } from '../factory/heartbeat.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 
@@ -11,7 +12,7 @@ interface InsertedCrashEventRow extends Omit<TaskEventMessage, 'at' | 'payload'>
 export function createSandboxHeartbeatStore(pool: sql.ConnectionPool, eventHub: TaskEventHub): SandboxHeartbeatStore {
   return {
     async listRunning() {
-      const { recordset } = await pool.request().query<RunningSandboxRow>(`SELECT
+      const { recordset } = await databaseReadRequest(pool).query<RunningSandboxRow>(`SELECT
         CAST(s.id AS varchar(19)) AS sandboxSessionId, s.foundry_session_id AS foundrySessionId,
         s.agent_name AS agentName, activeTurn.invocation_id AS invocationId
         FROM dbo.sandbox_sessions AS s

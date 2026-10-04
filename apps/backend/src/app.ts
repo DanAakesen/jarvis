@@ -26,6 +26,7 @@ import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
 
 export interface BuildAppOptions {
+  readonly databaseStatus?: () => boolean;
   readonly auth?: TokenVerifier;
   readonly modules?: readonly BackendModule[];
   readonly projectStore?: ProjectStore;
@@ -47,6 +48,7 @@ export interface BuildAppOptions {
 
 declare module 'fastify' {
   interface FastifyInstance {
+    databaseStatus: () => boolean;
     projectStore: ProjectStore | null;
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
@@ -108,6 +110,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     reply.code(statusCode).send({ error: statusCode < 500 ? 'Invalid request' : 'Internal server error' });
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));
+  app.decorate('databaseStatus', options.databaseStatus ?? (() => false));
   app.decorate('projectStore', options.projectStore ?? null);
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);

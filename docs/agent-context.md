@@ -250,6 +250,14 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
+P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
+project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
+when requests settled, and status polling stopped while idle. No horizontal
+overflow or page exceptions occurred. This does not verify live SQL auto-resume.
+Focused P1-14 checks: `npm test --workspace @jarvis/backend -- src/app.test.ts
+src/factory/tasks.test.ts src/database/wake-retry.test.ts src/database/lifecycle.test.ts
+src/database/config.test.ts` and `npm test --workspace @jarvis/web -- --run
+src/DatabaseWakeStatus.test.tsx src/App.test.tsx src/task-events.test.tsx`.
 P3-11 rechecked Settings and Projects at 390 and 1280 px: New projects defaults
 load and save, and the Projects page retains edit/archive but has no create form.
 The backend project POST route remains for P3-12. Live Entra and Azure SQL

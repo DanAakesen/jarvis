@@ -28,6 +28,7 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
 .nav-link[aria-current="page"] { color: var(--text); background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
 .brand { display: inline-flex; align-items: center; min-height: 44px; font-size: 22px; font-weight: 650; text-decoration: none; }
 .brand:hover { text-decoration: underline; }
+.database-wake-status { margin-top: 16px; font-size: 15px; }
 main { padding: 56px 0 72px; outline: none; }
 h1 { margin: 0 0 20px; font-size: clamp(28px, 4vw, 40px); font-weight: 650; line-height: 1.2; letter-spacing: -0.035em; }
 p { margin: 0; max-width: 55ch; font-size: 18px; color: var(--text-muted); }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { backendFetch } from '../backend-request';
 import { Link } from 'react-router-dom';
 import { streamTaskEvents } from '../task-events';
 import { TaskControls } from './TaskControls';
@@ -222,9 +223,9 @@ async function fetchJson(
 
   let response: Response;
   try {
-    response = await fetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
+    response = await backendFetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
       headers: { Authorization: `${['Bear', 'er'].join('')} ${token}` },
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
+      ...(signal ? { signal } : {}),
     });
   } catch (cause) {
     throw new Error('Jarvis could not reach the task service. Try again.', { cause });

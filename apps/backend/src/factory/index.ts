@@ -291,6 +291,7 @@ export const factoryModule: BackendModule = {
         for (const event of buffered) {
           if (!writeEvent(event)) return;
         }
+        if (!response.write('event: ready\ndata: {}\n\n')) end();
       };
       void replay().catch(end);
       return reply;
