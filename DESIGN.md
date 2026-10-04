@@ -8,6 +8,7 @@ The shared shell and voice-workspace structure were agreed with Dan on 4 October
 - **One app, many areas.** One app shell with area navigation. The Software Factory is the first area; later areas (Banking, Health and fitness, Calendar) must fit without redesigning the shell.
 - **Live and honest.** State changes appear without refresh. Stale or disconnected data is shown as such; progress uses observed milestones, not invented percentages.
 - **Full transparency.** Every task shows what the agent did, what it used, and what it cost.
+- **Headless Outlook tools (P7-09).** Calendar and mail actions are available through conversation only; P8 owns any future visual surface. A staged change must state exactly what will happen and how to confirm it; mail text is treated as untrusted content.
 
 ## Page set (phase 1)
 
