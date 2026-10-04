@@ -91,7 +91,7 @@ Status as of 4 October 2026.
 
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
-| Settings | Jarvis, voice and coding-agent defaults; global limits | Screen | Settings | Built | P1-11 |
+| Settings | Jarvis, voice and coding-agent defaults; global limits; app-wide light/dark appearance | Screen | Settings | Built | P1-11, P8-13 |
 | Jarvis model per session | Model and reasoning for new Jarvis sessions | Both | Settings; by voice with P7-11 | Built | P4-07 |
 | Credentials status | See credential expiry and renewal status (never values) | Screen | Settings | Built | P2-08 |
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |
@@ -129,7 +129,7 @@ Status as of 4 October 2026.
 | Desktop voice workspace | Enter full-page voice, carry open views across modes, and restore the typing layout; optionally minimise windows on entry (off by default) | Voice/chat | Main page | Planned | P8-10 |
 | Phone workspace | Show one main view, switch by swipe or request, and dock the active voice orb while content is foreground | Phone | Jarvis on phone | Planned | P8-11 |
 | Manual voice-end affordance | Choose the manual end control and Escape-key behavior without changing natural spoken ending | Both | Voice workspace | Planned (needs decision) | P8-12 |
-| Theme controls and client persistence | Use light/dark appearance and apply Jarvis-supplied theme variables across visits | Screen | Shared shell, Settings | Planned | P8-13 |
+| Theme controls and client persistence | Choose and persist light/dark appearance across visits; semantic theme variables update across the app. Custom and Jarvis-directed token changes remain unavailable pending P8-17/P8-18. | Screen | Shared shell, Settings | Built (offline; live settings unverified) | P8-13 |
 | Agent-directed workspace views | Ask Jarvis to create, update, show, close, minimise, restore, focus, move and resize views, and change the layout or contextual panel | Both | Main page and voice workspace | Planned | P8-15 |
 | Generated data views | Inspect accessible information in temporary, typed views using registered renderers | Screen | Workspace | Planned | P8-14 |
 | Runtime activity | See Jarvis's actual listening, thinking, tool-call and speaking state | Both | Main page and voice workspace | Planned | P8-16 |
