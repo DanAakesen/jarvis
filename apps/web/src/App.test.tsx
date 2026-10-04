@@ -302,6 +302,7 @@ describe('App shell', () => {
       });
     });
     await renderSignedIn();
+    await userEvent.click(screen.getByText('Activity and backend'));
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Welcome, Dan Aakesen');
     for (const name of ['Conversation', 'Now', 'Backend']) {
@@ -319,8 +320,8 @@ describe('App shell', () => {
     expect(screen.getByRole('radio', { name: 'English' })).toHaveProperty('disabled', false);
 
     expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', false);
-    expect(screen.getByRole('button', { name: 'Mute' })).toHaveProperty('disabled', true);
-    expect(screen.getByText(/microphone opens after the voice session is ready/)).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mute' })).toBeNull();
+    expect(screen.getByText(/microphone stays off until you enable it/)).not.toBeNull();
     expect(await screen.findByText('The backend is awake.')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Put the backend to sleep' })).toHaveProperty('disabled', false);
   });

@@ -9,6 +9,7 @@ type VoiceOrbState = {
 const voiceOrbStates: Record<VoiceStatus | 'tool_call', VoiceOrbState> = {
   stopped: { className: 'off', message: '' },
   connecting: { className: 'connecting', message: '' },
+  ready: { className: 'off', message: '' },
   stopping: { className: 'stopping', message: '' },
   listening: { className: 'listening', message: '' },
   thinking: { className: 'thinking', message: '' },

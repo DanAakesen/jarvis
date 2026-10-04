@@ -171,9 +171,8 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 | Data points | Actions |
 | --- | --- |
-| Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, streamed replies, tool-call chips (tool, outcome, link to task), and voice minutes per sitting | Type a message; start or stop voice; switch Danish/English |
-| Voice state: connecting, listening, thinking, speaking, reconnecting; an accessible fluid orb whose shape follows the actual runtime state and decoded playback level; a text alternative; what Jarvis heard; latency | Start or stop browser voice; interrupt by speaking; mute |
-| Screen-share status while sharing; Jarvis's frame description appears only in the active response | Share/stop a screen or window; ask Jarvis to look at it from chat or voice |
+| Conversation opens automatically in typing mode: messages (Dan, Jarvis) across chat and voice sessions, time, language, streamed replies, tool-call chips (tool, outcome, link to task), and voice minutes per sitting; empty/loading/failure and interrupted-reply feedback | Type from the bottom-centred composer; Enter sends, Shift+Enter adds a line; start voice only from the small input orb; switch Danish/English |
+| Voice state: connecting, ready with microphone off, listening, thinking, speaking, reconnecting; an accessible runtime-state orb and text alternative; what Jarvis heard; latency. History and composer hide during voice; exit restores the draft and typing focus | Explicitly enable the microphone after session readiness (also after reconnect); stop browser voice; interrupt by speaking; mute |
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings, and alerts for failed deployments, sandbox crashes, credential expiry, and the 80% monthly budget threshold | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready, Running, or PauseRequested |
 

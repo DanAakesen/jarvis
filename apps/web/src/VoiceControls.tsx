@@ -6,7 +6,7 @@ import { VoiceOrb } from './VoiceOrb';
 import { BrowserVoiceClient, type VoiceLanguage, type VoiceStatus } from './voice-client';
 import type { ScreenShareController } from './screen-sharing';
 
-const initialMessage = 'Start voice to speak with Jarvis. Your microphone opens after the voice session is ready.';
+const initialMessage = 'Start voice with the input orb. Your microphone stays off until you enable it.';
 
 async function accessToken(client: PublicClientApplication, config: PublicConfig): Promise<string> {
   const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
@@ -25,12 +25,16 @@ export function VoiceControls({
   config,
   language = 'da',
   onSessionEnded,
+  onActiveChange,
+  disabled = false,
   screenShare,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
   language?: VoiceLanguage;
   onSessionEnded?: () => void;
+  onActiveChange?: (active: boolean) => void;
+  disabled?: boolean;
   screenShare?: ScreenShareController;
 }) {
   const { setWorking } = useJarvisActivity();
@@ -39,6 +43,8 @@ export function VoiceControls({
   const [message, setMessage] = useState(initialMessage);
   const [audioLevel, setAudioLevel] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [enabling, setEnabling] = useState(false);
+  const stopButton = useRef<HTMLButtonElement>(null);
   const [screenSessionId, setScreenSessionId] = useState<string | null>(null);
   const [screenError, setScreenError] = useState('');
   const active = status !== 'stopped' && status !== 'error';
@@ -50,7 +56,13 @@ export function VoiceControls({
     setWorking('voice-turn', false);
   }, [setWorking]);
 
+  useEffect(() => {
+    if (active) stopButton.current?.focus();
+  }, [active]);
+
   const start = () => {
+    if (client.current || disabled) return;
+    onActiveChange?.(true);
     setScreenSessionId(null);
     const voice = new BrowserVoiceClient({
       backendUrl: config.backendUrl,
@@ -68,6 +80,10 @@ export function VoiceControls({
           client.current = null;
           setScreenSessionId(null);
           screenShare?.stop();
+          setMuted(false);
+          setEnabling(false);
+          onActiveChange?.(false);
+        } else if (nextStatus === 'ready') {
           setMuted(false);
         }
       },
@@ -89,8 +105,17 @@ export function VoiceControls({
 
   const stop = () => {
     client.current?.stop();
-    client.current = null;
-    setMuted(false);
+  };
+
+  const enableMicrophone = async () => {
+    const voice = client.current;
+    if (!voice || enabling) return;
+    setEnabling(true);
+    try {
+      await voice.enableMicrophone();
+    } finally {
+      if (client.current === voice) setEnabling(false);
+    }
   };
 
   const toggleMute = () => {
@@ -100,28 +125,37 @@ export function VoiceControls({
   };
 
   return (
-    <>
-      <VoiceOrb status={status} message={message} audioLevel={audioLevel} />
+    <div className="voice-controls" data-active={active}>
+      {active && <VoiceOrb status={status} message={message} audioLevel={audioLevel} />}
+      {status === 'error' && <p className="voice-error" role="alert">{message}</p>}
+      {!active && <p id="voice-start-guidance" className="visually-hidden">{initialMessage}</p>}
       <div className="action-row">
         {active
-          ? <button className="secondary-button" type="button" onClick={stop} disabled={status === 'stopping'}>Stop voice</button>
-          : <button className="primary-button" type="button" onClick={start} disabled={pending}>Start voice</button>}
-        <button
+          ? <button ref={stopButton} className="secondary-button" type="button" onClick={stop} disabled={status === 'stopping'}>Stop voice</button>
+          : <>
+              <button className="input-orb" type="button" onClick={start} disabled={disabled} aria-label="Start voice" aria-describedby="voice-start-guidance" title="Start voice"><span aria-hidden="true" /></button>
+              <span className="voice-start-label" aria-hidden="true">Start voice</span>
+            </>}
+        {active && (status === 'ready' ? (
+          <button className="primary-button" type="button" onClick={() => void enableMicrophone()} disabled={enabling} aria-describedby="voice-status">
+            {enabling ? 'Enabling microphone…' : 'Enable microphone'}
+          </button>
+        ) : <button
           className="secondary-button"
           type="button"
           onClick={toggleMute}
-          disabled={!active || pending}
+          disabled={pending}
           aria-describedby="voice-status"
           aria-pressed={muted}
         >
           {muted ? 'Unmute' : 'Mute'}
-        </button>
-        <button className="secondary-button" type="button" onClick={() => void inspectAndSendScreen()}
+        </button>)}
+        {active && <button className="secondary-button" type="button" onClick={() => void inspectAndSendScreen()}
           disabled={!active || !screenShare?.sharing || !screenSessionId || pending}>
           Look at screen
-        </button>
+        </button>}
       </div>
       {screenError && <p role="alert">{screenError}</p>}
-    </>
+    </div>
   );
 }
