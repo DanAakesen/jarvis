@@ -183,12 +183,15 @@ function markerDescription(marker: MarkerState): string {
 
 function GraphLegend() {
   return (
-    <ul className="release-graph-legend" aria-label="Graph state markers">
-      <li><span className="graph-key graph-key-pr" aria-hidden="true" />Pull request</li>
-      <li><span className="graph-key graph-key-checks" aria-hidden="true" />Checks</li>
-      <li><span className="graph-key graph-key-release" aria-hidden="true" />Release</li>
-      <li><span className="graph-key graph-key-deployment" aria-hidden="true" />Deployment</li>
-    </ul>
+    <>
+      <ul className="release-graph-legend" aria-label="Graph state markers">
+        <li><span className="graph-key graph-key-pr" aria-hidden="true" />Pull request</li>
+        <li><span className="graph-key graph-key-checks" aria-hidden="true" />Checks</li>
+        <li><span className="graph-key graph-key-release" aria-hidden="true" />Release</li>
+        <li><span className="graph-key graph-key-deployment" aria-hidden="true" />Deployment</li>
+      </ul>
+      <p className="release-legend-note">Marker shapes show record type; colour follows the status shown in the linked records.</p>
+    </>
   );
 }
 
@@ -211,6 +214,7 @@ function GitGraphView({ graph, data }: { graph: GitGraph; data: ReleaseView }) {
           viewBox={`0 0 ${width} ${height}`}
           width={width}
           height={height}
+          style={{ width, height }}
           role="group"
           aria-label={`${graph.branches.length} branches and ${graph.commits.length} commits, ordered by commit time`}
         >
@@ -237,6 +241,7 @@ function GitGraphView({ graph, data }: { graph: GitGraph; data: ReleaseView }) {
                     <g key={`${branch.name}-${sha}`}>
                       <a href={href} target="_blank" rel="noreferrer" aria-label={ariaLabel}>
                         <title>{ariaLabel}</title>
+                        <circle className="graph-hit-target" cx={x} cy={y} r="22" />
                         <circle className="graph-commit" cx={x} cy={y} r="6" />
                       </a>
                       {marker.pullRequest && <circle className={`graph-marker graph-marker-pr state-${marker.pullRequest.state}`} cx={x - 8} cy={y - 9} r="3.5" />}
