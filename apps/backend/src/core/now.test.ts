@@ -13,6 +13,7 @@ const headers = { authorization: `${['Bear', 'er'].join('')} ${['e30', 'e30', 's
 const feed: NowFeed = {
   updatedAt: '2026-10-04T00:00:00.000Z',
   awayMode: false,
+  confirmations: [],
   running: [{
     id: '42',
     title: 'Ship the feed',
@@ -31,13 +32,17 @@ const feed: NowFeed = {
 };
 const apps: ReturnType<typeof buildApp>[] = [];
 
-function fixture(store?: NowFeedStore, auth: TokenVerifier = async () => ({
-  objectId: config.auth.ownerObjectId,
-  tenantId: config.auth.tenantId,
-  displayName: 'Dan',
-})) {
+function fixture(
+  store?: NowFeedStore,
+  auth: TokenVerifier = async () => ({
+    objectId: config.auth.ownerObjectId,
+    tenantId: config.auth.tenantId,
+    displayName: 'Dan',
+  }),
+  awayModeStore?: AwayModeStore,
+) {
   const nowEventHub: NowFeedEventHub = createEventHub();
-  const app = buildApp(config, undefined, { auth, nowFeedStore: store, nowEventHub });
+  const app = buildApp(config, undefined, { auth, nowFeedStore: store, nowEventHub, awayModeStore });
   apps.push(app);
   return { app, nowEventHub };
 }
@@ -58,7 +63,7 @@ describe('Now feed API', () => {
     expect(store.read).toHaveBeenCalledOnce();
   });
 
-  it('marks verified browser use as present and includes the current mode', async () => {
+  it('marks explicit authenticated browser activity as present', async () => {
     let away = true;
     const awayModeStore = {
       read: vi.fn(async () => ({ away, source: away ? 'manual' : 'browser', changedAt: null, presenceAwaySince: null })),
@@ -76,14 +81,177 @@ describe('Now feed API', () => {
     });
     apps.push(app);
 
-    const response = await app.inject({
+    const feedResponse = await app.inject({
       url: '/now',
       headers: { ...headers, origin: 'https://fixture.azurestaticapps.net' },
     });
+    const anonymousPresence = await app.inject({ method: 'POST', url: '/now/present' });
+    const presenceResponse = await app.inject({
+      method: 'POST',
+      url: '/now/present',
+      headers: { ...headers, origin: 'https://fixture.azurestaticapps.net' },
+    });
+
+    expect(feedResponse.statusCode).toBe(200);
+    expect(feedResponse.json().awayMode).toBe(true);
+    expect(anonymousPresence.statusCode).toBe(401);
+    expect(presenceResponse.statusCode).toBe(200);
+    expect(presenceResponse.json()).toEqual({ away: false });
+    expect(awayModeStore.markPresent).toHaveBeenCalledOnce();
+  });
+
+  it('shows mode activity but not tasks or notifications in the browser while away', async () => {
+    const modeActivity = {
+      id: '8',
+      category: 'mode' as const,
+      title: 'Away mode is on',
+      link: null,
+      at: '2026-10-04T00:01:00.000Z',
+    };
+    const awayModeStore: AwayModeStore = {
+      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null })),
+      markPresent: vi.fn(),
+      set: vi.fn(),
+      observePresence: vi.fn(),
+    };
+    const { app } = fixture(
+      {
+        read: vi.fn(async () => ({
+          ...feed,
+          items: [...feed.items, modeActivity],
+        })),
+        dismiss: vi.fn(async () => true),
+      },
+      undefined,
+      awayModeStore,
+    );
+
+    const response = await app.inject({ url: '/now', headers });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().awayMode).toBe(false);
-    expect(awayModeStore.markPresent).toHaveBeenCalledOnce();
+    expect(response.json()).toMatchObject({
+      awayMode: true,
+      running: [],
+      items: [modeActivity],
+      confirmations: [],
+    });
+  });
+
+  it('lists browser confirmations only while present and requires an authenticated approval', async () => {
+    let away = false;
+    const confirmation = {
+      id: 'A'.repeat(43),
+      actionKind: 'merge',
+      summary: 'Merge the reviewed change.',
+      expiresAt: '2026-10-04T00:05:00.000Z',
+    } as const;
+    const awayModeStore: AwayModeStore = {
+      read: vi.fn(async () => ({
+        away,
+        source: away ? 'manual' : 'browser',
+        changedAt: null,
+        presenceAwaySince: null,
+      })),
+      markPresent: vi.fn(async () => {
+        away = false;
+        return { away, source: 'browser', changedAt: null, presenceAwaySince: null };
+      }),
+      set: vi.fn(),
+      observePresence: vi.fn(),
+    };
+    const resolveBrowserConfirmation = vi.fn(async () => true);
+    const teamsNotifications = {
+      pendingBrowserConfirmations: () => [confirmation],
+      resolveBrowserConfirmation,
+    } as unknown as TeamsNotificationService;
+    const app = buildApp({ ...config, staticWebAppOrigin: 'https://fixture.azurestaticapps.net' }, undefined, {
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
+      nowFeedStore: { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) },
+      awayModeStore,
+      teamsNotifications,
+    });
+    apps.push(app);
+
+    away = true;
+    const hidden = await app.inject({ url: '/now', headers });
+    expect(hidden.json().confirmations).toEqual([]);
+
+    away = false;
+    const shown = await app.inject({
+      url: '/now',
+      headers: { ...headers, origin: 'https://fixture.azurestaticapps.net' },
+    });
+    expect(shown.json().confirmations).toEqual([confirmation]);
+
+    expect((await app.inject({
+      method: 'POST',
+      url: `/now/confirmations/${confirmation.id}`,
+      payload: { decision: 'approve' },
+    })).statusCode).toBe(401);
+    expect(resolveBrowserConfirmation).not.toHaveBeenCalled();
+
+    const approved = await app.inject({
+      method: 'POST',
+      url: `/now/confirmations/${confirmation.id}`,
+      headers,
+      payload: { decision: 'approve' },
+    });
+    expect(approved.statusCode).toBe(204);
+    expect(resolveBrowserConfirmation).toHaveBeenCalledWith(confirmation.id, 'approve');
+
+    away = true;
+    const awayResponse = await app.inject({
+      method: 'POST',
+      url: `/now/confirmations/${confirmation.id}`,
+      headers,
+      payload: { decision: 'approve' },
+    });
+    expect(awayResponse.statusCode).toBe(409);
+    expect(resolveBrowserConfirmation).toHaveBeenCalledOnce();
+
+    const invalid = await app.inject({
+      method: 'POST',
+      url: `/now/confirmations/${confirmation.id}`,
+      headers,
+      payload: { decision: 'allow' },
+    });
+    expect(invalid.statusCode).toBe(400);
+  });
+
+  it('refuses browser approvals and presence updates from a different authenticated identity', async () => {
+    const markPresent = vi.fn();
+    const resolveBrowserConfirmation = vi.fn();
+    const app = buildApp(config, undefined, {
+      auth: async () => ({
+        objectId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        tenantId: config.auth.tenantId,
+        displayName: 'Other user',
+      }),
+      awayModeStore: {
+        read: vi.fn(async () => ({ away: false, source: 'browser', changedAt: null, presenceAwaySince: null })),
+        markPresent,
+        set: vi.fn(),
+        observePresence: vi.fn(),
+      } as unknown as AwayModeStore,
+      teamsNotifications: {
+        pendingBrowserConfirmations: () => [],
+        resolveBrowserConfirmation,
+      } as unknown as TeamsNotificationService,
+    });
+    apps.push(app);
+
+    const presence = await app.inject({ method: 'POST', url: '/now/present', headers });
+    const approval = await app.inject({
+      method: 'POST',
+      url: `/now/confirmations/${'A'.repeat(43)}`,
+      headers,
+      payload: { decision: 'approve' },
+    });
+
+    expect(presence.statusCode).toBe(403);
+    expect(approval.statusCode).toBe(403);
+    expect(markPresent).not.toHaveBeenCalled();
+    expect(resolveBrowserConfirmation).not.toHaveBeenCalled();
   });
 
   it('routes away task-state updates to Teams and withholds them from browser feeds', async () => {
@@ -193,6 +361,52 @@ describe('Now feed API', () => {
       });
       const chunk = await reader.read();
       expect(new TextDecoder().decode(chunk.value)).toContain('event: now\ndata: {}');
+    } finally {
+      controller.abort();
+      await reader.cancel().catch(() => {});
+    }
+  });
+
+  it('withholds Now refresh events while away but sends a mode-only update', async () => {
+    let away = true;
+    const nowEventHub: NowFeedEventHub = createEventHub();
+    const app = buildApp(config, undefined, {
+      auth: async () => ({
+        objectId: config.auth.ownerObjectId,
+        tenantId: config.auth.tenantId,
+        displayName: 'Dan',
+      }),
+      nowEventHub,
+      awayModeStore: {
+        read: vi.fn(async () => ({
+          away,
+          source: away ? 'manual' : 'browser',
+          changedAt: null,
+          presenceAwaySince: null,
+        })),
+        markPresent: vi.fn(),
+        set: vi.fn(),
+        observePresence: vi.fn(),
+      } as unknown as AwayModeStore,
+    });
+    apps.push(app);
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+    const response = await fetch(`${address}/now/events`, { headers, signal: controller.signal });
+    const reader = response.body!.getReader();
+
+    try {
+      const next = reader.read().then(({ value }) => new TextDecoder().decode(value));
+      nowEventHub.publish({ type: 'refresh' });
+      const received = await Promise.race([
+        next.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 50)),
+      ]);
+      expect(received).toBe(false);
+
+      away = false;
+      nowEventHub.publish({ type: 'mode_changed', away: false });
+      expect(await next).toContain('event: mode\ndata: {}');
     } finally {
       controller.abort();
       await reader.cancel().catch(() => {});

@@ -8,6 +8,7 @@ import { activityHref, formatDuration, type NowFeed } from './activity';
 const feed: NowFeed = {
   status: 'ready',
   awayMode: false,
+  confirmations: [],
   updatedAt: '2026-10-03T12:00:00Z',
   running: [
     { id: '42', title: 'Add the release view', project: 'Jarvis', agent: 'codex', activity: 'Running tests', startedAt: '2026-10-03T10:55:00Z' },
@@ -70,7 +71,12 @@ describe('activity panel', () => {
   });
 
   it('shows empty states for each group', () => {
-    renderPanel({ feed: { status: 'ready', awayMode: false, updatedAt: feed.updatedAt, running: [], items: [] }, onDismiss: vi.fn() });
+    renderPanel({
+      feed: {
+        status: 'ready', awayMode: false, confirmations: [], updatedAt: feed.updatedAt, running: [], items: [],
+      },
+      onDismiss: vi.fn(),
+    });
 
     for (const text of ['No tasks are running.', 'No tasks need attention.', 'No recent releases or deployments.', 'No credential warnings.', 'No active alerts.']) {
       expect(screen.getByText(text)).not.toBeNull();

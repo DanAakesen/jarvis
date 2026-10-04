@@ -321,14 +321,19 @@ and optional safe HTTPS links. The SDK logger is disabled, and the Fastify
 request log records route templates rather than bodies or tokenized audio URLs.
 
 Confirmation IDs are random 256-bit URL-safe values, stored with Dan's object
-ID, conversation, action kind and SQL expiry. Approval/rejection is a conditional
-single-use transition; the backend consumes an unexpired approval before calling
-the gated operation. Reject, timeout, cancellation, replay, unknown IDs, startup
-orphaning, and unverifiable identity all fail closed. The pending timer is five
-minutes. `runConfirmed` gates repository creation and the automatic squash-merge
-path; future delete, mail, calendar, out-of-browser computer and spend actions
-must use the same gate. Merge work is queued after webhook validation so the
-GitHub request is not held open while Dan responds.
+ID, conversation/channel, action kind and SQL expiry. Away-mode requests use
+Dan's validated Teams conversation; present-mode requests use the Now panel and
+the `browser` conversation marker. Browser summaries and IDs stay in the
+in-memory pending queue; `/now` exposes it only to Dan while present, and
+`POST /now/confirmations/:id` requires Dan's delegated identity and a pending,
+unexpired request. Approval/rejection is a conditional single-use transition;
+the backend consumes an unexpired approval before calling the gated operation.
+Reject, timeout, cancellation, replay, unknown IDs, startup orphaning, and
+unverifiable identity all fail closed. The pending timer is five minutes.
+`runConfirmed` gates repository creation and the automatic squash-merge path;
+future delete, mail, calendar, out-of-browser computer and spend actions must
+use the same gate. Merge work is queued after webhook validation so the GitHub
+request is not held open while Dan responds.
 
 Azure Speech F0 optionally synthesizes an `en-GB-RyanNeural` MP3 with the
 backend's managed-identity token. Quota, timeout, or synthesis failure leaves the
@@ -344,10 +349,12 @@ connector and synthesizer; they do not verify a live Teams or Speech service.
 `createAwayModeStore` persists one validated JSON state under the existing global
 `dbo.settings` key `away.mode.state`; no migration is needed. A mode transition
 and its `core/away_mode` activity row commit together, then refresh Now. The
-authenticated `set_away_mode` tool handles voice/chat commands. A request from an
-approved browser origin with Dan's verified delegated principal marks him present;
-the app-only hosted-agent principal cannot do so. `GET /now` displays the current
-mode and the main-page status makes it visible.
+authenticated `set_away_mode` tool handles voice/chat commands. The signed-in
+browser sends `POST /now/present` only while visible and focused on startup,
+focus, tab visibility, or user input; passive API/feed requests do not return Dan
+to present. The route verifies Dan's owner identity; the app-only hosted-agent
+principal cannot call it. `GET /now` displays the current mode and, while present,
+the pending browser confirmations. The main-page status makes mode visible.
 
 The backend's managed identity reads
 `GET /users/{DanObjectId}/presence` once per minute. Only continuous Graph
@@ -355,9 +362,14 @@ The backend's managed identity reads
 ten minutes. Available/busy presence clears a pending timer but never turns an
 already active away mode off; only Dan's explicit return command or browser use
 does that. Unknown or invalid provider results do not advance the timer. While
-away, task-state messages go through the existing P7-03 Teams notifier and live
-browser Now/task streams suppress task updates. Existing high-impact operations
-continue to require the P7-03 Teams confirmation gate in every mode.
+away, task-state messages and new approval requests go through the existing
+P7-03 Teams notifier. The authenticated browser Now response contains only mode
+status/activity, and ordinary Now refresh events are suppressed; a mode-change
+event refreshes that status. While present, task updates and new approvals use
+the browser, with high-impact actions still gated by a single-use explicit
+approval. Browser approval IDs and summaries are not written to logs or task
+events, and the existing SQL schema stores the channel marker and expiry
+without a migration.
 
 The permission is not part of Bicep or application startup. After merge, a tenant
 administrator must review and grant the Microsoft Graph application role

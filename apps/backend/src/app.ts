@@ -55,6 +55,7 @@ export interface BuildAppOptions {
 
 declare module 'fastify' {
   interface FastifyInstance {
+    ownerObjectId: string;
     databaseStatus: () => boolean;
     projectStore: ProjectStore | null;
     projectRepositoryCreator: RepositoryCreator | null;
@@ -99,17 +100,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   });
   // Authenticate before CORS can finish OPTIONS requests in its onRequest hook.
   installAuthentication(app, config, options.auth);
+  app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('awayModeStore', options.awayModeStore ?? null);
-  app.addHook('onRequest', async (request, reply) => {
-    const origin = request.headers.origin;
-    if (request.principal && origin !== undefined && origins.has(origin) && app.awayModeStore) {
-      try {
-        await app.awayModeStore.markPresent();
-      } catch {
-        return reply.code(503).send({ error: 'Presence could not be updated' });
-      }
-    }
-  });
   app.register(cors, {
     origin: (origin, callback) => callback(null, origin === undefined || origins.has(origin)),
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

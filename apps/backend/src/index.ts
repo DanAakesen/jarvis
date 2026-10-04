@@ -85,7 +85,7 @@ try {
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const nowEventHub = createEventHub<NowFeedUpdate>();
   const awayModeStore = database
-    ? createAwayModeStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
+    ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({ type: 'mode_changed', away: state.away }))
     : undefined;
   const alertNotifier = createAlertNotifier(telemetry);
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
@@ -236,6 +236,11 @@ try {
       store: createTeamsNotificationStore(database.pool),
       connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
       audioStore: teamsAudioStore,
+      isAway: async () => {
+        if (!awayModeStore) throw new Error('Away mode is unavailable');
+        return (await awayModeStore.read()).away;
+      },
+      onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
       ...(teamsSpeech ? { speech: teamsSpeech } : {}),
     })
     : undefined;

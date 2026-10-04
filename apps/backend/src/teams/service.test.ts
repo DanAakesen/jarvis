@@ -27,7 +27,10 @@ interface PendingRow {
   status: ConfirmationStatus | 'pending';
 }
 
-function harness(speech?: { synthesize: ReturnType<typeof vi.fn> }) {
+function harness(
+  speech?: { synthesize: ReturnType<typeof vi.fn> },
+  isAway: () => Promise<boolean> = async () => true,
+) {
   const rows = new Map<string, PendingRow>();
   const sent: Array<{ reference: ConversationReference; activity: ActivityLike }> = [];
   const store: TeamsNotificationStore = {
@@ -71,6 +74,7 @@ function harness(speech?: { synthesize: ReturnType<typeof vi.fn> }) {
       sent.push({ reference: conversation, activity });
     }),
   };
+  const onConfirmationsChanged = vi.fn();
   const service: TeamsNotificationService = createTeamsNotificationService({
     ownerObjectId,
     tenantId,
@@ -78,9 +82,11 @@ function harness(speech?: { synthesize: ReturnType<typeof vi.fn> }) {
     store,
     connector,
     audioStore: createEphemeralAudioStore(),
+    isAway,
+    onConfirmationsChanged,
     ...(speech ? { speech } : {}),
   });
-  return { service, store, connector, sent, rows };
+  return { service, store, connector, sent, rows, onConfirmationsChanged };
 }
 
 function firstConfirmationData(activity: ActivityLike): Record<string, unknown> {
@@ -126,6 +132,30 @@ describe('Teams notification service', () => {
     await expect(operation).resolves.toBe('merged');
     await expect(service.receiveConfirmation(cardAction(data), reference)).resolves.toBe(false);
     expect(action).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers present-mode confirmations in the browser without sending a Teams card', async () => {
+    const { service, store, connector, onConfirmationsChanged } = harness(undefined, async () => false);
+    const operation = service.requestConfirmation('merge', 'Merge the reviewed change.');
+
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    const [confirmation] = service.pendingBrowserConfirmations();
+    expect(confirmation).toMatchObject({
+      actionKind: 'merge',
+      summary: 'Merge the reviewed change.',
+    });
+    expect(Date.parse(confirmation!.expiresAt)).toBeGreaterThan(Date.now());
+    expect(store.createConfirmation).toHaveBeenCalledWith(
+      confirmation!.id, ownerObjectId, 'browser', 'merge', 300,
+    );
+    expect(connector.send).not.toHaveBeenCalled();
+
+    await expect(service.resolveBrowserConfirmation(confirmation!.id, 'approve')).resolves.toBe(true);
+    await expect(operation).resolves.toBeUndefined();
+    await expect(service.resolveBrowserConfirmation(confirmation!.id, 'approve')).resolves.toBe(false);
+    expect(store.consumeApproval).toHaveBeenCalledOnce();
+    expect(service.pendingBrowserConfirmations()).toEqual([]);
+    expect(onConfirmationsChanged).toHaveBeenCalledTimes(2);
   });
 
   it('does not run the action after rejection or an identity mismatch', async () => {

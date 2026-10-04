@@ -17,7 +17,7 @@ interface StoredStateRow {
 
 export function createAwayModeStore(
   pool: sql.ConnectionPool,
-  onModeChanged: () => void = () => {},
+  onModeChanged: (state: AwayModeState) => void = () => {},
 ): AwayModeStore {
   async function read(request: sql.Request | sql.Transaction): Promise<AwayModeState> {
     const result = await (request instanceof sql.Transaction ? new sql.Request(request) : request)
@@ -76,7 +76,7 @@ export function createAwayModeStore(
       try { await transaction.rollback(); } catch { /* Preserve the sanitized store error. */ }
       throw new Error('Away mode could not be saved');
     }
-    if (modeChanged) onModeChanged();
+    if (modeChanged) onModeChanged(next);
     return next;
   }
 

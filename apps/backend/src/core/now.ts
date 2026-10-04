@@ -2,6 +2,7 @@ import type { FastifyReply } from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import type { EventHub } from './event-hub.js';
 import { defaultAwayModeState } from './away-mode.js';
+import type { BrowserConfirmation } from '../teams/service.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
@@ -30,18 +31,19 @@ export interface NowFeed {
   items: NowActivityItem[];
   updatedAt: string;
   awayMode: boolean;
+  confirmations: readonly BrowserConfirmation[];
 }
 
-export type NowFeedSnapshot = Omit<NowFeed, 'awayMode'>;
+export type NowFeedSnapshot = Omit<NowFeed, 'awayMode' | 'confirmations'>;
 
 export interface NowFeedStore {
   read(): Promise<NowFeedSnapshot>;
   dismiss(id: string): Promise<boolean>;
 }
 
-export interface NowFeedUpdate {
-  type: 'refresh';
-}
+export type NowFeedUpdate =
+  | { type: 'refresh' }
+  | { type: 'mode_changed'; away: boolean };
 
 export type NowFeedEventHub = EventHub<NowFeedUpdate>;
 
@@ -61,13 +63,65 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 }
 
 export function registerNowRoutes(app: FastifyInstance) {
+  app.post('/now/present', async (request, reply) => {
+    if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    if (!app.awayModeStore) return reply.code(503).send({ error: 'Away mode unavailable' });
+    const state = await app.awayModeStore.markPresent();
+    return { away: state.away };
+  });
+
   app.get('/now', async (_request, reply) => {
     if (!app.nowFeedStore) return reply.code(503).send({ error: 'Now feed unavailable' });
+    reply.header('Cache-Control', 'no-store');
     const [feed, awayMode] = await Promise.all([
       app.nowFeedStore.read(),
       app.awayModeStore?.read() ?? Promise.resolve(defaultAwayModeState),
     ]);
-    return sendBounded(reply, { ...feed, awayMode: awayMode.away });
+    const confirmations = awayMode.away
+      ? []
+      : app.teamsNotifications?.pendingBrowserConfirmations() ?? [];
+    const snapshot = awayMode.away
+      ? {
+        ...feed,
+        running: [],
+        items: feed.items.filter((item) => item.category === 'mode'),
+      }
+      : feed;
+    return sendBounded(reply, { ...snapshot, awayMode: awayMode.away, confirmations });
+  });
+
+  app.post<{ Params: { id: string }; Body: { decision: 'approve' | 'reject' } }>('/now/confirmations/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        properties: { id: { type: 'string', pattern: '^[A-Za-z0-9_-]{43}$', maxLength: 43 } },
+        required: ['id'],
+        additionalProperties: false,
+      },
+      body: {
+        type: 'object',
+        properties: { decision: { type: 'string', enum: ['approve', 'reject'] } },
+        required: ['decision'],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    const service = app.teamsNotifications;
+    if (!service || !app.awayModeStore) {
+      return reply.code(503).send({ error: 'Confirmation service unavailable' });
+    }
+    if ((await app.awayModeStore.read()).away) {
+      return reply.code(409).send({ error: 'Approvals are sent to Teams while away.' });
+    }
+    if (!await service.resolveBrowserConfirmation(request.params.id, request.body.decision)) {
+      return reply.code(404).send({ error: 'Confirmation is no longer available.' });
+    }
+    return reply.code(204).send();
   });
 
   app.post<{ Params: { id: string } }>('/now/activity/:id/dismiss', {
@@ -98,8 +152,20 @@ export function registerNowRoutes(app: FastifyInstance) {
       cleanup();
       if (!response.writableEnded) response.end();
     };
-    unsubscribe = app.nowEventHub.subscribe(() => {
-      if (!closed && !response.write('event: now\ndata: {}\n\n')) end();
+    unsubscribe = app.nowEventHub.subscribe((event) => {
+      void (async () => {
+        let away: boolean;
+        try {
+          away = (await app.awayModeStore?.read() ?? defaultAwayModeState).away;
+        } catch {
+          return;
+        }
+        if (closed) return;
+        const frame = event.type === 'mode_changed'
+          ? 'event: mode\ndata: {}\n\n'
+          : away ? null : 'event: now\ndata: {}\n\n';
+        if (frame && !response.write(frame)) end();
+      })();
     });
     reply.hijack();
     const heartbeat = setInterval(() => {
