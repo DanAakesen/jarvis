@@ -306,6 +306,7 @@ Backend commands:
 | Focused P3-07 release webhook contract | `npm test --workspace @jarvis/backend -- --run src/database/webhook-delivery-store.test.ts` |
 | SQL Server migration, webhook mapping, and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
+| Focused P2-14 completion/expiry regressions | `npm test --workspace @jarvis/backend -- src/factory/heartbeat.test.ts src/factory/dispatcher.test.ts src/database/sandbox-heartbeat-store.test.ts` |
 | Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
 | P6-05 SQL Server parallel load test (CI `Database` job; prints a `P6-05 load:` summary line) | `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher-load.integration.test.ts` (isolated loopback SQL Server only) |
 | Focused P6-05 runner Codex limit test | `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_usage_limit` |
@@ -367,6 +368,11 @@ new sessions, calls `track()` after the SQL commit, and `untrack()` when session
 end. The dispatcher wakes on task events and retry deadlines, not SQL polling;
 expired start leases go to Needs attention rather than replaying a possibly
 accepted Foundry start. Offline tests do not verify live Foundry access.
+Every heartbeat poll emits `sandbox_heartbeat.decision` with the SQL session ID,
+invocation ID, HTTP status (null before any response), and a controlled decision.
+Use these fields to distinguish confirmation retries, committed crashes,
+`idle_expired`, unchanged state, and soft/persistence failures; no provider body,
+question, prompt, or credential is included.
 
 The optional `VOICE_LIVE_ENDPOINT` enables `/voice`; it must be a secure Azure
 Voice Live WebSocket endpoint without credentials in its URL. The backend pins

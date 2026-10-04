@@ -496,7 +496,17 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
                   WHEN @state = N'Done' OR @invocationCompleted = 1 THEN N'done' ELSE N'cancelled' END,
                 ended_at = SYSUTCDATETIME()
               OUTPUT inserted.id, inserted.task_id, inserted.started_at, inserted.ended_at, inserted.size INTO @ended
-              WHERE task_id = @taskId AND status = N'Active';
+              WHERE task_id = @taskId AND status = N'Active'
+                AND NOT (@state = N'NeedsAttention' AND @invocationCompleted = 0 AND
+                  COALESCE((SELECT TOP (1)
+                    CASE WHEN EXISTS (SELECT 1 FROM dbo.task_events AS event
+                      WHERE event.task_id = @taskId AND event.source = N'runner'
+                        AND event.type IN (N'completed', N'session_question')
+                        AND JSON_VALUE(event.payload, '$.invocationId') = turn.invocation_id)
+                      THEN N'completed' ELSE turn.status END
+                    FROM dbo.sandbox_turns AS turn
+                    WHERE turn.sandbox_session_id = dbo.sandbox_sessions.id
+                    ORDER BY turn.started_at DESC, turn.id DESC), N'') = N'completed');
               IF @state = N'NeedsAttention' AND @invocationCompleted = 0
                 INSERT @ended (id, task_id, started_at, ended_at, size)
                 SELECT s.id, s.task_id, s.started_at, s.ended_at, s.size

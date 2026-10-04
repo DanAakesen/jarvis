@@ -164,6 +164,7 @@ try {
   };
   const sandboxHeartbeat = database && config.foundryEndpoints
     ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub, alertNotifier), clientFor, {
+      onDecision: (decision) => logger.info(decision, 'sandbox_heartbeat.decision'),
       onError: (error) => {
         const details = error instanceof FoundryClientError
           ? { kind: error.kind, statusCode: error.statusCode, operation: error.operation }

@@ -365,7 +365,7 @@ describe('committed domain schema (groups 1-7)', () => {
       createEventHub<TaskEventMessage>(),
       alertNotifier,
     );
-    await expect(heartbeatStore.markNeedsAttention(String(sandboxId))).resolves.toBe(true);
+    await expect(heartbeatStore.markNeedsAttention(String(sandboxId))).resolves.toBe('crashed');
     await expect(heartbeatStore.markNeedsAttention(String(sandboxId))).resolves.toBe(false);
     expect(alertNotifier).toHaveBeenCalledTimes(2);
 
@@ -901,13 +901,14 @@ describe('committed domain schema (groups 1-7)', () => {
     expect(running).toEqual([{
       sandboxSessionId: String(sandboxSessionId), foundrySessionId: 'heartbeat-session',
       agentName: 'jarvis-runner-base-1x2', invocationId: 'heartbeat-invocation',
+      invocationCompleted: false,
     }]);
     await store.recordHeartbeat(String(sandboxSessionId));
     const heartbeat = await pool.request().query<{ at: Date | null }>(
       `SELECT last_heartbeat_at AS at FROM dbo.sandbox_sessions WHERE id = ${sandboxSessionId}`);
     expect(heartbeat.recordset[0]?.at).toBeInstanceOf(Date);
 
-    expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe(true);
+    expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe('crashed');
     expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe(false);
     const result = await pool.request().query<{ taskState: string; sessionStatus: string; endReason: string; leaseOwner: string | null }>(
       `SELECT t.state AS taskState, s.status AS sessionStatus, s.end_reason AS endReason, t.lease_owner AS leaseOwner
@@ -951,7 +952,7 @@ describe('committed domain schema (groups 1-7)', () => {
     const store = createSandboxHeartbeatStore(pool, eventHub);
     const question = 'Which license should this project use?';
 
-    expect(await store.markNeedsAttention(String(sandboxSessionId), question)).toBe(true);
+    expect(await store.markNeedsAttention(String(sandboxSessionId), question)).toBe('needs_attention');
     const taskDetail = await taskStore.get(task.id, 10, 0);
     expect(taskDetail?.state).toBe('NeedsAttention');
     expect(taskDetail?.events).toEqual(expect.arrayContaining([expect.objectContaining({
@@ -968,7 +969,9 @@ describe('committed domain schema (groups 1-7)', () => {
     expect(sandbox.recordset).toEqual([{ status: 'Ended', endReason: 'done' }]);
   });
 
-  it('ends an idle-expired completed session without changing the task state', async () => {
+  it.each(['completed', 'session_question', 'completed_before_turn'])(
+    'keeps a %s turn out of generic NeedsAttention crash cleanup and expires it without changing state',
+    async (type) => {
     const eventHub = createEventHub<TaskEventMessage>();
     const taskStore = createTaskStore(pool, eventHub);
     const project = await createProjectStore(pool).create({
@@ -985,27 +988,44 @@ describe('committed domain schema (groups 1-7)', () => {
       VALUES (${task.id}, N'idle-expiry-session', N'1', N'jarvis-runner-base-1x2', N'1x2',
         N'jarvis-runner-base@sha256:fixture', N'Active')`);
     const invocationId = `idle-expiry-${randomUUID()}`;
+    const recordCompletion = () => taskStore.recordEvent({
+      taskId: task.id,
+      type: type === 'completed_before_turn' ? 'completed' : type,
+      summary: 'The agent needs a clarification.',
+      source: 'runner',
+      payload: { invocationId, eventIndex: 1, data: { question: 'Which license?' } },
+    });
+    if (type === 'completed_before_turn') await recordCompletion();
     await pool.request()
       .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
       .input('invocationId', sql.NVarChar(255), invocationId)
       .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
         VALUES (@sandboxSessionId, @invocationId, N'task', N'idle-expiry-acp', N'running');`);
-    await taskStore.recordEvent({
-      taskId: task.id,
-      type: 'session_question',
-      summary: 'The agent needs a clarification.',
-      source: 'runner',
-      payload: { invocationId, eventIndex: 1, data: { question: 'Which license?' } },
-    });
+    if (type !== 'completed_before_turn') await recordCompletion();
+    if (type !== 'session_question') {
+      expect((await taskStore.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+    }
+    const dispatcherStore = createDispatcherStore(pool, eventHub);
+    expect(await dispatcherStore.endTaskSessions(task.id, 'NeedsAttention')).toEqual([]);
+    const session = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .query<{ status: string; endReason: string | null }>(
+        'SELECT status, end_reason AS endReason FROM dbo.sandbox_sessions WHERE id = @sandboxSessionId;');
+    expect(session.recordset).toEqual([{ status: 'Active', endReason: null }]);
 
     const heartbeatStore = createSandboxHeartbeatStore(pool, eventHub);
-    expect((await heartbeatStore.listRunning()).some((sandbox) =>
-      sandbox.sandboxSessionId === String(sandboxSessionId))).toBe(true);
+    expect(await heartbeatStore.listRunning()).toContainEqual({
+      sandboxSessionId: String(sandboxSessionId), foundrySessionId: 'idle-expiry-session',
+      agentName: 'jarvis-runner-base-1x2', invocationId, invocationCompleted: true,
+    });
+    expect(await heartbeatStore.markNeedsAttention(
+      String(sandboxSessionId), undefined, 'old-invocation', true,
+    )).toBe(false);
     const published: TaskEventMessage[] = [];
     eventHub.subscribe((event) => published.push(event));
     expect(await heartbeatStore.markNeedsAttention(
       String(sandboxSessionId), undefined, invocationId,
-    )).toBe(true);
+    )).toBe('idle_expired');
 
     const detail = await taskStore.get(task.id, 10, 0);
     expect(detail).toMatchObject({

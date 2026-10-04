@@ -44,4 +44,32 @@ describe('structured log export', () => {
     expect(records.join('')).toContain('telemetry.export_failed');
     expect(records.join('')).not.toContain('export-secret');
   });
+  it.each([200, 404, null])('exports safe heartbeat decisions with HTTP status %s', (httpStatus) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    const decision = { sandboxSessionId: '7', invocationId: 'invocation-1', httpStatus, decision: 'idle_expired' };
+    logger.info({
+      ...decision, token: 'token-secret', error: 'provider-secret', question: 'question-secret',
+    }, 'sandbox_heartbeat.decision');
+    expect(JSON.parse(records[0]!)).toMatchObject({ ...decision, msg: 'sandbox_heartbeat.decision' });
+    expect(sdk.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'sandbox_heartbeat.decision', properties: { service: 'jarvis-backend', ...decision },
+    }));
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it('rejects arbitrary heartbeat fields and decision text', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    logger.info({
+      sandboxSessionId: 'session-secret', invocationId: 'invocation\nsecret',
+      httpStatus: 'status-secret', decision: 'decision-secret',
+    }, 'sandbox_heartbeat.decision');
+    expect(records.join('')).not.toContain('secret');
+    expect(sdk.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'sandbox_heartbeat.decision', properties: { service: 'jarvis-backend' },
+    }));
+  });
 });
