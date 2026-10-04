@@ -96,9 +96,10 @@ Before marking the PR ready, update the repository in the same PR so the next ag
 | Added or verified a command, environment variable, secret name, or setup step | this file |
 | Built or proved a step in a flow | [architecture-flows.html](architecture-flows.html): the box status |
 | Settled a visual direction or found a UI issue | [DESIGN.md](../DESIGN.md) |
+| Added, changed, removed or verified a feature (including new planned tasks) | [features.md](features.md): its row's status, surface and tasks |
 | Found work outside the task | `PLAN.md`: a new task (next free ID in its phase, Depends on filled in, Not started) or an entry under Ideas. Update the Depends on column of any task this changes. Never drop it silently. |
 
-The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; never merge a draft.
+The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; never merge a draft, and never merge a PR whose diff against `main` is empty or whose only commits are a plan or merges from `main` (L69).
 
 Every task issue ends with the same "Before you start" and "Definition of done" checklist that summarises these rules. New task issues get it too.
 
