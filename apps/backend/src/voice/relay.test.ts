@@ -13,8 +13,11 @@ import { coreModule } from '../core/index.js';
 import { factoryModule } from '../factory/index.js';
 import type { BackendModule } from '../modules.js';
 import {
+  createDanishVoiceAgentEndpoint,
+  DANISH_VOICE_AGENT_NAME,
   createVoiceLiveConnector,
   createVoiceRelayModule,
+  normalizeFoundryProjectEndpoint,
   normalizeVoiceLiveEndpoint,
   VOICE_LIVE_SCOPE,
   VOICE_SUBPROTOCOL,
@@ -52,10 +55,20 @@ function appFor(
   getToken = vi.fn(async () => voiceToken),
   records: string[] = [],
   toolModules: readonly BackendModule[] = [],
+  connectDanish?: (token: string, signal: AbortSignal) => WebSocket,
 ) {
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
   const app = buildApp(config, createLogger(config, undefined, output), {
-    modules: [coreModule, factoryModule, ...toolModules, createVoiceRelayModule({ getToken, connect })],
+    modules: [
+      coreModule,
+      factoryModule,
+      ...toolModules,
+      createVoiceRelayModule({
+        getToken,
+        connect,
+        ...(connectDanish ? { connectDanish } : {}),
+      }),
+    ],
     auth: async (token) => {
       if (token !== browserToken) throw new AuthenticationDenied(401);
       return { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId };
@@ -155,6 +168,57 @@ describe('backend-relayed Voice Live WebSocket', () => {
     )).toBe(
       'wss://resource.services.ai.azure.com/voice-live/realtime?api-version=2026-07-15&model=gpt-realtime-2.1',
     );
+  });
+
+  it('builds the configured Foundry Danish voice-agent endpoint', () => {
+    const projectEndpoint = 'https://resource.services.ai.azure.com/api/projects/jarvis';
+    expect(normalizeFoundryProjectEndpoint(projectEndpoint)).toBe(projectEndpoint);
+    expect(createDanishVoiceAgentEndpoint(projectEndpoint, 'session_1')).toBe(
+      `wss://resource.services.ai.azure.com/api/projects/jarvis/agents/${DANISH_VOICE_AGENT_NAME}/endpoint/protocols/invocations_ws?api-version=v1&agent_session_id=session_1`,
+    );
+    expect(() => createDanishVoiceAgentEndpoint(projectEndpoint, 'bad session')).toThrow(TypeError);
+  });
+
+  it('relays Danish sessions to the hosted voice agent without sending English settings', async () => {
+    const forwarded: string[] = [];
+    const authorization = vi.fn();
+    const upstreamUrl = await echoServer((socket, request) => {
+      authorization(request.headers.authorization);
+      socket.on('message', (data) => {
+        forwarded.push(data.toString());
+        if (data.toString().includes('input_audio_buffer.append')) socket.send(data);
+      });
+    });
+    const connectDanish = vi.fn((token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    }));
+    const getToken = vi.fn(async (scope: string) => {
+      expect(scope).toBe(VOICE_LIVE_SCOPE);
+      return voiceToken;
+    });
+    const { app } = appFor(
+      () => { throw new Error('English voice must not connect'); },
+      getToken,
+      [],
+      [],
+      connectDanish,
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice/da`);
+    browser.send(JSON.stringify({ type: 'session.start', protocol_version: '1.0' }));
+    const audio = JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' });
+    const audioReply = new Promise<string>((resolve) => browser.once('message', (data) => resolve(data.toString())));
+    browser.send(audio);
+
+    await expect(audioReply).resolves.toBe(audio);
+    expect(connectDanish).toHaveBeenCalledOnce();
+    expect(authorization).toHaveBeenCalledWith(['Bearer', voiceToken].join(' '));
+    expect(forwarded.map((event) => JSON.parse(event).type)).toEqual([
+      'session.start',
+      'input_audio_buffer.append',
+    ]);
+    expect(forwarded.some((event) => JSON.parse(event).type === 'session.update')).toBe(false);
   });
 
   it('configures the English session on the backend and executes realtime tools there', async () => {

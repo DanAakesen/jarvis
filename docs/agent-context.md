@@ -480,6 +480,26 @@ the most recent 12 messages, bounded to 24,000 characters total and 8,000 per
 message. The context endpoint is agent-authorized and adds no configuration or
 secret. SQL-backed context behavior is covered by the database integration suite.
 
+### Danish voice provisioning
+
+The `Danish voice agent` workflow provisions `jarvis-voice-mai` after a successful
+`Deploy` when its inputs change, or on manual dispatch from `main`. It checks out
+the deployment commit, reads `foundryAdminEndpoint` from the `jarvis-infra`
+deployment, and authenticates with GitHub OIDC. The hash-locked SDK inputs are
+`agents/jarvis/requirements-voice-provisioner.in` and
+`agents/jarvis/requirements-voice-provisioner.txt`. To check locally:
+
+```sh
+python -m pip install --require-hashes -r agents/jarvis/requirements-voice-provisioner.txt
+python agents/jarvis/scripts/provision_danish_voice.py
+```
+
+The script requires `FOUNDRY_PROJECT_ENDPOINT` and an Azure CLI identity authorized
+to manage project agents. The Deploy smoke step grants its identity `Foundry User`
+on the project; Bicep grants the backend the same role. The backend receives the
+project endpoint from Bicep and uses its managed identity; do not put credentials
+in the browser.
+
 Agent configuration (environment variables, no secrets):
 
 | Variable | Meaning |
