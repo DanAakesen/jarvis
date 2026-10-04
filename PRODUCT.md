@@ -222,6 +222,16 @@ policies are `deliver_pr` or `complete_without_deployment`, sandbox sizes are
 letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
 32-bit integer (default 1).
 
+The backend lists every repository in the GitHub App installation for the
+configured New projects owner. It caches the list and refreshes it when Dan asks
+from the Projects page. Managed projects appear first; each other repository
+shows its last push and primary language, with **Manage with Jarvis** registering
+it without a form. Jarvis can register the same installed repository through
+`manage_repository`. Registration uses the repository's actual default branch,
+the New projects agent, policy, and task-limit defaults, and a tech identifier
+detected from its default-branch files or primary language. The GitHub App token
+and private key stay in the backend.
+
 The projects page derives running-task counts from tasks in the `Running` state
 and refreshes them when Dan refreshes the page. Until release data is connected,
 the last-release field is explicitly unavailable rather than inferred.
