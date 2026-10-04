@@ -68,7 +68,11 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
           WHERE project_id = @projectId AND sha = @sha)
           INSERT INTO dbo.releases (project_id, version, sha, status, created_at)
           VALUES (@projectId, @sha, @sha, N'building', @at);
-      END;`);
+      DECLARE @releaseId bigint = (
+        SELECT id FROM dbo.releases WHERE project_id = @projectId AND sha = @sha);
+      UPDATE dbo.workflow_runs SET release_id = @releaseId
+      WHERE project_id = @projectId AND head_sha = @sha AND release_id IS NULL;
+    END;`);
     return;
   }
 
@@ -95,6 +99,17 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
           ORDER BY id DESC);
         DECLARE @releaseId bigint = (
           SELECT id FROM dbo.releases WHERE project_id = @projectId AND sha = @headSha);
+        IF @releaseId IS NULL AND @workflow = N'Release' AND @trigger = N'push'
+          AND EXISTS (SELECT 1 FROM dbo.projects WHERE id = @projectId AND default_branch = @branch)
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM dbo.releases WITH (UPDLOCK, HOLDLOCK)
+            WHERE project_id = @projectId AND sha = @headSha)
+            INSERT INTO dbo.releases (project_id, version, sha, status, created_at)
+            VALUES (@projectId, CONVERT(nvarchar(100), @runNumber), @headSha, N'building',
+              COALESCE(@startedAt, SYSUTCDATETIME()));
+          SET @releaseId = (
+            SELECT id FROM dbo.releases WHERE project_id = @projectId AND sha = @headSha);
+        END;
         DECLARE @runChanged bit = 0;
         UPDATE dbo.workflow_runs SET
           workflow = @workflow, [trigger] = @trigger, head_sha = @headSha,
