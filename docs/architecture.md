@@ -67,6 +67,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   server returns the accepted value; rejected updates retain the previous
   appearance. Remaining voice samples, sleep, credential, and custom-theme
   controls are visibly disabled until their owning services/contracts exist.
+- P8-20 keeps the visual system in `apps/web/src/styles.css`: semantic light/dark
+  roles, type and layout tokens, elevation/translucency, and shared motion rules.
+  `JarvisActivityProvider` tracks chat and voice turns as separate active sources,
+  so one ending cannot clear the other's top-bar status. `VoiceControls` maps the
+  actual P5-04 status and decoded playback PCM level to the labelled orb; it does
+  not infer tool calls or window activity. CSS aurora and state motion pause while
+  the document is hidden and reduce to fades/static readable states when motion
+  is reduced. No persistence or backend route is added.
 - P7-16 extends the same authenticated, validated `dbo.settings` key/value store
   with bounded personality preferences. Hosted chat and Danish voice read them
   for each new agent invocation/session; the backend snapshots them when it

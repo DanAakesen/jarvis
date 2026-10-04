@@ -1,6 +1,7 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { useEffect, useRef, useState } from 'react';
 import type { PublicConfig } from '../config/public-config';
+import { useJarvisActivity } from './activity-context';
 import { VoiceOrb } from './VoiceOrb';
 import { BrowserVoiceClient, type VoiceLanguage, type VoiceStatus } from './voice-client';
 import type { ScreenShareController } from './screen-sharing';
@@ -32,9 +33,11 @@ export function VoiceControls({
   onSessionEnded?: () => void;
   screenShare?: ScreenShareController;
 }) {
+  const { setWorking } = useJarvisActivity();
   const client = useRef<BrowserVoiceClient | null>(null);
   const [status, setStatus] = useState<VoiceStatus>('stopped');
   const [message, setMessage] = useState(initialMessage);
+  const [audioLevel, setAudioLevel] = useState(0);
   const [muted, setMuted] = useState(false);
   const [screenSessionId, setScreenSessionId] = useState<string | null>(null);
   const [screenError, setScreenError] = useState('');
@@ -44,7 +47,8 @@ export function VoiceControls({
   useEffect(() => () => {
     client.current?.stop();
     client.current = null;
-  }, []);
+    setWorking('voice-turn', false);
+  }, [setWorking]);
 
   const start = () => {
     setScreenSessionId(null);
@@ -53,11 +57,13 @@ export function VoiceControls({
       getAccessToken: () => accessToken(authClient, config),
       language,
       ...(onSessionEnded ? { onSessionEnded } : {}),
+      onAudioLevel: (level) => setAudioLevel(Math.max(0, Math.min(1, level))),
       onSessionReady: setScreenSessionId,
       onScreenRequest: () => { void inspectAndSendScreen(); },
       onStatus: (nextStatus, nextMessage) => {
         setStatus(nextStatus);
         setMessage(nextMessage);
+        setWorking('voice-turn', nextStatus === 'thinking' || nextStatus === 'speaking');
         if (nextStatus === 'stopped' || nextStatus === 'error') {
           client.current = null;
           setScreenSessionId(null);
@@ -95,7 +101,7 @@ export function VoiceControls({
 
   return (
     <>
-      <VoiceOrb status={status} message={message} />
+      <VoiceOrb status={status} message={message} audioLevel={audioLevel} />
       <div className="action-row">
         {active
           ? <button className="secondary-button" type="button" onClick={stop} disabled={status === 'stopping'}>Stop voice</button>

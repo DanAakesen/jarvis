@@ -4,7 +4,15 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 
-const { createAuthClient, restoreProfile, signIn, loadConversationHistory, makeAuthClient } = vi.hoisted(() => {
+const {
+  createAuthClient,
+  restoreProfile,
+  signIn,
+  loadConversationHistory,
+  createChatSession,
+  sendChatTurn,
+  makeAuthClient,
+} = vi.hoisted(() => {
   const account = { homeAccountId: 'dan' };
   const makeAuthClient = () => ({
     initialize: vi.fn().mockResolvedValue(undefined),
@@ -17,11 +25,13 @@ const { createAuthClient, restoreProfile, signIn, loadConversationHistory, makeA
     restoreProfile: vi.fn().mockResolvedValue(null),
     signIn: vi.fn(),
     loadConversationHistory: vi.fn().mockResolvedValue({ messages: [], nextCursor: null }),
+    createChatSession: vi.fn(),
+    sendChatTurn: vi.fn(),
     makeAuthClient,
   };
 });
 vi.mock('./auth', () => ({ createAuthClient, restoreProfile, signIn }));
-vi.mock('./conversation-history', () => ({ loadConversationHistory }));
+vi.mock('./conversation-history', () => ({ loadConversationHistory, createChatSession, sendChatTurn }));
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com' };
 const fetchMock = vi.fn<typeof fetch>();
@@ -31,13 +41,21 @@ beforeEach(() => {
   createAuthClient.mockReturnValue(makeAuthClient());
   restoreProfile.mockResolvedValue(null);
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
+  createChatSession.mockResolvedValue({ id: '41', language: 'da' });
+  sendChatTurn.mockResolvedValue({
+    id: '52', sessionId: '41', role: 'jarvis', text: 'I am ready.', model: null,
+    voiceMinutes: null, at: '2026-10-03T12:02:00.000Z',
+  });
   fetchMock.mockResolvedValue(new Response(JSON.stringify({ state: 'awake' }), {
     status: 200, headers: { 'Content-Type': 'application/json' },
   }));
   vi.stubGlobal('fetch', fetchMock);
 });
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe('Jarvis routes', () => {
   it('disables sign-in until a backend is deployed', () => {
@@ -45,6 +63,35 @@ describe('Jarvis routes', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Jarvis is taking shape');
     expect(screen.getByRole('button', { name: 'Sign in with Microsoft' })).toHaveProperty('disabled', true);
     expect(screen.getByText('Sign-in is unavailable until the backend is deployed.')).not.toBeNull();
+  });
+
+  it('syncs reduced-motion and visibility preferences for CSS behavior', async () => {
+    const motionPreference = Object.assign(new EventTarget(), {
+      media: '(prefers-reduced-motion: reduce)',
+      matches: false,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    }) as unknown as MediaQueryList;
+    vi.stubGlobal('matchMedia', vi.fn(() => motionPreference));
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+    const view = render(<MemoryRouter><App config={{ ...__JARVIS_CONFIG__, backendUrl: null }} /></MemoryRouter>);
+
+    await waitFor(() => expect(document.documentElement.dataset.motionPreference).toBe('full'));
+    expect(document.documentElement.dataset.documentVisibility).toBe('visible');
+
+    Object.defineProperty(motionPreference, 'matches', { value: true });
+    motionPreference.dispatchEvent(new Event('change'));
+    expect(document.documentElement.dataset.motionPreference).toBe('reduced');
+
+    hidden.mockReturnValue(true);
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(document.documentElement.dataset.documentVisibility).toBe('hidden');
+
+    view.unmount();
+    hidden.mockRestore();
+    expect(document.documentElement.dataset.motionPreference).toBeUndefined();
+    expect(document.documentElement.dataset.documentVisibility).toBeUndefined();
   });
 
   it('shows Dan only after Microsoft sign-in and the backend profile request succeed', async () => {
@@ -131,6 +178,32 @@ describe('App shell', () => {
     resolveFeed(new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] })));
     await screen.findByText('No tasks are running.');
     expect(screen.queryByText('Waking Jarvis…')).toBeNull();
+  });
+
+  it('shows the working indicator only while a real chat turn is pending', async () => {
+    const user = userEvent.setup();
+    let finish: (() => void) | undefined;
+    sendChatTurn.mockImplementation(async (...args: unknown[]) => {
+      const onUser = args[4] as (message: Record<string, unknown>) => void;
+      onUser({
+        id: '51', sessionId: '41', channel: 'chat', language: 'da', role: 'dan',
+        text: 'Start the task.', model: null, voiceMinutes: null, at: '2026-10-03T12:01:00.000Z',
+      });
+      return await new Promise((resolve) => {
+        finish = () => resolve({
+          id: '52', sessionId: '41', channel: 'chat', language: 'da', role: 'jarvis',
+          text: 'I am ready.', model: null, voiceMinutes: null, at: '2026-10-03T12:02:00.000Z',
+        });
+      });
+    });
+    await renderSignedIn();
+
+    await user.type(screen.getByRole('textbox', { name: 'Message Jarvis' }), 'Start the task.');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByRole('status', { name: 'Jarvis is working' })).not.toBeNull();
+
+    finish?.();
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Jarvis is working' })).toBeNull());
   });
 
   it('hides navigation and area pages until Dan is signed in', async () => {

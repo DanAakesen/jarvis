@@ -272,6 +272,25 @@ horizontal overflow. Muted-text contrast against the page/surface was at least
 error was the intentionally rejected mock request; no page exceptions occurred.
 Screenshots are in `docs/ui/screenshots/p8-13-theme-settings-*.png`. These mocks
 do not verify live Entra, API authorization, or Azure SQL persistence.
+P8-20 was inspected in Chromium at 1440×900 and 390×844 across both appearances.
+The scratch harness returned empty task/project/usage data; its local WebSocket
+relay delivered PCM through the real P5-04 client for the speaking captures.
+Conversation, task board, projects, Settings, and Usage had no horizontal
+overflow at either width. Token contrast calculations passed AA for text and
+3:1 for focus/control outlines; muted text measured 5.71:1 light and 12.46:1
+dark against the page. Keyboard navigation revealed the skip link. Reduced
+motion left "Jarvis is speaking." visible, removed aurora/orb movement, and
+reduced transitions to 160 ms; the hidden-tab listener set animations to paused.
+The actual orb transform changed during normal speaking playback. Eight captures:
+[desktop light](ui/screenshots/p8-20-desktop-light.png),
+[desktop dark](ui/screenshots/p8-20-desktop-dark.png),
+[phone light](ui/screenshots/p8-20-phone-light.png),
+[phone dark](ui/screenshots/p8-20-phone-dark.png), and [desktop light speaking](ui/screenshots/p8-20-desktop-light-speaking.png),
+[desktop dark speaking](ui/screenshots/p8-20-desktop-dark-speaking.png),
+[phone light speaking](ui/screenshots/p8-20-phone-light-speaking.png),
+[phone dark speaking](ui/screenshots/p8-20-phone-dark-speaking.png).
+Local auth/API/voice fixtures do not verify live Entra, persisted settings,
+Azure SQL, provider audio, tool-call activity, or workspace windows.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal
