@@ -78,6 +78,7 @@ function harness(
   const tasks = {
     get: vi.fn(async () => ({ ...taskRecord, events: [], usage: [] })),
     transition,
+    recordEvent: vi.fn(),
   } as unknown as TaskStore;
   const settings: SettingsStore = { read: vi.fn(async () => ({
     'codex.model': '"gpt-5.5"', 'codex.reasoning_effort': '"medium"',
@@ -99,7 +100,7 @@ function harness(
   const deleteSession = vi.fn(async () => {});
   const clientFor = vi.fn(() => ({ startTask, steer, pause, resume, cancel, deleteSession }));
   const dispatcher = new TaskDispatcher(store, tasks, settings, clientFor, heartbeat, events, options);
-  return { dispatcher, events, settings, startTask, transition, track, untrack, clientFor, steer, pause, resume, cancel, deleteSession };
+  return { dispatcher, events, settings, tasks, startTask, transition, track, untrack, clientFor, steer, pause, resume, cancel, deleteSession };
 }
 
 function idleStore(nextAttemptAt: string | null = null): DispatcherStore {
@@ -488,7 +489,9 @@ describe('task crash recovery', () => {
     expect(verifyDelivery).not.toHaveBeenCalled();
   });
 
-  it('continues an idle-expired Running task in a new sandbox on its existing branch', async () => {
+  it.each(['recover', 'steer'] as const)(
+    'continues an idle-expired Running task via %s in a new sandbox on its existing branch',
+    async (action) => {
     const idleExpiredTask: TaskRecord = {
       ...controlTask, state: 'Running', latestSessionEndReason: 'idle_expired',
     };
@@ -502,7 +505,7 @@ describe('task crash recovery', () => {
       status: 'queued' as const,
       agent: 'codex' as const,
     }));
-    const { dispatcher, transition, track } = harness(idleStore(), startTask, idleExpiredTask, {
+    const { dispatcher, transition, track, tasks, steer } = harness(idleStore(), startTask, idleExpiredTask, {
       recoveryStore,
       workspaceFor: vi.fn(async (current) => ({
         repository: 'DanAakesen/jarvis',
@@ -511,7 +514,9 @@ describe('task crash recovery', () => {
       })),
     });
 
-    await expect(dispatcher.control('42', { action: 'recover' }))
+    await expect(dispatcher.control('42', action === 'steer'
+      ? { action, message: 'Keep the existing API.' }
+      : { action }))
       .resolves.toMatchObject({ kind: 'ok', task: { state: 'Running' } });
 
     expect(transition).toHaveBeenCalledWith('42', 'NeedsAttention');
@@ -522,6 +527,16 @@ describe('task crash recovery', () => {
       branch: idleExpiredTask.branch,
       taskId: '42',
     }));
+    expect(steer).not.toHaveBeenCalled();
+    if (action === 'steer') {
+      expect(startTask).toHaveBeenCalledWith(expect.objectContaining({
+        task: expect.stringContaining('New steering message:\nKeep the existing API.'),
+      }));
+      expect(tasks.recordEvent).toHaveBeenCalledWith({
+        taskId: '42', type: 'steered', summary: 'Keep the existing API.',
+        payload: { message: 'Keep the existing API.' }, source: 'dan',
+      });
+    }
     expect(track).toHaveBeenCalledWith(expect.objectContaining({
       invocationId: 'continued-invocation',
       foundrySessionId: 'continued-session',
@@ -616,7 +631,7 @@ describe('task crash recovery', () => {
       markNeedsAttention: vi.fn(async () => {
         state = 'NeedsAttention';
         publishState('Running', 'NeedsAttention');
-        return true;
+        return 'crashed' as const;
       }),
       resolvePause: vi.fn(async () => false),
     };
