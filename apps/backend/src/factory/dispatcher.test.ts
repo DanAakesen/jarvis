@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEventHub } from '../core/event-hub.js';
 import type { SettingsStore } from '../core/settings.js';
+import { FoundryClientError } from '../foundry/client.js';
 import type { SandboxHeartbeat } from './heartbeat.js';
 import { TaskDispatcher, type DispatchClaim, type DispatcherStore } from './dispatcher.js';
 import type { TaskEventHub, TaskEventMessage, TaskStore } from './task-store.js';
@@ -97,6 +98,21 @@ describe('task dispatcher', () => {
     await dispatcher.stop();
   });
 
+  it('does not lose a task event published during an idle queue scan', async () => {
+    const store = idleStore();
+    const { dispatcher, events } = harness(store);
+    vi.mocked(store.claimNext).mockImplementationOnce(async () => {
+      events.publish({
+        id: '3', taskId: '42', type: 'created', summary: null, payload: null,
+        payloadTruncated: false, source: 'backend', at: new Date().toISOString(),
+      });
+      return { kind: 'idle', nextAttemptAt: null };
+    });
+    dispatcher.start();
+    await vi.waitFor(() => expect(store.claimNext).toHaveBeenCalledTimes(2));
+    await dispatcher.stop();
+  });
+
   it('untracks active sessions when task state events end or pause work', async () => {
     const store = idleStore();
     vi.mocked(store.endTaskSessions).mockResolvedValue(['53']);
@@ -109,6 +125,50 @@ describe('task dispatcher', () => {
     });
     await vi.waitFor(() => expect(untrack).toHaveBeenCalledWith('53'));
     expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Paused');
+    await dispatcher.stop();
+  });
+
+  it('retries a rejected Foundry start twice and then moves it to NeedsAttention', async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    let retryAt: string | null = null;
+    const store: DispatcherStore = {
+      ...idleStore(),
+      claimNext: vi.fn(async () => {
+        if (attempts === 0 || (retryAt !== null && Date.parse(retryAt) <= Date.now())) {
+          attempts += 1;
+          retryAt = null;
+          return { kind: 'claimed' as const, task: { ...task, attemptCount: attempts } };
+        }
+        return { kind: 'idle' as const, nextAttemptAt: retryAt };
+      }),
+      failStart: vi.fn(async (_owner, _task, at) => { retryAt = at; }),
+    };
+    const { dispatcher, startTask } = harness(
+      store,
+      vi.fn(async () => { throw new FoundryClientError('http', 'start', 429); }),
+    );
+    dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.failStart).toHaveBeenCalledTimes(1);
+    expect(store.failStart).toHaveBeenNthCalledWith(
+      1, expect.any(String), expect.objectContaining({ attemptCount: 1 }),
+      new Date(Date.now() + 15_000).toISOString(), 'foundry_start_rejected',
+    );
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(store.failStart).toHaveBeenCalledTimes(2);
+    expect(store.failStart).toHaveBeenNthCalledWith(
+      2, expect.any(String), expect.objectContaining({ attemptCount: 2 }),
+      new Date(Date.now() + 30_000).toISOString(), 'foundry_start_rejected',
+    );
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(store.failStart).toHaveBeenCalledTimes(3);
+    expect(store.failStart).toHaveBeenNthCalledWith(
+      3, expect.any(String), expect.objectContaining({ attemptCount: 3 }), null, 'foundry_start_failed',
+    );
+    expect(startTask).toHaveBeenCalledTimes(3);
     await dispatcher.stop();
   });
 });

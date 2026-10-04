@@ -37,15 +37,21 @@ afterAll(async () => {
   await administrator.close();
 });
 
-async function createTask(events: TaskEventHub, title: string) {
+async function createProject(maxParallelTasks = 1): Promise<string> {
   const project = await pool.request()
     .input('repo', sql.NVarChar(140), `DanAakesen/dispatch-${randomUUID().slice(0, 8)}`)
-    .query<{ id: string }>(`INSERT dbo.projects (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+    .input('maxParallelTasks', sql.Int, maxParallelTasks)
+    .query<{ id: string }>(`INSERT dbo.projects (name, repo, default_branch, default_agent, policy, sandbox_size, tech, max_parallel_tasks)
       OUTPUT CAST(inserted.id AS varchar(19)) AS id
-      VALUES (N'Dispatch fixture', @repo, N'main', N'copilot', N'deliver_pr', N'1x2', N'node');`);
+      VALUES (N'Dispatch fixture', @repo, N'main', N'copilot', N'deliver_pr', N'1x2', N'node', @maxParallelTasks);`);
   const projectId = project.recordset[0]?.id;
   if (!projectId) throw new Error('Dispatcher project fixture was not created');
-  const task = await createTaskStore(pool, events).create({ projectId, title, request: 'Run the task' });
+  return projectId;
+}
+
+async function createTask(events: TaskEventHub, title: string, projectId?: string) {
+  const selectedProjectId = projectId ?? await createProject();
+  const task = await createTaskStore(pool, events).create({ projectId: selectedProjectId, title, request: 'Run the task' });
   if (!task) throw new Error('Dispatcher task fixture was not created');
   return task;
 }
@@ -103,6 +109,39 @@ describe('dispatcher SQL coordination', () => {
     )).recordset[0]?.count).toBe(1);
     expect((await taskStore.transition(task.id, 'Cancelled')).kind).toBe('ok');
     await createDispatcherStore(pool, events).endTaskSessions(task.id, 'Cancelled');
+  });
+
+  it('honors global limits and per-project limits using active leases', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const firstTask = await createTask(events, 'Global limit one');
+    const secondTask = await createTask(events, 'Global limit two');
+    const first = createDispatcherStore(pool, events);
+    const second = createDispatcherStore(pool, events);
+
+    const firstClaim = await first.claimNext('global-owner-one', 120, 3);
+    expect(firstClaim).toMatchObject({ kind: 'claimed', task: { taskId: firstTask.id } });
+    expect(await second.claimNext('global-owner-two', 120, 3)).toMatchObject({ kind: 'idle' });
+    if (firstClaim.kind !== 'claimed') throw new Error('Global fixture was not claimed');
+    await first.failStart('global-owner-one', firstClaim.task, null, 'test_cleanup');
+    const secondClaim = await second.claimNext('global-owner-two', 120, 3);
+    expect(secondClaim).toMatchObject({ kind: 'claimed', task: { taskId: secondTask.id } });
+    if (secondClaim.kind !== 'claimed') throw new Error('Second global fixture was not claimed');
+    await second.failStart('global-owner-two', secondClaim.task, null, 'test_cleanup');
+
+    await pool.request().query(`INSERT dbo.settings (scope, [key], value)
+      VALUES (N'global', N'global.max_parallel_tasks', N'2');`);
+    const projectId = await createProject(1);
+    const projectTaskOne = await createTask(events, 'Project limit one', projectId);
+    const projectTaskTwo = await createTask(events, 'Project limit two', projectId);
+    const projectClaim = await first.claimNext('project-owner-one', 120, 3);
+    expect(projectClaim).toMatchObject({ kind: 'claimed', task: { taskId: projectTaskOne.id } });
+    expect(await second.claimNext('project-owner-two', 120, 3)).toMatchObject({ kind: 'idle' });
+    if (projectClaim.kind !== 'claimed') throw new Error('Project fixture was not claimed');
+    await first.failStart('project-owner-one', projectClaim.task, null, 'test_cleanup');
+    const nextProjectClaim = await second.claimNext('project-owner-two', 120, 3);
+    expect(nextProjectClaim).toMatchObject({ kind: 'claimed', task: { taskId: projectTaskTwo.id } });
+    if (nextProjectClaim.kind !== 'claimed') throw new Error('Second project fixture was not claimed');
+    await second.failStart('project-owner-two', nextProjectClaim.task, null, 'test_cleanup');
   });
 
   it('makes no recurring SQL claims after the initial empty scan', async () => {

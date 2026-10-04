@@ -323,9 +323,16 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
             ended_at = SYSUTCDATETIME()
           OUTPUT inserted.id INTO @ended
           WHERE task_id = @taskId AND status = N'Active';
-          UPDATE dbo.sandbox_turns SET status = N'cancelled', ended_at = SYSUTCDATETIME()
-          WHERE status = N'running' AND sandbox_session_id IN (SELECT id FROM @ended);
-          SELECT CAST(id AS varchar(19)) AS sandboxSessionId FROM @ended;`);
+        IF @state = N'NeedsAttention'
+          INSERT @ended (id)
+          SELECT id FROM dbo.sandbox_sessions WHERE task_id = @taskId AND status = N'Crashed'
+            AND id NOT IN (SELECT id FROM @ended);
+        UPDATE dbo.sandbox_turns SET
+          status = CASE WHEN @state = N'Done' THEN N'completed'
+            WHEN @state = N'NeedsAttention' THEN N'failed' ELSE N'cancelled' END,
+          ended_at = SYSUTCDATETIME()
+        WHERE status = N'running' AND sandbox_session_id IN (SELECT id FROM @ended);
+        SELECT CAST(id AS varchar(19)) AS sandboxSessionId FROM @ended;`);
       return recordset.map(({ sandboxSessionId }) => sandboxSessionId);
     },
   };

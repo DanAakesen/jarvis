@@ -81,6 +81,7 @@ export class TaskDispatcher {
   private readonly now: () => number;
   private readonly onError: (error: unknown) => void;
   private started = false;
+  private wakePending = false;
   private pumping: Promise<void> | undefined;
   private timer: NodeJS.Timeout | undefined;
   private unsubscribe: (() => void) | undefined;
@@ -113,6 +114,7 @@ export class TaskDispatcher {
     this.unsubscribe = undefined;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
+    this.wakePending = false;
     await this.pumping;
   }
 
@@ -137,9 +139,16 @@ export class TaskDispatcher {
     if (!this.started) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
-    if (this.pumping) return;
+    if (this.pumping) {
+      this.wakePending = true;
+      return;
+    }
     this.pumping = this.pump().catch(this.onError).finally(() => {
       this.pumping = undefined;
+      if (this.wakePending && this.started) {
+        this.wakePending = false;
+        this.wake();
+      }
     });
   }
 
@@ -150,7 +159,13 @@ export class TaskDispatcher {
         this.schedule(result.nextAttemptAt);
         return;
       }
-      await this.startClaim(result.task);
+      try {
+        await this.startClaim(result.task);
+      } catch (error) {
+        this.onError(error);
+        this.schedule(new Date(this.now() + this.leaseSeconds * 1000).toISOString());
+        return;
+      }
     }
   }
 
