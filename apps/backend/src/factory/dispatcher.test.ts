@@ -502,6 +502,7 @@ describe('task crash recovery', () => {
     const activeTasks = {
       get: vi.fn(async () => ({ ...record, state, events: timeline, usage: [] })),
       list: vi.fn(async () => state === 'Running' ? [{ ...record, state }] : []),
+      recordEvent: vi.fn(async () => ({ id: '3' } as never)),
       transition: vi.fn(async (_id: string, next: TaskRecord['state'], completionVerified = false) => {
         if (next === 'Done' && !completionVerified) return { kind: 'invalid-transition' as const };
         const previous = state;
@@ -582,7 +583,9 @@ describe('task crash recovery', () => {
       }),
       { intervalMs: 60_000, failureConfirmMs: 30 },
     );
-    const verifyDelivery = vi.fn(async () => deliveryVerified);
+    const verifyDelivery = vi.fn(async () => deliveryVerified
+      ? { kind: 'awaiting_policy' as const }
+      : { kind: 'refused' as const, reason: 'GitHub could not open the task pull request.' });
     const options: DispatcherOptions = {
       recoveryStore,
       workspaceFor: vi.fn(async (current) => ({
@@ -621,9 +624,23 @@ describe('task crash recovery', () => {
     expect((startedRequests[0] as { task: string }).task).toContain('The branch contains the initial fix.');
     expect(verifyDelivery).toHaveBeenCalledWith({
       repository: 'DanAakesen/jarvis', defaultBranch: 'main', branch,
-    });
-    expect(state).toBe(deliveryVerified ? 'Done' : 'NeedsAttention');
-    expect(activeTasks.transition).toHaveBeenCalledWith('42', deliveryVerified ? 'Done' : 'NeedsAttention', deliveryVerified);
+    }, expect.objectContaining({ id: '42', title: 'Fix the bug' }));
+    expect(state).toBe(deliveryVerified ? 'Running' : 'NeedsAttention');
+    if (deliveryVerified) {
+      expect(activeTasks.transition).not.toHaveBeenCalled();
+    } else {
+      expect(activeTasks.transition).toHaveBeenCalledWith('42', 'NeedsAttention');
+      expect(activeTasks.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'pull_request_open_refused',
+        summary: 'GitHub could not open the task pull request.',
+        payload: { reason: 'GitHub could not open the task pull request.' },
+      }));
+    }
+    expect(store.endTaskSessions).toHaveBeenCalledWith(
+      '42',
+      deliveryVerified ? 'Done' : 'NeedsAttention',
+      true,
+    );
 
     await Promise.all([dispatcher.stop(), heartbeat.stop()]);
   });

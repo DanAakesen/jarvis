@@ -61,7 +61,10 @@ export interface DispatcherOptions {
   onError?: (error: unknown) => void;
   recoveryStore?: TaskRecoveryStore;
   workspaceFor?: (task: TaskRecord) => Promise<TaskWorkspace | null>;
-  verifyDelivery?: (workspace: TaskWorkspace) => Promise<boolean>;
+  verifyDelivery?: (
+    workspace: TaskWorkspace,
+    task: Pick<TaskRecord, 'id' | 'title'>,
+  ) => Promise<{ kind: 'awaiting_policy' } | { kind: 'refused'; reason: string }>;
 }
 
 const defaultLeaseSeconds = 120;
@@ -365,11 +368,27 @@ export class TaskDispatcher implements TaskController {
     if (detail.state === 'NeedsAttention') return false;
     if (detail.state !== 'Running') return true;
     const workspace = await this.workspaceFor?.(detail) ?? null;
-    const verified = workspace !== null && await (this.verifyDelivery?.(workspace) ?? Promise.resolve(false));
-    const nextState = verified ? 'Done' : 'NeedsAttention';
-    const transition = await this.tasks.transition(taskId, nextState, verified);
-    if (transition.kind !== 'ok') return false;
-    const ended = await this.store.endTaskSessions(taskId, nextState, true);
+    const result = workspace && this.verifyDelivery
+      ? await this.verifyDelivery(workspace, detail)
+      : {
+        kind: 'refused' as const,
+        reason: 'The task repository or branch could not be verified.',
+      };
+    if (result.kind === 'refused') {
+      await this.tasks.recordEvent({
+        taskId,
+        type: 'pull_request_open_refused',
+        summary: result.reason,
+        payload: { reason: result.reason },
+        source: 'backend',
+      });
+      const transition = await this.tasks.transition(taskId, 'NeedsAttention');
+      if (transition.kind !== 'ok') return false;
+      const ended = await this.store.endTaskSessions(taskId, 'NeedsAttention', true);
+      ended.forEach((id) => this.heartbeat.untrack(id));
+      return true;
+    }
+    const ended = await this.store.endTaskSessions(taskId, 'Done', true);
     ended.forEach((id) => this.heartbeat.untrack(id));
     return true;
   }
