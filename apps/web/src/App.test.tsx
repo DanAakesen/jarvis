@@ -190,7 +190,7 @@ describe('App shell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Toggle contextual panel' }));
     expect(screen.getByRole('heading', { name: 'Context' })).not.toBeNull();
-    expect(screen.getByText('No contextual information is available for this page yet.')).not.toBeNull();
+    expect(screen.getByText('No relevant information is available yet.')).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Welcome, Dan Aakesen' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Close context panel' }));
     expect(screen.queryByRole('heading', { name: 'Context' })).toBeNull();

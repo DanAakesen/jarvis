@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
 import { areas } from './areas';
+import { ContextPanel, ContextPanelProvider } from './ContextPanel';
+import { useContextPanel } from './context-panel-state';
 import { DatabaseWakeStatus } from './DatabaseWakeStatus';
 import { JarvisPage } from './JarvisPage';
 import { NotFoundPage, SignInPage } from './pages';
@@ -51,13 +53,20 @@ function UnavailableControl({ id, label, explanation, icon }: {
 }
 
 function Shell({ signedIn, config, session }: { signedIn: boolean; config: PublicConfig; session: SignInSession }) {
+  return (
+    <ContextPanelProvider>
+      <ShellLayout signedIn={signedIn} config={config} session={session} />
+    </ContextPanelProvider>
+  );
+}
+
+function ShellLayout({ signedIn, config, session }: { signedIn: boolean; config: PublicConfig; session: SignInSession }) {
   const { pathname } = useLocation();
   const navigationToggle = useRef<HTMLButtonElement>(null);
-  const contextToggle = useRef<HTMLButtonElement>(null);
+  const contextPanel = useContextPanel();
   const [navigationOpen, setNavigationOpen] = useState(() => (
     typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches
   ));
-  const [contextOpen, setContextOpen] = useState(false);
   const activeArea = areas.find(({ path }) => pathname.startsWith(`/${path}`));
   const settingsActive = pathname.startsWith('/settings');
   const areaLabel = settingsActive ? 'Settings' : activeArea?.label ?? 'Jarvis';
@@ -68,13 +77,8 @@ function Shell({ signedIn, config, session }: { signedIn: boolean; config: Publi
     setNavigationOpen(false);
   }
 
-  function closeContext() {
-    contextToggle.current?.focus();
-    setContextOpen(false);
-  }
-
   return (
-    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && navigationOpen} data-context-open={signedIn && contextOpen}>
+    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && navigationOpen} data-context-open={signedIn && contextPanel.isOpen}>
       <a className="skip-link" href="#content">Skip to content</a>
       {signedIn && (
         <nav className="area-rail" aria-label="Areas">
@@ -128,13 +132,13 @@ function Shell({ signedIn, config, session }: { signedIn: boolean; config: Publi
             <UnavailableControl id="screen-share-status" label="Share screen" explanation="Unavailable until screen sharing is built." icon="screen" />
             <UnavailableControl id="camera-status" label="Camera" explanation="Unavailable until camera support is built." icon="camera" />
             <button
-              ref={contextToggle}
+              id="context-panel-toggle"
               className="topbar-icon-button"
               type="button"
               aria-label="Toggle contextual panel"
-              aria-expanded={contextOpen}
+              aria-expanded={contextPanel.isOpen}
               aria-controls="context-panel"
-              onClick={() => setContextOpen((open) => !open)}
+              onClick={contextPanel.toggle}
             >
               <ShellIcon name="context" />
             </button>
@@ -152,17 +156,7 @@ function Shell({ signedIn, config, session }: { signedIn: boolean; config: Publi
           <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
         )}
       </footer>
-      {signedIn && (
-        <aside id="context-panel" className="context-panel" hidden={!contextOpen} aria-labelledby="context-heading">
-          <div className="context-panel-heading">
-            <h2 id="context-heading">Context</h2>
-            <button className="sidebar-close" type="button" aria-label="Close context panel" onClick={closeContext}>
-              <ShellIcon name="close" />
-            </button>
-          </div>
-          <p>No contextual information is available for this page yet.</p>
-        </aside>
-      )}
+      {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} />}
     </div>
   );
 }
