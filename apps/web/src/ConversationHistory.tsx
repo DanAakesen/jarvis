@@ -37,7 +37,7 @@ export function ConversationHistory({
   config: PublicConfig;
   historyRefresh?: number;
 }) {
-  const { setWorking } = useJarvisActivity();
+  const { beginWorking } = useJarvisActivity();
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,7 +95,7 @@ export function ConversationHistory({
     event.preventDefault();
     const text = draft.trim();
     if (!text || sending) return;
-    setWorking('chat-turn', true);
+    const finishWorking = beginWorking('chat-turn');
     setSending(true);
     setTurnError('');
     setHistoryError('');
@@ -137,7 +137,7 @@ export function ConversationHistory({
         setReload((value) => value + 1);
       }
     } finally {
-      setWorking('chat-turn', false);
+      finishWorking();
       setSending(false);
     }
   }

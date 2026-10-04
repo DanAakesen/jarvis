@@ -160,8 +160,8 @@ describe('ConversationHistory', () => {
   });
 
   it('keeps chat activity active until an in-flight turn settles after unmount', async () => {
-    let finish: ((value: typeof assistantMessage) => void) | undefined;
-    sendChatTurn.mockImplementation(async () => new Promise((resolve) => { finish = resolve; }));
+    const finishers: Array<(value: typeof assistantMessage) => void> = [];
+    sendChatTurn.mockImplementation(async () => new Promise((resolve) => { finishers.push(resolve); }));
     const content = (showConversation: boolean) => (
       <JarvisActivityProvider>
         <MemoryRouter>
@@ -180,7 +180,16 @@ describe('ConversationHistory', () => {
 
     view.rerender(content(false));
     expect(screen.getByTestId('activity').textContent).toBe('working');
-    finish?.(assistantMessage);
+    view.rerender(content(true));
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'Another question' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
+
+    finishers[0]?.(assistantMessage);
+    expect(screen.getByTestId('activity').textContent).toBe('working');
+    finishers[1]?.(assistantMessage);
     await waitFor(() => expect(screen.getByTestId('activity').textContent).toBe('idle'));
   });
 
