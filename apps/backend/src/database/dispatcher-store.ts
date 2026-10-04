@@ -484,7 +484,14 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
             .input('taskId', sql.BigInt, BigInt(taskId))
             .input('state', sql.NVarChar(32), state)
             .input('invocationCompleted', sql.Bit, invocationCompleted)
-            .query<{ sandboxSessionId: string }>(`DECLARE @ended TABLE (
+            .query<{ sandboxSessionId: string }>(`IF @state = N'NeedsAttention' AND NOT EXISTS (
+                SELECT 1 FROM dbo.tasks WITH (UPDLOCK, ROWLOCK)
+                WHERE id = @taskId AND state = N'NeedsAttention'
+              ) BEGIN
+                SELECT CAST(NULL AS varchar(19)) AS sandboxSessionId WHERE 1 = 0;
+                RETURN;
+              END;
+              DECLARE @ended TABLE (
                 id bigint NOT NULL PRIMARY KEY, task_id bigint NOT NULL,
                 started_at datetime2(7) NOT NULL, ended_at datetime2(7) NOT NULL, size nvarchar(8) NOT NULL
               );
@@ -496,7 +503,17 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
                   WHEN @state = N'Done' OR @invocationCompleted = 1 THEN N'done' ELSE N'cancelled' END,
                 ended_at = SYSUTCDATETIME()
               OUTPUT inserted.id, inserted.task_id, inserted.started_at, inserted.ended_at, inserted.size INTO @ended
-              WHERE task_id = @taskId AND status = N'Active';
+              WHERE task_id = @taskId AND status = N'Active'
+                AND NOT (@state = N'NeedsAttention' AND @invocationCompleted = 0 AND
+                  COALESCE((SELECT TOP (1)
+                    CASE WHEN EXISTS (SELECT 1 FROM dbo.task_events AS event
+                      WHERE event.task_id = @taskId AND event.source = N'runner'
+                        AND event.type IN (N'completed', N'session_question')
+                        AND JSON_VALUE(event.payload, '$.invocationId') = turn.invocation_id)
+                      THEN N'completed' ELSE turn.status END
+                    FROM dbo.sandbox_turns AS turn
+                    WHERE turn.sandbox_session_id = dbo.sandbox_sessions.id
+                    ORDER BY turn.started_at DESC, turn.id DESC), N'') = N'completed');
               IF @state = N'NeedsAttention' AND @invocationCompleted = 0
                 INSERT @ended (id, task_id, started_at, ended_at, size)
                 SELECT s.id, s.task_id, s.started_at, s.ended_at, s.size

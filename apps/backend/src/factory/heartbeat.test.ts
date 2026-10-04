@@ -33,11 +33,12 @@ function setup(records: { status_code: number; body: unknown }[]) {
   const store: SandboxHeartbeatStore = {
     listRunning: vi.fn(async () => [sandbox]),
     recordHeartbeat: vi.fn(async () => {}),
-    markNeedsAttention: vi.fn(async () => true),
+    markNeedsAttention: vi.fn(async () => 'crashed' as const),
     resolvePause: vi.fn(async () => true),
   };
-  const heartbeat = new SandboxHeartbeat(store, () => client);
-  return { heartbeat, store, fetch };
+  const onDecision = vi.fn();
+  const heartbeat = new SandboxHeartbeat(store, () => client, { onDecision });
+  return { heartbeat, store, fetch, onDecision };
 }
 
 afterEach(() => { vi.useRealTimers(); });
@@ -67,7 +68,7 @@ describe('sandbox heartbeat', () => {
   it('moves a task to NeedsAttention after two recorded not-found polls', async () => {
     vi.useFakeTimers();
     const missing = recording.records['status_not_found']!;
-    const { heartbeat, store, fetch } = setup([missing, missing]);
+    const { heartbeat, store, fetch, onDecision } = setup([missing, missing]);
 
     await heartbeat.start();
     await vi.advanceTimersByTimeAsync(0);
@@ -80,6 +81,71 @@ describe('sandbox heartbeat', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(store.markNeedsAttention).toHaveBeenCalledOnce();
     expect(store.markNeedsAttention).toHaveBeenCalledWith('7', undefined, sandbox.invocationId, false);
+    expect(onDecision.mock.calls.map(([decision]) => decision)).toEqual([
+      { sandboxSessionId: '7', invocationId: sandbox.invocationId, httpStatus: 404, decision: 'confirm_failure' },
+      { sandboxSessionId: '7', invocationId: sandbox.invocationId, httpStatus: 404, decision: 'crashed' },
+    ]);
+    await heartbeat.stop();
+  });
+
+  it('uses committed completion evidence when the first poll after completion fails', async () => {
+    vi.useFakeTimers();
+    const missing = recording.records['status_not_found']!;
+    const { heartbeat, store, onDecision } = setup([missing, missing]);
+    // The runner completes between polls; Foundry never returns a completed snapshot.
+    vi.mocked(store.markNeedsAttention).mockResolvedValue('idle_expired');
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(store.markNeedsAttention).toHaveBeenCalledWith('7', undefined, sandbox.invocationId, false);
+    expect(onDecision).toHaveBeenLastCalledWith({
+      sandboxSessionId: '7', invocationId: sandbox.invocationId, httpStatus: 404, decision: 'idle_expired',
+    });
+    await heartbeat.stop();
+  });
+
+  it('resets the failure window after a healthy poll and logs every decision', async () => {
+    vi.useFakeTimers();
+    const missing = recording.records['status_not_found']!;
+    const running = recording.records['status_running']!;
+    const { heartbeat, store, onDecision } = setup([missing, running, missing, missing]);
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(store.markNeedsAttention).not.toHaveBeenCalled();
+    expect(onDecision.mock.calls.map(([decision]) => [decision.httpStatus, decision.decision])).toEqual([
+      [404, 'confirm_failure'], [200, 'running'], [404, 'confirm_failure'],
+    ]);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(store.markNeedsAttention).toHaveBeenCalledOnce();
+    await heartbeat.stop();
+  });
+
+  it('logs soft failures without provider bodies or credentials', async () => {
+    vi.useFakeTimers();
+    const { heartbeat, store, onDecision } = setup([
+      { status_code: 429, body: { error: 'private provider body' } },
+    ]);
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.markNeedsAttention).not.toHaveBeenCalled();
+    expect(onDecision.mock.calls).toEqual([[{
+      sandboxSessionId: '7', invocationId: sandbox.invocationId, httpStatus: 429, decision: 'poll_failed',
+    }]]);
+    await heartbeat.stop();
+  });
+
+  it.each([200, 202])('logs the actual HTTP %i response status', async (statusCode) => {
+    vi.useFakeTimers();
+    const { heartbeat, onDecision } = setup([{
+      status_code: statusCode, body: recording.records['status_running']!.body,
+    }]);
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onDecision).toHaveBeenLastCalledWith({
+      sandboxSessionId: '7', invocationId: sandbox.invocationId, httpStatus: statusCode, decision: 'running',
+    });
     await heartbeat.stop();
   });
 
@@ -94,6 +160,7 @@ describe('sandbox heartbeat', () => {
     await heartbeat.start();
     await vi.advanceTimersByTimeAsync(0);
     expect(onCompleted).toHaveBeenCalledOnce();
+    expect(store.recordHeartbeat).toHaveBeenCalledWith('7', sandbox.invocationId, true);
     expect(store.markNeedsAttention).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(60_000);

@@ -21,6 +21,15 @@ export class ToolRefusal extends Error {
   }
 }
 
+export class ToolFailure extends Error {
+  constructor(reason: string) {
+    const trimmed = typeof reason === 'string' ? reason.trim() : '';
+    if (!trimmed || trimmed.length > 500) throw new TypeError('Invalid tool failure reason');
+    super(trimmed);
+    this.name = 'ToolFailure';
+  }
+}
+
 export interface RegisteredTool extends JarvisTool {
   readonly moduleId: string;
 }

@@ -38,6 +38,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | **Agent choice** | Codex or GitHub Copilot per task, regardless of project. |
 | **Subscriptions** | Codex uses Dan's ChatGPT Pro plan (Jarvis-only login); Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. No per-use billing for either. |
 | **Voice** | An open browser is enough. Danish and English with a language toggle; status requests and follow-ups. Voice Live credentials stay on the backend; the browser connects through an authenticated backend WebSocket relay. |
+| **Notes** | Dan can ask what he wrote about; Jarvis searches the configured OneDrive notes folder and grounds its answer in returned snippets and links. |
 | **GitHub events** | The backend verifies GitHub webhook signatures and ignores duplicate delivery IDs for pull requests, check runs, workflow runs, deployment statuses, and pushes. Delivery payloads are mapped into project records separately. |
 | **Continuity** | Work continues when the browser or voice session closes. |
 | **Sandbox** | One sandbox per task: starts when work begins, closes after delivery or cancel. The agent runs targeted builds and tests only; no Docker. |
@@ -87,7 +88,7 @@ stateDiagram-v2
     Paused --> Cancelled: Cancel
 ```
 
-- **Steer** submits a bounded text correction to the current turn. **Pause** requests a safe stop and remains `PauseRequested` until the backend confirms the turn has stopped; the heartbeat resolves an unsuccessful pause to `Running` or `NeedsAttention`. **Resume** continues the same Foundry session after a clean pause; **cancel** ends the task and requests deletion of its Foundry session.
+- **Steer** submits a bounded text correction to the current turn, or starts a new session on the task branch when the completed turn's session has expired. **Pause** requests a safe stop and remains `PauseRequested` until the backend confirms the turn has stopped; the heartbeat resolves an unsuccessful pause to `Running` or `NeedsAttention`. **Resume** continues the same Foundry session after a clean pause; **cancel** ends the task and requests deletion of its Foundry session.
 - Task controls are offered only for valid task states, with pending and failure feedback beside the action. The backend enforces every transition; a browser cannot set task state directly.
 - If writable disk falls below the configured threshold, the runner reports `disk_low`, stops the current turn, and the backend moves the task to Needs attention with reason `disk_low`.
 - If Codex rejects a turn because the Jarvis login's usage limit is reached, the runner reports the failure as `Codex usage limit reached` (reason `codex_usage_limit`) instead of a generic runner error. The task moves to Needs attention, and other tasks keep running.
@@ -127,6 +128,8 @@ Dan never fills in a project form. He gives Jarvis, by voice or chat, a project 
 ### Settings
 
 Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered.
+
+Dan can also change Jarvis's model or reasoning by chat or voice for the next session, and change the agent or verified model options on a Ready coding task. Running-task model changes are refused with a reason; they never alter an active turn.
 
 | Area | Setting | Default |
 | --- | --- | --- |
