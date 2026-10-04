@@ -72,6 +72,20 @@ describe('backend configuration', () => {
         .toThrow('JARVIS_CHAT_AGENT_NAME');
     }
   });
+  it('validates the optional Foundry memory-embedding deployment name', () => {
+    const FOUNDRY_PROJECT_ENDPOINT = 'https://resource.services.ai.azure.com/api/projects/jarvis';
+    expect(loadConfig({
+      FOUNDRY_PROJECT_ENDPOINT,
+      JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME: 'text-embedding-3-small',
+    }).foundryMemoryEmbeddingDeploymentName).toBe('text-embedding-3-small');
+    expect(() => loadConfig({
+      JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME: 'text-embedding-3-small',
+    })).toThrow('FOUNDRY_PROJECT_ENDPOINT is required');
+    for (const JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME of ['', '../other', 'bad name']) {
+      expect(() => loadConfig({ FOUNDRY_PROJECT_ENDPOINT, JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME }))
+        .toThrow('JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME');
+    }
+  });
   it('accepts a complete bot, audio-origin, and Speech F0 configuration', () => {
     expect(loadConfig({
       TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',

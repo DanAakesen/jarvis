@@ -6,6 +6,24 @@ import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
 import { setJarvisModelTool } from './model-tools.js';
 
+const memoryReadOnlyTools = new Set(['memory_search', 'memory_list', 'memory_history']);
+
+// Keep deletable memory content out of the durable generic tool-call audit.
+function auditToolArguments(toolName: string, value: unknown): unknown {
+  return toolName.startsWith('memory_') ? {} : value;
+}
+
+function auditToolResult(toolName: string, outcome: ToolCallOutcome, result: unknown): unknown {
+  if (!toolName.startsWith('memory_')) return result;
+  return {
+    confirmation: outcome === 'ok'
+      ? 'Memory operation completed.'
+      : outcome === 'refused'
+        ? 'Memory operation was refused.'
+        : 'Memory operation failed.',
+  };
+}
+
 export const coreModule: BackendModule = {
   id: 'core',
   tools: [setJarvisModelTool],
@@ -48,12 +66,24 @@ export const coreModule: BackendModule = {
     })));
     for (const tool of app.jarvisTools.list()) {
       app.post(`/tools/${tool.name}`, { config: { jarvisAgent: true }, schema: { body: tool.inputSchema } }, async (request, reply) => {
-        if (!app.toolCallStore) return reply.code(503).send({ error: 'Tool execution unavailable' });
-        const messageId = request.headers['x-jarvis-message-id'];
-        if (typeof messageId !== 'string' || !/^[1-9]\d{0,18}$/.test(messageId) ||
-          BigInt(messageId) > 9_223_372_036_854_775_807n) {
+        const messageHeader = request.headers['x-jarvis-message-id'];
+        const voiceItemHeader = request.headers['x-jarvis-voice-item-id'];
+        let messageId = typeof messageHeader === 'string' ? messageHeader : undefined;
+        if (messageHeader === undefined && typeof voiceItemHeader === 'string' &&
+            /^[A-Za-z0-9_-]{1,128}$/u.test(voiceItemHeader)) {
+          messageId = await app.conversationStore?.getDanMessageIdBySourceItemId(voiceItemHeader) ?? undefined;
+        }
+        const validMessageId = messageId !== undefined &&
+          /^[1-9]\d{0,18}$/u.test(messageId) && BigInt(messageId) <= 9_223_372_036_854_775_807n;
+        const unrecordedRead = messageId === undefined && request.agentPrincipal !== null &&
+          memoryReadOnlyTools.has(tool.name);
+        if (!validMessageId && !unrecordedRead) {
           return reply.code(400).send({ error: 'Invalid message ID' });
         }
+        if (messageHeader === undefined && messageId !== undefined && validMessageId) {
+          request.jarvisMemorySourceMessageId = messageId;
+        }
+        if (validMessageId && !app.toolCallStore) return reply.code(503).send({ error: 'Tool execution unavailable' });
 
         const controller = new AbortController();
         const abortOnRequest = () => controller.abort();
@@ -85,13 +115,15 @@ export const coreModule: BackendModule = {
           request.raw.removeListener('aborted', abortOnRequest);
           reply.raw.removeListener('close', abortOnClose);
         }
-        await app.toolCallStore.record({
-          messageId,
-          tool: tool.name,
-          arguments: tool.sensitive ? { redacted: true } : request.body,
-          result: tool.sensitive ? { redacted: true } : result,
-          outcome,
-        });
+        if (validMessageId) {
+          await app.toolCallStore!.record({
+            messageId: messageId!,
+            tool: tool.name,
+            arguments: tool.sensitive ? { redacted: true } : auditToolArguments(tool.name, request.body),
+            result: tool.sensitive ? { redacted: true } : auditToolResult(tool.name, outcome, result),
+            outcome,
+          });
+        }
         return { tool: tool.name, outcome, result, confirmation: confirmToolCall(tool.name, outcome, result) };
       });
     }

@@ -16,7 +16,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions; P3-14 opens or reuses an App-token PR after completed task work and leaves policy completion to P3-06; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; P7-03 adds managed-identity Teams notifications, expiring confirmations and Speech F0 fallback; P7-09 adds app-only Graph tools scoped through Exchange RBAC for Applications; live Azure behavior remains unverified |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0; `@microsoft/teams.apps` and `@microsoft/teams.cards` 2.1.0: schema validation, a plugin per area, SSE support, Bot Service adapter and Adaptive Cards | Skeleton, core/factory module registration and P1-03 projects API implemented; P7-03 adds the Teams module and fake-connector coverage; live Bot Service remains unverified |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
-| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, group 5 in #42, heartbeat agent routing in #32, `idle_expired` session end reason in #226, and group 8 conversation/confirmation state in P7-03; deployed heartbeat verification remains open |
+| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, group 5 in #42, heartbeat agent routing in #32, `idle_expired` session end reason in #226, group 8 conversation/confirmation state in P7-03, and group 9 long-term memory in P7-13; deployed heartbeat verification remains open |
 | Files | Azure Blob Storage for artifacts, logs, and archived task events | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
@@ -365,7 +365,7 @@ connector and synthesizer; they do not verify a live Teams or Speech service.
 ## Database startup and migration ownership
 
 The process creates one `mssql` pool when SQL settings are supplied and shares
-that process-owned pool with the tool-call and task stores. Production
+that process-owned pool with the tool-call, conversation, memory and task stores. Production
 configuration requires an Azure SQL host, database and user-assigned identity
 client ID; `azure-active-directory-msi-app-service` delegates token acquisition
 and renewal to Tedious/Azure Identity. TLS certificate validation stays enabled.
@@ -607,6 +607,41 @@ endpoint already comes from Bicep. No schema migration or custom `/chat` route i
 needed. The store passes a disposable SQL Server integration test, not a
 production Azure SQL test. Live Foundry chat streaming and a tool-call row linked
 to its stored message remain a post-merge Azure acceptance check.
+
+### Long-term memory (P7-13)
+
+The core memory module registers `memory_remember`, `memory_search`, `memory_list`,
+`memory_history`, `memory_correct` and `memory_forget`. Writes verify the referenced
+stored message is a Dan message; chat uses its stored message ID, and voice resolves
+the persisted transcript item ID to the transcript's stored message. Only the hosted
+agent may search/list/history without a current message ID, and those source-less
+read-only calls are not persisted as tool calls. All writes remain source-linked.
+Successful changes return a backend-built confirmation; retrieval errors remain
+errors, not empty results. For source-backed memory calls, the generic
+`tool_calls` audit keeps only the operation outcome, not memory arguments/results,
+so forgetting does not leave a second saved copy in that audit.
+
+The SQL store keeps one current memory per stable category/key, source-linked
+revisions, and a content-free forget audit. Same-key updates serialize in SQL;
+unchanged content and source are idempotent. Forget removes the current row and its
+history, not the conversation or source message. Search returns at most five
+memories with up to 500 characters of the current Dan source text. It uses
+`text-embedding-3-small` and cosine vector distance when the SQL vector type exists,
+falls back to full-text search when embeddings or vector search are unavailable,
+then uses bounded substring matching when SQL full-text is not installed. Each
+response identifies its search method and whether more results may exist.
+
+`0016_long_term_memory.sql` conditionally adds the `vector(1536)` column. The
+memory-store startup runs the idempotent
+`db/migrations/setup/0016_long_term_memory.sql` after migrations commit; this
+creates the full-text catalog/index when installed, outside Azure SQL's required
+migration transaction. Bicep deploys a sequential
+Global Standard capacity-1 `text-embedding-3-small` model alongside the existing
+Foundry deployments and sets `JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME`. The backend's
+existing managed identity and Foundry User role call the project embeddings endpoint
+using `https://ai.azure.com/.default`; no key is added. The existing Deploy workflow
+and startup migration runner provide repeatable, idempotent provisioning; no
+separate portal setup or memory-specific bootstrap is required.
 
 ```mermaid
 flowchart LR
@@ -1067,6 +1102,12 @@ The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **A
 Required deployment parameters are `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `foundryNameTimestamp`, and `budgetContactEmails`; the comma-separated email list comes from protected GitHub secret `JARVIS_BUDGET_CONTACT_EMAILS`. `backendImage` and `jarvisAgentObjectId` are optional. `JARVIS_GRAPH_APP_ID` and `JARVIS_GRAPH_TIME_ZONE` are optional GitHub variables set by [`infra/setup-outlook.ps1`](../infra/setup-outlook.ps1); both must be valid before the Bicep template enables Outlook tools. The app secret is not a deployment variable: it stays in Key Vault. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed. `pcBridgeClientId` is optional: Main Deploy passes it from the nonsecret Actions variable `JARVIS_PC_BRIDGE_CLIENT_ID`, and Bicep omits `ENTRA_PC_BRIDGE_CLIENT_ID` until it is provisioned.
 
 PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. Both `gpt-5.6-luna` and `gpt-realtime-2.1` use Global Standard capacity 1, configured independently. Dan accepted this starting allocation; adjust it if testing demonstrates rate limits. Exact model-specific limits and regional quota availability remain to be verified in P0-16. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
+
+P7-13 adds a sequential Global Standard capacity-1 `text-embedding-3-small`
+deployment after `gpt-realtime-2.1`, with the backend deployment name supplied to
+the Container App by Bicep. This small pay-as-you-go deployment is used only for
+memory embeddings; a model or vector capability failure falls back to lexical
+retrieval. Normal Bicep deployment is idempotent and does not require a portal step.
 
 `sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, and `budgetStartDate` to `2026-10-01T00:00:00Z`. Budget notification emails are required through `budgetContactEmails`; actual cost is interpreted in the subscription billing currency, which remains to be confirmed as DKK.
 
