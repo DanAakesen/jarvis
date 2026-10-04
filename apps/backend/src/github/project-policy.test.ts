@@ -46,6 +46,7 @@ function github(options: {
   mergeStatus?: number;
   requestStatus?: number;
   rateLimitHeaders?: Record<string, string>;
+  requestBody?: string;
 } = {}, onBaseBranchRead?: () => void) {
   const calls: { url: string; method: string; body?: string }[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
@@ -53,7 +54,7 @@ function github(options: {
     const method = init?.method ?? 'GET';
     calls.push({ url, method, ...(typeof init?.body === 'string' ? { body: init.body } : {}) });
     if (options.requestStatus) {
-      return new Response('{}', { status: options.requestStatus, headers: options.rateLimitHeaders });
+      return new Response(options.requestBody ?? '{}', { status: options.requestStatus, headers: options.rateLimitHeaders });
     }
     if (url.endsWith('/pulls/42/merge')) {
       if (options.mergeStatus && options.mergeStatus !== 200) {
@@ -194,8 +195,9 @@ describe('GitHub project completion policies', () => {
     ['429 responses', 429, {}],
     ['rate-limited 403 responses', 403, { 'x-ratelimit-remaining': '0' }],
     ['secondary rate limit 403 responses', 403, { 'retry-after': '60' }],
-  ])('leaves GitHub %s retryable', async (_description, requestStatus, rateLimitHeaders) => {
-    const test = fixture(candidate(), { requestStatus, rateLimitHeaders });
+    ['headerless secondary rate limit 403 responses', 403, {}, '{"message":"You have exceeded a secondary rate limit."}'],
+  ])('leaves GitHub %s retryable', async (_description, requestStatus, rateLimitHeaders, requestBody) => {
+    const test = fixture(candidate(), { requestStatus, rateLimitHeaders, requestBody });
 
     await expect(test.evaluator.handle(mapping)).rejects.toThrow('GitHub request failed');
     expect(test.recordEvent).not.toHaveBeenCalled();

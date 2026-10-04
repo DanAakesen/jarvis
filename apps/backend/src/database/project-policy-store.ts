@@ -21,7 +21,7 @@ export function createProjectPolicyStore(pool: sql.ConnectionPool): ProjectPolic
       return withTaskPolicyLock(pool, taskId, async (transaction) => {
         const { recordset } = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, taskId)
-          .query<{ state: string }>('SELECT state FROM dbo.tasks WITH (UPDLOCK, ROWLOCK) WHERE id = @taskId;');
+          .query<{ state: string }>('SELECT state FROM dbo.tasks WHERE id = @taskId;');
         const state = recordset[0]?.state;
         if (state !== 'Running' && state !== 'NeedsAttention') {
           return { kind: 'inactive' as const };

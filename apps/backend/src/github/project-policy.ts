@@ -48,12 +48,44 @@ class GithubRequestError extends Error {
 
 const githubApi = 'https://api.github.com';
 const maxResponseBytes = 1024 * 1024;
+const maxErrorResponseBytes = 16 * 1024;
 const shaPattern = /^[\da-f]{40}$/u;
 
 function object(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
+}
+
+async function isRateLimitedResponse(response: Response): Promise<boolean> {
+  if (response.status === 429) return true;
+  if (response.status !== 403) return false;
+  if (response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after')) return true;
+  const reader = response.body?.getReader();
+  if (!reader) return false;
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxErrorResponseBytes) {
+        await reader.cancel().catch(() => undefined);
+        return false;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  try {
+    const payload = object(JSON.parse(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8')) as unknown);
+    const message = payload?.message;
+    return typeof message === 'string' && /rate limit|abuse detection/iu.test(message);
+  } catch {
+    return false;
+  }
 }
 
 async function requestJson(
@@ -75,9 +107,7 @@ async function requestJson(
     redirect: 'error',
   });
   if (!response.ok) {
-    const rateLimited = response.status === 429 ||
-      (response.status === 403 &&
-        (response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after')));
+    const rateLimited = await isRateLimitedResponse(response);
     await response.body?.cancel().catch(() => undefined);
     throw new GithubRequestError(response.status, rateLimited);
   }
@@ -200,7 +230,9 @@ export function createProjectPolicyEvaluator({
 
   async function markDone(candidate: PolicyPullRequest): Promise<void> {
     if (candidate.taskState !== 'Running' && candidate.taskState !== 'NeedsAttention') return;
-    await tasks.transition(candidate.taskId, 'Done', true);
+    await store.withActiveTask(candidate.taskId, async () => {
+      await tasks.transition(candidate.taskId, 'Done', true);
+    });
   }
 
   async function evaluate(candidate: PolicyPullRequest): Promise<void> {
@@ -282,10 +314,22 @@ export function createProjectPolicyEvaluator({
       }
 
       mergeRequested = true;
-      const merge = await store.withActiveTask(candidate.taskId, () => requestJson(fetchImpl, `${path}/merge`, token, {
-        merge_method: 'squash',
-        sha: pullRequest.headSha,
-      }));
+      const merge = await store.withActiveTask(candidate.taskId, async () => {
+        const result = await requestJson(fetchImpl, `${path}/merge`, token, {
+          merge_method: 'squash',
+          sha: pullRequest.headSha,
+        });
+        if (result.merged === true) {
+          await tasks.recordEvent({
+            taskId: candidate.taskId,
+            type: 'project_policy_merge_requested',
+            summary: 'GitHub accepted the squash merge; awaiting its pull request webhook.',
+            payload: { pullRequest: candidate.number },
+            source: 'backend',
+          });
+        }
+        return result;
+      });
       if (merge.kind === 'inactive') {
         await recordReason(candidate.taskId, 'The task is no longer active; automatic merge was not attempted.');
         return;
@@ -295,13 +339,6 @@ export function createProjectPolicyEvaluator({
         await recordReason(candidate.taskId, 'GitHub did not confirm the squash merge.');
         return;
       }
-      await tasks.recordEvent({
-        taskId: candidate.taskId,
-        type: 'project_policy_merge_requested',
-        summary: 'GitHub accepted the squash merge; awaiting its pull request webhook.',
-        payload: { pullRequest: candidate.number },
-        source: 'backend',
-      });
     } catch (error) {
       if (error instanceof GithubRequestError && !error.rateLimited && error.status >= 400 && error.status < 500) {
         const reason = mergeRequested
