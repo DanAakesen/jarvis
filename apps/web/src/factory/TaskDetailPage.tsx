@@ -16,6 +16,20 @@ interface TaskEvent {
   at: string;
 }
 
+const usageSources = ['sandbox', 'jarvis_model', 'voice', 'codex', 'copilot'] as const;
+const usageMetrics = ['minutes', 'input_tokens', 'output_tokens', 'turns', 'premium_requests'] as const;
+
+interface TaskUsageRecord {
+  id: string | null;
+  source: typeof usageSources[number];
+  metric: typeof usageMetrics[number];
+  quantity: number;
+  costDkk: number | null;
+  sandboxSessionId: string | null;
+  at: string;
+  estimated: boolean;
+}
+
 interface TaskDetail {
   id: string;
   title: string;
@@ -33,6 +47,7 @@ interface TaskDetail {
   startedAt: string | null;
   finishedAt: string | null;
   events: TaskEvent[];
+  usage: TaskUsageRecord[];
 }
 
 interface ProjectLink {
@@ -83,6 +98,19 @@ function isTaskEvent(value: unknown): value is TaskEvent {
     isDate(value.at);
 }
 
+function isTaskUsageRecord(value: unknown): value is TaskUsageRecord {
+  return isObject(value) &&
+    (value.id === null || (typeof value.id === 'string' && /^[1-9]\d{0,18}$/.test(value.id))) &&
+    usageSources.includes(value.source as typeof usageSources[number]) &&
+    usageMetrics.includes(value.metric as typeof usageMetrics[number]) &&
+    typeof value.quantity === 'number' && Number.isFinite(value.quantity) && value.quantity >= 0 &&
+    (value.costDkk === null || (typeof value.costDkk === 'number' && Number.isFinite(value.costDkk) && value.costDkk >= 0)) &&
+    (value.sandboxSessionId === null ||
+      (typeof value.sandboxSessionId === 'string' && /^[1-9]\d{0,18}$/.test(value.sandboxSessionId))) &&
+    typeof value.at === 'string' && Number.isFinite(Date.parse(value.at)) &&
+    typeof value.estimated === 'boolean';
+}
+
 function isTaskDetail(value: unknown): value is TaskDetail {
   return isObject(value) && isSqlId(value.id) && typeof value.title === 'string' &&
     typeof value.request === 'string' && isSqlId(value.projectId) &&
@@ -96,7 +124,8 @@ function isTaskDetail(value: unknown): value is TaskDetail {
     (typeof value.branch === 'string' || value.branch === null) && isDate(value.createdAt) &&
     (value.startedAt === null || isDate(value.startedAt)) &&
     (value.finishedAt === null || isDate(value.finishedAt)) &&
-    Array.isArray(value.events) && value.events.every(isTaskEvent);
+    Array.isArray(value.events) && value.events.every(isTaskEvent) &&
+    Array.isArray(value.usage) && value.usage.length <= 1000 && value.usage.every(isTaskUsageRecord);
 }
 
 function isProjectLink(value: unknown): value is ProjectLink {
@@ -117,6 +146,36 @@ function formatDisk(bytes: unknown): string {
 
 function formatDate(value: string | null): string {
   return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Not started';
+}
+
+function usageLabel(metric: TaskUsageRecord['metric']): string {
+  return {
+    minutes: 'Sandbox minutes',
+    input_tokens: 'Input tokens',
+    output_tokens: 'Output tokens',
+    turns: 'Agent turns',
+    premium_requests: 'Premium requests',
+  }[metric];
+}
+
+function sourceLabel(record: TaskUsageRecord): string {
+  if (record.source === 'sandbox') {
+    return record.sandboxSessionId ? `Sandbox session ${record.sandboxSessionId}` : 'Sandbox';
+  }
+  return {
+    jarvis_model: 'Jarvis model',
+    voice: 'Voice',
+    codex: 'Codex',
+    copilot: 'Copilot',
+  }[record.source];
+}
+
+function formatQuantity(record: TaskUsageRecord): string {
+  const amount = new Intl.NumberFormat('en-GB', {
+    minimumFractionDigits: record.metric === 'minutes' ? 2 : 0,
+    maximumFractionDigits: record.metric === 'minutes' ? 2 : 0,
+  }).format(record.quantity);
+  return record.metric === 'minutes' ? `${amount} min` : amount;
 }
 
 function diskReading(event: TaskEvent): Record<string, unknown> | null {
@@ -473,9 +532,40 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
                 </ol>
               )}
           </section>
-          <section className="task-detail-section task-usage-slot" aria-labelledby="usage-heading">
+          <section className="task-detail-section task-usage" aria-labelledby="usage-heading">
             <h2 id="usage-heading">Usage</h2>
-            <p>Usage reporting will appear here when it is available.</p>
+            <p className="task-usage-note">
+              Sandbox cost is estimated from session time. Agent usage appears only when the provider reports it.
+            </p>
+            {task.usage.length === 0
+              ? <p>No usage has been recorded for this task yet.</p>
+              : (
+                <div className="task-usage-table-wrap">
+                  <table className="task-usage-table">
+                    <caption>Usage entries for task {taskId}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Source</th>
+                        <th scope="col">Usage</th>
+                        <th scope="col">Quantity</th>
+                        <th scope="col">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {task.usage.map((item, index) => (
+                        <tr key={item.id ?? `${item.sandboxSessionId}-${item.metric}-${index}`}>
+                          <th scope="row">{sourceLabel(item)}</th>
+                          <td>{usageLabel(item.metric)}</td>
+                          <td>{formatQuantity(item)}</td>
+                          <td>{item.costDkk === null
+                            ? '—'
+                            : `${item.estimated ? 'Estimated · ' : ''}DKK ${item.costDkk.toFixed(4)}`}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
           </section>
           <section className="task-detail-section" aria-labelledby="timeline-heading">
             <h2 id="timeline-heading">Task timeline</h2>

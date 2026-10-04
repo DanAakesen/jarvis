@@ -109,6 +109,38 @@ const task = {
     event('23', 'check_result', 'github', 'GitHub reported passing checks'),
     event('24', 'steered', 'dan', 'Dan sent a steering message'),
   ],
+  usage: [
+    {
+      id: '1',
+      source: 'sandbox',
+      metric: 'minutes',
+      quantity: 3.5,
+      costDkk: 0.0519,
+      sandboxSessionId: '9',
+      at: '2026-10-04T12:00:00.000Z',
+      estimated: true,
+    },
+    {
+      id: null,
+      source: 'copilot',
+      metric: 'turns',
+      quantity: 2,
+      costDkk: null,
+      sandboxSessionId: null,
+      at: '2026-10-04T12:02:00.000Z',
+      estimated: false,
+    },
+    {
+      id: null,
+      source: 'copilot',
+      metric: 'premium_requests',
+      quantity: 1,
+      costDkk: null,
+      sandboxSessionId: null,
+      at: '2026-10-04T12:02:00.000Z',
+      estimated: false,
+    },
+  ],
 };
 
 let taskEvents: typeof task.events;
@@ -175,11 +207,16 @@ describe('task detail page', () => {
     expect(screen.getByRole('link', { name: 'task/disk-headroom' }).getAttribute('href'))
       .toBe('https://github.com/DanAakesen/jarvis/tree/task/disk-headroom');
     expect(screen.getAllByText('Not reported')).toHaveLength(2);
-    expect(screen.getByText('Usage reporting will appear here when it is available.')).not.toBeNull();
     expect(screen.getAllByText('6.00 GiB')).toHaveLength(2);
     expect(screen.getByText('2.50 GiB')).not.toBeNull();
     expect(screen.getByText('0.50 GiB')).not.toBeNull();
     expect(screen.getAllByText('1.00 GiB')).toHaveLength(2);
+    expect(await screen.findByRole('table', { name: 'Usage entries for task 42' })).not.toBeNull();
+    expect(screen.getByText('Sandbox session 9')).not.toBeNull();
+    expect(screen.getByText('3.50 min')).not.toBeNull();
+    expect(screen.getByText('Estimated · DKK 0.0519')).not.toBeNull();
+    expect(screen.getByText('Agent turns')).not.toBeNull();
+    expect(screen.getByText('Premium requests')).not.toBeNull();
     expect(screen.getByText('Session disk snapshot')).not.toBeNull();
     expect(screen.getByText('Low sandbox disk; task needs attention')).not.toBeNull();
     expect(screen.getByText('GitHub reported passing checks')).not.toBeNull();
@@ -230,5 +267,30 @@ describe('task detail page', () => {
       'https://api.example.com/factory/tasks/42?eventLimit=100&eventOffset=100',
       expect.objectContaining({ headers: { Authorization: `${['Bear', 'er'].join('')} test-access-token` } }),
     );
+  });
+
+  it('retries the task detail request and uses the same response for usage', async () => {
+    const user = userEvent.setup();
+    const loadTask = fetchMock.getMockImplementation();
+    if (!loadTask) throw new Error('Default fetch mock is missing');
+    let failed = false;
+    fetchMock.mockImplementation(async (input, init) => {
+      if (!failed && String(input).includes('/factory/tasks/42')) {
+        failed = true;
+        return new Response(JSON.stringify({ error: 'unavailable' }), { status: 503 });
+      }
+      return loadTask(input, init);
+    });
+    render(
+      <MemoryRouter>
+        <TaskDetailPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} taskId="42" />
+      </MemoryRouter>,
+    );
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Task details could not be loaded');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('table', { name: 'Usage entries for task 42' })).not.toBeNull();
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/factory/tasks/42'))).toHaveLength(2);
   });
 });

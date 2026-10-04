@@ -73,9 +73,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   (`src/activity.ts`): running tasks (title, project, agent, activity, start
   time) and activity items (category, title, `activity.link`, time). Only
   `task:<id>`, `release:<id>` and `project:<id>` links become routes. Dismissal
-  removes an item only after the injected action resolves. No backend feed
-  exists yet, so production shows the unavailable state; P1-13 adds the API and
-  live updates.
+  removes an item only after the backend confirms it. P1-13 loads this data
+  from authenticated `GET /now`, persists dismissal through
+  `POST /now/activity/:id/dismiss`, and refreshes snapshots from authenticated
+  `/now/events`. The panel identifies unavailable data and reconnecting or
+  unavailable live updates rather than claiming a stale snapshot is current.
 - `/me` inherits the root authentication hook. The verifier accepts only
   Dan's signed delegated API token and returns a bounded display name from its
   validated `name` claim, falling back to `Dan` if that optional claim is absent
@@ -136,13 +138,27 @@ Connection and reconnection state is visible. The list API does not yet return
 pull-request, check, or usage values; cards mark those data points unavailable
 instead of inferring them. No backend route or persistence change is required.
 
+The main page's authenticated `GET /now` returns up to 100 running tasks with
+their project, agent, current activity and start time, plus up to 100
+non-dismissed attention, release/deployment and credential activity records.
+The read derives attention from the latest activity for each task in
+`NeedsAttention`; other categories use their `activity.kind`. The
+`POST /now/activity/:id/dismiss` route updates `activity.dismissed_at`, returns
+404 for an unknown ID, and is safe to repeat for an existing item. Task-event
+commits and dismissals invalidate the Now snapshot through `/now/events`; the
+browser reconnects and rereads the bounded snapshot. This stream is separate
+from task-history replay and has a 25-second heartbeat. These routes use the
+default Dan-only authentication. Offline API and SQL Server integration tests
+cover the contracts; deployed Entra, SQL and streaming behavior remain
+unverified.
+
 P1-09's task detail page reads `GET /factory/tasks/:id` in 100-event pages using
 `eventOffset`; the backend merges archived and SQL rows transparently. It resumes
 the authenticated P1-06 SSE stream from the last event in the initial page and
 deduplicates live/replayed events with the same persisted IDs. Project links reuse
 the active-project API to form validated GitHub branch links. PR/check data,
-artifacts, usage, and task-control writes remain unavailable to this page until
-their owning integrations and P2 controls are ready. For tasks created from a
+artifacts and task-control writes remain unavailable to this page until
+their owning integrations and P2 controls are ready; P2-12's usage section shows the task's recorded usage. For tasks created from a
 conversation, it fetches the matching message with a one-row paginated history
 request. No schema or API write path changed.
 
@@ -290,6 +306,18 @@ tool routes accept Dan's delegated token and opt in to the Jarvis agent identity
 process shutdown behavior are preserved.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
+
+P2-12 adds group 7 `dbo.usage`. Before each ACP prompt the runner sends an
+`agent_turn` event; the backend derives Codex/Copilot from the task row and
+idempotently stores the turn. It stores token or premium-request counts only when
+an ACP result or usage notification contains a nonnegative integer in the
+allowlisted `usage` fields. The provider's values are not inferred from a turn.
+When a sandbox session ends, the dispatcher stores its elapsed minutes and
+estimated DKK in the same transaction as the session/turn end updates. Task detail
+also calculates a live estimate for an open session. Rates use the documented
+Sweden Central vCPU/memory basis: 0.8901 DKK/hour for 1×2 and 1.7802 DKK/hour
+for 2×4; actual billed amounts may differ. SQL Server integration and live
+provider reporting remain post-merge checks.
 
 P6-03's backend job checks for events older than 90 days hourly, in bounded SQL
 batches, and uploads deterministic per-task blobs before deleting each batch in

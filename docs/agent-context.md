@@ -636,6 +636,14 @@ P2-11 provider option verification uses `npm ci --prefix runner/tools` and
 credentials are needed for these checks. Runner and Foundry contract tests
 exercise the local wire behavior, not authenticated model availability.
 
+P2-12 usage verification uses those pinned package docs and runner contracts.
+Offline inspection found that the Codex ACP README advertises token-usage events,
+without a confirmed field schema; the Copilot CLI README says each prompt consumes
+a premium request, without documenting a per-turn ACP report. Neither establishes
+what a live run sends. After merge, run one Codex task and one Copilot task, then
+check task detail against each runner event and the provider's actual response;
+record which token or premium-request fields, if any, were reported.
+
 The main-only [runner deploy workflow](../.github/workflows/runner-deploy.yml)
 requires Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME`, set to `jarvis-infra` after
 the first successful Deploy run. It consumes that deployment's existing outputs and bootstrap

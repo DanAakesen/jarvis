@@ -368,6 +368,8 @@ def test_codex_options_are_applied_and_confirmed_over_acp(tmp_path, monkeypatch)
         }),
     ]
     assert requests[-1][0] == "session/prompt"
+    assert state.events[-1]["kind"] == "agent_turn"
+    assert state.events[-1]["data"] == {"agent": "codex"}
 
 
 def test_codex_option_mismatch_fails_instead_of_reporting_success(tmp_path, monkeypatch):
