@@ -1,5 +1,6 @@
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
+import { withTaskPolicyLock as withProjectPolicyTaskLock } from './task-policy-lock.js';
 import type { DispatcherStore, DispatchClaimResult, TaskControlTarget } from '../factory/dispatcher.js';
 import type { RunningSandbox } from '../factory/heartbeat.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
@@ -92,6 +93,9 @@ async function insertEvent(
 
 export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEventHub): DispatcherStore {
   return {
+    async withTaskPolicyLock<T>(taskId: string, operation: () => Promise<T>) {
+      return withProjectPolicyTaskLock(pool, taskId, async () => operation());
+    },
     async claimNext(owner, leaseSeconds, maxAttempts): Promise<DispatchClaimResult> {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();

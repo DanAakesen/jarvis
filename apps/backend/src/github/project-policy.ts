@@ -41,7 +41,7 @@ interface PullRequestSnapshot {
 }
 
 class GithubRequestError extends Error {
-  constructor(readonly status: number) {
+  constructor(readonly status: number, readonly rateLimited: boolean) {
     super('GitHub request failed');
   }
 }
@@ -75,8 +75,11 @@ async function requestJson(
     redirect: 'error',
   });
   if (!response.ok) {
+    const rateLimited = response.status === 429 ||
+      (response.status === 403 &&
+        (response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after')));
     await response.body?.cancel().catch(() => undefined);
-    throw new GithubRequestError(response.status);
+    throw new GithubRequestError(response.status, rateLimited);
   }
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && Number(contentLength) > maxResponseBytes) {
@@ -300,7 +303,7 @@ export function createProjectPolicyEvaluator({
         source: 'backend',
       });
     } catch (error) {
-      if (error instanceof GithubRequestError && error.status >= 400 && error.status < 500) {
+      if (error instanceof GithubRequestError && !error.rateLimited && error.status >= 400 && error.status < 500) {
         const reason = mergeRequested
           ? 'GitHub refused the squash merge because merge rules or branch protection prevent it.'
           : 'GitHub refused to verify the pull request state.';

@@ -44,12 +44,17 @@ function github(options: {
   checkConclusion?: string;
   checkRuns?: readonly Record<string, unknown>[];
   mergeStatus?: number;
-} = {}) {
+  requestStatus?: number;
+  rateLimitHeaders?: Record<string, string>;
+} = {}, onBaseBranchRead?: () => void) {
   const calls: { url: string; method: string; body?: string }[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? 'GET';
     calls.push({ url, method, ...(typeof init?.body === 'string' ? { body: init.body } : {}) });
+    if (options.requestStatus) {
+      return new Response('{}', { status: options.requestStatus, headers: options.rateLimitHeaders });
+    }
     if (url.endsWith('/pulls/42/merge')) {
       if (options.mergeStatus && options.mergeStatus !== 200) {
         return new Response('{}', { status: options.mergeStatus });
@@ -83,6 +88,7 @@ function github(options: {
       return new Response(JSON.stringify({ state: 'success', total_count: 0, statuses: [] }));
     }
     if (url.endsWith('/branches/main')) {
+      onBaseBranchRead?.();
       return new Response(JSON.stringify({ commit: { sha: options.branchSha ?? baseSha } }));
     }
     throw new Error(`Unexpected GitHub request: ${url}`);
@@ -93,15 +99,24 @@ function github(options: {
 function fixture(
   project: PolicyPullRequest = candidate(),
   githubOptions: Parameters<typeof github>[0] = {},
+  onBaseBranchRead?: () => void,
 ) {
   const getPullRequest = vi.fn(async () => project);
-  const store: ProjectPolicyStore = { getPullRequest };
+  let taskActive = true;
+  const store: ProjectPolicyStore = {
+    getPullRequest,
+    async withActiveTask<T>(_taskId: string, operation: () => Promise<T>) {
+      return taskActive
+        ? { kind: 'active' as const, value: await operation() }
+        : { kind: 'inactive' as const };
+    },
+  };
   const transition = vi.fn(async () => ({ kind: 'ok' as const, task: {} as never }));
   const recordEvent = vi.fn(async () => ({ id: '1' } as never));
   const tasks = { transition, recordEvent } as unknown as Pick<TaskStore, 'transition' | 'recordEvent'>;
   const issue = vi.fn(async () => 'installation-token');
   const tokenIssuer: GitHubAppTokenIssuer = { issue };
-  const api = github(githubOptions);
+  const api = github(githubOptions, onBaseBranchRead);
   const evaluator = createProjectPolicyEvaluator({ store, tasks, tokenIssuer, fetch: api.fetch });
   return {
     evaluator,
@@ -110,6 +125,7 @@ function fixture(
     transition,
     recordEvent,
     issue,
+    setTaskActive(active: boolean) { taskActive = active; },
   };
 }
 
@@ -161,6 +177,28 @@ describe('GitHub project completion policies', () => {
     await confirmation.evaluator.handle({ ...mapping, state: 'merged', mergedAt: '2026-10-04T12:05:00.000Z' });
     expect(confirmation.transition).toHaveBeenCalledWith('7', 'Done', true);
     expect(test.issue).toHaveBeenCalledOnce();
+  });
+
+  it('does not request a merge when the task was cancelled during GitHub verification', async () => {
+    const test = fixture(candidate(), {}, () => test.setTaskActive(false));
+
+    await test.evaluator.handle(mapping);
+
+    expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
+    expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      summary: expect.stringContaining('task is no longer active'),
+    }));
+  });
+
+  it.each([
+    ['429 responses', 429, {}],
+    ['rate-limited 403 responses', 403, { 'x-ratelimit-remaining': '0' }],
+    ['secondary rate limit 403 responses', 403, { 'retry-after': '60' }],
+  ])('leaves GitHub %s retryable', async (_description, requestStatus, rateLimitHeaders) => {
+    const test = fixture(candidate(), { requestStatus, rateLimitHeaders });
+
+    await expect(test.evaluator.handle(mapping)).rejects.toThrow('GitHub request failed');
+    expect(test.recordEvent).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -1,5 +1,6 @@
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
+import { withTaskPolicyLock } from './task-policy-lock.js';
 import type { ProjectPolicyStore, PolicyPullRequest } from '../github/project-policy.js';
 
 export function createProjectPolicyStore(pool: sql.ConnectionPool): ProjectPolicyStore {
@@ -15,6 +16,20 @@ export function createProjectPolicyStore(pool: sql.ConnectionPool): ProjectPolic
           INNER JOIN dbo.tasks AS t ON t.id = pr.task_id
           WHERE p.repo = @repository AND pr.number = @number;`);
       return recordset[0] ?? null;
+    },
+    async withActiveTask<T>(taskId: string, operation: () => Promise<T>) {
+      return withTaskPolicyLock(pool, taskId, async (transaction) => {
+        const { recordset } = await new sql.Request(transaction)
+          .input('taskId', sql.BigInt, taskId)
+          .query<{ state: string }>('SELECT state FROM dbo.tasks WITH (UPDLOCK, ROWLOCK) WHERE id = @taskId;');
+        const state = recordset[0]?.state;
+        if (state !== 'Running' && state !== 'NeedsAttention') {
+          return { kind: 'inactive' as const };
+        }
+
+        const value = await operation();
+        return { kind: 'active' as const, value };
+      });
     },
   };
 }

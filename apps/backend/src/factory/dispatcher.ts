@@ -35,6 +35,7 @@ export interface DispatcherStore {
     invocationId: string;
   }): Promise<string>;
   getControlTarget(taskId: string): Promise<TaskControlTarget | null>;
+  withTaskPolicyLock<T>(taskId: string, operation: () => Promise<T>): Promise<T>;
   recordControlTurn(target: TaskControlTarget, accepted: InvocationAccepted, message: string): Promise<boolean>;
   recordResumedTurn(target: TaskControlTarget, accepted: InvocationAccepted): Promise<RunningSandbox>;
   endTaskSessions(taskId: string, state: string): Promise<string[]>;
@@ -218,14 +219,18 @@ export class TaskDispatcher implements TaskController {
     }
     if (task.state === 'Running' && (!activeTurn || !target)) return { kind: 'unavailable' };
     if (task.state === 'Paused' && !target) return { kind: 'unavailable' };
-    if (task.state === 'Running' && target) {
-      try {
-        await this.clientFor(target.agentName).cancel(target.invocationId);
-      } catch {
-        return { kind: 'failed' };
+    const cancellation = await this.store.withTaskPolicyLock(taskId, async () => {
+      if (task.state === 'Running' && target) {
+        try {
+          await this.clientFor(target.agentName).cancel(target.invocationId);
+        } catch {
+          return { kind: 'cancel-failed' as const };
+        }
       }
-    }
-    const cancelled = await this.tasks.transition(taskId, 'Cancelled');
+      return { kind: 'transitioned' as const, result: await this.tasks.transition(taskId, 'Cancelled') };
+    });
+    if (cancellation.kind === 'cancel-failed') return { kind: 'failed' };
+    const cancelled = cancellation.result;
     if (cancelled.kind !== 'ok') return transitionResult(cancelled.kind);
     let cleanupFailed = false;
     if (target) {
