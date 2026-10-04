@@ -1,6 +1,7 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { useEffect, useRef, useState } from 'react';
 import type { PublicConfig } from '../config/public-config';
+import { useJarvisActivity } from './activity-context';
 import { VoiceOrb } from './VoiceOrb';
 import { BrowserVoiceClient, type VoiceLanguage, type VoiceStatus } from './voice-client';
 
@@ -29,9 +30,11 @@ export function VoiceControls({
   language?: VoiceLanguage;
   onSessionEnded?: () => void;
 }) {
+  const { setWorking } = useJarvisActivity();
   const client = useRef<BrowserVoiceClient | null>(null);
   const [status, setStatus] = useState<VoiceStatus>('stopped');
   const [message, setMessage] = useState(initialMessage);
+  const [audioLevel, setAudioLevel] = useState(0);
   const [muted, setMuted] = useState(false);
   const active = status !== 'stopped' && status !== 'error';
   const pending = status === 'connecting' || status === 'reconnecting' || status === 'stopping';
@@ -39,7 +42,8 @@ export function VoiceControls({
   useEffect(() => () => {
     client.current?.stop();
     client.current = null;
-  }, []);
+    setWorking('voice-turn', false);
+  }, [setWorking]);
 
   const start = () => {
     const voice = new BrowserVoiceClient({
@@ -47,9 +51,11 @@ export function VoiceControls({
       getAccessToken: () => accessToken(authClient, config),
       language,
       ...(onSessionEnded ? { onSessionEnded } : {}),
+      onAudioLevel: (level) => setAudioLevel(Math.max(0, Math.min(1, level))),
       onStatus: (nextStatus, nextMessage) => {
         setStatus(nextStatus);
         setMessage(nextMessage);
+        setWorking('voice-turn', nextStatus === 'thinking' || nextStatus === 'speaking');
         if (nextStatus === 'stopped' || nextStatus === 'error') {
           client.current = null;
           setMuted(false);
@@ -74,7 +80,7 @@ export function VoiceControls({
 
   return (
     <>
-      <VoiceOrb status={status} message={message} />
+      <VoiceOrb status={status} message={message} audioLevel={audioLevel} />
       <div className="action-row">
         {active
           ? <button className="secondary-button" type="button" onClick={stop} disabled={status === 'stopping'}>Stop voice</button>

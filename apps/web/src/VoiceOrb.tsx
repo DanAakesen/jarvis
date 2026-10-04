@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { VoiceStatus } from './voice-client';
 
 type VoiceOrbState = {
@@ -17,15 +18,17 @@ const voiceOrbStates: Record<VoiceStatus | 'tool_call', VoiceOrbState> = {
   tool_call: { className: 'tool-call', message: '' },
 };
 
-export function VoiceOrb({ status, message }: { status: string; message: string }) {
+export function VoiceOrb({ status, message, audioLevel = 0 }: { status: string; message: string; audioLevel?: number }) {
   const state = voiceOrbStates[status as keyof typeof voiceOrbStates] ?? {
     className: 'unavailable',
     message: 'Voice status unavailable. The runtime reported an unrecognized status.',
   };
   const statusMessage = state.message || (status === 'error' ? `Voice unavailable. ${message}` : message);
+  const level = Number.isFinite(audioLevel) ? Math.max(0, Math.min(1, audioLevel)) : 0;
 
   return (
-    <div className={`voice-orb-presentation voice-orb-${state.className}`} data-state={state.className}>
+    <div className={`voice-orb-presentation voice-orb-${state.className}`} data-state={state.className}
+      style={{ '--voice-level': level } as CSSProperties}>
       <div className="voice-orb" aria-hidden="true"><span /></div>
       <div className="voice-orb-copy">
         <p

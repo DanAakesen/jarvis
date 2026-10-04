@@ -44,7 +44,7 @@ function audioAdapter(onOpen?: () => void) {
   return {
     prepare: vi.fn(async () => {}),
     open: vi.fn(async () => { onOpen?.(); }),
-    play: vi.fn(),
+    play: vi.fn(() => 0.5),
     stopPlayback: vi.fn(),
     hasPlayback: vi.fn(() => false),
     setPlaybackEndedHandler: vi.fn((handler: () => void) => { playbackEnded = handler; }),
@@ -134,12 +134,14 @@ describe('BrowserVoiceClient', () => {
   it('stops current playback when speech starts', async () => {
     const audio = audioAdapter();
     const statuses: string[] = [];
+    const audioLevels: number[] = [];
     let socket: MockSocket | undefined;
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com',
       getAccessToken: async () => 'token',
       language: 'en',
       onStatus: (status) => statuses.push(status),
+      onAudioLevel: (level) => audioLevels.push(level),
       createAudio: () => audio,
       createSocket: (url, protocols) => {
         socket = new MockSocket(url, protocols);
@@ -153,7 +155,9 @@ describe('BrowserVoiceClient', () => {
     socket?.receive({ type: 'response.created' });
     expect(statuses.at(-1)).toBe('thinking');
     socket?.receive({ type: 'response.audio.delta', delta: 'AQID' });
+    expect(audioLevels).toContain(0.5);
     socket?.receive({ type: 'input_audio_buffer.speech_started' });
+    expect(audioLevels.at(-1)).toBe(0);
     socket?.receive({ type: 'response.audio.delta', delta: 'BAUG' });
 
     expect(audio.play).toHaveBeenCalledWith('AQID');

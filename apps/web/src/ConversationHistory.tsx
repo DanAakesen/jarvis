@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { Link } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
+import { useJarvisActivity } from './activity-context';
 import {
   createChatSession,
   loadConversationHistory,
@@ -36,6 +37,7 @@ export function ConversationHistory({
   config: PublicConfig;
   historyRefresh?: number;
 }) {
+  const { setWorking } = useJarvisActivity();
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +51,11 @@ export function ConversationHistory({
   const [streamedText, setStreamedText] = useState('');
   const [interruptedText, setInterruptedText] = useState('');
   const [turnError, setTurnError] = useState('');
+
+  useEffect(() => {
+    setWorking('chat-turn', sending);
+    return () => setWorking('chat-turn', false);
+  }, [sending, setWorking]);
 
   useEffect(() => {
     let active = true;
@@ -141,7 +148,7 @@ export function ConversationHistory({
   const displayedVoiceUsage = new Set<string>();
 
   return (
-    <section className="conversation-history" aria-label="Conversation messages and controls">
+    <section className="conversation-history" data-turn-active={sending || undefined} aria-label="Conversation messages and controls">
       {loading ? (
         <p role="status" aria-live="polite">Loading conversation history…</p>
       ) : historyError && messages.length === 0 ? (
