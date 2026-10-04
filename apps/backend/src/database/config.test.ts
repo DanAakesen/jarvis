@@ -1,12 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import sql from 'mssql';
 import { loadDatabaseConfig } from './config.js';
+import { loadTaskEventArchiveStorageAccount } from './task-event-archive-config.js';
 
 const managed = { SQL_SERVER: 'sql-jarvis-fixture.database.windows.net', SQL_DATABASE: 'jarvis', SQL_MANAGED_IDENTITY_CLIENT_ID: '12345678-1234-1234-1234-123456789012' };
 
 describe('database configuration', () => {
   it('leaves the offline skeleton disconnected when no SQL settings exist', () => {
     expect(loadDatabaseConfig({})).toBeUndefined();
+  });
+
+  describe('task event archive configuration', () => {
+    it('accepts an Azure storage account name and rejects unsafe values', () => {
+      expect(loadTaskEventArchiveStorageAccount({ TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT: 'jarvisarchive01' }))
+        .toBe('jarvisarchive01');
+      expect(loadTaskEventArchiveStorageAccount({})).toBeUndefined();
+      expect(() => loadTaskEventArchiveStorageAccount({ TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT: 'https://storage.example' }))
+        .toThrow('valid storage account name');
+    });
   });
   it('selects supported per-connection Entra managed identity with validated TLS', () => {
     const config = loadDatabaseConfig(managed)!;

@@ -13,6 +13,10 @@ import type {
   TaskTransitionResult,
 } from '../factory/task-store.js';
 import { canTransitionTask, type TaskState } from '../factory/task-lifecycle.js';
+import {
+  acquireTaskEventArchiveLock,
+  type TaskEventArchive,
+} from './task-event-archive.js';
 
 interface TaskRow extends Omit<TaskRecord, 'createdAt' | 'startedAt' | 'finishedAt' | 'nextAttemptAt'> {
   createdAt: Date | string;
@@ -176,7 +180,11 @@ async function acquireSleepSwitchLock(transaction: sql.Transaction, mode: 'Share
   if ((recordset[0]?.result ?? -1) < 0) throw new Error('Task coordination lock unavailable');
 }
 
-export function createTaskStore(pool: sql.ConnectionPool, eventHub: TaskEventHub): TaskStore {
+export function createTaskStore(
+  pool: sql.ConnectionPool,
+  eventHub: TaskEventHub,
+  eventArchive?: TaskEventArchive,
+): TaskStore {
   return {
     async create(input: CreateTaskInput) {
       const transaction = new sql.Transaction(pool);
@@ -282,29 +290,92 @@ export function createTaskStore(pool: sql.ConnectionPool, eventHub: TaskEventHub
     },
 
     async get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null> {
-      const taskResult = await pool.request()
-        .input('taskId', sql.BigInt, BigInt(id))
-        .query<TaskRow>(`SELECT ${taskColumns} FROM dbo.tasks WHERE id = @taskId;`);
-      const row = taskResult.recordset[0];
-      if (!row) return null;
-      const eventsResult = await pool.request()
-        .input('taskId', sql.BigInt, BigInt(id))
-        .input('eventLimit', sql.Int, eventLimit)
-        .input('eventOffset', sql.Int, eventOffset)
-        .query<EventRow>(`SELECT CAST(id AS varchar(19)) AS id, type, summary,
+      if (!eventArchive) {
+        const taskResult = await pool.request()
+          .input('taskId', sql.BigInt, BigInt(id))
+          .query<TaskRow>(`SELECT ${taskColumns} FROM dbo.tasks WHERE id = @taskId;`);
+        const row = taskResult.recordset[0];
+        if (!row) return null;
+        const eventsResult = await pool.request()
+          .input('taskId', sql.BigInt, BigInt(id))
+          .input('eventLimit', sql.Int, eventLimit)
+          .input('eventOffset', sql.Int, eventOffset)
+          .query<EventRow>(`SELECT CAST(id AS varchar(19)) AS id, type, summary,
+            CASE WHEN DATALENGTH(payload) > 4096 THEN NULL ELSE payload END AS payload,
+            CAST(CASE WHEN DATALENGTH(payload) > 4096 THEN 1 ELSE 0 END AS bit) AS payloadTruncated,
+            source, at
+            FROM dbo.task_events WHERE task_id = @taskId
+            ORDER BY at ASC, id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
+        return {
+          ...toTask(row),
+          events: eventsResult.recordset.map((event) => ({
+            ...event,
+            payload: parsePayload(event.payload),
+            at: iso(event.at) as string,
+          })),
+        };
+      }
+
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        await acquireTaskEventArchiveLock(transaction, 'Shared');
+        const taskResult = await new sql.Request(transaction)
+          .input('taskId', sql.BigInt, BigInt(id))
+          .query<TaskRow>(`SELECT ${taskColumns} FROM dbo.tasks WHERE id = @taskId;`);
+        const row = taskResult.recordset[0];
+        if (!row) {
+          await transaction.rollback();
+          return null;
+        }
+
+        const archivedPage = await eventArchive.prepareArchivedEvents(transaction, id, eventOffset, eventLimit);
+        const remainingLimit = eventLimit - archivedPage.eventCount;
+        let activeEvents: TaskEventRecord[] = [];
+        if (remainingLimit > 0) {
+          const activeOffset = archivedPage.complete ? Math.max(eventOffset - archivedPage.total, 0) : 0;
+          const eventsResult = await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(id))
+            .input('eventLimit', sql.Int, remainingLimit)
+            .input('eventOffset', sql.Int, activeOffset)
+            .query<EventRow>(`SELECT CAST(id AS varchar(19)) AS id, type, summary,
+              CASE WHEN DATALENGTH(payload) > 4096 THEN NULL ELSE payload END AS payload,
+              CAST(CASE WHEN DATALENGTH(payload) > 4096 THEN 1 ELSE 0 END AS bit) AS payloadTruncated,
+              source, at
+              FROM dbo.task_events WHERE task_id = @taskId
+              ORDER BY at ASC, id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
+          activeEvents = eventsResult.recordset.map((event) => ({
+            ...event,
+            payload: parsePayload(event.payload),
+            at: iso(event.at) as string,
+          }));
+        }
+        await transaction.commit();
+        const archivedEvents = await eventArchive.restoreArchivedEvents(archivedPage);
+        return { ...toTask(row), events: [...archivedEvents, ...activeEvents] };
+      } catch {
+        await rollback(transaction);
+        throw new Error('Task detail persistence failed');
+      }
+    },
+
+    async getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]> {
+      const result = await pool.request()
+        .input('taskId', sql.BigInt, BigInt(taskId))
+        .input('eventId', sql.BigInt, BigInt(eventId))
+        .input('limit', sql.Int, limit)
+        .query<EventRow>(`SELECT TOP (@limit) CAST(id AS varchar(19)) AS id, type, summary,
           CASE WHEN DATALENGTH(payload) > 4096 THEN NULL ELSE payload END AS payload,
           CAST(CASE WHEN DATALENGTH(payload) > 4096 THEN 1 ELSE 0 END AS bit) AS payloadTruncated,
           source, at
-          FROM dbo.task_events WHERE task_id = @taskId
-          ORDER BY at ASC, id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
-      return {
-        ...toTask(row),
-        events: eventsResult.recordset.map((event) => ({
-          ...event,
-          payload: parsePayload(event.payload),
-          at: iso(event.at) as string,
-        })),
-      };
+          FROM dbo.task_events WHERE task_id = @taskId AND id > @eventId
+          ORDER BY id ASC;`);
+      return result.recordset.map((event) => ({
+        ...event,
+        taskId,
+        payload: parsePayload(event.payload),
+        at: iso(event.at) as string,
+      }));
     },
 
     async getRunningContext() {
@@ -374,6 +445,25 @@ export function createTaskStore(pool: sql.ConnectionPool, eventHub: TaskEventHub
       await transaction.begin();
       try {
         await acquireSleepSwitchLock(transaction, 'Shared');
+        if (state === 'Running') {
+          const agentResult = await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(id))
+            .query<{ agent: 'codex' | 'copilot' }>('SELECT agent FROM dbo.tasks WHERE id = @taskId;');
+          if (agentResult.recordset[0]?.agent === 'codex') {
+            const credential = await new sql.Request(transaction)
+              .query<{ status: string; renewalActive: boolean }>(`SELECT status,
+                CAST(CASE WHEN renewal_lease_until > SYSUTCDATETIME() THEN 1 ELSE 0 END AS bit) AS renewalActive
+                FROM dbo.credential_status WITH (UPDLOCK, HOLDLOCK) WHERE name = N'codex-login';`);
+            if (credential.recordset[0]?.status === 'failed') {
+              await transaction.rollback();
+              return { kind: 'credential-unavailable' };
+            }
+            if (credential.recordset[0]?.renewalActive !== false) {
+              await transaction.rollback();
+              return { kind: 'renewal-active' };
+            }
+          }
+        }
         const currentResult = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, BigInt(id))
           .query<{ state: TaskState }>('SELECT state FROM dbo.tasks WITH (UPDLOCK, ROWLOCK) WHERE id = @taskId;');

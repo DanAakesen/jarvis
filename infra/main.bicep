@@ -34,7 +34,8 @@ var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
-var backendAppScaleRoleId = guid(resourceGroup().id, 'jarvis-backend-app-scaler')
+// Custom role created by infra/bootstrap.ps1: the deploy identity cannot create role definitions (L54).
+var backendAppScaleRoleId = '985158cb-2c3c-5b9b-bd65-897ed9be3e36'
 var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var deployBackendApp = !empty(backendImage)
@@ -137,6 +138,14 @@ resource artifactsContainer 'Microsoft.Storage/storageAccounts/blobServices/cont
 resource logsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
   parent: blobService
   name: 'logs'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
+resource taskEventsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: 'task-events'
   properties: {
     publicAccess: 'None'
   }
@@ -479,6 +488,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: sqlDatabase.name
             }
             {
+              name: 'TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT'
+              value: storage.name
+            }
+            {
               name: 'SQL_MANAGED_IDENTITY_CLIENT_ID'
               value: backendIdentity.properties.clientId
             }
@@ -489,6 +502,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'BACKEND_CONTAINER_APP_RESOURCE_ID'
               value: resourceId('Microsoft.App/containerApps', 'ca-jarvis-backend-${suffix}')
+            }
+            {
+              name: 'FOUNDRY_RUNNER_AGENT_NAME'
+              value: 'jarvis-runner-node-1x2'
             }
           ], empty(jarvisAgentObjectId) ? [] : [
             {
@@ -536,37 +553,15 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
   }
   dependsOn: [
     acrPullAssignment
+    taskEventsContainer
   ]
 }
 
-resource backendAppScaleRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = if (deployBackendApp) {
-  name: backendAppScaleRoleId
-  properties: {
-    roleName: 'Jarvis backend app scaler'
-    description: 'Read and scale the Jarvis backend Container App.'
-    type: 'CustomRole'
-    permissions: [
-      {
-        actions: [
-          'Microsoft.App/containerApps/read'
-          'Microsoft.App/containerApps/write'
-        ]
-        notActions: []
-        dataActions: []
-        notDataActions: []
-      }
-    ]
-    assignableScopes: [
-      resourceGroup().id
-    ]
-  }
-}
-
 resource backendAppScaleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployBackendApp) {
-  name: guid(backendApp.id, backendIdentity.id, backendAppScaleRole.id)
+  name: guid(backendApp.id, backendIdentity.id, backendAppScaleRoleId)
   scope: backendApp
   properties: {
-    roleDefinitionId: backendAppScaleRole.id
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', backendAppScaleRoleId)
     principalId: backendIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }

@@ -258,6 +258,21 @@ foreach ($m in @($OwnerObjectId, $identity.principalId)) {
 }
 Write-Host '   members: Dan, id-jarvis-backend'
 
+# --- Backend scale role (P1-12) -----------------------------------------------------------
+# Bicep assigns this role to id-jarvis-backend on its own Container App, but the deploy
+# identity cannot create role definitions (L54). The ID matches main.bicep.
+Step 'Backend Container App scale role'
+$scaleRoleId = '985158cb-2c3c-5b9b-bd65-897ed9be3e36'
+$armToken = Invoke-Az account get-access-token --subscription $SubscriptionId --query accessToken -o tsv
+$scaleRole = @{ properties = @{
+    roleName = 'Jarvis backend app scaler'; description = 'Read and scale the Jarvis backend Container App.'; type = 'CustomRole'
+    permissions = @(@{ actions = @('Microsoft.App/containerApps/read', 'Microsoft.App/containerApps/write'); notActions = @(); dataActions = @(); notDataActions = @() })
+    assignableScopes = @("/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup")
+} } | ConvertTo-Json -Depth 6
+Invoke-RestMethod -Method PUT -ContentType 'application/json' -Body $scaleRole -Headers @{ Authorization = "Bearer $armToken" } `
+    -Uri "https://management.azure.com/subscriptions/$SubscriptionId/providers/Microsoft.Authorization/roleDefinitions/${scaleRoleId}?api-version=2022-04-01" | Out-Null
+Write-Host "   role: Jarvis backend app scaler ($scaleRoleId)"
+
 # --- GitHub Actions variables -------------------------------------------------------------
 Step "GitHub Actions variables on $GitHubRepo"
 $variables = [ordered]@{

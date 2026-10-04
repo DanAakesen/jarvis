@@ -83,6 +83,7 @@ stateDiagram-v2
 
 - **Steer and pause** stop the current turn at a safe point; **resume** continues the agent's conversation.
 - **Sandbox heartbeat:** while a task runs, the backend checks its active invocation about once a minute and updates the session heartbeat timestamp. HTTP 424/404/5xx on two polls (or persisting for 30 seconds) moves the task to Needs attention; a gap in runner events alone never signals a crash. **Recover** restarts it in a new sandbox from the task branch, with the task and its history.
+- **Dispatch:** the backend leases Ready tasks only when both global and project concurrency limits allow them. It retries safe start failures up to three attempts (15-second, then 30-second delays); an ambiguous Foundry start or exhausted attempts moves the task to Needs attention. The dispatcher reacts to committed task events and retry deadlines rather than polling SQL while idle.
 - The authenticated tasks API creates board tasks only for active projects, lists tasks with project, agent, state, period and search filters, and returns task details with a bounded, pageable event history. API responses are capped at 1 MiB; oversized event payloads are explicitly marked truncated. New tasks always start Ready and record their creation event.
 - Task state belongs to the backend. State changes must follow this lifecycle; clients cannot write state directly, and Done requires verified project-policy/GitHub completion.
 - Coding agents push small work-in-progress commits to the existing task branch after each meaningful step. They never force-push or push to `main`, and report commit or push failures.
@@ -128,7 +129,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Data points | Actions |
 | --- | --- |
 | Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, streamed replies, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
-| Voice state: listening, thinking, speaking; what Jarvis heard; latency | Interrupt by speaking; mute |
+| Voice state: connecting, listening, thinking, speaking, reconnecting; what Jarvis heard; latency | Start or stop browser voice; interrupt by speaking; mute |
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready or Running |
 
@@ -149,10 +150,14 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Sandbox sessions: start, end, size, end reason, heartbeat state | — |
 | Usage: sandbox minutes and DKK; Codex/Copilot turns and any reported usage | — |
 
+The backend persists each task event and state change to the task history and activity feed together, then publishes the committed event for live clients. The authenticated live feed resumes from the last delivered event after reconnect so updates missed while disconnected are replayed without duplicate timeline entries.
+
+The task timeline remains complete as older events move from SQL to private Blob Storage. The detail API restores those events on demand within its existing paginated response.
+
 The runner sends each task-scoped event to authenticated `POST /factory/sandbox-events`
 using its managed identity. The backend accepts only the separately assigned runner
 events role and records the event through `TaskStore.recordEvent`, which persists it
-with activity before publishing the committed event. Browser streaming remains P1-06.
+with activity before publishing the committed event.
 
 #### Software Factory — release view (per project)
 
@@ -190,6 +195,12 @@ the last-release field is explicitly unavailable rather than inferred.
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
 | Credentials: name, expiry, last renewal, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
+
+The backend checks Codex daily and renews only when the access token has three
+days or less remaining and no Codex task is running. Credential dates and
+status are non-secret Key Vault metadata; failed renewal is visible as
+"Action needed". Manual renewal and re-seed controls remain disabled until an
+operator workflow is available.
 
 The settings API validates choices against the server's available-model catalog.
 The coding-agent catalog currently offers only each provider's default. P2-11
