@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
@@ -12,7 +12,8 @@ import { NotFoundPage, SignInPage } from './pages';
 import { SettingsPage } from './SettingsPage';
 import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
-import { Workspace } from './Workspace';
+import { Workspace, type WorkspaceController } from './Workspace';
+import { WorkspaceCommandContext } from './workspace-command-state';
 
 type ShellIconName = 'home' | 'factory' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close';
 
@@ -68,7 +69,13 @@ function ShellLayout({ signedIn, config, session }: { signedIn: boolean; config:
   const { pathname } = useLocation();
   const { working } = useJarvisActivity();
   const navigationToggle = useRef<HTMLButtonElement>(null);
+  const workspaceController = useRef<WorkspaceController>(null);
   const contextPanel = useContextPanel();
+  const workspaceCommands = useMemo(() => ({
+    dispatch: (command: Parameters<WorkspaceController['dispatch']>[0]) => (
+      workspaceController.current?.dispatch(command) ?? false
+    ),
+  }), []);
   const [navigationOpen, setNavigationOpen] = useState(() => (
     typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches
   ));
@@ -83,6 +90,7 @@ function ShellLayout({ signedIn, config, session }: { signedIn: boolean; config:
   }
 
   return (
+    <WorkspaceCommandContext.Provider value={workspaceCommands}>
     <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && navigationOpen} data-context-open={signedIn && contextPanel.isOpen}>
       <a className="skip-link" href="#content">Skip to content</a>
       {signedIn && (
@@ -164,7 +172,7 @@ function ShellLayout({ signedIn, config, session }: { signedIn: boolean; config:
         <Outlet />
         {signedIn && (
           <div className="workspace-shell-area" hidden={pathname !== '/'}>
-            <Workspace views={[]} />
+            <Workspace ref={workspaceController} views={[]} />
           </div>
         )}
       </main>
@@ -175,6 +183,7 @@ function ShellLayout({ signedIn, config, session }: { signedIn: boolean; config:
       </footer>
       {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} />}
     </div>
+    </WorkspaceCommandContext.Provider>
   );
 }
 
