@@ -117,14 +117,32 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     expect((await tasks.transition(running.id, 'Running')).kind).toBe('ok');
     expect((await tasks.transition(needsAttention.id, 'Running')).kind).toBe('ok');
     expect((await tasks.transition(needsAttention.id, 'NeedsAttention')).kind).toBe('ok');
+    await pool.request().query(`UPDATE dbo.activity
+      SET at = DATEADD(day, 1, SYSUTCDATETIME())
+      WHERE area = N'factory' AND link = N'task:${needsAttention.id}';`);
+    const attentionActivity = await pool.request().query<{ id: string }>(`SELECT TOP (1)
+      CAST(id AS varchar(19)) AS id FROM dbo.activity
+      WHERE area = N'factory' AND link = N'task:${needsAttention.id}'
+      ORDER BY at DESC, id DESC;`);
+    const attentionActivityId = attentionActivity.recordset[0]?.id;
+    if (!attentionActivityId) throw new Error('Now feed attention activity was not created');
 
     const releaseId = await scalar(`INSERT dbo.activity (area, kind, title, link)
-      VALUES (N'github', N'release_published', N'Release feed fixture', N'release:7')`);
+      VALUES (N'github', N'release_published', N'Release feed fixture', N'release:7');
+      UPDATE dbo.activity SET at = DATEADD(day, 1, SYSUTCDATETIME()) WHERE id = SCOPE_IDENTITY()`);
     const credentialId = await scalar(`INSERT dbo.activity (area, kind, title, link)
-      VALUES (N'operations', N'credential_expiring', N'Credential feed fixture', NULL)`);
+      VALUES (N'operations', N'credential_expiring', N'Credential feed fixture', NULL);
+      UPDATE dbo.activity SET at = DATEADD(day, 1, SYSUTCDATETIME()) WHERE id = SCOPE_IDENTITY()`);
     const store = createNowFeedStore(pool);
 
     const initial = await store.read();
+    expect((await tasks.transition(running.id, 'Cancelled')).kind).toBe('ok');
+    expect((await tasks.transition(needsAttention.id, 'Running')).kind).toBe('ok');
+    expect((await tasks.transition(needsAttention.id, 'Cancelled')).kind).toBe('ok');
+    expect(initial.items.length).toBeLessThanOrEqual(100);
+    expect(initial.items.map((item) => item.at)).toEqual(
+      [...initial.items].map((item) => item.at).sort((left, right) => right.localeCompare(left)),
+    );
     expect(initial.running).toContainEqual(expect.objectContaining({
       id: running.id,
       title: 'Running feed task',
@@ -133,7 +151,7 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
       startedAt: expect.any(String),
     }));
     expect(initial.items).toContainEqual(expect.objectContaining({
-      id: String(needsAttention.id),
+      id: attentionActivityId,
       category: 'attention',
       title: expect.any(String),
       link: `task:${needsAttention.id}`,

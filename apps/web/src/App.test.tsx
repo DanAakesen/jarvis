@@ -133,6 +133,14 @@ describe('App shell', () => {
   });
 
   it('enables chat and explains the other unavailable main-page actions', async () => {
+    let resolveFeed!: (response: Response) => void;
+    const pendingFeed = new Promise<Response>((resolve) => { resolveFeed = resolve; });
+    fetchMock.mockImplementation(async (input) => {
+      if (new URL(String(input)).pathname === '/now') return pendingFeed;
+      return new Response(JSON.stringify({ state: 'awake' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    });
     await renderSignedIn();
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Welcome, Dan Aakesen');
@@ -140,6 +148,10 @@ describe('App shell', () => {
       expect(screen.getByRole('heading', { level: 2, name })).not.toBeNull();
     }
     expect(screen.getByText(/Loading current activity/)).not.toBeNull();
+    resolveFeed(new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }));
+    expect(await screen.findByText('No tasks are running.')).not.toBeNull();
 
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
