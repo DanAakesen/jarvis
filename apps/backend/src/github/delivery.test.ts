@@ -27,7 +27,12 @@ function github(options: {
   existing?: boolean;
   aheadBy?: number;
   branchStatus?: number;
+  pullRepository?: string;
 } = {}) {
+  const matchingPullRequest = {
+    ...pullRequest,
+    head: { ref: workspace.branch, repo: { full_name: options.pullRepository ?? workspace.repository } },
+  };
   const calls: { url: string; method: string; body?: string }[] = [];
   let created = options.existing ?? false;
   let createRequests = 0;
@@ -43,7 +48,7 @@ function github(options: {
         : jsonResponse({ name: workspace.branch });
     }
     if (parsed.pathname.endsWith('/pulls') && method === 'GET') {
-      return jsonResponse(created ? [pullRequest] : []);
+      return jsonResponse(created ? [matchingPullRequest] : []);
     }
     if (parsed.pathname.endsWith('/compare/main...jarvis%2Ftask-42')) {
       return jsonResponse({ ahead_by: options.aheadBy ?? 1 });
@@ -56,7 +61,7 @@ function github(options: {
       }
       createdPullRequests += 1;
       created = true;
-      return jsonResponse(pullRequest, 201);
+      return jsonResponse(matchingPullRequest, 201);
     }
     throw new Error(`Unexpected GitHub request: ${url}`);
   });
@@ -117,6 +122,19 @@ describe('GitHub task delivery', () => {
     expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: 'pull_request_opened',
       payload: expect.objectContaining({ pullRequest: 73, reused: true }),
+    }));
+  });
+
+  it('accepts GitHub canonical repository casing in a PR response', async () => {
+    const api = github({ pullRepository: 'danaakesen/Jarvis-Test-Target' });
+    const test = fixture(api.fetch);
+
+    await expect(test.handler(workspace, task)).resolves.toEqual({ kind: 'awaiting_policy' });
+
+    expect(api.creates).toBe(1);
+    expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'pull_request_opened',
+      payload: expect.objectContaining({ pullRequest: 73 }),
     }));
   });
 
