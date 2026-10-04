@@ -4,7 +4,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **UI planning (4 October 2026):** Dan agreed the shared shell/voice structure in [ui.md](ui.md). The frontend issue breakdown is P8-04–P8-13 with its coverage report in [docs/ui-implementation-coverage.md](docs/ui-implementation-coverage.md); P8-03 owns enabling logic and contracts. Final styling and deferred decisions remain open; no UI build is claimed complete.
+- **P8-04 (#235):** The shared shell is implemented in the draft PR with the existing Jarvis, Software Factory, Usage, and Settings routes; screen-share and Camera remain disabled until their P7 capabilities exist. App tests (20/20), web lint, and web build pass. Chromium checks at 1280×900 and 390×844 exercised navigation and contextual panels without horizontal overflow or page exceptions; screenshots are attached to the PR. The browser used scratch auth/API fixtures, so live Azure, screen-share and Camera behavior remain unverified. P8-05 is next; final styling and later P8 behavior remain open.
 
 - **P6-06 (#67):** The operations runbook is drafted in [docs/runbook.md](docs/runbook.md); Dan's acceptance review and live production verification are pending.
 - **P2-13 (#195):** Task starts now carry repository/default/task branch, dispatch persists `tasks.branch`, and the runner prepares the checkout before ACP. Commit-free `end_turn` replies become Needs attention questions. Next step: coordinator post-merge live Copilot/Codex pushes and question verification on `DanAakesen/jarvis-test-target`; live Foundry/GitHub acceptance remains unverified.

@@ -24,6 +24,8 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
   --sidebar-size: 220px;
   --context-size: 0px;
   display: grid;
+  height: 100vh;
+  height: 100dvh;
   min-height: 100vh;
   min-height: 100dvh;
   grid-template-columns: 56px minmax(0, var(--sidebar-size)) minmax(0, 1fr) minmax(0, var(--context-size));
@@ -160,7 +162,7 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
   border-top: 1px solid var(--rule);
 }
 .database-wake-status { margin: 0; font-size: 13px; }
-.app-signed-out { max-width: 720px; margin: 0 auto; padding: 0 32px; grid-template-columns: minmax(0, 1fr); grid-template-rows: 64px minmax(0, 1fr); }
+.app-signed-out { height: auto; max-width: 720px; margin: 0 auto; padding: 0 32px; grid-template-columns: minmax(0, 1fr); grid-template-rows: 64px minmax(0, 1fr); }
 .app-signed-out .area-rail, .app-signed-out .area-sidebar, .app-signed-out .context-panel { display: none; }
 .app-signed-out .app-topbar { grid-column: 1; grid-row: 1; margin: 0 -32px; padding: 8px 32px; }
 .app-signed-out .shell-main { grid-column: 1; grid-row: 2; padding: 56px 0 72px; overflow: visible; }
@@ -457,7 +459,7 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
 }
 
 @media (max-width: 700px) {
-  .app-shell { grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
+  .app-shell { height: auto; grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
   .area-rail { grid-row: 1 / 4; padding: 6px 4px; }
   .rail-button, .rail-link { width: 44px; min-width: 44px; }
   .app-topbar { grid-column: 2; grid-row: 1; display: grid; justify-items: stretch; gap: 2px; padding: 6px 8px; }
