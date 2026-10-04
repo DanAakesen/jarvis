@@ -107,6 +107,15 @@ stateDiagram-v2
 - Merge rules and Done are Dan's choices per project.
 - Permissions are enforced in the backend and runner, and GitHub branch protection is respected.
 
+### New projects
+
+Dan never fills in a project form. He gives Jarvis, by voice or chat, a project name and a short description; everything else comes from the **New projects** settings.
+
+1. Jarvis creates a private repository `<owner>/<name>` with the backend-only `jarvis-repo-admin` token. The token never enters a sandbox.
+2. Jarvis registers the project with the New projects defaults and starts the first task in a sandbox: clone the templates repository, run its initializer (`cpinit`) with the modules the agent chooses from the description, fill `PRODUCT.md` and `PLAN.md` from the description, add the repository's PR-check and release workflow templates (P3-09), and open a pull request.
+3. When the description is not enough to choose modules or fill the documents, the task moves to Needs attention with a question for Dan instead of guessing.
+4. The project's tech identifier is detected from the repository (for example `*.csproj` means .NET); Dan can change any project setting afterwards.
+
 ### Settings
 
 Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered.
@@ -120,6 +129,7 @@ Global defaults on the settings page; a task can override the coding-agent model
 | Codex | Model and reasoning effort | Codex default |
 | Copilot | Model | Copilot default |
 | Global | Max parallel tasks; sleep switch | Set by Dan |
+| New projects | Owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | `DanAakesen`, private, `DanAakesen/templates`, Copilot, Deliver a PR, 1, `main` |
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
@@ -188,7 +198,7 @@ It checks free space every 15 seconds; below the configurable threshold it repor
 
 | Data points | Actions |
 | --- | --- |
-| List: name, repository, default agent, policy, tech, running tasks, last release | Create, edit, archive a project |
+| List: name, repository, default agent, policy, tech, running tasks, last release | Edit or archive a project; new projects are created by Jarvis (see New projects) |
 | Project settings: repository, default branch, default agent, policy, merge rules, sandbox size, tech, max parallel tasks | Save (applies to new tasks only) |
 
 The project API lists active projects, creates and updates settings, and archives
