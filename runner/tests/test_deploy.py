@@ -34,7 +34,22 @@ def test_definition_uses_small_tiers_and_nonsecret_settings(tier, cpu, memory):
         "JARVIS_WORK_ROOT": "/files/jarvis",
         "JARVIS_BACKEND_URL": "https://backend.example",
         "JARVIS_API_SCOPE": "api://00000000-0000-4000-8000-000000000000/.default",
+        "JARVIS_DISK_LOW_THRESHOLD_BYTES": str(1024**3),
     }
+
+
+def test_disk_low_threshold_setting_is_forwarded_and_validated(monkeypatch):
+    monkeypatch.setenv("JARVIS_DISK_LOW_THRESHOLD_BYTES", "2048")
+    assert deploy._disk_low_threshold_bytes() == 2048
+    configured = deploy.definition(
+        "registry/runner@sha256:digest", "1x2", "https://vault.vault.azure.net/",
+        "https://backend.example", "api://00000000-0000-4000-8000-000000000000/.default",
+        deploy._disk_low_threshold_bytes(),
+    )
+    assert configured["environment_variables"]["JARVIS_DISK_LOW_THRESHOLD_BYTES"] == "2048"
+    for invalid in ("0", "-1", "one"):
+        with pytest.raises(ValueError, match="positive integer"):
+            deploy._disk_low_threshold_bytes(invalid)
 
 
 def test_backend_settings_use_the_production_api_origin_and_scope():

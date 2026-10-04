@@ -30,6 +30,7 @@ jobs:
       SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       INFRA_DEPLOYMENT: ${{ vars.JARVIS_INFRA_DEPLOYMENT_NAME }}
       IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      JARVIS_DISK_LOW_THRESHOLD_BYTES: ${{ vars.JARVIS_DISK_LOW_THRESHOLD_BYTES || '1073741824' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

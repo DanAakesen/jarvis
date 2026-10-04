@@ -3,6 +3,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -70,6 +71,88 @@ def test_state_event_is_bounded(tmp_path, monkeypatch):
     assert len(state.events) == app.MAX_EVENTS
     assert state.events[-1]["data"]["number"] == app.MAX_EVENTS + 9
     assert app._task_state_path("s", "i").exists()
+
+
+def test_disk_low_threshold_is_configurable(monkeypatch):
+    monkeypatch.delenv("JARVIS_DISK_LOW_THRESHOLD_BYTES", raising=False)
+    assert app._disk_low_threshold_bytes() == 1024**3
+    monkeypatch.setenv("JARVIS_DISK_LOW_THRESHOLD_BYTES", "2048")
+    assert app._disk_low_threshold_bytes() == 2048
+    monkeypatch.setenv("JARVIS_DISK_LOW_THRESHOLD_BYTES", "0")
+    with pytest.raises(RuntimeError, match="positive integer"):
+        app._disk_low_threshold_bytes()
+
+
+def test_low_disk_emits_snapshot_and_stops_the_turn(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "session_clients", {})
+    monkeypatch.setattr(app, "session_locks", {})
+    monkeypatch.setattr(app, "DISK_CHECK_INTERVAL_SECONDS", 0)
+    monkeypatch.setenv("JARVIS_BACKEND_URL", "https://backend.example")
+    monkeypatch.setenv("JARVIS_API_SCOPE", "api://00000000-0000-4000-8000-000000000000/.default")
+    gib = 1024**3
+    readings = iter([
+        SimpleNamespace(total=6 * gib, used=4 * gib, free=2 * gib),
+        SimpleNamespace(total=6 * gib, used=6 * gib - gib // 2, free=gib // 2),
+    ])
+    monkeypatch.setattr(
+        app.shutil,
+        "disk_usage",
+        lambda _path: next(readings, SimpleNamespace(total=6 * gib, used=6 * gib - gib // 2, free=gib // 2)),
+    )
+
+    class Publisher:
+        def __init__(self):
+            self.events = []
+
+        async def publish(self, _task_id, _invocation_id, _event_index, event):
+            self.events.append((event["kind"], event["data"]))
+
+        async def close(self):
+            pass
+
+    publisher = Publisher()
+
+    class Client:
+        def __init__(self, _command, _cwd, _state, _env, persisted_session_id=None):
+            self.cancelled = asyncio.Event()
+
+        async def start(self):
+            pass
+
+        async def run(self, _task):
+            await self.cancelled.wait()
+            return {}
+
+        async def cancel_turn(self):
+            self.cancelled.set()
+            return True
+
+        async def stop(self):
+            pass
+
+    async def credentials(_agent):
+        return {"github_token": "not-a-real-token", "copilot_token": "not-a-real-seat-token"}
+
+    monkeypatch.setattr(app, "RunnerEventPublisher", lambda *_args: publisher)
+    monkeypatch.setattr(app, "ACPClient", Client)
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    state = app.TaskState("low-disk", "session", "copilot", "work", task_id="42")
+
+    asyncio.run(app._run_task(state))
+
+    assert state.status == "cancelled"
+    events = dict(publisher.events)
+    assert events["disk_snapshot"] == {
+        "disk_total_bytes": 6 * gib,
+        "disk_used_bytes": 4 * gib,
+        "disk_free_bytes": 2 * gib,
+        "threshold_bytes": gib,
+    }
+    assert events["disk_low"]["disk_free_bytes"] == gib // 2
+    assert events["disk_low"]["threshold_bytes"] == gib
+    assert "completed" not in dict(publisher.events)
+    assert "failed" not in dict(publisher.events)
 
 
 def test_task_events_are_pushed_in_order_with_task_and_invocation_identity(tmp_path, monkeypatch):

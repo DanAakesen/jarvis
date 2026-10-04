@@ -507,6 +507,9 @@ which takes a few minutes; Codex caches the result.
 Python checks use each package's `.venv`. For the runner, from `runner/`:
 `.venv/bin/python -m ruff check .` and `.venv/bin/python -m pytest -q`
 (verified in the P0-14 Copilot session after setup: ruff passed, 36 tests passed).
+P6-07 adds fake-filesystem coverage for snapshots, threshold configuration, and
+the low-disk stop. These offline checks do not verify the Foundry writable disk;
+Dan performs that measurement post-merge.
 
 ### Runner event identity (P2-03)
 
@@ -514,6 +517,10 @@ Runner deploy sets `JARVIS_BACKEND_URL` from the successful `jarvis-infra`
 outputs and `JARVIS_API_SCOPE` from the bootstrapped `jarvis-api` identifier URI.
 Each hosted runner sends events with its managed identity; the backend accepts
 only the `Jarvis.Runner.Events` app role on `POST /factory/sandbox-events`.
+Runner deploy sets `JARVIS_DISK_LOW_THRESHOLD_BYTES` from the same-named GitHub
+Actions repository variable, defaulting to `1073741824` bytes (1 GiB). The runner
+emits a disk snapshot at each task-turn start and checks free space every 15
+seconds; `disk_low` stops the current turn and lets the backend own the task state.
 
 After Runner deploy succeeds, use the four `principal_id` values in its
 `runner-deployment` artifact to assign the role:
