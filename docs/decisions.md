@@ -152,6 +152,8 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 | 2026-10-04 | Left for Dan (Needs Dan column): Teams calling's per-minute ACS cost (P7-01), the Jev endpoint and key (P7-04), paid Grounding with Bing Search (P7-14), paid image/video generation (P7-15) | These need a new paid service approval or information only Dan has | Waiting for Dan |
 | 2026-10-04 | Visual direction: Concept B (living aurora) as the dark default and Concept C (daylight studio) as the light appearance; P8-20 (#282) builds the shared visual and motion system | Dan asked for a stunning, animated UI that feels alive, especially in voice mode, and for decisions on autopilot. B's audio- and state-driven fluid orb carries information through motion; C proves the light theme keeps the same states. Concepts and screenshots in docs/ui/concepts | Decided on autopilot; Dan to review |
 
+| 2026-10-04 | P8-13: persist `appearance.theme` as the validated `light`/`dark` setting through P1-11, defaulting to light. Apply semantic CSS variables only after the settings API accepts an update; leave custom/Jarvis-directed variable editing disabled until P8-17 implements the validated path using P8-18's allowlist. | Reuses the existing global settings key/value store without a migration, and prevents rejected updates from replacing the last accepted client theme. API/client tests and scratch Chromium checks cover persistence, rejection/retry, reload, keyboard focus, contrast and responsive layout; live Entra/API/SQL behavior remains unverified. | Implemented offline |
+
 ## Learnings
 
 Mistakes made so far and the rule that prevents each one.

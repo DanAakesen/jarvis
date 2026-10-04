@@ -120,7 +120,7 @@ sign-in; the header wraps on narrow screens.
 ## Settings (P1-11)
 
 Keep the Settings route within the shell's neutral foundation. Use one page
-headline and distinct form sections for Jarvis, Voice, Coding agents, Global,
+headline and distinct form sections for Appearance, Jarvis, Voice, Coding agents, Global,
 New projects, and Credentials. New-project controls use the documented defaults
 and the same labelled field grid as the other sections. Two columns make related controls easy to scan on wide screens;
 the form stacks on narrow screens. Save feedback stays beside the save action,
@@ -131,6 +131,22 @@ new visual direction or palette is introduced. Checked in Chromium at
 390 and 1280 px with mock auth/settings: no horizontal overflow, controls at
 least 44 px high, and save/disabled states visible. Live backend behavior remains
 unverified.
+
+P8-13 keeps the existing neutral visual foundation and adds light/dark palettes
+through semantic CSS variables in `apps/web/src/styles.css`. The Appearance
+section saves the selected mode immediately and applies only the accepted
+settings response across the shared shell. Both modes retain visible focus and
+high-contrast text, controls, feedback and surfaces. Custom and Jarvis-directed
+variable editing stays disabled with an explanation until P8-17 implements the
+validated settings/tool path using the token allowlist recorded in P8-18.
+Checked in Chromium at 1440px and 390px with scratch auth/settings mocks: a
+rejected update kept the current mode, retry and reload restored dark, and
+there was no horizontal overflow. Muted-text contrast against the page/surface
+was at least 6.25:1 in light mode and 8.99:1 in dark mode. Screenshots:
+[desktop light](docs/ui/screenshots/p8-13-theme-settings-desktop-light.png),
+[desktop dark](docs/ui/screenshots/p8-13-theme-settings-desktop-dark.png), and
+[phone dark](docs/ui/screenshots/p8-13-theme-settings-phone-dark.png). Live
+Entra and API/SQL behavior remain unverified.
 
 ## Projects (P1-10)
 

@@ -6,6 +6,7 @@ import { DatabaseWakeStatus } from './DatabaseWakeStatus';
 import { JarvisPage } from './JarvisPage';
 import { NotFoundPage, SignInPage } from './pages';
 import { SettingsPage } from './SettingsPage';
+import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
 
 type ShellIconName = 'home' | 'factory' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close';
@@ -181,26 +182,29 @@ export function App({ config = defaultConfig }: { config?: PublicConfig }) {
   const signedIn = session.state === 'signed-in' && session.profile !== null;
 
   return (
-    <Routes>
-      <Route element={<Shell signedIn={signedIn} config={config} session={session} />}>
-        <Route element={<RequireSignIn session={session} />}>
-          <Route index element={
-            <JarvisPage
-              name={session.profile?.name ?? ''}
-              client={session.client}
-              config={config}
-              getAccessToken={session.getAccessToken}
-            />
-          } />
-          {areas.map(({ id, path, Component }) => (
-            <Route key={id} path={`${path}/*`} element={
-              <Component backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+    <ThemePreferenceProvider key={signedIn ? 'signed-in' : 'signed-out'}
+      enabled={signedIn} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}>
+      <Routes>
+        <Route element={<Shell signedIn={signedIn} config={config} session={session} />}>
+          <Route element={<RequireSignIn session={session} />}>
+            <Route index element={
+              <JarvisPage
+                name={session.profile?.name ?? ''}
+                client={session.client}
+                config={config}
+                getAccessToken={session.getAccessToken}
+              />
             } />
-          ))}
-          <Route path="settings" element={<SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />} />
+            {areas.map(({ id, path, Component }) => (
+              <Route key={id} path={`${path}/*`} element={
+                <Component backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+              } />
+            ))}
+            <Route path="settings" element={<SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />} />
+          </Route>
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    </Routes>
+      </Routes>
+    </ThemePreferenceProvider>
   );
 }
