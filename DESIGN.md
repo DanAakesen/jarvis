@@ -124,3 +124,17 @@ action may have completed. A delivered reply is saved and history refreshes so
 tool outcomes and valid task IDs appear as labelled chips and links. The list and
 composer stay in the existing single-column conversation panel at mobile widths;
 the selected visual direction remains open. Live agent access awaits P4-08.
+
+## Browser voice (P5-04)
+
+The Voice section uses the existing neutral panel and replaces unavailable
+actions with Start voice, Stop voice, and Mute/Unmute. Connection, listening,
+thinking, speaking, reconnecting, and failure feedback stays beside those controls; the
+mute action is unavailable until a session is ready. The microphone opens only
+after session setup and the Danish no-model warm-up complete. Speaking
+interrupts playback. Controls wrap on narrow screens and use the shared 44 px
+button and visible-focus styles. Language selection and voice settings remain
+with P5-05; no new visual direction is chosen. A headless Chromium check at
+390 px and 1280 px verified the layout and start, speaking, interruption,
+reconnect, mute, and stop states with mocked relay/audio APIs. Physical
+microphone and speaker behavior remains unverified.

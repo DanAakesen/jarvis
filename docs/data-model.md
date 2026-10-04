@@ -78,7 +78,7 @@ flowchart LR
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
-P5-03 does not create `jarvis_sessions`, `messages`, or `tool_calls`; the realtime tool round-trip is backend-executed but not persisted yet. P4-03 owns conversation persistence, and P5-06 owns voice transcripts and usage. No schema or migration changes are part of P5-03.
+P5-03 and P5-04 do not create `jarvis_sessions`, `messages`, or `tool_calls`; realtime tool calls and browser audio are not persisted yet. P4-03 owns conversation persistence, and P5-06 owns voice transcripts and usage. No schema or migration changes are part of P5-03 or P5-04.
 
 ## 1 · Jarvis core
 
