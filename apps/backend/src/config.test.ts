@@ -6,6 +6,16 @@ describe('backend configuration', () => {
   it('defaults to the infrastructure port and offline logs', () => {
     expect(loadConfig({})).toEqual({ port: 3000, logLevel: 'info', auth: loadAuthConfig({}) });
   });
+  it('accepts only a secure Key Vault origin', () => {
+    expect(loadConfig({ KEY_VAULT_URI: 'https://kv-jarvis.vault.azure.net/' }).keyVaultUri)
+      .toBe('https://kv-jarvis.vault.azure.net/');
+    for (const KEY_VAULT_URI of [
+      '', 'http://kv-jarvis.vault.azure.net/', 'https://vault.example/', 'https://kv-jarvis.vault.azure.net/secrets',
+      'https://kv-jarvis.vault.azure.net/?token=secret',
+    ]) {
+      expect(() => loadConfig({ KEY_VAULT_URI })).toThrow(/^KEY_VAULT_URI must be a secure Azure Key Vault URL$/);
+    }
+  });
   it('accepts a configured HTTPS origin and backend-only telemetry string', () => {
     const connectionString = 'InstrumentationKey=00000000-0000-0000-0000-000000000001;IngestionEndpoint=https://swedencentral-0.in.applicationinsights.azure.com/';
     const foundryRuntimeEndpoint = 'https://resource.cognitiveservices.azure.com/api/projects/jarvis';
@@ -65,6 +75,21 @@ describe('backend configuration', () => {
       'https://jarvis.vault.azure.net/?secret=value',
     ]) {
       expect(() => loadConfig({ GITHUB_APP_ID: '123456', KEY_VAULT_URI })).toThrow('KEY_VAULT_URI');
+    }
+  });
+  it('validates the Azure budget resource ID used for budget polling', () => {
+    const JARVIS_MONTHLY_BUDGET_RESOURCE_ID =
+      '/subscriptions/12345678-1234-1234-1234-123456789abc/resourceGroups/rg-jarvis/providers/Microsoft.Consumption/budgets/jarvis-monthly';
+    expect(loadConfig({ JARVIS_MONTHLY_BUDGET_RESOURCE_ID }).monthlyBudgetResourceId)
+      .toBe(JARVIS_MONTHLY_BUDGET_RESOURCE_ID);
+    for (const value of [
+      '',
+      'https://management.azure.com/subscriptions/123/resourceGroups/rg/providers/Microsoft.Consumption/budgets/x',
+      `${JARVIS_MONTHLY_BUDGET_RESOURCE_ID}?api-version=2019-10-01`,
+      '/subscriptions/not-a-sub/resourceGroups/rg/providers/Microsoft.Consumption/budgets/x',
+    ]) {
+      expect(() => loadConfig({ JARVIS_MONTHLY_BUDGET_RESOURCE_ID: value }))
+        .toThrow('JARVIS_MONTHLY_BUDGET_RESOURCE_ID');
     }
   });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {

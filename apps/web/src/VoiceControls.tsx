@@ -1,6 +1,7 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { useEffect, useRef, useState } from 'react';
 import type { PublicConfig } from '../config/public-config';
+import { VoiceOrb } from './VoiceOrb';
 import { BrowserVoiceClient, type VoiceLanguage, type VoiceStatus } from './voice-client';
 
 const initialMessage = 'Start voice to speak with Jarvis. Your microphone opens after the voice session is ready.';
@@ -73,9 +74,7 @@ export function VoiceControls({
 
   return (
     <>
-      <p id="voice-status" className={status === 'error' ? 'voice-status error-text' : 'voice-status'} role={status === 'error' ? 'alert' : 'status'} aria-live="polite">
-        {message}
-      </p>
+      <VoiceOrb status={status} message={message} />
       <div className="action-row">
         {active
           ? <button className="secondary-button" type="button" onClick={stop} disabled={status === 'stopping'}>Stop voice</button>

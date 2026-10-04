@@ -8,12 +8,12 @@ and Jarvis tool definitions through the same `BackendModule` contract.
 | Owner | Current implementation | Later domain work |
 | --- | --- | --- |
 | `core/` | Health route; per-app tool catalogue and authenticated HTTP dispatcher; process-local typed event hub | Settings, activity read APIs, authenticated SSE route and replay |
-| `factory/` | Projects/tasks routes and SQL-backed task/event store | Real Jarvis tools |
+| `factory/` | Projects/tasks routes, SQL-backed task/event store, and project/task Jarvis tools, including `create_project` and `manage_repository` | Further Factory operations |
 | `foundry/` | Existing bounded sandbox client | Used by the dispatcher and task controls |
 
-Empty production tool lists are intentional: the domain API tasks have not
-implemented those operations yet. The registration boundary does not return
-fabricated settings, projects or tasks, and does not advertise unavailable tools.
+Only implemented Factory operations are registered as Jarvis tools. The
+registration boundary does not return fabricated settings, projects or tasks,
+and missing storage remains unavailable rather than returning invented data.
 Task events and matching activity rows are committed together; the task store
 publishes committed events through the core hub. The authenticated SSE endpoint
 and replay are P1-06. Root bearer authentication is implemented in issue #8 and inherited by every area route;

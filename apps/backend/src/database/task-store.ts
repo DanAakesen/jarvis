@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import type {
   CreateTaskInput,
   RecordTaskEventInput,
@@ -73,7 +74,9 @@ const taskColumns = `CAST(id AS varchar(19)) AS id, CAST(project_id AS varchar(1
   CAST(origin_message_id AS varchar(19)) AS originMessageId, title, request, source, agent,
   model_override AS modelOverride, reasoning_override AS reasoningOverride, state, activity,
   priority, attempt_count AS attemptCount, next_attempt_at AS nextAttemptAt, branch,
-  created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt`;
+  created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt,
+  (SELECT TOP (1) session.end_reason FROM dbo.sandbox_sessions AS session
+    WHERE session.task_id = dbo.tasks.id ORDER BY session.started_at DESC, session.id DESC) AS latestSessionEndReason`;
 
 const insertedTaskColumns = `CAST(inserted.id AS varchar(19)) AS id,
   CAST(inserted.project_id AS varchar(19)) AS projectId,
@@ -81,7 +84,8 @@ const insertedTaskColumns = `CAST(inserted.id AS varchar(19)) AS id,
   inserted.source, inserted.agent, inserted.model_override AS modelOverride,
   inserted.reasoning_override AS reasoningOverride, inserted.state, inserted.activity,
   inserted.priority, inserted.attempt_count AS attemptCount, inserted.next_attempt_at AS nextAttemptAt,
-  inserted.branch, inserted.created_at AS createdAt, inserted.started_at AS startedAt,
+  inserted.branch, CAST(NULL AS nvarchar(16)) AS latestSessionEndReason,
+  inserted.created_at AS createdAt, inserted.started_at AS startedAt,
   inserted.finished_at AS finishedAt`;
 const sleepSwitchLock = 'jarvis.backend-sleep-switch';
 
@@ -130,6 +134,15 @@ function validateEvent(event: RecordTaskEventInput): string | null {
     throw new Error('Invalid task event');
   }
   return serializePayload(event.payload);
+}
+
+function completedRunnerInvocation(event: RecordTaskEventInput): string | null {
+  if (event.source !== 'runner' || (event.type !== 'completed' && event.type !== 'session_question') ||
+    typeof event.payload !== 'object' || event.payload === null || Array.isArray(event.payload)) return null;
+  const invocationId = (event.payload as { invocationId?: unknown }).invocationId;
+  return typeof invocationId === 'string' && invocationId.length > 0 && invocationId.length <= 255
+    ? invocationId
+    : null;
 }
 
 function toTaskEvent(row: InsertedEventRow, taskId: string): TaskEventMessage {
@@ -268,7 +281,7 @@ async function recordRunnerUsage(
 }
 
 async function taskUsage(executor: sql.ConnectionPool | sql.Transaction, taskId: string): Promise<TaskUsageRecord[]> {
-  const request = executor instanceof sql.Transaction ? new sql.Request(executor) : new sql.Request(executor);
+  const request = executor instanceof sql.Transaction ? new sql.Request(executor) : databaseReadRequest(executor);
   const { recordset } = await request
     .input('taskId', sql.BigInt, BigInt(taskId))
     .query<UsageRow>(`SELECT CAST(NULL AS varchar(19)) AS id, source, metric, SUM(quantity) AS quantity,
@@ -317,6 +330,15 @@ export function createTaskStore(
 ): TaskStore {
   return {
     async create(input: CreateTaskInput) {
+      const source = input.source ?? 'board';
+      const originMessageId = input.originMessageId;
+      if ((source !== 'board' && source !== 'chat') ||
+        (source === 'chat' && originMessageId === undefined) ||
+        (source === 'board' && originMessageId !== undefined) ||
+        (originMessageId !== undefined &&
+          (!/^[1-9][0-9]{0,18}$/.test(originMessageId) || BigInt(originMessageId) > maxSqlBigInt))) {
+        throw new Error('Invalid task input');
+      }
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
@@ -332,22 +354,24 @@ export function createTaskStore(
         }
         const inserted = await new sql.Request(transaction)
           .input('projectId', sql.BigInt, BigInt(input.projectId))
+          .input('originMessageId', sql.BigInt, originMessageId === undefined ? null : BigInt(originMessageId))
           .input('title', sql.NVarChar(200), input.title)
           .input('request', sql.NVarChar(sql.MAX), input.request)
+          .input('source', sql.NVarChar(16), source)
           .input('agent', sql.NVarChar(16), input.agent ?? defaultAgent)
           .input('modelOverride', sql.NVarChar(100), input.modelOverride ?? null)
           .input('reasoningOverride', sql.NVarChar(32), input.reasoningOverride ?? null)
           .input('priority', sql.Int, input.priority ?? 0)
           .query<TaskRow>(`INSERT INTO dbo.tasks
-            (project_id, title, request, source, agent, model_override, reasoning_override, priority)
+            (project_id, origin_message_id, title, request, source, agent, model_override, reasoning_override, priority)
             OUTPUT ${insertedTaskColumns}
-            VALUES (@projectId, @title, @request, N'board', @agent, @modelOverride, @reasoningOverride, @priority);`);
+            VALUES (@projectId, @originMessageId, @title, @request, @source, @agent, @modelOverride, @reasoningOverride, @priority);`);
         const task = inserted.recordset[0];
         if (!task) throw new Error('Task insert returned no row');
         const event: RecordTaskEventInput = {
           taskId: task.id,
           type: 'created',
-          summary: 'Task created from the board',
+          summary: source === 'chat' ? 'Task created from chat' : 'Task created from the board',
           payload: { state: 'Ready' },
           source: 'backend',
         };
@@ -385,7 +409,7 @@ export function createTaskStore(
     },
 
     async list(filters: TaskListFilters) {
-      const request = pool.request()
+      const request = databaseReadRequest(pool)
         .input('limit', sql.Int, filters.limit)
         .input('offset', sql.Int, filters.offset);
       const clauses: string[] = [];
@@ -421,12 +445,12 @@ export function createTaskStore(
 
     async get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null> {
       if (!eventArchive) {
-        const taskResult = await pool.request()
+        const taskResult = await databaseReadRequest(pool)
           .input('taskId', sql.BigInt, BigInt(id))
           .query<TaskRow>(`SELECT ${taskColumns} FROM dbo.tasks WHERE id = @taskId;`);
         const row = taskResult.recordset[0];
         if (!row) return null;
-        const eventsResult = await pool.request()
+        const eventsResult = await databaseReadRequest(pool)
           .input('taskId', sql.BigInt, BigInt(id))
           .input('eventLimit', sql.Int, eventLimit)
           .input('eventOffset', sql.Int, eventOffset)
@@ -506,7 +530,7 @@ export function createTaskStore(
     },
 
     async getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]> {
-      const result = await pool.request()
+      const result = await databaseReadRequest(pool)
         .input('taskId', sql.BigInt, BigInt(taskId))
         .input('eventId', sql.BigInt, BigInt(eventId))
         .input('limit', sql.Int, limit)
@@ -525,7 +549,7 @@ export function createTaskStore(
     },
 
     async getRunningContext() {
-      const result = await pool.request()
+      const result = await databaseReadRequest(pool)
         .input('taskLimit', sql.Int, runningContextTaskLimit + 1)
         .input('eventLimit', sql.Int, runningContextEventLimit)
         .query<RunningContextRow>(`WITH running_tasks AS (
@@ -586,7 +610,12 @@ export function createTaskStore(
       };
     },
 
-    async transition(id: string, state: TaskState, completionVerified = false): Promise<TaskTransitionResult> {
+    async transition(
+      id: string,
+      state: TaskState,
+      completionVerified = false,
+      eventReason?: string,
+    ): Promise<TaskTransitionResult> {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
@@ -640,7 +669,7 @@ export function createTaskStore(
           taskId: id,
           type: 'state_changed',
           summary: 'Task state changed',
-          payload: { from: current, to: state },
+          payload: { from: current, to: state, ...(eventReason ? { reason: eventReason } : {}) },
           source: 'backend',
         };
         const serializedPayload = validateEvent(event);
@@ -660,7 +689,8 @@ export function createTaskStore(
       await transaction.begin();
       try {
         let currentState: TaskState | undefined;
-        if (event.type === 'disk_low') {
+        const isQuestion = event.source === 'runner' && event.type === 'session_question';
+        if (event.type === 'disk_low' || isQuestion) {
           const task = await new sql.Request(transaction)
             .input('taskId', sql.BigInt, BigInt(event.taskId))
             .query<{ state: TaskState }>(
@@ -669,17 +699,29 @@ export function createTaskStore(
         }
         const publishedEvent = await insertTaskEvent(transaction, event, payload);
         await recordRunnerUsage(transaction, event, event.payload);
-        let stateChangedEvent: TaskEventMessage | undefined;
-        if (currentState === 'Running') {
+        const invocationId = completedRunnerInvocation(event);
+        if (invocationId) {
           await new sql.Request(transaction)
             .input('taskId', sql.BigInt, BigInt(event.taskId))
+            .input('invocationId', sql.NVarChar(255), invocationId)
+            .query(`UPDATE turn SET status = N'completed', ended_at = SYSUTCDATETIME()
+              FROM dbo.sandbox_turns AS turn
+              INNER JOIN dbo.sandbox_sessions AS session ON session.id = turn.sandbox_session_id
+              WHERE session.task_id = @taskId AND turn.invocation_id = @invocationId
+                AND turn.status = N'running';`);
+        }
+        let stateChangedEvent: TaskEventMessage | undefined;
+        if (currentState === 'Running' || (isQuestion && currentState === 'PauseRequested')) {
+          await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(event.taskId))
+            .input('currentState', sql.NVarChar(32), currentState)
             .query(`UPDATE dbo.tasks SET state = N'NeedsAttention', lease_owner = NULL, lease_until = NULL
-              WHERE id = @taskId AND state = N'Running';`);
+              WHERE id = @taskId AND state = @currentState;`);
           const stateChanged: RecordTaskEventInput = {
             taskId: event.taskId,
             type: 'state_changed',
-            summary: 'Low sandbox disk; task needs attention',
-            payload: { from: 'Running', to: 'NeedsAttention', reason: 'disk_low' },
+            summary: isQuestion ? 'Agent needs input; task needs attention' : 'Low sandbox disk; task needs attention',
+            payload: { from: currentState, to: 'NeedsAttention', reason: isQuestion ? 'session_question' : 'disk_low' },
             source: 'backend',
           };
           stateChangedEvent = await insertTaskEvent(

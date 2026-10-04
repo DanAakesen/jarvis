@@ -1,12 +1,13 @@
 import { Link, NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
 import { areas } from './areas';
+import { DatabaseWakeStatus } from './DatabaseWakeStatus';
 import { JarvisPage } from './JarvisPage';
 import { NotFoundPage, SignInPage } from './pages';
 import { SettingsPage } from './SettingsPage';
 import { useSignIn, type SignInSession } from './useSignIn';
 
-function Shell({ signedIn }: { signedIn: boolean }) {
+function Shell({ signedIn, config, session }: { signedIn: boolean; config: PublicConfig; session: SignInSession }) {
   return (
     <div className="app">
       <a className="skip-link" href="#content">Skip to content</a>
@@ -23,6 +24,9 @@ function Shell({ signedIn }: { signedIn: boolean }) {
           </>
         )}
       </header>
+      {signedIn && config.backendUrl && (
+        <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+      )}
       <main id="content" tabIndex={-1}>
         <Outlet />
       </main>
@@ -45,7 +49,7 @@ export function App({ config = defaultConfig }: { config?: PublicConfig }) {
 
   return (
     <Routes>
-      <Route element={<Shell signedIn={signedIn} />}>
+      <Route element={<Shell signedIn={signedIn} config={config} session={session} />}>
         <Route element={<RequireSignIn session={session} />}>
           <Route index element={
             <JarvisPage

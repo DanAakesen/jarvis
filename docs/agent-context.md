@@ -19,6 +19,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 | Tables, relationships, and groups | [data-model.md](data-model.md) |
 | Step-by-step flows with evidence status | [architecture-flows.html](architecture-flows.html) (open in a browser) |
 | Decisions and learnings L1–L40 | [decisions.md](decisions.md) |
+| Production operations | [Runbook](runbook.md) |
 | Prototype code and reports to port in P2 and P4 | [reference/](reference/) |
 | Open-source research | [open-source.md](open-source.md) |
 
@@ -96,16 +97,17 @@ Before marking the PR ready, update the repository in the same PR so the next ag
 | Added or verified a command, environment variable, secret name, or setup step | this file |
 | Built or proved a step in a flow | [architecture-flows.html](architecture-flows.html): the box status |
 | Settled a visual direction or found a UI issue | [DESIGN.md](../DESIGN.md) |
+| Added, changed, removed or verified a feature (including new planned tasks) | [features.md](features.md): its row's status, surface and tasks |
 | Found work outside the task | `PLAN.md`: a new task (next free ID in its phase, Depends on filled in, Not started) or an entry under Ideas. Update the Depends on column of any task this changes. Never drop it silently. |
 
-The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; never merge a draft.
+The PR body states what changed, how it was verified (commands and results), what remains unverified, and follow-ups. Then mark the PR ready for review; never merge a draft, and never merge a PR whose diff against `main` is empty or whose only commits are a plan or merges from `main` (L69).
 
 Every task issue ends with the same "Before you start" and "Definition of done" checklist that summarises these rules. New task issues get it too.
 
 ### Merge
 
 - **Coordinator removed.** Dan or an explicitly authorized agent squash-merges a PR when it is ready (not a draft; see Copilot drafts below), no agent is still working on it, its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the authorized worker updates it and waits for the checks again, so every merge is tested against the current `main`.
-- **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, merge only `fix-main:` PRs until `main` is green again.
+- **Never start from a broken `main`.** After every merge, CI and deploy run on `main`; deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, merge only `fix-main:` PRs until `main` is green again. Only a **failed** run blocks: a queued, pending or in-progress Deploy is not a broken `main`, so start or continue your task (L75).
 - **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, also after follow-up rounds and while the PR has merge conflicts (L Follow-up rounds (after an `@copilot` comment) can't edit the title, so on Copilot's closing comment the workflow also drops a leftover `[WIP]` prefix.
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
@@ -124,7 +126,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
 - The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
 - Bicep sets `BACKEND_CONTAINER_APP_RESOURCE_ID` and grants `id-jarvis-backend` a custom role limited to Container App read/write on that app. The sleep API uses this fixed target and the existing `SQL_MANAGED_IDENTITY_CLIENT_ID` for ARM authentication. Local tests inject the scaler; a local app without an Azure managed identity cannot perform live scaling, and the Bicep build/lint checks do not verify the deployed role.
-- `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Confirm the billing currency is DKK and supply any required budget notification email addresses as appropriate. The first Azure deployment and real resource behavior are verified by the first Deploy run (P0-16), not by the local build/lint.
+- `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Deploy requires the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub secret, a comma-separated list including Dan's email. It passes the values through a mode-0600 temporary parameters file to the required Bicep `budgetContactEmails` parameter, then deletes the file. Do not commit email addresses. The first Azure deployment and real resource behavior are verified by Deploy, not by local Bicep build/lint.
 - The [Deploy workflow](../.github/workflows/deploy.yml) is the only routine path to Azure: push to `main` deploys the parts changed since the last successful Deploy run; Dan's `workflow_dispatch` on `main` redeploys everything. Its Bicep deployment is always named `jarvis-infra`. Details: [production deploy](architecture.md#production-deploy-p0-11).
 - GitHub Actions OIDC: GitHub signs this repository's tokens with the immutable-ID subject `repo:DanAakesen@68902534/jarvis@1403065900:ref:refs/heads/main`, not `repo:DanAakesen/jarvis:ref:refs/heads/main`. `infra/bootstrap.ps1` reads the IDs with `gh api repos/DanAakesen/jarvis` and registers the federated credential `github-main-ids`. An `AADSTS700213` sign-in failure means the credential is missing: Dan re-runs bootstrap; the subject is printed under "Federated token details" in the `azure/login` step (L49).
 - Dan's Azure CLI defaults to the Microsoft tenant: pass `--subscription` in every command and script (L7). For Microsoft Graph, get the token with `az account get-access-token --subscription <id> --resource-type ms-graph`; `--tenant` picks the wrong account.
@@ -190,7 +192,7 @@ Dan's manual setup checklist:
 
    In **GitHub → Settings → Developer settings → GitHub Apps → Jarvis Software Factory → Webhook**, set the URL to `https://<backendFqdn>/github/webhooks`, choose `application/json`, paste the same secret, enable the webhook, and subscribe to `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. Save the settings, remove the temporary local copy, and inspect **Recent Deliveries** for a successful 2xx response to GitHub's initial `ping`. The receiver records that signed but unsupported event as ignored. Never put either copy in source control or logs.
 
-Status, 4 October 2026: Dan registered the App, installed it on all repositories of his account, trimmed its permissions, and stored `github-app-private-key` in Key Vault (P3-10). P3-02 code is merged but its live token issuance and sandbox push are not yet verified. The webhook receiver (P3-03) is implemented; webhook secret provisioning, App URL configuration, and live delivery remain Dan's post-merge steps. The receiver caches the secret after its first successful lookup, so restart the backend when rotating it.
+Status, 4 October 2026: Dan registered the App, installed it on all repositories of his account, trimmed its permissions, and stored `github-app-private-key` in Key Vault (P3-10). P3-02 code is merged but its live token issuance and sandbox push are not yet verified. The webhook receiver (P3-03) is implemented; webhook secret provisioning, App URL configuration, and live delivery remain Dan's post-merge steps. P3-05 uses a separate repository-scoped token with only Actions read permission in the backend, stores failed-job logs in the existing private `logs` container, and never passes that token to the sandbox. The backend setting `global.max_check_attempts` defaults to 3 and accepts 0–10; 0 disables automatic repairs. The receiver caches the webhook secret after its first successful lookup, so restart the backend when rotating it.
 
 ## Setup and commands
 
@@ -217,8 +219,10 @@ Verified in Codex cloud for P0-02:
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
+| Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
+| Focused P3-05 failed-check tests | `npm test --workspace @jarvis/backend -- src/database/checks-loop-blob.test.ts src/database/checks-loop-store.test.ts src/github/checks-loop.test.ts src/github/actions-logs.test.ts src/github/webhook.test.ts src/core/settings.test.ts src/github-app.test.ts` |
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |
@@ -250,16 +254,28 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
+P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
+project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
+when requests settled, and status polling stopped while idle. No horizontal
+overflow or page exceptions occurred. This does not verify live SQL auto-resume.
+Focused P1-14 checks: `npm test --workspace @jarvis/backend -- src/app.test.ts
+src/factory/tasks.test.ts src/database/wake-retry.test.ts src/database/lifecycle.test.ts
+src/database/config.test.ts` and `npm test --workspace @jarvis/web -- --run
+src/DatabaseWakeStatus.test.tsx src/App.test.tsx src/task-events.test.tsx`.
 P3-11 rechecked Settings and Projects at 390 and 1280 px: New projects defaults
 load and save, and the Projects page retains edit/archive but has no create form.
-The backend project POST route remains for P3-12. Live Entra and Azure SQL
-behavior remain unverified.
+The backend project POST route remains available to Jarvis for P3-12. Live Entra
+and Azure SQL behavior remain unverified.
 P3-13 was checked at 390 and 1280 px with scratch-only auth and API mocks:
 managed projects appeared first, managing a repository needed no form and removed
 it from the unmanaged list, and explicit refresh loaded the updated list. Neither
 width overflowed, the management buttons were 44 px high, and no browser errors
 occurred. Live GitHub App, Key Vault, Entra, and Azure SQL behavior remains
 unverified.
+P3-12 adds the authenticated `create_project` tool and backend-only Key Vault
+repository creation. Backend and runner contract tests are local/offline; live
+Entra, Key Vault, Azure SQL, private template access and the throwaway end-to-end
+scaffolding PR remain unverified.
 P1-08 was inspected at 390 and 1280 px with scratch-only auth and project/task/SSE
 mocks. All six columns, task creation, filter submission, modal dismissal, and
 focus return worked; the page had no horizontal overflow, controls were at least
@@ -276,6 +292,12 @@ with no horizontal overflow or console errors. The live acceptance still
 requires both agents on `DanAakesen/jarvis-test-target`, including intermediate
 commits on the task branch; the coordinator runs it post-merge. Live Entra, Azure
 SQL/Blob archive reads, deployed SSE, and live Foundry controls remain unverified.
+P2-14's actual `TaskControls` component and styles were inspected in Chromium at
+390 and 1280 px from a scratch Vite harness with only the controls POST mocked.
+Continue showed a disabled pending state and success feedback; an active-crash
+fixture still showed Recover. The button measured 44 px, neither viewport
+overflowed, and there were no page errors. Live backend/Foundry expiry remains
+unverified.
 P6-01 was inspected at 390 and 1280 px using the scratch `./auth` stub, a
 placeholder backend origin, and a mocked `/usage` response. Project/agent/source
 grouping, period selection, task links, 503 recovery, and the empty state worked;
@@ -290,7 +312,8 @@ Backend commands:
 | Purpose | Command |
 | --- | --- |
 | Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
-| SQL Server migration and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
+| Focused P3-07 release webhook contract | `npm test --workspace @jarvis/backend -- --run src/database/webhook-delivery-store.test.ts` |
+| SQL Server migration, webhook mapping, and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
 | Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
 | P6-05 SQL Server parallel load test (CI `Database` job; prints a `P6-05 load:` summary line) | `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher-load.integration.test.ts` (isolated loopback SQL Server only) |
@@ -321,13 +344,17 @@ access):
 
 The factory tasks API provides authenticated create, filtered list, detail, and
 state-aware control routes. The controls route accepts only `steer`, `pause`,
-`resume`, or `cancel`; it never accepts a client-supplied task state. Task list
+`resume`, `cancel`, or `recover` (the latter only for Needs attention); it never
+accepts a client-supplied task state. Recovery starts a new Foundry session from
+the task branch with the original request, bounded steering history, and an event
+summary. Task list
 filters are `projectId`, `agent`, `state`, `createdAfter`,
 `createdBefore`, and `search`; `limit`/`offset` and `eventLimit`/`eventOffset`
 bound result pages. Responses are capped at 1 MiB; event payloads above 4 KiB
 are marked truncated. State is backend-owned; do not add a client state update.
 The task store's transition operation must be used by backend dispatch/control
-code, and `Done` requires a trusted completion-verification call.
+code, and `Done` requires GitHub verification of the task branch and a pull
+request in the configured repository.
 
 `PORT` defaults to 3000, matching Container Apps ingress. `LOG_LEVEL` defaults
 to `info`. `STATIC_WEB_APP_ORIGIN` is an exact HTTPS origin with no trailing
@@ -443,6 +470,15 @@ Verified locally for issue #30 (no Azure access required):
 | Run offline Foundry contract tests | `npx --no-install vitest run --config apps/backend/src/foundry/vitest.config.mts` |
 
 The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and an injected `getToken(scope, signal)` identity provider. These are module options, not new environment variables. See the [module guide](../apps/backend/src/foundry/README.md) for operation ownership and fixture provenance. Recorded runner responses are captured locally with ACP stubbed; these checks establish the offline contract, not live Azure readiness. The dedicated `Foundry contract CI` workflow checks this module on the current skeleton without depending on the server implementation.
+
+P2-13 task starts require `repository` (`owner/name`), `defaultBranch`, and
+`branch` in addition to the task identifier. The runner prepares the Git
+checkout before starting ACP; provider probes and Codex renewal do not clone a
+repository. Keep the existing Git credential-helper interface when changing
+token acquisition (P3-02). After merge, the coordinator must run one Copilot and
+one Codex task on `DanAakesen/jarvis-test-target`, verify pushes to their
+`jarvis/task-<id>` branches, and verify that a commit-free agent question appears
+as Needs attention.
 
 ### Database access and migrations (#7)
 

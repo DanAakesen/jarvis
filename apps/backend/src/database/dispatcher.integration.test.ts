@@ -8,6 +8,7 @@ import type { SandboxHeartbeat } from '../factory/heartbeat.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 import { createTaskStore } from './task-store.js';
 import { createDispatcherStore } from './dispatcher-store.js';
+import { createTaskRecoveryStore } from './recovery-store.js';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations } from './migrations.js';
 
@@ -61,10 +62,91 @@ function settings(): SettingsStore {
 }
 
 function heartbeat(): SandboxHeartbeat {
-  return { track: vi.fn(), untrack: vi.fn() } as unknown as SandboxHeartbeat;
+  return { track: vi.fn(), untrack: vi.fn(), setCompletionHandler: vi.fn() } as unknown as SandboxHeartbeat;
 }
 
 describe('dispatcher SQL coordination', () => {
+  it('persists the workspace branch with the lease and retains it across deferred and rejected starts', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, events);
+    const task = await createTask(events, 'Persisted workspace');
+    const store = createDispatcherStore(pool, events);
+    const first = await store.claimNext('workspace-owner', 120, 3);
+    if (first.kind !== 'claimed') throw new Error('Workspace fixture was not claimed');
+    expect(first.task).toMatchObject({
+      taskId: task.id, defaultBranch: 'main', branch: `jarvis/task-${task.id}`,
+      repository: expect.stringMatching(/^DanAakesen\/dispatch-/),
+    });
+    expect((await taskStore.get(task.id, 1, 0))?.branch).toBe(first.task.branch);
+    await store.deferClaim('wrong-owner', first.task, 0);
+    expect(await store.claimNext('competing-owner', 120, 3)).toMatchObject({ kind: 'idle' });
+    await store.deferClaim('workspace-owner', first.task, 0);
+    const deferred = await store.claimNext('workspace-owner', 120, 3);
+    if (deferred.kind !== 'claimed') throw new Error('Deferred workspace fixture was not claimed');
+    expect(deferred.task.branch).toBe(first.task.branch);
+    expect(deferred.task.attemptCount).toBe(1);
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    await store.failStart('workspace-owner', deferred.task, new Date(Date.now() - 1000).toISOString(), 'rejected');
+    const retry = await store.claimNext('workspace-owner', 120, 3);
+    if (retry.kind !== 'claimed') throw new Error('Retry workspace fixture was not claimed');
+    expect(retry.task.branch).toBe(first.task.branch);
+    expect(retry.task.attemptCount).toBe(2);
+    await store.failStart('workspace-owner', retry.task, null, 'test_cleanup');
+  });
+
+  it('reuses a pre-existing branch when a task is reclaimed for a fresh session', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, events);
+    const task = await createTask(events, 'Retained workspace');
+    await pool.request().input('taskId', sql.BigInt, BigInt(task.id))
+      .query(`UPDATE dbo.tasks SET branch = N'jarvis/existing-recovery-branch' WHERE id = @taskId;`);
+    const store = createDispatcherStore(pool, events);
+    const claim = await store.claimNext('recovery-owner', 120, 3);
+    if (claim.kind !== 'claimed') throw new Error('Recovery workspace fixture was not claimed');
+    expect(claim.task.branch).toBe('jarvis/existing-recovery-branch');
+    expect((await taskStore.get(task.id, 1, 0))?.branch).toBe(claim.task.branch);
+    await store.failStart('recovery-owner', claim.task, null, 'test_cleanup');
+  });
+
+  it.each(['Running', 'PauseRequested'] as const)('records a session question and needs-attention state atomically from %s', async (state) => {
+    const events = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, events);
+    const task = await createTask(events, 'Agent question');
+    await taskStore.transition(task.id, 'Running');
+    if (state === 'PauseRequested') await taskStore.transition(task.id, state);
+    const delivered: TaskEventMessage[] = [];
+    const unsubscribe = events.subscribe((event) => delivered.push(event));
+    const question = {
+      taskId: task.id, type: 'session_question', source: 'runner' as const,
+      summary: 'Which implementation should I use?',
+      payload: { invocationId: 'question-turn', eventIndex: 1, data: { question: 'Which implementation should I use?' } },
+    };
+    await taskStore.recordEvent(question);
+    expect(delivered.map(({ type }) => type)).toEqual(['session_question', 'state_changed']);
+    expect(delivered[0]?.summary).toBe('Which implementation should I use?');
+    expect(delivered[1]?.payload).toEqual({ from: state, to: 'NeedsAttention', reason: 'session_question' });
+    expect((await taskStore.get(task.id, 10, 0))?.state).toBe('NeedsAttention');
+    await taskStore.recordEvent(question);
+    expect(delivered.map(({ type }) => type)).toEqual(['session_question', 'state_changed', 'session_question']);
+    unsubscribe();
+  });
+
+  it('does not restart or change a cancelled task on a late runner question', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, events);
+    const task = await createTask(events, 'Late agent question');
+    await taskStore.transition(task.id, 'Cancelled');
+    const delivered: TaskEventMessage[] = [];
+    const unsubscribe = events.subscribe((event) => delivered.push(event));
+    await taskStore.recordEvent({
+      taskId: task.id, type: 'session_question', source: 'runner',
+      payload: { data: { question: 'Late question' } },
+    });
+    expect(delivered.map(({ type }) => type)).toEqual(['session_question']);
+    expect((await taskStore.get(task.id, 1, 0))?.state).toBe('Cancelled');
+    unsubscribe();
+  });
+
   it('starts a ready task once when two dispatcher instances race for it', async () => {
     const events = createEventHub<TaskEventMessage>();
     const taskStore = createTaskStore(pool, events);
@@ -74,12 +156,16 @@ describe('dispatcher SQL coordination', () => {
     const unsubscribe = events.subscribe((event) => {
       if (event.type === 'sandbox_started') resolveStarted();
     });
-    const startFirst = vi.fn(async () => ({
-      invocationId: 'invocation-first', sessionId: 'session-first', status: 'queued' as const, agent: 'copilot' as const,
-    }));
-    const startSecond = vi.fn(async () => ({
-      invocationId: 'invocation-second', sessionId: 'session-second', status: 'queued' as const, agent: 'copilot' as const,
-    }));
+    const startFirst = vi.fn(async (request: import('../foundry/client.js').TaskRequest) => {
+      expect((await taskStore.get(task.id, 1, 0))?.branch).toBe(request.branch);
+      expect(request.branch).toBe(`jarvis/task-${task.id}`);
+      return { invocationId: 'invocation-first', sessionId: 'session-first', status: 'queued' as const, agent: 'copilot' as const };
+    });
+    const startSecond = vi.fn(async (request: import('../foundry/client.js').TaskRequest) => {
+      expect((await taskStore.get(task.id, 1, 0))?.branch).toBe(request.branch);
+      expect(request.branch).toBe(`jarvis/task-${task.id}`);
+      return { invocationId: 'invocation-second', sessionId: 'session-second', status: 'queued' as const, agent: 'copilot' as const };
+    });
     const first = new TaskDispatcher(
       createDispatcherStore(pool, events), taskStore, settings(),
       () => ({ startTask: startFirst, deleteSession: vi.fn(async () => {}) }), heartbeat(), events,
@@ -111,10 +197,47 @@ describe('dispatcher SQL coordination', () => {
     await createDispatcherStore(pool, events).endTaskSessions(task.id, 'Cancelled');
   });
 
+  it('claims a NeedsAttention task once and persists its recovered sandbox session', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, events);
+    const task = await createTask(events, 'Recover crashed task');
+    const branch = `jarvis/task-${task.id}`;
+    await pool.request()
+      .input('taskId', sql.BigInt, BigInt(task.id))
+      .input('branch', sql.NVarChar(255), branch)
+      .query(`UPDATE dbo.tasks SET branch = @branch WHERE id = @taskId;`);
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    expect((await taskStore.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+
+    const recoveryStore = createTaskRecoveryStore(pool, events);
+    const ownerOne = randomUUID();
+    const ownerTwo = randomUUID();
+    const [first, second] = await Promise.all([
+      recoveryStore.claimRecovery(task.id, ownerOne, 120),
+      recoveryStore.claimRecovery(task.id, ownerTwo, 120),
+    ]);
+    const claim = first.kind === 'claimed' ? first : second.kind === 'claimed' ? second : undefined;
+    const owner = first.kind === 'claimed' ? ownerOne : ownerTwo;
+    if (!claim) throw new Error('The recovery claim was not acquired');
+    expect(claim).toMatchObject({ kind: 'claimed', task: { taskId: task.id } });
+    expect([first.kind, second.kind].filter((kind) => kind === 'claimed')).toHaveLength(1);
+
+    const dispatcherStore = createDispatcherStore(pool, events);
+    const sandboxSessionId = await dispatcherStore.recordStarted(owner, claim.task, 'jarvis-runner-base-1x2', {
+      sessionId: `recovered-${task.id}`,
+      invocationId: `recovered-invocation-${task.id}`,
+    });
+    expect((await taskStore.get(task.id, 10, 0))?.state).toBe('Running');
+    expect(await dispatcherStore.endTaskSessions(task.id, 'Cancelled')).toEqual([sandboxSessionId]);
+    expect((await taskStore.transition(task.id, 'Cancelled')).kind).toBe('ok');
+  });
+
   it('reuses the Foundry session and accumulates sandbox usage across pause and resume', async () => {
     const events = createEventHub<TaskEventMessage>();
     const taskStore = createTaskStore(pool, events);
     const task = await createTask(events, 'Pause and resume');
+    await pool.request().input('taskId', sql.BigInt, BigInt(task.id))
+      .query(`UPDATE dbo.tasks SET branch = N'jarvis/persisted-resume-branch' WHERE id = @taskId;`);
     expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
 
     const foundrySessionId = `resume-${randomUUID()}`;
@@ -137,6 +260,7 @@ describe('dispatcher SQL coordination', () => {
     const store = createDispatcherStore(pool, events);
     const target = await store.getControlTarget(task.id);
     if (!target) throw new Error('Active session was not available for steering');
+    expect(target).toMatchObject({ defaultBranch: 'main', branch: 'jarvis/persisted-resume-branch' });
     let publishedSteeringEvent: TaskEventMessage | undefined;
     const unsubscribe = events.subscribe((event) => {
       if (event.type === 'steered') publishedSteeringEvent = event;
@@ -251,6 +375,43 @@ describe('dispatcher SQL coordination', () => {
 
     expect(first.recordset[0]?.quantity).toBeGreaterThan(0);
     expect(second.recordset[0]?.quantity).toBe(first.recordset[0]?.quantity);
+  });
+
+  it('ends a completed invocation without recording a crash when delivery needs attention', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, events);
+    const task = await createTask(events, 'Completed turn without delivery');
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    const foundrySessionId = `completed-${randomUUID()}`;
+    const inserted = await pool.request()
+      .input('taskId', sql.BigInt, BigInt(task.id))
+      .input('foundrySessionId', sql.NVarChar(255), foundrySessionId)
+      .query<{ sandboxSessionId: string }>(`INSERT dbo.sandbox_sessions
+        (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+        OUTPUT CAST(inserted.id AS varchar(19)) AS sandboxSessionId
+        VALUES (@taskId, @foundrySessionId, N'active', N'runner', N'1x2', N'runner', N'Active');`);
+    const sandboxSessionId = inserted.recordset[0]?.sandboxSessionId;
+    if (!sandboxSessionId) throw new Error('Completed session fixture was not created');
+    await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .input('invocationId', sql.NVarChar(255), `completed-turn-${randomUUID()}`)
+      .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+        VALUES (@sandboxSessionId, @invocationId, N'task', N'completed-acp', N'running');`);
+    expect((await taskStore.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+
+    const store = createDispatcherStore(pool, events);
+    expect(await store.endTaskSessions(task.id, 'NeedsAttention', true)).toEqual([sandboxSessionId]);
+    const result = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .query<{ taskState: string; sessionStatus: string; endReason: string; turnStatus: string }>(`SELECT
+        task.state AS taskState, session.status AS sessionStatus, session.end_reason AS endReason, turn.status AS turnStatus
+        FROM dbo.sandbox_sessions AS session
+        INNER JOIN dbo.tasks AS task ON task.id = session.task_id
+        INNER JOIN dbo.sandbox_turns AS turn ON turn.sandbox_session_id = session.id
+        WHERE session.id = @sandboxSessionId;`);
+    expect(result.recordset).toEqual([{
+      taskState: 'NeedsAttention', sessionStatus: 'Ended', endReason: 'done', turnStatus: 'completed',
+    }]);
   });
 
   it('honors global limits and per-project limits using active leases', async () => {

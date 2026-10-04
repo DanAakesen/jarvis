@@ -1,6 +1,6 @@
 # Design
 
-No visual direction is chosen yet. Dan designs each page by giving an image generator the page's data points and actions from [PRODUCT.md](PRODUCT.md#page-requirements), then picks a direction. Record the chosen direction, references, and findings here. Requirements stay in PRODUCT.md; token values go in code.
+The shared shell and voice-workspace structure were agreed with Dan on 4 October 2026; final styling remains open. See [the complete UI discussion and wireframes](ui.md). Dan designs each page by giving an image generator the page's data points and actions from [PRODUCT.md](PRODUCT.md#page-requirements), then picks a direction. Record the chosen direction, references, and findings here. Requirements stay in PRODUCT.md; token values go in code.
 
 ## Design goals
 
@@ -43,7 +43,7 @@ event timeline.
 
 - **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.
 - **Language toggle:** Danish ↔ English, visible wherever voice is active.
-- **Task controls:** steer, pause, resume, cancel, and recover, each with a clear pending state (for example, "Pausing…" until the turn has stopped).
+- **Task controls:** steer, pause, resume, cancel, recover after a crash, and continue after a completed turn's session expires. Show a clear pending state (for example, "Continuing…" while a fresh session starts).
 - **Sleep switch:** the main page shows configured awake/asleep state (minimum replicas 1/0), pending and failure feedback, and explains a refusal while any task is Ready or Running. Settings links to the main-page control.
 - **Live updates:** cards and timeline entries change state without layout jumps; a visible marker for a disconnected or stale event stream. Only committed task updates are presented as current.
 
@@ -77,6 +77,11 @@ visual direction. The header contains the Jarvis home link, area navigation
 surface fill and full outline, never a lone edge. Navigation appears only after
 sign-in; the header wraps on narrow screens.
 
+- **Database wake (P1-14):** one shared, polite status message above the page
+  content reads “Waking Jarvis…” while the backend reports a resume wait.
+  Keep the current page and pending controls visible; do not infer this state
+  from elapsed time or replace it with an invented progress indicator.
+
 - **Main page:** the verified name is the headline. Conversation (chat,
   language, voice, and persisted history) is the wide column; "Now" and Backend
   sit beside it from 900 px and stack below it on narrower screens.
@@ -84,12 +89,17 @@ sign-in; the header wraps on narrow screens.
   stays visible but disabled, and is linked to that explanation with
   `aria-describedby`. No sample messages, tasks or states are shown.
 - **Activity panel:** Running tasks, Needs attention, Releases and deployments,
-  and Credential warnings, each with an empty state. Item titles open their
+  Credential warnings, and Alerts, each with an empty state. Item titles open their
   task, release or project. Dismiss shows "Dismissing…", keeps the item and
   explains a failure, and returns focus to the Now heading after removal.
   The panel loads its backend snapshot, offers retry when unavailable, and
   labels reconnecting or unavailable live updates while keeping the last
   snapshot visible.
+- **Alerts (P6-02):** Keep alerts in the existing Now activity panel as a
+  separate, dismissible "Alerts" group; retain the condition title, timestamp,
+  and task/release/project link where one exists. Budget alerts have no invented
+  page or cost estimate. The group uses the shell's existing neutral list and
+  responsive layout; no new palette or alert-only visual language is needed.
 - **Area pages:** the Software Factory has its own Tasks and Projects
   navigation. Unbuilt task and release pages explain what is unavailable.
   Project management is implemented below; record pages link back to their list.
@@ -167,6 +177,10 @@ filter. Controls display pending, success, and error feedback beside the action;
 unavailable PR/artifact links have adjacent explanations rather than implying an
 action is ready.
 
+Needs attention presents a Recover action with a short explanation that recovery
+starts a new sandbox from the task branch and saved history. The action keeps its
+identity while pending and reports success or failure beside the control.
+
 At narrow widths the metadata and controls stack into one column and timeline
 payloads scroll within the page. Existing 44 px controls and focus styles are
 reused. The usage section is an explicit P2-12 slot; disk values remain based on
@@ -228,3 +242,21 @@ reconnect, mute, and stop states with mocked relay/audio APIs. Physical
 microphone and speaker behavior remains unverified. Stop shows "Saving voice
 session…" until the backend has recorded usage, then refreshes conversation
 history.
+
+## Next-generation shared shell (design agreed, not implemented)
+
+[ui.md](ui.md) records the confirmed structure, open questions, feature-placement
+proposals and eight static wireframes. Typing uses a thin left icon rail,
+expandable left navigation, thin top/bottom bars, a contextual right panel and
+a central tabbed workspace. Settings is top-right. Voice hides the shell and
+composer, using a full-page background and a state-driven orb: centred alone,
+left of content windows on desktop, bottom-docked behind one main phone view.
+Windows can tile, overlap, minimise into tabs and be restored by Dan or Jarvis.
+
+Existing windows carry between modes by default. The optional minimise-on-voice
+setting defaults off; when enabled, voice begins with only the orb and windows
+remain docked on return to typing. Otherwise the earlier shell layout returns.
+Generated views are temporary; theme values persist. Small-orb input controls
+start voice explicitly. Glass/transparency and futuristic styling are exploratory;
+white wireframe windows are not a selected final treatment. Existing screen
+documentation below/above describes current implementation, not this future shell.

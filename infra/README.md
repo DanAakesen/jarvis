@@ -19,8 +19,12 @@ See the [Azure constraints](../docs/agent-context.md#azure) and
 
 ## Required deployment inputs
 
-`main.bicep` requires `backendIdentityResourceId`, `sqlAdminGroupObjectId` and
-`foundryNameTimestamp`. `backendImage` is optional: empty skips the backend app,
+`main.bicep` requires `backendIdentityResourceId`, `sqlAdminGroupObjectId`,
+`foundryNameTimestamp`, and `budgetContactEmails`. The Deploy workflow reads
+the comma-separated addresses from the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub
+secret and writes a protected temporary parameters file; do not put addresses
+in the repository. This configures the email-only Azure Monitor action group
+used by both app alert rules and budget thresholds. `backendImage` is optional: empty skips the backend app,
 which the Deploy workflow uses only before ACR holds the first backend image.
 The workflow takes the IDs from `bootstrap.output.json` and deploys as
 `jarvis-infra`.

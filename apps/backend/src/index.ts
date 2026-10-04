@@ -13,6 +13,7 @@ import { createProjectStore } from './database/project-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
+import { createTaskRecoveryStore } from './database/recovery-store.js';
 import { createCredentialStatusStore } from './database/credential-status-store.js';
 import { createUsageStore } from './database/usage-store.js';
 import { createSandboxHeartbeatStore } from './database/sandbox-heartbeat-store.js';
@@ -39,8 +40,20 @@ import { TaskDispatcher } from './factory/dispatcher.js';
 import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
 import { createNowFeedStore } from './database/now-feed-store.js';
 import { createGitHubAppRepositoryCatalog, createGitHubAppTokenIssuer } from './github-app.js';
+import { createRepoAdminRepositoryCreator } from './credentials/repo-admin.js';
 import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js';
+import { createChecksLoopStore } from './database/checks-loop-store.js';
+import { createChecksLoopBlobStore } from './database/checks-loop-blob.js';
+import { createGitHubActionsLogClient } from './github/actions-logs.js';
+import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
+import { createProjectPolicyStore } from './database/project-policy-store.js';
+import { createProjectPolicyEvaluator } from './github/project-policy.js';
+import { createGitHubDeliveryHandler } from './github/delivery.js';
+import { createAlertNotifier } from './alerts.js';
+import type { NowFeedUpdate } from './core/now.js';
+import { createAlertActivityStore } from './database/alert-store.js';
+import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 
 try {
   const config = loadConfig();
@@ -58,11 +71,23 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
+  const nowEventHub = createEventHub<NowFeedUpdate>();
+  const alertNotifier = createAlertNotifier(telemetry);
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
     config.foundryEndpoints || config.githubAppId || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
+    : undefined;
+  const projectRepositoryCreator = config.keyVaultUri && credential
+    ? createRepoAdminRepositoryCreator(
+      config.keyVaultUri,
+      async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Key Vault identity unavailable');
+        return token.token;
+      },
+    )
     : undefined;
   const githubAppKeyVault = config.githubAppId && config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
@@ -146,7 +171,7 @@ try {
     return client;
   };
   const sandboxHeartbeat = database && config.foundryEndpoints
-    ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub), clientFor, {
+    ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub, alertNotifier), clientFor, {
       onError: (error) => {
         const details = error instanceof FoundryClientError
           ? { kind: error.kind, statusCode: error.statusCode, operation: error.operation }
@@ -165,8 +190,16 @@ try {
       },
     })
     : null;
+  const projectStore = database ? createProjectStore(database.pool) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
-  const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool) : null;
+  const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;
+  const projectPolicyEvaluator = database && taskStore && githubAppTokenIssuer
+    ? createProjectPolicyEvaluator({
+      store: createProjectPolicyStore(database.pool),
+      tasks: taskStore,
+      tokenIssuer: githubAppTokenIssuer,
+    })
+    : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const dispatcher = database && taskStore && settingsStore && sandboxHeartbeat && config.foundryEndpoints
     ? new TaskDispatcher(
@@ -176,12 +209,51 @@ try {
       clientFor,
       sandboxHeartbeat,
       eventHub,
-      { onError: () => logger.warn('dispatcher.operation_failed') },
+      {
+        onError: () => logger.warn('dispatcher.operation_failed'),
+        recoveryStore: createTaskRecoveryStore(database.pool, eventHub),
+        workspaceFor: async (task) => {
+          if (!task.branch) return null;
+          const project = (await projectStore?.list())?.find(({ id }) => id === task.projectId);
+          return project
+            ? { repository: project.repo, defaultBranch: project.default_branch, branch: task.branch }
+            : null;
+        },
+        ...(githubAppTokenIssuer
+          ? { verifyDelivery: createGitHubDeliveryHandler(githubAppTokenIssuer, taskStore, config.staticWebAppOrigin) }
+          : {}),
+      },
     )
+    : undefined;
+  const checksLoop = database && archiveStorageAccount && credential && githubAppTokenIssuer &&
+    taskStore && settingsStore && dispatcher
+    ? createChecksLoop({
+      store: createChecksLoopStore(database.pool),
+      logs: createGitHubActionsLogClient(githubAppTokenIssuer),
+      blobs: createChecksLoopBlobStore(
+        new BlobServiceClient(
+          `https://${archiveStorageAccount}.blob.core.windows.net`,
+          credential,
+        ).getContainerClient('logs'),
+      ),
+      settings: settingsStore,
+      tasks: taskStore,
+      controller: dispatcher,
+      onError: () => logger.warn('github.checks_loop_recovery_failed'),
+    })
     : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
-    createGithubWebhookModule({ deliveryStore: webhookDeliveryStore, getSecret: getWebhookSecret }),
+    createGithubWebhookModule({
+      deliveryStore: webhookDeliveryStore,
+      getSecret: getWebhookSecret,
+      ...(checksLoop || projectPolicyEvaluator ? {
+        onMapping: async (mapping) => {
+          await checksLoop?.handleMapping(mapping);
+          await projectPolicyEvaluator?.handle(mapping);
+        },
+      } : {}),
+    }),
   ];
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
@@ -196,11 +268,29 @@ try {
         : {}),
     }));
   }
-  const credentialStatusStore = database ? createCredentialStatusStore(database.pool) : undefined;
+  const credentialStatusStore = database ? createCredentialStatusStore(database.pool, {
+    alertNotifier,
+    onAlert: () => nowEventHub.publish({ type: 'refresh' }),
+  }) : undefined;
+  const budgetAlertStore = database
+    ? createAlertActivityStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
+    : undefined;
+  const budgetReader = database && credential && config.monthlyBudgetResourceId
+    ? createArmBudgetReader({
+      resourceId: config.monthlyBudgetResourceId,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Azure budget identity unavailable');
+        return token.token;
+      },
+    })
+    : undefined;
   const app = buildApp(config, logger, {
     modules,
+    ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(database && taskStore && settingsStore ? {
-      projectStore: createProjectStore(database.pool),
+      ...(projectStore ? { projectStore } : {}),
+      ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
@@ -214,11 +304,24 @@ try {
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
     eventHub,
+    nowEventHub,
     ...(conversationAgent ? { conversationAgent } : {}),
   });
+  if (checksLoop) app.addHook('onClose', async () => { await checksLoop.stop(); });
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
+  let stopBudgetMonitor: (() => Promise<void>) | undefined;
+  if (budgetReader && budgetAlertStore) {
+    app.addHook('onClose', async () => { await stopBudgetMonitor?.(); });
+    app.addHook('onReady', async () => {
+      stopBudgetMonitor = startBudgetAlertMonitor(
+        budgetReader,
+        budgetAlertStore,
+        () => logger.warn('budget_alert.check_failed'),
+      );
+    });
+  }
   if (database && credential && config.foundryEndpoints && config.foundryRunnerAgentName) {
     const client = clientFor(config.foundryRunnerAgentName);
     let stopCodexRenewal: (() => void) | undefined;
@@ -257,6 +360,7 @@ try {
       await sandboxHeartbeat?.start();
       dispatcher?.start();
       await app.listen({ port: config.port, host: '0.0.0.0' });
+      void checksLoop?.start();
       taskEventArchiveJob?.start();
       logger.info({ port: config.port }, 'server.listening');
     }

@@ -19,6 +19,85 @@ def test_required_string_rejects_missing_and_blank():
         app._required_string({"task": " "}, "task")
 
 
+def test_needs_attention_marker_is_bounded_and_requires_a_question():
+    question = "Which license should this project use?"
+    text = f"Working\n{app.NEEDS_ATTENTION_MARKER} {question}\n"
+    assert app._needs_attention_question(text) == question
+    assert app._needs_attention_question(f"{app.NEEDS_ATTENTION_MARKER} ") is None
+    assert app._needs_attention_question("The task is complete.") is None
+    assert app._needs_attention_question(f"{app.NEEDS_ATTENTION_MARKER} {'x' * 700}") == "x" * 500
+
+
+def test_runner_reports_agent_question_as_needs_attention(tmp_path, monkeypatch, local_workspace):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "session_clients", {})
+    monkeypatch.setattr(app, "session_locks", {})
+    monkeypatch.setenv("JARVIS_DISK_LOW_THRESHOLD_BYTES", "1000")
+    monkeypatch.setattr(app, "_disk_snapshot", lambda: {
+        "disk_total_bytes": 10_000,
+        "disk_used_bytes": 1_000,
+        "disk_free_bytes": 9_000,
+    })
+    monkeypatch.setenv("JARVIS_BACKEND_URL", "https://backend.example")
+    monkeypatch.setenv("JARVIS_API_SCOPE", "api://00000000-0000-4000-8000-000000000000/.default")
+    question = "Which license should this project use?"
+
+    class Publisher:
+        def __init__(self, *_args):
+            self.events = []
+
+        async def publish(self, _task_id, _invocation_id, _event_index, event):
+            self.events.append((event["kind"], event["data"]))
+
+        async def close(self):
+            pass
+
+    class Client:
+        def __init__(self, _command, _cwd, _state, _env, persisted_session_id=None):
+            pass
+
+        async def start(self):
+            pass
+
+        async def run(self, _task):
+            return {"jarvis_needs_attention": question}
+
+        async def stop(self):
+            pass
+
+    async def credentials(_agent):
+        return {"github_token": "not-a-real-token", "copilot_token": "not-a-real-seat-token"}
+
+    publisher = Publisher()
+    monkeypatch.setattr(app, "RunnerEventPublisher", lambda *_args: publisher)
+    monkeypatch.setattr(app, "ACPClient", Client)
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    state = app.TaskState("attention", "session", "copilot", "scaffold", task_id="42")
+
+    asyncio.run(app._run_task(state))
+
+    assert state.status == "needs_attention"
+    assert state.error == question
+    assert ("needs_attention", {"question": question}) in publisher.events
+    assert not any(kind == "completed" for kind, _data in publisher.events)
+
+
+def test_assistant_text_chunks_are_extracted_only_from_text_messages():
+    assert app._assistant_message_chunk({
+        "method": "session/update",
+        "params": {
+            "update": {
+                "sessionUpdate": "agent_message_chunk",
+                "content": {"type": "text", "text": "JARVIS_NEEDS_ATTENTION: "},
+            },
+        },
+    }) == "JARVIS_NEEDS_ATTENTION: "
+    assert app._assistant_message_chunk({
+        "method": "session/update",
+        "params": {"update": {"sessionUpdate": "tool_call", "content": {"type": "text", "text": "ignored"}}},
+    }) is None
+
+
 def test_key_vault_probe_accepts_deployment_payload_without_task(monkeypatch):
     async def fake_credentials(agent):
         assert agent == "copilot"
@@ -84,7 +163,7 @@ def test_disk_low_threshold_is_configurable(monkeypatch):
         app._disk_low_threshold_bytes()
 
 
-def test_low_disk_emits_snapshot_and_stops_the_turn(tmp_path, monkeypatch):
+def test_low_disk_emits_snapshot_and_stops_the_turn(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})
@@ -184,7 +263,7 @@ def test_task_events_are_pushed_in_order_with_task_and_invocation_identity(tmp_p
     ]
 
 
-def test_steer_after_event_is_delivered_before_the_new_turn(tmp_path, monkeypatch):
+def test_steer_after_event_is_delivered_before_the_new_turn(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})
@@ -303,6 +382,13 @@ def test_runner_event_publisher_uses_identity_and_bounds_event_payload(monkeypat
             3,
             {"at": 1.0, "kind": "agent_output", "data": {"text": "x" * (app.MAX_EVENT_PAYLOAD_BYTES + 1)}},
         )
+        await publisher.publish(
+            "42", "invocation", 4,
+            {"at": 2.0, "kind": "session_question", "data": {
+                "question": "Which behaviour do you want?",
+                "result": {"response": {"usage": {"input_tokens": 123, "premium_requests": 1}}},
+            }},
+        )
         await publisher.close()
 
     asyncio.run(exercise())
@@ -314,6 +400,11 @@ def test_runner_event_publisher_uses_identity_and_bounds_event_payload(monkeypat
     assert len(request_options["json"]["summary"]) == 2000
     assert request_options["json"]["payload"] == {
         "invocationId": "invocation", "eventIndex": 3, "truncated": True,
+    }
+    assert sent[1][1]["json"]["summary"] == "Which behaviour do you want?"
+    assert sent[1][1]["json"]["payload"]["data"]["question"] == "Which behaviour do you want?"
+    assert sent[1][1]["json"]["payload"]["data"]["result"]["response"]["usage"] == {
+        "input_tokens": 123, "premium_requests": 1,
     }
 
 
@@ -421,7 +512,10 @@ def test_invoke_accepts_effective_provider_options(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "tasks", {})
     monkeypatch.setattr(app, "tasks_lock", asyncio.Lock())
     monkeypatch.setattr(app.asyncio, "create_task", lambda coroutine: coroutine.close())
-    payload = {"agent": "codex", "task": "Work", "task_id": "42", "model": "gpt-5.4", "reasoning": "high"}
+    payload = {
+        "agent": "codex", "task": "Work", "task_id": "42", "model": "gpt-5.4", "reasoning": "high",
+        "repository": "owner/project", "defaultBranch": "main", "branch": "jarvis/task-42",
+    }
     body = json.dumps(payload).encode()
 
     async def receive():
@@ -496,7 +590,7 @@ def test_app_token_tasks_do_not_read_the_legacy_github_secret(monkeypatch):
     assert requested == ["jarvis-copilot"]
 
 
-def test_task_uses_an_app_token_and_configures_per_push_credentials(tmp_path, monkeypatch):
+def test_task_uses_an_app_token_and_configures_per_push_credentials(tmp_path, monkeypatch, local_workspace):
     work_root = tmp_path / "work root"
     monkeypatch.setattr(app, "WORK_ROOT", work_root)
     monkeypatch.setattr(app, "session_clients", {})
@@ -998,7 +1092,7 @@ def test_client_redacts_credential_values_in_nested_output(tmp_path):
         "content": ["token=[redacted]", {"text": "[redacted]"}]}
 
 
-def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch):
+def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})
@@ -1041,7 +1135,7 @@ def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch):
     ],
 )
 def test_codex_usage_limit_failure_is_reported_distinctly(
-    tmp_path, monkeypatch, codex_error_info, expected_error, expected_reason
+    tmp_path, monkeypatch, local_workspace, codex_error_info, expected_error, expected_reason
 ):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
@@ -1138,7 +1232,7 @@ def test_cancel_queued_turn_prevents_work_after_session_lock(tmp_path, monkeypat
     asyncio.run(exercise())
 
 
-def test_next_turn_waits_for_provider_cleanup(tmp_path, monkeypatch):
+def test_next_turn_waits_for_provider_cleanup(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})

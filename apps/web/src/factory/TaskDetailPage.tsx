@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { backendFetch } from '../backend-request';
 import { Link } from 'react-router-dom';
 import { streamTaskEvents } from '../task-events';
 import { TaskControls } from './TaskControls';
@@ -42,6 +43,7 @@ interface TaskDetail {
   modelOverride: string | null;
   reasoningOverride: string | null;
   state: TaskState;
+  latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
   attemptCount: number;
   branch: string | null;
   createdAt: string;
@@ -121,6 +123,8 @@ function isTaskDetail(value: unknown): value is TaskDetail {
     (value.modelOverride === null || typeof value.modelOverride === 'string') &&
     (value.reasoningOverride === null || typeof value.reasoningOverride === 'string') &&
     taskStates.includes(value.state as TaskState) && typeof value.attemptCount === 'number' &&
+    (value.latestSessionEndReason === undefined || value.latestSessionEndReason === null ||
+      ['done', 'cancelled', 'crashed', 'idle', 'idle_expired'].includes(String(value.latestSessionEndReason))) &&
     Number.isSafeInteger(value.attemptCount) && value.attemptCount >= 0 &&
     (typeof value.branch === 'string' || value.branch === null) && isDate(value.createdAt) &&
     (value.startedAt === null || isDate(value.startedAt)) &&
@@ -222,9 +226,9 @@ async function fetchJson(
 
   let response: Response;
   try {
-    response = await fetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
+    response = await backendFetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
       headers: { Authorization: `${['Bear', 'er'].join('')} ${token}` },
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
+      ...(signal ? { signal } : {}),
     });
   } catch (cause) {
     throw new Error('Jarvis could not reach the task service. Try again.', { cause });
@@ -500,22 +504,25 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
           </dl>
           <section className="task-detail-section task-actions" aria-labelledby="actions-heading">
             <h2 id="actions-heading">Task actions</h2>
-            <p id="task-actions-unavailable">Controls are available only when the task state permits them. Recovery is not available yet.</p>
             <p id="pull-request-unavailable">Pull-request links are not reported until the GitHub integration is available.</p>
             <TaskControls
               backendUrl={backendUrl}
               getAccessToken={getAccessToken}
               taskId={task.id}
               state={task.state}
+              latestSessionEndReason={task.latestSessionEndReason}
               onComplete={(state) => setLoaded((current) =>
                 current.key === requestKey && current.value.status === 'ready'
-                  ? { ...current, value: { ...current.value, task: { ...current.value.task, state } } }
+                  ? {
+                    ...current,
+                    value: {
+                      ...current.value,
+                      task: { ...current.value.task, state, latestSessionEndReason: null },
+                    },
+                  }
                   : current)}
             />
             <div className="action-row">
-              <button className="secondary-button" type="button" disabled aria-describedby="task-actions-unavailable">
-                Recover
-              </button>
               <button className="secondary-button" type="button" disabled aria-describedby="pull-request-unavailable">
                 Open pull request
               </button>

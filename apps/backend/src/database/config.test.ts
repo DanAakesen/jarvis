@@ -23,7 +23,7 @@ describe('database configuration', () => {
     const config = loadDatabaseConfig(managed)!;
     expect(config.authentication).toEqual({ type: 'azure-active-directory-msi-app-service', options: { clientId: managed.SQL_MANAGED_IDENTITY_CLIENT_ID } });
     expect(config.options).toMatchObject({ encrypt: true, trustServerCertificate: false });
-    expect(config).toMatchObject({ connectionTimeout: 120_000, requestTimeout: 120_000, validateConnection: 'socket', pool: { min: 0 } });
+    expect(config).toMatchObject({ connectionTimeout: 30_000, requestTimeout: 120_000, validateConnection: 'socket', pool: { min: 0, acquireTimeoutMillis: 30_000, createTimeoutMillis: 30_000 } });
     // Real mssql pool accepts this config; no connection or Azure request occurs.
     expect(new sql.ConnectionPool(config).config.authentication).toEqual(config.authentication);
   });

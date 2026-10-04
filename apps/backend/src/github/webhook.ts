@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
+import { mapGithubWebhook, type GithubWebhookMapping } from './webhook-mapping.js';
 import type { WebhookDeliveryStore } from './webhook-delivery.js';
 
 const acceptedEvents = new Set([
@@ -13,6 +14,7 @@ const acceptedEvents = new Set([
 interface WebhookOptions {
   readonly deliveryStore: WebhookDeliveryStore | null;
   readonly getSecret: () => Promise<string | undefined>;
+  readonly onMapping?: (mapping: GithubWebhookMapping) => Promise<void>;
 }
 
 function uniqueHeader(request: { raw: { rawHeaders: string[] }; headers: Record<string, unknown> }, name: string): string | undefined {
@@ -65,17 +67,33 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
           return reply.code(401).send({ error: 'Invalid webhook signature' });
         }
 
+        let payload: unknown;
         try {
-          const inserted = await options.deliveryStore.record({
+          payload = JSON.parse(request.body.toString('utf8'));
+        } catch {
+          return reply.code(400).send({ error: 'Invalid webhook payload' });
+        }
+        const mapping = acceptedEvents.has(event) ? mapGithubWebhook(event, payload) : undefined;
+        let inserted: boolean;
+        try {
+          inserted = await options.deliveryStore.record({
             deliveryId,
             event,
-            outcome: acceptedEvents.has(event) ? 'ok' : 'ignored',
+            outcome: mapping ? 'ok' : 'ignored',
+            ...(mapping ? { mapping } : {}),
           });
-          return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
+          if (inserted) app.nowEventHub.publish({ type: 'refresh' });
         } catch {
           request.log.error('github.webhook_delivery_store_failed');
           return reply.code(503).send({ error: 'Webhook storage unavailable' });
         }
+        try {
+          if (mapping) await options.onMapping?.(mapping);
+        } catch {
+          request.log.error('github.webhook_mapping_failed');
+          return reply.code(503).send({ error: 'Webhook processing unavailable' });
+        }
+        return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
       });
     },
   };

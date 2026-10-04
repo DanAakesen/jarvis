@@ -1,7 +1,7 @@
 import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { ToolRefusal } from '../core/tool-registry.js';
-import { loadEffectiveSettings } from '../core/settings.js';
+import { readSettings } from '../core/settings.js';
 import {
   GitHubRepositoryUnavailableError,
   ProjectConflictError,
@@ -9,10 +9,12 @@ import {
   manageExistingRepository,
   projectRoutes,
 } from './projects.js';
+import { createProjectTool } from './new-project.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
 import type {
   CreateTaskInput, RecordTaskEventInput, TaskControlCommand, TaskEventMessage, TaskListFilters,
 } from './task-store.js';
+import { factoryTools } from './tools.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxResponseBytes = 1024 * 1024;
@@ -53,7 +55,7 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 
 export const factoryModule: BackendModule = {
   id: 'factory',
-  tools: [{
+  tools: [...factoryTools, createProjectTool, {
     name: 'manage_repository',
     description: 'Register an existing repository from the GitHub App installation using the New projects defaults.',
     inputSchema: {
@@ -88,7 +90,7 @@ export const factoryModule: BackendModule = {
       const catalog = app.githubRepositoryCatalog;
       const settingsStore = app.settingsStore;
       if (!catalog || !settingsStore) return reply.code(503).send({ error: 'GitHub repository service unavailable' });
-      const settings = await loadEffectiveSettings(settingsStore);
+      const settings = await readSettings(settingsStore);
       try {
         const listing = await catalog.list(settings.newProjects.owner, request.query.refresh ?? false);
         return sendBounded(reply.header('Cache-Control', 'no-store'), listing);
@@ -196,7 +198,7 @@ export const factoryModule: BackendModule = {
         body: {
           type: 'object',
           properties: {
-            action: { type: 'string', enum: ['steer', 'pause', 'resume', 'cancel'] },
+            action: { type: 'string', enum: ['steer', 'pause', 'resume', 'cancel', 'recover'] },
             message: { type: 'string', minLength: 1, maxLength: 65_536 },
           },
           required: ['action'],
@@ -342,6 +344,7 @@ export const factoryModule: BackendModule = {
         for (const event of buffered) {
           if (!writeEvent(event)) return;
         }
+        if (!response.write('event: ready\ndata: {}\n\n')) end();
       };
       void replay().catch(end);
       return reply;

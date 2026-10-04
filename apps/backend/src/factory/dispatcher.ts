@@ -1,14 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { defaultSettings, type SettingsStore } from '../core/settings.js';
+import type { GitHubDeliveryResult, TaskCompletionGate } from '../github/delivery.js';
 import {
-  FoundryClientError, type CodingAgent, type FoundryClient, type InvocationAccepted, type TaskRequest,
+  FoundryClientError, type CodingAgent, type FoundryClient, type InvocationAccepted, type TaskRequest, type TaskWorkspace,
 } from '../foundry/client.js';
 import type { RunningSandbox, SandboxHeartbeat } from './heartbeat.js';
+import type { RecoveryClaimResult, TaskRecoveryStore } from './recovery-store.js';
 import type {
-  TaskControlCommand, TaskControlResult, TaskController, TaskEventHub, TaskEventMessage, TaskRecord, TaskStore,
+  TaskControlCommand, TaskControlResult, TaskController, TaskDetail, TaskEventHub, TaskEventMessage, TaskRecord, TaskStore,
 } from './task-store.js';
 
-export interface DispatchClaim {
+export interface DispatchClaim extends TaskWorkspace {
   taskId: string;
   projectId: string;
   title: string;
@@ -35,12 +37,14 @@ export interface DispatcherStore {
     invocationId: string;
   }): Promise<string>;
   getControlTarget(taskId: string): Promise<TaskControlTarget | null>;
+  withTaskPolicyLock<T>(taskId: string, operation: () => Promise<T>): Promise<T>;
+  hasPendingProjectPolicyMerge(taskId: string): Promise<boolean>;
   recordControlTurn(target: TaskControlTarget, accepted: InvocationAccepted, message: string): Promise<boolean>;
   recordResumedTurn(target: TaskControlTarget, accepted: InvocationAccepted): Promise<RunningSandbox>;
-  endTaskSessions(taskId: string, state: string): Promise<string[]>;
+  endTaskSessions(taskId: string, state: string, invocationCompleted?: boolean): Promise<string[]>;
 }
 
-export interface TaskControlTarget extends RunningSandbox {
+export interface TaskControlTarget extends RunningSandbox, TaskWorkspace {
   taskId: string;
   agent: CodingAgent;
   request: string;
@@ -56,6 +60,13 @@ export interface DispatcherOptions {
   maxAttempts?: number;
   now?: () => number;
   onError?: (error: unknown) => void;
+  recoveryStore?: TaskRecoveryStore;
+  workspaceFor?: (task: TaskRecord) => Promise<TaskWorkspace | null>;
+  verifyDelivery?: (
+    workspace: TaskWorkspace,
+    task: Pick<TaskRecord, 'id' | 'title'>,
+    gate?: TaskCompletionGate,
+  ) => Promise<GitHubDeliveryResult>;
 }
 
 const defaultLeaseSeconds = 120;
@@ -64,6 +75,11 @@ const firstRetryDelayMs = 15_000;
 const maxRetryDelayMs = 5 * 60_000;
 const maxSettingsModelLength = 100;
 const maxSettingsReasoningLength = 32;
+const recoveryEventLimit = 100;
+const recoverySummaryEventLimit = 30;
+const recoverySteeringLimit = 20;
+const recoverySummaryLineLength = 240;
+const maxRecoveryPromptLength = 65_000;
 
 function configuredValue(value: unknown, fallback: string, limit: number): string {
   if (typeof value !== 'string') return fallback;
@@ -98,12 +114,44 @@ function transitionResult(kind: string): TaskControlResult {
   return { kind: 'failed' };
 }
 
+function clipped(value: string, limit: number): string {
+  const characters = Array.from(value);
+  return characters.length > limit ? `${characters.slice(0, limit).join('')}…` : value;
+}
+
+function recoveryPrompt(task: TaskDetail): string {
+  const steering = task.events
+    .filter((event) => event.type === 'steered' && event.source === 'dan' && event.summary)
+    .slice(-recoverySteeringLimit)
+    .map((event) => `- ${clipped(event.summary ?? '', recoverySummaryLineLength)}`);
+  const events = task.events
+    .slice(-recoverySummaryEventLimit)
+    .map((event) => `- ${event.at} [${event.source}/${event.type}] ${clipped(event.summary ?? '', recoverySummaryLineLength)}`);
+  const prompt = [
+    'Continue the existing task from the configured task branch. Do not recreate work already present there.',
+    `Original task:\n${task.request}`,
+    `Prior steering messages:\n${steering.length > 0 ? steering.join('\n') : 'None recorded.'}`,
+    `Task event summary:\n${events.length > 0 ? events.join('\n') : 'No events recorded.'}`,
+  ].join('\n\n');
+  return clipped(prompt, maxRecoveryPromptLength);
+}
+
+function recoveryFailureResult(result: RecoveryClaimResult): TaskControlResult | null {
+  if (result.kind === 'claimed') return null;
+  if (result.kind === 'not-found') return { kind: 'not-found' };
+  if (result.kind === 'invalid-transition') return { kind: 'invalid-transition' };
+  return { kind: 'unavailable' };
+}
+
 export class TaskDispatcher implements TaskController {
   private readonly owner = randomUUID();
   private readonly leaseSeconds: number;
   private readonly maxAttempts: number;
   private readonly now: () => number;
   private readonly onError: (error: unknown) => void;
+  private readonly recoveryStore: TaskRecoveryStore | undefined;
+  private readonly workspaceFor: DispatcherOptions['workspaceFor'];
+  private readonly verifyDelivery: DispatcherOptions['verifyDelivery'];
   private started = false;
   private wakePending = false;
   private pumping: Promise<void> | undefined;
@@ -124,6 +172,10 @@ export class TaskDispatcher implements TaskController {
     this.maxAttempts = options.maxAttempts ?? defaultMaxAttempts;
     this.now = options.now ?? Date.now;
     this.onError = options.onError ?? (() => {});
+    this.recoveryStore = options.recoveryStore;
+    this.workspaceFor = options.workspaceFor;
+    this.verifyDelivery = options.verifyDelivery;
+    this.heartbeat.setCompletionHandler((sandbox) => this.acceptCompleted(sandbox));
   }
 
   start(): void {
@@ -144,8 +196,16 @@ export class TaskDispatcher implements TaskController {
   }
 
   async control(taskId: string, command: TaskControlCommand): Promise<TaskControlResult> {
-    const task = await this.tasks.get(taskId, 1, 0);
+    let task = await this.tasks.get(taskId, 1, 0);
     if (!task) return { kind: 'not-found' };
+    if (command.action === 'recover') {
+      if (task.state === 'Running' && task.latestSessionEndReason === 'idle_expired') {
+        const attention = await this.tasks.transition(taskId, 'NeedsAttention');
+        if (attention.kind !== 'ok') return transitionResult(attention.kind);
+        task = { ...task, ...attention.task };
+      }
+      return this.recover(task);
+    }
     let target = await this.store.getControlTarget(taskId);
     if (task.state === 'Paused' && target?.sessionStatus === 'Active') {
       const ended = await this.store.endTaskSessions(taskId, 'Paused');
@@ -201,7 +261,7 @@ export class TaskDispatcher implements TaskController {
       try {
         accepted = await this.clientFor(target.agentName).resume(
           target.foundrySessionId,
-          await this.taskRequest(taskId, task),
+          await this.taskRequest(taskId, { ...task, ...target }),
         );
         const running = await this.store.recordResumedTurn(target, accepted);
         this.heartbeat.track(running);
@@ -218,14 +278,24 @@ export class TaskDispatcher implements TaskController {
     }
     if (task.state === 'Running' && (!activeTurn || !target)) return { kind: 'unavailable' };
     if (task.state === 'Paused' && !target) return { kind: 'unavailable' };
-    if (task.state === 'Running' && target) {
-      try {
-        await this.clientFor(target.agentName).cancel(target.invocationId);
-      } catch {
-        return { kind: 'failed' };
+    const cancellation = await this.store.withTaskPolicyLock(taskId, async () => {
+      const latestTask = await this.tasks.get(taskId, 1, 0);
+      if (!latestTask || latestTask.state !== task.state) return { kind: 'state-changed' as const };
+      if (await this.store.hasPendingProjectPolicyMerge(taskId)) return { kind: 'merge-pending' as const };
+      if (task.state === 'Running' && target) {
+        try {
+          await this.clientFor(target.agentName).cancel(target.invocationId);
+        } catch {
+          return { kind: 'cancel-failed' as const };
+        }
       }
+      return { kind: 'transitioned' as const, result: await this.tasks.transition(taskId, 'Cancelled') };
+    });
+    if (cancellation.kind === 'cancel-failed') return { kind: 'failed' };
+    if (cancellation.kind === 'state-changed' || cancellation.kind === 'merge-pending') {
+      return { kind: 'invalid-transition' };
     }
-    const cancelled = await this.tasks.transition(taskId, 'Cancelled');
+    const cancelled = cancellation.result;
     if (cancelled.kind !== 'ok') return transitionResult(cancelled.kind);
     let cleanupFailed = false;
     if (target) {
@@ -246,6 +316,96 @@ export class TaskDispatcher implements TaskController {
     return cleanupFailed ? { kind: 'failed' } : { kind: 'ok', task: cancelled.task };
   }
 
+  private async recover(task: TaskDetail): Promise<TaskControlResult> {
+    if (task.state !== 'NeedsAttention') return { kind: 'invalid-transition' };
+    const recoveryStore = this.recoveryStore;
+    const workspaceFor = this.workspaceFor;
+    if (!recoveryStore || !workspaceFor) return { kind: 'unavailable' };
+    const workspace = await workspaceFor(task);
+    if (!workspace?.repository || !workspace.defaultBranch || !workspace.branch) return { kind: 'unavailable' };
+
+    const claimResult = await recoveryStore.claimRecovery(task.id, this.owner, this.leaseSeconds);
+    const failure = recoveryFailureResult(claimResult);
+    if (failure) return failure;
+    if (claimResult.kind !== 'claimed') return { kind: 'unavailable' };
+    const claim = claimResult.task;
+    let accepted: InvocationAccepted | undefined;
+    try {
+      const history = await this.tasks.get(task.id, recoveryEventLimit, 0);
+      if (!history) {
+        await this.store.failStart(this.owner, claim, null, 'recovery_task_missing');
+        return { kind: 'not-found' };
+      }
+      const request = await this.taskRequest(task.id, {
+        ...claim,
+        ...workspace,
+        request: recoveryPrompt(history),
+      });
+      const runnerName = agentName(claim);
+      accepted = await this.clientFor(runnerName).startTask(request);
+      const sandboxSessionId = await this.store.recordStarted(this.owner, claim, runnerName, accepted);
+      this.heartbeat.track({
+        sandboxSessionId,
+        foundrySessionId: accepted.sessionId,
+        agentName: runnerName,
+        invocationId: accepted.invocationId,
+      });
+      return { kind: 'ok', task: { ...task, state: 'Running' } };
+    } catch (error) {
+      if (accepted) {
+        await this.clientFor(agentName(claim)).deleteSession(accepted.sessionId).catch(this.onError);
+      }
+      await this.store.failStart(this.owner, claim, null, 'recovery_start_failed').catch(this.onError);
+      this.onError(error);
+      return { kind: 'failed' };
+    }
+  }
+
+  private async acceptCompleted(sandbox: RunningSandbox): Promise<boolean> {
+    const taskId = await this.recoveryStore?.getRunningTaskForSession(sandbox);
+    if (!this.recoveryStore) return true;
+    if (!taskId) return false;
+    const detail = await this.tasks.get(taskId, recoveryEventLimit, 0);
+    if (!detail) return false;
+    if (detail.state === 'NeedsAttention') return false;
+    if (detail.state !== 'Running') return true;
+    const gate: TaskCompletionGate = async (operation) => this.store.withTaskPolicyLock(taskId, async () => {
+      const latestTask = await this.tasks.get(taskId, 1, 0);
+      if (!latestTask || latestTask.state !== 'Running') return { kind: 'not_running' as const };
+      return { kind: 'ran' as const, value: await operation() };
+    });
+    const workspace = await this.workspaceFor?.(detail) ?? null;
+    const result = workspace && this.verifyDelivery
+      ? await this.verifyDelivery(workspace, detail, gate)
+      : {
+        kind: 'refused' as const,
+        reason: 'The task repository or branch could not be verified.',
+      };
+    if (result.kind === 'not_running') return true;
+    return this.store.withTaskPolicyLock(taskId, async () => {
+      const latestTask = await this.tasks.get(taskId, recoveryEventLimit, 0);
+      if (!latestTask) return false;
+      if (latestTask.state !== 'Running') return true;
+      if (result.kind === 'refused') {
+        await this.tasks.recordEvent({
+          taskId,
+          type: 'pull_request_open_refused',
+          summary: result.reason,
+          payload: { reason: result.reason },
+          source: 'backend',
+        });
+        const transition = await this.tasks.transition(taskId, 'NeedsAttention', false, 'pull_request_open_refused');
+        if (transition.kind !== 'ok') return false;
+        const ended = await this.store.endTaskSessions(taskId, 'NeedsAttention', true);
+        ended.forEach((id) => this.heartbeat.untrack(id));
+        return true;
+      }
+      const ended = await this.store.endTaskSessions(taskId, 'Done', true);
+      ended.forEach((id) => this.heartbeat.untrack(id));
+      return true;
+    });
+  }
+
   private async endSession(target: TaskControlTarget, state: 'Paused' | 'Cancelled' = 'Paused'): Promise<void> {
     const ids = await this.store.endTaskSessions(target.taskId, state);
     ids.forEach((id) => this.heartbeat.untrack(id));
@@ -257,8 +417,13 @@ export class TaskDispatcher implements TaskController {
       const state = typeof payload === 'object' && payload !== null && 'to' in payload
         ? (payload as { to?: unknown }).to
         : undefined;
-      if (state === 'Paused' || state === 'NeedsAttention' || state === 'Done' || state === 'Cancelled') {
-        void this.store.endTaskSessions(event.taskId, state)
+      const reason = typeof payload === 'object' && payload !== null && 'reason' in payload
+        ? (payload as { reason?: unknown }).reason
+        : undefined;
+      const keepCompletedQuestionSession = state === 'NeedsAttention' && reason === 'session_question';
+      if (!keepCompletedQuestionSession &&
+        (state === 'Paused' || state === 'NeedsAttention' || state === 'Done' || state === 'Cancelled')) {
+        void this.store.endTaskSessions(event.taskId, state, reason === 'pull_request_open_refused')
           .then((sessionIds) => sessionIds.forEach((id) => this.heartbeat.untrack(id)))
           .catch(this.onError);
       }
@@ -353,7 +518,7 @@ export class TaskDispatcher implements TaskController {
 
   private async taskRequest(
     taskId: string,
-    task: Pick<TaskRecord, 'agent' | 'request' | 'modelOverride' | 'reasoningOverride'>,
+    task: Pick<TaskRecord, 'agent' | 'request' | 'modelOverride' | 'reasoningOverride'> & TaskWorkspace,
   ): Promise<TaskRequest> {
     const stored = await this.settings.read();
     const providerSettings = task.agent === 'codex'
@@ -366,6 +531,9 @@ export class TaskDispatcher implements TaskController {
         agent: 'codex',
         task: task.request,
         taskId,
+        repository: task.repository,
+        defaultBranch: task.defaultBranch,
+        branch: task.branch,
         ...(model === 'default' ? {} : { model }),
         ...((task.reasoningOverride ??
           configuredValue(stored['codex.reasoning_effort'], defaultSettings.codex.reasoning, maxSettingsReasoningLength)) === 'default'
@@ -377,6 +545,9 @@ export class TaskDispatcher implements TaskController {
         agent: 'copilot',
         task: task.request,
         taskId,
+        repository: task.repository,
+        defaultBranch: task.defaultBranch,
+        branch: task.branch,
         ...(model === 'default' ? {} : { model }),
       };
     return request;

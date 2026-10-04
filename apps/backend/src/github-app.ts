@@ -3,6 +3,7 @@ import { SignJWT } from 'jose';
 
 export interface GitHubAppTokenIssuer {
   issue(repository: string): Promise<string>;
+  issueForActions(repository: string): Promise<string>;
 }
 
 export interface GitHubRepository {
@@ -239,34 +240,43 @@ export function createGitHubAppTokenIssuer({
   fetch: fetchImpl = fetch,
   now = Date.now,
 }: GitHubAppTokenIssuerOptions): GitHubAppTokenIssuer {
+  const issue = async (repository: string, permissions: Record<string, 'read' | 'write'>): Promise<string> => {
+    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
+      throw new Error('GitHub repository is invalid');
+    }
+    const [owner, name] = repository.split('/');
+    if (!owner || !name) throw new Error('GitHub repository is invalid');
+
+    const issuedAt = Math.floor(now() / 1000);
+    const appToken = await new SignJWT({})
+      .setProtectedHeader({ alg: 'RS256' })
+      .setIssuer(appId)
+      .setIssuedAt(issuedAt - 60)
+      .setExpirationTime(issuedAt + 9 * 60)
+      .sign(createPrivateKey(await getPrivateKey()));
+
+    const installation = object(await requestJson(
+      fetchImpl,
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/installation`,
+      appToken,
+    ));
+    const id = installationId(installation?.id);
+    if (!id) {
+      throw new Error('GitHub installation response is invalid');
+    }
+
+    const token = await requestJson(
+      fetchImpl,
+      `/app/installations/${id}/access_tokens`,
+      appToken,
+      { repositories: [name], permissions },
+    );
+    return validInstallationToken(token, now);
+  };
+
   return {
-    async issue(repository) {
-      if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
-        throw new Error('GitHub repository is invalid');
-      }
-      const [owner, name] = repository.split('/');
-      if (!owner || !name) throw new Error('GitHub repository is invalid');
-
-      const appToken = await createAppJwt(appId, await getPrivateKey(), now);
-
-      const installation = object(await requestJson(
-        fetchImpl,
-        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/installation`,
-        appToken,
-      ));
-      const id = installationId(installation?.id);
-      if (!id) {
-        throw new Error('GitHub installation response is invalid');
-      }
-
-      const token = object(await requestJson(
-        fetchImpl,
-        `/app/installations/${id}/access_tokens`,
-        appToken,
-        { repositories: [name], permissions: { contents: 'write', pull_requests: 'write' } },
-      ));
-      return validInstallationToken(token, now);
-    },
+    issue: (repository) => issue(repository, { contents: 'write', pull_requests: 'write' }),
+    issueForActions: (repository) => issue(repository, { actions: 'read' }),
   };
 }
 

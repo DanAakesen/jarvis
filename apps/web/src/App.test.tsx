@@ -117,6 +117,22 @@ describe('App shell', () => {
     await screen.findByRole('navigation', { name: 'Areas' });
   }
 
+  it('renders backend-reported waking in the shared signed-in shell', async () => {
+    let resolveFeed!: (response: Response) => void;
+    const pendingFeed = new Promise<Response>((resolve) => { resolveFeed = resolve; });
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/database/status') return new Response(JSON.stringify({ waking: true }));
+      if (path === '/now') return pendingFeed;
+      return new Response(JSON.stringify({ state: 'awake' }));
+    });
+    await renderSignedIn();
+    expect((await screen.findByText('Waking Jarvis…')).getAttribute('role')).toBe('status');
+    resolveFeed(new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] })));
+    await screen.findByText('No tasks are running.');
+    expect(screen.queryByText('Waking Jarvis…')).toBeNull();
+  });
+
   it('hides navigation and area pages until Dan is signed in', async () => {
     render(<MemoryRouter initialEntries={['/factory/tasks']}><App config={config} /></MemoryRouter>);
 

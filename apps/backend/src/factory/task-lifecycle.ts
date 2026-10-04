@@ -15,7 +15,7 @@ const transitions: Readonly<Record<TaskState, readonly TaskState[]>> = {
   Running: ['PauseRequested', 'NeedsAttention', 'Done', 'Cancelled'],
   PauseRequested: ['Running', 'Paused', 'NeedsAttention'],
   Paused: ['Running', 'Cancelled'],
-  NeedsAttention: ['Running'],
+  NeedsAttention: ['Running', 'Done'],
   Done: [],
   Cancelled: [],
 };

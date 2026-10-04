@@ -5,7 +5,7 @@ export const FOUNDRY_SCOPE = "https://ai.azure.com/.default";
 
 export type CodingAgent = "codex" | "copilot";
 export type InvocationStatus =
-  | "queued" | "running" | "completed" | "failed" | "cancelled"
+  | "queued" | "running" | "completed" | "failed" | "cancelled" | "needs_attention"
   | "cancelling" | "interrupted" | "paused" | "unknown";
 export type JsonObject = { [key: string]: unknown };
 export type FoundryErrorKind = "http" | "auth" | "timeout" | "aborted" | "transport" | "protocol";
@@ -36,9 +36,14 @@ export interface FoundryClientOptions {
 
 export interface RequestOptions { signal?: AbortSignal }
 /** Effective task configuration; the dispatcher resolves overrides before settings defaults. */
-export type TaskRequest =
+export interface TaskWorkspace {
+  repository: string;
+  defaultBranch: string;
+  branch: string;
+}
+export type TaskRequest = TaskWorkspace & (
   | { agent: "copilot"; task: string; taskId?: string; model?: string }
-  | { agent: "codex"; task: string; taskId?: string; model?: string; reasoning?: string };
+  | { agent: "codex"; task: string; taskId?: string; model?: string; reasoning?: string });
 export interface InvocationAccepted {
   invocationId: string;
   sessionId: string;
@@ -61,7 +66,8 @@ export interface InvocationSnapshot extends InvocationAccepted {
 export interface CancelAcknowledgement { invocationId: string; status: InvocationStatus }
 
 const STATUSES = new Set<unknown>([
-  "queued", "running", "completed", "failed", "cancelled", "cancelling", "interrupted", "paused", "unknown",
+  "queued", "running", "completed", "failed", "cancelled", "needs_attention",
+  "cancelling", "interrupted", "paused", "unknown",
 ]);
 
 function object(value: unknown): value is JsonObject {
@@ -96,13 +102,47 @@ function taskBody(request: TaskRequest): JsonObject {
   const model = option(request.model, "model", 100);
   const reasoning = request.agent === "codex" ? option(request.reasoning, "reasoning", 32) : undefined;
   const taskId = taskIdentifier(request.taskId);
+  const workspaceInput = request as Partial<TaskWorkspace>;
+  if (workspaceInput.repository === undefined || workspaceInput.defaultBranch === undefined ||
+      workspaceInput.branch === undefined) {
+    throw new TypeError("repository, defaultBranch and branch must be provided together");
+  }
+  const repositoryName = repository(workspaceInput.repository);
+  const defaultBranch = branch(workspaceInput.defaultBranch, "defaultBranch");
+  const taskBranch = branch(workspaceInput.branch, "branch");
+  if (taskBranch === defaultBranch || taskBranch === "main" || taskBranch === "master") {
+    throw new TypeError("branch must be a separate task branch");
+  }
   return {
     agent: agent(request.agent),
     task: text(request.task, "task"),
+    repository: repositoryName,
+    defaultBranch,
+    branch: taskBranch,
     ...(taskId === undefined ? {} : { task_id: taskId }),
     ...(model === undefined ? {} : { model }),
     ...(reasoning === undefined ? {} : { reasoning }),
   };
+}
+
+function repository(value: unknown): string {
+  if (typeof value !== "string" || value !== value.trim() || value.length > 140 ||
+      !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/u.test(value) ||
+      value.split("/")[1] === "." || value.split("/")[1] === "..") {
+    throw new TypeError("repository must be a GitHub owner/name");
+  }
+  return value;
+}
+
+function branch(value: unknown, name: string): string {
+  if (typeof value !== "string" || !value || value.length > 255 || value === "HEAD" ||
+      value.startsWith("-") || /[\s~^:?*[\]\\]/u.test(value) ||
+      [...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127) ||
+      value.includes("..") || value.includes("@{") || value.endsWith(".") ||
+      value.split("/").some((part) => !part || part.startsWith(".") || part.endsWith(".lock"))) {
+    throw new TypeError(`${name} must be a valid Git branch`);
+  }
+  return value;
 }
 
 function taskIdentifier(value: unknown): string | undefined {

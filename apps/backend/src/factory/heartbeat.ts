@@ -10,7 +10,12 @@ export interface RunningSandbox {
 export interface SandboxHeartbeatStore {
   listRunning(): Promise<RunningSandbox[]>;
   recordHeartbeat(sandboxSessionId: string): Promise<void>;
-  markNeedsAttention(sandboxSessionId: string): Promise<boolean>;
+  markNeedsAttention(
+    sandboxSessionId: string,
+    question?: string,
+    invocationId?: string,
+    invocationCompleted?: boolean,
+  ): Promise<boolean>;
   resolvePause(sandboxSessionId: string, state: 'Running' | 'Paused'): Promise<boolean>;
 }
 
@@ -32,6 +37,8 @@ interface TrackedSandbox {
   timer: NodeJS.Timeout | undefined;
   controller: AbortController | undefined;
   pending: Promise<void> | undefined;
+  invocationCompleted: boolean;
+  completionHandled: boolean;
 }
 
 export const heartbeatIntervalMs = 60_000;
@@ -49,6 +56,7 @@ export class SandboxHeartbeat {
   private readonly failureConfirmMs: number;
   private readonly now: () => number;
   private readonly onError: (error: unknown) => void;
+  private completionHandler: ((sandbox: RunningSandbox) => Promise<boolean>) | undefined;
   private started = false;
 
   constructor(
@@ -74,9 +82,14 @@ export class SandboxHeartbeat {
     if (previous) this.cancel(previous);
     const entry: TrackedSandbox = {
       sandbox, failures: 0, failureSince: undefined, timer: undefined, controller: undefined, pending: undefined,
+      invocationCompleted: false, completionHandled: false,
     };
     this.tracked.set(sandbox.sandboxSessionId, entry);
     if (this.started) this.poll(entry);
+  }
+
+  setCompletionHandler(handler: (sandbox: RunningSandbox) => Promise<boolean>): void {
+    this.completionHandler = handler;
   }
 
   untrack(sandboxSessionId: string): void {
@@ -120,8 +133,22 @@ export class SandboxHeartbeat {
         if (paused) this.untrack(entry.sandbox.sandboxSessionId);
       } else if (result.status === 'running' || result.status === 'queued') {
         await this.store.resolvePause(entry.sandbox.sandboxSessionId, 'Running');
+      } else if (result.status === 'completed') {
+        entry.invocationCompleted = true;
+        if (this.completionHandler && !entry.completionHandled) {
+          const handled = await this.completionHandler(entry.sandbox);
+          entry.completionHandled = true;
+          if (handled) this.untrack(entry.sandbox.sandboxSessionId);
+        }
+      } else if (result.status === 'needs_attention') {
+        await this.store.markNeedsAttention(
+          entry.sandbox.sandboxSessionId, result.error ?? undefined, entry.sandbox.invocationId, entry.invocationCompleted,
+        );
+        this.untrack(entry.sandbox.sandboxSessionId);
       } else if (result.status === 'failed') {
-        await this.store.markNeedsAttention(entry.sandbox.sandboxSessionId);
+        await this.store.markNeedsAttention(
+          entry.sandbox.sandboxSessionId, undefined, entry.sandbox.invocationId, entry.invocationCompleted,
+        );
         this.untrack(entry.sandbox.sandboxSessionId);
       }
     } catch (error) {
@@ -131,7 +158,9 @@ export class SandboxHeartbeat {
         entry.failures += 1;
         if (entry.failures >= 2 || this.now() - entry.failureSince >= this.failureConfirmMs) {
           try {
-            await this.store.markNeedsAttention(entry.sandbox.sandboxSessionId);
+            await this.store.markNeedsAttention(
+              entry.sandbox.sandboxSessionId, undefined, entry.sandbox.invocationId, entry.invocationCompleted,
+            );
             this.untrack(entry.sandbox.sandboxSessionId);
           } catch (storeError) {
             this.onError(storeError);

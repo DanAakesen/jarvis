@@ -17,6 +17,7 @@ export interface TaskRecord {
   attemptCount: number;
   nextAttemptAt: string | null;
   branch: string | null;
+  latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
@@ -87,6 +88,8 @@ export interface CreateTaskInput {
   projectId: string;
   title: string;
   request: string;
+  source?: 'board' | 'chat';
+  originMessageId?: string;
   agent?: 'codex' | 'copilot';
   modelOverride?: string;
   reasoningOverride?: string;
@@ -122,7 +125,7 @@ export interface TaskStore {
   getActiveRepository(id: string, foundrySessionId: string): Promise<string | null>;
   getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]>;
   getRunningContext(): Promise<RunningTaskContextSnapshot>;
-  transition(id: string, state: TaskState, completionVerified?: boolean): Promise<TaskTransitionResult>;
+  transition(id: string, state: TaskState, completionVerified?: boolean, eventReason?: string): Promise<TaskTransitionResult>;
   withNoActiveTasks<T>(operation: () => Promise<T>): Promise<ActiveTaskGuardResult<T>>;
   /** Persist the timeline and activity entries atomically, then publish the committed event. */
   recordEvent(event: RecordTaskEventInput): Promise<TaskEventMessage>;
@@ -130,7 +133,7 @@ export interface TaskStore {
 
 export type TaskControlCommand =
   | { action: 'steer'; message: string }
-  | { action: 'pause' | 'resume' | 'cancel' };
+  | { action: 'pause' | 'resume' | 'cancel' | 'recover' };
 
 export type TaskControlResult =
   | { kind: 'ok'; task: TaskRecord }

@@ -19,6 +19,7 @@ export interface Settings {
   };
   global: {
     maxParallelTasks: number;
+    maxCheckAttempts: number;
   };
   newProjects: {
     owner: string;
@@ -51,7 +52,7 @@ export const defaultSettings: Settings = {
   },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
-  global: { maxParallelTasks: 1 },
+  global: { maxParallelTasks: 1, maxCheckAttempts: 3 },
   newProjects: {
     owner: 'DanAakesen',
     visibility: 'private',
@@ -90,7 +91,10 @@ const settingKeys = {
   },
   codex: { model: 'codex.model', reasoning: 'codex.reasoning_effort' },
   copilot: { model: 'copilot.model' },
-  global: { maxParallelTasks: 'global.max_parallel_tasks' },
+  global: {
+    maxParallelTasks: 'global.max_parallel_tasks',
+    maxCheckAttempts: 'global.max_check_attempts',
+  },
   newProjects: {
     owner: 'new_projects.owner',
     visibility: 'new_projects.visibility',
@@ -125,6 +129,9 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
   if (area === 'copilot' && key === 'model') return isOption(value, settingsOptions.copilotModels);
   if (area === 'global' && key === 'maxParallelTasks') {
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 100;
+  }
+  if (area === 'global' && key === 'maxCheckAttempts') {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 10;
   }
   if (area === 'newProjects') {
     if (key === 'owner') {
@@ -193,7 +200,10 @@ const settingsPatchSchema = {
         },
         global: {
           type: 'object', minProperties: 1, additionalProperties: true,
-          properties: { maxParallelTasks: { type: 'integer', minimum: 1, maximum: 100 } },
+          properties: {
+            maxParallelTasks: { type: 'integer', minimum: 1, maximum: 100 },
+            maxCheckAttempts: { type: 'integer', minimum: 0, maximum: 10 },
+          },
         },
         newProjects: {
           type: 'object', minProperties: 1, additionalProperties: true,
@@ -262,8 +272,8 @@ function parseStoredValues(values: Record<string, unknown>): Partial<Settings> {
   return stored as Partial<Settings>;
 }
 
-export async function loadEffectiveSettings(store: SettingsStore): Promise<Settings> {
-  return mergeSettings(parseStoredValues(await store.read()));
+export async function readSettings(settingsStore: SettingsStore): Promise<Settings> {
+  return mergeSettings(parseStoredValues(await settingsStore.read()));
 }
 
 function flattenSettings(settings: SettingsPatch): { key: string; value: string }[] {
@@ -284,7 +294,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
   app.get('/settings', async (_request, reply) => {
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const credentials = await app.credentialStatusStore?.list() ?? [];
-    return { settings: await loadEffectiveSettings(app.settingsStore), options: settingsOptions, credentials };
+    return { settings: await readSettings(app.settingsStore), options: settingsOptions, credentials };
   });
 
   app.get('/agent/settings', {
@@ -314,7 +324,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
   }, async (request, reply) => {
     if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
-    const settings = await loadEffectiveSettings(app.settingsStore);
+    const settings = await readSettings(app.settingsStore);
     return { model: settings.jarvis.model, reasoningEffort: settings.jarvis.reasoning };
   });
 
@@ -325,7 +335,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     const patch = body.settings;
     await app.settingsStore.write(patch);
     const credentials = await app.credentialStatusStore?.list() ?? [];
-    return { settings: await loadEffectiveSettings(app.settingsStore), options: settingsOptions, credentials };
+    return { settings: await readSettings(app.settingsStore), options: settingsOptions, credentials };
   });
 }
 

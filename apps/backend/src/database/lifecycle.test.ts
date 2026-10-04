@@ -3,15 +3,19 @@ import pino from 'pino';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createDatabase, registerDatabase } from './lifecycle.js';
+import sql from 'mssql';
 
 const mocks = vi.hoisted(() => ({
   connect: vi.fn(async () => {}), close: vi.fn(async () => {}),
+  acquire: vi.fn(async () => ({})), release: vi.fn(),
   read: vi.fn(async () => []), migrate: vi.fn(async () => {}),
 }));
-vi.mock('mssql', () => ({ default: { ConnectionPool: class {
+vi.mock('mssql', async (importOriginal) => ({ default: { ...(await importOriginal<typeof import('mssql')>()).default, ConnectionPool: class {
   on() { return this; }
   connect = mocks.connect;
   close = mocks.close;
+  acquire = mocks.acquire;
+  release = mocks.release;
 } } }));
 vi.mock('./migrations.js', () => ({
   defaultMigrationsDirectory: '/fixture', readMigrations: mocks.read, applyMigrations: mocks.migrate,
@@ -95,5 +99,66 @@ describe('database startup ownership', () => {
     await closed;
     expect(mocks.close).toHaveBeenCalledOnce();
     expect(mocks.migrate).not.toHaveBeenCalled();
+  });
+  it('retries startup connection timeouts beyond 30 seconds and clears waking status after migration', async () => {
+    vi.useFakeTimers();
+    mocks.connect.mockImplementationOnce(() => new Promise((_resolve, reject) => {
+      setTimeout(() => { reject(new sql.ConnectionError('fixture timeout', 'ETIMEOUT')); }, 30_000);
+    }));
+    const database = createDatabase({ server: 'fixture' });
+    const initialized = database.initialize();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(database.isWaking()).toBe(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await initialized;
+    expect(mocks.connect).toHaveBeenCalledTimes(2);
+    expect(mocks.migrate).toHaveBeenCalledOnce();
+    expect(database.isWaking()).toBe(false);
+    await database.close();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it('bounds startup resume retries to 90 seconds within the larger migration deadline', async () => {
+    vi.useFakeTimers();
+    mocks.connect.mockRejectedValue({ number: 40613 });
+    const database = createDatabase({ server: 'fixture' });
+    const initialized = expect(database.initialize()).rejects.toThrow('Database startup failed');
+    await vi.advanceTimersByTimeAsync(89_999);
+    expect(database.isWaking()).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+    await initialized;
+    expect(database.isWaking()).toBe(false);
+    expect(mocks.migrate).not.toHaveBeenCalled();
+    await database.close();
+    expect(mocks.close).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    mocks.connect.mockResolvedValue();
+  });
+  it('does not retry a permanent startup failure or expose its provider details', async () => {
+    mocks.connect.mockRejectedValueOnce(new sql.ConnectionError('secret-provider-query', 'ELOGIN'));
+    const database = createDatabase({ server: 'fixture' });
+    await expect(database.initialize()).rejects.toThrow('Database startup failed');
+    await database.close();
+    expect(mocks.connect).toHaveBeenCalledOnce();
+    expect(mocks.migrate).not.toHaveBeenCalled();
+    expect(database.isWaking()).toBe(false);
+  });
+  it('owns an outstanding acquisition through shutdown and releases the late result before closing', async () => {
+    const database = createDatabase({ server: 'fixture' });
+    await database.initialize();
+    let resolve!: (connection: object) => void;
+    mocks.acquire.mockImplementationOnce(() => new Promise<object>((done) => { resolve = done; }));
+    const acquisition = expect((database.pool as unknown as {
+      acquire(requester: object): Promise<object>;
+    }).acquire({})).rejects.toBeDefined();
+    await vi.waitFor(() => { expect(mocks.acquire).toHaveBeenCalledOnce(); });
+    const closing = database.close();
+    await acquisition;
+    expect(mocks.close).not.toHaveBeenCalled();
+    const connection = {};
+    resolve(connection);
+    await closing;
+    expect(mocks.release).toHaveBeenCalledExactlyOnceWith(connection);
+    expect(mocks.close).toHaveBeenCalledOnce();
+    expect(database.isWaking()).toBe(false);
   });
 });

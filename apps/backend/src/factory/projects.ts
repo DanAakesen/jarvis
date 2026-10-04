@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { loadEffectiveSettings } from '../core/settings.js';
+import { readSettings } from '../core/settings.js';
 import type { GitHubRepositoryCatalog, GitHubRepositoryListing } from '../github-app.js';
 
 export interface Project {
@@ -52,7 +52,7 @@ export async function manageExistingRepository(
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repositoryName)) {
     throw new RepositoryNotAvailableError();
   }
-  const settings = await loadEffectiveSettings(settingsStore);
+  const settings = await readSettings(settingsStore);
   let listing: GitHubRepositoryListing;
   try {
     listing = await catalog.list(settings.newProjects.owner);

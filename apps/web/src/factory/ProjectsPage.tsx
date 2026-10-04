@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { backendFetch } from '../backend-request';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 interface Project {
@@ -148,14 +149,13 @@ async function request(
   let response: Response;
   try {
     const bearerScheme = ['Bear', 'er'].join('');
-    response = await fetch(`${backendUrl}${path}`, {
+    response = await backendFetch(`${backendUrl}${path}`, {
       method,
       headers: {
         Authorization: `${bearerScheme} ${await getAccessToken()}`,
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(10_000),
     });
   } catch (cause) {
     if (cause instanceof Error && cause.message === 'Your Microsoft sign-in needs attention. Sign in again.') throw cause;

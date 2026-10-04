@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
+import { backendFetch } from '../backend-request';
 
 type TaskState = 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
-type Action = 'steer' | 'pause' | 'resume' | 'cancel';
+type Action = 'steer' | 'pause' | 'resume' | 'cancel' | 'recover';
 const taskStates: TaskState[] = ['Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'];
 
 const messages: Record<Action, string> = {
@@ -9,6 +10,7 @@ const messages: Record<Action, string> = {
   pause: 'Pause requested. The task will show Paused after its turn stops.',
   resume: 'Task resumed.',
   cancel: 'Task cancelled.',
+  recover: 'Recovery started from the task branch.',
 };
 
 function errorMessage(status: number): string {
@@ -23,12 +25,14 @@ export function TaskControls({
   getAccessToken,
   taskId,
   state,
+  latestSessionEndReason,
   onComplete,
 }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   taskId: string;
   state: TaskState;
+  latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null | undefined;
   onComplete: (state: TaskState) => void;
 }) {
   const [busy, setBusy] = useState<Action | null>(null);
@@ -37,6 +41,7 @@ export function TaskControls({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
+  const continueExpiredSession = latestSessionEndReason === 'idle_expired';
 
   async function run(action: Action, steeringMessage?: string) {
     if (!backendUrl) {
@@ -57,7 +62,7 @@ export function TaskControls({
     try {
       let response: Response;
       try {
-        response = await fetch(
+        response = await backendFetch(
         `${backendUrl.replace(/\/+$/, '')}/factory/tasks/${taskId}/controls`,
         {
           method: 'POST',
@@ -69,7 +74,7 @@ export function TaskControls({
             action,
             ...(action === 'steer' ? { message: steeringMessage } : {}),
           }),
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(action === 'recover' ? 35_000 : 10_000),
         },
         );
       } catch {
@@ -86,7 +91,9 @@ export function TaskControls({
         result.id !== taskId || !('state' in result) || !taskStates.includes(result.state as TaskState)) {
         throw new Error('Jarvis returned an invalid task control result. Check the task state before retrying.');
       }
-      setFeedback(messages[action]);
+      setFeedback(action === 'recover' && continueExpiredSession
+        ? 'Continuation started from the task branch.'
+        : messages[action]);
       setSteering(false);
       setConfirmCancel(false);
       setMessage('');
@@ -110,8 +117,37 @@ export function TaskControls({
   if (state === 'PauseRequested') {
     return <p className="task-control-feedback" role="status">Pausing… The current turn is stopping.</p>;
   }
+  if (state === 'Running' && continueExpiredSession) {
+    return (
+      <div className="task-controls">
+        <div className="action-row">
+          <button className="secondary-button" type="button" disabled={busy !== null}
+            onClick={() => void run('recover')}>
+            {busy === 'recover' ? 'Continuing…' : 'Continue'}
+          </button>
+        </div>
+        <p className="task-control-guidance">Starts a new sandbox from the existing task branch and its recorded history.</p>
+        {error && <p className="task-control-error" role="alert">{error}</p>}
+        {feedback && <p className="task-control-feedback" role="status" aria-live="polite">{feedback}</p>}
+      </div>
+    );
+  }
   if (state === 'NeedsAttention') {
-    return <p className="task-control-guidance">Task controls are unavailable while this task needs attention.</p>;
+    return (
+      <div className="task-controls">
+        <div className="action-row">
+          <button className="secondary-button" type="button" disabled={busy !== null}
+            onClick={() => void run('recover')}>
+            {busy === 'recover'
+              ? continueExpiredSession ? 'Continuing…' : 'Recovering…'
+              : continueExpiredSession ? 'Continue' : 'Recover'}
+          </button>
+        </div>
+        <p className="task-control-guidance">Starts a new sandbox from the existing task branch and its recorded history.</p>
+        {error && <p className="task-control-error" role="alert">{error}</p>}
+        {feedback && <p className="task-control-feedback" role="status" aria-live="polite">{feedback}</p>}
+      </div>
+    );
   }
   if (state === 'Done' || state === 'Cancelled') {
     return <p className="task-control-guidance">This task is finished; no further controls are available.</p>;
