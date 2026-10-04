@@ -51,10 +51,15 @@ async function insertEvent(
   payload: Record<string, unknown>,
   source: 'backend' | 'dan' = 'backend',
 ): Promise<TaskEventMessage> {
+  let activityTitle = summary.slice(0, 400);
+  if (activityTitle.length === 400 && activityTitle.charCodeAt(399) >= 0xd800 && activityTitle.charCodeAt(399) <= 0xdbff) {
+    activityTitle = activityTitle.slice(0, -1);
+  }
   const { recordset } = await new sql.Request(transaction)
     .input('taskId', sql.BigInt, BigInt(taskId))
     .input('type', sql.NVarChar(64), type)
     .input('summary', sql.NVarChar(2000), summary)
+    .input('activityTitle', sql.NVarChar(400), activityTitle)
     .input('payload', sql.NVarChar(sql.MAX), JSON.stringify(payload))
     .input('source', sql.NVarChar(16), source)
     .query<EventRow>(`INSERT dbo.task_events (task_id, type, summary, payload, source)
@@ -63,7 +68,7 @@ async function insertEvent(
         inserted.source, inserted.at
       VALUES (@taskId, @type, @summary, @payload, @source);
       INSERT dbo.activity (area, kind, title, link)
-      VALUES (N'factory', @type, @summary, CONCAT(N'task:', @taskId));`);
+      VALUES (N'factory', @type, @activityTitle, CONCAT(N'task:', @taskId));`);
   const row = recordset[0];
   if (!row) throw new Error('Dispatcher event insert returned no row');
   return {

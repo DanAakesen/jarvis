@@ -191,7 +191,7 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
     const sandboxSession = await scalar(`INSERT dbo.sandbox_sessions
       (task_id, foundry_session_id, agent_version, agent_name, size, image, status, started_at, cost_estimate_dkk)
       VALUES (${String(task)}, N'foundry-session-1', N'1', N'jarvis-runner-base-1x2', N'1x2', N'jarvis-runner:latest',
-        N'Active', DATEADD(minute, -15, SYSUTCDATETIME()), 0.25)`);
+        N'Active', DATEADD(minute, -15, SYSUTCDATETIME()), 0)`);
     await pool.request().query(`INSERT dbo.sandbox_turns
       (sandbox_session_id, invocation_id, mode, acp_session_id, status)
       VALUES (${String(sandboxSession)}, N'invocation-1', N'task', N'acp-session-1', N'running');
