@@ -1,2 +1,2 @@
-DROP INDEX UX_activity_alert_key ON dbo.activity;
-ALTER TABLE dbo.activity DROP COLUMN alert_key;
+EXEC(N'DROP INDEX UX_activity_alert_key ON dbo.activity;');
+EXEC(N'ALTER TABLE dbo.activity DROP COLUMN alert_key;');
