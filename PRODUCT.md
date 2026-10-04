@@ -81,6 +81,7 @@ stateDiagram-v2
     Running --> NeedsAttention: Blocked, failed, sandbox crashed, or disk_low
     NeedsAttention --> Running: Continue or recover
     Running --> Done: Project policy satisfied
+    NeedsAttention --> Done: Verified project policy satisfied
     Ready --> Cancelled: Cancel
     Running --> Cancelled: Cancel
     Paused --> Cancelled: Cancel
@@ -107,11 +108,12 @@ stateDiagram-v2
 
 | Policy | Allowed outcome |
 | --- | --- |
-| **Deliver a PR** | Implement, test, push a task branch, and open or update a pull request. Stop at a green PR. |
-| **Complete without deployment** | Also merge when the project's merge rules pass. |
+| **Deliver a PR** | Implement, test, push a task branch, and open or update a pull request. Stop at a non-draft PR with green checks; mark Done without merging. |
+| **Complete without deployment** | Also squash-merge with the GitHub App when checks are green, the PR is not a draft, its branch is up to date, and GitHub reports it mergeable. Mark Done after the signed merge webhook is persisted. |
 
 - Merge rules and Done are Dan's choices per project.
-- Permissions are enforced in the backend and runner, and GitHub branch protection is respected.
+- The backend applies policy only from task-linked P3-04 GitHub records and current GitHub API state; an agent report never marks a task Done. `NeedsAttention` can become Done only after that verification.
+- The GitHub merge endpoint enforces repository branch protection and required checks. A refusal is recorded on the task and leaves it unfinished.
 
 ### New projects
 

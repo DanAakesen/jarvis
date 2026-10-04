@@ -81,7 +81,7 @@ Status as of 4 October 2026.
 | Webhook receiver | GitHub events are verified and recorded once | Background | — | Built (live webhook setup pending) | P3-03 |
 | PR, run, release and deploy records | Webhook events stored as pull requests, workflow runs, releases, deployments | Background | — | Built (live webhook setup pending) | P3-04 |
 | Checks loop | A failed PR check is sent back to the task; the agent fixes it | Background | Task detail | Planned | P3-05 |
-| Project policy and merge | Stop at a green PR, or merge automatically when rules pass | Background | Project settings | Planned | P3-06 |
+| Project policy and merge | Open a PR for completed branch commits when none is open; stop at a verified green PR or squash-merge via the GitHub App when checks, branch freshness and protection rules pass | Background | Project settings | Built (fake-tested; live test-repository acceptance pending) | P3-06 |
 | Release records | One release per merge to `main`, linked to runs and deployments by SHA | Background | — | Built (live webhook setup pending) | P3-07 |
 | Release view | Git graph, releases, runs and deployments per project | Screen | Release view | Planned | P3-08 |
 | Workflow templates | Managed projects copy PR-check and release workflows | Background | — | Built | P3-09 |
@@ -98,7 +98,7 @@ Status as of 4 October 2026.
 | Event archive | Old task events move to Blob and load on demand | Background | Task detail | Built | P6-03 |
 | Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Now + email | Main page; email-only Azure Monitor action group | Built (offline; live Azure delivery unverified) | P6-02 |
 | Backup drill | Database restore documented | Background | — | Planned | P6-04 |
-| Runbook | Deploy, rollback, key rotation, recovery steps | — | docs | Planned | P6-06 |
+| Runbook | Deploy, rollback, key rotation, task recovery, sleep, and temporary SQL access | — | [Operations runbook](runbook.md) | In progress | P6-06 |
 
 ## Jarvis everywhere (P7)
 

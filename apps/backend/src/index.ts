@@ -43,6 +43,8 @@ import { createRepoAdminRepositoryCreator } from './credentials/repo-admin.js';
 import { createGitHubAppTokenIssuer } from './github-app.js';
 import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js';
 import { createGithubWebhookModule } from './github/webhook.js';
+import { createProjectPolicyStore } from './database/project-policy-store.js';
+import { createProjectPolicyEvaluator } from './github/project-policy.js';
 import { createGitHubDeliveryVerifier } from './github/delivery.js';
 import { createAlertNotifier } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
@@ -179,6 +181,13 @@ try {
   const projectStore = database ? createProjectStore(database.pool) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;
+  const projectPolicyEvaluator = database && taskStore && githubAppTokenIssuer
+    ? createProjectPolicyEvaluator({
+      store: createProjectPolicyStore(database.pool),
+      tasks: taskStore,
+      tokenIssuer: githubAppTokenIssuer,
+    })
+    : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const dispatcher = database && taskStore && settingsStore && sandboxHeartbeat && config.foundryEndpoints
     ? new TaskDispatcher(
@@ -206,7 +215,11 @@ try {
     : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
-    createGithubWebhookModule({ deliveryStore: webhookDeliveryStore, getSecret: getWebhookSecret }),
+    createGithubWebhookModule({
+      deliveryStore: webhookDeliveryStore,
+      getSecret: getWebhookSecret,
+      ...(projectPolicyEvaluator ? { onMapping: projectPolicyEvaluator.handle } : {}),
+    }),
   ];
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
