@@ -28,7 +28,11 @@ class StreamingModelClient(Protocol):
             yield ""
 
     async def complete_chat(
-        self, messages: Sequence[ModelMessage], language: str
+        self,
+        messages: Sequence[ModelMessage],
+        language: str,
+        *,
+        settings: ModelSettings | None = None,
     ) -> AsyncIterator[str]:
         """Yield ordered text-chat chunks."""
         if False:
