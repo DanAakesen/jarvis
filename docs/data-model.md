@@ -1,11 +1,11 @@
 # Data model
 
-Version 1, updated 4 October 2026 for P6-02. Scope: the Jarvis core and the Software Factory only. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 4 October 2026 for P7-03. Scope: the Jarvis core and the Software Factory only. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
 Issue #7 adds `dbo.schema_migrations`, an internal deployment ledger separate
-from the seven domain groups: `name nvarchar(255)` primary key, `checksum char(64)`
+from the eight domain groups: `name nvarchar(255)` primary key, `checksum char(64)`
 (SHA-256 of committed file bytes), and `applied_at datetime2(7)` defaulting to
 `SYSUTCDATETIME()`. The backend creates and writes it only while holding the
 transaction-owned `jarvis.schema-migrations` app lock. Its rows must remain an
@@ -28,10 +28,13 @@ before restoring the prior constraint.
 P6-02 adds nullable `activity.alert_key` and a filtered unique index in
 `0011_alert_deduplication.sql`; each event condition has one activity row and
 can be safely retried. Its down migration removes the index and column.
+P7-03 adds the Teams conversation and confirmation tables in
+`0014_teams_notifications.sql`; its down migration removes both tables and the
+confirmation expiry index.
 
 ## Overview
 
-Seven groups. Arrows show the main references between groups.
+Eight groups. Arrows show the main references between groups.
 
 ```mermaid
 flowchart LR
@@ -67,6 +70,10 @@ flowchart LR
         webhook_deliveries
         credential_status
     end
+    subgraph PHONE["8 · Phone notifications"]
+        teams_conversations
+        teams_confirmations
+    end
     tool_calls --> tasks
     tasks --> projects
     sandbox_sessions --> tasks
@@ -87,6 +94,7 @@ flowchart LR
 | 5 | GitHub and release | Pull requests, checks, the release view (commits fetched from GitHub on demand) | `pull_requests`, `workflow_runs`, `releases`, `deployments` |
 | 6 | Operations | Safe webhook handling, credential expiry warnings | `webhook_deliveries`, `credential_status` |
 | 7 | Usage and cost | Transparency per task and project: sandbox time, model tokens, voice, Codex and Copilot usage | `usage` |
+| 8 | Phone notifications | Dan's validated Teams personal conversation and expiring one-time approvals | `teams_conversations`, `teams_confirmations` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
@@ -480,6 +488,34 @@ session total with its messages, and the main page displays it once per sitting.
   grouped breakdowns and marks partial results so displayed subtotals are not
   mistaken for full-period totals. Existing voice rows are included when P5-06
   has written them.
+
+## 8 · Phone notifications
+
+```mermaid
+erDiagram
+   teams_conversations {
+       string owner_object_id PK
+       string conversation_id
+       json reference_json
+       datetime updated_at
+   }
+   teams_confirmations {
+       string confirmation_id PK
+       string owner_object_id
+       string conversation_id
+       string action_kind
+       string status "pending | approved | rejected | expired | cancelled | executing"
+       datetime expires_at
+       datetime resolved_at
+   }
+```
+
+P7-03 stores one validated personal Teams conversation reference for Dan and
+single-use confirmation state bound to his object ID and conversation ID.
+`IX_teams_confirmations_expiry` supports expiry cleanup. Cards and message text
+are not persisted in these tables; voice bytes live only in a bounded in-memory
+store with five-minute links. Startup expires pending confirmations, and an
+approval is atomically consumed before the backend invokes its action.
 
 ## Physical schema (groups 1–3)
 

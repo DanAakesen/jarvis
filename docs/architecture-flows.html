@@ -181,6 +181,8 @@ const LANES = {
   graph:    { name: "Microsoft Graph",  tech: "OneDrive · Microsoft Search" },
   backend:  { name: "Backend",          tech: "Node.js · Container Apps" },
   data:     { name: "SQL data",         tech: "Azure SQL · tasks, settings, events" },
+  teams:    { name: "Microsoft Teams",  tech: "Teams personal chat · Adaptive Cards" },
+  speech:   { name: "Azure Speech",     tech: "Speech F0 · text-to-speech" },
   blob:     { name: "Blob Storage",     tech: "Private logs · artifacts · task events" },
   vault:    { name: "Secrets",          tech: "Key Vault" },
   foundry:  { name: "Sandbox platform", tech: "Foundry Hosted Agents" },
@@ -566,6 +568,32 @@ const FLOWS = [
     ],
   },
   {
+    name: "Teams notifications",
+    summary: "After Dan starts a personal Teams chat, the backend can deliver proactive text, optional Speech F0 audio, and expiring approval cards. Only a verified one-time approval resumes a gated action.",
+    nodes: [
+      { id: "resources", lane: "actions", col: 1, s: "assumed", t: "Provision F0 services", d: "Deploy Azure Bot Service F0, its Teams channel, Speech F0 and the backend identity's Speech User role.", ev: "Bicep build/lint checks local resource shape only. Azure deployment, role propagation and free-tier quota remain unverified." },
+      { id: "install", lane: "user", col: 2, s: "assumed", t: "Start a personal chat", d: "Dan installs the bot and sends the first message using his Novaro account.", ev: "Required before a proactive conversation reference exists; coordinator phone setup remains pending." },
+      { id: "receive", lane: "backend", col: 3, s: "proven", t: "Verify bot activity", d: "Teams SDK verifies Bot Service authentication; the backend checks the personal channel, Dan's object ID and tenant.", ev: "Identity and channel checks are covered by fake-activity tests; live Bot Service authentication is unverified." },
+      { id: "reference", lane: "data", col: 4, s: "proven", t: "Persist safe conversation reference", d: "Save only the validated personal reference needed for proactive messages.", ev: "Parameterized store contracts and service tests cover owner binding and bounded reference fields; live Azure SQL is unverified." },
+      { id: "send", lane: "backend", col: 5, s: "proven", t: "Send a notification or card", d: "The backend sends short text, optional safe links, or an Adaptive Card with Approve, Reject and a five-minute expiry.", ev: "Fake-connector tests cover notification, card, approval and rejection behavior." },
+      { id: "teams", lane: "teams", col: 6, s: "assumed", t: "Deliver to Dan's phone", d: "Teams delivers the proactive message to Dan's installed personal chat.", ev: "Bot resource and Teams channel are authored in Bicep; live Teams installation and phone delivery remain unverified." },
+      { id: "speech", lane: "speech", col: 6, s: "proven", t: "Optionally synthesize a voice note", d: "Speech F0 returns bounded MP3 bytes; failure or exhausted free allowance keeps text delivery.", ev: "Fake synthesizer tests cover text fallback and an ephemeral audio URL; real F0 quota and playback remain unverified." },
+      { id: "response", lane: "backend", col: 7, s: "proven", t: "Validate and consume response", d: "The backend verifies Dan and the conversation, then atomically consumes an unexpired approval once.", ev: "Fake-store round trips cover approve, reject, expiry, unknown identity and replay; the action is not run for any refusal." },
+      { id: "action", lane: "backend", col: 8, s: "proven", t: "Resume the approved action", d: "Repository creation or automatic merge runs only after the confirmed wrapper returns approval.", ev: "Repository-creation and project-policy tests verify approval gating and fail-closed behavior when confirmation is unavailable." },
+    ],
+    edges: [
+      ["resources", "install", "assumed", "Teams channel"],
+      ["install", "receive", "assumed", "first personal message"],
+      ["receive", "reference", "proven", "Dan-only reference"],
+      ["reference", "send", "proven", "proactive send"],
+      ["send", "teams", "assumed", "text/card"],
+      ["send", "speech", "proven", "optional TTS"],
+      ["speech", "teams", "proven", "temporary audio URL"],
+      ["teams", "response", "assumed", "card submit"],
+      ["response", "action", "proven", "approved and consumed"],
+    ],
+  },
+  {
     name: "Alerts",
     summary: "Four condition types appear once in the Now feed; the email-only Azure Monitor action group handles deployment, sandbox, credential and budget notifications.",
     nodes: [
@@ -797,7 +825,7 @@ function buildOverview() {
   return {
     name: "Complete flow", overview: true, offScale: OV.offScale, nodes, edges, segments, cols: offset,
     ordered: [...nodes].sort(byPosition),
-    summary: "All fourteen flows in one swimlane, in tab order. Arrows between segments show where each flow picks up; 11–14 run alongside. Select a box for details, or a segment title to open its tab.",
+    summary: "All flows in one swimlane, in tab order. Arrows between segments show where each flow picks up. Select a box for details, or a segment title to open its tab.",
   };
 }
 
