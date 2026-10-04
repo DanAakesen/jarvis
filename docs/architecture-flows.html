@@ -178,6 +178,7 @@ const LANES = {
   jarvis:   { name: "Jarvis agent",     tech: "Foundry hosted agent · voice bridge" },
   model:    { name: "Model",            tech: "gpt-5.6-luna · gpt-realtime-2.1" },
   entra:    { name: "Microsoft Entra",  tech: "Tenant-specific OAuth 2.0 / OIDC" },
+  graph:    { name: "Microsoft Graph",  tech: "OneDrive · Microsoft Search" },
   backend:  { name: "Backend",          tech: "Node.js · Container Apps" },
   data:     { name: "SQL data",         tech: "Azure SQL · tasks, settings, events" },
   blob:     { name: "Blob Storage",     tech: "Private logs · artifacts · task events" },
@@ -249,7 +250,7 @@ const FLOWS = [
   },
   {
     name: "Settings",
-    summary: "A signed-in user edits global defaults. The backend validates each value against its catalog and stores partial changes; future sessions and tasks read the defaults, including personality preferences for new chat and voice sessions.",
+    summary: "A signed-in user edits global defaults, or Jarvis uses its authenticated tool. The backend validates each value against its catalog and stores partial changes; future sessions and tasks read the defaults, including personality preferences for new chat and voice sessions.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "context", t: "Dan opens Settings", d: "The app shell already has a verified sign-in." },
       { id: "page", lane: "board", col: 2, s: "docs", t: "Load settings and choices", d: "The browser silently gets a delegated API token and calls `/settings`." },
@@ -258,7 +259,7 @@ const FLOWS = [
       { id: "validate", lane: "backend", col: 5, s: "proven", t: "Validate and whitelist", d: "Reject unknown keys, unsupported choices, invalid custom instructions, invalid project defaults, and out-of-range task limits.", ev: "P7-16 backend tests cover tone/style catalogs, instruction bounds, invalid updates, and no write on rejection." },
       { id: "save", lane: "backend", col: 6, s: "proven", t: "PATCH /settings", d: "Persist only changed keys in one SQL transaction.", ev: "P7-16 route tests verify persistence/readback and reset through the existing SettingsStore; the SQL adapter uses parameterized settings keys/values." },
       { id: "rows", lane: "data", col: 7, s: "docs", t: "Global rows in dbo.settings", d: "Reuses the P1-01 key/value table; no settings history." },
-      { id: "next", lane: "backend", col: 8, s: "proven", t: "New session reads defaults", d: "Hosted chat reads settings per invocation; hosted voice snapshots them at session start; English realtime snapshots them when the backend configures a new relay. Existing voice keeps its snapshot. Personality changes response style only, not identity, tools, permissions, language, model, voice, or action truth.", ev: "P7-16 backend and agent tests verify setting reads, per-session isolation, prompt precedence, and unchanged server-owned tool schemas. Live Azure session behavior remains unverified. P2-05 still resolves task model overrides before saved task defaults." },
+      { id: "next", lane: "backend", col: 8, s: "proven", t: "Next session reads defaults", d: "Hosted chat reads settings per invocation; hosted voice snapshots them at session start; English realtime snapshots them when the backend configures a new relay. `set_jarvis_model` updates validated model/reasoning defaults for the next session. Personality changes response style only, not identity, tools, permissions, language, model, voice, or action truth. Tasks resolve overrides before saved provider settings.", ev: "P4-07 and P7-16 tests verify per-session settings and isolation; P7-11 tests verify model catalog validation and next-session updates. P2-11 verifies provider option forwarding offline. Live Azure session and provider behavior remain unverified." },
     ],
     edges: [
       ["start", "page", "docs", "open"], ["page", "read", "docs", "token + GET"],
@@ -271,7 +272,7 @@ const FLOWS = [
     name: "Task model configuration",
     summary: "The dispatcher supplies effective per-task model settings; the Foundry client forwards them and the runner applies/preserves provider-specific choices.",
     nodes: [
-      { id: "source", lane: "backend", col: 1, s: "assumed", t: "Resolve task override or setting", d: "P2-05 selects each task override first, otherwise the current provider setting; task settings currently configure reasoning only for Codex." },
+      { id: "source", lane: "backend", col: 1, s: "proven", t: "Resolve task override or setting", d: "P2-05 selects each task override first, otherwise the current provider setting. P7-11 lets Jarvis set a verified agent/model/reasoning override while the task is Ready; Running and other non-Ready changes are refused.", ev: "Backend tool tests cover accepted options and refusal paths; SQL Server integration verifies the state guard, committed event/activity, and detail fields. Live voice selection remains unverified." },
       { id: "wire", lane: "backend", col: 2, s: "proven", t: "POST effective options to Foundry", d: "FoundryClient sends model and optional Codex reasoning in the invocation body.", ev: "Foundry contract tests verify non-default values and omission of provider defaults." },
       { id: "provider", lane: "runner", col: 3, s: "proven", t: "Configure the provider", d: "Copilot gets --model at process launch; Codex receives model and reasoning_effort through ACP session/set_config_option.", ev: "Pinned provider versions checked; local ACP fixtures verify selected values. Authenticated provider execution remains unverified." },
       { id: "retain", lane: "runner", col: 4, s: "proven", t: "Retain options for the task", d: "Effective values are stored beside the ACP session ID and reused after process recreation for steer/resume." },
@@ -400,7 +401,7 @@ const FLOWS = [
     nodes: [
       { id: "ctx", lane: "runner", col: 1, s: "context", from: [[5, "work"]], t: "From 5: agent working", d: "Events recorded per invocation." },
       { id: "live", lane: "runner", col: 2, s: "proven", t: "Runner pushes live events", d: "Task-scoped events include disk readings and session_question when end_turn adds no task-branch commit.", ev: "P2-13 records the last agent message as the question and atomically moves Running or PauseRequested to NeedsAttention with reason session_question; the completed session stays monitored for idle-expiry classification. P2-03 authenticates delivery; P6-07 covers disk_low. Local contracts cover these paths; live question and task-branch pushes remain coordinator post-merge checks." },
-      { id: "poll", lane: "backend", col: 2, s: "proven", t: "Sandbox heartbeat", d: "Checks active invocations about once a minute; active-turn failure crashes, completed-turn expiry ends as idle_expired without a task-state change.", ev: "P2-06/P2-14 fake-Foundry tests distinguish both outcomes. It reloads active sessions at startup and keeps registrations in memory, so it does not query SQL while idle. SQL Server CI and live Azure polling remain unverified." },
+      { id: "poll", lane: "backend", col: 2, s: "proven", t: "Sandbox heartbeat", d: "Checks active invocations about once a minute; active-turn failure crashes, completed-turn expiry ends as idle_expired without a task-state change. Logs every decision with session ID and HTTP status.", ev: "P2-06/P2-14 fake-Foundry/store tests distinguish both outcomes even when the first poll fails after runner completion. It persists observed completion and reloads active sessions once at startup. SQL Server CI and live Azure polling remain unverified." },
       { id: "store", lane: "data", col: 3, s: "proven", t: "Store task event and activity", d: "Both records commit together in Azure SQL.", ev: "P1-05's task-store event API and state transitions write task_events and activity in one transaction." },
       { id: "usage", lane: "data", col: 4, s: "proven", t: "Persist per-task usage", d: "Count ACP prompts, store reported provider metrics, and finalize sandbox minutes and estimated DKK per session.", ev: "P2-12 ties turn and provider metrics to invocation/event identity and commits them with runner events; sandbox usage is recorded transactionally at session end. SQL Server CI and live provider reports remain post-merge checks." },
       { id: "archive", lane: "data", col: 4, s: "docs", t: "Archive older task events", d: "After 90 days, bounded batches upload to private Blob before SQL rows are deleted and indexed.", ev: "P6-03 commits the task_event_archives index with SQL deletion; unindexed retry blobs stay invisible. Fake-Blob and SQL Server tests cover archive/restore. Live Azure verification remains post-merge." },
@@ -524,7 +525,7 @@ const FLOWS = [
     nodes: [
       { id: "ctx", lane: "foundry", col: 1, s: "context", t: "During 5–8" },
       { id: "crash", lane: "foundry", col: 2, s: "proven", t: "Sandbox crashes mid-turn", d: "Files and conversation are lost; a new agent version does not restart sessions.", ev: "Restart report (L22): forced crash lost the clone and the ACP conversation.", href: "reference/coding-sandbox-prototype/RESTART-REPORT.md" },
-      { id: "detect", lane: "backend", col: 3, s: "proven", t: "Classify confirmed expiry", d: "HTTP 424/404/5xx on two polls; active invocation -> crash/Needs attention, completed invocation -> Ended/idle_expired with task state unchanged.", ev: "P2-06/P2-14 fake-Foundry tests cover both decisions; SQL Server CI and live Foundry expiry remain unverified." },
+      { id: "detect", lane: "backend", col: 3, s: "proven", t: "Classify confirmed expiry", d: "HTTP 424/404/5xx on two polls; latest active invocation -> crash/Needs attention, completed invocation -> Ended/idle_expired with task state unchanged.", ev: "P2-14 guards generic NeedsAttention cleanup and stale polls using latest-turn and committed runner-event evidence. Fake-Foundry/store tests pass; SQL cleanup/early-event contracts and live Foundry expiry remain unverified locally." },
       { id: "retry", lane: "backend", col: 4, s: "docs", t: "Retry safe failures, then Needs attention", d: "Three attempts, scheduled 15 and 30 seconds apart; ambiguous remote starts are not replayed.", ev: "P2-05 unit tests cover dispatcher behavior; the SQL Server acceptance tests are in CI. Live Azure behavior remains unverified." },
       { id: "flag", lane: "data", col: 4, s: "proven", t: "Task row: Needs attention", ev: "P2-06 writes the crash state and ends the failed sandbox session transactionally." },
       { id: "idle", lane: "data", col: 5, s: "proven", t: "Session ends idle_expired", d: "End the sandbox session and publish its event without changing task state.", ev: "P2-14 store contract asserts Ended/idle_expired and unchanged task state; SQL Server CI remains unverified." },
@@ -641,6 +642,29 @@ const FLOWS = [
       ["tool", "model", "unknown", "tool result"],
       ["model", "voice", "unknown", "spoken response"],
       ["voice", "done", "unknown", "audio"],
+    ],
+  },
+  {
+    name: "Notes search",
+    summary: "Jarvis searches Dan's configured OneDrive notes folder through the authenticated backend, then quotes returned snippets and links.",
+    nodes: [
+      { id: "ask", lane: "user", col: 1, s: "context", t: "Ask what Dan wrote", d: "“What did I write about …?”" },
+      { id: "tool", lane: "jarvis", col: 2, s: "proven", t: "Call notes_search", d: "Chat and voice instructions require quotes to come from returned snippets and include a note link.", ev: "Hosted-agent and realtime instruction tests cover grounded note answers." },
+      { id: "auth", lane: "backend", col: 3, s: "proven", t: "Validate and authorize", d: "The registered tool schema bounds the query and results; existing authenticated tool routes accept Dan or the configured Jarvis agent.", ev: "Fastify fake-Graph tests cover input rejection and backend-only registration." },
+      { id: "folder", lane: "backend", col: 4, s: "proven", t: "Resolve the configured folder", d: "Use Dan's fixed Entra object ID and `JARVIS_NOTES_FOLDER_PATH` (default `/Jarvis/Notes`).", ev: "The client requests a backend-only Graph token with its managed identity; local tests assert the folder path." },
+      { id: "graph", lane: "graph", col: 5, s: "unknown", t: "Search OneDrive notes", d: "Microsoft Search `driveItem` query adds a KQL path restriction. `Files.Read.All` is tenant-wide because Graph Search does not support `Sites.Selected`.", ev: "Fake Graph tests verify query construction. Coordinator approval/consent and a live known-note search remain pending.", href: "agent-context.md#azure" },
+      { id: "filter", lane: "backend", col: 6, s: "proven", t: "Filter and bound results", d: "Reject links outside the configured folder; return plain-text snippets, title and link. Empty and provider-error results are explained.", ev: "Offline tests cover out-of-folder hits, empty results, malformed responses, provider failure and snippets." },
+      { id: "record", lane: "data", col: 7, s: "proven", t: "Record the tool call", d: "The existing `tool_calls` table stores the bounded query, result and outcome; no schema migration.", ev: "P4-02 dispatch contract and P7-10 route tests exercise call recording." },
+      { id: "reply", lane: "jarvis", col: 8, s: "proven", t: "Quote the note and link", d: "Jarvis answers from returned snippets only and includes the note link.", ev: "Chat, hosted-agent and English realtime instructions are covered offline." },
+    ],
+    edges: [
+      ["ask", "tool", "proven", "question"],
+      ["tool", "auth", "proven", "backend tool call"],
+      ["auth", "folder", "proven", "validated query + identity"],
+      ["folder", "graph", "unknown", "app-only Graph token"],
+      ["graph", "filter", "unknown", "search hits"],
+      ["filter", "record", "proven", "bounded result"],
+      ["record", "reply", "proven", "tool result + link"],
     ],
   },
 ];
