@@ -160,6 +160,10 @@ filter. Controls display pending, success, and error feedback beside the action;
 unavailable PR/artifact links have adjacent explanations rather than implying an
 action is ready.
 
+Needs attention presents a Recover action with a short explanation that recovery
+starts a new sandbox from the task branch and saved history. The action keeps its
+identity while pending and reports success or failure beside the control.
+
 At narrow widths the metadata and controls stack into one column and timeline
 payloads scroll within the page. Existing 44 px controls and focus styles are
 reused. The usage section is an explicit P2-12 slot; disk values remain based on
