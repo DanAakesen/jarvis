@@ -1,4 +1,6 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { loadEffectiveSettings } from '../core/settings.js';
+import type { GitHubRepositoryCatalog, GitHubRepositoryListing } from '../github-app.js';
 
 export interface Project {
   readonly id: string;
@@ -28,6 +30,55 @@ export interface ProjectStore {
 
 export class ProjectConflictError extends Error {
   constructor() { super('Project repository already exists'); }
+}
+
+export class RepositoryNotAvailableError extends Error {
+  constructor() { super('Repository is not available through the GitHub App installation'); }
+}
+
+export class GitHubRepositoryUnavailableError extends Error {
+  constructor() { super('GitHub repository service is unavailable'); }
+}
+
+export async function manageExistingRepository(
+  app: FastifyInstance,
+  repositoryName: string,
+  catalog: GitHubRepositoryCatalog = app.githubRepositoryCatalog!,
+  signal?: AbortSignal,
+): Promise<Project> {
+  const projectStore = app.projectStore;
+  const settingsStore = app.settingsStore;
+  if (!projectStore || !settingsStore || !catalog) throw new Error('Repository management is unavailable');
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repositoryName)) {
+    throw new RepositoryNotAvailableError();
+  }
+  const settings = await loadEffectiveSettings(settingsStore);
+  let listing: GitHubRepositoryListing;
+  try {
+    listing = await catalog.list(settings.newProjects.owner);
+  } catch {
+    throw new GitHubRepositoryUnavailableError();
+  }
+  const repository = listing.repositories.find((item) => item.fullName.toLowerCase() === repositoryName.toLowerCase());
+  if (!repository) throw new RepositoryNotAvailableError();
+  let tech: string;
+  try {
+    tech = await catalog.detectTech(repository);
+  } catch {
+    throw new GitHubRepositoryUnavailableError();
+  }
+  signal?.throwIfAborted();
+  return projectStore.create({
+    name: repository.name,
+    repo: repository.fullName,
+    default_branch: repository.defaultBranch,
+    default_agent: settings.newProjects.defaultAgent,
+    policy: settings.newProjects.policy,
+    merge_rules: null,
+    sandbox_size: '1x2',
+    tech,
+    max_parallel_tasks: settings.newProjects.maxParallelTasks,
+  });
 }
 
 const projectFields = {
@@ -109,6 +160,35 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(201).header('Location', `/factory/projects/${project.id}`).send(project);
     } catch (error) {
       if (error instanceof ProjectConflictError) return reply.code(409).send({ error: 'Project repository already exists' });
+      throw error;
+    }
+  });
+
+  app.post<{ Body: { repository: string } }>('/manage', {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          repository: { type: 'string', minLength: 3, maxLength: 140, pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' },
+        },
+        required: ['repository'],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    if (!app.projectStore || !app.settingsStore || !app.githubRepositoryCatalog) {
+      return reply.code(503).send({ error: 'Repository management unavailable' });
+    }
+    try {
+      const project = await manageExistingRepository(app, request.body.repository);
+      return reply.code(201).header('Location', `/factory/projects/${project.id}`).send(project);
+    } catch (error) {
+      if (error instanceof RepositoryNotAvailableError) return reply.code(404).send({ error: 'Repository not available' });
+      if (error instanceof ProjectConflictError) return reply.code(409).send({ error: 'Project repository already exists' });
+      if (error instanceof GitHubRepositoryUnavailableError) {
+        request.log.warn('github.repository_management_failed');
+        return reply.code(502).send({ error: 'GitHub repository service unavailable' });
+      }
       throw error;
     }
   });

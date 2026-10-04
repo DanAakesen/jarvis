@@ -1,6 +1,14 @@
 import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
-import { projectRoutes } from './projects.js';
+import { ToolRefusal } from '../core/tool-registry.js';
+import { loadEffectiveSettings } from '../core/settings.js';
+import {
+  GitHubRepositoryUnavailableError,
+  ProjectConflictError,
+  RepositoryNotAvailableError,
+  manageExistingRepository,
+  projectRoutes,
+} from './projects.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
 import type {
   CreateTaskInput, RecordTaskEventInput, TaskControlCommand, TaskEventMessage, TaskListFilters,
@@ -45,8 +53,51 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 
 export const factoryModule: BackendModule = {
   id: 'factory',
-  tools: [],
+  tools: [{
+    name: 'manage_repository',
+    description: 'Register an existing repository from the GitHub App installation using the New projects defaults.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repository: { type: 'string', minLength: 3, maxLength: 140, pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' },
+      },
+      required: ['repository'],
+      additionalProperties: false,
+    },
+    execute: async (input, request, signal) => {
+      try {
+        return await manageExistingRepository(request.server, (input as { repository: string }).repository, undefined, signal);
+      } catch (error) {
+        if (error instanceof ProjectConflictError) throw new ToolRefusal('That repository is already managed by Jarvis.');
+        if (error instanceof RepositoryNotAvailableError) throw new ToolRefusal('That repository is not available in the GitHub App installation.');
+        if (error instanceof GitHubRepositoryUnavailableError) throw error;
+        throw error;
+      }
+    },
+  }],
   registerRoutes: async (app) => {
+    app.get<{ Querystring: { refresh?: boolean } }>('/factory/repositories', {
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: { refresh: { type: 'boolean', default: false } },
+          additionalProperties: false,
+        },
+      },
+    }, async (request, reply) => {
+      const catalog = app.githubRepositoryCatalog;
+      const settingsStore = app.settingsStore;
+      if (!catalog || !settingsStore) return reply.code(503).send({ error: 'GitHub repository service unavailable' });
+      const settings = await loadEffectiveSettings(settingsStore);
+      try {
+        const listing = await catalog.list(settings.newProjects.owner, request.query.refresh ?? false);
+        return sendBounded(reply.header('Cache-Control', 'no-store'), listing);
+      } catch {
+        request.log.warn('github.repository_list_failed');
+        return reply.code(502).send({ error: 'GitHub repository service unavailable' });
+      }
+    });
+
     app.post<{ Body: CreateTaskInput }>('/factory/tasks', {
       schema: {
         body: {

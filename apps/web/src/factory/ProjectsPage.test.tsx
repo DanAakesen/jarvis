@@ -21,6 +21,13 @@ const project = {
 const getAccessToken = vi.fn(async () => 'test-access-token');
 const fetchMock = vi.fn<typeof fetch>();
 let projects: typeof project[];
+let repositories: {
+  fullName: string;
+  name: string;
+  defaultBranch: string;
+  pushedAt: string | null;
+  language: string | null;
+}[];
 
 function response(body: unknown, status = 200) {
   return new Response(status === 204 ? null : JSON.stringify(body), {
@@ -44,6 +51,13 @@ function renderFactory(path = '/factory/projects') {
 beforeEach(() => {
   getAccessToken.mockClear();
   projects = [{ ...project }];
+  repositories = [{
+    fullName: 'DanAakesen/second-project',
+    name: 'second-project',
+    defaultBranch: 'develop',
+    pushedAt: '2026-10-03T12:00:00Z',
+    language: 'C#',
+  }];
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (input, init) => {
     const url = String(input);
@@ -51,7 +65,27 @@ beforeEach(() => {
     if (url.endsWith('/factory/tasks?state=Running&limit=100')) {
       return response({ tasks: [{ projectId: '7', state: 'Running' }], limit: 100, offset: 0 });
     }
+    if (url.includes('/factory/repositories') && method === 'GET') {
+      return response({ repositories, fetchedAt: '2026-10-04T09:00:00.000Z' });
+    }
     if (url.endsWith('/factory/projects') && method === 'GET') return response(projects);
+    if (url.endsWith('/factory/projects/manage') && method === 'POST') {
+      const repository = repositories.find((item) => item.fullName === JSON.parse(String(init?.body)).repository);
+      if (!repository) return response({ error: 'not found' }, 404);
+      const managed = {
+        ...project,
+        id: '8',
+        name: repository.name,
+        repo: repository.fullName,
+        default_branch: repository.defaultBranch,
+        default_agent: 'copilot' as const,
+        policy: 'deliver_pr' as const,
+        tech: 'dotnet',
+      };
+      projects = [...projects, managed];
+      repositories = repositories.filter((item) => item.fullName !== repository.fullName);
+      return response(managed, 201);
+    }
     if (url.endsWith('/factory/projects/7') && method === 'PATCH') {
       const updated = { ...project, ...JSON.parse(String(init?.body)) };
       projects = projects.map((item) => item.id === '7' ? updated : item);
@@ -80,9 +114,35 @@ describe('Projects page', () => {
     expect(within(row).getByText('1')).not.toBeNull();
     expect(within(row).getByText('Not available yet')).not.toBeNull();
     expect(screen.getByText(/Last release data will appear when release tracking is connected/)).not.toBeNull();
+    const available = screen.getByRole('article', { name: 'DanAakesen/second-project' });
+    expect(within(available).getByText((_text, element) => element?.tagName === 'TIME').getAttribute('dateTime'))
+      .toBe('2026-10-03T12:00:00Z');
+    expect(within(available).getByText('C#')).not.toBeNull();
+    expect(within(available).getByRole('button', { name: 'Manage with Jarvis' })).not.toBeNull();
 
     const request = fetchMock.mock.calls.find(([url]) => String(url).includes('/factory/projects'))?.[1];
     expect(request?.headers).toMatchObject({ Authorization: ['Bearer', 'test-access-token'].join(' ') });
+  });
+
+  it('manages an existing repository without a form and refreshes the list on demand', async () => {
+    const user = userEvent.setup();
+    renderFactory();
+
+    const row = await screen.findByRole('article', { name: 'DanAakesen/second-project' });
+    await user.click(within(row).getByRole('button', { name: 'Manage with Jarvis' }));
+
+    expect(await screen.findByText('Managed DanAakesen/second-project with Jarvis.')).not.toBeNull();
+    expect(screen.getByRole('article', { name: 'second-project' })).not.toBeNull();
+    expect(screen.queryByRole('article', { name: 'DanAakesen/second-project' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Project name' })).toBeNull();
+    expect(fetchMock.mock.calls.some(([url, init]) =>
+      String(url).endsWith('/factory/projects/manage') && init?.method === 'POST' &&
+      JSON.stringify(JSON.parse(String(init.body))) === JSON.stringify({ repository: 'DanAakesen/second-project' }),
+    )).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: 'Refresh projects and repositories' }));
+    await screen.findByRole('article', { name: 'second-project' });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/factory/repositories?refresh=true'))).toBe(true);
   });
 
   it('does not expose a project creation form or link', async () => {
@@ -116,7 +176,7 @@ describe('Projects page', () => {
     expect(screen.getByText(/task history stays available/)).not.toBeNull();
     await user.click(within(confirmation).getByRole('button', { name: 'Confirm archive' }));
 
-    expect(await screen.findByRole('heading', { name: 'No active projects' })).not.toBeNull();
+    expect(await screen.findByRole('heading', { name: 'No managed projects' })).not.toBeNull();
     expect(screen.getByText(/Project archived\. Its task history is retained/)).not.toBeNull();
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true);
   });
