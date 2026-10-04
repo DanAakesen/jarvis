@@ -48,6 +48,62 @@ describe('webhook delivery store', () => {
     expect(transactionEvents.values).toEqual([`begin:${sql.ISOLATION_LEVEL.SERIALIZABLE}`, 'commit']);
   });
 
+  it('creates and links a main release by project and SHA when webhook events arrive out of order', async () => {
+    transactionEvents.values.length = 0;
+    const query = vi.fn().mockResolvedValue({ rowsAffected: [1] });
+    const store = createWebhookDeliveryStore({ query } as unknown as sql.ConnectionPool);
+    const sha = 'a'.repeat(40);
+    const at = '2026-10-04T12:00:00.000Z';
+
+    await store.record({
+      deliveryId: 'workflow-before-push',
+      event: 'workflow_run',
+      outcome: 'ok',
+      mapping: {
+        kind: 'workflow_run', repository: 'DanAakesen/jarvis', id: 100, name: 'Release', event: 'push',
+        branch: 'main', headSha: sha, runNumber: 7, pullRequestNumbers: [], status: 'completed',
+        conclusion: 'success', startedAt: at, completedAt: at,
+      },
+    });
+    await store.record({
+      deliveryId: 'push-after-workflow',
+      event: 'push',
+      outcome: 'ok',
+      mapping: { kind: 'push', repository: 'DanAakesen/jarvis', ref: 'refs/heads/main', sha, at },
+    });
+    await store.record({
+      deliveryId: 'deployment-by-sha',
+      event: 'deployment_status',
+      outcome: 'ok',
+      mapping: {
+        kind: 'deployment_status', repository: 'DanAakesen/jarvis', id: 101, sha, environment: 'production',
+        status: 'success', at,
+      },
+    });
+
+    const workflowRunSql = query.mock.calls[1]?.[0];
+    expect(workflowRunSql).toContain('SELECT id FROM dbo.releases WITH (UPDLOCK, HOLDLOCK)');
+    expect(workflowRunSql).toContain("IF @releaseId IS NULL AND @workflow = N'Release' AND @trigger = N'push'");
+    expect(workflowRunSql).toContain('default_branch = @branch');
+    expect(workflowRunSql).toContain('VALUES (@projectId, CONVERT(nvarchar(100), @runNumber), @headSha');
+    expect(workflowRunSql).toContain('release_id = COALESCE(@releaseId, release_id)');
+
+    const pushSql = query.mock.calls[3]?.[0];
+    expect(pushSql).toContain('WHERE project_id = @projectId AND sha = @sha');
+    expect(pushSql).toContain('UPDATE dbo.workflow_runs SET release_id = @releaseId');
+    expect(pushSql).toContain('WHERE project_id = @projectId AND head_sha = @sha AND release_id IS NULL');
+
+    const deploymentSql = query.mock.calls[5]?.[0];
+    expect(deploymentSql).toContain('WHERE project_id = @projectId AND sha = @sha');
+    expect(deploymentSql).toContain('INSERT INTO dbo.deployments');
+    expect(query.mock.calls[1]?.[1]).toContainEqual(['runNumber', sql.Int, 7]);
+    expect(transactionEvents.values).toEqual([
+      `begin:${sql.ISOLATION_LEVEL.SERIALIZABLE}`, 'commit',
+      `begin:${sql.ISOLATION_LEVEL.SERIALIZABLE}`, 'commit',
+      `begin:${sql.ISOLATION_LEVEL.SERIALIZABLE}`, 'commit',
+    ]);
+  });
+
   it.each([2601, 2627])('reports SQL Server duplicate-key error %i as already recorded', async (number) => {
     transactionEvents.values.length = 0;
     const query = vi.fn().mockRejectedValue({ number });

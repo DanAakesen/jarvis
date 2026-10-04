@@ -295,6 +295,7 @@ Backend commands:
 | Purpose | Command |
 | --- | --- |
 | Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
+| Focused P3-07 release webhook contract | `npm test --workspace @jarvis/backend -- --run src/database/webhook-delivery-store.test.ts` |
 | SQL Server migration, webhook mapping, and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
 | Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
@@ -326,13 +327,17 @@ access):
 
 The factory tasks API provides authenticated create, filtered list, detail, and
 state-aware control routes. The controls route accepts only `steer`, `pause`,
-`resume`, or `cancel`; it never accepts a client-supplied task state. Task list
+`resume`, `cancel`, or `recover` (the latter only for Needs attention); it never
+accepts a client-supplied task state. Recovery starts a new Foundry session from
+the task branch with the original request, bounded steering history, and an event
+summary. Task list
 filters are `projectId`, `agent`, `state`, `createdAfter`,
 `createdBefore`, and `search`; `limit`/`offset` and `eventLimit`/`eventOffset`
 bound result pages. Responses are capped at 1 MiB; event payloads above 4 KiB
 are marked truncated. State is backend-owned; do not add a client state update.
 The task store's transition operation must be used by backend dispatch/control
-code, and `Done` requires a trusted completion-verification call.
+code, and `Done` requires GitHub verification of the task branch and a pull
+request in the configured repository.
 
 `PORT` defaults to 3000, matching Container Apps ingress. `LOG_LEVEL` defaults
 to `info`. `STATIC_WEB_APP_ORIGIN` is an exact HTTPS origin with no trailing
