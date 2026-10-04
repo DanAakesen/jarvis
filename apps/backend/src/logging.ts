@@ -28,11 +28,16 @@ const events = new Set([
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
 // Headers, bodies, URLs, query strings, arbitrary messages and errors are discarded.
+const authDenialReasons = new Set([
+  'missing_token', 'malformed_authorization', 'duplicate_authorization', 'invalid_token', 'principal_not_allowed_on_route',
+]);
+
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   if (typeof input.reqId === 'string' && /^[\da-f-]{36}$/i.test(input.reqId)) fields.reqId = input.reqId;
   if (typeof input.method === 'string' && /^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$/.test(input.method)) fields.method = input.method;
   if (typeof input.route === 'string' && /^\/[\w/:-]{0,100}$/.test(input.route)) fields.route = input.route;
+  if (typeof input.reason === 'string' && authDenialReasons.has(input.reason)) fields.reason = input.reason;
   for (const key of ['statusCode', 'responseTime', 'port']) {
     if (typeof input[key] === 'number' && Number.isFinite(input[key])) fields[key] = input[key];
   }
