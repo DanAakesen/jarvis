@@ -28,6 +28,17 @@ The disk section uses recorded task events, not a live filesystem estimate; show
 each reading's time and byte-derived human-readable values without implying that
 the current filesystem state is available.
 
+## Task usage (P2-12)
+
+The task detail route presents usage in a compact, semantic table rather than
+summary tiles. Each sandbox session has its own minutes and estimated DKK; agent
+turns and any provider-reported metrics remain separate rows, with no fabricated
+cost for subscription use. The neutral shell carries explicit loading, empty,
+failure/retry, and populated states. On narrow screens only the table scrolls
+horizontally; the page itself stays within the viewport. Usage is part of the
+task detail response and appears alongside the task metadata, disk readings, and
+event timeline.
+
 ## Interactions to design
 
 - **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.

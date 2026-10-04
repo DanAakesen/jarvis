@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskDetailPage } from './TaskDetailPage';
@@ -70,6 +71,38 @@ const task = {
       at: '2026-10-04T12:02:00.000Z',
     },
   ],
+  usage: [
+    {
+      id: '1',
+      source: 'sandbox',
+      metric: 'minutes',
+      quantity: 3.5,
+      costDkk: 0.0519,
+      sandboxSessionId: '9',
+      at: '2026-10-04T12:00:00.000Z',
+      estimated: true,
+    },
+    {
+      id: null,
+      source: 'copilot',
+      metric: 'turns',
+      quantity: 2,
+      costDkk: null,
+      sandboxSessionId: null,
+      at: '2026-10-04T12:02:00.000Z',
+      estimated: false,
+    },
+    {
+      id: null,
+      source: 'copilot',
+      metric: 'premium_requests',
+      quantity: 1,
+      costDkk: null,
+      sandboxSessionId: null,
+      at: '2026-10-04T12:02:00.000Z',
+      estimated: false,
+    },
+  ],
 };
 
 beforeEach(() => {
@@ -98,8 +131,35 @@ describe('task detail page', () => {
     expect(screen.getByText('2.50 GiB')).not.toBeNull();
     expect(screen.getByText('0.50 GiB')).not.toBeNull();
     expect(screen.getAllByText('1.00 GiB')).toHaveLength(2);
+    expect(await screen.findByRole('table', { name: 'Usage entries for task 42' })).not.toBeNull();
+    expect(screen.getByText('Sandbox session 9')).not.toBeNull();
+    expect(screen.getByText('3.50 min')).not.toBeNull();
+    expect(screen.getByText('Estimated · DKK 0.0519')).not.toBeNull();
+    expect(screen.getByText('Agent turns')).not.toBeNull();
+    expect(screen.getByText('Premium requests')).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/factory/tasks/42', expect.objectContaining({
       headers: { Authorization: `${['Bear', 'er'].join('')} test-access-token` },
     }));
+  });
+
+  it('retries the task detail request and uses the same response for usage', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockReset()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'unavailable' }), { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(task), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+    render(
+      <MemoryRouter>
+        <TaskDetailPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} taskId="42" />
+      </MemoryRouter>,
+    );
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Task details could not be loaded');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('table', { name: 'Usage entries for task 42' })).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

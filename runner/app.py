@@ -860,6 +860,7 @@ class ACPClient:
                 )
                 if selected is None or selected.get("currentValue") != value:
                     raise RuntimeError(f"Codex did not apply the requested {config_id} option")
+        self.state.event("agent_turn", agent=self.state.agent)
         result = await self.request(
             "session/prompt",
             {

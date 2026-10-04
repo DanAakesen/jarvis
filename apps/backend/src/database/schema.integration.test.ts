@@ -8,6 +8,7 @@ import { createCredentialStatusStore } from './credential-status-store.js';
 import { createSettingsStore } from './settings-store.js';
 import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
+import { createDispatcherStore } from './dispatcher-store.js';
 import {
   createTaskEventArchive,
   type TaskEventArchiveBlobStore,
@@ -26,7 +27,7 @@ const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'credential_status', 'jarvis_sessions', 'messages', 'projects', 'sandbox_sessions',
-  'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks', 'tool_calls', 'webhook_deliveries',
+  'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks', 'tool_calls', 'usage', 'webhook_deliveries',
 ];
 
 async function tables(): Promise<string[]> {
@@ -78,7 +79,7 @@ afterAll(async () => {
   await administrator.close();
 });
 
-describe('committed domain schema (groups 1-4 and 6)', () => {
+describe('committed domain schema (groups 1-4, 6 and 7)', () => {
   it('boots the committed migration manifest twice without duplicate ledger rows', async () => {
     const committed = await readMigrations();
     expect(await applyMigrations(pool, committed)).toEqual(committed.map((migration) => migration.name));
@@ -122,8 +123,9 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
       INSERT dbo.activity (area, kind, title, link) VALUES (N'factory', N'task_done', N'Fix it is done', N'task:${String(task)}');
       UPDATE dbo.tasks SET state = N'Running', lease_owner = N'dispatcher-1', lease_until = DATEADD(minute, 5, SYSUTCDATETIME()) WHERE id = ${String(task)};`);
     const sandboxSession = await scalar(`INSERT dbo.sandbox_sessions
-      (task_id, foundry_session_id, agent_version, agent_name, size, image, status, cost_estimate_dkk)
-      VALUES (${String(task)}, N'foundry-session-1', N'1', N'jarvis-runner-base-1x2', N'1x2', N'jarvis-runner:latest', N'Active', 0.25)`);
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status, started_at, cost_estimate_dkk)
+      VALUES (${String(task)}, N'foundry-session-1', N'1', N'jarvis-runner-base-1x2', N'1x2', N'jarvis-runner:latest',
+        N'Active', DATEADD(minute, -15, SYSUTCDATETIME()), 0.25)`);
     await pool.request().query(`INSERT dbo.sandbox_turns
       (sandbox_session_id, invocation_id, mode, acp_session_id, status)
       VALUES (${String(sandboxSession)}, N'invocation-1', N'task', N'acp-session-1', N'running');
@@ -135,6 +137,58 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
       WHERE delivery_id = N'delivery-1';
       UPDATE dbo.credential_status SET expires_at = SYSUTCDATETIME(),
         last_renewed_at = SYSUTCDATETIME(), status = N'ok' WHERE name = N'codex-login';`);
+    const taskStore = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    const activeUsageDetail = await taskStore.get(String(task), 100, 0);
+    expect(activeUsageDetail?.usage).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: 'sandbox', metric: 'minutes', sandboxSessionId: String(sandboxSession), estimated: true,
+      }),
+    ]));
+    const dispatcherStore = createDispatcherStore(pool, createEventHub<TaskEventMessage>());
+    await dispatcherStore.endTaskSessions(String(task), 'Done');
+    const sandboxUsage = await pool.request()
+      .input('sessionId', sql.BigInt, BigInt(sandboxSession))
+      .query<{ quantity: number; costDkk: number }>(`SELECT quantity, cost_dkk AS costDkk FROM dbo.usage
+        WHERE sandbox_session_id = @sessionId AND source = N'sandbox' AND metric = N'minutes';`);
+    expect(sandboxUsage.recordset).toHaveLength(1);
+    expect(sandboxUsage.recordset[0]?.quantity).toBeGreaterThan(14.99);
+    expect(sandboxUsage.recordset[0]?.quantity).toBeLessThan(15.1);
+    expect(sandboxUsage.recordset[0]?.costDkk).toBeGreaterThan(0.22);
+    expect(sandboxUsage.recordset[0]?.costDkk).toBeLessThan(0.23);
+
+    const turn = {
+      invocationId: 'usage-invocation', eventIndex: 1, data: { agent: 'codex' },
+    };
+    await taskStore.recordEvent({ taskId: String(task), type: 'agent_turn', payload: turn, source: 'runner' });
+    await taskStore.recordEvent({ taskId: String(task), type: 'agent_turn', payload: turn, source: 'runner' });
+    await taskStore.recordEvent({
+      taskId: String(task),
+      type: 'completed',
+      source: 'runner',
+      payload: {
+        invocationId: 'usage-invocation',
+        eventIndex: 8,
+        data: { result: { response: { usage: { input_tokens: 123, output_tokens: 45, premium_requests: 1 } } } },
+      },
+    });
+    await taskStore.recordEvent({
+      taskId: String(task),
+      type: 'acp_notification',
+      source: 'runner',
+      payload: {
+        invocationId: 'usage-invocation',
+        eventIndex: 9,
+        data: { params: { usage: { inputTokens: 124 } } },
+      },
+    });
+    const usageDetail = await taskStore.get(String(task), 100, 0);
+    expect(usageDetail?.usage).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: 'sandbox', metric: 'minutes', sandboxSessionId: String(sandboxSession) }),
+      expect.objectContaining({ source: 'codex', metric: 'turns', quantity: 1 }),
+      expect.objectContaining({ source: 'codex', metric: 'input_tokens', quantity: 247 }),
+      expect.objectContaining({ source: 'codex', metric: 'output_tokens', quantity: 45 }),
+      expect.objectContaining({ source: 'codex', metric: 'premium_requests', quantity: 1 }),
+    ]));
     const row = await pool.request().query<{ state: string; priority: number; attempt_count: number }>(
       `SELECT state, priority, attempt_count FROM dbo.tasks WHERE id = ${String(task)}`);
     expect(row.recordset).toEqual([{ state: 'Running', priority: 0, attempt_count: 0 }]);
@@ -499,7 +553,9 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
       name: 'Heartbeat fixture', repo: `${database}/heartbeat`, default_branch: 'main',
       default_agent: 'copilot', policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
     });
+
     const taskStore = createTaskStore(pool, createEventHub<TaskEventMessage>());
+
     const task = await taskStore.create({
       projectId: project.id, title: 'Heartbeat fixture', request: 'Exercise heartbeat persistence',
     });
