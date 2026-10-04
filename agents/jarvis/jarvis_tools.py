@@ -43,6 +43,8 @@ Speech recognition can mishear names: "Jarvis" may arrive as "Jarvi" or "Javis",
 Task ids may be spoken as numbers; use the matching id from the supplied context or tool results.
 
 Rules:
+- Notes questions: use notes_search, quote only returned snippets, and include a returned note link.
+  If there is no match or search fails, say so plainly.
 - New work: create a task with the project, the agent, and Dan's request in Danish as the text.
   If Dan does not name an agent, use the project's default agent.
 - Corrections or extra instructions for a running task: steer the task.
@@ -99,15 +101,31 @@ def _model_settings(value: Any) -> ModelSettings:
         raise ValueError("invalid Jarvis settings")
     model = value.get("model")
     reasoning_effort = value.get("reasoningEffort")
+    personality = value.get("personality", {})
+    if not isinstance(personality, dict):
+        raise ValueError("invalid Jarvis settings")
+    tone = personality.get("tone", "british_butler")
+    response_style = personality.get("responseStyle", "concise")
+    custom_instructions = personality.get("customInstructions", "")
     if (
         not isinstance(model, str)
         or not model.strip()
         or len(model) > 100
         or any(ord(character) < 32 or ord(character) == 127 for character in model)
         or reasoning_effort not in {"none", "low", "medium", "high"}
+        or not isinstance(tone, str)
+        or tone not in {"british_butler", "warm", "direct", "playful"}
+        or not isinstance(response_style, str)
+        or response_style not in {"concise", "balanced", "detailed"}
+        or not isinstance(custom_instructions, str)
+        or len(custom_instructions) > 2_000
+        or any(
+            ord(character) < 32 and character not in "\n\r\t"
+            for character in custom_instructions
+        )
     ):
         raise ValueError("invalid Jarvis settings")
-    return ModelSettings(model, reasoning_effort)
+    return ModelSettings(model, reasoning_effort, tone, response_style, custom_instructions)
 
 
 @dataclass(frozen=True, slots=True)

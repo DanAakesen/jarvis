@@ -39,8 +39,8 @@ import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
 import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
 import { createNowFeedStore } from './database/now-feed-store.js';
+import { createGitHubAppRepositoryCatalog, createGitHubAppTokenIssuer } from './github-app.js';
 import { createRepoAdminRepositoryCreator } from './credentials/repo-admin.js';
-import { createGitHubAppTokenIssuer } from './github-app.js';
 import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js';
 import { createChecksLoopStore } from './database/checks-loop-store.js';
 import { createChecksLoopBlobStore } from './database/checks-loop-blob.js';
@@ -55,6 +55,8 @@ import { createPcBridgeStatusStore } from './database/pc-bridge-status-store.js'
 import { createAlertNotifier } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
+import { createGraphClient } from './graph/client.js';
+import { createNotesModule } from './notes/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 
 try {
@@ -81,6 +83,15 @@ try {
       ? { managedIdentityClientId }
       : {})
     : undefined;
+  const graphClient = credential
+    ? createGraphClient({
+      getToken: async (signal) => {
+        const token = await credential.getToken('https://graph.microsoft.com/.default', { abortSignal: signal });
+        if (!token) throw new Error('Microsoft Graph credentials are unavailable');
+        return token.token;
+      },
+    })
+    : undefined;
   const projectRepositoryCreator = config.keyVaultUri && credential
     ? createRepoAdminRepositoryCreator(
       config.keyVaultUri,
@@ -94,14 +105,22 @@ try {
   const githubAppKeyVault = config.githubAppId && config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
     : undefined;
+  const getGitHubAppPrivateKey = async () => {
+    if (!githubAppKeyVault) throw new Error('GitHub App private key is unavailable');
+    const secret = await githubAppKeyVault.getSecret('github-app-private-key');
+    if (!secret.value) throw new Error('GitHub App private key is unavailable');
+    return secret.value;
+  };
   const githubAppTokenIssuer = config.githubAppId && githubAppKeyVault
     ? createGitHubAppTokenIssuer({
       appId: config.githubAppId,
-      getPrivateKey: async () => {
-        const secret = await githubAppKeyVault.getSecret('github-app-private-key');
-        if (!secret.value) throw new Error('GitHub App private key is unavailable');
-        return secret.value;
-      },
+      getPrivateKey: getGitHubAppPrivateKey,
+    })
+    : undefined;
+  const githubRepositoryCatalog = config.githubAppId && githubAppKeyVault
+    ? createGitHubAppRepositoryCatalog({
+      appId: config.githubAppId,
+      getPrivateKey: getGitHubAppPrivateKey,
     })
     : undefined;
   const webhookSecretClient = config.keyVaultUri && credential
@@ -166,6 +185,7 @@ try {
   };
   const sandboxHeartbeat = database && config.foundryEndpoints
     ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub, alertNotifier), clientFor, {
+      onDecision: (decision) => logger.info(decision, 'sandbox_heartbeat.decision'),
       onError: (error) => {
         const details = error instanceof FoundryClientError
           ? { kind: error.kind, statusCode: error.statusCode, operation: error.operation }
@@ -256,6 +276,13 @@ try {
       onStatusError: () => logger.warn('pc_bridge.status_update_failed'),
     }),
   ];
+  if (graphClient) {
+    modules.push(createNotesModule({
+      graph: graphClient,
+      ownerObjectId: config.auth.ownerObjectId,
+      folderPath: config.notesFolderPath,
+    }));
+  }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
       getToken: async (scope, signal) => {
@@ -297,6 +324,7 @@ try {
       conversationStore: createConversationStore(database.pool),
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
+      ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),
       ...(dispatcher ? { taskController: dispatcher } : {}),
       nowFeedStore: createNowFeedStore(database.pool),
       usageStore: createUsageStore(database.pool),

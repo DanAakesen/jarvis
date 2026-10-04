@@ -198,13 +198,14 @@ export class TaskDispatcher implements TaskController {
   async control(taskId: string, command: TaskControlCommand): Promise<TaskControlResult> {
     let task = await this.tasks.get(taskId, 1, 0);
     if (!task) return { kind: 'not-found' };
-    if (command.action === 'recover') {
+    const continueWithSteering = command.action === 'steer' && task.latestSessionEndReason === 'idle_expired';
+    if (command.action === 'recover' || continueWithSteering) {
       if (task.state === 'Running' && task.latestSessionEndReason === 'idle_expired') {
         const attention = await this.tasks.transition(taskId, 'NeedsAttention');
         if (attention.kind !== 'ok') return transitionResult(attention.kind);
         task = { ...task, ...attention.task };
       }
-      return this.recover(task);
+      return this.recover(task, command.action === 'steer' ? command.message : undefined);
     }
     let target = await this.store.getControlTarget(taskId);
     if (task.state === 'Paused' && target?.sessionStatus === 'Active') {
@@ -316,7 +317,7 @@ export class TaskDispatcher implements TaskController {
     return cleanupFailed ? { kind: 'failed' } : { kind: 'ok', task: cancelled.task };
   }
 
-  private async recover(task: TaskDetail): Promise<TaskControlResult> {
+  private async recover(task: TaskDetail, steering?: string): Promise<TaskControlResult> {
     if (task.state !== 'NeedsAttention') return { kind: 'invalid-transition' };
     const recoveryStore = this.recoveryStore;
     const workspaceFor = this.workspaceFor;
@@ -331,6 +332,12 @@ export class TaskDispatcher implements TaskController {
     const claim = claimResult.task;
     let accepted: InvocationAccepted | undefined;
     try {
+      if (steering) {
+        await this.tasks.recordEvent({
+          taskId: task.id, type: 'steered', summary: steering.slice(0, 2000),
+          payload: { message: steering }, source: 'dan',
+        });
+      }
       const history = await this.tasks.get(task.id, recoveryEventLimit, 0);
       if (!history) {
         await this.store.failStart(this.owner, claim, null, 'recovery_task_missing');
@@ -339,7 +346,10 @@ export class TaskDispatcher implements TaskController {
       const request = await this.taskRequest(task.id, {
         ...claim,
         ...workspace,
-        request: recoveryPrompt(history),
+        request: clipped([
+          ...(steering ? [`New steering message:\n${steering}`] : []),
+          recoveryPrompt(history),
+        ].join('\n\n'), maxRecoveryPromptLength),
       });
       const runnerName = agentName(claim);
       accepted = await this.clientFor(runnerName).startTask(request);
