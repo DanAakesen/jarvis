@@ -97,7 +97,7 @@ Status as of 4 October 2026.
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |
 | Usage and cost | Sandbox, model, voice, Codex and Copilot usage per task, project, period | Screen | Usage | Built | P2-12, P6-01 |
 | Event archive | Old task events move to Blob and load on demand | Background | Task detail | Built | P6-03 |
-| Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Phone | — | Planned | P6-02 |
+| Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Now + email | Main page; email-only Azure Monitor action group | Built (offline; live Azure delivery unverified) | P6-02 |
 | Backup drill | Database restore documented | Background | — | Planned | P6-04 |
 | Runbook | Deploy, rollback, key rotation, task recovery, sleep, and temporary SQL access | — | [Operations runbook](runbook.md) | In progress | P6-06 |
 

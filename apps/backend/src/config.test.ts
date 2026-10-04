@@ -77,6 +77,21 @@ describe('backend configuration', () => {
       expect(() => loadConfig({ GITHUB_APP_ID: '123456', KEY_VAULT_URI })).toThrow('KEY_VAULT_URI');
     }
   });
+  it('validates the Azure budget resource ID used for budget polling', () => {
+    const JARVIS_MONTHLY_BUDGET_RESOURCE_ID =
+      '/subscriptions/12345678-1234-1234-1234-123456789abc/resourceGroups/rg-jarvis/providers/Microsoft.Consumption/budgets/jarvis-monthly';
+    expect(loadConfig({ JARVIS_MONTHLY_BUDGET_RESOURCE_ID }).monthlyBudgetResourceId)
+      .toBe(JARVIS_MONTHLY_BUDGET_RESOURCE_ID);
+    for (const value of [
+      '',
+      'https://management.azure.com/subscriptions/123/resourceGroups/rg/providers/Microsoft.Consumption/budgets/x',
+      `${JARVIS_MONTHLY_BUDGET_RESOURCE_ID}?api-version=2019-10-01`,
+      '/subscriptions/not-a-sub/resourceGroups/rg/providers/Microsoft.Consumption/budgets/x',
+    ]) {
+      expect(() => loadConfig({ JARVIS_MONTHLY_BUDGET_RESOURCE_ID: value }))
+        .toThrow('JARVIS_MONTHLY_BUDGET_RESOURCE_ID');
+    }
+  });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {
     expect(() => loadConfig({ PORT })).toThrow('PORT');
   });
