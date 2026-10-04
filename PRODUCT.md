@@ -148,6 +148,14 @@ English voice sessions use Ryan HD and the British butler persona. The backend o
 
 Danish voice uses the authenticated backend `/voice/da` WebSocket to a provisioned Foundry Voice Live agent. The agent bridges to the hosted Jarvis agent, uses MAI Transcribe with language `da` and the Danish phrase list, and fixes Harper to `da-DK`.
 
+### Phone notifications and confirmations (P7-03)
+
+Jarvis sends Dan short text updates and Adaptive Card approval requests in a personal Teams chat. The backend stores only Dan's validated conversation reference after his first interaction; Bot Service activities must be from Dan's Entra object ID in the Novaro tenant. Confirmation cards offer Approve and Reject and expire after five minutes. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action.
+
+Azure Speech F0 may add a voice note to a notification or confirmation. If synthesis fails or the free allowance is exhausted, Jarvis still sends the text and never falls back to a paid tier. Speech audio is temporary and served through a short-lived opaque link.
+
+These actions always require Dan's confirmation: merge, delete, send mail, calendar changes, repository creation, computer use outside the browser, and anything that spends money. The backend must refuse a gated operation if Teams confirmation is unavailable. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
+
 Personality preferences are validated and persisted in Settings. They apply to new chat and voice sessions; changing or resetting them does not interrupt an active voice session. Reset restores the current British-butler, concise defaults and clears custom instructions. Preferences affect response style only, not Jarvis's identity, available tools, permissions, selected language, model or voice, or truthful reporting of action outcomes.
 
 ### Page requirements
@@ -163,7 +171,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings, and alerts for failed deployments, sandbox crashes, credential expiry, and the 80% monthly budget threshold | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready, Running, or PauseRequested |
 
-The "Now" panel reads current running tasks and the latest non-dismissed task-attention, release/deployment, credential-warning, and alert activity. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes, and expiring credentials are emailed through stateful Azure Monitor rules; the monthly Azure budget sends its 80% threshold through the same email-only action group. The backend reads actual budget spend on a bounded 15-minute schedule for the Now item. No SMS or voice notifications are sent; phone delivery is P7-03. Task changes, alerts, dismissals, and credential/budget alert writes refresh the panel through authenticated server-sent events; reconnecting states identify when the displayed snapshot may be stale.
+The "Now" panel reads current running tasks and the latest non-dismissed task-attention, release/deployment, credential-warning, and alert activity. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes, and expiring credentials are emailed through stateful Azure Monitor rules; the monthly Azure budget sends its 80% threshold through the same email-only action group. The backend reads actual budget spend on a bounded 15-minute schedule for the Now item. These existing activity alerts remain email-only; direct phone notifications and confirmations use Teams through P7-03. Task changes, alerts, dismissals, and credential/budget alert writes refresh the panel through authenticated server-sent events; reconnecting states identify when the displayed snapshot may be stale.
 
 The voice orb follows status transitions reported by the browser voice client and includes a text alternative. Unknown states are reported as unavailable, and motion is disabled when reduced motion is preferred. Tool-call activity remains explicitly unavailable until the runtime publishes that state (P8-16); the UI does not infer it from thinking or speech.
 

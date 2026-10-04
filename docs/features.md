@@ -108,7 +108,7 @@ Status as of 4 October 2026.
 | --- | --- | --- | --- | --- | --- |
 | Teams calling | Call Jarvis from the Teams app (no paid number at first) | Phone | Teams | Planned (needs decision) | P7-01 |
 | Away mode | "I'm leaving": updates and confirmations go to the phone | Both | Main page, Phone | Planned (needs decision) | P7-02 |
-| Phone confirmations | Approve or reject actions from Teams, with a voice note | Phone | Teams | Planned (needs decision) | P7-03 |
+| Phone confirmations | Receive Dan-only Teams notifications and approve or reject actions with optional Speech F0 voice notes | Phone | Teams | Built offline; live Azure/phone check pending | P7-03 |
 | Screen sharing | Share a screen or window; Jarvis sees it | Both | Main page | Planned (needs decision) | P7-05 |
 | Local PC bridge | Jarvis opens apps, URLs and allowed commands on Dan's PC | Voice/chat | PC companion | Planned (needs decision) | P7-06 |
 | Computer use | Jarvis clicks and types on Dan's PC while he talks | Voice/chat | PC companion | Planned (needs decision) | P7-07 |

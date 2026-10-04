@@ -101,6 +101,7 @@ function fixture(
   project: PolicyPullRequest = candidate(),
   githubOptions: Parameters<typeof github>[0] = {},
   onBaseBranchRead?: () => void,
+  confirmationEnabled = true,
 ) {
   const getPullRequest = vi.fn(async () => project);
   let taskActive = true;
@@ -118,7 +119,13 @@ function fixture(
   const issue = vi.fn(async () => 'installation-token');
   const tokenIssuer: GitHubAppTokenIssuer = { issue };
   const api = github(githubOptions, onBaseBranchRead);
-  const evaluator = createProjectPolicyEvaluator({ store, tasks, tokenIssuer, fetch: api.fetch });
+  const runConfirmed = confirmationEnabled
+    ? vi.fn(<T>(_summary: string, action: () => Promise<T>) => action())
+    : undefined;
+  const evaluator = createProjectPolicyEvaluator({
+    store, tasks, tokenIssuer, fetch: api.fetch,
+    ...(runConfirmed ? { runConfirmed } : {}),
+  });
   return {
     evaluator,
     api,
@@ -126,6 +133,7 @@ function fixture(
     transition,
     recordEvent,
     issue,
+    runConfirmed,
     setTaskActive(active: boolean) { taskActive = active; },
   };
 }
@@ -155,10 +163,12 @@ describe('GitHub project completion policies', () => {
     expect(test.recordEvent).not.toHaveBeenCalled();
   });
 
-  it('squash-merges eligible complete_without_deployment PRs and waits for the persisted merge webhook before Done', async () => {
+  it('confirms eligible complete_without_deployment PR merges and waits for the merge webhook before Done', async () => {
     const test = fixture();
 
     await test.evaluator.handle(mapping);
+    await vi.waitFor(() => expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(true));
+    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalled());
 
     expect(test.api.calls.at(-1)).toMatchObject({
       url: `https://api.github.com/repos/${repository}/pulls/42/merge`,
@@ -166,6 +176,10 @@ describe('GitHub project completion policies', () => {
       body: JSON.stringify({ merge_method: 'squash', sha: headSha }),
     });
     expect(test.transition).not.toHaveBeenCalled();
+    expect(test.runConfirmed).toHaveBeenCalledWith(
+      expect.stringContaining(`pull request #42 in ${repository}`),
+      expect.any(Function),
+    );
     expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: 'project_policy_merge_requested',
       summary: expect.stringContaining('awaiting its pull request webhook'),
@@ -186,8 +200,20 @@ describe('GitHub project completion policies', () => {
     await test.evaluator.handle(mapping);
 
     expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
+    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalled());
     expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
       summary: expect.stringContaining('task is no longer active'),
+    }));
+  });
+
+  it('refuses to merge when Dan confirmation is unavailable', async () => {
+    const test = fixture(candidate(), {}, undefined, false);
+
+    await test.evaluator.handle(mapping);
+
+    expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
+    expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      summary: expect.stringContaining('Dan confirmation is unavailable'),
     }));
   });
 
@@ -213,6 +239,7 @@ describe('GitHub project completion policies', () => {
     const test = fixture(candidate(), options);
 
     await test.evaluator.handle(mapping);
+    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalled());
 
     expect(test.transition).not.toHaveBeenCalled();
     expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
