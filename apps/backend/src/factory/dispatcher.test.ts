@@ -433,6 +433,61 @@ describe('task dispatcher', () => {
 });
 
 describe('task crash recovery', () => {
+  it('skips delivery when cancellation already changed the task state', async () => {
+    const recoveryStore: TaskRecoveryStore = {
+      getRunningTaskForSession: vi.fn(async () => '42'),
+      claimRecovery: vi.fn(async () => ({ kind: 'invalid-transition' })),
+    };
+    const cancelledTask = { ...controlTask, state: 'Cancelled' as const };
+    const tasks = {
+      get: vi.fn(async () => ({ ...cancelledTask, events: [], usage: [] })),
+      transition: vi.fn(),
+      recordEvent: vi.fn(),
+    } as unknown as TaskStore;
+    const lock = vi.fn(async (_taskId: string, operation: () => Promise<unknown>) => operation());
+    const store = { ...idleStore(), withTaskPolicyLock: lock };
+    const settings: SettingsStore = { read: vi.fn(async () => ({})), write: vi.fn(async () => {}) };
+    let completionHandler: ((sandbox: {
+      sandboxSessionId: string;
+      foundrySessionId: string;
+      agentName: string;
+      invocationId: string;
+    }) => Promise<boolean>) | undefined;
+    const heartbeat = {
+      setCompletionHandler: vi.fn((handler: typeof completionHandler) => { completionHandler = handler; }),
+      untrack: vi.fn(),
+    } as unknown as SandboxHeartbeat;
+    const verifyDelivery = vi.fn(async () => ({ kind: 'awaiting_policy' as const }));
+    new TaskDispatcher(
+      store,
+      tasks,
+      settings,
+      () => ({ startTask: vi.fn(), steer: vi.fn(), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn(), deleteSession: vi.fn() }),
+      heartbeat,
+      createEventHub<TaskEventMessage>(),
+      {
+        recoveryStore,
+        workspaceFor: vi.fn(async () => ({
+          repository: 'DanAakesen/jarvis',
+          defaultBranch: 'main',
+          branch: 'jarvis/task-42',
+        })),
+        verifyDelivery,
+      },
+    );
+
+    await expect(completionHandler?.({
+      sandboxSessionId: '53',
+      foundrySessionId: 'session-1',
+      agentName: 'runner',
+      invocationId: 'invocation-1',
+    })).resolves.toBe(true);
+
+    expect(lock).not.toHaveBeenCalled();
+    expect(tasks.get).toHaveBeenCalledOnce();
+    expect(verifyDelivery).not.toHaveBeenCalled();
+  });
+
   it('continues an idle-expired Running task in a new sandbox on its existing branch', async () => {
     const idleExpiredTask: TaskRecord = {
       ...controlTask, state: 'Running', latestSessionEndReason: 'idle_expired',
@@ -629,7 +684,7 @@ describe('task crash recovery', () => {
     expect((startedRequests[0] as { task: string }).task).toContain('The branch contains the initial fix.');
     expect(verifyDelivery).toHaveBeenCalledWith({
       repository: 'DanAakesen/jarvis', defaultBranch: 'main', branch,
-    }, expect.objectContaining({ id: '42', title: 'Fix the bug' }));
+    }, expect.objectContaining({ id: '42', title: 'Fix the bug' }), expect.any(Function));
     expect(state).toBe(deliveryVerified ? 'Running' : 'NeedsAttention');
     if (deliveryVerified) {
       expect(activeTasks.transition).not.toHaveBeenCalled();

@@ -17,7 +17,12 @@ interface PullRequest {
 
 export type GitHubDeliveryResult =
   | { kind: 'awaiting_policy' }
+  | { kind: 'not_running' }
   | { kind: 'refused'; reason: string };
+
+export type TaskCompletionGate = <T>(operation: () => Promise<T>) => Promise<
+  { kind: 'ran'; value: T } | { kind: 'not_running' }
+>;
 
 class GitHubDeliveryRequestError extends Error {
   constructor(readonly status: number) {
@@ -65,6 +70,7 @@ async function request(
   path: string,
   token: string,
   body?: unknown,
+  timeoutMs = 10_000,
 ): Promise<unknown> {
   const response = await fetchImpl(`${apiUrl}${path}`, {
     method: body === undefined ? 'GET' : 'POST',
@@ -75,7 +81,7 @@ async function request(
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(timeoutMs),
     redirect: 'error',
   });
   if (!response.ok) {
@@ -104,6 +110,7 @@ async function findOpenPullRequest(
   baseBranch: string,
   owner: string,
   token: string,
+  timeoutMs?: number,
 ): Promise<PullRequest | null> {
   const query = new URLSearchParams({
     base: baseBranch,
@@ -111,7 +118,7 @@ async function findOpenPullRequest(
     per_page: '1',
     state: 'open',
   });
-  const response = await request(fetchImpl, `/repos/${repositoryPath}/pulls?${query}`, token);
+  const response = await request(fetchImpl, `/repos/${repositoryPath}/pulls?${query}`, token, undefined, timeoutMs);
   if (!Array.isArray(response) || response.length > 1) {
     throw new Error('GitHub pull request response is invalid');
   }
@@ -125,8 +132,8 @@ export function createGitHubDeliveryHandler(
   tasks: Pick<TaskStore, 'recordEvent'>,
   staticWebAppOrigin?: string,
   fetchImpl: typeof fetch = fetch,
-): (workspace: TaskWorkspace, task: DeliveryTask) => Promise<GitHubDeliveryResult> {
-  return async ({ repository, defaultBranch, branch }, task) => {
+): (workspace: TaskWorkspace, task: DeliveryTask, gate?: TaskCompletionGate) => Promise<GitHubDeliveryResult> {
+  return async ({ repository, defaultBranch, branch }, task, gate) => {
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository) ||
       !defaultBranch || defaultBranch.length > 255 || !branch || branch.length > 255 ||
       !/^[1-9][0-9]{0,18}$/u.test(task.id) || !task.title.trim()) {
@@ -172,22 +179,45 @@ export function createGitHubDeliveryHandler(
           };
         }
 
-        try {
+        const create = async () => {
           const taskPath = `/factory/tasks/${encodeURIComponent(task.id)}`;
-          const created = await request(fetchImpl, `/repos/${repositoryPath}/pulls`, token, {
-            title: task.title,
-            head: branch,
-            base: defaultBranch,
-            body: staticWebAppOrigin
-              ? `Completed by Jarvis task [#${task.id}](${staticWebAppOrigin}${taskPath}).`
-              : `Completed by Jarvis task #${task.id} (task details: ${taskPath}).`,
-          });
-          pull = pullRequest(created, repository, branch, defaultBranch);
-          if (!pull) throw new Error('GitHub pull request response is invalid');
-        } catch (error) {
-          if (!(error instanceof GitHubDeliveryRequestError) || error.status !== 422) throw error;
+          try {
+            const created = await request(fetchImpl, `/repos/${repositoryPath}/pulls`, token, {
+              title: task.title,
+              head: branch,
+              base: defaultBranch,
+              body: staticWebAppOrigin
+                ? `Completed by Jarvis task [#${task.id}](${staticWebAppOrigin}${taskPath}).`
+                : `Completed by Jarvis task #${task.id} (task details: ${taskPath}).`,
+            }, 6_000);
+            const opened = pullRequest(created, repository, branch, defaultBranch);
+            if (!opened) throw new Error('GitHub pull request response is invalid');
+            await recordOpenedPull(tasks, task.id, opened, branch, defaultBranch, repository);
+            return { kind: 'opened' as const };
+          } catch (error) {
+            if (error instanceof GitHubDeliveryRequestError && error.status === 422) {
+              return { kind: 'duplicate' as const };
+            }
+            const reconciled = await findOpenPullRequest(
+              fetchImpl, repositoryPath, repository, branch, defaultBranch, owner!, token, 3_000,
+            );
+            if (reconciled) {
+              await recordOpenedPull(tasks, task.id, reconciled, branch, defaultBranch, repository);
+              return { kind: 'opened' as const };
+            }
+            throw error;
+          }
+        };
+        const guardedCreate = gate
+          ? await gate(create)
+          : { kind: 'ran' as const, value: await create() };
+        if (guardedCreate.kind === 'not_running') return { kind: 'not_running' };
+        if (guardedCreate.value.kind === 'opened') {
+          return { kind: 'awaiting_policy' };
+        }
+        if (guardedCreate.value.kind === 'duplicate') {
           pull = await findOpenPullRequest(fetchImpl, repositoryPath, repository, branch, defaultBranch, owner!, token);
-          if (!pull) throw error;
+          if (!pull) throw new Error('GitHub could not verify the task pull request after a duplicate create');
         }
       }
     } catch {
@@ -196,9 +226,30 @@ export function createGitHubDeliveryHandler(
         reason: 'GitHub could not verify or open the task pull request. Check repository access and retry the task.',
       };
     }
+    if (!pull) {
+      return {
+        kind: 'refused',
+        reason: 'GitHub could not verify or open the task pull request. Check repository access and retry the task.',
+      };
+    }
 
-    await tasks.recordEvent({
-      taskId: task.id,
+    const recorded = gate
+      ? await gate(() => recordOpenedPull(tasks, task.id, pull, branch, defaultBranch, repository))
+      : { kind: 'ran' as const, value: await recordOpenedPull(tasks, task.id, pull, branch, defaultBranch, repository) };
+    return recorded.kind === 'not_running' ? { kind: 'not_running' } : { kind: 'awaiting_policy' };
+  };
+}
+
+async function recordOpenedPull(
+  tasks: Pick<TaskStore, 'recordEvent'>,
+  taskId: string,
+  pull: PullRequest,
+  branch: string,
+  defaultBranch: string,
+  repository: string,
+): Promise<void> {
+  await tasks.recordEvent({
+      taskId,
       type: 'pull_request_opened',
       summary: `${pull.reused ? 'Reused' : 'Opened'} pull request #${pull.number} for the completed task branch`,
       payload: {
@@ -210,6 +261,4 @@ export function createGitHubDeliveryHandler(
       },
       source: 'backend',
     });
-    return { kind: 'awaiting_policy' };
-  };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
-import { createGitHubDeliveryHandler } from './delivery.js';
+import { createGitHubDeliveryHandler, type TaskCompletionGate } from './delivery.js';
 
 const workspace = {
   repository: 'DanAakesen/jarvis-test-target',
@@ -80,6 +80,17 @@ function fixture(fetch: typeof globalThis.fetch) {
 }
 
 describe('GitHub task delivery', () => {
+  it('does not create a PR when cancellation wins the completion gate', async () => {
+    const api = github();
+    const test = fixture(api.fetch);
+    const gate: TaskCompletionGate = vi.fn(async () => ({ kind: 'not_running' }));
+
+    await expect(test.handler(workspace, task, gate)).resolves.toEqual({ kind: 'not_running' });
+
+    expect(api.creates).toBe(0);
+    expect(test.recordEvent).not.toHaveBeenCalled();
+  });
+
   it('opens one PR for completed branch commits and reuses it on duplicate completions', async () => {
     const api = github();
     const test = fixture(api.fetch);
@@ -106,6 +117,25 @@ describe('GitHub task delivery', () => {
       payload: expect.objectContaining({ pullRequest: 73, reused: false }),
     }));
     expect(test.recordEvent).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      type: 'pull_request_opened',
+      payload: expect.objectContaining({ pullRequest: 73, reused: true }),
+    }));
+  });
+
+  it('reconciles a timed-out create that GitHub accepted before recording the PR', async () => {
+    const api = github();
+    const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
+      const response = await api.fetch(input, init);
+      if (init?.method === 'POST') throw new Error('connection closed after GitHub accepted the create');
+      return response;
+    });
+    const test = fixture(fetch);
+
+    await expect(test.handler(workspace, task)).resolves.toEqual({ kind: 'awaiting_policy' });
+
+    expect(api.creates).toBe(1);
+    expect(api.calls.filter((call) => call.method === 'GET' && call.url.includes('/pulls?'))).toHaveLength(2);
+    expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: 'pull_request_opened',
       payload: expect.objectContaining({ pullRequest: 73, reused: true }),
     }));

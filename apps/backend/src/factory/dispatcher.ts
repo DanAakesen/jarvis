@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { defaultSettings, type SettingsStore } from '../core/settings.js';
+import type { GitHubDeliveryResult, TaskCompletionGate } from '../github/delivery.js';
 import {
   FoundryClientError, type CodingAgent, type FoundryClient, type InvocationAccepted, type TaskRequest, type TaskWorkspace,
 } from '../foundry/client.js';
@@ -64,7 +65,8 @@ export interface DispatcherOptions {
   verifyDelivery?: (
     workspace: TaskWorkspace,
     task: Pick<TaskRecord, 'id' | 'title'>,
-  ) => Promise<{ kind: 'awaiting_policy' } | { kind: 'refused'; reason: string }>;
+    gate?: TaskCompletionGate,
+  ) => Promise<GitHubDeliveryResult>;
 }
 
 const defaultLeaseSeconds = 120;
@@ -367,30 +369,41 @@ export class TaskDispatcher implements TaskController {
     if (!detail) return false;
     if (detail.state === 'NeedsAttention') return false;
     if (detail.state !== 'Running') return true;
+    const gate: TaskCompletionGate = async (operation) => this.store.withTaskPolicyLock(taskId, async () => {
+      const latestTask = await this.tasks.get(taskId, 1, 0);
+      if (!latestTask || latestTask.state !== 'Running') return { kind: 'not_running' as const };
+      return { kind: 'ran' as const, value: await operation() };
+    });
     const workspace = await this.workspaceFor?.(detail) ?? null;
     const result = workspace && this.verifyDelivery
-      ? await this.verifyDelivery(workspace, detail)
+      ? await this.verifyDelivery(workspace, detail, gate)
       : {
         kind: 'refused' as const,
         reason: 'The task repository or branch could not be verified.',
       };
-    if (result.kind === 'refused') {
-      await this.tasks.recordEvent({
-        taskId,
-        type: 'pull_request_open_refused',
-        summary: result.reason,
-        payload: { reason: result.reason },
-        source: 'backend',
-      });
-      const transition = await this.tasks.transition(taskId, 'NeedsAttention', false, 'pull_request_open_refused');
-      if (transition.kind !== 'ok') return false;
-      const ended = await this.store.endTaskSessions(taskId, 'NeedsAttention', true);
+    if (result.kind === 'not_running') return true;
+    return this.store.withTaskPolicyLock(taskId, async () => {
+      const latestTask = await this.tasks.get(taskId, recoveryEventLimit, 0);
+      if (!latestTask) return false;
+      if (latestTask.state !== 'Running') return true;
+      if (result.kind === 'refused') {
+        await this.tasks.recordEvent({
+          taskId,
+          type: 'pull_request_open_refused',
+          summary: result.reason,
+          payload: { reason: result.reason },
+          source: 'backend',
+        });
+        const transition = await this.tasks.transition(taskId, 'NeedsAttention', false, 'pull_request_open_refused');
+        if (transition.kind !== 'ok') return false;
+        const ended = await this.store.endTaskSessions(taskId, 'NeedsAttention', true);
+        ended.forEach((id) => this.heartbeat.untrack(id));
+        return true;
+      }
+      const ended = await this.store.endTaskSessions(taskId, 'Done', true);
       ended.forEach((id) => this.heartbeat.untrack(id));
       return true;
-    }
-    const ended = await this.store.endTaskSessions(taskId, 'Done', true);
-    ended.forEach((id) => this.heartbeat.untrack(id));
-    return true;
+    });
   }
 
   private async endSession(target: TaskControlTarget, state: 'Paused' | 'Cancelled' = 'Paused'): Promise<void> {
