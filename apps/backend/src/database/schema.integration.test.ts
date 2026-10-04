@@ -297,7 +297,9 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     const published: TaskEventMessage[] = [];
     eventHub.subscribe((event) => published.push(event));
     const store = createSandboxHeartbeatStore(pool, eventHub);
-    expect(await store.listRunning()).toEqual([{
+    // Earlier tests in this database leave their own running sessions; check only this fixture's.
+    const running = (await store.listRunning()).filter((row) => row.sandboxSessionId === String(sandboxSessionId));
+    expect(running).toEqual([{
       sandboxSessionId: String(sandboxSessionId), foundrySessionId: 'heartbeat-session',
       agentName: 'jarvis-runner-base-1x2', invocationId: 'heartbeat-invocation',
     }]);
