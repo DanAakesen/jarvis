@@ -28,6 +28,19 @@ interface ProjectValues {
   max_parallel_tasks: number | '';
 }
 
+interface ExistingRepository {
+  fullName: string;
+  name: string;
+  defaultBranch: string;
+  pushedAt: string | null;
+  language: string | null;
+}
+
+interface RepositoryListing {
+  repositories: ExistingRepository[];
+  fetchedAt: string;
+}
+
 type ProjectFields = Omit<Project, 'id' | 'active'>;
 type LoadState = 'loading' | 'ready' | 'error';
 type ProjectsPageProps = { backendUrl: string | null; getAccessToken: () => Promise<string> };
@@ -116,19 +129,21 @@ function validateProjectValues(values: ProjectValues): string | null {
   return null;
 }
 
-function projectError(method: string, status: number): Error {
+function projectError(operation: 'load' | 'save' | 'manage', status: number): Error {
   if (status === 401) return new Error('Your Microsoft sign-in needs attention. Sign in again.');
-  if (status === 503) return new Error('Project data is unavailable until the database is connected.');
+  if (status === 503) return new Error('Project or repository data is unavailable until its backend service is connected.');
+  if (status === 502) return new Error('GitHub repository data is unavailable. Try again.');
   if (status === 409) return new Error('This repository is already assigned to a project. Archived repositories remain reserved.');
+  if (status === 404 && operation === 'manage') return new Error('This repository is no longer available through the GitHub App.');
   if (status === 404) return new Error('This project is no longer available.');
-  return new Error(`Jarvis could not ${method} project data (HTTP ${status}).`);
+  return new Error(`Jarvis could not ${operation} project data (HTTP ${status}).`);
 }
 
 async function request(
   backendUrl: string,
   getAccessToken: () => Promise<string>,
   path: string,
-  method: 'GET' | 'PATCH' | 'DELETE' = 'GET',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
   body?: unknown,
 ): Promise<unknown> {
   let response: Response;
@@ -146,7 +161,10 @@ async function request(
     if (cause instanceof Error && cause.message === 'Your Microsoft sign-in needs attention. Sign in again.') throw cause;
     throw new Error('Jarvis could not reach the project service. Try again.', { cause });
   }
-  if (!response.ok) throw projectError(method === 'GET' ? 'load' : 'save', response.status);
+  if (!response.ok) {
+    const operation = path === '/factory/projects/manage' ? 'manage' : method === 'GET' ? 'load' : 'save';
+    throw projectError(operation, response.status);
+  }
   if (response.status === 204) return null;
   try {
     return await response.json();
@@ -161,6 +179,33 @@ async function loadProjects(backendUrl: string, getAccessToken: () => Promise<st
     throw new Error('Jarvis returned invalid project data. Try again.');
   }
   return value.filter((project) => project.active);
+}
+
+function isExistingRepository(value: unknown): value is ExistingRepository {
+  if (!isObject(value)) return false;
+  return typeof value.fullName === 'string' && repositoryPattern.test(value.fullName) &&
+    typeof value.name === 'string' && value.name.length <= 100 &&
+    typeof value.defaultBranch === 'string' && value.defaultBranch.length > 0 && value.defaultBranch.length <= 255 &&
+    (value.pushedAt === null || (typeof value.pushedAt === 'string' && Number.isFinite(Date.parse(value.pushedAt)))) &&
+    (value.language === null || (typeof value.language === 'string' && value.language.length <= 100));
+}
+
+async function loadRepositories(
+  backendUrl: string,
+  getAccessToken: () => Promise<string>,
+  refresh: boolean,
+): Promise<RepositoryListing> {
+  const value: unknown = await request(
+    backendUrl,
+    getAccessToken,
+    `/factory/repositories${refresh ? '?refresh=true' : ''}`,
+  );
+  if (!isObject(value) || !Array.isArray(value.repositories) ||
+    !value.repositories.every(isExistingRepository) ||
+    typeof value.fetchedAt !== 'string' || !Number.isFinite(Date.parse(value.fetchedAt))) {
+    throw new Error('Jarvis returned invalid repository data. Try again.');
+  }
+  return { repositories: value.repositories, fetchedAt: value.fetchedAt };
 }
 
 async function loadRunningTasks(backendUrl: string, getAccessToken: () => Promise<string>): Promise<string[]> {
@@ -180,12 +225,23 @@ function policyLabel(policy: Project['policy']): string {
   return policy === 'deliver_pr' ? 'Deliver a pull request' : 'Complete without deployment';
 }
 
+function repositoryDate(value: string): string {
+  return new Date(value).toLocaleString();
+}
+
 export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) {
   const [state, setState] = useState<LoadState>(backendUrl ? 'loading' : 'error');
   const [projects, setProjects] = useState<Project[]>([]);
+  const [repositories, setRepositories] = useState<ExistingRepository[]>([]);
+  const [repositoryFetchedAt, setRepositoryFetchedAt] = useState('');
+  const [repositoryState, setRepositoryState] = useState<LoadState>(backendUrl ? 'loading' : 'error');
+  const [repositoryError, setRepositoryError] = useState('');
   const [runningCounts, setRunningCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState(backendUrl ? '' : 'Projects are unavailable until the backend is deployed.');
   const [taskError, setTaskError] = useState('');
+  const [manageError, setManageError] = useState('');
+  const [manageMessage, setManageMessage] = useState('');
+  const [managingRepository, setManagingRepository] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [settledRequestKey, setSettledRequestKey] = useState('');
   const location = useLocation();
@@ -200,7 +256,8 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
     void Promise.allSettled([
       loadProjects(backendUrl, getAccessToken),
       loadRunningTasks(backendUrl, getAccessToken),
-    ]).then(([projectResult, taskResult]) => {
+      loadRepositories(backendUrl, getAccessToken, reloadKey > 0),
+    ]).then(([projectResult, taskResult, repositoryResult]) => {
       if (!active) return;
       if (projectResult.status === 'rejected') {
         setError(projectResult.reason instanceof Error ? projectResult.reason.message : 'Projects could not be loaded. Try again.');
@@ -218,12 +275,48 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
       } else {
         setTaskError('Running task counts are unavailable. Refresh to try again.');
       }
+      if (repositoryResult.status === 'fulfilled') {
+        setRepositories(repositoryResult.value.repositories);
+        setRepositoryFetchedAt(repositoryResult.value.fetchedAt);
+        setRepositoryState('ready');
+        setRepositoryError('');
+      } else {
+        setRepositoryState('error');
+        setRepositoryError(repositoryResult.reason instanceof Error
+          ? repositoryResult.reason.message
+          : 'Existing repositories could not be loaded. Try again.');
+      }
       setSettledRequestKey(requestKey);
     });
     return () => { active = false; };
   }, [backendUrl, getAccessToken, reloadKey, requestKey]);
 
   const retry = () => setReloadKey((value) => value + 1);
+  const manageRepository = async (repository: ExistingRepository) => {
+    if (!backendUrl || managingRepository) return;
+    setManagingRepository(repository.fullName);
+    setManageError('');
+    setManageMessage('');
+    try {
+      const value = await request(
+        backendUrl,
+        getAccessToken,
+        '/factory/projects/manage',
+        'POST',
+        { repository: repository.fullName },
+      );
+      if (!isProject(value) || !value.active) throw new Error('Jarvis returned invalid project data. Try again.');
+      setProjects((current) => [...current.filter((project) => project.repo.toLowerCase() !== value.repo.toLowerCase()), value]);
+      setRepositories((current) => current.filter((item) => item.fullName.toLowerCase() !== value.repo.toLowerCase()));
+      setManageMessage(`Managed ${value.repo} with Jarvis.`);
+    } catch (cause) {
+      setManageError(cause instanceof Error ? cause.message : `Jarvis could not manage ${repository.fullName}. Try again.`);
+    } finally {
+      setManagingRepository('');
+    }
+  };
+  const managedRepositories = new Set(projects.map((project) => project.repo.toLowerCase()));
+  const otherRepositories = repositories.filter((repository) => !managedRepositories.has(repository.fullName.toLowerCase()));
 
   return (
     <section className="projects-page" aria-labelledby="projects-heading">
@@ -231,7 +324,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
       <p>Manage repositories and the defaults used for new tasks. Changes do not alter running tasks.</p>
       <div className="projects-toolbar">
         {visibleState === 'ready' && (
-          <button className="secondary-button" type="button" onClick={retry}>Refresh projects</button>
+          <button className="secondary-button" type="button" onClick={retry}>Refresh projects and repositories</button>
         )}
       </div>
       {visibleState === 'loading' && <p className="projects-feedback" role="status">Loading projects…</p>}
@@ -245,11 +338,13 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
         <>
           {pageNotice(location.state) && <p className="projects-feedback" role="status">{pageNotice(location.state)}</p>}
           {taskError && <p className="projects-feedback" role="status">{taskError}</p>}
+          {manageMessage && <p className="projects-feedback" role="status">{manageMessage}</p>}
+          {manageError && <p className="projects-feedback" role="alert">{manageError}</p>}
           <p className="projects-freshness">Running task counts update when you refresh this page. Last release data will appear when release tracking is connected.</p>
           {projects.length === 0 ? (
             <section className="project-empty" aria-labelledby="empty-projects-heading">
-              <h2 id="empty-projects-heading">No active projects</h2>
-              <p>Projects are registered by Jarvis. Configure their defaults in Settings.</p>
+              <h2 id="empty-projects-heading">No managed projects</h2>
+              <p>Register an existing repository below or configure New projects defaults in Settings.</p>
               <Link className="home-link" to="/settings">New project defaults</Link>
             </section>
           ) : (
@@ -276,6 +371,48 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
               ))}
             </ul>
           )}
+          <section className="existing-repositories" aria-labelledby="existing-repositories-heading">
+            <h2 id="existing-repositories-heading">Existing repositories</h2>
+            {repositoryFetchedAt && (
+              <p className="repository-freshness">Repository list refreshed {repositoryDate(repositoryFetchedAt)}.</p>
+            )}
+            {repositoryState === 'loading' && <p className="projects-feedback" role="status">Loading existing repositories…</p>}
+            {repositoryState === 'error' && (
+              <div className="projects-feedback" role="alert">
+                <p>{repositoryError}</p>
+                <button className="secondary-button" type="button" onClick={retry}>Retry repository list</button>
+              </div>
+            )}
+            {repositoryState === 'ready' && otherRepositories.length === 0 && (
+              <p className="projects-feedback">All repositories in the GitHub App installation are managed.</p>
+            )}
+            {otherRepositories.length > 0 && (
+              <ul className="repository-list" aria-label="Repositories not managed by Jarvis">
+                {otherRepositories.map((repository) => (
+                  <li key={repository.fullName.toLowerCase()}>
+                    <article className="repository-item" aria-labelledby={`repository-${repository.name}-name`}>
+                      <div className="repository-info">
+                        <h3 id={`repository-${repository.name}-name`}><code>{repository.fullName}</code></h3>
+                        <dl className="repository-meta">
+                          <div>
+                            <dt>Last push</dt>
+                            <dd>{repository.pushedAt
+                              ? <time dateTime={repository.pushedAt}>{repositoryDate(repository.pushedAt)}</time>
+                              : 'Not pushed yet'}</dd>
+                          </div>
+                          <div><dt>Language</dt><dd>{repository.language ?? 'Not reported'}</dd></div>
+                        </dl>
+                      </div>
+                      <button className="secondary-button" type="button" disabled={!!managingRepository}
+                        onClick={() => { void manageRepository(repository); }}>
+                        {managingRepository === repository.fullName ? 'Managing…' : 'Manage with Jarvis'}
+                      </button>
+                    </article>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </>
       )}
     </section>

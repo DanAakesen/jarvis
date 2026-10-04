@@ -151,6 +151,13 @@ P3-11 rechecked Settings and Projects in Chromium 154 at 390 and 1280 px with
 scratch-only auth and API mocks. New-project settings save, the Projects page has
 no create link or form, and neither width overflows; controls remain at least
 44 px high. Live Entra and Azure SQL behavior remains unverified.
+P3-13 keeps installed repositories below managed projects in the same neutral
+layout. Each unmanaged repository shows its owner/name, last push, and language
+with a single **Manage with Jarvis** action; the existing toolbar refreshes both
+projects and repositories. Chromium 154 checks at 390 and 1280 px exercised
+management without a form and explicit refresh. Neither width overflowed, buttons
+were 44 px high, and there were no browser errors. Live GitHub App, Entra, and
+Azure SQL behavior remains unverified.
 
 ## Task view (P1-08)
 
