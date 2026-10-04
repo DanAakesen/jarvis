@@ -56,7 +56,7 @@ CREATE TABLE dbo.workflow_runs (
   CONSTRAINT UQ_workflow_runs_project_github_run UNIQUE (project_id, github_run_id),
   CONSTRAINT CK_workflow_runs_github_run_id CHECK (github_run_id > 0),
   CONSTRAINT CK_workflow_runs_workflow CHECK (LEN(workflow) > 0),
-  CONSTRAINT CK_workflow_runs_trigger CHECK (LEN(trigger) > 0),
+  CONSTRAINT CK_workflow_runs_trigger CHECK (LEN([trigger]) > 0),
   CONSTRAINT CK_workflow_runs_head_sha CHECK (head_sha NOT LIKE '%[^0-9a-fA-F]%'),
   CONSTRAINT CK_workflow_runs_status CHECK (status IN (N'queued', N'in_progress', N'completed')),
   CONSTRAINT CK_workflow_runs_conclusion CHECK (conclusion IS NULL OR conclusion IN (N'success', N'failure', N'cancelled')),
