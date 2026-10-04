@@ -242,6 +242,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
   const [options, setOptions] = useState<SettingsOptions | null>(null);
   const [credentials, setCredentials] = useState<CredentialStatus[]>([]);
   const [saving, setSaving] = useState(false);
+  const [resettingPersonality, setResettingPersonality] = useState(false);
   const [message, setMessage] = useState('');
   const [personalityResetMessage, setPersonalityResetMessage] = useState('');
   const [error, setError] = useState(backendUrl ? '' : 'Settings are unavailable until the backend is deployed.');
@@ -298,12 +299,25 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
     setMessage('');
   };
 
-  const resetPersonality = () => {
-    if (!settings || saving) return;
-    setSettings((current) => current ? ({ ...current, personality: { ...defaultPersonality } }) : current);
+  const resetPersonality = async () => {
+    if (!settings || !savedSettings || !backendUrl || saving || personalityIsDefault) return;
+    setSaving(true);
+    setResettingPersonality(true);
     setError('');
     setMessage('');
-    setPersonalityResetMessage('Default personality selected. Save settings to apply it to new sessions.');
+    setPersonalityResetMessage('');
+    try {
+      const result = await requestSettings(backendUrl, getAccessToken, 'PATCH', { personality: defaultPersonality });
+      setSavedSettings(result.settings);
+      setSettings((current) => current ? ({ ...current, personality: { ...result.settings.personality } }) : current);
+      setOptions(result.options);
+      setPersonalityResetMessage('Personality reset and saved. Defaults apply to new sessions.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Personality could not be reset. Try again.');
+    } finally {
+      setSaving(false);
+      setResettingPersonality(false);
+    }
   };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
@@ -370,7 +384,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
           <section className="settings-section" aria-labelledby="personality-settings-heading">
             <h2 id="personality-settings-heading">Jarvis Personality</h2>
             <p className="settings-explanation" id="personality-session-help">
-              Personality changes apply to new chat and voice sessions. Active sessions keep their current settings.
+              Personality changes apply to new sessions. Active sessions keep their current settings.
             </p>
             <div className="settings-grid">
               <SelectField id="personality-tone" label="Tone" value={settings.personality.tone}
@@ -399,11 +413,23 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
                 )}
               </div>
             </div>
+            <p className="settings-explanation" id="personality-reset-help">
+              {saving
+                ? 'Wait for the current save to finish before resetting.'
+                : personalityIsDefault
+                  ? 'The current personality already matches the default.'
+                  : 'Reset saves the current default immediately.'}
+            </p>
             <div className="settings-actions">
               <button className="secondary-button" type="button" disabled={saving || personalityIsDefault}
-                onClick={resetPersonality}>Reset personality</button>
+                aria-describedby="personality-reset-help"
+                onClick={() => { void resetPersonality(); }}>Reset personality</button>
             </div>
-            {personalityResetMessage && <p className="settings-explanation" role="status">{personalityResetMessage}</p>}
+            {(resettingPersonality || personalityResetMessage) && (
+              <p className="settings-explanation" role="status">
+                {resettingPersonality ? 'Resetting personality…' : personalityResetMessage}
+              </p>
+            )}
           </section>
 
           <section className="settings-section" aria-labelledby="voice-settings-heading">
@@ -530,7 +556,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
           <div className="settings-save">
             <button className="primary-button" type="submit"
               disabled={!dirty || !maxTasksValid || !newProjectMaxTasksValid || !personalityInstructionsValid || saving}>
-              {saving ? 'Saving…' : 'Save settings'}
+              {saving && !resettingPersonality ? 'Saving…' : 'Save settings'}
             </button>
             <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
               {error || message}

@@ -141,8 +141,12 @@ describe('SettingsPage', () => {
     expect(await screen.findByRole('heading', { name: 'Jarvis Personality', level: 2 })).not.toBeNull();
     expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('value', 'british_butler');
     expect(screen.getByRole('combobox', { name: 'Response style' })).toHaveProperty('value', 'concise');
-    expect(screen.getByText(/apply to new chat and voice sessions/)).not.toBeNull();
+    expect(screen.getByText(/apply to new sessions/)).not.toBeNull();
     expect(screen.getByRole('textbox', { name: 'Custom instructions' })).toHaveProperty('maxLength', 2_000);
+    expect(screen.getByRole('button', {
+      name: 'Reset personality',
+      description: /already matches the default/,
+    })).toHaveProperty('disabled', true);
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Tone' }), 'warm');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Response style' }), 'balanced');
@@ -155,7 +159,24 @@ describe('SettingsPage', () => {
     expect(JSON.parse(String(request?.body))).toEqual({ settings: { personality: updated.personality } });
   });
 
-  it('resets personality to the current defaults and saves the reset', async () => {
+  it('shows pending feedback and prevents duplicate saves', async () => {
+    const user = userEvent.setup();
+    const updated = { ...settings, personality: { ...settings.personality, tone: 'warm' as const } };
+    let resolveSave!: (value: Response) => void;
+    const pendingSave = new Promise<Response>((resolve) => { resolveSave = resolve; });
+    fetchMock.mockResolvedValueOnce(response(settingsResponse())).mockReturnValueOnce(pendingSave);
+    renderSettingsPage();
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Tone' }), 'warm');
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(screen.getByRole('button', { name: 'Saving…' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('disabled', true);
+    resolveSave(response(settingsResponse(updated)));
+    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+  });
+
+  it('resets personality to the current defaults and preserves edits when reset fails', async () => {
     const user = userEvent.setup();
     const customized = {
       ...settings,
@@ -166,21 +187,27 @@ describe('SettingsPage', () => {
       },
     };
     fetchMock.mockResolvedValueOnce(response(settingsResponse(customized)))
+      .mockResolvedValueOnce(response({ error: 'Internal server error' }, 500))
       .mockResolvedValueOnce(response(settingsResponse()));
     renderSettingsPage();
 
     await screen.findByRole('heading', { name: 'Jarvis Personality', level: 2 });
     await user.click(screen.getByRole('button', { name: 'Reset personality' }));
 
+    expect((await screen.findByRole('alert')).textContent).toMatch(/could not save settings \(HTTP 500\)/);
+    expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('value', 'playful');
+    expect(screen.getByRole('combobox', { name: 'Response style' })).toHaveProperty('value', 'detailed');
+    expect(screen.getByRole('textbox', { name: 'Custom instructions' })).toHaveProperty('value', customized.personality.customInstructions);
+    expect(screen.getByRole('button', { name: 'Reset personality' })).toHaveProperty('disabled', false);
+
+    await user.click(screen.getByRole('button', { name: 'Reset personality' }));
     expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('value', settings.personality.tone);
     expect(screen.getByRole('combobox', { name: 'Response style' })).toHaveProperty('value', settings.personality.responseStyle);
     expect(screen.getByRole('textbox', { name: 'Custom instructions' })).toHaveProperty('value', '');
-    expect(screen.getByText(/Save settings to apply it to new sessions/)).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', false);
-
-    await user.click(screen.getByRole('button', { name: 'Save settings' }));
-    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
-    const [, request] = fetchMock.mock.calls[1]!;
+    expect(await screen.findByText(/Personality reset and saved/)).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', true);
+    expect(screen.getByText(/already matches the default/)).not.toBeNull();
+    const [, request] = fetchMock.mock.calls[2]!;
     expect(JSON.parse(String(request?.body))).toEqual({ settings: { personality: settings.personality } });
   });
 
