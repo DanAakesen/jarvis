@@ -319,6 +319,14 @@ the page had no horizontal overflow, selects measured 44 px, and only the table
 scrolls horizontally. The expected mocked 503 produced a browser network log;
 there were no other console errors or page exceptions. Live SQL and provider or
 voice usage remain unverified.
+P3-08 was inspected at 390×844 (dark theme) and 1280×1300 (light theme) in
+Chromium using scratch-only auth and mocked release/graph/API responses: opening
+a release, refresh, and keyboard focus on a commit link worked; its hit area was
+44×44 px and the document did not overflow either viewport. The desktop and
+phone screenshots are
+`docs/ui/screenshots/p3-08-release-view-desktop.png` and
+`docs/ui/screenshots/p3-08-release-view-phone.png`; their fixture data is mocked.
+Live Entra, Azure SQL, and GitHub behavior remain unverified.
 Never commit the stub or weaken sign-in in the app.
 
 Backend commands:
@@ -327,10 +335,12 @@ Backend commands:
 | --- | --- |
 | Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
 | Focused P3-07 release webhook contract | `npm test --workspace @jarvis/backend -- --run src/database/webhook-delivery-store.test.ts` |
+| Focused P3-08 release API and GitHub graph tests | `npm test --workspace @jarvis/backend -- --run src/factory/release-view.test.ts src/github/release-graph.test.ts src/github-app.test.ts` |
 | SQL Server migration, webhook mapping, and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
 | Focused P2-14 completion/expiry regressions | `npm test --workspace @jarvis/backend -- src/factory/heartbeat.test.ts src/factory/dispatcher.test.ts src/database/sandbox-heartbeat-store.test.ts` |
 | Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
+| Focused P3-08 release view and project navigation tests | `npm test --workspace @jarvis/web -- --run src/factory/ReleasePage.test.tsx src/factory/ProjectsPage.test.tsx src/App.test.tsx` |
 | P6-05 SQL Server parallel load test (CI `Database` job; prints a `P6-05 load:` summary line) | `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher-load.integration.test.ts` (isolated loopback SQL Server only) |
 | Focused P6-05 runner Codex limit test | `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_usage_limit` |
 | Start compiled backend | `npm start --workspace @jarvis/backend` (after its build) |
@@ -762,6 +772,33 @@ to assign `Jarvis.Tools` and persist that same value as the
 infrastructure deployments. Cloud agents cannot run bootstrap or verify Azure;
 Dan verifies the hosted deployment and tools after this local step. Tool calls
 also need the stored message ID from P4-03, supplied by the caller in P4-06.
+
+### Screen sharing (P7-05)
+
+The backend uses the existing `FOUNDRY_PROJECT_ENDPOINT` and managed identity;
+Bicep already grants that identity `Foundry User`, so this feature adds no Azure
+resource, credential, or provisioning script. The migration runs at backend
+startup after merge. `global.screen_share_daily_frame_cap` defaults to 300 and
+is editable in Settings (1–300).
+
+After merge, Dan/coordinator should:
+
+1. Run the main `Deploy` workflow and confirm migration `0015_screen_frame_usage`
+   applied and the backend revision is ready.
+2. Confirm the configured `gpt-5.6-luna` deployment accepts image input and is
+   Global Standard. The DKK estimate uses the 2 October 2026 price snapshot
+   (1.3157 input and 7.8941 output DKK per million short-context tokens); update
+   the rate table if the live SKU or current price differs.
+3. In a signed-in browser, share a window, verify the persistent sharing status
+   and Stop control, request an inspection from chat and voice, and check that
+   Jarvis describes the visible content. Stop voice and leave the page to verify
+   stream cleanup. Confirm the three-second limit, configurable daily cap, usage
+   count, estimated DKK and absence of frame/message content in logs and history.
+
+Cloud agents cannot access the Azure tenant or verify billed usage. The screen
+bridge's fake-model tests prove the offline contract only; the live model,
+managed-identity exchange, SQL migration and browser screen capture remain
+unverified until this coordinator check.
 
 ## Release procedure
 

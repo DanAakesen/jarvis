@@ -320,6 +320,26 @@ const FLOWS = [
     ],
   },
   {
+    name: "Screen sharing",
+    summary: "Dan explicitly shares a browser screen and requests an inspection; a backend-only vision call supplies transient context to the active chat or voice response.",
+    nodes: [
+      { id: "share", lane: "board", col: 1, s: "proven", t: "Share a window or screen", d: "Browser getDisplayMedia; status and Stop remain visible. Capture only after a user request." },
+      { id: "upload", lane: "backend", col: 2, s: "proven", t: "Authenticate and validate frame", d: "POST /screen/frames checks Dan's identity, active session, JPEG, 1 MiB size, and daily/three-second limits.", ev: "Focused route tests cover authentication, type/size bounds, refusal and the fake-model path." },
+      { id: "usage", lane: "data", col: 3, s: "proven", t: "Reserve frame usage", d: "Store screen_frames count; on inference success store token counts and estimated DKK. No frame data is persisted." },
+      { id: "model", lane: "model", col: 4, s: "unknown", t: "Describe with Foundry vision", d: "Backend managed identity calls the configured vision-capable deployment with the in-memory JPEG.", ev: "Fake-model contract is tested; live image support, managed-identity exchange and billed SKU remain coordinator checks." },
+      { id: "context", lane: "backend", col: 5, s: "proven", t: "Pass a transient description", d: "Send only a bounded, untrusted description to chat or voice response instructions; do not create transcript or task-event content." },
+      { id: "reply", lane: "board", col: 6, s: "proven", t: "Answer Dan", d: "Jarvis uses the description in the active reply; the share stream stops with voice or page teardown." },
+    ],
+    edges: [
+      ["share", "upload", "proven", "explicit request + JPEG"],
+      ["upload", "usage", "proven", "validated frame reservation"],
+      ["upload", "model", "unknown", "managed identity + in-memory image"],
+      ["model", "context", "proven", "bounded description"],
+      ["context", "reply", "proven", "separate transient context"],
+      ["usage", "reply", "docs", "frame and token usage"],
+    ],
+  },
+  {
     name: "Understand",
     summary: "The Jarvis agent reads context, asks the model which action to take, and calls a backend function with its own identity.",
     nodes: [
@@ -500,7 +520,7 @@ const FLOWS = [
   },
   {
     name: "Release",
-    summary: "After the merge, GitHub Actions builds, tests and deploys. Every step reaches the board's release view through GitHub webhooks; no polling.",
+    summary: "After the merge, GitHub Actions builds, tests and deploys. Webhooks update persisted release records; the project view fetches the Git graph from GitHub on demand.",
     nodes: [
       { id: "ctx", lane: "github", col: 1, s: "context", from: [[9, "merge"]], t: "From 9: merged to main" },
       { id: "wf", lane: "actions", col: 2, s: "docs", t: "Release workflow", d: "Build, test and upload an artifact on merge to main.", ev: "P3-09: copyable release workflow is in templates/github-actions/release.yml; see the adoption guide.", href: "github-actions-templates.md" },
@@ -510,7 +530,8 @@ const FLOWS = [
       { id: "receiver", lane: "backend", col: 3, s: "proven", t: "Verify and deduplicate webhook", d: "Check the raw-body HMAC; commit each `X-GitHub-Delivery` ID with its mapped rows in one transaction.", ev: "P3-03/04 offline route/store tests verify signatures, idempotency, and allowlisted input; the complete SQL Server integration suite passes locally." },
       { id: "rec", lane: "data", col: 4, s: "proven", t: "Delivery metadata", d: "Store event name, delivery ID, outcome and timestamps; never the payload or secret." },
       { id: "map", lane: "data", col: 5, s: "proven", t: "Map events into project records", d: "Map PRs, checks, workflow runs, default-branch releases and deployment statuses; correlate release records by project/SHA even when webhooks arrive out of order.", ev: "P3-04 mapper/route/store tests and the SQL Server integration suite cover linked records, duplicate deliveries, and a Release run/deployment arriving before the main push. Local SQL Server tests pass; live test-project delivery remains unverified." },
-      { id: "view", lane: "board", col: 5, s: "assumed", t: "Release view", d: "Commits, PRs, running / passed / failed, deployed." },
+      { id: "graph", lane: "github", col: 4, s: "proven", t: "Fetch branches and commits", d: "P3-08 fetches a bounded graph with a repository-scoped contents:read token; commits are not persisted." },
+      { id: "view", lane: "board", col: 5, s: "proven", t: "Release view", d: "Per-project releases, runs, deployments, and an on-demand horizontal commit graph.", ev: "P3-08 focused API/UI tests and scratch Chromium checks at 390 and 1280 px use mocked GitHub/API data; live Entra, SQL, and GitHub behavior remain unverified." },
       { id: "fail", lane: "backend", col: 5, s: "assumed", t: "Failed release: Needs attention", d: "Offer a fix task with the failing log." },
       { id: "ask", lane: "jarvis", col: 6, s: "assumed", t: "Answer release questions", d: "“Is the release out, sir?”" },
     ],
@@ -518,7 +539,8 @@ const FLOWS = [
       ["ctx", "wf", "docs", "push to main"], ["wf", "deploy", "docs", "tests passed"], ["deploy", "migrations", "docs", "backend startup"],
       ["wf", "receiver", "proven", "signed webhook"], ["deploy", "receiver", "proven", "deployment_status"],
       ["receiver", "rec", "proven", "insert once"], ["rec", "map", "proven", "P3-04"],
-      ["map", "view", "docs", "event"], ["map", "fail", "docs", "failed run"],
+      ["map", "view", "proven", "authenticated project read"], ["graph", "view", "proven", "branches + commits"],
+      ["map", "fail", "docs", "failed run"],
       ["fail", "view", "docs", "event"], ["map", "ask", "docs", "read"],
     ],
   },
