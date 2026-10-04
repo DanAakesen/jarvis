@@ -128,6 +128,14 @@ confirms completion. The browser and hosted agent service identities do not rece
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
 
+P1-08's web board uses the authenticated project and task APIs for filters and
+task creation, requesting at most 100 newest matching tasks at a time. It opens
+the P1-06 authenticated fetch-SSE client for nonterminal tasks, resumes from each
+stream's last event ID, and refreshes the filtered task snapshot after events.
+Connection and reconnection state is visible. The list API does not yet return
+pull-request, check, or usage values; cards mark those data points unavailable
+instead of inferring them. No backend route or persistence change is required.
+
 `GET /operations/sleep` reports the Container App's configured minimum replicas;
 `PUT /operations/sleep` accepts only awake (1) or asleep (0). Both routes use the
 root's Dan-only authentication. The backend targets only its Bicep-configured
@@ -420,6 +428,7 @@ These boxes are responsibilities; they do not each need a separate service.
 | Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. Browser streaming is P1-06. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`. No polling. |
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. The fetch client reconnects with its last delivered ID and ignores repeats. |
+| Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. Live state is visible; PR/check/usage values stay unavailable until their owning data integrations exist. |
 | Idle | The dispatcher subscribes to committed task events and schedules only the next retry deadline. After its startup scan, it makes no recurring SQL queries while idle; there is no polling timer. |
 | Always on | The backend normally runs with a minimum of 1 replica, so the heartbeat never stops. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready or Running. The backend does not query SQL while idle, so the database can still pause. |
 

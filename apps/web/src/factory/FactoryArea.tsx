@@ -2,6 +2,7 @@ import { Navigate, NavLink, Route, Routes, useParams } from 'react-router-dom';
 import { NotFoundPage, PendingPage } from '../pages';
 import type { AreaProps } from '../areas';
 import { ProjectSettingsPage, ProjectsPage } from './ProjectsPage';
+import { TasksPage } from './TasksPage';
 import { TaskDetailPage } from './TaskDetailPage';
 
 const idPattern = /^[1-9]\d{0,15}$/;
@@ -35,12 +36,7 @@ export function FactoryArea({ backendUrl, getAccessToken }: AreaProps) {
       </nav>
       <Routes>
         <Route index element={<Navigate to="tasks" replace />} />
-        <Route path="tasks" element={
-          <PendingPage title="Tasks">
-            The task board isn&apos;t available yet. It will show tasks in columns by state, with filters
-            and a way to create a task.
-          </PendingPage>
-        } />
+        <Route path="tasks" element={<TasksPage backendUrl={backendUrl} getAccessToken={getAccessToken} />} />
         <Route path="tasks/:taskId" element={<TaskPage backendUrl={backendUrl} getAccessToken={getAccessToken} />} />
         <Route path="projects" element={<ProjectsPage backendUrl={backendUrl} getAccessToken={getAccessToken} />} />
         <Route path="projects/new" element={

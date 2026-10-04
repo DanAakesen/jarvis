@@ -142,6 +142,8 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Card: title, project, agent, state, current activity, last update, duration, attempt count, PR number and checks state, usage so far | Open; steer; pause; resume; cancel; recover (Needs attention) |
 | Filters: project, agent, state, period | Filter; search |
 
+The board shows up to 100 newest matching tasks. Pull request, checks, and usage are marked "Not reported" until their data sources are connected; the board does not infer values.
+
 #### Software Factory — task detail
 
 | Data points | Actions |

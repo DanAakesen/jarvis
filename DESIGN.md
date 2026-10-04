@@ -110,6 +110,22 @@ list, create, update, and archive worked; neither width overflowed, controls
 were at least 44 px high, and the project form stacked on mobile. Live Entra and
 Azure SQL behavior remains unverified.
 
+## Task view (P1-08)
+
+Continue the neutral foundation and put the create action and filters before the
+board. Keep the six task states as distinct columns; columns stack on narrow
+screens, use two columns at tablet widths, and scroll horizontally on wide
+screens. Cards group task facts as labelled details, with the state always
+written as text. The create dialog uses labelled fields and keeps pending and
+failure feedback beside its actions. Pull request, checks, and usage remain
+explicitly "Not reported" until the backend provides those values.
+
+Checked in Chromium at 1280 and 390 px with scratch-only auth and API mocks:
+task creation, SSE-driven card refresh, Escape dismissal with focus return, and
+filters worked. Neither width overflowed the page, modal content fit on mobile,
+and controls were at least 44 px high. Live Entra, Azure SQL, and deployed SSE
+behavior remain unverified.
+
 ## Conversation history (P4-03)
 
 After sign-in, the main page shows the persisted conversation in chronological
