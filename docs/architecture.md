@@ -33,6 +33,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 ## Web skeleton and configuration
 
+- P8-05 keeps the conversation screen viewport-bound within the P8-04 shell.
+  `ConversationHistory` owns the draft, language, chat turn and typing/voice
+  visibility; `VoiceControls` owns the browser voice client and reports active
+  state. Hiding the composer preserves its draft, and terminal voice states
+  restore input focus. Persisted voice completion refreshes history. The
+  transcript scrolls independently; activity/backend controls are expandable
+  within it. APIs and persisted conversation contracts are unchanged.
 - React mounts into `apps/web/index.html`. BrowserRouter renders the home page
   and a catch-all page with a return link. Production static hosting must fall
   back to `index.html` for client routes (P0-11).
@@ -67,6 +74,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   server returns the accepted value; rejected updates retain the previous
   appearance. Remaining voice samples, sleep, credential, and custom-theme
   controls are visibly disabled until their owning services/contracts exist.
+- P8-20 keeps the visual system in `apps/web/src/styles.css`: semantic light/dark
+  roles, type and layout tokens, elevation/translucency, and shared motion rules.
+  `JarvisActivityProvider` tracks chat and voice turns as separate active sources,
+  so one ending cannot clear the other's top-bar status. `VoiceControls` maps the
+  actual P5-04 status and decoded playback PCM level to the labelled orb; it does
+  not infer tool calls or window activity. CSS aurora and state motion pause while
+  the document is hidden and reduce to fades/static readable states when motion
+  is reduced. No persistence or backend route is added.
 - P7-16 extends the same authenticated, validated `dbo.settings` key/value store
   with bounded personality preferences. Hosted chat and Danish voice read them
   for each new agent invocation/session; the backend snapshots them when it
@@ -915,8 +930,8 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 
 | Area | Design | Evidence |
 | --- | --- | --- |
-| Browser connection | Browser connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. It captures and sends mono 24 kHz PCM only after the relay is ready; provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, interruption, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
-| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then captures audio. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
+| Browser connection | The composer orb explicitly connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. Readiness never opens capture: a separate Enable microphone action captures and sends mono 24 kHz PCM. Reconnect returns to microphone-off readiness. Provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, explicit activation, permission denial, interruption, stop during activation, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
+| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then waits for explicit microphone activation. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
 | English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Completed voice transcripts are persisted as messages; voice tool calls are not stored as `tool_calls`. |
 | Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |

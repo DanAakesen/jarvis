@@ -1,15 +1,29 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ConversationHistory } from './ConversationHistory';
 import type { CameraController } from './screen-sharing';
+import { JarvisActivityProvider } from './activity-provider';
+import { useJarvisActivity } from './activity-context';
+import type { VoiceClientOptions } from './voice-client';
 
-const { loadConversationHistory, createChatSession, sendChatTurn } = vi.hoisted(() => ({
+const { loadConversationHistory, createChatSession, sendChatTurn, voiceSessions } = vi.hoisted(() => ({
   loadConversationHistory: vi.fn(),
   createChatSession: vi.fn(),
   sendChatTurn: vi.fn(),
+  voiceSessions: [] as VoiceClientOptions[],
 }));
 vi.mock('./conversation-history', () => ({ loadConversationHistory, createChatSession, sendChatTurn }));
+vi.mock('./voice-client', () => ({
+  BrowserVoiceClient: class {
+    constructor(private readonly options: VoiceClientOptions) { voiceSessions.push(options); }
+    start() { this.options.onStatus('ready', 'Microphone is off.'); }
+    stop() { this.options.onStatus('stopped', 'Voice is off.'); this.options.onSessionEnded?.(); }
+    enableMicrophone = vi.fn(async () => {});
+    setMuted = vi.fn();
+  },
+}));
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com' };
 const client = {} as never;
@@ -33,16 +47,29 @@ const assistantMessage = {
   id: '52', sessionId: '41', role: 'jarvis' as const, text: 'I am ready.', model: null, voiceMinutes: null, at: '2026-10-03T12:02:00.000Z',
 };
 
-function renderConversation(historyRefresh = 0) {
+function renderConversation(historyRefresh = 0, camera?: CameraController) {
   return render(
-    <MemoryRouter>
-      <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
-    </MemoryRouter>,
+    <JarvisActivityProvider>
+      <MemoryRouter>
+        <ConversationHistory
+          client={client}
+          config={config}
+          historyRefresh={historyRefresh}
+          {...(camera ? { camera } : {})}
+        />
+      </MemoryRouter>
+    </JarvisActivityProvider>,
   );
+}
+
+function ActivityProbe() {
+  const { working } = useJarvisActivity();
+  return <output data-testid="activity">{working ? 'working' : 'idle'}</output>;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  voiceSessions.length = 0;
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
   createChatSession.mockResolvedValue(session);
 });
@@ -107,9 +134,11 @@ describe('ConversationHistory', () => {
     expect(await screen.findByText('I started the task.')).not.toBeNull();
 
     view.rerender(
-      <MemoryRouter>
-        <ConversationHistory client={client} config={config} historyRefresh={1} />
-      </MemoryRouter>,
+      <JarvisActivityProvider>
+        <MemoryRouter>
+          <ConversationHistory client={client} config={config} historyRefresh={1} />
+        </MemoryRouter>
+      </JarvisActivityProvider>,
     );
 
     await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
@@ -165,11 +194,7 @@ describe('ConversationHistory', () => {
       inspect: vi.fn(async () => 'A red mug in Dan’s hand.'),
     };
     sendChatTurn.mockResolvedValue(assistantMessage);
-    render(
-      <MemoryRouter>
-        <ConversationHistory client={client} config={config} camera={camera} />
-      </MemoryRouter>,
-    );
+    renderConversation(0, camera);
 
     fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
       target: { value: 'What am I holding?' },
@@ -192,9 +217,7 @@ describe('ConversationHistory', () => {
   });
 
   it('does not send a camera request while the camera is off', async () => {
-    render(
-      <MemoryRouter>
-        <ConversationHistory client={client} config={config} camera={{
+    renderConversation(0, {
           sharing: false,
           starting: false,
           inspecting: false,
@@ -202,9 +225,7 @@ describe('ConversationHistory', () => {
           start: vi.fn(async () => {}),
           stop: vi.fn(),
           inspect: vi.fn(async () => 'A red mug.'),
-        }} />
-      </MemoryRouter>,
-    );
+        });
 
     fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
       target: { value: 'What am I holding?' },
@@ -215,6 +236,40 @@ describe('ConversationHistory', () => {
       .toBe('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
     expect(createChatSession).not.toHaveBeenCalled();
     expect(sendChatTurn).not.toHaveBeenCalled();
+  });
+
+  it('keeps chat activity active until an in-flight turn settles after unmount', async () => {
+    const finishers: Array<(value: typeof assistantMessage) => void> = [];
+    sendChatTurn.mockImplementation(async () => new Promise((resolve) => { finishers.push(resolve); }));
+    const content = (showConversation: boolean) => (
+      <JarvisActivityProvider>
+        <MemoryRouter>
+          <ActivityProbe />
+          {showConversation && <ConversationHistory client={client} config={config} />}
+        </MemoryRouter>
+      </JarvisActivityProvider>
+    );
+    const view = render(content(true));
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'Hello Jarvis' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(screen.getByTestId('activity').textContent).toBe('working');
+
+    view.rerender(content(false));
+    expect(screen.getByTestId('activity').textContent).toBe('working');
+    view.rerender(content(true));
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'Another question' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
+
+    finishers[0]?.(assistantMessage);
+    expect(screen.getByTestId('activity').textContent).toBe('working');
+    finishers[1]?.(assistantMessage);
+    await waitFor(() => expect(screen.getByTestId('activity').textContent).toBe('idle'));
   });
 
   it('shows partial text and recovery guidance after an interrupted reply', async () => {
@@ -243,5 +298,72 @@ describe('ConversationHistory', () => {
     );
     expect(await screen.findByText('Partial reply, interrupted: Partial')).not.toBeNull();
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('value', '');
+  });
+
+  it('keeps an unsent draft after a send failure and restores input focus', async () => {
+    sendChatTurn.mockRejectedValueOnce(new Error('Could not send. Try again.'));
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Keep this draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not send. Try again.');
+    expect(input).toHaveProperty('value', 'Keep this draft');
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('sends with Enter, preserves Shift+Enter and ignores composing input', async () => {
+    sendChatTurn.mockResolvedValue(assistantMessage);
+    const user = userEvent.setup();
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    await user.click(input);
+    await user.type(input, 'Hello');
+    await user.keyboard('{Shift>}{Enter}{/Shift}');
+    expect(input).toHaveProperty('value', 'Hello\n');
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Start voice' }));
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Send' }));
+    await user.click(input);
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    await waitFor(() => expect(input).toHaveProperty('disabled', false));
+    expect(document.activeElement).toBe(input);
+  });
+
+  it.each(['stop', 'natural', 'error'] as const)('restores typing and draft after voice %s', async (exit) => {
+    const user = userEvent.setup();
+    loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });
+    renderConversation();
+    await screen.findByText('I started the task.');
+    expect(voiceSessions).toHaveLength(0);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await user.click(input);
+    await user.type(input, 'Unsent draft');
+    await user.click(screen.getByRole('radio', { name: 'English' }));
+    const start = screen.getByRole('button', { name: 'Start voice' });
+    start.focus();
+    await user.keyboard('{Enter}');
+    expect(voiceSessions).toHaveLength(1);
+    expect(voiceSessions[0]?.language).toBe('en');
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByText('I started the task.')).not.toBeNull();
+    expect(screen.getByText('I started the task.').closest('[hidden]')).not.toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Stop voice' }));
+    if (exit === 'stop') {
+      await user.keyboard('{Enter}');
+    } else {
+      act(() => {
+        voiceSessions[0]?.onStatus(exit === 'error' ? 'error' : 'stopped', exit === 'error' ? 'Connection failed.' : 'Voice is off.');
+        if (exit === 'natural') voiceSessions[0]?.onSessionEnded?.();
+      });
+    }
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(input);
+    expect(input).toHaveProperty('value', 'Unsent draft');
+    expect(document.activeElement).toBe(input);
+    expect(screen.getByRole('radio', { name: 'English' })).toHaveProperty('checked', true);
+    if (exit !== 'error') await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
   });
 });

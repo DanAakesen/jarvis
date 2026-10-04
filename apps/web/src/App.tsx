@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
+import { useJarvisActivity } from './activity-context';
+import { JarvisActivityProvider } from './activity-provider';
 import { areas } from './areas';
 import { ContextPanel, ContextPanelProvider } from './ContextPanel';
 import type { CameraController } from './screen-sharing';
@@ -101,6 +103,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
   camera: CameraController;
 }) {
   const { pathname } = useLocation();
+  const { working } = useJarvisActivity();
   const navigationToggle = useRef<HTMLButtonElement>(null);
   const contextPanel = useContextPanel();
   const [navigationOpen, setNavigationOpen] = useState(() => (
@@ -168,6 +171,13 @@ function ShellLayout({ signedIn, config, session, camera }: {
         </div>
         {signedIn && (
           <div className="topbar-actions">
+            {working && (
+              <span className="topbar-working" role="status" aria-label="Jarvis is working" aria-live="polite">
+                <span className="topbar-working-mark" aria-hidden="true" />
+                <span className="topbar-working-wide" aria-hidden="true">Jarvis is working</span>
+                <span className="topbar-working-compact" aria-hidden="true">Working</span>
+              </span>
+            )}
             <UnavailableControl id="screen-share-status" label="Share screen" explanation="Unavailable until screen sharing is built." icon="screen" />
             <CameraControl camera={camera} />
             <button
@@ -219,31 +229,51 @@ export function App({ config = defaultConfig }: { config?: PublicConfig }) {
     if (!signedIn) stopCamera();
   }, [signedIn, stopCamera]);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const motionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    const syncPreferences = () => {
+      root.dataset.motionPreference = motionPreference?.matches ? 'reduced' : 'full';
+      root.dataset.documentVisibility = document.hidden ? 'hidden' : 'visible';
+    };
+    syncPreferences();
+    motionPreference?.addEventListener('change', syncPreferences);
+    document.addEventListener('visibilitychange', syncPreferences);
+    return () => {
+      motionPreference?.removeEventListener('change', syncPreferences);
+      document.removeEventListener('visibilitychange', syncPreferences);
+      delete root.dataset.documentVisibility;
+      delete root.dataset.motionPreference;
+    };
+  }, []);
+
   return (
-    <ThemePreferenceProvider key={signedIn ? 'signed-in' : 'signed-out'}
-      enabled={signedIn} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}>
-      <Routes>
-        <Route element={<Shell signedIn={signedIn} config={config} session={session} camera={camera} />}>
-          <Route element={<RequireSignIn session={session} />}>
-            <Route index element={
-              <JarvisPage
-                name={session.profile?.name ?? ''}
-                client={session.client}
-                config={config}
-                getAccessToken={session.getAccessToken}
-                camera={camera}
-              />
-            } />
-            {areas.map(({ id, path, Component }) => (
-              <Route key={id} path={`${path}/*`} element={
-                <Component backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+    <JarvisActivityProvider>
+      <ThemePreferenceProvider key={signedIn ? 'signed-in' : 'signed-out'}
+        enabled={signedIn} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}>
+        <Routes>
+          <Route element={<Shell signedIn={signedIn} config={config} session={session} camera={camera} />}>
+            <Route element={<RequireSignIn session={session} />}>
+              <Route index element={
+                <JarvisPage
+                  name={session.profile?.name ?? ''}
+                  client={session.client}
+                  config={config}
+                  getAccessToken={session.getAccessToken}
+                  camera={camera}
+                />
               } />
-            ))}
-            <Route path="settings" element={<SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />} />
+              {areas.map(({ id, path, Component }) => (
+                <Route key={id} path={`${path}/*`} element={
+                  <Component backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+                } />
+              ))}
+              <Route path="settings" element={<SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />} />
+            </Route>
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
-      </Routes>
-    </ThemePreferenceProvider>
+        </Routes>
+      </ThemePreferenceProvider>
+    </JarvisActivityProvider>
   );
 }

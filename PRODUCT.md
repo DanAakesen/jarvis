@@ -173,15 +173,16 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 | Data points | Actions |
 | --- | --- |
-| Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, streamed replies, tool-call chips (tool, outcome, link to task), and voice minutes per sitting | Type a message; start or stop voice; switch Danish/English |
-| Voice state: connecting, listening, thinking, speaking, reconnecting; an accessible runtime-state orb and text alternative; what Jarvis heard; latency | Start or stop browser voice; interrupt by speaking; mute |
-| Screen-share status while sharing; Jarvis's frame description appears only in the active response | Share/stop a screen or window; ask Jarvis to look at it from chat or voice |
+| Conversation opens automatically in typing mode: messages (Dan, Jarvis) across chat and voice sessions, time, language, streamed replies, tool-call chips (tool, outcome, link to task), and voice minutes per sitting; empty/loading/failure and interrupted-reply feedback | Type from the bottom-centred composer; Enter sends, Shift+Enter adds a line; start voice only from the small input orb; switch Danish/English |
+| Voice state: connecting, ready with microphone off, listening, thinking, speaking, reconnecting; an accessible runtime-state orb and text alternative; what Jarvis heard; latency. History and composer hide during voice; exit restores the draft and typing focus | Explicitly enable the microphone after session readiness (also after reconnect); stop browser voice; interrupt by speaking; mute |
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings, and alerts for failed deployments, sandbox crashes, credential expiry, and the 80% monthly budget threshold | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready, Running, or PauseRequested |
 
 The "Now" panel reads current running tasks and the latest non-dismissed task-attention, release/deployment, credential-warning, and alert activity. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes, and expiring credentials are emailed through stateful Azure Monitor rules; the monthly Azure budget sends its 80% threshold through the same email-only action group. The backend reads actual budget spend on a bounded 15-minute schedule for the Now item. These existing activity alerts remain email-only; direct phone notifications and confirmations use Teams through P7-03. Task changes, alerts, dismissals, and credential/budget alert writes refresh the panel through authenticated server-sent events; reconnecting states identify when the displayed snapshot may be stale.
 
 The voice orb follows status transitions reported by the browser voice client and includes a text alternative. Unknown states are reported as unavailable, and motion is disabled when reduced motion is preferred. Tool-call activity remains explicitly unavailable until the runtime publishes that state (P8-16); the UI does not infer it from thinking or speech.
+
+The shared top bar reports when an actual chat turn or voice response is running. The orb's audio response uses decoded playback samples, not microphone input or an estimated level. The shell and current pages share the light/dark visual system; unavailable tool-call and workspace-window events are never inferred.
 
 #### Software Factory — task view
 
