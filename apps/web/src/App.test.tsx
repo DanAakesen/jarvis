@@ -188,13 +188,16 @@ describe('App shell', () => {
     const user = userEvent.setup();
     await renderSignedIn();
 
-    await user.click(screen.getByRole('button', { name: 'Toggle contextual panel' }));
+    const toggle = screen.getByRole('button', { name: 'Toggle contextual panel' });
+    await user.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByRole('heading', { name: 'Context' })).not.toBeNull();
     expect(screen.getByText('No relevant information is available yet.')).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Welcome, Dan Aakesen' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Close context panel' }));
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('heading', { name: 'Context' })).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Toggle contextual panel' }));
+    expect(document.activeElement).toBe(toggle);
   });
 
   it('enables chat and explains the other unavailable main-page actions', async () => {
