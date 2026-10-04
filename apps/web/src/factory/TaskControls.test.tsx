@@ -57,6 +57,22 @@ describe('task controls', () => {
     expect(onComplete).toHaveBeenCalledWith('Running');
   });
 
+  it('recovers a task needing attention and refreshes it as Running', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(response({ id: '42', state: 'Running' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onComplete = renderControls('NeedsAttention');
+
+    await user.click(screen.getByRole('button', { name: 'Recover' }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.com/factory/tasks/42/controls',
+      expect.objectContaining({ body: JSON.stringify({ action: 'recover' }) }),
+    );
+    expect((await screen.findByRole('status')).textContent).toContain('Recovery started');
+    expect(onComplete).toHaveBeenCalledWith('Running');
+  });
+
   it('offers only state-valid actions and requires confirmation before cancelling', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(response({ id: '42', state: 'Cancelled' }));
@@ -65,6 +81,7 @@ describe('task controls', () => {
 
     expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Recover' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Cancel task' }));
     expect(screen.getByText('This ends the task and cannot be undone.')).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Confirm cancel task' }));

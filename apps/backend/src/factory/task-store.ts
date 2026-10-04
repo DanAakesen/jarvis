@@ -130,7 +130,7 @@ export interface TaskStore {
 
 export type TaskControlCommand =
   | { action: 'steer'; message: string }
-  | { action: 'pause' | 'resume' | 'cancel' };
+  | { action: 'pause' | 'resume' | 'cancel' | 'recover' };
 
 export type TaskControlResult =
   | { kind: 'ok'; task: TaskRecord }

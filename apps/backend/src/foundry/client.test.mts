@@ -118,6 +118,36 @@ describe("Foundry runner wire contract", () => {
     });
   });
 
+  it("forwards the task repository and branch workspace when starting a task", async () => {
+    const { client, fetch } = setup(fixtures["task_start"]);
+    await client.startTask({
+      agent: "copilot",
+      task: "Continue from the task branch",
+      repository: "DanAakesen/jarvis",
+      defaultBranch: "main",
+      branch: "jarvis/task-42",
+    });
+    expect(request(fetch).body).toEqual({
+      agent: "copilot",
+      task: "Continue from the task branch",
+      repository: "DanAakesen/jarvis",
+      defaultBranch: "main",
+      branch: "jarvis/task-42",
+    });
+  });
+
+  it("rejects incomplete or unsafe task workspaces before sending a request", async () => {
+    const { client, fetch } = setup(fixtures["task_start"]);
+    await expect(client.startTask({
+      agent: "copilot", task: "Recover", repository: "DanAakesen/jarvis",
+    })).rejects.toThrow("must be provided together");
+    await expect(client.startTask({
+      agent: "copilot", task: "Recover", repository: "DanAakesen/jarvis",
+      defaultBranch: "main", branch: "main",
+    })).rejects.toThrow("separate task branch");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("cancels only the requested invocation without deleting the session", async () => {
     const { client, fetch } = setup(fixtures["cancel"]);
     expect(await client.cancel("capture-task")).toEqual({ invocationId: "capture-task", status: "cancelled" });

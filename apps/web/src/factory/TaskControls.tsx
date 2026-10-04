@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 
 type TaskState = 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
-type Action = 'steer' | 'pause' | 'resume' | 'cancel';
+type Action = 'steer' | 'pause' | 'resume' | 'cancel' | 'recover';
 const taskStates: TaskState[] = ['Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'];
 
 const messages: Record<Action, string> = {
@@ -9,6 +9,7 @@ const messages: Record<Action, string> = {
   pause: 'Pause requested. The task will show Paused after its turn stops.',
   resume: 'Task resumed.',
   cancel: 'Task cancelled.',
+  recover: 'Recovery started from the task branch.',
 };
 
 function errorMessage(status: number): string {
@@ -69,7 +70,7 @@ export function TaskControls({
             action,
             ...(action === 'steer' ? { message: steeringMessage } : {}),
           }),
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(action === 'recover' ? 35_000 : 10_000),
         },
         );
       } catch {
@@ -111,7 +112,19 @@ export function TaskControls({
     return <p className="task-control-feedback" role="status">Pausing… The current turn is stopping.</p>;
   }
   if (state === 'NeedsAttention') {
-    return <p className="task-control-guidance">Task controls are unavailable while this task needs attention.</p>;
+    return (
+      <div className="task-controls">
+        <div className="action-row">
+          <button className="secondary-button" type="button" disabled={busy !== null}
+            onClick={() => void run('recover')}>
+            {busy === 'recover' ? 'Recovering…' : 'Recover'}
+          </button>
+        </div>
+        <p className="task-control-guidance">Starts a new sandbox from the existing task branch and its recorded history.</p>
+        {error && <p className="task-control-error" role="alert">{error}</p>}
+        {feedback && <p className="task-control-feedback" role="status" aria-live="polite">{feedback}</p>}
+      </div>
+    );
   }
   if (state === 'Done' || state === 'Cancelled') {
     return <p className="task-control-guidance">This task is finished; no further controls are available.</p>;
