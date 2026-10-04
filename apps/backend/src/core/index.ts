@@ -1,6 +1,6 @@
 import type { BackendModule } from '../modules.js';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
-import { ToolRefusal } from './tool-registry.js';
+import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
 import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
@@ -73,6 +73,9 @@ export const coreModule: BackendModule = {
           if (error instanceof ToolRefusal && !controller.signal.aborted) {
             outcome = 'refused';
             result = { refused: error.message };
+          } else if (error instanceof ToolFailure && !controller.signal.aborted) {
+            outcome = 'error';
+            result = { failure: error.message };
           } else {
             outcome = 'error';
             result = { error: 'Tool execution failed' };
@@ -81,7 +84,13 @@ export const coreModule: BackendModule = {
           request.raw.removeListener('aborted', abortOnRequest);
           reply.raw.removeListener('close', abortOnClose);
         }
-        await app.toolCallStore.record({ messageId, tool: tool.name, arguments: request.body, result, outcome });
+        await app.toolCallStore.record({
+          messageId,
+          tool: tool.name,
+          arguments: tool.sensitive ? { redacted: true } : request.body,
+          result: tool.sensitive ? { redacted: true } : result,
+          outcome,
+        });
         return { tool: tool.name, outcome, result, confirmation: confirmToolCall(tool.name, outcome, result) };
       });
     }

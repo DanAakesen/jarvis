@@ -77,6 +77,35 @@ describe('backend configuration', () => {
       expect(() => loadConfig({ GITHUB_APP_ID: '123456', KEY_VAULT_URI })).toThrow('KEY_VAULT_URI');
     }
   });
+  it('requires a valid Graph app ID, Key Vault, and time zone together', () => {
+    const appId = '12345678-1234-1234-1234-123456789abc';
+    const keyVault = 'https://jarvis.vault.azure.net/';
+    expect(loadConfig({
+      JARVIS_GRAPH_APP_ID: appId,
+      JARVIS_GRAPH_TIME_ZONE: 'Europe/Copenhagen',
+      KEY_VAULT_URI: keyVault,
+    })).toMatchObject({
+      graphAppId: appId,
+      graphTimeZone: 'Europe/Copenhagen',
+      keyVaultUri: keyVault,
+    });
+    expect(() => loadConfig({ JARVIS_GRAPH_APP_ID: appId })).toThrow('KEY_VAULT_URI');
+    expect(() => loadConfig({ JARVIS_GRAPH_APP_ID: appId, KEY_VAULT_URI: keyVault }))
+      .toThrow('JARVIS_GRAPH_APP_ID and JARVIS_GRAPH_TIME_ZONE');
+    expect(() => loadConfig({
+      JARVIS_GRAPH_TIME_ZONE: 'Europe/Copenhagen',
+    })).toThrow('JARVIS_GRAPH_APP_ID and JARVIS_GRAPH_TIME_ZONE');
+    expect(() => loadConfig({
+      JARVIS_GRAPH_APP_ID: 'not-a-uuid',
+      JARVIS_GRAPH_TIME_ZONE: 'Europe/Copenhagen',
+      KEY_VAULT_URI: keyVault,
+    })).toThrow('JARVIS_GRAPH_APP_ID');
+    expect(() => loadConfig({
+      JARVIS_GRAPH_APP_ID: appId,
+      JARVIS_GRAPH_TIME_ZONE: 'not/a-zone',
+      KEY_VAULT_URI: keyVault,
+    })).toThrow('JARVIS_GRAPH_TIME_ZONE');
+  });
   it('validates the Azure budget resource ID used for budget polling', () => {
     const JARVIS_MONTHLY_BUDGET_RESOURCE_ID =
       '/subscriptions/12345678-1234-1234-1234-123456789abc/resourceGroups/rg-jarvis/providers/Microsoft.Consumption/budgets/jarvis-monthly';
