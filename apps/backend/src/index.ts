@@ -54,6 +54,9 @@ import { createAlertNotifier } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
+import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
+import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
+import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
 
 try {
   const config = loadConfig();
@@ -247,6 +250,16 @@ try {
       } : {}),
     }),
   ];
+  if (database && settingsStore && config.foundryProjectEndpoint && credential) {
+    modules.push(createScreenVisionModule(new ScreenVisionService(
+      createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry screen identity unavailable');
+        return token.token;
+      }),
+      createScreenFrameUsageStore(database.pool),
+    )));
+  }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
       getToken: async (scope, signal) => {

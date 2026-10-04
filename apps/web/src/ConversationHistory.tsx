@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { Link } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
+import type { ScreenShareController } from './screen-sharing';
 import {
   createChatSession,
   loadConversationHistory,
@@ -31,10 +32,12 @@ export function ConversationHistory({
   client,
   config,
   historyRefresh = 0,
+  screenShare,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
   historyRefresh?: number;
+  screenShare?: ScreenShareController;
 }) {
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -49,6 +52,7 @@ export function ConversationHistory({
   const [streamedText, setStreamedText] = useState('');
   const [interruptedText, setInterruptedText] = useState('');
   const [turnError, setTurnError] = useState('');
+  const [screenContext, setScreenContext] = useState<{ sessionId: string; description: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -100,11 +104,18 @@ export function ConversationHistory({
     setInterruptedText('');
     let userMessageSaved = false;
     let partialReply = '';
+    let contextForTurn: string | undefined;
     try {
       const activeSession = session?.language === language
         ? session
         : await createChatSession(client, config, language);
       setSession(activeSession);
+      contextForTurn = screenContext?.sessionId === activeSession.id ? screenContext.description : undefined;
+      setScreenContext(null);
+      if (/what(?:'s| is) on (?:my|the) screen|look at (?:my|the) screen/iu.test(text) &&
+          screenShare?.sharing && contextForTurn === undefined) {
+        contextForTurn = await screenShare.inspect(activeSession.id);
+      }
       const assistant = await sendChatTurn(
         client,
         config,
@@ -119,6 +130,7 @@ export function ConversationHistory({
           setStreamedText(partialReply);
         },
         () => { userMessageSaved = true; },
+        contextForTurn,
       );
       setMessages((current) => [...current, asHistoryMessage(assistant, activeSession.language)]);
       setDraft('');
@@ -133,8 +145,24 @@ export function ConversationHistory({
         setStreamedText('');
         setReload((value) => value + 1);
       }
+
     } finally {
       setSending(false);
+    }
+  }
+
+  async function inspectScreen() {
+    if (!screenShare?.sharing || sending) return;
+    setTurnError('');
+    try {
+      const activeSession = session?.language === language
+        ? session
+        : await createChatSession(client, config, language);
+      setSession(activeSession);
+      const description = await screenShare.inspect(activeSession.id);
+      setScreenContext({ sessionId: activeSession.id, description });
+    } catch (reason) {
+      setTurnError(reason instanceof Error ? reason.message : 'Jarvis could not inspect the shared screen.');
     }
   }
 
@@ -251,7 +279,13 @@ export function ConversationHistory({
           <button className="primary-button" type="submit" disabled={sending || !draft.trim()}>
             Send
           </button>
+          <button className="secondary-button" type="button" onClick={() => void inspectScreen()}
+            disabled={sending || !screenShare?.sharing}>
+            Look at screen
+          </button>
         </div>
+        {screenContext?.sessionId === session?.id &&
+          <p role="status">Screen context is ready for the next message; it will not be saved in conversation history.</p>}
       </form>
     </section>
   );

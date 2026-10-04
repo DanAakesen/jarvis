@@ -162,12 +162,13 @@ export async function sendChatTurn(
   onUserMessage: (message: ChatMessage) => void,
   onDelta: (text: string) => void,
   onDeliveryUncertain?: () => void,
+  screenContext?: string,
 ): Promise<ChatMessage> {
   const response = await chatResponse(
     client,
     config,
     `/conversation/sessions/${session.id}/turns`,
-    { text },
+    { text, ...(screenContext === undefined ? {} : { screenContext }) },
     'text/event-stream',
     onDeliveryUncertain,
   );
