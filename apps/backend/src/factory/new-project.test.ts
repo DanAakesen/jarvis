@@ -74,6 +74,7 @@ it('uses configured defaults and keeps the repository secret out of task and rec
     },
     list: vi.fn(async () => []),
     get: vi.fn(async () => null),
+    updateModelConfig: vi.fn(async () => ({ kind: 'not-found' as const })),
     getEventsAfter: vi.fn(async () => []),
     getRunningContext: vi.fn(async () => ({ runningTasks: [], truncated: false })),
     transition: vi.fn(async () => ({ kind: 'not-found' as const })),

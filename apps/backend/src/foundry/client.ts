@@ -34,7 +34,7 @@ export interface FoundryClientOptions {
   maxResponseBytes?: number;
 }
 
-export interface RequestOptions { signal?: AbortSignal }
+export interface RequestOptions { signal?: AbortSignal; onResponse?: (statusCode: number) => void }
 /** Effective task configuration; the dispatcher resolves overrides before settings defaults. */
 export interface TaskWorkspace {
   repository: string;
@@ -335,6 +335,7 @@ export class FoundryClient {
           ...(body ? { body: JSON.stringify(body) } : {}),
         });
         if (response.redirected) { await response.body?.cancel().catch(() => undefined); throw this.protocol(operation) }
+        options.onResponse?.(response.status);
         if (!response.ok) { await response.body?.cancel().catch(() => undefined); throw new FoundryClientError("http", operation, response.status) }
         const content = await this.readBody(response, operation, controller.signal);
         if (ignoreBody) return undefined;

@@ -272,3 +272,19 @@ Generated views are temporary; theme values persist. Small-orb input controls
 start voice explicitly. Glass/transparency and futuristic styling are exploratory;
 white wireframe windows are not a selected final treatment. Existing screen
 documentation below/above describes current implementation, not this future shell.
+
+## Proposed surfaces for accepted capability additions
+
+Editable personality should live in **Settings → Jarvis → Personality**, reached
+through the agreed top-right Settings entry. Proposed fields are tone/response
+style and custom instructions, with Save and Reset to the current default and
+clear new-session application feedback. This placement is a recommendation, not
+a newly reviewed screen design. P8-19 owns the form; P7-16 owns its validated
+persistence and chat/voice application. Visual themes remain separate.
+
+Research and generated image/video results use the existing dynamic workspace,
+with source links or artifact references and honest progress/error states.
+Memory can be queried, corrected and forgotten through registered tools; a
+dedicated memory-management screen has not been selected. Reuse the agreed shell
+and view contracts rather than adding permanent rail/top-bar controls for each
+new capability.
