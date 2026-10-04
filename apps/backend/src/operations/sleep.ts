@@ -43,7 +43,7 @@ export function createSleepModule(scaler: ContainerAppScaler | null): BackendMod
           try {
             const result = await taskStore.withNoActiveTasks(() => scaler.setMinimumReplicas(0));
             if (result.kind === 'active') {
-              return reply.code(409).send({ error: 'Cannot put the backend to sleep while tasks are Ready or Running.' });
+              return reply.code(409).send({ error: 'Cannot put the backend to sleep while tasks are Ready, Running, or PauseRequested.' });
             }
             return { state: 'asleep' };
           } catch {

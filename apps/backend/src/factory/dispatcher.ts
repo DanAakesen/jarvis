@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { defaultSettings, type SettingsStore } from '../core/settings.js';
-import { FoundryClientError, type CodingAgent, type FoundryClient, type TaskRequest } from '../foundry/client.js';
-import type { SandboxHeartbeat } from './heartbeat.js';
-import type { TaskEventHub, TaskEventMessage, TaskStore } from './task-store.js';
+import {
+  FoundryClientError, type CodingAgent, type FoundryClient, type InvocationAccepted, type TaskRequest,
+} from '../foundry/client.js';
+import type { RunningSandbox, SandboxHeartbeat } from './heartbeat.js';
+import type {
+  TaskControlCommand, TaskControlResult, TaskController, TaskEventHub, TaskEventMessage, TaskRecord, TaskStore,
+} from './task-store.js';
 
 export interface DispatchClaim {
   taskId: string;
@@ -30,7 +34,21 @@ export interface DispatcherStore {
     sessionId: string;
     invocationId: string;
   }): Promise<string>;
+  getControlTarget(taskId: string): Promise<TaskControlTarget | null>;
+  recordControlTurn(target: TaskControlTarget, accepted: InvocationAccepted, message: string): Promise<boolean>;
+  recordResumedTurn(target: TaskControlTarget, accepted: InvocationAccepted): Promise<RunningSandbox>;
   endTaskSessions(taskId: string, state: string): Promise<string[]>;
+}
+
+export interface TaskControlTarget extends RunningSandbox {
+  taskId: string;
+  agent: CodingAgent;
+  request: string;
+  modelOverride: string | null;
+  reasoningOverride: string | null;
+  sandboxSize: '1x2' | '2x4';
+  image: string;
+  sessionStatus: 'Active' | 'Idle';
 }
 
 export interface DispatcherOptions {
@@ -74,7 +92,13 @@ function isCredentialFailure(kind: string): boolean {
   return kind === 'credential-unavailable';
 }
 
-export class TaskDispatcher {
+function transitionResult(kind: string): TaskControlResult {
+  if (kind === 'not-found') return { kind: 'not-found' };
+  if (kind === 'invalid-transition') return { kind: 'invalid-transition' };
+  return { kind: 'failed' };
+}
+
+export class TaskDispatcher implements TaskController {
   private readonly owner = randomUUID();
   private readonly leaseSeconds: number;
   private readonly maxAttempts: number;
@@ -90,7 +114,8 @@ export class TaskDispatcher {
     private readonly store: DispatcherStore,
     private readonly tasks: TaskStore,
     private readonly settings: SettingsStore,
-    private readonly clientFor: (agentName: string) => Pick<FoundryClient, 'startTask' | 'deleteSession'>,
+    private readonly clientFor: (agentName: string) => Pick<FoundryClient,
+      'startTask' | 'steer' | 'pause' | 'resume' | 'cancel' | 'deleteSession'>,
     private readonly heartbeat: SandboxHeartbeat,
     private readonly events: TaskEventHub,
     options: DispatcherOptions = {},
@@ -116,6 +141,114 @@ export class TaskDispatcher {
     this.timer = undefined;
     this.wakePending = false;
     await this.pumping;
+  }
+
+  async control(taskId: string, command: TaskControlCommand): Promise<TaskControlResult> {
+    const task = await this.tasks.get(taskId, 1, 0);
+    if (!task) return { kind: 'not-found' };
+    let target = await this.store.getControlTarget(taskId);
+    if (task.state === 'Paused' && target?.sessionStatus === 'Active') {
+      const ended = await this.store.endTaskSessions(taskId, 'Paused');
+      ended.forEach((id) => this.heartbeat.untrack(id));
+      target = await this.store.getControlTarget(taskId);
+    }
+    const activeTurn = task.state === 'Running' && target?.sessionStatus === 'Active' && target.invocationId;
+    const pausedSession = task.state === 'Paused' && target?.sessionStatus === 'Idle';
+
+    if (command.action === 'steer') {
+      if (!activeTurn || !target) return { kind: 'invalid-transition' };
+      let accepted: InvocationAccepted | undefined;
+      try {
+        accepted = await this.clientFor(target.agentName).steer(
+          target.foundrySessionId, task.agent, command.message, { taskId },
+        );
+        if (!await this.store.recordControlTurn(target, accepted, command.message)) {
+          await this.clientFor(target.agentName).cancel(accepted.invocationId).catch(this.onError);
+          return { kind: 'invalid-transition' };
+        }
+        this.heartbeat.track({ ...target, invocationId: accepted.invocationId });
+        return { kind: 'ok', task };
+      } catch {
+        if (accepted) await this.clientFor(target.agentName).cancel(accepted.invocationId).catch(this.onError);
+        return { kind: 'failed' };
+      }
+    }
+
+    if (command.action === 'pause') {
+      if (!activeTurn || !target) return { kind: 'invalid-transition' };
+      const requested = await this.tasks.transition(taskId, 'PauseRequested');
+      if (requested.kind !== 'ok') return transitionResult(requested.kind);
+      try {
+        const acknowledgement = await this.clientFor(target.agentName).pause(target.foundrySessionId);
+        if (acknowledgement.status === 'idle') {
+          const paused = await this.tasks.transition(taskId, 'Paused');
+          if (paused.kind !== 'ok') return transitionResult(paused.kind);
+          const ended = await this.store.endTaskSessions(taskId, 'Paused');
+          ended.forEach((id) => this.heartbeat.untrack(id));
+          return { kind: 'ok', task: paused.task };
+        }
+        return { kind: 'ok', task: requested.task };
+      } catch {
+        return { kind: 'failed' };
+      }
+    }
+
+    if (command.action === 'resume') {
+      if (!pausedSession || !target) return { kind: 'invalid-transition' };
+      const resumed = await this.tasks.transition(taskId, 'Running');
+      if (resumed.kind !== 'ok') return transitionResult(resumed.kind);
+      let accepted: InvocationAccepted | undefined;
+      try {
+        accepted = await this.clientFor(target.agentName).resume(
+          target.foundrySessionId,
+          await this.taskRequest(task),
+        );
+        const running = await this.store.recordResumedTurn(target, accepted);
+        this.heartbeat.track(running);
+        return { kind: 'ok', task: resumed.task };
+      } catch {
+        if (accepted) await this.clientFor(target.agentName).cancel(accepted.invocationId).catch(this.onError);
+        await this.tasks.transition(taskId, 'NeedsAttention').catch(this.onError);
+        return { kind: 'failed' };
+      }
+    }
+
+    if (task.state !== 'Ready' && task.state !== 'Running' && task.state !== 'Paused') {
+      return { kind: 'invalid-transition' };
+    }
+    if (task.state === 'Running' && (!activeTurn || !target)) return { kind: 'unavailable' };
+    if (task.state === 'Paused' && !target) return { kind: 'unavailable' };
+    if (task.state === 'Running' && target) {
+      try {
+        await this.clientFor(target.agentName).cancel(target.invocationId);
+      } catch {
+        return { kind: 'failed' };
+      }
+    }
+    const cancelled = await this.tasks.transition(taskId, 'Cancelled');
+    if (cancelled.kind !== 'ok') return transitionResult(cancelled.kind);
+    let cleanupFailed = false;
+    if (target) {
+      try {
+        await this.endSession(target, 'Cancelled');
+      } catch (error) {
+        cleanupFailed = true;
+        this.heartbeat.untrack(target.sandboxSessionId);
+        this.onError(error);
+      }
+      try {
+        await this.clientFor(target.agentName).deleteSession(target.foundrySessionId);
+      } catch (error) {
+        cleanupFailed = true;
+        this.onError(error);
+      }
+    }
+    return cleanupFailed ? { kind: 'failed' } : { kind: 'ok', task: cancelled.task };
+  }
+
+  private async endSession(target: TaskControlTarget, state: 'Paused' | 'Cancelled' = 'Paused'): Promise<void> {
+    const ids = await this.store.endTaskSessions(target.taskId, state);
+    ids.forEach((id) => this.heartbeat.untrack(id));
   }
 
   private onTaskEvent(event: TaskEventMessage): void {
@@ -218,7 +351,7 @@ export class TaskDispatcher {
     });
   }
 
-  private async taskRequest(task: DispatchClaim): Promise<TaskRequest> {
+  private async taskRequest(task: Pick<TaskRecord, 'agent' | 'request' | 'modelOverride' | 'reasoningOverride'>): Promise<TaskRequest> {
     const stored = await this.settings.read();
     const providerSettings = task.agent === 'codex'
       ? defaultSettings.codex

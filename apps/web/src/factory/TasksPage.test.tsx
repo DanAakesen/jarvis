@@ -90,6 +90,8 @@ describe('Factory task board', () => {
     expect(within(card).getByText('Codex')).not.toBeNull();
     expect(within(card).getByText('Updating tests')).not.toBeNull();
     expect(within(card).getByText('2')).not.toBeNull();
+    expect(within(card).getByRole('button', { name: 'Pause' })).not.toBeNull();
+    expect(within(card).getByRole('button', { name: 'Steer' })).not.toBeNull();
     expect(within(card).getAllByText('Not reported')).toHaveLength(3);
     expect(within(card).getByRole('link', { name: 'Fix the bug' }).getAttribute('href')).toBe('/factory/tasks/42');
     expect(await screen.findByText('Live updates connected.')).not.toBeNull();

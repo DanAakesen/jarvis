@@ -2,7 +2,9 @@ import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { projectRoutes } from './projects.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
-import type { CreateTaskInput, RecordTaskEventInput, TaskEventMessage, TaskListFilters } from './task-store.js';
+import type {
+  CreateTaskInput, RecordTaskEventInput, TaskControlCommand, TaskEventMessage, TaskListFilters,
+} from './task-store.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxResponseBytes = 1024 * 1024;
@@ -135,6 +137,39 @@ export const factoryModule: BackendModule = {
       const detail = await store.get(request.params.id, request.query.eventLimit ?? 100, request.query.eventOffset ?? 0);
       if (!detail) return reply.code(404).send({ error: 'Task not found' });
       return sendBounded(reply, detail);
+    });
+
+    app.post<{ Params: { id: string }; Body: { action: string; message?: string } }>('/factory/tasks/:id/controls', {
+      schema: {
+        params: { type: 'object', properties: { id: idSchema }, required: ['id'], additionalProperties: false },
+        body: {
+          type: 'object',
+          properties: {
+            action: { type: 'string', enum: ['steer', 'pause', 'resume', 'cancel'] },
+            message: { type: 'string', minLength: 1, maxLength: 65_536 },
+          },
+          required: ['action'],
+          additionalProperties: false,
+          allOf: [{
+            if: { properties: { action: { const: 'steer' } }, required: ['action'] },
+            then: { required: ['message'] },
+            else: { not: { required: ['message'] } },
+          }],
+        },
+      },
+    }, async (request, reply) => {
+      const controller = app.taskController;
+      if (!controller) return reply.code(503).send({ error: 'Task controls are unavailable' });
+      if (!isSqlBigInt(request.params.id)) return reply.code(400).send({ error: 'Invalid task ID' });
+      if (request.body.action === 'steer' && !request.body.message?.trim()) {
+        return reply.code(400).send({ error: 'Steering message cannot be empty' });
+      }
+      const result = await controller.control(request.params.id, request.body as TaskControlCommand);
+      if (result.kind === 'not-found') return reply.code(404).send({ error: 'Task not found' });
+      if (result.kind === 'invalid-transition') return reply.code(409).send({ error: 'Task state does not allow this action' });
+      if (result.kind === 'unavailable') return reply.code(503).send({ error: 'Task runtime is unavailable' });
+      if (result.kind === 'failed') return reply.code(502).send({ error: 'Task control could not be completed' });
+      return sendBounded(reply, result.task);
     });
 
     app.get<{ Params: { id: string } }>('/factory/tasks/:id/events', {

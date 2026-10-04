@@ -131,7 +131,9 @@ board. Keep the six task states as distinct columns; columns stack on narrow
 screens, use two columns at tablet widths, and scroll horizontally on wide
 screens. Cards group task facts as labelled details, with the state always
 written as text. The create dialog uses labelled fields and keeps pending and
-failure feedback beside its actions. Pull request, checks, and usage remain
+failure feedback beside its actions. A shared task-controls component offers
+steer/pause while Running, resume while Paused, and cancel only after confirmation.
+Pull request, checks, and usage remain
 explicitly "Not reported" until the backend provides those values.
 
 Checked in Chromium at 1280 and 390 px with scratch-only auth and API mocks:
@@ -143,12 +145,13 @@ behavior remain unverified.
 ## Task detail (P1-09)
 
 The page extends the neutral Factory layout with a labelled task summary, a compact
-metadata grid, and separate sections for actions, recorded disk readings, usage,
+metadata grid, and separate sections for state-aware task actions, recorded disk readings, usage,
 the originating conversation message, and the event timeline. The timeline remains chronological and shows all event
 sources by default; users can filter by event type, expand bounded event payloads,
 and request additional event pages. Its connection state stays visible beside the
-filter. Disabled task controls and unavailable PR/artifact links have adjacent
-explanations rather than implying an action is ready.
+filter. Controls display pending, success, and error feedback beside the action;
+unavailable PR/artifact links have adjacent explanations rather than implying an
+action is ready.
 
 At narrow widths the metadata and controls stack into one column and timeline
 payloads scroll within the page. Existing 44 px controls and focus styles are

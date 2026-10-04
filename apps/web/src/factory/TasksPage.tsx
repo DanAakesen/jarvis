@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { streamTaskEvents } from '../task-events';
+import { TaskControls } from './TaskControls';
 
 interface Project {
   id: string;
@@ -510,6 +511,13 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                               <div><dt>Checks</dt><dd>Not reported</dd></div>
                               <div><dt>Usage</dt><dd>Not reported</dd></div>
                             </dl>
+                            <TaskControls
+                              backendUrl={backendUrl}
+                              getAccessToken={getAccessToken}
+                              taskId={task.id}
+                              state={task.state}
+                              onComplete={() => setReloadKey((value) => value + 1)}
+                            />
                           </article>
                         </li>
                       ))}

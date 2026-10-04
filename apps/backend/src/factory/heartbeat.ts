@@ -11,6 +11,7 @@ export interface SandboxHeartbeatStore {
   listRunning(): Promise<RunningSandbox[]>;
   recordHeartbeat(sandboxSessionId: string): Promise<void>;
   markNeedsAttention(sandboxSessionId: string): Promise<boolean>;
+  resolvePause(sandboxSessionId: string, state: 'Running' | 'Paused'): Promise<boolean>;
 }
 
 export interface SandboxStatusClient {
@@ -114,6 +115,15 @@ export class SandboxHeartbeat {
       }
       await this.store.recordHeartbeat(entry.sandbox.sandboxSessionId);
       entry.failures = 0;
+      if (result.status === 'paused') {
+        const paused = await this.store.resolvePause(entry.sandbox.sandboxSessionId, 'Paused');
+        if (paused) this.untrack(entry.sandbox.sandboxSessionId);
+      } else if (result.status === 'running' || result.status === 'queued') {
+        await this.store.resolvePause(entry.sandbox.sandboxSessionId, 'Running');
+      } else if (result.status === 'failed') {
+        await this.store.markNeedsAttention(entry.sandbox.sandboxSessionId);
+        this.untrack(entry.sandbox.sandboxSessionId);
+      }
     } catch (error) {
       if (signal.aborted) return;
       if (isSandboxCrashResponse(error)) {

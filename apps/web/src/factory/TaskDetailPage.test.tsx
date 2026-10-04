@@ -144,6 +144,7 @@ const task = {
 };
 
 let taskEvents: typeof task.events;
+let taskState: 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
 
 function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -165,8 +166,13 @@ beforeEach(() => {
   streamHarness.callbacks.clear();
   streamHarness.lastEventIds.clear();
   taskEvents = [...task.events];
+  taskState = 'NeedsAttention';
   fetchMock.mockReset().mockImplementation(async (input) => {
     const url = new URL(String(input));
+    if (url.pathname === '/factory/tasks/42/controls') {
+      taskState = 'PauseRequested';
+      return response({ ...task, state: taskState });
+    }
     if (url.pathname === '/factory/projects') return response([project]);
     if (url.pathname === '/conversation/history') {
       return response({
@@ -183,7 +189,7 @@ beforeEach(() => {
     if (url.pathname === '/factory/tasks/42') {
       const offset = Number(url.searchParams.get('eventOffset') ?? 0);
       const limit = Number(url.searchParams.get('eventLimit') ?? 100);
-      return response({ ...task, events: taskEvents.slice(offset, offset + limit) });
+      return response({ ...task, state: taskState, events: taskEvents.slice(offset, offset + limit) });
     }
     return response({ error: 'Unexpected request' }, 500);
   });
@@ -193,7 +199,7 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('task detail page', () => {
-  it('shows task metadata, project and branch links, disabled actions, disk readings, and every event source', async () => {
+  it('shows task metadata, project and branch links, state-valid actions, disk readings, and every event source', async () => {
     renderTaskPage();
 
     expect(await screen.findByRole('heading', { name: 'Keep disk headroom' })).not.toBeNull();
@@ -224,14 +230,33 @@ describe('task detail page', () => {
     expect(screen.getByText('GitHub reported passing checks')).not.toBeNull();
     expect(screen.getByText('Dan sent a steering message')).not.toBeNull();
     expect(screen.getByText('Chat')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Steer' }).hasAttribute('disabled')).toBe(true);
-    expect(screen.getByRole('button', { name: 'Pause' }).hasAttribute('disabled')).toBe(true);
-    expect(screen.getByText('Task controls are shown here and will be enabled in P2.')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
+    expect(screen.getByText('Task controls are unavailable while this task needs attention.')).not.toBeNull();
     expect(screen.getByText('Live updates connected')).not.toBeNull();
     expect(streamHarness.lastEventIds.get('42')).toBe('24');
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.example.com/factory/tasks/42?eventLimit=100&eventOffset=0',
       expect.objectContaining({ headers: { Authorization: `${['Bear', 'er'].join('')} test-access-token` } }),
+    );
+  });
+
+  it('sends task controls from the detail page for a Running task', async () => {
+    const user = userEvent.setup();
+    taskState = 'Running';
+    renderTaskPage();
+    await screen.findByRole('heading', { name: 'Keep disk headroom' });
+
+    await user.click(screen.getByRole('button', { name: 'Pause' }));
+
+    expect(await screen.findByText(/Pause requested/)).not.toBeNull();
+    expect(await screen.findByText('Pause requested', { exact: true })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
+    expect(fetchMock.mock.calls.filter(([input]) =>
+      new URL(String(input)).pathname === '/factory/tasks/42')).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.com/factory/tasks/42/controls',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ action: 'pause' }) }),
     );
   });
 

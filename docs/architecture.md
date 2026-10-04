@@ -131,6 +131,18 @@ confirms completion. The browser and hosted agent service identities do not rece
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
 
+`POST /factory/tasks/:id/controls` accepts only `steer`, `pause`, `resume`, or
+`cancel`; it uses the default Dan-only authentication and never accepts a requested
+task state. The dispatcher validates the current state, uses the Foundry client for
+the remote operation, and persists the accepted invocation or lifecycle transition.
+Steering also stores the bounded user message as a `steered` task event in the same
+transaction as its turn, then publishes the event after commit; SSE payloads over
+4 KiB are omitted and marked truncated. Pause remains `PauseRequested` until heartbeat
+confirms the turn stopped; steering and resume register the accepted turn for heartbeat
+monitoring. A stale or invalid transition returns 409, unavailable runtime state returns
+503, and remote failures are sanitized. The board and detail page share one state-aware
+controls component.
+
 P1-08's web board uses the authenticated project and task APIs for filters and
 task creation, requesting at most 100 newest matching tasks at a time. It opens
 the P1-06 authenticated fetch-SSE client for nonterminal tasks, resumes from each
@@ -158,17 +170,19 @@ P1-09's task detail page reads `GET /factory/tasks/:id` in 100-event pages using
 the authenticated P1-06 SSE stream from the last event in the initial page and
 deduplicates live/replayed events with the same persisted IDs. Project links reuse
 the active-project API to form validated GitHub branch links. PR/check data,
-artifacts and task-control writes remain unavailable to this page until
-their owning integrations and P2 controls are ready; P2-12's usage section shows the task's recorded usage. For tasks created from a
+artifacts remain unavailable until their integrations are ready; P2-07's task
+controls call the authenticated dispatcher route, and P2-12's usage section shows
+the task's recorded usage. For tasks created from a
 conversation, it fetches the matching message with a one-row paginated history
-request. No schema or API write path changed.
+request. P2-07 adds a separate authenticated control write route; no schema change
+is required.
 
 `GET /operations/sleep` reports the Container App's configured minimum replicas;
 `PUT /operations/sleep` accepts only awake (1) or asleep (0). Both routes use the
 root's Dan-only authentication. The backend targets only its Bicep-configured
 Container App resource ID and obtains an ARM token with its user-assigned
-managed identity. Before requesting sleep, the task store checks for Ready or
-Running tasks under an exclusive SQL application lock; task creation and state
+managed identity. Before requesting sleep, the task store checks for Ready,
+Running, or PauseRequested tasks under an exclusive SQL application lock; task creation and state
 transitions use the matching shared lock, held through their writes. The lock
 remains held through the bounded ARM request, closing the race with new active
 tasks. Refusal is a 409; unavailable ARM configuration or failures return a
@@ -313,9 +327,12 @@ P2-12 adds group 7 `dbo.usage`. Before each ACP prompt the runner sends an
 idempotently stores the turn. It stores token or premium-request counts only when
 an ACP result or usage notification contains a nonnegative integer in the
 allowlisted `usage` fields. The provider's values are not inferred from a turn.
-When a sandbox session ends, the dispatcher stores its elapsed minutes and
-estimated DKK in the same transaction as the session/turn end updates. Task detail
-also calculates a live estimate for an open session. Rates use the documented
+When a sandbox session pauses, the dispatcher stores its elapsed minutes and
+estimated DKK in the same transaction as the session/turn end updates. Resume
+reopens that same Foundry session row and starts a new active interval; the unique
+Foundry session ID remains intact, and each pause adds its elapsed minutes and cost
+to the existing usage row. Cancellation also ends an idle paused row. Task detail
+calculates a live estimate for an open interval. Rates use the documented
 Sweden Central vCPU/memory basis: 0.8901 DKK/hour for 1×2 and 1.7802 DKK/hour
 for 2×4; actual billed amounts may differ. SQL Server integration and live
 provider reporting remain post-merge checks.
@@ -470,7 +487,7 @@ These boxes are responsibilities; they do not each need a separate service.
 
 | Part | Design |
 | --- | --- |
-| Queue | The Azure SQL task table. A transaction-owned dispatcher app lock serializes claims across replicas; Ready rows are leased only when both global and project limits allow them. Active Running tasks and unexpired startup leases consume capacity. |
+| Queue | The Azure SQL task table. A transaction-owned dispatcher app lock serializes claims across replicas; Ready rows are leased only when both global and project limits allow them. Active Running and PauseRequested tasks and unexpired startup leases consume capacity. |
 | Retries | `attempt_count` and `next_attempt_at` on the task row. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; ambiguous Foundry starts and exhausted attempts move to Needs attention. Expired startup leases move to Needs attention rather than being replayed, avoiding duplicate remote sessions. |
 | Sandbox heartbeat | At startup, the backend loads active sandbox turns once; the dispatcher registers new turns. Each registered invocation is checked immediately and about once a minute, and `last_heartbeat_at` is updated after a valid response. The poller holds active sessions in memory and makes no recurring SQL reads while idle. |
 | Crash detection | Two consecutive HTTP 424/404/5xx responses, with a confirming poll after 30 s; the task and sandbox session are updated in one transaction, then the committed task event is published through the in-process hub. Event gaps alone never trigger it (L22). |
@@ -479,7 +496,7 @@ These boxes are responsibilities; they do not each need a separate service.
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. The fetch client reconnects with its last delivered ID and ignores repeats. |
 | Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. Live state is visible; PR/check/usage values stay unavailable until their owning data integrations exist. |
 | Idle | The dispatcher subscribes to committed task events and schedules only the next retry deadline. After its startup scan, it makes no recurring SQL queries while idle; there is no polling timer. |
-| Always on | The backend normally runs with a minimum of 1 replica, so the heartbeat never stops. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready or Running. The backend does not query SQL while idle, so the database can still pause. |
+| Always on | The backend normally runs with a minimum of 1 replica, so the heartbeat never stops. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. The backend does not query SQL while idle, so the database can still pause. |
 
 Scale settings are revision-scope in Container Apps, so the sleep switch creates a new revision; that is acceptable because it is used only when nothing runs. The SQL application lock blocks new active-task writes between the idle check and the ARM update.
 

@@ -127,4 +127,19 @@ export interface TaskStore {
   recordEvent(event: RecordTaskEventInput): Promise<TaskEventMessage>;
 }
 
+export type TaskControlCommand =
+  | { action: 'steer'; message: string }
+  | { action: 'pause' | 'resume' | 'cancel' };
+
+export type TaskControlResult =
+  | { kind: 'ok'; task: TaskRecord }
+  | { kind: 'not-found' }
+  | { kind: 'invalid-transition' }
+  | { kind: 'unavailable' }
+  | { kind: 'failed' };
+
+export interface TaskController {
+  control(taskId: string, command: TaskControlCommand): Promise<TaskControlResult>;
+}
+
 export type TaskEventHub = EventHub<TaskEventMessage>;

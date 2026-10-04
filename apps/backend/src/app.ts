@@ -13,7 +13,7 @@ import { conversationModule } from './core/conversation.js';
 import type { ConversationStore } from './core/conversation-store.js';
 import type { ConversationAgent } from './core/chat-agent.js';
 import { factoryModule } from './factory/index.js';
-import type { TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
+import type { TaskController, TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
 import type { ProjectStore } from './factory/projects.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
@@ -30,6 +30,7 @@ export interface BuildAppOptions {
   readonly projectStore?: ProjectStore;
   readonly toolCallStore?: ToolCallStore;
   readonly taskStore?: TaskStore;
+  readonly taskController?: TaskController;
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
   readonly credentialStatusStore?: CredentialStatusStore;
@@ -47,6 +48,7 @@ declare module 'fastify' {
     projectStore: ProjectStore | null;
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
+    taskController: TaskController | null;
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
     credentialStatusStore: CredentialStatusStore | null;
@@ -106,6 +108,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('projectStore', options.projectStore ?? null);
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);
+  app.decorate('taskController', options.taskController ?? null);
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());

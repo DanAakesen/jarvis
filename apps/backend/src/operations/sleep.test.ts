@@ -88,7 +88,7 @@ describe('sleep switch API', () => {
       payload: { state: 'asleep' },
     });
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toEqual({ error: 'Cannot put the backend to sleep while tasks are Ready or Running.' });
+    expect(response.json()).toEqual({ error: 'Cannot put the backend to sleep while tasks are Ready, Running, or PauseRequested.' });
     expect(scaler.setMinimumReplicas).not.toHaveBeenCalled();
   });
 
