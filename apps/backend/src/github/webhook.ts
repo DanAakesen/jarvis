@@ -90,7 +90,7 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
         try {
           if (mapping) await options.onMapping?.(mapping);
         } catch {
-          request.log.error('github.project_policy_evaluation_failed');
+          request.log.error('github.webhook_mapping_failed');
           return reply.code(503).send({ error: 'Webhook processing unavailable' });
         }
         return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
