@@ -11,6 +11,7 @@ import {
 } from './realtime.js';
 import type { BackendModule } from '../modules.js';
 import type { ConversationRole } from '../core/conversation-store.js';
+import { defaultSettings, readSettings } from '../core/settings.js';
 
 export const VOICE_LIVE_SCOPE = 'https://ai.azure.com/.default';
 export const VOICE_SUBPROTOCOL = 'jarvis.voice.v1';
@@ -357,9 +358,17 @@ function registerVoiceRoute(
         await sessionReady;
         const token = await credential(getToken, controller.signal);
         if (controller.signal.aborted || browser.readyState !== WebSocket.OPEN) return;
+        let personality = defaultSettings.personality;
+        if (english && app.settingsStore) {
+          try {
+            personality = (await readSettings(app.settingsStore)).personality;
+          } catch {
+            request.log.warn('voice.personality_settings_unavailable');
+          }
+        }
         upstream = connect(token, controller.signal);
         upstream.once('open', () => {
-          if (english) sendUpstream(createEnglishSessionUpdate(app.jarvisTools), flushQueued);
+          if (english) sendUpstream(createEnglishSessionUpdate(app.jarvisTools, personality), flushQueued);
           else flushQueued();
         });
         upstream.on('message', (data, binary) => {

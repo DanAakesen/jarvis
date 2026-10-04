@@ -39,8 +39,8 @@ import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
 import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
 import { createNowFeedStore } from './database/now-feed-store.js';
+import { createGitHubAppRepositoryCatalog, createGitHubAppTokenIssuer } from './github-app.js';
 import { createRepoAdminRepositoryCreator } from './credentials/repo-admin.js';
-import { createGitHubAppTokenIssuer } from './github-app.js';
 import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js';
 import { createChecksLoopStore } from './database/checks-loop-store.js';
 import { createChecksLoopBlobStore } from './database/checks-loop-blob.js';
@@ -92,14 +92,22 @@ try {
   const githubAppKeyVault = config.githubAppId && config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
     : undefined;
+  const getGitHubAppPrivateKey = async () => {
+    if (!githubAppKeyVault) throw new Error('GitHub App private key is unavailable');
+    const secret = await githubAppKeyVault.getSecret('github-app-private-key');
+    if (!secret.value) throw new Error('GitHub App private key is unavailable');
+    return secret.value;
+  };
   const githubAppTokenIssuer = config.githubAppId && githubAppKeyVault
     ? createGitHubAppTokenIssuer({
       appId: config.githubAppId,
-      getPrivateKey: async () => {
-        const secret = await githubAppKeyVault.getSecret('github-app-private-key');
-        if (!secret.value) throw new Error('GitHub App private key is unavailable');
-        return secret.value;
-      },
+      getPrivateKey: getGitHubAppPrivateKey,
+    })
+    : undefined;
+  const githubRepositoryCatalog = config.githubAppId && githubAppKeyVault
+    ? createGitHubAppRepositoryCatalog({
+      appId: config.githubAppId,
+      getPrivateKey: getGitHubAppPrivateKey,
     })
     : undefined;
   const webhookSecretClient = config.keyVaultUri && credential
@@ -289,6 +297,7 @@ try {
       conversationStore: createConversationStore(database.pool),
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
+      ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),
       ...(dispatcher ? { taskController: dispatcher } : {}),
       nowFeedStore: createNowFeedStore(database.pool),
       usageStore: createUsageStore(database.pool),

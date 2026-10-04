@@ -215,8 +215,8 @@ def test_protocol_mismatch_is_rejected() -> None:
 
 
 def test_each_session_keeps_its_own_model_settings_snapshot() -> None:
-    first_settings = ModelSettings("gpt-5.6-luna", "low")
-    second_settings = ModelSettings("gpt-5.4-mini", "high")
+    first_settings = ModelSettings("gpt-5.6-luna", "low", "warm", "balanced", "Plain language.")
+    second_settings = ModelSettings("gpt-5.4-mini", "high", "direct", "detailed", "")
     model = FakeModel([["First"], ["Second"]], settings=[first_settings, second_settings])
     app = create_app(model, configure_observability=None)
 
