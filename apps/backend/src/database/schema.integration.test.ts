@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import sql from 'mssql';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readDownMigration, readMigrations, revertMigration, type Migration } from './migrations.js';
 import { createTaskStore } from './task-store.js';
@@ -10,6 +10,7 @@ import { createSettingsStore } from './settings-store.js';
 import { createWebhookDeliveryStore } from './webhook-delivery-store.js';
 import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
+import { createAlertActivityStore } from './alert-store.js';
 import { createDispatcherStore } from './dispatcher-store.js';
 import {
   createTaskEventArchive,
@@ -101,12 +102,13 @@ describe('committed domain schema (groups 1-7)', () => {
         N'IX_sandbox_turns_sandbox_session_id_started_at', N'IX_artifacts_task_id_at',
         N'IX_task_event_archives_task_first_at', N'IX_pull_requests_project_head_sha',
         N'IX_workflow_runs_project_head_sha', N'IX_releases_project_created_at',
-        N'IX_deployments_release_id_at') ORDER BY name`);
+        N'IX_deployments_release_id_at', N'UX_activity_alert_key') ORDER BY name`);
     expect(recordset.map((row) => row.name)).toEqual([
       'IX_artifacts_task_id_at', 'IX_deployments_release_id_at', 'IX_pull_requests_project_head_sha',
       'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
       'IX_sandbox_turns_sandbox_session_id_started_at', 'IX_task_event_archives_task_first_at',
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
+      'UX_activity_alert_key',
     ]);
   });
 
@@ -319,6 +321,79 @@ describe('committed domain schema (groups 1-7)', () => {
     expect(await store.dismiss(String(releaseId))).toBe(true);
     expect((await store.read()).items.some((item) => item.id === String(releaseId))).toBe(false);
     expect(await store.dismiss('9223372036854775807')).toBe(false);
+  });
+
+  it('records each alert condition once and returns it in the Now feed', async () => {
+    const alertNotifier = vi.fn();
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Alert fixture', N'DanAakesen/alert-${randomUUID().slice(0, 8)}', N'main',
+        N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const repo = (await pool.request()
+      .input('projectId', sql.Int, projectId)
+      .query<{ repo: string }>('SELECT repo FROM dbo.projects WHERE id = @projectId')).recordset[0]!.repo;
+    const sha = 'd'.repeat(40);
+    const releaseId = await scalar(`INSERT dbo.releases (project_id, version, sha, status, created_at)
+      VALUES (${projectId}, N'1', N'${sha}', N'deploying', SYSUTCDATETIME())`);
+    const deploymentStore = createWebhookDeliveryStore(pool, alertNotifier);
+    const failedDeployment = {
+      kind: 'deployment_status' as const, repository: repo, id: 1_900_000_000_099, sha,
+      environment: 'production', status: 'failure' as const, at: new Date().toISOString(),
+    };
+    await deploymentStore.record({
+      deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok', mapping: failedDeployment,
+    });
+    await deploymentStore.record({
+      deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok', mapping: failedDeployment,
+    });
+    expect(alertNotifier).toHaveBeenCalledExactlyOnceWith({
+      type: 'deployment_failure',
+      dedupeKey: `deployment:${failedDeployment.id}`,
+      title: 'Deployment failed: production',
+      link: `release:${releaseId}`,
+    });
+
+    const tasks = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    const task = await tasks.create({ projectId: String(projectId), title: 'Crash fixture', request: 'Run' });
+    if (!task) throw new Error('Alert fixture task was not created');
+    expect((await tasks.transition(task.id, 'Running')).kind).toBe('ok');
+    const sandboxId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, size, image, status, agent_name)
+      VALUES (${task.id}, N'alert-${randomUUID()}', N'1', N'1x2', N'node', N'Active', N'jarvis-runner-node-1x2')`);
+    const heartbeatStore = createSandboxHeartbeatStore(
+      pool,
+      createEventHub<TaskEventMessage>(),
+      alertNotifier,
+    );
+    await expect(heartbeatStore.markNeedsAttention(String(sandboxId))).resolves.toBe(true);
+    await expect(heartbeatStore.markNeedsAttention(String(sandboxId))).resolves.toBe(false);
+    expect(alertNotifier).toHaveBeenCalledTimes(2);
+
+    const credentialStore = createCredentialStatusStore(pool, { alertNotifier });
+    const expiry = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+    await credentialStore.updateCopilotStatus('renew_soon', expiry, new Date().toISOString());
+    await credentialStore.updateCopilotStatus('renew_soon', expiry, new Date().toISOString());
+    expect(alertNotifier).toHaveBeenCalledTimes(3);
+
+    const refreshed = vi.fn();
+    const budgetAlerts = createAlertActivityStore(pool, refreshed);
+    const budgetAlert = {
+      type: 'budget_threshold' as const,
+      dedupeKey: `budget-80:${new Date().toISOString().slice(0, 7)}`,
+      title: 'Monthly Azure budget reached 80%',
+      link: null,
+    };
+    await expect(budgetAlerts.record(budgetAlert)).resolves.toBe(true);
+    await expect(budgetAlerts.record(budgetAlert)).resolves.toBe(false);
+    expect(refreshed).toHaveBeenCalledOnce();
+
+    const feed = await createNowFeedStore(pool).read();
+    expect(feed.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: 'alert', title: 'Deployment failed: production', link: `release:${releaseId}` }),
+      expect.objectContaining({ category: 'alert', title: 'Sandbox crashed', link: `task:${task.id}` }),
+      expect.objectContaining({ category: 'alert', title: `copilot-token expires ${expiry.slice(0, 10)}`, link: null }),
+      expect.objectContaining({ category: 'alert', title: 'Monthly Azure budget reached 80%', link: null }),
+    ]));
   });
 
   it('stores valid records across the committed schema', async () => {

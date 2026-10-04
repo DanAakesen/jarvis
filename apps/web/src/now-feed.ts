@@ -33,7 +33,8 @@ function validTime(value: unknown): value is string {
 
 function isActivityItem(value: unknown): value is ActivityItem {
   return isRecord(value) && validId(value.id) &&
-    (value.category === 'attention' || value.category === 'release' || value.category === 'credential') &&
+    (value.category === 'attention' || value.category === 'release' ||
+      value.category === 'credential' || value.category === 'alert') &&
     typeof value.title === 'string' && value.title.length > 0 && value.title.length <= 400 &&
     (value.link === null || typeof value.link === 'string') && validTime(value.at);
 }

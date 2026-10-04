@@ -16,6 +16,7 @@ const feed: NowFeed = {
     { id: '2', category: 'release', title: 'Release 7 deployed', link: 'release:7', at: '2026-10-03T11:40:00Z' },
     { id: '3', category: 'credential', title: 'Codex login expires in 3 days', link: null, at: '2026-10-03T09:00:00Z' },
     { id: '4', category: 'release', title: 'Unexpected link', link: 'javascript:alert(1)', at: '2026-10-03T09:00:00Z' },
+    { id: '5', category: 'alert', title: 'Monthly budget reached 80%', link: null, at: '2026-10-03T08:00:00Z' },
   ],
 };
 
@@ -64,12 +65,13 @@ describe('activity panel', () => {
     expect(within(releases).queryByRole('link', { name: 'Unexpected link' })).toBeNull();
     expect(within(releases).getByText('Unexpected link')).not.toBeNull();
     expect(within(section('Credential warnings')).queryByRole('link')).toBeNull();
+    expect(within(section('Alerts')).getByText('Monthly budget reached 80%')).not.toBeNull();
   });
 
   it('shows empty states for each group', () => {
     renderPanel({ feed: { status: 'ready', updatedAt: feed.updatedAt, running: [], items: [] }, onDismiss: vi.fn() });
 
-    for (const text of ['No tasks are running.', 'No tasks need attention.', 'No recent releases or deployments.', 'No credential warnings.']) {
+    for (const text of ['No tasks are running.', 'No tasks need attention.', 'No recent releases or deployments.', 'No credential warnings.', 'No active alerts.']) {
       expect(screen.getByText(text)).not.toBeNull();
     }
   });
