@@ -255,6 +255,14 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
+P8-05 conversation checks used the same scratch-only auth/API/audio fixtures at
+1440×900 and 390×844, plus 320/280 px overflow checks. Long history stays inside
+an independently scrolling transcript; the composer remains bottom-centred.
+Streaming, interruption, history retry, explicit voice entry, microphone
+permission denial, natural voice end, draft/focus restoration and reduced
+motion were exercised. Screenshots in `docs/ui/screenshots/p8-05-*` contain
+labelled local fixtures, not production conversations. A real phone keyboard,
+physical microphone/speakers and live Azure round-trip remain unverified.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

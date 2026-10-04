@@ -395,7 +395,8 @@ export class BrowserVoiceClient {
 
   async enableMicrophone(): Promise<void> {
     const socket = this.socket;
-    if (!socket || !this.running || this.stopping || !this.sessionReady || this.microphoneOpen || this.microphoneOpening) return;
+    if (!socket || socket.readyState !== WebSocket.OPEN || !this.running || this.stopping ||
+        !this.sessionReady || this.microphoneOpen || this.microphoneOpening) return;
     this.microphoneOpening = true;
     try {
       await this.audio.open((audio) => {
@@ -412,6 +413,7 @@ export class BrowserVoiceClient {
       this.audio.setMuted(this.muted);
       this.publish('listening', 'Listening for your voice.');
     } catch {
+      this.audio.closeInput();
       if (this.running && !this.stopping && socket === this.socket) {
         this.publish('ready', 'Microphone access was not granted. Check browser permissions, then enable the microphone to retry.');
       }

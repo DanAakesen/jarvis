@@ -55,7 +55,13 @@ export function ConversationHistory({
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceRefresh, setVoiceRefresh] = useState(0);
   const input = useRef<HTMLTextAreaElement>(null);
+  const replyEnd = useRef<HTMLDivElement>(null);
   const wasBusy = useRef(false);
+  const lastMessageId = messages.at(-1)?.id;
+
+  useEffect(() => {
+    if (!voiceActive) replyEnd.current?.scrollIntoView?.({ block: 'end' });
+  }, [lastMessageId, streamedText, sending, voiceActive]);
 
   useEffect(() => {
     const busy = voiceActive || sending;
@@ -105,7 +111,7 @@ export function ConversationHistory({
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || sending || voiceActive) return;
     setSending(true);
     setTurnError('');
     setHistoryError('');
@@ -222,13 +228,19 @@ export function ConversationHistory({
           Partial reply, interrupted: {interruptedText}
         </p>
       )}
-      {turnError && <p className="chat-error" role="alert">{turnError}</p>}
+      {turnError && (
+        <div>
+          <p className="chat-error" role="alert">{turnError}</p>
+          <p className="chat-guidance">If a reply is interrupted, check the conversation and task status before sending again.</p>
+        </div>
+      )}
       {sending && <p className="chat-status" role="status" aria-live="polite">Jarvis is replying…</p>}
+      <div ref={replyEnd} />
       {children}
       </div>
 
       <div className="conversation-input" data-voice-active={voiceActive}>
-      <form className="composer" hidden={voiceActive} onSubmit={(event) => void sendMessage(event)}>
+      <form id="conversation-composer" className="composer" hidden={voiceActive} onSubmit={(event) => void sendMessage(event)}>
         <fieldset className="choice-group" disabled={sending}>
           <legend>Reply language</legend>
           <label className="choice">
@@ -269,14 +281,10 @@ export function ConversationHistory({
           aria-describedby="chat-guidance"
         />
         <p id="chat-guidance" className="chat-guidance">
-          Enter to send; Shift+Enter for a new line. If a reply is interrupted, check the conversation and task status before sending again.
+          Enter to send; Shift+Enter for a new line.
         </p>
-        <div className="action-row">
-          <button className="primary-button" type="submit" disabled={sending || !draft.trim()}>
-            Send
-          </button>
-        </div>
       </form>
+      <div className="conversation-actions">
       <VoiceControls
         client={client}
         config={config}
@@ -285,6 +293,12 @@ export function ConversationHistory({
         onActiveChange={setVoiceActive}
         onSessionEnded={() => setVoiceRefresh((value) => value + 1)}
       />
+      {!voiceActive && (
+        <button className="primary-button" type="submit" form="conversation-composer" disabled={sending || !draft.trim()}>
+          Send
+        </button>
+      )}
+      </div>
       </div>
     </section>
   );

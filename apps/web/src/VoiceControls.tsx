@@ -97,12 +97,16 @@ export function VoiceControls({
 
   return (
     <div className="voice-controls" data-active={active}>
-      {(active || status === 'error') && <VoiceOrb status={status} message={message} />}
+      {active && <VoiceOrb status={status} message={message} />}
+      {status === 'error' && <p className="voice-error" role="alert">{message}</p>}
       {!active && <p id="voice-start-guidance" className="visually-hidden">{initialMessage}</p>}
       <div className="action-row">
         {active
           ? <button ref={stopButton} className="secondary-button" type="button" onClick={stop} disabled={status === 'stopping'}>Stop voice</button>
-          : <button className="input-orb" type="button" onClick={start} disabled={disabled} aria-label="Start voice" aria-describedby="voice-start-guidance" title="Start voice"><span aria-hidden="true" /></button>}
+          : <>
+              <button className="input-orb" type="button" onClick={start} disabled={disabled} aria-label="Start voice" aria-describedby="voice-start-guidance" title="Start voice"><span aria-hidden="true" /></button>
+              <span className="voice-start-label" aria-hidden="true">Start voice</span>
+            </>}
         {active && (status === 'ready' ? (
           <button className="primary-button" type="button" onClick={() => void enableMicrophone()} disabled={enabling} aria-describedby="voice-status">
             {enabling ? 'Enabling microphone…' : 'Enable microphone'}

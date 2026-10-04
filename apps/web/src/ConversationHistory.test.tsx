@@ -215,6 +215,11 @@ describe('ConversationHistory', () => {
     expect(input).toHaveProperty('value', 'Hello\n');
     fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
     expect(sendChatTurn).not.toHaveBeenCalled();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Start voice' }));
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Send' }));
+    await user.click(input);
     await user.keyboard('{Enter}');
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
     await waitFor(() => expect(input).toHaveProperty('disabled', false));
