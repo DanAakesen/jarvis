@@ -293,7 +293,7 @@ must configure this endpoint and provider identity before live use. Local voice
 tests use a mock WebSocket and do not verify Azure access or browser audio.
 
 The optional `JARVIS_CHAT_AGENT_URL` is the full HTTPS URL of the hosted agent's
-`/chat` route (no credentials, query, or fragment). Until P4-08 configures it,
+`/chat` route (no credentials, query, or fragment). Until P4-09 (#157) configures it,
 chat turns return a visible 503 rather than a placeholder reply. The backend
 forwards Dan's delegated token only to this server-side endpoint; the agent
 validates it through `/me` and verifies the source message through
