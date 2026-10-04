@@ -318,6 +318,15 @@ export function createTaskStore(
 ): TaskStore {
   return {
     async create(input: CreateTaskInput) {
+      const source = input.source ?? 'board';
+      const originMessageId = input.originMessageId;
+      if ((source !== 'board' && source !== 'chat') ||
+        (source === 'chat' && originMessageId === undefined) ||
+        (source === 'board' && originMessageId !== undefined) ||
+        (originMessageId !== undefined &&
+          (!/^[1-9][0-9]{0,18}$/.test(originMessageId) || BigInt(originMessageId) > maxSqlBigInt))) {
+        throw new Error('Invalid task input');
+      }
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
@@ -333,22 +342,24 @@ export function createTaskStore(
         }
         const inserted = await new sql.Request(transaction)
           .input('projectId', sql.BigInt, BigInt(input.projectId))
+          .input('originMessageId', sql.BigInt, originMessageId === undefined ? null : BigInt(originMessageId))
           .input('title', sql.NVarChar(200), input.title)
           .input('request', sql.NVarChar(sql.MAX), input.request)
+          .input('source', sql.NVarChar(16), source)
           .input('agent', sql.NVarChar(16), input.agent ?? defaultAgent)
           .input('modelOverride', sql.NVarChar(100), input.modelOverride ?? null)
           .input('reasoningOverride', sql.NVarChar(32), input.reasoningOverride ?? null)
           .input('priority', sql.Int, input.priority ?? 0)
           .query<TaskRow>(`INSERT INTO dbo.tasks
-            (project_id, title, request, source, agent, model_override, reasoning_override, priority)
+            (project_id, origin_message_id, title, request, source, agent, model_override, reasoning_override, priority)
             OUTPUT ${insertedTaskColumns}
-            VALUES (@projectId, @title, @request, N'board', @agent, @modelOverride, @reasoningOverride, @priority);`);
+            VALUES (@projectId, @originMessageId, @title, @request, @source, @agent, @modelOverride, @reasoningOverride, @priority);`);
         const task = inserted.recordset[0];
         if (!task) throw new Error('Task insert returned no row');
         const event: RecordTaskEventInput = {
           taskId: task.id,
           type: 'created',
-          summary: 'Task created from the board',
+          summary: source === 'chat' ? 'Task created from chat' : 'Task created from the board',
           payload: { state: 'Ready' },
           source: 'backend',
         };

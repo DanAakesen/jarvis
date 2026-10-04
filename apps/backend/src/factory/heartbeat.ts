@@ -10,7 +10,7 @@ export interface RunningSandbox {
 export interface SandboxHeartbeatStore {
   listRunning(): Promise<RunningSandbox[]>;
   recordHeartbeat(sandboxSessionId: string): Promise<void>;
-  markNeedsAttention(sandboxSessionId: string): Promise<boolean>;
+  markNeedsAttention(sandboxSessionId: string, question?: string): Promise<boolean>;
   resolvePause(sandboxSessionId: string, state: 'Running' | 'Paused'): Promise<boolean>;
 }
 
@@ -120,6 +120,9 @@ export class SandboxHeartbeat {
         if (paused) this.untrack(entry.sandbox.sandboxSessionId);
       } else if (result.status === 'running' || result.status === 'queued') {
         await this.store.resolvePause(entry.sandbox.sandboxSessionId, 'Running');
+      } else if (result.status === 'needs_attention') {
+        await this.store.markNeedsAttention(entry.sandbox.sandboxSessionId, result.error ?? undefined);
+        this.untrack(entry.sandbox.sandboxSessionId);
       } else if (result.status === 'failed') {
         await this.store.markNeedsAttention(entry.sandbox.sandboxSessionId);
         this.untrack(entry.sandbox.sandboxSessionId);

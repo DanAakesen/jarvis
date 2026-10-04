@@ -200,7 +200,7 @@ describe("Foundry runner wire contract", () => {
     await expect(client.startTask({ ...workspace, agent: "codex", task: "Work" })).rejects.toMatchObject({ kind: "protocol" });
   });
 
-  it.each(["completed", "failed", "paused", "interrupted", "cancelled", "unknown"])("reports provider %s unchanged", async (status) => {
+  it.each(["completed", "failed", "paused", "interrupted", "cancelled", "needs_attention", "unknown"])("reports provider %s unchanged", async (status) => {
     const body = { ...(fixtures["status_running"] as object), status, finished_at: 1_759_440_002 };
     const { client } = setup(body);
     expect((await client.status("capture-task")).status).toBe(status);
