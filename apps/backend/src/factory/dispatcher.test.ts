@@ -136,7 +136,7 @@ describe('task dispatcher', () => {
     await flush();
 
     expect(startTask).toHaveBeenCalledWith({
-      agent: 'codex', task: 'Find and fix it', model: 'gpt-5.4', reasoning: 'high',
+      agent: 'codex', task: 'Find and fix it', taskId: '42', model: 'gpt-5.4', reasoning: 'high',
     });
     expect(first.track).toHaveBeenCalledOnce();
     expect(second.track).toHaveBeenCalledTimes(0);
@@ -289,7 +289,7 @@ describe('task dispatcher', () => {
     const result = await dispatcher.control('42', { action: 'resume' });
 
     expect(resume).toHaveBeenCalledWith('session-1', {
-      agent: 'codex', task: 'Find and fix it', model: 'gpt-5.4', reasoning: 'high',
+      agent: 'codex', task: 'Find and fix it', taskId: '42', model: 'gpt-5.4', reasoning: 'high',
     });
     expect(store.recordResumedTurn).toHaveBeenCalledWith(pausedTarget, expect.objectContaining({
       invocationId: 'invocation-resume',
