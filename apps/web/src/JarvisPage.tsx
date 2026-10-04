@@ -4,6 +4,7 @@ import { ActivityPanel } from './ActivityPanel';
 import type { NowFeed } from './activity';
 import { BackendSleepControl } from './BackendSleepControl';
 import { ConversationHistory } from './ConversationHistory';
+import { VoiceControls } from './VoiceControls';
 import './ConversationHistory.css';
 
 const nowFeed: NowFeed = {
@@ -34,14 +35,8 @@ export function JarvisPage({
 
           <section aria-labelledby="voice-heading">
             <h3 id="voice-heading">Voice</h3>
-            <p id="voice-status">
-              Voice isn&apos;t available yet. It will show whether Jarvis is listening, thinking or speaking, what
-              Jarvis heard and the response latency. You will be able to interrupt by speaking.
-            </p>
-            <div className="action-row">
-              <button className="secondary-button" type="button" disabled aria-describedby="voice-status">Start voice</button>
-              <button className="secondary-button" type="button" disabled aria-describedby="voice-status">Mute</button>
-            </div>
+            <p>Speak to Jarvis through a live voice session. You can interrupt Jarvis by speaking.</p>
+            <VoiceControls client={client} config={config} />
           </section>
         </section>
 

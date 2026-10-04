@@ -277,13 +277,14 @@ preflight route are public; explicit OPTIONS business endpoints are protected.
 
 `FOUNDRY_ADMIN_ENDPOINT` and `FOUNDRY_RUNTIME_ENDPOINT` are optional HTTPS Foundry
 project endpoints, supplied by Bicep in production. Configure both to enable
-sandbox heartbeats; if absent, the backend starts with heartbeat disabled and logs
-a warning. The backend identity uses `DefaultAzureCredential` with the SQL
-managed-identity client ID and has Foundry User on the project. The sandbox
-heartbeat reloads active sessions at startup; P2-05 dispatcher code must persist
-each session's `agent_name`, register it with `app.sandboxHeartbeat.track()`, and
-remove finished sessions with `untrack()`.
-Heartbeat tests use recorded responses and do not verify live Foundry access.
+sandbox dispatch and heartbeats; if absent, the backend starts with both disabled.
+The backend identity uses `DefaultAzureCredential` with the SQL
+managed-identity client ID and has Foundry User on the project. At startup, the
+heartbeat reloads active sessions once; the dispatcher writes `agent_name` for
+new sessions, calls `track()` after the SQL commit, and `untrack()` when sessions
+end. The dispatcher wakes on task events and retry deadlines, not SQL polling;
+expired start leases go to Needs attention rather than replaying a possibly
+accepted Foundry start. Offline tests do not verify live Foundry access.
 
 The optional `VOICE_LIVE_ENDPOINT` enables `/voice`; it must be a secure Azure
 Voice Live WebSocket endpoint without credentials in its URL. The backend pins
@@ -299,6 +300,16 @@ forwards Dan's delegated token only to this server-side endpoint; the agent
 validates it through `/me` and verifies the source message through
 `/conversation/history`. Never expose the authorization header to the browser
 or log it.
+
+Production runner calls use the optional paired `FOUNDRY_RUNTIME_ENDPOINT` and
+`FOUNDRY_ADMIN_ENDPOINT`, plus `FOUNDRY_RUNNER_AGENT_NAME`. Bicep supplies the
+project URLs and `jarvis-runner-node-1x2`; these are non-secret settings. When
+configured, the backend uses its shared `DefaultAzureCredential`, selected with
+`SQL_MANAGED_IDENTITY_CLIENT_ID`. The daily Codex renewal job requires database
+and Foundry runner configuration, and uses the SQL credential lease; the task
+dispatcher must start Codex work through `TaskStore.transition` so both
+operations serialize. Bicep retains one `Foundry User` assignment for the
+backend identity at project scope.
 
 Backend authentication defaults to the nonsecret identities in
 `infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and
@@ -386,7 +397,7 @@ The client constructor takes `runtimeEndpoint`, `adminEndpoint`, `agentName` and
   `schema.integration.test.ts` reverts all of them newest first and reapplies.
   `0001_core_tables.sql` contains groups 1–3; `0002_sandbox_operations.sql`
   contains groups 4 and 6; `0003_sandbox_agent_name.sql` adds the heartbeat's
-  Foundry routing field, and P6-03's `0004_task_event_archives.sql` indexes
+  Foundry routing field, and P6-03's `0005_task_event_archives.sql` indexes
   committed Blob chunks for on-demand task-history reads.
   See [migration guide](../db/migrations/README.md).
 - Offline checks: `npm test --workspace @jarvis/backend`,

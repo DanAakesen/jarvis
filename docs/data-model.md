@@ -16,7 +16,7 @@ reverse script in `db/migrations/down/`; see [Physical schema](#physical-schema-
 Groups 4–7 follow in P2-01, P2-12 and P3-04. P2-06 adds the nullable
 `sandbox_sessions.agent_name` column in `0003_sandbox_agent_name.sql`; new
 sessions must populate it so the heartbeat can address the correct Foundry agent.
-P6-03 adds `task_event_archives` in `0004_task_event_archives.sql`, indexing each
+P6-03 adds `task_event_archives` in `0005_task_event_archives.sql`, indexing each
 committed event blob so interrupted uploads remain invisible and task history
 pages can locate the required blobs without listing the container.
 
@@ -81,7 +81,7 @@ flowchart LR
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
-P5-03 does not create `jarvis_sessions`, `messages`, or `tool_calls`; the realtime tool round-trip is backend-executed but not persisted yet. P4-03 owns conversation persistence, and P5-06 owns voice transcripts and usage. No schema or migration changes are part of P5-03.
+P5-03 and P5-04 do not create `jarvis_sessions`, `messages`, or `tool_calls`; realtime tool calls and browser audio are not persisted yet. P4-03 owns conversation persistence, and P5-06 owns voice transcripts and usage. No schema or migration changes are part of P5-03 or P5-04.
 
 ## 1 · Jarvis core
 
@@ -240,12 +240,12 @@ erDiagram
     }
 ```
 
-- **The queue is `tasks` itself (Decision 3, option A).** The dispatcher takes the oldest `Ready` task within the project's and the global limit, sets `lease_owner` and `lease_until`, and starts a sandbox. A lease that expires means the dispatcher died, and another may take over.
-- **Retries:** `attempt_count` and `next_attempt_at`; after the limit the task moves to `NeedsAttention`.
-- `task_events` stores **every** task event (Dan's choice: maximum freedom for the UI). It drives the card's live updates (via SSE) and the task's history; a backend job moves events older than 90 days to private Blob Storage in bounded batches. The SQL rows are deleted only after their archive blobs upload successfully, and `task_event_archives` records the blob references in the same SQL transaction as deletion. Task-detail pages read only the indexed archived chunks they need and keep the same bounded pagination. The live `recordEvent` write path remains unchanged. Each event also creates a `factory` activity row with its type as `kind`, its summary (or type) as title, and `task:<id>` as link.
+- **The queue is `tasks` itself (Decision 3, option A).** The dispatcher takes the highest-priority oldest eligible `Ready` task within the global and project limits. A transaction-owned `jarvis.task-dispatcher` app lock serializes capacity checks and claims; `lease_owner` and `lease_until` reserve a startup slot. Expired startup leases move to `NeedsAttention`, not another start, because the remote start may have succeeded before the dispatcher stopped.
+- **Retries:** `attempt_count` increments for each leased start. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; `next_attempt_at` gates each retry. Ambiguous Foundry start outcomes are not replayed and move to `NeedsAttention`.
+- `task_events` stores **every** task event (Dan's choice: maximum freedom for the UI). It is append-only, drives the card's live updates (via SSE) and the task's history, and is the only fast-growing table; archive by age: a backend job moves events older than 90 days to private Blob Storage in bounded batches. The SQL rows are deleted only after their archive blobs upload successfully, and `task_event_archives` records the blob references in the same SQL transaction as deletion. Task-detail pages read only the indexed archived chunks they need and keep the same bounded pagination. The live `recordEvent` write path remains unchanged. Each event also creates a `factory` activity row with its type as `kind`, its summary (or type) as title, and `task:<id>` as link.
 - `origin_message_id` links a task to the message in Jarvis's conversation that created it. The existing schema requires this reference for non-board tasks; board tasks may omit it.
 - P1-04 creates a board task only for an active project, using the project's default agent unless the request selects one. Task creation and its `created` event share a transaction. Backend state transitions lock the task row, enforce the product lifecycle, and write a `state_changed` event in that transaction; `Done` requires a trusted, verified-completion call. There is no client state-update route.
-- P1-05 writes each task event and its activity row in the same transaction. `TaskStore.recordEvent` is the producer API for future runner and backend event sources; JSON payloads are capped at 1 MiB. The in-process hub publishes only after commit; payloads over 4 KiB are omitted from the published event and marked truncated. The P1-06 SSE endpoint adds authenticated streaming, heartbeat and reconnect replay.
+- P1-05 writes each task event and its activity row in the same transaction. `TaskStore.recordEvent` is the producer API for future runner and backend event sources; JSON payloads are capped at 1 MiB. The in-process hub publishes only after commit; payloads over 4 KiB are omitted from the published event and marked truncated. P1-06's authenticated SSE endpoint reads missed events from `task_events` by ascending ID in bounded pages, buffers live hub publications during replay, and suppresses overlapping IDs. The fetch client reconnects with the last delivered ID; the stream sends a heartbeat comment every 25 seconds. No schema change is needed.
 - `GET /factory/tasks` filters by project, agent, state, creation period and search, with bounded offset pagination. `GET /factory/tasks/:id` returns the task and a bounded, pageable event slice. Responses are capped at 1 MiB; event payloads over 4 KiB are omitted and marked truncated.
 
 ## 4 · Sandbox
@@ -291,7 +291,7 @@ erDiagram
     }
 ```
 
-- A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22).
+- A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22). The dispatcher records `agent_name` for heartbeat routing. `agent_version = 'active'` and `image` records the selected Foundry runner route (for example `jarvis-runner-base-1x2`); the Invocations start response does not expose the resolved version number or container digest.
 - The sandbox heartbeat updates `last_heartbeat_at`; it needs the session's `agent_name` to address the Foundry runtime. Live runner events update `last_event_at` and add `task_events`.
 - Large content (logs, CI logs, transcripts) lives in Blob; SQL keeps only the path.
 - The schema checks sandbox sizes, statuses, turn modes, end reasons and artifact kinds against these vocabularies. UTC `datetime2` end and heartbeat/event timestamps cannot precede their start.
@@ -372,13 +372,15 @@ erDiagram
         string name PK "codex-login, copilot-token, github-app-key"
         datetime expires_at
         datetime last_renewed_at
-        string status "ok | renew_soon | failed"
+        string status "ok | renew_soon | failed | unknown"
+        uuid renewal_lease_owner "nullable"
+        datetime renewal_lease_until "nullable"
     }
 ```
 
 - `webhook_deliveries` makes webhook handling idempotent: GitHub may deliver the same event twice.
 - A delivery is first stored with null outcome and processing time; those fields are set together to `ok`, `ignored` or `error` when handled. No webhook payload or secret is stored here.
-- `credential_status` stores expiry/renewal dates and status only, never secret values; it drives "renew soon" warnings on the board.
+- `credential_status` stores expiry/last-updated dates and status only, never secret values. Codex and Copilot start as `unknown`; Key Vault metadata and Codex renewal populate dates. A paired owner/expiry lease serializes Codex renewal against Codex task starts; unknown status alone does not block tasks, while a failed Codex renewal does.
 - Container App sleep state is read from Azure's configured minimum replicas; it is not persisted in `settings` or another SQL table. The sleep refusal check takes an exclusive transaction-owned application lock while task creation and state transitions take the shared lock, so no Ready or Running task can be introduced between the check and scale request. This adds no schema object.
 
 ## 7 · Usage and cost
@@ -428,7 +430,7 @@ erDiagram
 | Foreign keys | No cascades. Projects are archived (`active = 0`), not deleted |
 | Indexes | Dispatcher `IX_tasks_state_next_attempt_at`; timeline `IX_task_events_task_id_at`; plus one per foreign key: `IX_messages_jarvis_session_id_at`, `IX_tasks_project_id_state` (also the per-project running count), filtered `IX_tasks_origin_message_id`, `IX_tool_calls_message_id`, filtered `IX_tool_calls_task_id` |
 
-P6-03's `0004_task_event_archives.sql` adds the archive index table without changing
+P6-03's `0005_task_event_archives.sql` adds the archive index table without changing
 the `task_events` producer schema. The API still validates every field (P1-03,
 P1-04); these checks are the last line of defence.
 
