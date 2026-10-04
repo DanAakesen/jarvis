@@ -20,6 +20,15 @@ export interface Settings {
   global: {
     maxParallelTasks: number;
   };
+  newProjects: {
+    owner: string;
+    visibility: 'private' | 'public';
+    templatesRepository: string;
+    defaultAgent: 'codex' | 'copilot';
+    policy: 'deliver_pr' | 'complete_without_deployment';
+    maxParallelTasks: number;
+    defaultBranch: string;
+  };
 }
 
 export type SettingsPatch = {
@@ -43,6 +52,15 @@ export const defaultSettings: Settings = {
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
   global: { maxParallelTasks: 1 },
+  newProjects: {
+    owner: 'DanAakesen',
+    visibility: 'private',
+    templatesRepository: 'DanAakesen/templates',
+    defaultAgent: 'copilot',
+    policy: 'deliver_pr',
+    maxParallelTasks: 1,
+    defaultBranch: 'main',
+  },
 };
 
 export const settingsOptions = {
@@ -56,6 +74,9 @@ export const settingsOptions = {
   codexModels: ['default'],
   codexReasoningEfforts: ['default'],
   copilotModels: ['default'],
+  projectVisibilities: ['private', 'public'],
+  projectAgents: ['codex', 'copilot'],
+  projectPolicies: ['deliver_pr', 'complete_without_deployment'],
 } as const;
 
 const settingKeys = {
@@ -70,6 +91,15 @@ const settingKeys = {
   codex: { model: 'codex.model', reasoning: 'codex.reasoning_effort' },
   copilot: { model: 'copilot.model' },
   global: { maxParallelTasks: 'global.max_parallel_tasks' },
+  newProjects: {
+    owner: 'new_projects.owner',
+    visibility: 'new_projects.visibility',
+    templatesRepository: 'new_projects.templates_repository',
+    defaultAgent: 'new_projects.default_agent',
+    policy: 'new_projects.policy',
+    maxParallelTasks: 'new_projects.max_parallel_tasks',
+    defaultBranch: 'new_projects.default_branch',
+  },
 } as const;
 
 function isOption(value: unknown, options: readonly string[]): value is string {
@@ -95,6 +125,27 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
   if (area === 'copilot' && key === 'model') return isOption(value, settingsOptions.copilotModels);
   if (area === 'global' && key === 'maxParallelTasks') {
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 100;
+  }
+  if (area === 'newProjects') {
+    if (key === 'owner') {
+      return typeof value === 'string' && /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(value);
+    }
+    if (key === 'visibility') return isOption(value, settingsOptions.projectVisibilities);
+    if (key === 'templatesRepository') {
+      return typeof value === 'string' &&
+        /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/[A-Za-z0-9._-]{1,100}$/.test(value);
+    }
+    if (key === 'defaultAgent') return isOption(value, settingsOptions.projectAgents);
+    if (key === 'policy') return isOption(value, settingsOptions.projectPolicies);
+    if (key === 'maxParallelTasks') {
+      return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 100;
+    }
+    if (key === 'defaultBranch') {
+      return typeof value === 'string' && value.length > 0 && value.length <= 255 &&
+        !/[\x00-\x20~^:?*\\[\]]/.test(value) && !value.includes('..') && !value.includes('@{') &&
+        !value.startsWith('/') && !value.endsWith('/') && !value.endsWith('.') &&
+        !value.split('/').some((part) => part.startsWith('.') || part.endsWith('.lock'));
+    }
   }
   return false;
 }
@@ -141,6 +192,18 @@ const settingsPatchSchema = {
         global: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: { maxParallelTasks: { type: 'integer', minimum: 1, maximum: 100 } },
+        },
+        newProjects: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: {
+            owner: { type: 'string', minLength: 1, maxLength: 39 },
+            visibility: selectSchema(settingsOptions.projectVisibilities),
+            templatesRepository: { type: 'string', minLength: 3, maxLength: 140 },
+            defaultAgent: selectSchema(settingsOptions.projectAgents),
+            policy: selectSchema(settingsOptions.projectPolicies),
+            maxParallelTasks: { type: 'integer', minimum: 1, maximum: 100 },
+            defaultBranch: { type: 'string', minLength: 1, maxLength: 255 },
+          },
         },
       },
     },
