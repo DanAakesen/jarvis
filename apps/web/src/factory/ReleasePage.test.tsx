@@ -60,8 +60,13 @@ describe('project release view', () => {
     const releaseLink = (await screen.findAllByRole('link', { name: 'Build 18' }))[0]!;
     expect(screen.getByRole('heading', { name: 'Jarvis releases' })).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Git history' })).not.toBeNull();
-    expect(screen.getByRole('link', { name: /Commit aaaaaaa: Add the release view/ }).getAttribute('href'))
+    const commitLink = screen.getByRole('link', { name: /Commit aaaaaaa: Add the release view/ });
+    expect(commitLink.getAttribute('href'))
       .toBe(`https://github.com/DanAakesen/jarvis/commit/${sha}`);
+    expect(commitLink.querySelector('.graph-hit-target')?.getAttribute('r')).toBe('22');
+    expect(screen.getByRole('group', { name: '1 branch and 1 commit, ordered by commit time' }).getAttribute('style'))
+      .toContain('width: 720px');
+    expect(screen.getByText(/Marker shapes show record type/)).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Release · success' }).getAttribute('href'))
       .toBe('https://github.com/DanAakesen/jarvis/actions/runs/9871');
     expect(screen.getByRole('link', { name: 'PR #3 · merged · checks passed' }).getAttribute('href'))

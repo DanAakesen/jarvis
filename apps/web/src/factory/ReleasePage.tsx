@@ -216,7 +216,7 @@ function GitGraphView({ graph, data }: { graph: GitGraph; data: ReleaseView }) {
           height={height}
           style={{ width, height }}
           role="group"
-          aria-label={`${graph.branches.length} branches and ${graph.commits.length} commits, ordered by commit time`}
+          aria-label={`${graph.branches.length} ${graph.branches.length === 1 ? 'branch' : 'branches'} and ${graph.commits.length} ${graph.commits.length === 1 ? 'commit' : 'commits'}, ordered by commit time`}
         >
           {graph.branches.map((branch, lane) => {
             const ordered = [...branch.commits].reverse().filter((sha) => positions.has(sha));
