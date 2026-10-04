@@ -123,7 +123,8 @@ Status as of 4 October 2026.
 | Complete Jarvis front end | One designed UI for all features above | Screen | All pages | Planned | P8-01, P8-04–P8-13 |
 | Shared app shell and area navigation | Navigate areas from the rail/sidebar; open Settings from the top-right; toggle the camera with an accessible on/off state | Screen | All pages | Built | P8-04, P7-08 |
 | Conversation opening and voice entry | See the conversation on arrival, type from the bottom-centred composer, and explicitly start voice from the small orb; separately enable the microphone, and restore the draft and typing focus on exit | Both | Main page | Built (offline/browser fixtures) | P8-05 |
-| Dynamic workspace views | View accessible information in temporary, question-relevant windows; ask Jarvis or move/resize/reorder views | Screen | Main workspace | Planned | P8-06 |
+| Workspace composition | Arrange open temporary views as tiles or layers; move, resize, and reorder with pointer or keyboard; reflow on narrow screens | Screen | Main workspace | Built | P8-06 |
+| Dynamic workspace views | View accessible information in temporary, question-relevant windows and ask Jarvis to create or arrange them | Screen | Main workspace | In progress | P8-06, P8-14, P8-15 |
 | Window tabs and restore | Minimise a view without closing or saving it, then restore it from its tab or by asking Jarvis | Both | Main/voice workspace | Planned | P8-07 |
 | Contextual right panel | Open, close, or change relevant information without replacing the main content | Both | Main workspace | Client built; authenticated Jarvis command delivery pending P8-15 | P8-08, P8-15 |
 | Runtime-state orb | See listening, thinking, speaking, reconnect, and unavailable states from the actual voice client; tool-call activity is stated unavailable until its runtime event exists | Screen | Voice workspace | Built | P8-09, P8-16 |
