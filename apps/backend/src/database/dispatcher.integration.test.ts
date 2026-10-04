@@ -66,6 +66,47 @@ function heartbeat(): SandboxHeartbeat {
 }
 
 describe('dispatcher SQL coordination', () => {
+  it('updates a Ready task model and publishes only the committed change event', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const published: TaskEventMessage[] = [];
+    events.subscribe((event) => published.push(event));
+    const taskStore = createTaskStore(pool, events);
+    const task = await createTask(events, 'Model selection');
+    try {
+      const updated = await taskStore.updateModelConfig(task.id, {
+        agent: 'codex', modelOverride: 'default', reasoningOverride: 'default',
+      });
+
+      expect(updated).toMatchObject({
+        kind: 'ok',
+        task: { id: task.id, state: 'Ready', agent: 'codex', modelOverride: 'default', reasoningOverride: 'default' },
+      });
+      expect(published.at(-1)).toMatchObject({
+        taskId: task.id,
+        type: 'model_changed',
+        summary: 'Coding agent settings changed',
+        payload: { agent: 'codex', model: 'default', reasoning: 'default' },
+      });
+      expect((await taskStore.get(task.id, 5, 0))?.modelOverride).toBe('default');
+      expect((await pool.request()
+        .input('link', sql.NVarChar(100), `task:${task.id}`)
+        .input('kind', sql.NVarChar(64), 'model_changed')
+        .query<{ count: number }>(`SELECT COUNT(*) AS count FROM dbo.activity
+          WHERE link = @link AND kind = @kind;`)).recordset).toEqual([{ count: 1 }]);
+
+      await pool.request().input('taskId', sql.BigInt, BigInt(task.id))
+        .query(`UPDATE dbo.tasks SET state = N'Running' WHERE id = @taskId;`);
+      const eventCount = published.length;
+      expect(await taskStore.updateModelConfig(task.id, {
+        agent: 'copilot', modelOverride: null, reasoningOverride: null,
+      })).toEqual({ kind: 'not-ready' });
+      expect(published).toHaveLength(eventCount);
+    } finally {
+      await pool.request().input('taskId', sql.BigInt, BigInt(task.id))
+        .query(`UPDATE dbo.tasks SET state = N'Done' WHERE id = @taskId;`);
+    }
+  });
+
   it('persists the workspace branch with the lease and retains it across deferred and rejected starts', async () => {
     const events = createEventHub<TaskEventMessage>();
     const taskStore = createTaskStore(pool, events);
