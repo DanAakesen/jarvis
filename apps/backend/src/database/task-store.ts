@@ -74,7 +74,9 @@ const taskColumns = `CAST(id AS varchar(19)) AS id, CAST(project_id AS varchar(1
   CAST(origin_message_id AS varchar(19)) AS originMessageId, title, request, source, agent,
   model_override AS modelOverride, reasoning_override AS reasoningOverride, state, activity,
   priority, attempt_count AS attemptCount, next_attempt_at AS nextAttemptAt, branch,
-  created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt`;
+  created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt,
+  (SELECT TOP (1) session.end_reason FROM dbo.sandbox_sessions AS session
+    WHERE session.task_id = dbo.tasks.id ORDER BY session.started_at DESC, session.id DESC) AS latestSessionEndReason`;
 
 const insertedTaskColumns = `CAST(inserted.id AS varchar(19)) AS id,
   CAST(inserted.project_id AS varchar(19)) AS projectId,
@@ -82,7 +84,8 @@ const insertedTaskColumns = `CAST(inserted.id AS varchar(19)) AS id,
   inserted.source, inserted.agent, inserted.model_override AS modelOverride,
   inserted.reasoning_override AS reasoningOverride, inserted.state, inserted.activity,
   inserted.priority, inserted.attempt_count AS attemptCount, inserted.next_attempt_at AS nextAttemptAt,
-  inserted.branch, inserted.created_at AS createdAt, inserted.started_at AS startedAt,
+  inserted.branch, CAST(NULL AS nvarchar(16)) AS latestSessionEndReason,
+  inserted.created_at AS createdAt, inserted.started_at AS startedAt,
   inserted.finished_at AS finishedAt`;
 const sleepSwitchLock = 'jarvis.backend-sleep-switch';
 
@@ -131,6 +134,15 @@ function validateEvent(event: RecordTaskEventInput): string | null {
     throw new Error('Invalid task event');
   }
   return serializePayload(event.payload);
+}
+
+function completedRunnerInvocation(event: RecordTaskEventInput): string | null {
+  if (event.source !== 'runner' || (event.type !== 'completed' && event.type !== 'session_question') ||
+    typeof event.payload !== 'object' || event.payload === null || Array.isArray(event.payload)) return null;
+  const invocationId = (event.payload as { invocationId?: unknown }).invocationId;
+  return typeof invocationId === 'string' && invocationId.length > 0 && invocationId.length <= 255
+    ? invocationId
+    : null;
 }
 
 function toTaskEvent(row: InsertedEventRow, taskId: string): TaskEventMessage {
@@ -682,6 +694,17 @@ export function createTaskStore(
         }
         const publishedEvent = await insertTaskEvent(transaction, event, payload);
         await recordRunnerUsage(transaction, event, event.payload);
+        const invocationId = completedRunnerInvocation(event);
+        if (invocationId) {
+          await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(event.taskId))
+            .input('invocationId', sql.NVarChar(255), invocationId)
+            .query(`UPDATE turn SET status = N'completed', ended_at = SYSUTCDATETIME()
+              FROM dbo.sandbox_turns AS turn
+              INNER JOIN dbo.sandbox_sessions AS session ON session.id = turn.sandbox_session_id
+              WHERE session.task_id = @taskId AND turn.invocation_id = @invocationId
+                AND turn.status = N'running';`);
+        }
         let stateChangedEvent: TaskEventMessage | undefined;
         if (currentState === 'Running' || (isQuestion && currentState === 'PauseRequested')) {
           await new sql.Request(transaction)

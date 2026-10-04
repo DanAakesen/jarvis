@@ -377,6 +377,43 @@ describe('dispatcher SQL coordination', () => {
     expect(second.recordset[0]?.quantity).toBe(first.recordset[0]?.quantity);
   });
 
+  it('ends a completed invocation without recording a crash when delivery needs attention', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, events);
+    const task = await createTask(events, 'Completed turn without delivery');
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    const foundrySessionId = `completed-${randomUUID()}`;
+    const inserted = await pool.request()
+      .input('taskId', sql.BigInt, BigInt(task.id))
+      .input('foundrySessionId', sql.NVarChar(255), foundrySessionId)
+      .query<{ sandboxSessionId: string }>(`INSERT dbo.sandbox_sessions
+        (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+        OUTPUT CAST(inserted.id AS varchar(19)) AS sandboxSessionId
+        VALUES (@taskId, @foundrySessionId, N'active', N'runner', N'1x2', N'runner', N'Active');`);
+    const sandboxSessionId = inserted.recordset[0]?.sandboxSessionId;
+    if (!sandboxSessionId) throw new Error('Completed session fixture was not created');
+    await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .input('invocationId', sql.NVarChar(255), `completed-turn-${randomUUID()}`)
+      .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+        VALUES (@sandboxSessionId, @invocationId, N'task', N'completed-acp', N'running');`);
+    expect((await taskStore.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+
+    const store = createDispatcherStore(pool, events);
+    expect(await store.endTaskSessions(task.id, 'NeedsAttention', true)).toEqual([sandboxSessionId]);
+    const result = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .query<{ taskState: string; sessionStatus: string; endReason: string; turnStatus: string }>(`SELECT
+        task.state AS taskState, session.status AS sessionStatus, session.end_reason AS endReason, turn.status AS turnStatus
+        FROM dbo.sandbox_sessions AS session
+        INNER JOIN dbo.tasks AS task ON task.id = session.task_id
+        INNER JOIN dbo.sandbox_turns AS turn ON turn.sandbox_session_id = session.id
+        WHERE session.id = @sandboxSessionId;`);
+    expect(result.recordset).toEqual([{
+      taskState: 'NeedsAttention', sessionStatus: 'Ended', endReason: 'done', turnStatus: 'completed',
+    }]);
+  });
+
   it('honors global limits and per-project limits using active leases', async () => {
     const events = createEventHub<TaskEventMessage>();
     const firstTask = await createTask(events, 'Global limit one');

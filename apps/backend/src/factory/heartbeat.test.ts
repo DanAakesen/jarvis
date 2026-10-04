@@ -79,6 +79,28 @@ describe('sandbox heartbeat', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(store.markNeedsAttention).toHaveBeenCalledOnce();
+    expect(store.markNeedsAttention).toHaveBeenCalledWith('7', undefined, sandbox.invocationId, false);
+    await heartbeat.stop();
+  });
+
+  it('ends an expired session without a crash after its invocation completed', async () => {
+    vi.useFakeTimers();
+    const completed = recording.records['status_completed']!;
+    const missing = recording.records['status_not_found']!;
+    const { heartbeat, store } = setup([completed, missing, missing]);
+    const onCompleted = vi.fn(async () => false);
+    heartbeat.setCompletionHandler(onCompleted);
+
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onCompleted).toHaveBeenCalledOnce();
+    expect(store.markNeedsAttention).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(store.markNeedsAttention).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(store.markNeedsAttention).toHaveBeenCalledWith('7', undefined, sandbox.invocationId, true);
+    expect(onCompleted).toHaveBeenCalledOnce();
     await heartbeat.stop();
   });
 
@@ -105,7 +127,7 @@ describe('sandbox heartbeat', () => {
     await heartbeat.start();
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(store.markNeedsAttention).toHaveBeenCalledWith('7', question);
+    expect(store.markNeedsAttention).toHaveBeenCalledWith('7', question, sandbox.invocationId, false);
     await heartbeat.stop();
   });
 

@@ -58,14 +58,15 @@ Status as of 4 October 2026.
 | Task board | See tasks in columns by state with live updates; filter and search | Screen | Task view | Built | P1-08 |
 | Create task | Create a task (project, agent, text, optional model/reasoning) | Both | Task view; by voice once P4-10 lands | Built (screen) | P1-04, P1-08, P4-10 |
 | Task detail | See header, full event timeline, sandbox sessions, disk readings, usage | Screen | Task detail | Built | P1-09 |
-| Task controls | Steer, pause, resume, cancel | Both | Board, task detail; by voice once P4-10 lands | Built (screen) | P2-07, P4-10 |
-| Recover crashed task | Restart a crashed task from its branch in a new sandbox | Both | Task detail | In progress | P2-10 |
+| Task controls | Steer, pause, resume, cancel, and continue after a completed turn's session expires | Both | Board, task detail; by voice once P4-10 lands | Built (screen) | P2-07, P2-14, P4-10 |
+| Recover crashed task | Restart a task after an active-turn crash from its branch in a new sandbox | Both | Task detail | Built (offline) | P2-10 |
+| Continue after idle expiry | Start a new session on the existing task branch without changing task state when a completed invocation's Foundry session expires | Both | Board, task detail | Built (offline) | P2-14 |
 | Sandbox per task | Each task runs Codex or Copilot in its own Foundry sandbox that closes after delivery or cancel | Background | — | Live (start and events); repo clone in progress | P2-02, P2-04, P2-05, P2-13 |
 | Agent and model per task | Choose Codex or Copilot, model and reasoning per task | Both | Create task | Built | P2-11 |
 | Repository workspace | Sandbox clones the project repo and works on `jarvis/task-…`; agent questions surface in Needs attention | Background | — | In progress | P2-13 |
 | Frequent pushes | Agents push work in progress after each step | Background | — | Built | P2-09 |
 | GitHub App tokens | Sandboxes push with one-hour tokens scoped to the task's repository | Background | — | Built (enabled; live push check after P2-13) | P3-02 |
-| Heartbeat and crash detection | Crashed sandboxes move the task to Needs attention | Background | — | Built | P2-06 |
+| Heartbeat and crash detection | Active invocation failures move the task to Needs attention; expiry after a completed invocation ends the session as idle-expired without changing task state | Background | — | Built (offline) | P2-06, P2-14 |
 | Disk headroom | Low disk moves a task to Needs attention instead of failing | Background | Task detail | Built | P6-07 |
 | Codex limit handling | A Codex usage-limit stop is reported clearly; other tasks continue | Background | Task detail | Built | P6-05 |
 | Parallel tasks | Several tasks run within global and per-project limits | Background | Settings | Built (offline load test) | P2-05, P6-05, P6-08 |
@@ -80,7 +81,7 @@ Status as of 4 October 2026.
 | New projects defaults | Owner, visibility, templates, agent, policy, limits for new projects | Screen | Settings | Built | P3-11 |
 | Webhook receiver | GitHub events are verified and recorded once | Background | — | Built (live webhook setup pending) | P3-03 |
 | PR, run, release and deploy records | Webhook events stored as pull requests, workflow runs, releases, deployments | Background | — | Built (live webhook setup pending) | P3-04 |
-| Checks loop | A failed PR check is sent back to the task; the agent fixes it | Background | Task detail | Planned | P3-05 |
+| Checks loop | A failed task-PR check is stored in private Blob and sent to the same task; bounded repairs move to Needs attention when exhausted | Background | Task detail | Built | P3-05 |
 | Project policy and merge | Open a PR for completed branch commits when none is open; stop at a verified green PR or squash-merge via the GitHub App when checks, branch freshness and protection rules pass | Background | Project settings | Built (fake-tested; live test-repository acceptance pending) | P3-06 |
 | Release records | One release per merge to `main`, linked to runs and deployments by SHA | Background | — | Built (live webhook setup pending) | P3-07 |
 | Release view | Git graph, releases, runs and deployments per project | Screen | Release view | Planned | P3-08 |

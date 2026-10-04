@@ -22,6 +22,9 @@ pages can locate the required blobs without listing the container.
 P1-13 adds nullable `activity.dismissed_at` in `0008_activity_dismissals.sql`;
 the feed omits dismissed activity while retaining it for history and supports
 reverting the column with the paired down migration.
+P2-14 adds `idle_expired` to the `sandbox_sessions.end_reason` check in
+`0010_idle_expired_sessions.sql`; its down migration maps that value to `idle`
+before restoring the prior constraint.
 
 ## Overview
 
@@ -153,7 +156,9 @@ erDiagram
   the documented defaults. Current keys are `jarvis.model`,
   `jarvis.reasoning_effort`, `voice.stt.model`, `voice.en.model`,
   `voice.en.voice`, `voice.da.voice`, `voice.default_language`, `codex.model`,
-  `codex.reasoning_effort`, `copilot.model`, and `global.max_parallel_tasks`.
+  `codex.reasoning_effort`, `copilot.model`, `global.max_parallel_tasks`, and
+  `global.max_check_attempts` (default 3; integer range 0–10, where 0 disables
+  automatic check repair).
   P3-11 adds `new_projects.owner`, `new_projects.visibility`,
   `new_projects.templates_repository`, `new_projects.default_agent`,
   `new_projects.policy`, `new_projects.max_parallel_tasks`, and
@@ -260,6 +265,7 @@ erDiagram
 - P1-04 creates a board task only for an active project, using the project's default agent unless the request selects one. Task creation and its `created` event share a transaction. Backend state transitions lock the task row, enforce the product lifecycle, and write a `state_changed` event in that transaction; `Done` requires GitHub verification of the task branch and a pull request in the configured repository. There is no client state-update route.
 - P3-12 creates its initial scaffold task through the same store and transaction, linked to the chat message that invoked `create_project`; a runner clarification becomes a normal `NeedsAttention` state-change event with a bounded question and ends the sandbox session as `Ended`/`done`, not `Crashed`.
 - P1-05 writes each task event and its activity row in the same transaction. The runner-only `POST /factory/sandbox-events` validates its task-scoped input and calls `TaskStore.recordEvent` with source `runner` (no schema change); `recordEvent` is also the producer API for backend event sources; JSON payloads are capped at 1 MiB. The in-process hub publishes only after commit; payloads over 4 KiB are omitted from the published event and marked truncated. P1-06's authenticated SSE endpoint reads missed events from `task_events` by ascending ID in bounded pages, buffers live hub publications during replay, and suppresses overlapping IDs. The fetch client reconnects with the last delivered ID; the stream sends a heartbeat comment every 25 seconds. No schema change is needed.
+- P3-05 records `checks_retry_started`, `checks_retry_failed`, and `checks_attempts_exhausted` markers in this same event stream. Successful steers are recognized by the run ID embedded in the existing `steered` event; the serialized event payload is searched as `nvarchar(max)` because SQL Server `JSON_VALUE` would truncate this long prompt lookup. No schema change is needed.
 - `GET /factory/tasks` filters by project, agent, state, creation period and search, with bounded offset pagination. `GET /factory/tasks/:id` returns the task and a bounded, pageable event slice (event limit up to 200; offset up to 10,000). P1-09 requests 100 at a time, loads additional pages on demand, and merges them with the authenticated SSE stream by event ID; archived and SQL events use the same order and response shape. Its optional `origin_message_id` lookup uses a single row from `/conversation/history`. Responses are capped at 1 MiB; event payloads over 4 KiB are omitted and marked truncated. No schema change is required for the detail page.
 - P1-08's board uses the task list and event stream without changing the schema. The current task-list contract has no pull-request, check, or usage fields, so those card values remain explicitly unavailable until the GitHub integration (P3-03/P3-04) and usage work (P2-12) supply them.
 - Runner task events carry disk readings in `payload.data`: `disk_snapshot` records
@@ -288,7 +294,7 @@ erDiagram
         datetime last_heartbeat_at
         datetime last_event_at
         datetime ended_at
-        string end_reason "done | cancelled | crashed | idle"
+        string end_reason "done | cancelled | crashed | idle | idle_expired"
         decimal cost_estimate_dkk
     }
     sandbox_turns {
@@ -312,7 +318,7 @@ erDiagram
 ```
 
 - A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22). The unique `foundry_session_id` row is reused after a clean pause: resume resets `started_at`, clears `ended_at`, and adds the completed active interval to that session's existing sandbox usage row. Cancelling a paused task marks its idle session Ended. The dispatcher records `agent_name` for heartbeat routing. `agent_version = 'active'` and `image` records the selected Foundry runner route (for example `jarvis-runner-base-1x2`); the Invocations start response does not expose the resolved version number or container digest.
-- The sandbox heartbeat updates `last_heartbeat_at`; it needs the session's `agent_name` to address the Foundry runtime. Live runner events update `last_event_at` and add `task_events`.
+- The sandbox heartbeat updates `last_heartbeat_at`; it needs the session's `agent_name` to address the Foundry runtime. Runner completion events mark the matching `sandbox_turns` row completed. If Foundry later confirms that this invocation's session expired, the session ends with `idle_expired` while task state remains unchanged; the task API exposes the latest session end reason for Continue versus Recover. Live runner events update `last_event_at` and add `task_events`.
 - Large content (logs, CI logs, transcripts) lives in Blob; SQL keeps only the path.
 - The schema checks sandbox sizes, statuses, turn modes, end reasons and artifact kinds against these vocabularies. UTC `datetime2` end and heartbeat/event timestamps cannot precede their start.
 - `sandbox_sessions` is indexed by task and status; turns and artifacts are indexed by their parent and timestamp for the session/task timelines.
@@ -376,10 +382,12 @@ erDiagram
 - **One release = one push of a merge to the project's default branch** (no tags). A `push` creates it by project and SHA; if its webhook arrives first, the matching `Release` workflow run on that branch creates the same row with the run number. The push and workflow paths are idempotent, and the push links any earlier workflow runs by project/SHA. `pull_request` updates its record, `check_run` updates the PR check summary, `workflow_run` upserts by GitHub run ID, and `deployment_status` upserts by GitHub deployment ID. The release view is filled from the subscribed GitHub webhooks, never by polling.
 - PRs are upserted by project and PR number; their task link is derived from a matching task branch. Workflow runs link to a matching PR and release by project/SHA. A deployment status is retained only when its SHA already identifies a release; a matching default-branch `Release` run can create that row before the push notification arrives.
 - A delivery row and its mapped records commit in one serializable SQL transaction. A duplicate delivery ID leaves every mapped record unchanged. The receiver verifies the raw-body signature, then keeps only these mapped fields in memory; it never stores or logs webhook payloads or secrets.
+- P3-05 reuses `workflow_runs.log_artifact` for the private `logs` Blob path and existing `task_events` for bounded repair-attempt markers. Failed logs themselves remain in Blob; no new SQL table or migration is needed.
 - P3-06 joins a task-linked `pull_requests` row to its project policy and task state after the webhook transaction commits. `pull_requests.state` and `pull_requests.checks` are the persisted completion evidence; no policy-specific columns or tables are added. Backend task events record policy blocks and accepted merge requests.
 - `deliver_pr` completes only after the persisted PR/check records and current GitHub PR/check state agree. `complete_without_deployment` requests a squash merge only for a non-draft, green, up-to-date, mergeable PR; the task becomes Done only after the signed webhook records the merge.
+- When completed task work has commits on its task branch but no open PR, the backend creates one using the repository-scoped GitHub App token, task branch as head, project default branch as base, task title and a link to the Jarvis task. The resulting PR webhook is persisted before policy evaluation.
 - **Commits are not stored.** The release area shows a horizontal git graph per project (branches as lines, commits as dots): commits and branches come from the GitHub API when the page opens or when Dan asks Jarvis; the dots are coloured from `pull_requests`, `workflow_runs`, `releases` and `deployments`.
-- A failed PR check stores the log in Blob, and the backend steers the task with it.
+- A failed task-PR workflow stores the bounded failed-job log in private Blob storage and steers the same task with a bounded excerpt and the log path. The backend limits repairs using `global.max_check_attempts`, persists attempt markers in `task_events`, and moves exhausted or unavailable repairs to NeedsAttention.
 - The release view reads `releases`, `workflow_runs` and `deployments`, plus commits from GitHub on demand.
 
 ## 6 · Operations

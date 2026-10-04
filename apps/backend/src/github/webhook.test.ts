@@ -138,6 +138,29 @@ describe('GitHub webhook receiver', () => {
     expect(deliveries.size).toBe(1);
   });
 
+  it('sends completed failed workflow runs to the checks loop and allows webhook retries', async () => {
+    const onMapping = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary log storage failure'))
+      .mockResolvedValueOnce(undefined);
+    const { app, deliveries } = fixture(async () => secret, onMapping);
+    const payload = payloadFor('workflow_run') as { workflow_run: Record<string, unknown>; repository: typeof repository };
+    payload.workflow_run['conclusion'] = 'failure';
+    const body = Buffer.from(JSON.stringify(payload));
+
+    const first = await deliver(app, 'delivery-failed-run', 'workflow_run', body);
+    expect(first.statusCode).toBe(503);
+    expect(deliveries.size).toBe(1);
+    expect(onMapping).toHaveBeenCalledOnce();
+
+    const retry = await deliver(app, 'delivery-failed-run', 'workflow_run', body);
+    expect(retry.statusCode).toBe(202);
+    expect(retry.json()).toEqual({ status: 'duplicate' });
+    expect(onMapping).toHaveBeenCalledTimes(2);
+    expect(onMapping.mock.calls[0]?.[0]).toMatchObject({
+      kind: 'workflow_run', id: 1_900_000_000_001, conclusion: 'failure',
+    });
+  });
+
   it('evaluates project policy only after persisted webhook mapping and retries duplicate deliveries', async () => {
     const order: string[] = [];
     const getSecret = async () => secret;

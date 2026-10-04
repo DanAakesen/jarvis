@@ -17,6 +17,7 @@ export interface TaskRecord {
   attemptCount: number;
   nextAttemptAt: string | null;
   branch: string | null;
+  latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
