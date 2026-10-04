@@ -278,3 +278,16 @@ The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-l
 - Memory design (Decision 6).
 - What usage Codex and Copilot report per turn ([data model](docs/data-model.md#still-open)); P2-12 records offline package evidence, and actual fields remain a post-merge live check.
 - Whether Foundry sandboxes can get the documented 20 GiB disk (Decision 9).
+
+## Shared UI direction (4 October 2026; planned)
+
+The confirmed requirements and proposed feature placement are in [ui.md](ui.md).
+Jarvis has one typing shell with expandable navigation and context panels, and a
+fullscreen voice workspace with a runtime-state-driven orb. Jarvis can create and
+arrange temporary views of accessible data, while Dan can override layouts and
+move/resize windows. Tabs retain minimised views within the active workspace.
+Voice is explicitly started; the always-available assistant does not continuously
+listen. Desktop and phone layouts follow the mode/window rules in ui.md. Theme
+variables can be changed on demand and persist until changed again. Banking and
+Fitness and Health are future areas; their detailed integrations remain deferred.
+This is planned behaviour, not a claim that the existing frontend implements it.

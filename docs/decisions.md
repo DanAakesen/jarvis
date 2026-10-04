@@ -21,6 +21,7 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-04 | Shared typing shell and fullscreen voice workspace; temporary dynamic windows with tabs; persisted theme values; orb driven by runtime state; optional minimise-on-voice toggle defaults off | Dan confirmed these behaviours in the UI design conversation and reviewed the static wireframes. See [ui.md](../ui.md) for details and unresolved styling/control choices. | Confirmed requirements; implementation planning pending |
 | 2026-10-01 | Coding sandbox: Foundry Hosted Agents, one session per task; Container Apps Jobs as fallback behind the same runner contract | Proof of concept: all nine checks passed for Copilot and Codex ([report](reference/coding-sandbox-prototype/REPORT.md)) | Proven |
 | 2026-10-01 | ACP for both agents: Copilot CLI `--acp`, Codex via `codex-acp`; Python adapter in the sandbox image | Steer, pause, and resume proven over ACP; Foundry hosted agents support only Python or C# | Proven |
 | 2026-10-02 | Codex uses a Jarvis-only ChatGPT Pro login, renewed by Jarvis; no API key | Renewal proven through Codex's own client; Dan's own login untouched (L6, L12) | Proven |

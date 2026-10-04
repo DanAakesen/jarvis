@@ -4,6 +4,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **UI planning (4 October 2026):** Dan agreed the shared shell/voice structure in [ui.md](ui.md). Frontend breakdown is P8-02; enabling logic breakdown is P8-03. Final styling and deferred decisions remain open; no UI build is claimed complete.
+
 - **P6-06 (#67):** The operations runbook is drafted in [docs/runbook.md](docs/runbook.md); Dan's acceptance review and live production verification are pending.
 - **P2-13 (#195):** Task starts now carry repository/default/task branch, dispatch persists `tasks.branch`, and the runner prepares the checkout before ACP. Commit-free `end_turn` replies become Needs attention questions. Next step: coordinator post-merge live Copilot/Codex pushes and question verification on `DanAakesen/jarvis-test-target`; live Foundry/GitHub acceptance remains unverified.
 - **P1-14 (#192):** Complete. SQL connection acquisition and explicitly read-only queries wait through resume errors with backoff within a shared 90-second deadline; executed writes and transactions are not replayed. Signed-in pages show backend-reported “Waking Jarvis…” while requests wait. Offline retry/status/SSE tests and desktop/mobile browser checks pass. Next: verify production auto-resume after deployment; live Azure SQL remains unverified.
@@ -254,6 +256,8 @@ Goal: one complete Jarvis front end that exposes the existing and P7 features on
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P8-01 | [#211](https://github.com/DanAakesen/jarvis/issues/211) | Design session with Dan: the coordinator prepares a feature inventory (on screen, voice only, or both) and layout sketches; the result goes into DESIGN.md and the build is split into P8 issues | Dan approves the design; P8 build issues created | None | In progress |
+| P8-02 | [#230](https://github.com/DanAakesen/jarvis/issues/230) | Copilot breaks ui.md into frontend implementation issues with full coverage and no duplicates | UI coverage report; PLAN.md tasks and GitHub issues created with acceptance criteria and dependency links | None; use the UI design delivery PR as source until merged | Not started |
+| P8-03 | [#231](https://github.com/DanAakesen/jarvis/issues/231) | Copilot breaks ui.md into enabling tools, contracts, runtime state, data access and business-logic issues | Logic coverage report; PLAN.md tasks and GitHub issues created with acceptance criteria and dependency links | None; use the UI design delivery PR as source until merged | Not started |
 
 ### Out of scope for phase 1
 
