@@ -57,7 +57,7 @@ Dan's brief (4 October 2026): the UI should be stunning, with rich styling and m
 - **Light appearance (C):** warm neutral surfaces and editorial typography with an ink-particle orb, so light mode keeps the same states and motion vocabulary.
 - **Constraints kept:** every orb state is also labelled in text; no gradient text, no emoji icons, no lone coloured borders; sample data appears in the concepts only.
 
-Token values belong in `apps/web/src/styles.css`; P8-20 (#282) implements this visual and motion system across the shell.
+Canonical colour, type, spacing, radius, surface, elevation and motion values belong in `apps/web/src/styles.css`. P8-20 (#282) applies Concept B/C across the current shell and pages: the dark aurora is CSS-only, and the orb follows reported voice state plus decoded playback PCM. Chat/voice activity is explicit in the top bar; tool-call state and workspace windows remain unavailable until their runtime contracts exist. Hidden tabs pause animation; reduced motion uses fades and keeps the state label readable.
 
 ## Voice end (P8-12, decided 4 October 2026)
 

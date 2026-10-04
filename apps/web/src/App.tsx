@@ -132,7 +132,8 @@ function Shell({ signedIn, config, session }: { signedIn: boolean; config: Publi
             {working && (
               <span className="topbar-working" role="status" aria-label="Jarvis is working" aria-live="polite">
                 <span className="topbar-working-mark" aria-hidden="true" />
-                <span aria-hidden="true">Jarvis is working</span>
+                <span className="topbar-working-wide" aria-hidden="true">Jarvis is working</span>
+                <span className="topbar-working-compact" aria-hidden="true">Working</span>
               </span>
             )}
             <UnavailableControl id="screen-share-status" label="Share screen" explanation="Unavailable until screen sharing is built." icon="screen" />

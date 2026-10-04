@@ -87,6 +87,13 @@ describe('ThemePreferenceProvider', () => {
     expect(storedTheme).toBe('dark');
     expect(await screen.findByText('Theme saved.')).not.toBeNull();
 
+    await user.click(screen.getByRole('radio', { name: 'Light' }));
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('light'));
+    expect(storedTheme).toBe('light');
+    await user.click(screen.getByRole('radio', { name: 'Dark' }));
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
+    expect(storedTheme).toBe('dark');
+
     firstVisit.unmount();
     document.documentElement.dataset.theme = 'light';
     renderPreference();

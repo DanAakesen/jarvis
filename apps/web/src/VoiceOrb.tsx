@@ -28,7 +28,7 @@ export function VoiceOrb({ status, message, audioLevel = 0 }: { status: string; 
 
   return (
     <div className={`voice-orb-presentation voice-orb-${state.className}`} data-state={state.className}
-      style={{ '--voice-level': level } as CSSProperties}>
+      style={{ '--voice-level': level * 0.08 } as CSSProperties}>
       <div className="voice-orb" aria-hidden="true"><span /></div>
       <div className="voice-orb-copy">
         <p
