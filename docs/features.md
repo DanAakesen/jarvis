@@ -121,7 +121,7 @@ Status as of 4 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Complete Jarvis front end | One designed UI for all features above | Screen | All pages | Planned | P8-01, P8-04–P8-13 |
-| Shared app shell and area navigation | Navigate areas from the rail/sidebar; open Settings from the top-right; use confirmed screen-share and Camera controls | Screen | All pages | Planned | P8-04 |
+| Shared app shell and area navigation | Navigate areas from the rail/sidebar; open Settings from the top-right; see Screen sharing and Camera controls disabled until their capabilities are built | Screen | All pages | Built | P8-04 |
 | Conversation opening and voice entry | See the conversation on arrival, type from the bottom-centred composer, and explicitly start voice from the small orb | Both | Main page | Planned | P8-05 |
 | Dynamic workspace views | View accessible information in temporary, question-relevant windows; ask Jarvis or move/resize/reorder views | Screen | Main workspace | Planned | P8-06 |
 | Window tabs and restore | Minimise a view without closing or saving it, then restore it from its tab or by asking Jarvis | Both | Main/voice workspace | Planned | P8-07 |
