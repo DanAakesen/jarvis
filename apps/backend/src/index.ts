@@ -10,6 +10,7 @@ import { createDatabase, registerDatabase } from './database/lifecycle.js';
 import { createToolCallStore } from './database/tool-call-store.js';
 import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
+import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
@@ -45,6 +46,7 @@ import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js
 import { createChecksLoopStore } from './database/checks-loop-store.js';
 import { createChecksLoopBlobStore } from './database/checks-loop-blob.js';
 import { createGitHubActionsLogClient } from './github/actions-logs.js';
+import { createGitHubReleaseGraphReader } from './github/release-graph.js';
 import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
@@ -205,6 +207,10 @@ try {
   const projectStore = database ? createProjectStore(database.pool) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;
+  const releaseViewStore = database ? createReleaseViewStore(database.pool) : undefined;
+  const releaseGraphReader = githubAppTokenIssuer
+    ? createGitHubReleaseGraphReader(githubAppTokenIssuer)
+    : undefined;
   const projectPolicyEvaluator = database && taskStore && githubAppTokenIssuer
     ? createProjectPolicyEvaluator({
       store: createProjectPolicyStore(database.pool),
@@ -307,6 +313,8 @@ try {
   const app = buildApp(config, logger, {
     modules,
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
+    ...(releaseViewStore ? { releaseViewStore } : {}),
+    ...(releaseGraphReader ? { releaseGraphReader } : {}),
     ...(database && taskStore && settingsStore ? {
       ...(projectStore ? { projectStore } : {}),
       ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
