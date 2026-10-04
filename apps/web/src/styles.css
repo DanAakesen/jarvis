@@ -140,6 +140,7 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
 .project-archive > .secondary-button { margin-top: 16px; }
 .project-archive-confirm { margin-top: 16px; padding: 16px; background: var(--disabled-surface); border-radius: 6px; }
 .project-archive-confirm .primary-button { margin-top: 0; }
+<<<<<<< HEAD
 .tasks-page > p { margin: 0 0 20px; font-size: 16px; }
 .tasks-toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0 8px; }
 .tasks-toolbar .primary-button { margin-top: 0; }
@@ -219,6 +220,23 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
   }
   .task-column { min-height: 160px; }
 }
+=======
+.task-detail > .home-link { margin-top: 0; }
+.task-meta, .task-disk-meta {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 24px; margin: 0;
+}
+.task-meta { padding: 20px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
+.task-meta > div, .task-disk-meta > div { min-width: 0; }
+.task-detail-section { margin-top: 24px; padding: 24px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
+.task-detail-section h2 { margin-bottom: 12px; }
+.task-detail-section > p, .task-disk-time { font-size: 14px; }
+.task-disk-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.task-disk-list > li { min-width: 0; padding: 16px; background: #f6f7f9; border: 1px solid var(--rule); border-radius: 6px; }
+.task-disk-list h3 { margin: 0 0 4px; }
+.task-disk-time { margin: 0; }
+.task-disk-meta { margin-top: 16px; }
+.task-detail-error { display: grid; justify-items: start; gap: 12px; }
+>>>>>>> origin/main
 
 @media (min-width: 900px) {
   .jarvis-layout { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
@@ -239,10 +257,15 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
   .settings-section { padding: 22px 0; }
   .project-item, .project-empty { padding: 20px 16px; }
   .project-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+<<<<<<< HEAD
   .task-filters { grid-template-columns: minmax(0, 1fr); padding: 16px; }
   .task-search-field { grid-column: auto; }
   .task-dialog-backdrop { padding: 12px; }
   .task-dialog { max-height: calc(100vh - 24px); padding: 20px 16px; }
+=======
+  .task-meta, .task-disk-meta { grid-template-columns: minmax(0, 1fr); }
+  .task-detail-section { padding: 20px 16px; }
+>>>>>>> origin/main
 }
 
 @media (max-width: 380px) {

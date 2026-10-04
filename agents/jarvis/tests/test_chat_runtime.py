@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Tests for the authenticated HTTP chat route."""
+"""Tests for the authenticated Foundry chat invocation."""
 
 from __future__ import annotations
 
@@ -65,12 +65,18 @@ def test_chat_streams_text_and_sets_tool_source_message() -> None:
     app, model = app_with(context)
     with TestClient(app) as client:
         response = client.post(
-            "/chat",
-            headers={"Authorization": AUTHORIZATION},
-            json={"messageId": "42", "text": "Hej Jarvis", "language": "da"},
+            "/invocations",
+            json={
+                "messageId": "42",
+                "text": "Hej Jarvis",
+                "language": "da",
+                "delegatedAuthorization": AUTHORIZATION,
+            },
         )
+        custom_route = client.post("/chat")
 
     assert response.status_code == 200
+    assert custom_route.status_code == 404
     assert response.headers["content-type"].startswith("text/event-stream")
     assert 'data: {"text": "Hej"}' in response.text
     assert "event: done" in response.text
@@ -95,17 +101,25 @@ def test_chat_rejects_unverified_messages_and_invalid_requests() -> None:
     app, model = app_with(unauthorized)
     with TestClient(app) as client:
         invalid = client.post(
-            "/chat",
-            headers={"Authorization": AUTHORIZATION},
-            json={"messageId": "0", "text": "Hello", "language": "en"},
+            "/invocations",
+            json={
+                "messageId": "0",
+                "text": "Hello",
+                "language": "en",
+                "delegatedAuthorization": AUTHORIZATION,
+            },
         )
         unauthorized_response = client.post(
-            "/chat",
-            headers={"Authorization": AUTHORIZATION},
-            json={"messageId": "42", "text": "Hello", "language": "en"},
+            "/invocations",
+            json={
+                "messageId": "42",
+                "text": "Hello",
+                "language": "en",
+                "delegatedAuthorization": AUTHORIZATION,
+            },
         )
         missing_auth = client.post(
-            "/chat",
+            "/invocations",
             json={"messageId": "42", "text": "Hello", "language": "en"},
         )
 
@@ -133,9 +147,13 @@ def test_chat_stream_errors_are_sanitized() -> None:
     )
     with TestClient(app) as client:
         response = client.post(
-            "/chat",
-            headers={"Authorization": AUTHORIZATION},
-            json={"messageId": "42", "text": "Hello", "language": "en"},
+            "/invocations",
+            json={
+                "messageId": "42",
+                "text": "Hello",
+                "language": "en",
+                "delegatedAuthorization": AUTHORIZATION,
+            },
         )
 
     assert response.status_code == 200

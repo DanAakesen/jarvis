@@ -15,7 +15,7 @@ No visual direction is chosen yet. Dan designs each page by giving an image gene
 | --- | --- |
 | Jarvis (main) | Conversation, voice state, "now" activity, sleep switch |
 | Task view | Kanban columns by task state |
-| Task detail | Header, complete paginated event timeline, sandbox sessions, usage |
+| Task detail | Header, complete paginated event timeline, sandbox sessions, usage, and timestamped writable-disk total/free readings with low-disk threshold |
 | Release view | Horizontal git graph per project (branches as lines, commits as dots), releases, workflow runs, deployments |
 | Projects | Project list and settings |
 | Settings | Models, reasoning, voices, limits, credential status |
@@ -24,6 +24,9 @@ No visual direction is chosen yet. Dan designs each page by giving an image gene
 The repository `PLAN.md` status workflow is GitHub metadata; it does not add a Jarvis UI control or visual state.
 
 Events archived after 90 days load through the same task-detail timeline and pagination; the archive is invisible to the user.
+The disk section uses recorded task events, not a live filesystem estimate; show
+each reading's time and byte-derived human-readable values without implying that
+the current filesystem state is available.
 
 ## Interactions to design
 
@@ -141,7 +144,8 @@ beside the composer, preserve partial text as interrupted, and warn that a task
 action may have completed. A delivered reply is saved and history refreshes so
 tool outcomes and valid task IDs appear as labelled chips and links. The list and
 composer stay in the existing single-column conversation panel at mobile widths;
-the selected visual direction remains open. Live agent access awaits P4-08.
+the selected visual direction remains open. P4-09 routes chat through Foundry
+Invocations; live Azure streaming and tool-call linkage remain a post-merge check.
 
 ## Browser voice (P5-04)
 

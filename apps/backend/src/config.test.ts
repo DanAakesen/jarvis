@@ -22,19 +22,19 @@ describe('backend configuration', () => {
         runtime: foundryRuntimeEndpoint,
       },
       foundryRunnerAgentName: 'jarvis-runner-node-1x2',
-      applicationInsightsConnectionString: connectionString,
     });
   });
-  it('validates the optional hosted chat-agent URL', () => {
-    expect(loadConfig({ JARVIS_CHAT_AGENT_URL: 'https://agent.example/chat/' }).chatAgentUrl)
-      .toBe('https://agent.example/chat');
-    for (const JARVIS_CHAT_AGENT_URL of [
-      'http://agent.example/chat',
-      '******agent.example/chat',
-      'https://agent.example/chat?token=secret',
-      'https://agent.example/chat#fragment',
-    ]) {
-      expect(() => loadConfig({ JARVIS_CHAT_AGENT_URL })).toThrow('JARVIS_CHAT_AGENT_URL');
+  it('validates the configured hosted chat-agent name', () => {
+    const FOUNDRY_PROJECT_ENDPOINT = 'https://resource.services.ai.azure.com/api/projects/jarvis';
+    expect(loadConfig({
+      FOUNDRY_PROJECT_ENDPOINT, JARVIS_CHAT_AGENT_NAME: 'jarvis',
+    }).foundryChatAgentName).toBe('jarvis');
+    expect(() => loadConfig({ JARVIS_CHAT_AGENT_NAME: 'jarvis' })).toThrow(
+      'FOUNDRY_PROJECT_ENDPOINT is required',
+    );
+    for (const JARVIS_CHAT_AGENT_NAME of ['', '../other', 'bad name']) {
+      expect(() => loadConfig({ FOUNDRY_PROJECT_ENDPOINT, JARVIS_CHAT_AGENT_NAME }))
+        .toThrow('JARVIS_CHAT_AGENT_NAME');
     }
   });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {
