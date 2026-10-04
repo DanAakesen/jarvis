@@ -18,6 +18,7 @@ from starlette.testclient import TestClient
 from response_coordinator import ResponseCoordinator
 from scripts.smoke_test import ResponseValidator
 from state import (
+    DEFAULT_MODEL_SETTINGS,
     MAX_ACTIVE_RESPONSES,
     MAX_HISTORY_CHARACTERS,
     MAX_HISTORY_MESSAGES,
@@ -29,6 +30,7 @@ from state import (
     InputClaim,
     InputOrigin,
     ModelMessage,
+    ModelSettings,
     SessionState,
 )
 from voice_runtime import IDLE_REMINDER_TEXT, VoiceRuntime, create_app
@@ -45,14 +47,30 @@ class FakeModel:
     model_name = "fake-model"
     server_address = "fake.example"
 
-    def __init__(self, scripts: Sequence[list[str] | BaseException | BlockingScript]) -> None:
+    def __init__(
+        self,
+        scripts: Sequence[list[str] | BaseException | BlockingScript],
+        settings: Sequence[ModelSettings] | None = None,
+        settings_error: BaseException | None = None,
+    ) -> None:
         self._scripts = list(scripts)
+        self._settings = list(settings or [ModelSettings("fake-model", "none")])
+        self._settings_error = settings_error
         self.requests: list[tuple[ModelMessage, ...]] = []
+        self.request_settings: list[ModelSettings | None] = []
         self.closed = False
         self.close_count = 0
 
-    async def complete(self, messages: Sequence[ModelMessage]) -> AsyncIterator[str]:
+    async def session_settings(self) -> ModelSettings:
+        if self._settings_error is not None:
+            raise self._settings_error
+        return self._settings.pop(0) if len(self._settings) > 1 else self._settings[0]
+
+    async def complete(
+        self, messages: Sequence[ModelMessage], *, settings: ModelSettings | None = None
+    ) -> AsyncIterator[str]:
         self.requests.append(tuple(messages))
+        self.request_settings.append(settings)
         script = self._scripts.pop(0)
         if isinstance(script, BaseException):
             raise script
@@ -194,6 +212,41 @@ def test_protocol_mismatch_is_rejected() -> None:
         send_user(ws, "in_after_rejection", "must not run")
 
     assert model.requests == []
+
+
+def test_each_session_keeps_its_own_model_settings_snapshot() -> None:
+    first_settings = ModelSettings("gpt-5.6-luna", "low")
+    second_settings = ModelSettings("gpt-5.4-mini", "high")
+    model = FakeModel([["First"], ["Second"]], settings=[first_settings, second_settings])
+    app = create_app(model, configure_observability=None)
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/invocations_ws") as first:
+            assert start(first)["type"] == "session.ready"
+            with client.websocket_connect("/invocations_ws") as second:
+                assert start(second)["type"] == "session.ready"
+                send_user(first, "in_first", "First session")
+                receive_until(first, "response.done")
+                send_user(second, "in_second", "Second session")
+                receive_until(second, "response.done")
+
+    assert model.request_settings == [first_settings, second_settings]
+
+
+def test_session_start_uses_defaults_when_settings_cannot_be_loaded(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    model = FakeModel([["Fallback answer"]], settings_error=RuntimeError("private backend detail"))
+    app = create_app(model, configure_observability=None)
+
+    with TestClient(app) as client, client.websocket_connect("/invocations_ws") as ws:
+        assert start(ws)["type"] == "session.ready"
+        send_user(ws, "in_fallback", "Use the fallback")
+        receive_until(ws, "response.done")
+
+    assert model.request_settings == [DEFAULT_MODEL_SETTINGS]
+    assert "Could not load Jarvis settings; using default session settings" in caplog.text
+    assert "private backend detail" not in caplog.text
 
 
 def test_input_before_session_start_is_ignored() -> None:

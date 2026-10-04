@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import socket
@@ -34,6 +35,7 @@ from jarvis_tools import current_conversation, current_turn
 from model_contract import StreamingModelClient
 from response_coordinator import ResponseCoordinator
 from state import (
+    DEFAULT_MODEL_SETTINGS,
     MAX_MESSAGE_CHARACTERS,
     InputClaim,
     SessionState,
@@ -136,6 +138,14 @@ class VoiceRuntime:
                 )
             )
             return
+        try:
+            state.model_settings = await self._model_client.session_settings()
+        except asyncio.CancelledError:
+            state.terminating = True
+            raise
+        except Exception:
+            state.model_settings = DEFAULT_MODEL_SETTINGS
+            logger.warning("Could not load Jarvis settings; using default session settings")
         try:
             await session.send(SessionReady())
             state.activate()
