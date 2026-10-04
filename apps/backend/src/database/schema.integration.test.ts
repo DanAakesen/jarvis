@@ -388,8 +388,22 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
 
     expect((await store.transition(created.id, 'Done')).kind).toBe('invalid-transition');
     await transition(created.id, 'Running');
+    const foundrySessionId = 'session-active-task';
+    await pool.request()
+      .input('taskId', sql.BigInt, BigInt(created.id))
+      .input('sessionId', sql.NVarChar(255), foundrySessionId)
+      .query(`INSERT dbo.sandbox_sessions
+        (task_id, foundry_session_id, agent_version, size, image, status)
+        VALUES (@taskId, @sessionId, N'runner', N'1x2', N'runner', N'Active');`);
+    expect(await store.getActiveRepository(created.id, foundrySessionId)).toBe(
+      (await pool.request().input('id', sql.BigInt, BigInt(projectId))
+        .query<{ repo: string }>('SELECT repo FROM dbo.projects WHERE id = @id;')).recordset[0]?.repo,
+    );
+    expect(await store.getActiveRepository(created.id, 'other-session')).toBeNull();
     await transition(created.id, 'PauseRequested');
+    expect(await store.getActiveRepository(created.id, foundrySessionId)).not.toBeNull();
     await transition(created.id, 'Paused');
+    expect(await store.getActiveRepository(created.id, foundrySessionId)).toBeNull();
     await transition(created.id, 'Running');
     await pool.request()
       .input('taskId', sql.BigInt, BigInt(created.id))

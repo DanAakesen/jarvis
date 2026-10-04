@@ -13,7 +13,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces for the two apps, one root lockfile | Implemented in P0-01; empty app builds verified in Codex cloud |
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
-| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, and `@azure/storage-blob` 12.31.0 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; live Blob archive/restore remains unverified |
+| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, and `@azure/keyvault-secrets` 4.11.2 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P3-02 reads the GitHub App key through the backend identity; live Azure behavior remains unverified |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton, core/factory module registration and P1-03 projects API implemented; remaining domain APIs and SSE are in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
 | Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, and heartbeat agent routing in #32; deployed heartbeat verification remains open |
@@ -137,8 +137,12 @@ logger bindings as well as log arguments, dropping request/provider secrets.
 The factory module exposes authenticated `POST /factory/tasks`, filtered and
 paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event
 history. It validates active projects and bounded request/query inputs. Runner
-identities with the `Jarvis.Runner.Events` app role may only call
-`POST /factory/sandbox-events`; it validates task/event fields and records source
+identities with the `Jarvis.Runner.Events` app role may call
+`POST /factory/sandbox-events` and `POST /factory/tasks/:id/github-token`. The
+token route requires an active task and its unended Foundry session, derives its
+repository from task/project state, and mints a one-hour repository-scoped App
+token; it accepts neither a repository nor an unrelated task/session from the
+caller. The events route validates task/event fields and records source
 `runner` through `TaskStore.recordEvent`. Clients cannot update task state directly;
 the task store serializes backend transitions, checks the lifecycle, and records
 state events atomically. Completion can reach Done only through a trusted call that
@@ -247,7 +251,9 @@ or `app`; otherwise 403. Its principal goes to `request.agentPrincipal`, never
 `request.principal`, and only routes with `config: { jarvisAgent: true }` accept it:
 `GET /tools`, `GET /factory/context`, and `POST /tools/{name}`. Coding runner
 identities receive a separate `Jarvis.Runner.Events` app role and are accepted only
-on `POST /factory/sandbox-events`; their principal is kept separately as
+on `POST /factory/sandbox-events` and the narrowly scoped
+`POST /factory/tasks/:id/github-token`; the latter requires the Foundry session
+ID and can only issue a token for that session's active task repository. Their principal is kept separately as
 `request.runnerPrincipal`. The bootstrap script assigns this role only to the
 runner principals supplied after Runner deploy. All other routes, including `/me`
 and task APIs, reject runner identities. `jarvis-api` requires role assignment, so
@@ -573,10 +579,11 @@ live provider selection remains unverified.
   It uses the successful infrastructure deployment's admin/runtime endpoints and
   records each variant only after both Key Vault provider probes pass. Probe
   sessions are explicitly deleted, including failed probes (L14).
-- Each dedicated agent identity reads only the three credential secret scopes;
-  write access covers only `codex-login`. The port retains the `jarvis-github` token from the
-  prototype until #40 adds task-scoped GitHub App installation tokens; CLI seat
-  authentication is separate. No workflow seeds credentials.
+- Each dedicated agent identity reads only its credential secret scopes; write
+  access covers only `codex-login`. The runner retains `jarvis-github` from the
+  prototype while App-token mode is off by default; P3-02 adds the opt-in
+  task-scoped App flow. Keep the legacy secret and grant until its live push check
+  succeeds. CLI seat authentication is separate. No workflow seeds credentials.
 - Invocation metadata is stored separately for each turn, with path-safe IDs and
   backward reads of earlier session records. Idle recreation retains earlier
   status lookups; prompts and credentials are omitted. Only allowlisted Codex
@@ -615,7 +622,7 @@ The agent can read everything in its sandbox, including environment variables, s
 | --- | --- | --- | --- |
 | Copilot | Fine-grained token with only the Copilot Requests permission | Manually renewed at its configured expiry; Key Vault expiry/update metadata is shown in Settings | Implemented offline; live metadata pending #11 |
 | Codex | Jarvis-only ChatGPT Pro login, separate from Dan's own apps | Daily check; renews when 3 days or less remain and writes it back to Key Vault | Implemented offline; live renewal proof pending #11 and Dan's credential setup |
-| GitHub | GitHub App token for one repository: contents and pull requests | 1 hour; the Git credential helper fetches the current token for each push | Decided; the prototype used a fine-grained token |
+| GitHub | GitHub App token for one repository: contents and pull requests | 1 hour; the Git credential helper requests a fresh token from the backend for each Git credential request | Implemented offline; live sandbox push remains unverified |
 
 ### GitHub credentials inventory
 
@@ -624,7 +631,7 @@ Every GitHub credential Jarvis uses, checked with Dan on 4 October 2026. Each to
 | Credential | Type and scope | Stored in | Used by | Lifetime |
 | --- | --- | --- | --- | --- |
 | Jarvis Software Factory | GitHub App, installed on all of Dan's repositories. Repository permissions: Contents and Pull requests read/write; Actions, Checks and Deployments read; Metadata read; nothing else | Private key as Key Vault `github-app-private-key` (backend only) | Backend: one-hour, single-repository installation tokens (P3-02 to P3-06) | Permanent; rotate the key if exposed |
-| `jarvis-github` | Fine-grained token: Contents and Pull requests read/write on all repositories | Key Vault `jarvis-github` | Sandbox clone, push and pull requests | Temporary: delete the token and the secret when P3-02 (#40) switches pushes to installation tokens |
+| `jarvis-github` | Fine-grained token: Contents and Pull requests read/write on all repositories | Key Vault `jarvis-github` | Legacy sandbox Git credential path while App-token mode is disabled | Keep until the post-merge App-token push check succeeds; then revoke/remove in a follow-up |
 | `jarvis-copilot` | Fine-grained token: only the Copilot Requests account permission; no repository access | Key Vault `jarvis-copilot` | Copilot CLI sign-in inside the sandbox | Until revoked |
 | `jarvis-repo-admin` | Fine-grained token: Administration read/write on all repositories (creates repositories); planned with P3-12 | Key Vault `jarvis-repo-admin` (backend only) | Backend: create a new project's repository | Until revoked |
 | `PROJECT_TOKEN` | Classic token: `project` and `repo` | GitHub environment `project-board` (only `main` can use it) | Project board sync workflow; user-owned boards accept no App or fine-grained token | Until revoked |
@@ -636,7 +643,22 @@ Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The 
 
 [`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02 and P3-03; repository metadata read is GitHub's required baseline.
 
-The backend stores the private key in Key Vault as `github-app-private-key` and uses its managed identity to mint one-hour, repository-scoped installation tokens. The key must never enter a sandbox. The same backend identity reads `github-app-webhook-secret` for signature verification; Bicep supplies the vault URI. P3-10 completed App registration, permission trimming, and private-key storage on 4 October 2026. The webhook URL and secret are Dan's post-merge setup for P3-03. The App ID is configuration, not a secret.
+The backend reads `github-app-private-key` from Key Vault with its managed identity
+and uses the configured `GITHUB_APP_ID` to mint one-hour installation tokens
+scoped to the repository of an active task. The Deploy workflow maps repository
+Actions variable `JARVIS_GITHUB_APP_ID` to that backend setting. The runner-only
+`POST /factory/tasks/:id/github-token` route requires the caller's Foundry session
+ID and verifies it is an unended session for the active task before deriving the
+repository from backend task/project state; it does not trust a caller-supplied
+repository or task ID alone. The runner's app-only identity must carry
+`Jarvis.Runner.Events`, and the route opts into that principal separately from user
+and Jarvis-agent routes. The key never enters a sandbox. Git credential requests
+call the backend for a fresh token and match the returned repository to the
+GitHub host and path before returning credentials. The runner retries a 404
+session lookup with bounded delays to cover the interval before the backend
+persists the newly started Foundry session.
+
+App-token mode is explicitly opt-in through the Runner deploy Actions variable `JARVIS_GITHUB_APP_TOKEN_ENABLED` (default `false`); enabling it also requires `GITHUB_APP_ID`. Keep the legacy `jarvis-github` secret and runner read grant until the live post-merge push check against `DanAakesen/jarvis-test-target` succeeds. The same backend identity reads the separate `github-app-webhook-secret` for P3-03 webhook signature verification; Bicep supplies the vault URI. The App ID is configuration, not a secret.
 
 **Codex login rules** (Pro login only; no API key):
 
@@ -650,10 +672,10 @@ Jarvis has its own Codex session, so it never signs Dan out of the ChatGPT app o
 
 **Access rules**
 
-- Key Vault holds these credentials; the sandbox identity reads only its agent credentials and can write only the Codex login secret. The backend identity will read the GitHub App private key and webhook secret; neither will be accessible to the sandbox.
+- Key Vault holds these credentials; the sandbox identity reads only its agent credentials and can write only the Codex login secret. The backend identity reads the GitHub App private key; it is never accessible to the sandbox. The legacy GitHub secret remains readable by the runner until the post-merge App-token push check succeeds.
 - Bicep assigns the backend identity Foundry User at project scope so it can invoke and poll the runner and serve the Danish voice agent.
 - Agents run only on Dan's private repositories.
-- The backend keeps the GitHub App key, creates each task's token, and performs merges outside the sandbox.
+- The backend keeps the GitHub App key and creates each task's token; the task-scoped token is the only App credential sent to its sandbox. The backend performs merges outside the sandbox.
 - The sandbox identity cannot reach Jarvis data or other areas; it reports through the backend.
 
 ## Build and release

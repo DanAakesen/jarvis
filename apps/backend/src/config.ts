@@ -18,6 +18,7 @@ export interface BackendConfig {
   foundryRunnerAgentName?: string;
   foundryChatAgentName?: string;
   foundryProjectEndpoint?: string;
+  githubAppId?: string;
   auth: AuthConfig;
 }
 
@@ -115,6 +116,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (foundryRunnerAgentName !== undefined && !/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName)) {
     throw new ConfigurationError('FOUNDRY_RUNNER_AGENT_NAME must be a valid agent name');
   }
+  const githubAppId = env.GITHUB_APP_ID;
+  if (githubAppId !== undefined && !/^[1-9][0-9]{0,19}$/u.test(githubAppId)) {
+    throw new ConfigurationError('GITHUB_APP_ID must be a positive decimal identifier');
+  }
+  if (githubAppId !== undefined && keyVaultUri === undefined) {
+    throw new ConfigurationError('KEY_VAULT_URI is required when GITHUB_APP_ID is configured');
+  }
 
   return {
     auth: loadAuthConfig(env),
@@ -130,6 +138,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryRunnerAgentName === undefined ? {} : { foundryRunnerAgentName }),
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
+    ...(githubAppId === undefined ? {} : { githubAppId }),
   };
 }
 

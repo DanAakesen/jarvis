@@ -47,6 +47,26 @@ describe('backend configuration', () => {
         .toThrow('JARVIS_CHAT_AGENT_NAME');
     }
   });
+  it('accepts a GitHub App ID only with a secure Key Vault origin', () => {
+    expect(loadConfig({
+      GITHUB_APP_ID: '123456',
+      KEY_VAULT_URI: 'https://jarvis.vault.azure.net/',
+    })).toMatchObject({
+      githubAppId: '123456',
+      keyVaultUri: 'https://jarvis.vault.azure.net/',
+    });
+    expect(() => loadConfig({ GITHUB_APP_ID: '0', KEY_VAULT_URI: 'https://jarvis.vault.azure.net/' }))
+      .toThrow('GITHUB_APP_ID');
+    expect(() => loadConfig({ GITHUB_APP_ID: '123456' })).toThrow('KEY_VAULT_URI');
+    for (const KEY_VAULT_URI of [
+      'http://jarvis.vault.azure.net/',
+      'https://example.com/',
+      'https://jarvis.vault.azure.net/path',
+      'https://jarvis.vault.azure.net/?secret=value',
+    ]) {
+      expect(() => loadConfig({ GITHUB_APP_ID: '123456', KEY_VAULT_URI })).toThrow('KEY_VAULT_URI');
+    }
+  });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {
     expect(() => loadConfig({ PORT })).toThrow('PORT');
   });

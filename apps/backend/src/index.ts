@@ -38,6 +38,7 @@ import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
 import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
 import { createNowFeedStore } from './database/now-feed-store.js';
+import { createGitHubAppTokenIssuer } from './github-app.js';
 import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js';
 import { createGithubWebhookModule } from './github/webhook.js';
 
@@ -57,10 +58,24 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
-  const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint || config.foundryEndpoints || sleepResourceId
+  const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
+    config.foundryEndpoints || config.githubAppId || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
+    : undefined;
+  const githubAppKeyVault = config.githubAppId && config.keyVaultUri && credential
+    ? new SecretClient(config.keyVaultUri, credential)
+    : undefined;
+  const githubAppTokenIssuer = config.githubAppId && githubAppKeyVault
+    ? createGitHubAppTokenIssuer({
+      appId: config.githubAppId,
+      getPrivateKey: async () => {
+        const secret = await githubAppKeyVault.getSecret('github-app-private-key');
+        if (!secret.value) throw new Error('GitHub App private key is unavailable');
+        return secret.value;
+      },
+    })
     : undefined;
   const webhookSecretClient = config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
@@ -182,6 +197,7 @@ try {
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
       taskStore,
+      ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
       ...(dispatcher ? { taskController: dispatcher } : {}),
       nowFeedStore: createNowFeedStore(database.pool),
       usageStore: createUsageStore(database.pool),

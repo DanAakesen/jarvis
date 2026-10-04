@@ -172,6 +172,34 @@ export const factoryModule: BackendModule = {
       return sendBounded(reply, result.task);
     });
 
+    app.post<{ Params: { id: string } }>('/factory/tasks/:id/github-token', {
+      config: { jarvisRunner: true },
+      schema: {
+        params: { type: 'object', properties: { id: idSchema }, required: ['id'], additionalProperties: false },
+      },
+    }, async (request, reply) => {
+      const store = app.taskStore;
+      const tokenIssuer = app.githubAppTokenIssuer;
+      if (!store || !tokenIssuer) return reply.code(503).send({ error: 'GitHub token service unavailable' });
+      if (!isSqlBigInt(request.params.id)) return reply.code(400).send({ error: 'Invalid task ID' });
+      const sessionHeaderCount = request.raw.rawHeaders.filter((_value, index) =>
+        index % 2 === 0 && request.raw.rawHeaders[index]?.toLowerCase() === 'x-jarvis-session-id').length;
+      const foundrySessionId = request.headers['x-jarvis-session-id'];
+      if (sessionHeaderCount !== 1 || typeof foundrySessionId !== 'string' ||
+        !/^[A-Za-z0-9_.:-]{1,255}$/u.test(foundrySessionId)) {
+        return reply.code(400).send({ error: 'Invalid runner session ID' });
+      }
+      const repository = await store.getActiveRepository(request.params.id, foundrySessionId);
+      if (!repository) return reply.code(404).send({ error: 'Task not found' });
+      try {
+        const token = await tokenIssuer.issue(repository);
+        return reply.header('Cache-Control', 'no-store').send({ token, repository });
+      } catch {
+        request.log.warn('github.installation_token_failed');
+        return reply.code(502).send({ error: 'GitHub token unavailable' });
+      }
+    });
+
     app.get<{ Params: { id: string } }>('/factory/tasks/:id/events', {
       schema: {
         params: { type: 'object', properties: { id: idSchema }, required: ['id'], additionalProperties: false },
