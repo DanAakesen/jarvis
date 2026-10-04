@@ -683,6 +683,33 @@ infrastructure deployments. Cloud agents cannot run bootstrap or verify Azure;
 Dan verifies the hosted deployment and tools after this local step. Tool calls
 also need the stored message ID from P4-03, supplied by the caller in P4-06.
 
+### Screen sharing (P7-05)
+
+The backend uses the existing `FOUNDRY_PROJECT_ENDPOINT` and managed identity;
+Bicep already grants that identity `Foundry User`, so this feature adds no Azure
+resource, credential, or provisioning script. The migration runs at backend
+startup after merge. `global.screen_share_daily_frame_cap` defaults to 300 and
+is editable in Settings (1–300).
+
+After merge, Dan/coordinator should:
+
+1. Run the main `Deploy` workflow and confirm migration `0012_screen_frame_usage`
+   applied and the backend revision is ready.
+2. Confirm the configured `gpt-5.6-luna` deployment accepts image input and is
+   Global Standard. The DKK estimate uses the 2 October 2026 price snapshot
+   (1.3157 input and 7.8941 output DKK per million short-context tokens); update
+   the rate table if the live SKU or current price differs.
+3. In a signed-in browser, share a window, verify the persistent sharing status
+   and Stop control, request an inspection from chat and voice, and check that
+   Jarvis describes the visible content. Stop voice and leave the page to verify
+   stream cleanup. Confirm the three-second limit, configurable daily cap, usage
+   count, estimated DKK and absence of frame/message content in logs and history.
+
+Cloud agents cannot access the Azure tenant or verify billed usage. The screen
+bridge's fake-model tests prove the offline contract only; the live model,
+managed-identity exchange, SQL migration and browser screen capture remain
+unverified until this coordinator check.
+
 ## Release procedure
 
 - Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, web, and the Jarvis agent; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).

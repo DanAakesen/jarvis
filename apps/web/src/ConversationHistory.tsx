@@ -284,7 +284,7 @@ export function ConversationHistory({
             Look at screen
           </button>
         </div>
-        {screenContext?.sessionId === session?.id &&
+        {screenContext && screenContext.sessionId === session?.id &&
           <p role="status">Screen context is ready for the next message; it will not be saved in conversation history.</p>}
       </form>
     </section>
