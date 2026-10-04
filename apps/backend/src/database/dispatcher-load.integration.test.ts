@@ -69,7 +69,7 @@ async function createProject(index: number, maxParallelTasks: number): Promise<s
 async function activeCounts(): Promise<{ global: number; byProject: Map<string, number> }> {
   // This observer read can be chosen as a deadlock victim against the dispatchers' update locks.
   // Retry it so a lost observation doesn't fail the fake start and strand a task (L64).
-  let recordset: { projectId: string; active: number }[] = [];
+  let recordset: { projectId: string; active: number }[];
   for (let attempt = 1; ; attempt += 1) {
     try {
       ({ recordset } = await pool.request()
