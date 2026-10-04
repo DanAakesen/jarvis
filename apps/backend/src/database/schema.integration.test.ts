@@ -858,15 +858,20 @@ describe('committed domain schema (groups 1-7)', () => {
   it('reads and transactionally writes only the recognized global settings', async () => {
     const store = createSettingsStore(pool);
     await store.write({
+      appearance: { theme: 'dark', accent: '#a1b2c3', background: 'living-aurora' },
       jarvis: { model: 'gpt-5.6-luna', reasoning: 'low' },
-      voice: { defaultLanguage: 'en' },
+      voice: { defaultLanguage: 'en', minimizeWindowsOnVoiceStart: true },
       global: { maxParallelTasks: 3 },
     });
 
     expect(await store.read()).toMatchObject({
+      'appearance.theme': '"dark"',
+      'appearance.accent': '"#a1b2c3"',
+      'appearance.background': '"living-aurora"',
       'jarvis.model': '"gpt-5.6-luna"',
       'jarvis.reasoning_effort': '"low"',
       'voice.default_language': '"en"',
+      'voice.minimize_windows_on_voice_start': 'true',
       'global.max_parallel_tasks': '3',
     });
   });

@@ -2,12 +2,13 @@ import type { BackendModule } from '../modules.js';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
+import { setThemeTool } from './theme.js';
 import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [],
+  tools: [setThemeTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);
