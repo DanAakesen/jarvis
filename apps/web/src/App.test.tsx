@@ -139,7 +139,7 @@ describe('App shell', () => {
     for (const name of ['Conversation', 'Now', 'Backend']) {
       expect(screen.getByRole('heading', { level: 2, name })).not.toBeNull();
     }
-    expect(screen.getByText(/Activity isn't available yet/)).not.toBeNull();
+    expect(screen.getByText(/Loading current activity/)).not.toBeNull();
 
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);

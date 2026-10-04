@@ -73,6 +73,9 @@ sign-in; the header wraps on narrow screens.
   and Credential warnings, each with an empty state. Item titles open their
   task, release or project. Dismiss shows "Dismissing…", keeps the item and
   explains a failure, and returns focus to the Now heading after removal.
+  The panel loads its backend snapshot, offers retry when unavailable, and
+  labels reconnecting or unavailable live updates while keeping the last
+  snapshot visible.
 - **Area pages:** the Software Factory has its own Tasks and Projects
   navigation. Unbuilt task and release pages explain what is unavailable.
   Project management is implemented below; record pages link back to their list.

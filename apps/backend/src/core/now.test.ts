@@ -1,0 +1,133 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { buildApp } from '../app.js';
+import { loadConfig } from '../config.js';
+import type { TokenVerifier } from '../auth/verify.js';
+import { createEventHub } from './event-hub.js';
+import type { NowFeed, NowFeedEventHub, NowFeedStore } from './now.js';
+
+const config = { ...loadConfig({}), logLevel: 'silent' as const };
+const headers = { authorization: `${['Bear', 'er'].join('')} ${['e30', 'e30', 'sig'].join('.')}` };
+const feed: NowFeed = {
+  updatedAt: '2026-10-04T00:00:00.000Z',
+  running: [{
+    id: '42',
+    title: 'Ship the feed',
+    project: 'Jarvis',
+    agent: 'copilot',
+    activity: 'Running tests',
+    startedAt: '2026-10-03T23:00:00.000Z',
+  }],
+  items: [{
+    id: '7',
+    category: 'attention',
+    title: 'Sandbox crashed',
+    link: 'task:43',
+    at: '2026-10-03T23:30:00.000Z',
+  }],
+};
+const apps: ReturnType<typeof buildApp>[] = [];
+
+function fixture(store?: NowFeedStore, auth: TokenVerifier = async () => ({
+  objectId: config.auth.ownerObjectId,
+  tenantId: config.auth.tenantId,
+  displayName: 'Dan',
+})) {
+  const nowEventHub: NowFeedEventHub = createEventHub();
+  const app = buildApp(config, undefined, { auth, nowFeedStore: store, nowEventHub });
+  apps.push(app);
+  return { app, nowEventHub };
+}
+
+afterEach(async () => {
+  await Promise.all(apps.splice(0).map((app) => app.close()));
+});
+
+describe('Now feed API', () => {
+  it('returns the current running tasks and activity to the signed-in user', async () => {
+    const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
+    const { app } = fixture(store);
+
+    const response = await app.inject({ url: '/now', headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(feed);
+    expect(store.read).toHaveBeenCalledOnce();
+  });
+
+  it('protects the read and returns unavailable when its store is missing', async () => {
+    const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
+    const { app } = fixture(store);
+
+    expect((await app.inject({ url: '/now' })).statusCode).toBe(401);
+    expect(store.read).not.toHaveBeenCalled();
+
+    const unavailable = fixture();
+    const response = await unavailable.app.inject({ url: '/now', headers });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: 'Now feed unavailable' });
+  });
+
+  it('persists a dismissal, publishes an update, and returns not found for an unknown item', async () => {
+    const store: NowFeedStore = {
+      read: vi.fn(async () => feed),
+      dismiss: vi.fn(async (id) => id === '7'),
+    };
+    const { app, nowEventHub } = fixture(store);
+    const update = vi.fn();
+    nowEventHub.subscribe(update);
+
+    const dismissed = await app.inject({ method: 'POST', url: '/now/activity/7/dismiss', headers });
+    const missing = await app.inject({ method: 'POST', url: '/now/activity/8/dismiss', headers });
+
+    expect(dismissed.statusCode).toBe(204);
+    expect(store.dismiss).toHaveBeenNthCalledWith(1, '7');
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json()).toEqual({ error: 'Activity item not found' });
+    expect(store.dismiss).toHaveBeenNthCalledWith(2, '8');
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  it('rejects IDs outside SQL bigint range before dismissing', async () => {
+    const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
+    const { app } = fixture(store);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/now/activity/9223372036854775808/dismiss',
+      headers,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(store.dismiss).not.toHaveBeenCalled();
+  });
+
+  it('streams authenticated refresh events after a task event', async () => {
+    const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
+    const { app } = fixture(store);
+    expect((await app.inject({ url: '/now/events' })).statusCode).toBe(401);
+
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+    const response = await fetch(`${address}/now/events`, { headers, signal: controller.signal });
+    const reader = response.body!.getReader();
+
+    try {
+      expect(response.headers.get('content-type')).toContain('text/event-stream');
+      app.eventHub.publish({
+        id: '20',
+        taskId: '42',
+        type: 'progress',
+        summary: 'Tests passed',
+        payload: null,
+        payloadTruncated: false,
+        source: 'runner',
+        at: '2026-10-04T00:00:00.000Z',
+      });
+      const chunk = await reader.read();
+      expect(new TextDecoder().decode(chunk.value)).toContain('event: now\ndata: {}');
+    } finally {
+      controller.abort();
+      await reader.cancel().catch(() => {});
+    }
+  });
+});

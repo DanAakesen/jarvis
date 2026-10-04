@@ -45,6 +45,7 @@ describe('committed SQL manifest', () => {
       '0001_core_tables.sql', '0002_sandbox_operations.sql', '0003_sandbox_agent_name.sql',
       '0004_credential_renewal.sql',
       '0005_task_event_archives.sql',
+      '0006_activity_dismissals.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

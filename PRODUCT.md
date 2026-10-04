@@ -133,6 +133,8 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready or Running |
 
+The "Now" panel reads current running tasks and the latest non-dismissed task-attention, release/deployment, and credential-warning activity. Dismissal is saved per activity item and remains in effect after reload. Task changes and dismissals refresh the panel through authenticated server-sent events; reconnecting states identify when the displayed snapshot may be stale.
+
 #### Software Factory — task view
 
 | Data points | Actions |

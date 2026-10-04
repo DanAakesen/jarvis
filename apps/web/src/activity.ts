@@ -1,11 +1,10 @@
 /**
- * View model for the main page's "Now" activity panel. Field names follow the `tasks` and
- * `activity` tables in docs/data-model.md; the API that supplies them is a later task.
+ * View model for the main page's "Now" activity panel.
  */
 export type CodingAgent = 'codex' | 'copilot';
 
 export interface RunningTask {
-  id: number;
+  id: string;
   title: string;
   project: string;
   agent: CodingAgent;
@@ -17,7 +16,7 @@ export interface RunningTask {
 export type ActivityCategory = 'attention' | 'release' | 'credential';
 
 export interface ActivityItem {
-  id: number;
+  id: string;
   category: ActivityCategory;
   title: string;
   /** `activity.link`, for example `task:42`, `release:7` or `project:3`. */
@@ -26,8 +25,11 @@ export interface ActivityItem {
 }
 
 export type NowFeed =
+  | { status: 'loading' }
   | { status: 'unavailable'; message: string }
   | { status: 'ready'; running: readonly RunningTask[]; items: readonly ActivityItem[]; updatedAt: string };
+
+export type NowFeedStreamStatus = 'connecting' | 'connected' | 'reconnecting' | 'unavailable';
 
 export const activityCategories: readonly { id: ActivityCategory; heading: string; empty: string }[] = [
   { id: 'attention', heading: 'Needs attention', empty: 'No tasks need attention.' },

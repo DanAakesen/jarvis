@@ -8,6 +8,7 @@ import {
   formatTime,
   type ActivityItem,
   type NowFeed,
+  type NowFeedStreamStatus,
 } from './activity';
 
 function useNow(enabled: boolean): number {
@@ -26,16 +27,18 @@ function without<T>(values: ReadonlySet<T>, value: T): ReadonlySet<T> {
   return next;
 }
 
-export function ActivityPanel({ feed, onDismiss }: {
+export function ActivityPanel({ feed, onDismiss, onRetry, streamStatus }: {
   feed: NowFeed;
-  onDismiss?: (id: number) => Promise<void>;
+  onDismiss?: (id: string) => Promise<void>;
+  onRetry?: () => void;
+  streamStatus?: NowFeedStreamStatus;
 }) {
   const ready = feed.status === 'ready';
   const now = useNow(ready && feed.running.length > 0);
   const heading = useRef<HTMLHeadingElement>(null);
-  const [dismissed, setDismissed] = useState<ReadonlySet<number>>(new Set());
-  const [pending, setPending] = useState<ReadonlySet<number>>(new Set());
-  const [failed, setFailed] = useState<ReadonlySet<number>>(new Set());
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+  const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
 
   async function dismiss(item: ActivityItem) {
     if (!onDismiss || pending.has(item.id)) return;
@@ -55,9 +58,24 @@ export function ActivityPanel({ feed, onDismiss }: {
   return (
     <section className="panel" aria-labelledby="now-heading">
       <h2 id="now-heading" ref={heading} tabIndex={-1}>Now</h2>
-      {feed.status === 'unavailable' ? <p>{feed.message}</p> : (
+      {feed.status === 'loading' ? <p>Loading current activity…</p> : feed.status === 'unavailable' ? (
+        <>
+          <p>{feed.message}</p>
+          {onRetry && <button className="secondary-button" type="button" onClick={onRetry}>Retry</button>}
+        </>
+      ) : (
         <>
           <p className="freshness">Updated <time dateTime={feed.updatedAt}>{formatTime(feed.updatedAt)}</time></p>
+          {streamStatus === 'connected' && <p className="freshness" role="status">Live updates connected.</p>}
+          {streamStatus === 'reconnecting' && (
+            <p className="freshness" role="status">Live updates are reconnecting; showing the last feed snapshot.</p>
+          )}
+          {streamStatus === 'unavailable' && (
+            <>
+              <p className="freshness" role="status">Live updates are unavailable; reconnect to check for changes.</p>
+              {onRetry && <button className="secondary-button" type="button" onClick={onRetry}>Reconnect</button>}
+            </>
+          )}
           {!onDismiss && <p id="dismiss-status" className="freshness">Dismissing isn&apos;t available yet.</p>}
 
           <section aria-labelledby="now-running-heading">

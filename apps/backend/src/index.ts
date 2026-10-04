@@ -35,6 +35,7 @@ import { FoundryClient, FoundryClientError } from './foundry/client.js';
 import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
 import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
+import { createNowFeedStore } from './database/now-feed-store.js';
 
 try {
   const config = loadConfig();
@@ -148,6 +149,7 @@ try {
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
       taskStore,
+      nowFeedStore: createNowFeedStore(database.pool),
     } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
