@@ -259,7 +259,7 @@ jobs:
           } >>"$GITHUB_OUTPUT"
       - name: Allow this identity in the backend
         run: |
-          az containerapp update --name "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --set-env-vars "ENTRA_JARVIS_AGENT_OBJECT_ID=$AGENT_PRINCIPAL" --output none --only-show-errors
+          az containerapp update --name "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --set-env-vars "ENTRA_JARVIS_AGENT_OBJECT_ID=$AGENT_PRINCIPAL" "JARVIS_CHAT_AGENT_NAME=jarvis" --output none --only-show-errors
           for attempt in $(seq 1 30); do
             az containerapp show --name "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --output json --only-show-errors >"$RUNNER_TEMP/backend-app.json"
             latest=$(jq -r '.properties.latestRevisionName // ""' "$RUNNER_TEMP/backend-app.json")

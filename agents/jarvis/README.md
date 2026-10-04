@@ -39,21 +39,24 @@ loaded, the turn fails before the model is asked.
 If the context snapshot cannot be loaded, the turn also fails before the model
 call rather than answering with missing or stale task status.
 
-The chat route verifies the delegated user token and stored source message before
-starting a turn. It sets the source ID in the per-turn `current_message_id` context,
-which the tool loop uses for every backend call. `create_app` accepts a
-`chat_context_loader`; P4-04 can provide its context builder at that seam. The
-default loader verifies the stored message and supplies a bounded history window.
-Deployment, the role assignment and a live check of the factory tools are P4-08.
+The chat handler is registered with Foundry's `invocations` protocol, not as a
+custom `/chat` route. It accepts an application payload containing the delegated
+user authorization, stored source-message ID, text and language. Before starting
+a turn it checks `/me` and the exact stored source message, then sets that ID in
+the per-turn `current_message_id` context used for every backend tool call.
+`create_app` accepts a `chat_context_loader`; the default loader verifies the
+stored message and supplies a bounded history window. The backend authenticates
+to Foundry with its managed identity; the delegated user token remains in the
+server-to-agent payload and is never sent to the browser or logged.
 
 ## Commands
 
 Setup: `bash scripts/setup-dependencies.sh` from the repository root creates
-`.venv` from the hash-locked `requirements-dev.txt`.
+`agents/jarvis/.venv` from the hash-locked `requirements-dev.txt`.
 
 ```sh
-.venv/bin/python -m ruff check .
-.venv/bin/python -m pytest -q
+agents/jarvis/.venv/bin/python -m ruff check agents/jarvis
+agents/jarvis/.venv/bin/python -m pytest agents/jarvis/tests -q
 docker build --tag jarvis-agent:local .
 docker run --rm --publish 8088:8088 \
   --env FOUNDRY_PROJECT_ENDPOINT=https://<host>/api/projects/<name> \

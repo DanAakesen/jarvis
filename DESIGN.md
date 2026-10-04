@@ -125,7 +125,8 @@ beside the composer, preserve partial text as interrupted, and warn that a task
 action may have completed. A delivered reply is saved and history refreshes so
 tool outcomes and valid task IDs appear as labelled chips and links. The list and
 composer stay in the existing single-column conversation panel at mobile widths;
-the selected visual direction remains open. Live agent access awaits P4-08.
+the selected visual direction remains open. P4-09 routes chat through Foundry
+Invocations; live Azure streaming and tool-call linkage remain a post-merge check.
 
 ## Browser voice (P5-04)
 
