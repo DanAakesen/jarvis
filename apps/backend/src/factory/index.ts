@@ -2,7 +2,7 @@ import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { projectRoutes } from './projects.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
-import type { CreateTaskInput, TaskEventMessage, TaskListFilters } from './task-store.js';
+import type { CreateTaskInput, RecordTaskEventInput, TaskEventMessage, TaskListFilters } from './task-store.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxResponseBytes = 1024 * 1024;
@@ -26,6 +26,8 @@ interface TaskDetailQuery {
   eventLimit?: number;
   eventOffset?: number;
 }
+
+type SandboxEventInput = Omit<RecordTaskEventInput, 'source'>;
 
 function isSqlBigInt(value: string): boolean {
   return BigInt(value) <= maxSqlBigInt;
@@ -235,6 +237,29 @@ export const factoryModule: BackendModule = {
       const store = app.taskStore;
       if (!store) return reply.code(503).send({ error: 'Task service unavailable' });
       return sendBounded(reply, await store.getRunningContext());
+    });
+
+    app.post<{ Body: SandboxEventInput }>('/factory/sandbox-events', {
+      config: { jarvisRunner: true },
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            taskId: idSchema,
+            type: { type: 'string', pattern: '^[a-z][a-z_]{0,63}$', maxLength: 64 },
+            summary: { type: ['string', 'null'], maxLength: 2000 },
+            payload: { type: 'object' },
+          },
+          required: ['taskId', 'type'],
+          additionalProperties: false,
+        },
+      },
+    }, async (request, reply) => {
+      const store = app.taskStore;
+      if (!store) return reply.code(503).send({ error: 'Task service unavailable' });
+      if (!isSqlBigInt(request.body.taskId)) return reply.code(400).send({ error: 'Invalid task ID' });
+      const event = await store.recordEvent({ ...request.body, source: 'runner' });
+      return reply.code(201).send({ eventId: event.id });
     });
 
     await app.register(projectRoutes, { prefix: '/factory/projects' });

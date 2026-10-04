@@ -508,6 +508,24 @@ Python checks use each package's `.venv`. For the runner, from `runner/`:
 `.venv/bin/python -m ruff check .` and `.venv/bin/python -m pytest -q`
 (verified in the P0-14 Copilot session after setup: ruff passed, 36 tests passed).
 
+### Runner event identity (P2-03)
+
+Runner deploy sets `JARVIS_BACKEND_URL` from the successful `jarvis-infra`
+outputs and `JARVIS_API_SCOPE` from the bootstrapped `jarvis-api` identifier URI.
+Each hosted runner sends events with its managed identity; the backend accepts
+only the `Jarvis.Runner.Events` app role on `POST /factory/sandbox-events`.
+
+After Runner deploy succeeds, use the four `principal_id` values in its
+`runner-deployment` artifact to assign the role:
+
+```powershell
+./infra/bootstrap.ps1 -JarvisRunnerPrincipalIds '<base-1x2-id>','<base-2x4-id>','<dotnet-1x2-id>','<dotnet-2x4-id>'
+```
+
+Cloud agents cannot run bootstrap or reach Azure. After merge, Dan verifies the
+role assignment with a task-ID-bearing runner invocation and confirms its event
+appears in task history; browser live updates additionally require P1-06.
+
 ### Jarvis agent
 
 `agents/jarvis` (P4-01) has its own `.venv` from the shared setup script. Verified

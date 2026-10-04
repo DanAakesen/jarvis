@@ -7,7 +7,7 @@ import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
 import { coreModule } from '../core/index.js';
 import type { JarvisTool } from '../core/tool-registry.js';
-import { createTokenVerifier } from './verify.js';
+import { createTokenVerifier, runnerEventsRole } from './verify.js';
 import { loadAuthConfig } from './config.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
@@ -309,6 +309,48 @@ describe('Jarvis agent identity on the tool routes', () => {
     const { app } = agentFixture();
     const response = await app.inject({ url: '/tools', headers: { authorization: bearer(await token({ ...agentClaims, aud: `api://${config.auth.apiClientId}` })) } });
     expect(response.statusCode).toBe(401);
+  });
+});
+
+describe('runner identity on sandbox-event routes', () => {
+  function addRunnerRoute(app: ReturnType<typeof buildApp>) {
+    app.post('/runner-only', { config: { jarvisRunner: true } }, async (request) => ({
+      principal: request.runnerPrincipal,
+    }));
+  }
+
+  it('accepts only an app-only token with the runner-events role on runner routes', async () => {
+    const { app } = agentFixture();
+    addRunnerRoute(app);
+    const runnerObjectId = '22222222-2222-4222-8222-222222222222';
+    const runnerToken = bearer(await token({
+      oid: runnerObjectId,
+      scp: undefined,
+      roles: [runnerEventsRole],
+      idtyp: 'app',
+    }));
+
+    const accepted = await app.inject({ method: 'POST', url: '/runner-only', headers: { authorization: runnerToken } });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toEqual({
+      principal: { kind: 'jarvis-runner', objectId: runnerObjectId, tenantId: config.auth.tenantId },
+    });
+    expect((await app.inject({ url: '/protected', headers: { authorization: runnerToken } })).statusCode).toBe(403);
+  });
+
+  it.each([
+    ['the Jarvis tools role', { oid: agentObjectId, roles: ['Jarvis.Tools'], scp: undefined, idtyp: 'app' }],
+    ['a delegated token', { roles: [runnerEventsRole], scp: 'access_as_user' }],
+    ['a user token', { roles: [runnerEventsRole], scp: undefined, idtyp: 'user' }],
+  ])('refuses %s on runner routes', async (_name, claims) => {
+    const { app } = agentFixture();
+    addRunnerRoute(app);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/runner-only',
+      headers: { authorization: bearer(await token(claims)) },
+    });
+    expect(response.statusCode).toBe(403);
   });
 });
 

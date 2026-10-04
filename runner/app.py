@@ -24,10 +24,12 @@ from hashlib import sha256
 from itertools import chain
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from azure.identity.aio import DefaultAzureCredential
 from azure.keyvault.secrets.aio import SecretClient
 from azure.ai.agentserver.invocations import InvocationAgentServerHost
+import httpx
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
@@ -35,6 +37,7 @@ from starlette.responses import JSONResponse, Response
 APP_VERSION = "0.2.0"
 WORK_ROOT = Path(os.environ.get("JARVIS_WORK_ROOT", "/files/jarvis"))
 MAX_EVENTS = 500
+MAX_EVENT_PAYLOAD_BYTES = 256 * 1024
 TASK_STATE_FILE = "task-state.json"
 TASK_STATE_DIR = "invocations"
 ACP_SESSION_FILE = "acp-session.json"
@@ -55,6 +58,8 @@ CODEX_RENEW_MIN_DAYS_LEFT = 3.0
 # through its own client (codex-rs login/src/auth/manager.rs).
 CODEX_RENEW_ACCESS_TOKEN_MARKER = "jarvis-renew-required"
 CODEX_CONFIG = 'cli_auth_credentials_store = "file"\n'
+TASK_ID_PATTERN = re.compile(r"^[1-9][0-9]{0,18}$")
+MAX_SQL_BIGINT = 9_223_372_036_854_775_807
 TASK_DELIVERY_INSTRUCTIONS = (
     "Keep your work on the existing task branch. To limit work lost in a sandbox crash, "
     "after each meaningful work step create a small commit and push it to that branch, "
@@ -66,12 +71,119 @@ TASK_DELIVERY_INSTRUCTIONS = (
 _LAST_REFRESH = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$")
 
 
+class RunnerEventPublisher:
+    def __init__(self, backend_url: str, api_scope: str):
+        try:
+            parsed = urlsplit(backend_url)
+            invalid_port = parsed.port is not None
+        except ValueError:
+            raise RuntimeError("JARVIS_BACKEND_URL must be an HTTPS origin") from None
+        if (parsed.scheme != "https" or not parsed.hostname or invalid_port or parsed.username or parsed.password
+                or parsed.path not in {"", "/"} or parsed.query or parsed.fragment):
+            raise RuntimeError("JARVIS_BACKEND_URL must be an HTTPS origin")
+        if not re.fullmatch(r"api://[\da-fA-F]{8}(-[\da-fA-F]{4}){3}-[\da-fA-F]{12}/\.default", api_scope):
+            raise RuntimeError("JARVIS_API_SCOPE must be the Jarvis API application scope")
+        self.url = f"{backend_url.rstrip('/')}/factory/sandbox-events"
+        self.api_scope = api_scope
+        self.credential = DefaultAzureCredential(
+            exclude_interactive_browser_credential=True,
+            exclude_environment_credential=True,
+            exclude_shared_token_cache_credential=True,
+            exclude_visual_studio_code_credential=True,
+            exclude_cli_credential=True,
+            exclude_powershell_credential=True,
+            exclude_developer_cli_credential=True,
+            exclude_broker_credential=True,
+        )
+        self.client = httpx.AsyncClient(timeout=10, follow_redirects=False)
+
+    async def publish(self, task_id: str, invocation_id: str, event_index: int, event: dict[str, Any]) -> None:
+        token = await self.credential.get_token(self.api_scope)
+        data = event["data"]
+        summary = next(
+            (data[key] for key in ("summary", "text", "error", "message")
+             if isinstance(data.get(key), str) and data[key].strip()),
+            event["kind"].replace("_", " "),
+        )
+        payload = {
+            "invocationId": invocation_id,
+            "eventIndex": event_index,
+            "runnerAt": event["at"],
+            "data": data,
+        }
+        if len(json.dumps(payload, ensure_ascii=True).encode("utf-8")) > MAX_EVENT_PAYLOAD_BYTES:
+            payload = {"invocationId": invocation_id, "eventIndex": event_index, "truncated": True}
+        response = await self.client.post(
+            self.url,
+            json={
+                "taskId": task_id,
+                "type": event["kind"],
+                "summary": summary[:2000],
+                "payload": payload,
+            },
+            headers={"Authorization": " ".join(("Bearer", token.token))},
+        )
+        response.raise_for_status()
+
+    async def close(self) -> None:
+        try:
+            await self.client.aclose()
+        finally:
+            await self.credential.close()
+
+
+async def _publish_after(
+    previous: asyncio.Task[None] | None,
+    publisher: RunnerEventPublisher,
+    state: "TaskState",
+    task_id: str,
+    invocation_id: str,
+    event_index: int,
+    event: dict[str, Any],
+) -> None:
+    if previous is not None:
+        try:
+            await previous
+        except Exception:
+            pass
+    try:
+        await publisher.publish(task_id, invocation_id, event_index, event)
+    except Exception:
+        state.event_delivery_failed = True
+        raise
+
+
+async def _flush_event_delivery(state: "TaskState") -> None:
+    delivery_exception: Exception | None = None
+    try:
+        if state.event_delivery is not None:
+            await state.event_delivery
+    except Exception as exc:
+        delivery_exception = exc
+    finally:
+        if state.event_delivery_failed:
+            state.status = "failed"
+            state.error = "Runner event delivery failed"
+            LOGGER.error(
+                "task event delivery failed (%s)",
+                type(delivery_exception).__name__ if delivery_exception is not None else "earlier event",
+            )
+        if state.event_publisher is not None:
+            try:
+                await state.event_publisher.close()
+            except Exception as exc:
+                state.status = "failed"
+                state.error = "Runner event delivery failed"
+                LOGGER.error("task event delivery cleanup failed (%s)", type(exc).__name__)
+
+
 @dataclass
 class TaskState:
     invocation_id: str
     session_id: str
     agent: str
     task: str
+    task_id: str | None = None
     mode: str = "task"
     model: str | None = None
     reasoning: str | None = None
@@ -86,14 +198,31 @@ class TaskState:
     cancel_requested: bool = False
     # Set to "steer" or "pause" when the current turn is stopped on purpose.
     stop_requested: str | None = None
+    event_count: int = 0
+    event_delivery_failed: bool = False
+    event_publisher: RunnerEventPublisher | None = field(default=None, repr=False)
+    event_delivery: asyncio.Task[None] | None = field(default=None, repr=False)
 
     def event(self, kind: str, **data: Any) -> None:
-        self.events.append(
-            {"at": time.time(), "kind": kind, "data": data}
-        )
+        event = {"at": time.time(), "kind": kind, "data": data}
+        self.events.append(event)
         if len(self.events) > MAX_EVENTS:
             del self.events[: len(self.events) - MAX_EVENTS]
+        event_index = self.event_count
+        self.event_count += 1
         _persist_task(self)
+        if self.event_publisher is not None and self.task_id is not None:
+            self.event_delivery = asyncio.create_task(
+                _publish_after(
+                    self.event_delivery,
+                    self.event_publisher,
+                    self,
+                    self.task_id,
+                    self.invocation_id,
+                    event_index,
+                    event,
+                )
+            )
 
 
 tasks: dict[str, TaskState] = {}
@@ -151,6 +280,7 @@ def _persist_task(state: TaskState) -> None:
         "invocation_id": state.invocation_id,
         "session_id": state.session_id,
         "agent": state.agent,
+        "task_id": state.task_id,
         "status": state.status,
         "started_at": state.started_at,
         "finished_at": state.finished_at,
@@ -200,6 +330,7 @@ def _load_task(invocation_id: str) -> TaskState | None:
             session_id=str(saved["session_id"]),
             agent=str(saved["agent"]),
             task="",
+            task_id=saved.get("task_id") if _valid_task_id(saved.get("task_id")) else None,
             mode=str(saved.get("mode", "task")),
             status=str(saved.get("status", "unknown")),
             started_at=float(saved.get("started_at", time.time())),
@@ -251,6 +382,20 @@ def _required_string(payload: dict[str, Any], key: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"'{key}' must be a non-empty string")
     return value.strip()
+
+
+def _valid_task_id(value: Any) -> bool:
+    return (isinstance(value, str) and TASK_ID_PATTERN.fullmatch(value) is not None
+            and int(value) <= MAX_SQL_BIGINT)
+
+
+def _optional_task_id(payload: dict[str, Any]) -> str | None:
+    value = payload.get("task_id")
+    if value is None:
+        return None
+    if not _valid_task_id(value):
+        raise ValueError("'task_id' must be a valid task identifier")
+    return value
 
 
 def _optional_config(payload: dict[str, Any], key: str, max_length: int) -> str | None:
@@ -662,7 +807,7 @@ class ACPClient:
                 ],
             },
         )
-        return {"acp_session_id": self.acp_session_id, "response": result}
+        return {"acp_session_id": self.acp_session_id, "response": self._redact(result)}
 
     async def cancel_turn(self) -> bool:
         """Send ACP session/cancel; the in-flight session/prompt then returns stopReason 'cancelled'."""
@@ -724,12 +869,15 @@ async def _stop_session_client(session_id: str) -> None:
         await client.stop()
 
 
-async def _run_task(state: TaskState) -> None:
+async def _run_task(
+    state: TaskState,
+    *,
+    stopped_invocation: str | None = None,
+    emit_steer_after: bool = False,
+) -> None:
     if state.cancel_requested:
         return
     state.status = "running"
-    state.event("started", agent=state.agent)
-    state.event("runner_instance", **RUNNER_INSTANCE)
     worktree = WORK_ROOT / state.session_id
     worktree.mkdir(parents=True, exist_ok=True)
     credentials: dict[str, str] = {}
@@ -737,6 +885,16 @@ async def _run_task(state: TaskState) -> None:
     session_lock = session_locks.setdefault(state.session_id, asyncio.Lock())
     lock_acquired = False
     try:
+        if state.task_id is not None:
+            backend_url = os.environ.get("JARVIS_BACKEND_URL")
+            api_scope = os.environ.get("JARVIS_API_SCOPE")
+            if not backend_url or not api_scope:
+                raise RuntimeError("Runner event delivery is not configured")
+            state.event_publisher = RunnerEventPublisher(backend_url, api_scope)
+        if emit_steer_after:
+            state.event("steer_after", stopped_invocation=stopped_invocation)
+        state.event("started", agent=state.agent)
+        state.event("runner_instance", **RUNNER_INSTANCE)
         await session_lock.acquire()
         lock_acquired = True
         if state.cancel_requested:
@@ -832,6 +990,7 @@ async def _run_task(state: TaskState) -> None:
             state.event("capacity", **capacity)
             LOGGER.info("capacity %s", json.dumps(capacity, sort_keys=True))
             credentials.clear()
+            await _flush_event_delivery(state)
             state.finished_at = time.time()
             _persist_task(state)
 
@@ -871,8 +1030,11 @@ async def _stop_running_turn(session_id: str, reason: str, exclude: str | None =
 
 async def _steer_then_run(state: TaskState) -> None:
     stopped = await _stop_running_turn(state.session_id, "steer", exclude=state.invocation_id)
-    state.event("steer_after", stopped_invocation=stopped.invocation_id if stopped else None)
-    await _run_task(state)
+    await _run_task(
+        state,
+        stopped_invocation=stopped.invocation_id if stopped else None,
+        emit_steer_after=True,
+    )
 
 
 async def _run_codex_renewal(state: TaskState, min_days_left: float, force: bool) -> None:
@@ -1000,6 +1162,12 @@ async def invoke(request: Request) -> Response:
         finally:
             credentials.clear()
     try:
+        task_id = _optional_task_id(payload)
+        if os.environ.get("JARVIS_BACKEND_URL") and task_id is None:
+            raise ValueError("'task_id' is required")
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    try:
         task = (
             _steering_prompt(_required_string(payload, "message"))
             if mode == "steer"
@@ -1019,6 +1187,7 @@ async def invoke(request: Request) -> Response:
         session_id=session_id,
         agent=agent,
         task=task,
+        task_id=task_id,
         model=model,
         reasoning=reasoning,
     )

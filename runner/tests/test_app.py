@@ -72,9 +72,170 @@ def test_state_event_is_bounded(tmp_path, monkeypatch):
     assert app._task_state_path("s", "i").exists()
 
 
+def test_task_events_are_pushed_in_order_with_task_and_invocation_identity(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    class Publisher:
+        def __init__(self):
+            self.events = []
+
+        async def publish(self, task_id, invocation_id, event_index, event):
+            self.events.append((task_id, invocation_id, event_index, event["kind"]))
+
+        async def close(self):
+            pass
+
+    publisher = Publisher()
+    state = app.TaskState("invocation", "session", "copilot", "work", task_id="42")
+    state.event_publisher = publisher
+
+    async def exercise():
+        state.event("started", agent="copilot")
+        state.event("agent_output", text="Updating tests")
+        await app._flush_event_delivery(state)
+
+    asyncio.run(exercise())
+    assert publisher.events == [
+        ("42", "invocation", 0, "started"),
+        ("42", "invocation", 1, "agent_output"),
+    ]
+
+
+def test_steer_after_event_is_delivered_before_the_new_turn(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "session_clients", {})
+    monkeypatch.setattr(app, "session_locks", {})
+    monkeypatch.setenv("JARVIS_BACKEND_URL", "https://backend.example")
+    monkeypatch.setenv("JARVIS_API_SCOPE", "api://00000000-0000-4000-8000-000000000000/.default")
+
+    class Publisher:
+        def __init__(self, *_args):
+            self.events = []
+
+        async def publish(self, _task_id, _invocation_id, event_index, event):
+            self.events.append((event_index, event["kind"], event["data"]))
+
+        async def close(self):
+            pass
+
+    class Client:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def start(self):
+            pass
+
+        async def run(self, _task):
+            return {"text": "done"}
+
+        async def stop(self):
+            pass
+
+    async def credentials(_agent):
+        return {"github_token": "token", "copilot_token": "token"}
+
+    monkeypatch.setattr(app, "RunnerEventPublisher", Publisher)
+    monkeypatch.setattr(app, "ACPClient", Client)
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    state = app.TaskState("invocation", "session", "copilot", "work", task_id="42")
+
+    asyncio.run(app._run_task(state, stopped_invocation="previous", emit_steer_after=True))
+
+    assert state.status == "completed"
+    assert [(index, kind) for index, kind, _data in state.event_publisher.events[:2]] == [
+        (0, "steer_after"),
+        (1, "started"),
+    ]
+    assert state.event_publisher.events[0][2] == {"stopped_invocation": "previous"}
+
+
+def test_event_delivery_failure_is_reported_in_runner_status(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    class Publisher:
+        def __init__(self):
+            self.calls = 0
+
+        async def publish(self, *_args):
+            self.calls += 1
+            raise RuntimeError("network failure")
+
+        async def close(self):
+            pass
+
+    state = app.TaskState("invocation", "session", "copilot", "work", task_id="42")
+    publisher = Publisher()
+    state.event_publisher = publisher
+
+    async def exercise():
+        state.event("started")
+        state.event("completed")
+        await app._flush_event_delivery(state)
+
+    asyncio.run(exercise())
+    assert publisher.calls == 2
+    assert state.status == "failed"
+    assert state.error == "Runner event delivery failed"
+
+
+def test_runner_event_publisher_uses_identity_and_bounds_event_payload(monkeypatch):
+    sent = []
+
+    class Credential:
+        def __init__(self, **options):
+            self.options = options
+
+        async def get_token(self, scope):
+            assert scope == "api://00000000-0000-4000-8000-000000000000/.default"
+            return type("Token", (), {"token": "fixture-token"})()
+
+        async def close(self):
+            pass
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+    class Client:
+        def __init__(self, **options):
+            assert options == {"timeout": 10, "follow_redirects": False}
+
+        async def post(self, url, **options):
+            sent.append((url, options))
+            return Response()
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr(app, "DefaultAzureCredential", Credential)
+    monkeypatch.setattr(app.httpx, "AsyncClient", Client)
+    publisher = app.RunnerEventPublisher(
+        "https://backend.example",
+        "api://00000000-0000-4000-8000-000000000000/.default",
+    )
+
+    async def exercise():
+        await publisher.publish(
+            "42",
+            "invocation",
+            3,
+            {"at": 1.0, "kind": "agent_output", "data": {"text": "x" * (app.MAX_EVENT_PAYLOAD_BYTES + 1)}},
+        )
+        await publisher.close()
+
+    asyncio.run(exercise())
+    url, request_options = sent[0]
+    assert url == "https://backend.example/factory/sandbox-events"
+    assert request_options["headers"]["Authorization"] == " ".join(("Bearer", "fixture-token"))
+    assert request_options["json"]["taskId"] == "42"
+    assert request_options["json"]["type"] == "agent_output"
+    assert len(request_options["json"]["summary"]) == 2000
+    assert request_options["json"]["payload"] == {
+        "invocationId": "invocation", "eventIndex": 3, "truncated": True,
+    }
+
+
 def test_session_and_task_metadata_are_persisted_without_prompt_or_result(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
-    state = app.TaskState("invocation", "foundry-session", "codex", "secret prompt")
+    state = app.TaskState("invocation", "foundry-session", "codex", "secret prompt", task_id="42")
     state.result = {"response": "secret result"}
     state.event("started")
     state.model = "gpt-5.4"
@@ -85,6 +246,7 @@ def test_session_and_task_metadata_are_persisted_without_prompt_or_result(tmp_pa
     acp_metadata = json.loads((tmp_path / "foundry-session" / app.ACP_SESSION_FILE).read_text())
     assert "secret prompt" not in json.dumps(task_metadata)
     assert "secret result" not in json.dumps(task_metadata)
+    assert task_metadata["task_id"] == "42"
     assert acp_metadata["acp_session_id"] == "acp-session"
     assert app._load_acp_session("foundry-session", "codex") == {
         "acp_session_id": "acp-session", "model": "gpt-5.4", "reasoning": "high",
@@ -92,6 +254,7 @@ def test_session_and_task_metadata_are_persisted_without_prompt_or_result(tmp_pa
     restored = app._load_task("invocation")
     assert restored is not None
     assert restored.session_id == "foundry-session"
+    assert restored.task_id == "42"
     assert restored.task == ""
 
 
@@ -172,7 +335,7 @@ def test_invoke_accepts_effective_provider_options(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "tasks", {})
     monkeypatch.setattr(app, "tasks_lock", asyncio.Lock())
     monkeypatch.setattr(app.asyncio, "create_task", lambda coroutine: coroutine.close())
-    payload = {"agent": "codex", "task": "Work", "model": "gpt-5.4", "reasoning": "high"}
+    payload = {"agent": "codex", "task": "Work", "task_id": "42", "model": "gpt-5.4", "reasoning": "high"}
     body = json.dumps(payload).encode()
 
     async def receive():
@@ -193,6 +356,35 @@ def test_invoke_accepts_effective_provider_options(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert app.tasks["inv"].model == "gpt-5.4"
     assert app.tasks["inv"].reasoning == "high"
+    assert app.tasks["inv"].task_id == "42"
+
+
+@pytest.mark.parametrize("task_id", [None, 0, "0", "9223372036854775808", "42 "])
+def test_configured_live_events_require_valid_task_ids(tmp_path, monkeypatch, task_id):
+    monkeypatch.setenv("JARVIS_BACKEND_URL", "https://backend.example")
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "tasks", {})
+    payload = {"agent": "copilot", "task": "Work"}
+    if task_id is not None:
+        payload["task_id"] = task_id
+    body = json.dumps(payload).encode()
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/invocations",
+            "headers": [(b"content-type", b"application/json")],
+            "state": {"invocation_id": "inv", "session_id": "session"},
+        },
+        receive,
+    )
+    response = asyncio.run(app.invoke(request))
+    assert response.status_code == 400
+    assert app.tasks == {}
 
 
 def test_git_credential_helper_uses_process_environment(tmp_path):
