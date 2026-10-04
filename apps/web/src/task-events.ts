@@ -7,6 +7,7 @@ export interface TaskEventStreamOptions<T extends { id: string }> {
   lastEventId?: string;
   getAccessToken: () => Promise<string>;
   onEvent: (event: T) => void;
+  onStatus?: (status: 'connecting' | 'connected' | 'reconnecting' | 'error') => void;
   signal: AbortSignal;
 }
 
@@ -88,6 +89,7 @@ export async function streamTaskEvents<T extends { id: string }>({
   lastEventId: initialEventId,
   getAccessToken,
   onEvent,
+  onStatus,
   signal,
 }: TaskEventStreamOptions<T>): Promise<void> {
   if (!/^[1-9][0-9]{0,18}$/.test(taskId) || BigInt(taskId) > maxSqlBigInt) {
@@ -101,6 +103,7 @@ export async function streamTaskEvents<T extends { id: string }>({
   let lastEventId = initialEventId;
   let reconnectDelay = 1000;
   while (!signal.aborted) {
+    onStatus?.('connecting');
     try {
       const token = await getAccessToken();
       const response = await fetch(`${backendUrl.replace(/\/+$/, '')}/factory/tasks/${taskId}/events`, {
@@ -114,9 +117,11 @@ export async function streamTaskEvents<T extends { id: string }>({
       if (!response.ok) {
         await response.body?.cancel().catch(() => {});
         if (response.status < 500 && response.status !== 429) throw new TaskEventStreamError(response.status);
+        onStatus?.('reconnecting');
       } else if (!response.body) {
         throw new Error('Task event stream returned no response body.');
       } else {
+        onStatus?.('connected');
         await readEvents(response.body, signal, (id, data) => {
           if (!/^[1-9][0-9]{0,18}$/.test(id) || BigInt(id) > maxSqlBigInt) {
             throw new Error('Task event stream returned an invalid event ID.');
@@ -133,11 +138,15 @@ export async function streamTaskEvents<T extends { id: string }>({
           onEvent(event as T);
         });
         if (signal.aborted) return;
+        onStatus?.('reconnecting');
       }
     } catch (error) {
       if (signal.aborted) return;
-      if (error instanceof TaskEventStreamError) throw error;
-      if (!(error instanceof TypeError)) throw error;
+      if (error instanceof TaskEventStreamError || !(error instanceof TypeError)) {
+        onStatus?.('error');
+        throw error;
+      }
+      onStatus?.('reconnecting');
     }
     await waitForReconnect(reconnectDelay, signal);
     reconnectDelay = Math.min(reconnectDelay * 2, 30_000);

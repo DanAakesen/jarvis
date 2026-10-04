@@ -38,6 +38,7 @@ describe('task event stream client', () => {
   it('uses bearer auth, resumes after disconnect, and ignores replayed IDs', async () => {
     const controller = new AbortController();
     const received: TaskEvent[] = [];
+    const statuses: string[] = [];
     const frame = (id: string) => `id: ${id}\nevent: task\ndata: ${JSON.stringify({ id, taskId: '42', type: 'progress' })}\n\n`;
     fetchMock
       .mockResolvedValueOnce(eventStream(': heartbeat\n\n', frame('19'), frame('19')))
@@ -48,6 +49,7 @@ describe('task event stream client', () => {
       backendUrl: 'https://api.example.com/',
       taskId: '42',
       getAccessToken,
+      onStatus: (status) => statuses.push(status),
       onEvent: (event) => {
         received.push(event);
         if (event.id === '20') controller.abort();
@@ -60,6 +62,7 @@ describe('task event stream client', () => {
     await streaming;
 
     expect(received.map(({ id }) => id)).toEqual(['19', '20']);
+    expect(statuses).toEqual(['connecting', 'connected', 'reconnecting', 'connecting', 'connected']);
     expect(getAccessToken).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example.com/factory/tasks/42/events');
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
@@ -74,15 +77,18 @@ describe('task event stream client', () => {
 
   it('surfaces authentication failures instead of retrying them', async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 }));
+    const statuses: string[] = [];
 
     await expect(streamTaskEvents<TaskEvent>({
       backendUrl: 'https://api.example.com',
       taskId: '42',
       getAccessToken,
+      onStatus: (status) => statuses.push(status),
       onEvent: () => {},
       signal: new AbortController().signal,
     })).rejects.toBeInstanceOf(TaskEventStreamError);
     expect(fetchMock).toHaveBeenCalledOnce();
+    expect(statuses).toEqual(['connecting', 'error']);
   });
 
   it('rejects malformed task IDs before making a request', async () => {
