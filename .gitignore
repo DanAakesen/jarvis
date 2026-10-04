@@ -34,3 +34,6 @@ test-results/
 infra/*.json
 !infra/bootstrap.output.json
 !infra/main.parameters.json
+
+# Private keys (for example the GitHub App key) must never be committed.
+*.pem
