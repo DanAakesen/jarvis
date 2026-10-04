@@ -37,7 +37,7 @@ var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
-var costManagementReaderRoleId = '72fafb9e-0641-4937-9268-a91bfd8191a0'
+var costManagementReaderRoleId = '72fafb9e-0641-4937-9268-a91bfd8191a3'
 // Custom role created by infra/bootstrap.ps1: the deploy identity cannot create role definitions (L54).
 var backendAppScaleRoleId = '985158cb-2c3c-5b9b-bd65-897ed9be3e36'
 var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
@@ -129,7 +129,7 @@ resource appAlertRules 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = [fo
             | where alertType == "${alertType}"
             | summarize alertCount = count() by alertKey
           '''
-          timeAggregation: 'Count'
+          timeAggregation: 'Total'
           metricMeasureColumn: 'alertCount'
           operator: 'GreaterThan'
           threshold: 0
