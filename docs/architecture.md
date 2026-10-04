@@ -559,7 +559,7 @@ live provider selection remains unverified.
   records each variant only after both Key Vault provider probes pass. Probe
   sessions are explicitly deleted, including failed probes (L14).
 - Each dedicated agent identity reads only the three credential secret scopes;
-  write access covers only `codex-login`. The port retains `github-token` from the
+  write access covers only `codex-login`. The port retains the `jarvis-github` token from the
   prototype until #40 adds task-scoped GitHub App installation tokens; CLI seat
   authentication is separate. No workflow seeds credentials.
 - Invocation metadata is stored separately for each turn, with path-safe IDs and
@@ -604,13 +604,13 @@ The agent can read everything in its sandbox, including environment variables, s
 
 ### GitHub credentials inventory
 
-Every GitHub credential Jarvis uses, checked with Dan on 4 October 2026. Anything not listed here is not used by Jarvis and should be deleted.
+Every GitHub credential Jarvis uses, checked with Dan on 4 October 2026. Each token's Key Vault secret has exactly the token's GitHub name, so a problem with one is found under the same name in both places. Anything not listed here is not used by Jarvis and should be deleted.
 
 | Credential | Type and scope | Stored in | Used by | Lifetime |
 | --- | --- | --- | --- | --- |
 | Jarvis Software Factory | GitHub App, installed on all of Dan's repositories. Repository permissions: Contents and Pull requests read/write; Actions, Checks and Deployments read; Metadata read; nothing else | Private key as Key Vault `github-app-private-key` (backend only) | Backend: one-hour, single-repository installation tokens (P3-02 to P3-06) | Permanent; rotate the key if exposed |
-| `jarvis-github` | Fine-grained token: Contents and Pull requests read/write on all repositories | Key Vault `github-token` | Sandbox clone, push and pull requests | Temporary: delete the token and the secret when P3-02 (#40) switches pushes to installation tokens |
-| `jarvis-copilot` | Fine-grained token: only the Copilot Requests account permission; no repository access | Key Vault `copilot-token` | Copilot CLI sign-in inside the sandbox | Until revoked |
+| `jarvis-github` | Fine-grained token: Contents and Pull requests read/write on all repositories | Key Vault `jarvis-github` | Sandbox clone, push and pull requests | Temporary: delete the token and the secret when P3-02 (#40) switches pushes to installation tokens |
+| `jarvis-copilot` | Fine-grained token: only the Copilot Requests account permission; no repository access | Key Vault `jarvis-copilot` | Copilot CLI sign-in inside the sandbox | Until revoked |
 | `PROJECT_TOKEN` | Classic token: `project` and `repo` | GitHub environment `project-board` (only `main` can use it) | Project board sync workflow; user-owned boards accept no App or fine-grained token | Until revoked |
 | `GITHUB_TOKEN` | Automatic per workflow run | GitHub Actions | CI and repository workflows | One run |
 

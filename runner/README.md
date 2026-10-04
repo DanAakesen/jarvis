@@ -93,9 +93,9 @@ ACP output. Errors and credential probes never return secret-provider details.
 Renew only while no Codex task runs; the backend scheduler in #34 owns that
 coordination across sandboxes.
 
-The port retains the prototype's `github-token`, `copilot-token`, and
-`codex-login` retrieval contract. `copilot-token` authenticates the CLI seat;
-`github-token` is separate Git access. The GitHub App installation-token flow
+The runner reads Key Vault secrets `jarvis-github`, `jarvis-copilot` and
+`codex-login`; each GitHub token's secret has the same name as the token in GitHub
+(L62). `jarvis-copilot` authenticates the CLI seat; `jarvis-github` is separate Git access. The GitHub App installation-token flow
 in #40 will replace the prototype's static Git-token path. This workflow never
 seeds or copies credentials; the workspace `GH_TOKEN` is not a runner input.
 Dan's personal Codex login must never be used. See the

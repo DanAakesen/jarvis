@@ -60,7 +60,7 @@ def test_dockerfile_does_not_contain_secret_names():
     dockerfile = Path(__file__).parents[1].joinpath("Dockerfile").read_text()
     assert "COPILOT_GITHUB_TOKEN" not in dockerfile
     assert "auth.json" not in dockerfile
-    assert "github-token" not in dockerfile
+    assert "jarvis-github" not in dockerfile
 
 
 def test_state_event_is_bounded(tmp_path, monkeypatch):

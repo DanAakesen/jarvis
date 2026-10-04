@@ -51,7 +51,9 @@ ACTIVE_STATUSES = {"queued", "running"}
 STOP_WAIT_SECONDS = 90
 STOPPED_STATUS = {"steer": "interrupted", "pause": "paused"}
 CODEX_LOGIN_SECRET = "codex-login"
-COPILOT_TOKEN_SECRET = "copilot-token"
+# Key Vault secret names match the GitHub token names (L62).
+COPILOT_TOKEN_SECRET = "jarvis-copilot"
+GITHUB_TOKEN_SECRET = "jarvis-github"
 # Codex renews its login itself only when the access token (valid 10 days) is
 # within 5 minutes of expiry, and each renewal invalidates every other copy.
 # Jarvis renews earlier, in one sandbox at a time, so tasks never renew mid-run.
@@ -674,7 +676,7 @@ async def _renew_codex_login(session_id: str, min_days_left: float, force: bool 
 
 
 async def _credentials_for(agent: str) -> dict[str, str]:
-    github_token = await _key_vault_secret("github-token")
+    github_token = await _key_vault_secret(GITHUB_TOKEN_SECRET)
     if agent == "copilot":
         return {
             "github_token": github_token,
