@@ -84,7 +84,7 @@ Status as of 4 October 2026.
 | Checks loop | A failed task-PR check is stored in private Blob and sent to the same task; bounded repairs move to Needs attention when exhausted | Background | Task detail | Built | P3-05 |
 | Project policy and merge | On task completion, open or reuse an App-backed PR only when the task branch is ahead of the default branch; record refusals as Needs attention, then stop at a verified green PR or squash-merge via the GitHub App when checks, branch freshness and protection rules pass | Background | Project settings; task detail | Built offline with fake GitHub coverage; coordinator live test-repository acceptance pending | P3-06, P3-14 |
 | Release records | One release per merge to `main`, linked to runs and deployments by SHA | Background | — | Built (live webhook setup pending) | P3-07 |
-| Release view | Git graph, releases, runs and deployments per project | Screen | Release view | Planned | P3-08 |
+| Release view | Git graph, releases, runs and deployments per project | Screen | Release view | Built | P3-08 |
 | Workflow templates | Managed projects copy PR-check and release workflows | Background | — | Built | P3-09 |
 
 ## Settings, usage and operations

@@ -408,6 +408,7 @@ erDiagram
 - **Commits are not stored.** The release area shows a horizontal git graph per project (branches as lines, commits as dots): commits and branches come from the GitHub API when the page opens or when Dan asks Jarvis; the dots are coloured from `pull_requests`, `workflow_runs`, `releases` and `deployments`.
 - A failed task-PR workflow stores the bounded failed-job log in private Blob storage and steers the same task with a bounded excerpt and the log path. The backend limits repairs using `global.max_check_attempts`, persists attempt markers in `task_events`, and moves exhausted or unavailable repairs to NeedsAttention.
 - The release view reads `releases`, `workflow_runs` and `deployments`, plus commits from GitHub on demand.
+- P3-08 adds no table or migration. Authenticated `GET /factory/projects/:id/releases` returns the active project's persisted release, pull-request, workflow-run and deployment records plus a bounded GitHub graph; each response fetches the graph rather than persisting commit data. A failed graph read is represented as `graph: null` without discarding the SQL records.
 
 ## 6 · Operations
 

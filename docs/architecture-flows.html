@@ -519,7 +519,7 @@ const FLOWS = [
   },
   {
     name: "Release",
-    summary: "After the merge, GitHub Actions builds, tests and deploys. Every step reaches the board's release view through GitHub webhooks; no polling.",
+    summary: "After the merge, GitHub Actions builds, tests and deploys. Webhooks update persisted release records; the project view fetches the Git graph from GitHub on demand.",
     nodes: [
       { id: "ctx", lane: "github", col: 1, s: "context", from: [[9, "merge"]], t: "From 9: merged to main" },
       { id: "wf", lane: "actions", col: 2, s: "docs", t: "Release workflow", d: "Build, test and upload an artifact on merge to main.", ev: "P3-09: copyable release workflow is in templates/github-actions/release.yml; see the adoption guide.", href: "github-actions-templates.md" },
@@ -529,7 +529,8 @@ const FLOWS = [
       { id: "receiver", lane: "backend", col: 3, s: "proven", t: "Verify and deduplicate webhook", d: "Check the raw-body HMAC; commit each `X-GitHub-Delivery` ID with its mapped rows in one transaction.", ev: "P3-03/04 offline route/store tests verify signatures, idempotency, and allowlisted input; the complete SQL Server integration suite passes locally." },
       { id: "rec", lane: "data", col: 4, s: "proven", t: "Delivery metadata", d: "Store event name, delivery ID, outcome and timestamps; never the payload or secret." },
       { id: "map", lane: "data", col: 5, s: "proven", t: "Map events into project records", d: "Map PRs, checks, workflow runs, default-branch releases and deployment statuses; correlate release records by project/SHA even when webhooks arrive out of order.", ev: "P3-04 mapper/route/store tests and the SQL Server integration suite cover linked records, duplicate deliveries, and a Release run/deployment arriving before the main push. Local SQL Server tests pass; live test-project delivery remains unverified." },
-      { id: "view", lane: "board", col: 5, s: "assumed", t: "Release view", d: "Commits, PRs, running / passed / failed, deployed." },
+      { id: "graph", lane: "github", col: 4, s: "proven", t: "Fetch branches and commits", d: "P3-08 fetches a bounded graph with a repository-scoped contents:read token; commits are not persisted." },
+      { id: "view", lane: "board", col: 5, s: "proven", t: "Release view", d: "Per-project releases, runs, deployments, and an on-demand horizontal commit graph.", ev: "P3-08 focused API/UI tests and scratch Chromium checks at 390 and 1280 px use mocked GitHub/API data; live Entra, SQL, and GitHub behavior remain unverified." },
       { id: "fail", lane: "backend", col: 5, s: "assumed", t: "Failed release: Needs attention", d: "Offer a fix task with the failing log." },
       { id: "ask", lane: "jarvis", col: 6, s: "assumed", t: "Answer release questions", d: "“Is the release out, sir?”" },
     ],
@@ -537,7 +538,8 @@ const FLOWS = [
       ["ctx", "wf", "docs", "push to main"], ["wf", "deploy", "docs", "tests passed"], ["deploy", "migrations", "docs", "backend startup"],
       ["wf", "receiver", "proven", "signed webhook"], ["deploy", "receiver", "proven", "deployment_status"],
       ["receiver", "rec", "proven", "insert once"], ["rec", "map", "proven", "P3-04"],
-      ["map", "view", "docs", "event"], ["map", "fail", "docs", "failed run"],
+      ["map", "view", "proven", "authenticated project read"], ["graph", "view", "proven", "branches + commits"],
+      ["map", "fail", "docs", "failed run"],
       ["fail", "view", "docs", "event"], ["map", "ask", "docs", "read"],
     ],
   },
