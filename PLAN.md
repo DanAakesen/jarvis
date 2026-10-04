@@ -254,7 +254,7 @@ Goal: Dan reaches Jarvis away from the browser, and Jarvis can see, act on his P
 
 ### P8 — Jarvis UI
 
-Goal: one complete Jarvis front end that exposes the existing and P7 features on screen, by voice, or both.
+Goal: one complete Jarvis front end that exposes the existing and P7 features on screen, by voice, or both. Backend enabling work is limited to typed safe view/data contracts, validated agent-directed workspace commands, truthful runtime activity, and persisted UI preferences. The open window set and generated views remain temporary; conversation and source records keep their existing retention.
 
 P8-04–P8-13 are the frontend allocation, selected after checking `main` and both planning PRs (#233 and #234); neither planning PR had added P8 task rows at the time of allocation. Coordinate any later backend task IDs after this range and replace the P8-03 planning dependency with the matching implementation-task dependencies before those UI tasks start.
 
@@ -277,6 +277,18 @@ P8-04–P8-13 are the frontend allocation, selected after checking `main` and bo
 ### Out of scope for phase 1
 
 Banking, health and fitness, and other areas; the memory design (Decision 6); a paid phone number for Jarvis; Azure Web PubSub; the Codex API-key fallback (see [Ideas](#ideas)).
+
+### P8 backend-enabling tasks
+
+P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks therefore start at P8-14. The matching frontend consumers must be blocked by their enabling contracts: P8-06 by P8-14 and P8-15; P8-07, P8-08, P8-10 and P8-11 by P8-15; P8-09, P8-10 and P8-11 by P8-16; and P8-10 and P8-13 by P8-17.
+
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P8-14 |  | Typed, bounded generated-view and data contracts: describe views with versioned JSON data and Dan-approved renderer/action identifiers; accept only validated declarative payloads from existing authorised tools and APIs, with bounded results; never execute generated HTML, JavaScript or CSS | Contract schemas and TypeScript types agree; tests cover valid, malformed, unsupported and oversized payloads, bounded/paginated source data, and partial or unavailable results; a signed-in local UI can render a fixture from an existing data source without executing generated code | P1-04, P4-02, P4-10, P8-18 | Not started |
+| P8-15 |  | Agent-directed workspace tools: register create, update, show, close, minimise, restore, focus, move and resize operations plus layout and context-panel controls; deliver validated commands to the active signed-in workspace without persisting temporary views | Tool schemas reject invalid IDs, geometry and operations; commands are scoped to the active workspace and acknowledged only after application; disconnected/stale clients, cancellation, timeout and partial failure return honest refused/error results; bounded queues and idempotent command IDs prevent runaway or duplicate actions; local chat/voice acceptance creates, rearranges, minimises, restores and closes a view while conversation and source records remain intact | P4-02, P4-10, P8-14 | Not started |
+| P8-16 |  | Publish a typed, ephemeral Jarvis activity contract for actual listening, thinking, tool-call and speaking states, including interruption, reconnect and failure transitions where reported by the runtime; coordinate speaking state with P7-12 announcements rather than duplicating them | Mocked chat and voice protocol tests prove state transitions use observed events, including tool start and recorded ok/refused/error outcome; no listening state appears before voice is ready; cancellation and disconnect end or fail the activity visibly; no transcript, tool arguments or secrets are copied into activity events; the voice workspace shows the matching runtime state in a local acceptance check | P4-05, P4-10, P5-03, P5-04, P7-12, P8-15 | Not started |
+| P8-17 |  | Persist confirmed UI preferences and safely update themes through the existing validated settings and Jarvis tool boundaries: light/dark mode, Dan-approved theme tokens, and “Minimise all windows when starting voice” defaulting off; do not persist generated views | Settings retain preferences across reloads while view/window state does not; token names and values are allowlisted and bounded; invalid updates fail without overwriting other settings; the registered theme tool reports truthful refused/error outcomes and updates an active UI without reload; offline API/store/tool tests and a local signed-in UI check cover theme persistence and the default-off toggle | P1-11, P4-02, P4-10, P8-18 | Not started |
+| P8-18 |  | **needs-decision:** Confirm the initial generated-view renderer/action catalogue and adjustable theme-token names/value types without treating examples or the five-theme proposal as requirements | Dan chooses and records the initial allowlists in the UI source before P8-14 or P8-17 implements them; the decision explicitly excludes arbitrary generated code and leaves visual styling/preset count open unless Dan decides otherwise | None | Not started |
 
 ### Confirm before P0
 
