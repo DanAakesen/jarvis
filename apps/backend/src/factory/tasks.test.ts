@@ -79,6 +79,7 @@ function fixture(
     create: vi.fn(async () => task),
     list: vi.fn(async () => [task]),
     get: vi.fn(async () => detail),
+    updateModelConfig: vi.fn(async () => ({ kind: 'not-found' as const })),
     getActiveRepository: vi.fn(async () => 'DanAakesen/jarvis-test-target'),
     getEventsAfter: vi.fn(async (taskId, eventId, limit) => detail.events
       .filter((event) => BigInt(event.id) > BigInt(eventId))

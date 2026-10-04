@@ -130,6 +130,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - The [Deploy workflow](../.github/workflows/deploy.yml) is the only routine path to Azure: push to `main` deploys the parts changed since the last successful Deploy run; Dan's `workflow_dispatch` on `main` redeploys everything. Its Bicep deployment is always named `jarvis-infra`. Details: [production deploy](architecture.md#production-deploy-p0-11).
 - GitHub Actions OIDC: GitHub signs this repository's tokens with the immutable-ID subject `repo:DanAakesen@68902534/jarvis@1403065900:ref:refs/heads/main`, not `repo:DanAakesen/jarvis:ref:refs/heads/main`. `infra/bootstrap.ps1` reads the IDs with `gh api repos/DanAakesen/jarvis` and registers the federated credential `github-main-ids`. An `AADSTS700213` sign-in failure means the credential is missing: Dan re-runs bootstrap; the subject is printed under "Federated token details" in the `azure/login` step (L49).
 - Dan's Azure CLI defaults to the Microsoft tenant: pass `--subscription` in every command and script (L7). For Microsoft Graph, get the token with `az account get-access-token --subscription <id> --resource-type ms-graph`; `--tenant` picks the wrong account.
+- P7-10 deploys `JARVIS_NOTES_FOLDER_PATH` from the `notesFolderPath` Bicep parameter (default `/Jarvis/Notes`). After merge, the coordinator must review and approve the broad Graph `Files.Read.All` application permission before running `./infra/setup-notes-search.ps1` with an administrator-authorized Azure CLI session. The script is idempotent and assigns the permission to `id-jarvis-backend`; Graph Search does not support `Sites.Selected`. The backend fixes the user to Dan and scopes queries and returned links to the configured folder. Live tenant consent and a known-note search remain unverified.
 - `az` runs through a `.cmd` file: avoid `&`, parentheses, and pipes inside arguments such as `--query` (L20); filter JSON in PowerShell instead.
 - Never reuse a deleted Foundry account or project name; generate timestamped names (L2).
 - `FOUNDRY_*` and `AGENT_*` environment variables are reserved in hosted agents (L18).
@@ -326,6 +327,7 @@ Backend commands:
 | Focused P3-07 release webhook contract | `npm test --workspace @jarvis/backend -- --run src/database/webhook-delivery-store.test.ts` |
 | SQL Server migration, webhook mapping, and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
+| Focused P2-14 completion/expiry regressions | `npm test --workspace @jarvis/backend -- src/factory/heartbeat.test.ts src/factory/dispatcher.test.ts src/database/sandbox-heartbeat-store.test.ts` |
 | Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
 | P6-05 SQL Server parallel load test (CI `Database` job; prints a `P6-05 load:` summary line) | `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher-load.integration.test.ts` (isolated loopback SQL Server only) |
 | Focused P6-05 runner Codex limit test | `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_usage_limit` |
@@ -387,6 +389,11 @@ new sessions, calls `track()` after the SQL commit, and `untrack()` when session
 end. The dispatcher wakes on task events and retry deadlines, not SQL polling;
 expired start leases go to Needs attention rather than replaying a possibly
 accepted Foundry start. Offline tests do not verify live Foundry access.
+Every heartbeat poll emits `sandbox_heartbeat.decision` with the SQL session ID,
+invocation ID, HTTP status (null before any response), and a controlled decision.
+Use these fields to distinguish confirmation retries, committed crashes,
+`idle_expired`, unchanged state, and soft/persistence failures; no provider body,
+question, prompt, or credential is included.
 
 The optional `VOICE_LIVE_ENDPOINT` enables `/voice`; it must be a secure Azure
 Voice Live WebSocket endpoint without credentials in its URL. The backend pins

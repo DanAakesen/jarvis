@@ -188,6 +188,8 @@ transaction as its turn, then publishes the event after commit; SSE payloads ove
 confirms the turn stopped; steering and resume register the accepted turn for heartbeat
 monitoring. `recover` starts a new session on the existing task branch and accepts
 `Running` only for a session ending `idle_expired`, first moving it to NeedsAttention.
+Steering after recorded idle expiry uses the same new-session recovery path and
+includes the new correction in the recovery prompt and task history.
 A stale or invalid transition returns 409, unavailable runtime state returns
 503, and remote failures are sanitized. The board and detail page share one state-aware
 controls component.
@@ -375,10 +377,12 @@ with ownership and handlers. Authenticated `GET /tools` exposes every descriptor
 name, description and input schema. The core registers a schema-validated
 `POST /tools/{name}` for every tool at composition time, passes the request and
 cancellation signal to its handler, then writes the arguments, result and outcome
-to `tool_calls` using the process-owned SQL pool. Each response carries `outcome`
-(`ok`, `refused` from a tool's `ToolRefusal`, or `error`) and a `confirmation`
-built only from that recorded result (L16), which Jarvis relays instead of its own
-claim; a non-200 response means nothing was confirmed. Calls require
+to `tool_calls` using the process-owned SQL pool. A tool may provide a bounded safe
+failure explanation with `ToolFailure`; other unexpected errors remain generic.
+Each response carries `outcome` (`ok`, `refused` from a tool's `ToolRefusal`, or
+`error`) and a `confirmation` built only from that recorded result (L16), which
+Jarvis relays instead of its own claim; a non-200 response means nothing was
+confirmed. Calls require
 `X-Jarvis-Message-ID`; absent persistence returns 503 before tool execution. The
 tool routes accept Dan's delegated token and opt in to the Jarvis agent identity
 ([backend authentication](#backend-authentication)). Existing Foundry client, health/security/logging and
@@ -392,6 +396,27 @@ They call the injected project/task stores and task controller, so the same
 validation and lifecycle state machine serve HTTP, chat and voice. Task details sent
 to a tool contain bounded event summaries, not event payloads. The project and task
 tool overview is in [features.md](features.md).
+
+### Notes search (P7-10)
+
+The backend registers `notes_search` when its managed identity is available. It
+validates a bounded query, resolves Dan's OneDrive folder using
+`JARVIS_NOTES_FOLDER_PATH` (default `/Jarvis/Notes`), and calls Microsoft Search for
+`driveItem` results with a KQL `path` restriction. It also verifies every returned
+link stays below that folder, limits the result count and snippet length, and
+returns only title, plain-text snippet and link. Empty results are explicit;
+provider failures return a safe explanation without Graph details. Chat and voice
+instructions require Jarvis to quote returned snippets and include a result link.
+
+Graph credentials are backend-only: the backend identity requests a Graph
+application token, while the hosted agent uses only its existing Jarvis tool token.
+Microsoft Graph Search does not support `Sites.Selected`; the idempotent
+[`setup-notes-search.ps1`](../infra/setup-notes-search.ps1) therefore grants
+`Files.Read.All` to the backend identity. This is a tenant-wide app permission,
+so the coordinator must review and approve it before running the script. Runtime
+requests always fix the user to Dan's configured Entra object ID and restrict
+search/results to the configured notes folder. Fake Graph tests cover the
+contracts; tenant consent and a known-note live search remain unverified.
 
 ### New project creation (P3-12)
 
@@ -552,7 +577,7 @@ Rendered image: [assets/runtime-overview.png](assets/runtime-overview.png).
 | --- | --- |
 | Web | One app shell (Jarvis) with area navigation from `apps/web/src/areas.ts`; each area owns its pages and nested routes. The main page is the conversation plus activity across areas. Shell implemented in P1-07. |
 | Backend | A shared core (sign-in, events, settings, usage, the Jarvis tool registry, dispatcher) plus one module per area, in one deployable backend. Board, voice, and later the Windows app call the same functions. |
-| Jarvis tools | Each area registers its tools with the core, so Jarvis gains abilities without being rebuilt. |
+| Jarvis tools | Each area registers its tools with the core, so Jarvis gains abilities without being rebuilt. The core model tool validates and stores Jarvis defaults for the next session; the Factory tool validates provider choices and updates only Ready tasks, atomically recording the change for task detail/SSE. Both use the existing authenticated tool routes and server-side settings catalog. |
 | Data | Relational Azure SQL tables per area; no JSON files as the domain model. See [data-model.md](data-model.md). |
 | Project source | GitHub owns code, project instructions, and durable project decisions. |
 
@@ -596,6 +621,22 @@ These boxes are responsibilities; they do not each need a separate service.
 | Idle | The dispatcher subscribes to committed task events and schedules only the next retry deadline. After its startup scan, it makes no recurring SQL queries while idle; there is no polling timer. |
 | Always on | The backend normally runs with a minimum of 1 replica, so the heartbeat never stops. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. The backend does not query SQL while idle, so the database can still pause. |
 
+P2-14 also guards the dispatcher's generic NeedsAttention cleanup: a completed
+latest turn stays monitored rather than being marked Crashed. Completion evidence
+comes from the turn row or a matching committed runner `completed`/`session_question`
+event, including events delivered before the turn row was inserted. A valid
+heartbeat completion response persists the matching turn's completion before
+delivery verification; startup reloads that evidence. Terminal heartbeat decisions
+check the latest invocation under the session transaction so an old poll cannot end
+a newer turn. Each poll logs `sandbox_heartbeat.decision` with `sandboxSessionId`,
+`invocationId`, `httpStatus` (null when no HTTP response arrived), and `decision`.
+Confirmed failure logs the committed outcome (`crashed`, `idle_expired`, or
+`needs_attention`) or `unchanged`; prompts, questions, response bodies, and
+credentials are not logged. SQL Server CI and the production task-state/expiry
+check remain unverified locally.
+NeedsAttention cleanup locks and rechecks the current task state, so delayed
+state-event handling cannot close a session started by subsequent recovery.
+
 Scale settings are revision-scope in Container Apps, so the sleep switch creates a new revision; that is acceptable because it is used only when nothing runs. The SQL application lock blocks new active-task writes between the idle check and the ARM update.
 
 ## Coding sandbox
@@ -614,7 +655,7 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | Idle timeout | 2 minutes without requests shuts the sandbox down; files and the conversation survive an idle shutdown. |
 | Crash | Files and conversation since the last persist point are lost; a new agent version does not restart running sessions. Recover starts a new session from the task branch with the original task, recorded steering, and a bounded event summary; the agent pushes often (L22). Provider completion is accepted only with GitHub branch and pull-request evidence. |
 | Endpoints | Administration (connections, versions): `*.services.ai.azure.com`. Sessions and Invocations: `*.cognitiveservices.azure.com` (L10). |
-| Settings | The Foundry invocation carries the effective `model` and, for Codex, `reasoning`. Copilot CLI 1.0.91 accepts `--model`; `@agentclientprotocol/codex-acp` 2.1.1 applies `model` and `reasoning_effort` through `session/set_config_option`. The runner retains the effective values with the ACP session so steer/resume does not pick up changed defaults. P2-05 resolves task overrides before settings defaults. |
+| Settings | The Foundry invocation carries the effective `model` and, for Codex, `reasoning`. Copilot CLI 1.0.91 accepts `--model`; `@agentclientprotocol/codex-acp` 2.1.1 applies `model` and `reasoning_effort` through `session/set_config_option`. The runner retains the effective values with the ACP session so steer/resume does not pick up changed defaults. P2-05 resolves task overrides before settings defaults. P7-11's Jarvis tool updates only the global next-session defaults; its task tool atomically updates overrides only while a task is Ready and refuses running or otherwise non-Ready tasks. |
 
 ### Production runner implementation
 
@@ -902,6 +943,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
 - The backend identity has `Foundry User` on the Foundry project for the Danish voice relay.
+- P7-10's Microsoft Graph `Files.Read.All` app role is assigned separately by an administrator; Graph Search does not support `Sites.Selected`. The notes tool uses Dan's fixed object ID and the configured folder path, and validates result links before returning snippets.
 - Secrets only in Key Vault; none in code, images, environment variables, or logs.
 
 ## Bicep resources
@@ -919,13 +961,13 @@ call linkage remain the post-merge P4-09 acceptance check.
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (the SSE hub and dispatcher run in one process; more copies need Web PubSub, see Ideas in PLAN.md); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID` |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (the SSE hub and dispatcher run in one process; more copies need Web PubSub, see Ideas in PLAN.md); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `JARVIS_NOTES_FOLDER_PATH`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID` |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Azure Monitor action group | `jarvis-alerts` | Email receivers from required `budgetContactEmails`; no SMS/voice receivers |
 | Log alert rules | Deployment failure, sandbox crash, credential expiry | Stateful scheduled-query rules on `AppTraces`; group by hashed alert condition and send through `jarvis-alerts` |
 | Monthly budget | `jarvis-monthly` | Resource-group scoped; 300 in the subscription billing currency, monthly from 1 October 2026 (fixed start date; Azure rejects changing it), actual-cost alerts above 80 % and 100 % to `jarvis-alerts` |
 
-The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling and the Danish voice agent), **Cost Management Reader** at the resource group for budget reads, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live role assignment and ARM behavior remain unverified until the change is deployed.
+The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling and the Danish voice agent), **Cost Management Reader** at the resource group for budget reads, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. The separate P7-10 setup script can assign Graph `Files.Read.All`; this tenant-wide permission requires coordinator approval. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live role assignment and ARM behavior remain unverified until the change is deployed.
 
 Required deployment parameters are `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `foundryNameTimestamp`, and `budgetContactEmails`; the comma-separated email list comes from protected GitHub secret `JARVIS_BUDGET_CONTACT_EMAILS`. `backendImage` and `jarvisAgentObjectId` are optional. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed.
 
