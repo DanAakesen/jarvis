@@ -8,6 +8,10 @@ import { createCredentialStatusStore } from './credential-status-store.js';
 import { createSettingsStore } from './settings-store.js';
 import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
+import {
+  createTaskEventArchive,
+  type TaskEventArchiveBlobStore,
+} from './task-event-archive.js';
 import { ProjectConflictError } from '../factory/projects.js';
 import { createEventHub } from '../core/event-hub.js';
 import type { TaskEventMessage } from '../factory/task-store.js';
@@ -22,7 +26,7 @@ const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'credential_status', 'jarvis_sessions', 'messages', 'projects', 'sandbox_sessions',
-  'sandbox_turns', 'settings', 'task_events', 'tasks', 'tool_calls', 'webhook_deliveries',
+  'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks', 'tool_calls', 'webhook_deliveries',
 ];
 
 async function tables(): Promise<string[]> {
@@ -37,6 +41,26 @@ async function ledger(): Promise<string[]> {
 async function scalar(text: string): Promise<number> {
   const { recordset } = await pool.request().query<{ id: number }>(`${text}; SELECT CAST(SCOPE_IDENTITY() AS int) AS id;`);
   return recordset[0]?.id ?? 0;
+}
+
+function createMemoryArchiveBlobStore() {
+  const stored = new Map<string, Buffer>();
+  let failUpload = false;
+  const blobs: TaskEventArchiveBlobStore = {
+    async upload(name, body) {
+      if (failUpload) throw new Error('Blob storage unavailable');
+      stored.set(name, body);
+    },
+    async download(name) {
+      const body = stored.get(name);
+      if (!body) throw new Error('Archive blob not found');
+      return body;
+    },
+  };
+  return {
+    blobs,
+    failUploads(value: boolean) { failUpload = value; },
+  };
 }
 
 beforeAll(async () => {
@@ -70,10 +94,11 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     const { recordset } = await pool.request().query<{ name: string }>(
       `SELECT name FROM sys.indexes WHERE name IN (
         N'IX_tasks_state_next_attempt_at', N'IX_task_events_task_id_at', N'IX_sandbox_sessions_task_id_status',
-        N'IX_sandbox_turns_sandbox_session_id_started_at', N'IX_artifacts_task_id_at') ORDER BY name`);
+        N'IX_sandbox_turns_sandbox_session_id_started_at', N'IX_artifacts_task_id_at',
+        N'IX_task_event_archives_task_first_at') ORDER BY name`);
     expect(recordset.map((row) => row.name)).toEqual([
       'IX_artifacts_task_id_at', 'IX_sandbox_sessions_task_id_status', 'IX_sandbox_turns_sandbox_session_id_started_at',
-      'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at',
+      'IX_task_event_archives_task_first_at', 'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at',
     ]);
   });
 
@@ -346,6 +371,62 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
       { kind: 'files_changed', title: 'Changed source files' },
       { kind: 'state_changed', title: 'Task state changed' },
     ]);
+  });
+
+  it('archives old events only after Blob upload and restores paged task history', async () => {
+    const projectResult = await pool.request()
+      .input('repo', sql.NVarChar(140), `DanAakesen/archive-${randomUUID().slice(0, 8)}`)
+      .query<{ id: string }>(`INSERT dbo.projects (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+        OUTPUT CAST(inserted.id AS varchar(19)) AS id
+        VALUES (N'Task event archive fixture', @repo, N'main', N'copilot', N'deliver_pr', N'1x2', N'node');`);
+    const projectId = projectResult.recordset[0]?.id;
+    if (!projectId) throw new Error('Task event archive project was not created');
+
+    const blobStore = createMemoryArchiveBlobStore();
+    const archive = createTaskEventArchive(pool, blobStore.blobs);
+    const store = createTaskStore(pool, createEventHub<TaskEventMessage>(), archive);
+    const task = await store.create({ projectId, title: 'Archive task events', request: 'Test archive and restore' });
+    if (!task) throw new Error('Task event archive fixture was not created');
+
+    await pool.request()
+      .input('taskId', sql.BigInt, BigInt(task.id))
+      .input('firstAt', sql.DateTime2(7), new Date('2020-01-01T00:00:00.000Z'))
+      .input('secondAt', sql.DateTime2(7), new Date('2020-01-02T00:00:00.000Z'))
+      .query(`INSERT dbo.task_events (task_id, type, summary, payload, source, at) VALUES
+        (@taskId, N'archived_first', N'First archived event', N'{"archived":true}', N'backend', @firstAt),
+        (@taskId, N'archived_second', N'Second archived event', N'{"archived":true}', N'runner', @secondAt);`);
+
+    const cutoff = new Date('2021-01-01T00:00:00.000Z');
+    blobStore.failUploads(true);
+    await expect(archive.archiveExpiredEvents(cutoff)).rejects.toThrow('Blob storage unavailable');
+    const retained = await pool.request()
+      .input('taskId', sql.BigInt, BigInt(task.id))
+      .input('cutoff', sql.DateTime2(7), cutoff)
+      .query<{ count: number }>('SELECT COUNT(*) AS count FROM dbo.task_events WHERE task_id = @taskId AND at < @cutoff;');
+    expect(retained.recordset[0]?.count).toBe(2);
+
+    blobStore.failUploads(false);
+    await expect(archive.archiveExpiredEvents(cutoff)).resolves.toBe(2);
+    await expect(archive.archiveExpiredEvents(cutoff)).resolves.toBe(0);
+    const remaining = await pool.request().input('taskId', sql.BigInt, BigInt(task.id))
+      .query<{ type: string }>('SELECT type FROM dbo.task_events WHERE task_id = @taskId ORDER BY at, id;');
+    expect(remaining.recordset.map(({ type }) => type)).toEqual(['created']);
+
+    await expect(store.get(task.id, 2, 0)).resolves.toMatchObject({
+      events: [
+        { type: 'archived_first', payload: { archived: true }, source: 'backend' },
+        { type: 'archived_second', payload: { archived: true }, source: 'runner' },
+      ],
+    });
+    await expect(store.get(task.id, 2, 1)).resolves.toMatchObject({
+      events: [
+        { type: 'archived_second' },
+        { type: 'created' },
+      ],
+    });
+    await expect(store.get(task.id, 2, 2)).resolves.toMatchObject({
+      events: [{ type: 'created' }],
+    });
   });
 
   it('reads and transactionally writes only the recognized global settings', async () => {

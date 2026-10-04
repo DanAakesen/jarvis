@@ -15,13 +15,15 @@ No visual direction is chosen yet. Dan designs each page by giving an image gene
 | --- | --- |
 | Jarvis (main) | Conversation, voice state, "now" activity, sleep switch |
 | Task view | Kanban columns by task state |
-| Task detail | Header, event timeline, sandbox sessions, usage |
+| Task detail | Header, complete paginated event timeline, sandbox sessions, usage |
 | Release view | Horizontal git graph per project (branches as lines, commits as dots), releases, workflow runs, deployments |
 | Projects | Project list and settings |
 | Settings | Models, reasoning, voices, limits, credential status |
 | Usage and cost | Usage by task, project, and period |
 
 The repository `PLAN.md` status workflow is GitHub metadata; it does not add a Jarvis UI control or visual state.
+
+Events archived after 90 days load through the same task-detail timeline and pagination; the archive is invisible to the user.
 
 ## Interactions to design
 
