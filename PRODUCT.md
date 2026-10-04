@@ -21,7 +21,7 @@ Keep implementation phases and progress in [PLAN.md](PLAN.md), visual choices in
 | **3 — Health and fitness (Daily)** | Clean up the existing Daily solution and migrate valuable functions, integrations, and history to Azure. |
 | **4 — Windows app** | The same core experience through the shared backend. Framework open. |
 
-Only phase 1 is in scope now. Banking, health and fitness, calendar, and other areas get no tables, pages, or code until their phase starts.
+Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, phone confirmations, screen and camera, PC control, calendar, mail and notes search) and P8 (the complete Jarvis UI) in [PLAN.md](PLAN.md). Banking, health and fitness, and other areas get no tables, pages, or code until their phase starts.
 
 ## Scope and core workflows
 
