@@ -198,7 +198,7 @@ It checks free space every 15 seconds; below the configurable threshold it repor
 
 | Data points | Actions |
 | --- | --- |
-| List: name, repository, default agent, policy, tech, running tasks, last release | Edit or archive a project; new projects are created by Jarvis (see New projects) |
+| List: every repository of Dan's GitHub account. Managed projects first (name, repository, default agent, policy, tech, running tasks, last release), then the other repositories (name, last push, language) | Edit or archive a managed project; **Manage with Jarvis** registers an existing repository with the New projects defaults (tech detected from the repository); Jarvis can do the same by voice or chat; new repositories are created by Jarvis (see New projects) |
 | Project settings: repository, default branch, default agent, policy, merge rules, sandbox size, tech, max parallel tasks | Save (applies to new tasks only) |
 
 The project API lists active projects, creates and updates settings, and archives
