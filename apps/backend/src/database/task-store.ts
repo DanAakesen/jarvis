@@ -9,6 +9,8 @@ import type {
   TaskEventMessage,
   TaskEventRecord,
   TaskListFilters,
+  TaskModelConfig,
+  TaskModelUpdateResult,
   TaskRecord,
   TaskStore,
   TaskTransitionResult,
@@ -383,6 +385,50 @@ export function createTaskStore(
       } catch {
         await rollback(transaction);
         throw new Error('Task persistence failed');
+      }
+    },
+
+    async updateModelConfig(id: string, config: TaskModelConfig): Promise<TaskModelUpdateResult> {
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        const updated = await new sql.Request(transaction)
+          .input('taskId', sql.BigInt, BigInt(id))
+          .input('agent', sql.NVarChar(16), config.agent)
+          .input('modelOverride', sql.NVarChar(100), config.modelOverride)
+          .input('reasoningOverride', sql.NVarChar(32), config.reasoningOverride)
+          .query<TaskRow>(`UPDATE dbo.tasks WITH (UPDLOCK, ROWLOCK)
+            SET agent = @agent, model_override = @modelOverride, reasoning_override = @reasoningOverride
+            OUTPUT ${insertedTaskColumns}
+            WHERE id = @taskId AND state = N'Ready';`);
+        const row = updated.recordset[0];
+        if (row) {
+          const task = toTask(row);
+          const event: RecordTaskEventInput = {
+            taskId: task.id,
+            type: 'model_changed',
+            summary: 'Coding agent settings changed',
+            payload: {
+              agent: task.agent,
+              model: task.modelOverride,
+              reasoning: task.reasoningOverride,
+            },
+            source: 'backend',
+          };
+          const publishedEvent = await insertTaskEvent(transaction, event, validateEvent(event));
+          await transaction.commit();
+          eventHub.publish(publishedEvent);
+          return { kind: 'ok', task };
+        }
+
+        const existing = await new sql.Request(transaction)
+          .input('taskId', sql.BigInt, BigInt(id))
+          .query<{ id: string }>('SELECT CAST(id AS varchar(19)) AS id FROM dbo.tasks WITH (UPDLOCK, HOLDLOCK) WHERE id = @taskId;');
+        await transaction.rollback();
+        return existing.recordset.length ? { kind: 'not-ready' } : { kind: 'not-found' };
+      } catch {
+        await rollback(transaction);
+        throw new Error('Task model update failed');
       }
     },
 

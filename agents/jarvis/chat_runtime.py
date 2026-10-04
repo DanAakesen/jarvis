@@ -159,8 +159,11 @@ def register_chat_invocation(
             turn_token = current_turn.set(message_id)
             output_bytes = 0
             try:
+                settings = await model_client.session_settings()
                 messages = (*history, ModelMessage("user", text.strip()))
-                async for delta in model_client.complete_chat(messages, language):
+                async for delta in model_client.complete_chat(
+                    messages, language, settings=settings
+                ):
                     output_bytes += len(delta.encode("utf-8"))
                     if output_bytes > MAX_OUTPUT_BYTES:
                         raise RuntimeError("Chat response exceeded the size limit")

@@ -158,11 +158,16 @@ erDiagram
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
 - P1-11 stores global defaults in the existing key/value table; missing keys use
   the documented defaults. Current keys are `jarvis.model`,
-  `jarvis.reasoning_effort`, `voice.stt.model`, `voice.en.model`,
+  `jarvis.reasoning_effort`, `personality.tone`, `personality.response_style`,
+  `personality.custom_instructions`, `voice.stt.model`, `voice.en.model`,
   `voice.en.voice`, `voice.da.voice`, `voice.default_language`, `codex.model`,
   `codex.reasoning_effort`, `copilot.model`, `global.max_parallel_tasks`, and
   `global.max_check_attempts` (default 3; integer range 0–10, where 0 disables
   automatic check repair).
+  P7-16 adds the three `personality.*` JSON string settings to that same
+  key/value scope; tone and response style use closed catalogs, and custom
+  instructions are limited to 2,000 characters. The existing `dbo.settings`
+  schema already supports these keys, so no migration is required.
   P3-11 adds `new_projects.owner`, `new_projects.visibility`,
   `new_projects.templates_repository`, `new_projects.default_agent`,
   `new_projects.policy`, `new_projects.max_parallel_tasks`, and
@@ -265,6 +270,7 @@ erDiagram
 - **Retries:** `attempt_count` increments for each leased start. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; `next_attempt_at` gates each retry. Ambiguous Foundry start outcomes are not replayed and move to `NeedsAttention`.
 - P2-13 sets the existing `tasks.branch` to `jarvis/task-<id>` on dispatch when absent and preserves it for retries, resume, and recovery. No schema migration is needed. A runner `session_question` event stores the last agent message; its transaction moves a Running or PauseRequested task to NeedsAttention with reason `session_question` and releases its lease before publishing the events.
 - `task_events` stores **every** task event (Dan's choice: maximum freedom for the UI). It is append-only, drives the card's live updates (via SSE) and the task's history, and is the only fast-growing table; archive by age: a backend job moves events older than 90 days to private Blob Storage in bounded batches. The SQL rows are deleted only after their archive blobs upload successfully, and `task_event_archives` records the blob references in the same SQL transaction as deletion. Task-detail pages read only the indexed archived chunks they need and keep the same bounded pagination. The live `recordEvent` write path remains unchanged. Each event also creates a `factory` activity row with its type as `kind`, its summary (or type) as title, and `task:<id>` as link.
+- P7-11 updates the existing task agent/model/reasoning fields only when the task is Ready, then writes a bounded `model_changed` event and activity row in the same transaction. The committed event is published through the existing hub so task detail refreshes; no table or migration is added.
 - `origin_message_id` links a task to the message in Jarvis's conversation that created it. The existing schema requires this reference for non-board tasks; board tasks may omit it.
 - P1-04 creates a board task only for an active project, using the project's default agent unless the request selects one. Task creation and its `created` event share a transaction. Backend state transitions lock the task row, enforce the product lifecycle, and write a `state_changed` event in that transaction; `Done` requires GitHub verification of the task branch and a pull request in the configured repository. There is no client state-update route.
 - P3-12 creates its initial scaffold task through the same store and transaction, linked to the chat message that invoked `create_project`; a runner clarification becomes a normal `NeedsAttention` state-change event with a bounded question and ends the sandbox session as `Ended`/`done`, not `Crashed`.
@@ -323,6 +329,7 @@ erDiagram
 
 - A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22). The unique `foundry_session_id` row is reused after a clean pause: resume resets `started_at`, clears `ended_at`, and adds the completed active interval to that session's existing sandbox usage row. Cancelling a paused task marks its idle session Ended. The dispatcher records `agent_name` for heartbeat routing. `agent_version = 'active'` and `image` records the selected Foundry runner route (for example `jarvis-runner-base-1x2`); the Invocations start response does not expose the resolved version number or container digest.
 - The sandbox heartbeat updates `last_heartbeat_at`; it needs the session's `agent_name` to address the Foundry runtime. Runner completion events mark the matching `sandbox_turns` row completed. If Foundry later confirms that this invocation's session expired, the session ends with `idle_expired` while task state remains unchanged; the task API exposes the latest session end reason for Continue versus Recover. Live runner events update `last_event_at` and add `task_events`.
+- Heartbeat-observed completion also persists the matching turn's terminal status. Expiry and generic NeedsAttention cleanup check the latest turn and its matching committed runner completion events, so an event arriving before turn insertion cannot become a false crash. An old invocation's poll cannot end a newer turn. These guards require no schema migration.
 - Large content (logs, CI logs, transcripts) lives in Blob; SQL keeps only the path.
 - The schema checks sandbox sizes, statuses, turn modes, end reasons and artifact kinds against these vocabularies. UTC `datetime2` end and heartbeat/event timestamps cannot precede their start.
 - `sandbox_sessions` is indexed by task and status; turns and artifacts are indexed by their parent and timestamp for the session/task timelines.

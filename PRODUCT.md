@@ -88,7 +88,7 @@ stateDiagram-v2
     Paused --> Cancelled: Cancel
 ```
 
-- **Steer** submits a bounded text correction to the current turn. **Pause** requests a safe stop and remains `PauseRequested` until the backend confirms the turn has stopped; the heartbeat resolves an unsuccessful pause to `Running` or `NeedsAttention`. **Resume** continues the same Foundry session after a clean pause; **cancel** ends the task and requests deletion of its Foundry session.
+- **Steer** submits a bounded text correction to the current turn, or starts a new session on the task branch when the completed turn's session has expired. **Pause** requests a safe stop and remains `PauseRequested` until the backend confirms the turn has stopped; the heartbeat resolves an unsuccessful pause to `Running` or `NeedsAttention`. **Resume** continues the same Foundry session after a clean pause; **cancel** ends the task and requests deletion of its Foundry session.
 - Task controls are offered only for valid task states, with pending and failure feedback beside the action. The backend enforces every transition; a browser cannot set task state directly.
 - If writable disk falls below the configured threshold, the runner reports `disk_low`, stops the current turn, and the backend moves the task to Needs attention with reason `disk_low`.
 - If Codex rejects a turn because the Jarvis login's usage limit is reached, the runner reports the failure as `Codex usage limit reached` (reason `codex_usage_limit`) instead of a generic runner error. The task moves to Needs attention, and other tasks keep running.
@@ -129,9 +129,12 @@ Dan never fills in a project form. He gives Jarvis, by voice or chat, a project 
 
 Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered.
 
+Dan can also change Jarvis's model or reasoning by chat or voice for the next session, and change the agent or verified model options on a Ready coding task. Running-task model changes are refused with a reason; they never alter an active turn.
+
 | Area | Setting | Default |
 | --- | --- | --- |
 | Jarvis | Model and reasoning effort | `gpt-5.6-luna`, reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
+| Personality | Tone, response style, and custom instructions (up to 2,000 characters) | British butler, concise, no custom instructions |
 | Voice | Speech to text | MAI Transcribe |
 | Voice | Voice per language | English: Ryan HD (British butler persona, addresses Dan as "sir"); Danish: Harper (MAI-Voice-2) |
 | Voice | Default language | Danish |
@@ -144,6 +147,8 @@ Global defaults on the settings page; a task can override the coding-agent model
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
 Danish voice uses the authenticated backend `/voice/da` WebSocket to a provisioned Foundry Voice Live agent. The agent bridges to the hosted Jarvis agent, uses MAI Transcribe with language `da` and the Danish phrase list, and fixes Harper to `da-DK`.
+
+Personality preferences are validated and persisted in Settings. They apply to new chat and voice sessions; changing or resetting them does not interrupt an active voice session. Reset restores the current British-butler, concise defaults and clears custom instructions. Preferences affect response style only, not Jarvis's identity, available tools, permissions, selected language, model or voice, or truthful reporting of action outcomes.
 
 ### Page requirements
 
@@ -239,6 +244,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Data points | Actions |
 | --- | --- |
 | Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
+| Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset (applies to new sessions) |
 | Voice: speech-to-text model, voice per language, default language | Change; play a voice sample |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
