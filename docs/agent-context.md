@@ -293,13 +293,18 @@ Voice Live WebSocket endpoint without credentials in its URL. The backend pins
 must configure this endpoint and provider identity before live use. Local voice
 tests use a mock WebSocket and do not verify Azure access or browser audio.
 
-The optional `JARVIS_CHAT_AGENT_URL` is the full HTTPS URL of the hosted agent's
-`/chat` route (no credentials, query, or fragment). Until P4-09 (#157) configures it,
-chat turns return a visible 503 rather than a placeholder reply. The backend
-forwards Dan's delegated token only to this server-side endpoint; the agent
-validates it through `/me` and verifies the source message through
-`/conversation/history`. Never expose the authorization header to the browser
-or log it.
+`JARVIS_CHAT_AGENT_NAME` names the hosted chat agent (`jarvis` in production);
+`FOUNDRY_PROJECT_ENDPOINT` is the secure Azure AI project endpoint supplied by
+Bicep. The main Deploy workflow configures the name after publishing the hosted
+agent, and Bicep retains it on later infrastructure updates. The backend calls
+Foundry's Invocations endpoint using its managed identity and the
+`https://ai.azure.com/.default` scope. It sends the user's delegated authorization
+and stored message ID in the application payload, not the Foundry HTTP
+`Authorization` header. The agent validates the delegated token through `/me`,
+verifies the source message through `/conversation/history`, then streams its
+application-defined SSE reply. Never expose or log the delegated token. Without
+the agent name, chat remains unavailable and returns a visible 503; live Azure
+streaming and tool-call linkage require the post-merge acceptance check.
 
 Production runner calls use the optional paired `FOUNDRY_RUNTIME_ENDPOINT` and
 `FOUNDRY_ADMIN_ENDPOINT`, plus `FOUNDRY_RUNNER_AGENT_NAME`. Bicep supplies the
