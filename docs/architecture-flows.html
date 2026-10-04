@@ -163,7 +163,7 @@ const DOC = {
 };
 
 const STATUS = {
-  proven:  { label: "Proven in prototype", short: "Proven",  def: "ran in Azure",          lineDef: "ran in Azure",                               dash: "",    width: 2.6, evidence: "Prototype run, 1–2 October 2026.", href: R },
+  proven:  { label: "Proven (prototype or offline)", short: "Proven", def: "prototype or offline tests", lineDef: "tested in prototype or offline", dash: "", width: 2.6, evidence: "Prototype run or offline tests.", href: R },
   docs:    { label: "Confirmed by docs",   short: "Docs",    def: "vendor docs, not run",  lineDef: "standard code or vendor docs, not run",      dash: "",    width: 2.6, evidence: "Vendor documentation; not run by us." },
   assumed: { label: "Assumed",             short: "Assumed", def: "not built yet",         lineDef: "relies on platform behavior not seen yet",   dash: "7 5", width: 2.2, evidence: "Design assumption; not built or tested yet.", href: J },
   unknown: { label: "Unknown",             short: "Unknown", def: "open or untested",      lineDef: "no known way yet",                           dash: "2 4", width: 2.2, evidence: "Open question; not tested.", href: J },
@@ -203,8 +203,8 @@ const FLOWS = [
       { id: "project-api", lane: "backend", col: 3, s: "proven", t: "Projects API", d: "Authenticated list, create, update, and archive routes validate requests.", ev: "P1-03 offline Fastify tests cover authentication, CRUD responses, and validation rules." },
       { id: "project-store", lane: "data", col: 4, s: "proven", t: "Read and write projects", d: "Parameterized SQL; archive sets active = 0.", ev: "P1-03 SQL Server-container integration tests execute project CRUD and archive queries; deployed Azure SQL remains unverified." },
       { id: "chat", lane: "board", col: 4, s: "assumed", t: "Type to Jarvis", d: "Chat box on the board.", ev: "Design assumption: the board can also send free text to the Jarvis agent." },
-      { id: "speak", lane: "voice", col: 2, s: "unknown", t: "Speak Danish", d: "Browser voice uses the authenticated backend WebSocket; provider credentials stay server-side.", ev: "P5-01 local mock test covers the relay only. Browser audio and real Voice Live interoperability are unverified." },
-      { id: "relay", lane: "backend", col: 3, s: "unknown", t: "Relay to Voice Live", d: "Backend authenticates the browser and forwards WebSocket messages to the provider.", ev: "P5-01 test verifies bidirectional forwarding and credential separation against a local mock upstream. Production provider wiring and Azure interoperability are unverified." },
+      { id: "speak", lane: "voice", col: 2, s: "unknown", t: "Speak Danish", d: "Browser voice uses the authenticated `/voice/da` WebSocket; provider credentials stay server-side.", ev: "P5-01/P5-02 local mock tests cover authentication and relay wiring. The browser audio client (P5-04) and live round-trip are unverified." },
+      { id: "relay", lane: "backend", col: 3, s: "unknown", t: "Relay to Voice Live", d: "Backend authenticates the browser and forwards WebSocket messages to the provisioned Danish voice agent.", ev: "Local tests verify the `/voice/da` endpoint and bidirectional forwarding against a mock upstream. The workflow provisions MAI Transcribe (`da`, phrase list) and Harper (`da-DK`); live deployment and Azure interoperability remain unverified pending P4-08." },
       { id: "stt", lane: "voice", col: 4, s: "proven", t: "Danish speech to text", d: "MAI Transcribe, language da: 0–1.8 % word errors.", ev: "Voice prototype V2: MAI Transcribe heard English names in Danish correctly; Azure Speech da-DK had 22–25 % word errors; no language set was unusable.", href: VR },
       { id: "vq", lane: "voice", col: 5, s: "proven", t: "Voice quality and cost", d: "2.7–3.9 s to first audio; ≈4 DKK per 30-minute day.", ev: "Voice prototype V6–V7: interruption detected in 0.6 s; cost estimated from measured usage at list prices; billed meters to confirm with infra/cost.ps1.", href: VR },
       { id: "jin", lane: "jarvis", col: 6, s: "proven", t: "Jarvis agent gets the text", d: "Voice Live bridges to a hosted agent (preview).", ev: "Voice prototype V1: voice agent → hosted agent over Bridge Protocol 1.0 (invocations_ws).", href: VR },
@@ -246,7 +246,7 @@ const FLOWS = [
       { id: "validate", lane: "backend", col: 5, s: "docs", t: "Validate and whitelist", d: "Reject unknown keys, unsupported models, invalid reasoning, and out-of-range task limits.", ev: "P1-11 backend tests reject unsupported values without writing." },
       { id: "save", lane: "backend", col: 6, s: "docs", t: "PATCH /settings", d: "Persist only changed keys in one SQL transaction.", ev: "SQL adapter uses parameterized settings keys/values; isolated SQL Server integration runs in Database CI." },
       { id: "rows", lane: "data", col: 7, s: "docs", t: "Global rows in dbo.settings", d: "Reuses the P1-01 key/value table; no settings history." },
-      { id: "next", lane: "backend", col: 8, s: "assumed", t: "Next session or task reads defaults", d: "P4-07 and P2-11 connect the stored values to new work. Existing work keeps its original settings." },
+      { id: "next", lane: "backend", col: 8, s: "docs", t: "Next session or task reads defaults", d: "Jarvis sessions: the agent reads validated model and reasoning values from `GET /agent/settings` before acknowledging a session and keeps that snapshot; if the read is unavailable it logs a warning and uses the defaults. Tasks: P2-05 resolves the task override before the saved setting and sends the effective options to the Foundry runner. Existing work keeps its original settings.", ev: "P4-07 backend and agent tests verify the agent-only read, per-session model selection, isolation across concurrent sessions, and fallback when settings are unavailable. Deployed-agent verification remains P4-08. P2-11 proves Foundry request forwarding and provider-specific runner application offline; settings-store-to-dispatcher wiring remains P2-05." },
     ],
     edges: [
       ["start", "page", "docs", "open"], ["page", "read", "docs", "token + GET"],
@@ -256,18 +256,34 @@ const FLOWS = [
     ],
   },
   {
+    name: "Task model configuration",
+    summary: "The dispatcher supplies effective per-task model settings; the Foundry client forwards them and the runner applies/preserves provider-specific choices.",
+    nodes: [
+      { id: "source", lane: "backend", col: 1, s: "assumed", t: "Resolve task override or setting", d: "P2-05 selects each task override first, otherwise the current provider setting; task settings currently configure reasoning only for Codex." },
+      { id: "wire", lane: "backend", col: 2, s: "proven", t: "POST effective options to Foundry", d: "FoundryClient sends model and optional Codex reasoning in the invocation body.", ev: "Foundry contract tests verify non-default values and omission of provider defaults." },
+      { id: "provider", lane: "runner", col: 3, s: "proven", t: "Configure the provider", d: "Copilot gets --model at process launch; Codex receives model and reasoning_effort through ACP session/set_config_option.", ev: "Pinned provider versions checked; local ACP fixtures verify selected values. Authenticated provider execution remains unverified." },
+      { id: "retain", lane: "runner", col: 4, s: "proven", t: "Retain options for the task", d: "Effective values are stored beside the ACP session ID and reused after process recreation for steer/resume." },
+    ],
+    edges: [
+      ["source", "wire", "assumed", "effective task config"],
+      ["wire", "provider", "proven", "model + Codex reasoning"],
+      ["provider", "retain", "proven", "session config"],
+    ],
+  },
+  {
     name: "Conversation history",
     summary: "The conversation API stores chat and voice sittings in one continuous thread; the signed-in main page reads bounded chronological history.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "context", t: "Dan starts a chat or voice sitting" },
-      { id: "session", lane: "board", col: 2, s: "proven", t: "Client opens a conversation session", d: "POST /conversation/sessions with channel and language; client wiring remains P4-06/P5-03/P5-04." },
+      { id: "session", lane: "board", col: 2, s: "proven", t: "Client opens a conversation session", d: "POST /conversation/sessions with channel and language; voice wiring remains P5-03/P5-04." },
       { id: "create", lane: "backend", col: 3, s: "proven", t: "Validate and create session", d: "One jarvis_sessions row per sitting." },
       { id: "sessionRow", lane: "data", col: 4, s: "proven", t: "Store the session", d: "Uses the existing group-one schema; no migration." },
-      { id: "message", lane: "board", col: 2, s: "proven", t: "Client appends a message", d: "POST /conversation/sessions/{id}/messages; write contract tested, client wiring remains future work." },
-      { id: "write", lane: "backend", col: 3, s: "proven", t: "Require an active session", d: "Validate role and bounded text before insert." },
-      { id: "messageRow", lane: "data", col: 4, s: "proven", t: "Store messages and tool calls", d: "P4-02 writes tool_calls against their source message." },
+      { id: "message", lane: "board", col: 2, s: "proven", t: "Send a chat turn", d: "POST /conversation/sessions/{id}/turns; the page displays streamed text and links valid task IDs." },
+      { id: "write", lane: "backend", col: 3, s: "proven", t: "Validate and save Dan's message", d: "Require an active chat session and persist the source message before invoking Jarvis." },
+      { id: "chat-agent", lane: "jarvis", col: 4, s: "proven", t: "Verify and stream a reply", d: "The hosted agent checks the delegated token and source message, then streams text while its tool loop records calls.", ev: "Backend/agent contract tests pass offline; deployed Foundry endpoint and live delegated authorization remain unverified (P4-08)." },
+      { id: "messageRow", lane: "data", col: 4, s: "proven", t: "Store messages and tool calls", d: "The backend saves a completed assistant reply; P4-02 records tool_calls against Dan's source message." },
       { id: "history", lane: "backend", col: 5, s: "proven", t: "Read a history page", d: "GET /conversation/history returns up to 50 messages and a message-ID cursor; maximum 100." },
-      { id: "main", lane: "board", col: 6, s: "proven", t: "Show the conversation", d: "Chronological history, tool outcomes, loading/empty/error states, and an older-history action.", ev: "Backend/API and component tests pass offline; the store passes disposable SQL Server integration tests. Live browser sign-in and Azure SQL remain unverified." },
+      { id: "main", lane: "board", col: 6, s: "proven", t: "Show the conversation", d: "Chronological history, streaming replies, task-linked tool outcomes, loading/empty/error states, and older-history action.", ev: "Backend, agent and web contract tests pass offline; live Foundry access and browser sign-in remain unverified." },
       { id: "origin", lane: "data", col: 5, s: "docs", t: "Keep task origin message", d: "Existing schema requires origin_message_id for non-board tasks; task creation remains P1-04/P4-01." },
     ],
     edges: [
@@ -275,8 +291,10 @@ const FLOWS = [
       ["session", "create", "proven", "validated request"],
       ["create", "sessionRow", "proven", "insert"],
       ["start", "message", "proven", "chat text or transcript"],
-      ["message", "write", "proven", "message + session ID"],
-      ["write", "messageRow", "proven", "insert"],
+      ["message", "write", "proven", "bounded text + session ID"],
+      ["write", "chat-agent", "proven", "stored source message + delegated token"],
+      ["chat-agent", "messageRow", "proven", "text stream + tool calls"],
+      ["write", "messageRow", "proven", "store the user message"],
       ["messageRow", "history", "proven", "messages + tool metadata"],
       ["history", "main", "proven", "chronological page + cursor"],
       ["messageRow", "origin", "docs", "message reference"],
@@ -292,7 +310,7 @@ const FLOWS = [
       { id: "rows", lane: "data", col: 3, s: "docs", t: "Task rows and recent events", d: "Read existing tasks and task_events rows; no migration.", ev: "The SQL Server integration test covers the bounded latest-event query, but could not run locally without the isolated SQL Server configuration." },
       { id: "tool", lane: "model", col: 3, s: "proven", t: "Choose an action", d: "Tool call: create_task(project, agent, text).", ev: "Voice prototype V3: gpt-5.6-luna with strict action rules chose the right tool and arguments for 20/20 Danish commands through the deployed path.", href: VR },
       { id: "intent", lane: "model", col: 4, s: "proven", t: "Danish intent accuracy and cost", d: "20/20 commands; ≈0.003 DKK per command (gpt-5.6-luna).", ev: "Voice prototype V3 and reliability trials. Risk found: the model can describe an action it did not take; speak confirmations from tool results.", href: VR },
-      { id: "call", lane: "jarvis", col: 4, s: "docs", t: "Call a backend function", d: "Agent sends tool arguments and the source message ID.", ev: "P4-01: agents/jarvis loads GET /tools and sends each model tool call to POST /tools/{name} with an app-only token from its platform identity, verified offline and against the real backend built locally. It needs the turn's stored message ID from P4-03 and has none yet, so it refuses the call; deployment and a live agent token are P4-08." },
+      { id: "call", lane: "jarvis", col: 4, s: "docs", t: "Call a backend function", d: "Agent sends tool arguments and the source message ID.", ev: "P4-01: agents/jarvis loads GET /tools and sends each model tool call to POST /tools/{name} with an app-only token from its platform identity, verified offline and against the real backend built locally. The P4-08 main-only deployment workflow is implemented, but Azure remains unverified. P4-06 passes the chat turn's stored message ID; offline tests exercise the path. Production chat also needs JARVIS_CHAT_AGENT_URL on the backend." },
 
       { id: "auth", lane: "backend", col: 5, s: "docs", t: "Authorize the caller", d: "Dan's delegated token, or the Jarvis agent's app-only token with the Jarvis.Tools role on the tool routes only.", ev: "Issue #8: real RSA/local JWKS checks prove RS256 signature, issuer, API audience, time, tenant, Dan's object ID and scope offline. Authentication runs before CORS, including explicit business OPTIONS routes (L31). P0-09 checks browser token forwarding and /me offline. P4-01 adds the agent policy (configured object ID, Jarvis.Tools role, no delegated scope, opted-in routes; elsewhere 403), tested offline with signed tokens; live Entra agent tokens remain unverified (P4-08)." },
 
@@ -313,7 +331,7 @@ const FLOWS = [
       { id: "card", lane: "board", col: 4, s: "assumed", t: "Read task as Ready", d: "The API returns created tasks; browser streaming awaits P1-06.", ev: "P1-04 provides create/list/detail routes and P1-05 publishes persisted events to the in-process hub. The web task board and SSE endpoint are not built yet." },
       { id: "limit", lane: "backend", col: 3, s: "assumed", t: "Check concurrency limit", d: "Dan controls how many tasks run at once.", ev: "PRODUCT.md: parallel work requirement." },
       { id: "queue", lane: "backend", col: 4, s: "assumed", t: "Dispatcher: the task table is the queue", d: "Picks Ready rows within the limit; one owner for dispatch and retries.", ev: "Decision 3 (decisions.md): option A, SQL as the queue. Not built." },
-      { id: "awake", lane: "backend", col: 5, s: "assumed", t: "Backend always on", d: "Minimum 1 replica (≈ 30 DKK/month); sleep switch in the board.", ev: "Decision 3 (decisions.md). Minimum 1 keeps the sandbox heartbeat running. Sleep sets minimum 0: the backend wakes on the next request; refused while tasks run.", href: DOC.acaScale },
+      { id: "awake", lane: "backend", col: 5, s: "proven", t: "Backend sleep switch", d: "The main-page switch sets minimum replicas to 0 or 1; sleep is refused while a task is Ready or Running.", ev: "P1-12 tests the authenticated sleep routes, ARM client, and task refusal under the SQL application lock. Bicep grants only Container App read/write on the backend app. Live managed-identity, role assignment, and ARM scaling remain unverified.", href: DOC.acaScale },
     ],
     edges: [
       ["ctx", "policy", "proven", ""], ["policy", "row", "proven", "insert"], ["row", "card", "assumed", "GET"],
@@ -367,7 +385,7 @@ const FLOWS = [
     nodes: [
       { id: "ctx", lane: "runner", col: 1, s: "context", from: [[5, "work"]], t: "From 5: agent working", d: "Events recorded per invocation." },
       { id: "live", lane: "runner", col: 2, s: "assumed", t: "Runner pushes live events", d: "Files changed, tests, commits: sent to the backend as they happen.", ev: "Not built. The runner already records these events (prototype telemetry)." },
-      { id: "poll", lane: "backend", col: 2, s: "proven", t: "Sandbox heartbeat", d: "About once a minute: keeps the sandbox alive, detects a dead one.", ev: "Prototype: the driver polled; sandboxes shut down only after 2 quiet minutes. Issue #30 supplies a bounded status call with preserved HTTP failures, verified offline; the heartbeat policy remains future work. Real-time updates come from the runner, not from the heartbeat." },
+      { id: "poll", lane: "backend", col: 2, s: "proven", t: "Sandbox heartbeat", d: "Checks active invocations about once a minute; updates last_heartbeat_at.", ev: "P2-06 tests the backend poller against recorded Foundry responses. It reloads active sessions at startup and keeps registered sessions in memory, so it does not query SQL while idle. Live Azure polling remains unverified." },
       { id: "store", lane: "data", col: 3, s: "proven", t: "Store task event and activity", d: "Both records commit together in Azure SQL.", ev: "P1-05's task-store event API and state transitions write task_events and activity in one transaction." },
       { id: "push", lane: "backend", col: 4, s: "proven", t: "Publish to in-process hub", d: "Connected subscribers receive committed events synchronously.", ev: "Backend tests verify publication follows SQL persistence and reaches a subscriber within one second. P1-06 adds the authenticated SSE endpoint, heartbeat and replay.", href: DOC.sse },
       { id: "card", lane: "board", col: 6, s: "assumed", t: "Card shows activity", d: "Current activity and last update." },
@@ -469,7 +487,7 @@ const FLOWS = [
     nodes: [
       { id: "ctx", lane: "foundry", col: 1, s: "context", t: "During 5–8" },
       { id: "crash", lane: "foundry", col: 2, s: "proven", t: "Sandbox crashes mid-turn", d: "Files and conversation are lost; a new agent version does not restart sessions.", ev: "Restart report (L22): forced crash lost the clone and the ACP conversation.", href: "reference/coding-sandbox-prototype/RESTART-REPORT.md" },
-      { id: "detect", lane: "backend", col: 3, s: "assumed", t: "Detect a missing or stale task", d: "Sandbox heartbeat fails, or live events stop." },
+      { id: "detect", lane: "backend", col: 3, s: "proven", t: "Confirm sandbox crash", d: "HTTP 424/404/5xx on two polls, with the confirming poll after 30 seconds; event gaps alone do not trigger it.", ev: "P2-06 has recorded-response unit tests and an atomic SQL NeedsAttention transition. Live Foundry failure and Azure SQL behavior remain unverified." },
       { id: "retry", lane: "backend", col: 4, s: "assumed", t: "Dispatcher retries, then Needs attention", d: "Attempt count and next-attempt time on the task row.", ev: "Decision 3 (decisions.md): option A. Not built." },
       { id: "flag", lane: "data", col: 4, s: "assumed", t: "Task row: Needs attention" },
       { id: "card", lane: "board", col: 5, s: "assumed", t: "Card: Needs attention", d: "With a Resume button." },
@@ -489,7 +507,7 @@ const FLOWS = [
       { id: "ctx", lane: "backend", col: 1, s: "context", t: "Daily, alongside 4–9", d: "Only while no Codex task runs." },
       { id: "sched", lane: "backend", col: 2, s: "proven", t: "Schedule renew-codex", d: "Daily backend timer and pollable runner invocation.", ev: "Offline backend renewal-job and runner tests exercise a renewal invocation once. Live Foundry/Key Vault proof awaits P0-16 and Dan's credentials." },
       { id: "copilot", lane: "user", col: 2, s: "docs", t: "Renew the Copilot token at expiry", d: "Fine-grained token; manual. Its Key Vault expiry/update dates appear in Settings." },
-      { id: "lease", lane: "data", col: 3, s: "assumed", t: "Acquire the shared SQL lease", d: "Refuse while a Codex task is running; Codex starts lock the same credential row.", ev: "SQL Server integration coverage is added; execution awaits database CI. P2-05 dispatch must use TaskStore.transition." },
+      { id: "lease", lane: "data", col: 3, s: "proven", t: "Acquire the shared SQL lease", d: "Refuse while a Codex task is running; Codex starts lock the same credential row.", ev: "The disposable SQL Server integration suite passes, including renewal/task-start serialization and lease recovery. P2-05 dispatch must use TaskStore.transition; live Azure SQL remains unverified." },
       { id: "check", lane: "runner", col: 4, s: "proven", t: "Check the access token", d: "Renews only when 3 days or less remain.", ev: "Unit tests cover the 3-day threshold; the backend supplies the threshold." },
       { id: "mark", lane: "runner", col: 5, s: "proven", t: "Mark the private copy expired", d: "Then codex exec in a throwaway session." },
       { id: "renew", lane: "agent", col: 6, s: "proven", t: "Codex renews through its own client", d: "New 10-day access token.", ev: "Prototype: forced renewal at 11:43 UTC. Codex source confirms the trigger.", href: DOC.codex },

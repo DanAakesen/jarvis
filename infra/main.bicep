@@ -12,6 +12,9 @@ param sqlAdminGroupName string = 'jarvis-sql-admins'
 @description('The container image to run in the backend app. Empty skips the backend app; the deploy workflow uses this only before the registry holds the first backend image.')
 param backendImage string = ''
 
+@description('The Entra object ID of the hosted Jarvis agent. Empty keeps agent access disabled.')
+param jarvisAgentObjectId string = ''
+
 @description('The subscription currency amount for the monthly resource group budget (300 DKK).')
 param monthlyBudgetAmount int = 300
 
@@ -31,7 +34,8 @@ var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
-var foundryAgentConsumerRoleId = 'eed3b665-ab3a-47b6-8f48-c9382fb1dad6'
+var backendAppScaleRoleId = guid(resourceGroup().id, 'jarvis-backend-app-scaler')
+var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var deployBackendApp = !empty(backendImage)
 
@@ -207,6 +211,16 @@ resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-0
   }
 }
 
+resource backendFoundryUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryProject.id, backendIdentity.id, foundryUserRoleId)
+  scope: foundryProject
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', foundryUserRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // Foundry allows one operation at a time per account: create the project first,
 // then each model deployment in turn (the first deploy failed with RequestConflict).
 resource gpt56LunaDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
@@ -263,16 +277,6 @@ resource foundryAppInsightsAssignment 'Microsoft.Authorization/roleAssignments@2
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringMetricsPublisherRoleId)
     principalId: foundryProject.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource backendFoundryAgentConsumerAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(foundryProject.id, backendIdentity.id, foundryAgentConsumerRoleId)
-  scope: foundryProject
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', foundryAgentConsumerRoleId)
-    principalId: backendIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -449,7 +453,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             cpu: json('0.25')
             memory: '0.5Gi'
           }
-          env: [
+          env: concat([
             {
               name: 'STATIC_WEB_APP_ORIGIN'
               value: 'https://${staticWebApp.properties.defaultHostname}'
@@ -457,6 +461,14 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               value: appInsights.properties.ConnectionString
+            }
+            {
+              name: 'FOUNDRY_ADMIN_ENDPOINT'
+              value: 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
+            }
+            {
+              name: 'FOUNDRY_RUNTIME_ENDPOINT'
+              value: 'https://${foundryAccount.name}.cognitiveservices.azure.com/api/projects/${foundryProject.name}'
             }
             {
               name: 'SQL_SERVER'
@@ -471,18 +483,23 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: backendIdentity.properties.clientId
             }
             {
-              name: 'FOUNDRY_RUNTIME_ENDPOINT'
-              value: 'https://${foundryAccount.name}.cognitiveservices.azure.com/api/projects/${foundryProject.name}'
+              name: 'FOUNDRY_PROJECT_ENDPOINT'
+              value: 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
             }
             {
-              name: 'FOUNDRY_ADMIN_ENDPOINT'
-              value: 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
+              name: 'BACKEND_CONTAINER_APP_RESOURCE_ID'
+              value: resourceId('Microsoft.App/containerApps', 'ca-jarvis-backend-${suffix}')
             }
             {
               name: 'FOUNDRY_RUNNER_AGENT_NAME'
               value: 'jarvis-runner-node-1x2'
             }
-          ]
+          ], empty(jarvisAgentObjectId) ? [] : [
+            {
+              name: 'ENTRA_JARVIS_AGENT_OBJECT_ID'
+              value: jarvisAgentObjectId
+            }
+          ])
           // Startup applies migrations before listening and may wait for the serverless database to resume (300-second deadline).
           probes: [
             {
@@ -524,6 +541,39 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
   dependsOn: [
     acrPullAssignment
   ]
+}
+
+resource backendAppScaleRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = if (deployBackendApp) {
+  name: backendAppScaleRoleId
+  properties: {
+    roleName: 'Jarvis backend app scaler'
+    description: 'Read and scale the Jarvis backend Container App.'
+    type: 'CustomRole'
+    permissions: [
+      {
+        actions: [
+          'Microsoft.App/containerApps/read'
+          'Microsoft.App/containerApps/write'
+        ]
+        notActions: []
+        dataActions: []
+        notDataActions: []
+      }
+    ]
+    assignableScopes: [
+      resourceGroup().id
+    ]
+  }
+}
+
+resource backendAppScaleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployBackendApp) {
+  name: guid(backendApp.id, backendIdentity.id, backendAppScaleRole.id)
+  scope: backendApp
+  properties: {
+    roleDefinitionId: backendAppScaleRole.id
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
 }
 
 resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {

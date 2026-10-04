@@ -19,6 +19,10 @@ interface SessionRow {
   ended_at: Date | null;
 }
 
+interface SessionIdRow extends SessionRow {
+  id: string;
+}
+
 interface MessageRow {
   id: string;
   session_id: string;
@@ -75,6 +79,16 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       const row = result.recordset[0];
       if (!row) throw new Error('Conversation session was not created');
       return sessionFromRow(row);
+    },
+
+    async getSession(sessionId) {
+      const result = await pool.request()
+        .input('sessionId', sql.BigInt, BigInt(sessionId))
+        .query<SessionIdRow>(`SELECT CONVERT(varchar(20), id) AS id, channel, language,
+          started_at, ended_at
+          FROM dbo.jarvis_sessions WHERE id = @sessionId;`);
+      const row = result.recordset[0];
+      return row ? sessionFromRow(row) : null;
     },
 
     async endSession(sessionId) {

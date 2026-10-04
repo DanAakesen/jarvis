@@ -7,6 +7,7 @@ import { createTaskStore } from './task-store.js';
 import { createCredentialStatusStore } from './credential-status-store.js';
 import { createSettingsStore } from './settings-store.js';
 import { createProjectStore } from './project-store.js';
+import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
 import { ProjectConflictError } from '../factory/projects.js';
 import { createEventHub } from '../core/event-hub.js';
 import type { TaskEventMessage } from '../factory/task-store.js';
@@ -96,8 +97,8 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
       INSERT dbo.activity (area, kind, title, link) VALUES (N'factory', N'task_done', N'Fix it is done', N'task:${String(task)}');
       UPDATE dbo.tasks SET state = N'Running', lease_owner = N'dispatcher-1', lease_until = DATEADD(minute, 5, SYSUTCDATETIME()) WHERE id = ${String(task)};`);
     const sandboxSession = await scalar(`INSERT dbo.sandbox_sessions
-      (task_id, foundry_session_id, agent_version, size, image, status, cost_estimate_dkk)
-      VALUES (${String(task)}, N'foundry-session-1', N'1', N'1x2', N'jarvis-runner:latest', N'Active', 0.25)`);
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status, cost_estimate_dkk)
+      VALUES (${String(task)}, N'foundry-session-1', N'1', N'jarvis-runner-base-1x2', N'1x2', N'jarvis-runner:latest', N'Active', 0.25)`);
     await pool.request().query(`INSERT dbo.sandbox_turns
       (sandbox_session_id, invocation_id, mode, acp_session_id, status)
       VALUES (${String(sandboxSession)}, N'invocation-1', N'task', N'acp-session-1', N'running');
@@ -112,7 +113,7 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     const row = await pool.request().query<{ state: string; priority: number; attempt_count: number }>(
       `SELECT state, priority, attempt_count FROM dbo.tasks WHERE id = ${String(task)}`);
     expect(row.recordset).toEqual([{ state: 'Running', priority: 0, attempt_count: 0 }]);
-    await pool.request().query(`UPDATE dbo.tasks SET state = N'Cancelled', finished_at = SYSUTCDATETIME()
+    await pool.request().query(`UPDATE dbo.tasks SET state = N'Done', finished_at = SYSUTCDATETIME()
       WHERE id = ${String(task)};`);
   });
 
@@ -143,6 +144,7 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     const allowedCopilot = await tasks.create({ projectId, title: 'Copilot allowed', request: 'Run', agent: 'copilot' });
     if (!allowedCopilot) throw new Error('Copilot task was not created');
     expect((await tasks.transition(allowedCopilot.id, 'Running')).kind).toBe('ok');
+    expect((await tasks.transition(allowedCopilot.id, 'Cancelled')).kind).toBe('ok');
 
     await credentials.completeCodexRenewal(
       owner, 'ok', '2030-01-01T00:00:00.000Z', '2026-10-03T00:00:00.000Z',
@@ -181,6 +183,8 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     expect(await credentials.acquireCodexRenewalLease(repairedOwner, 900)).toBe(true);
     await credentials.completeCodexRenewal(repairedOwner, 'ok', null, null);
     expect((await tasks.transition(failedCredentialTask.id, 'Running')).kind).toBe('ok');
+    expect((await tasks.transition(failedCredentialTask.id, 'PauseRequested')).kind).toBe('ok');
+    expect((await tasks.transition(failedCredentialTask.id, 'Paused')).kind).toBe('ok');
   });
 
   it('creates, filters, reads and transitions tasks with transactional history', async () => {
@@ -195,6 +199,10 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     const created = await store.create({ projectId, title: 'Task API contract', request: 'Exercise SQL task operations' });
     expect(created).toMatchObject({ projectId, agent: 'copilot', source: 'board', state: 'Ready' });
     if (!created) throw new Error('Task API fixture task was not created');
+    let idleOperationRan = false;
+    expect(await store.withNoActiveTasks(async () => { idleOperationRan = true; }))
+      .toEqual({ kind: 'active' });
+    expect(idleOperationRan).toBe(false);
 
     expect(await store.list({
       projectId, agent: 'copilot', state: 'Ready', search: 'contract',
@@ -250,6 +258,8 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     await transition(created.id, 'Running');
     await transition(created.id, 'Done', true);
     expect((await store.transition(created.id, 'Running')).kind).toBe('invalid-transition');
+    await expect(store.withNoActiveTasks(async () => 'scale updated'))
+      .resolves.toEqual({ kind: 'idle', value: 'scale updated' });
 
     const readyCancel = await store.create({ projectId, title: 'Cancel ready', request: 'Cancel before start' });
     if (!readyCancel) throw new Error('Ready task fixture was not created');
@@ -349,6 +359,63 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     });
   });
 
+  it('heartbeats running sandboxes and atomically marks a confirmed crash', async () => {
+    const project = await createProjectStore(pool).create({
+      name: 'Heartbeat fixture', repo: `${database}/heartbeat`, default_branch: 'main',
+      default_agent: 'copilot', policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
+    });
+    const taskStore = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    const task = await taskStore.create({
+      projectId: project.id, title: 'Heartbeat fixture', request: 'Exercise heartbeat persistence',
+    });
+    if (!task) throw new Error('Heartbeat task fixture was not created');
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    const sandboxSessionId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+      VALUES (${task.id}, N'heartbeat-session', N'1', N'jarvis-runner-base-1x2', N'1x2',
+        N'jarvis-runner-base@sha256:fixture', N'Active')`);
+    await pool.request().query(`INSERT dbo.sandbox_turns
+      (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+      VALUES (${sandboxSessionId}, N'heartbeat-invocation', N'task', N'heartbeat-acp', N'running')`);
+
+    const eventHub = createEventHub<TaskEventMessage>();
+    const published: TaskEventMessage[] = [];
+    eventHub.subscribe((event) => published.push(event));
+    const store = createSandboxHeartbeatStore(pool, eventHub);
+    // Earlier tests in this database leave their own running sessions; check only this fixture's.
+    const running = (await store.listRunning()).filter((row) => row.sandboxSessionId === String(sandboxSessionId));
+    expect(running).toEqual([{
+      sandboxSessionId: String(sandboxSessionId), foundrySessionId: 'heartbeat-session',
+      agentName: 'jarvis-runner-base-1x2', invocationId: 'heartbeat-invocation',
+    }]);
+    await store.recordHeartbeat(String(sandboxSessionId));
+    const heartbeat = await pool.request().query<{ at: Date | null }>(
+      `SELECT last_heartbeat_at AS at FROM dbo.sandbox_sessions WHERE id = ${sandboxSessionId}`);
+    expect(heartbeat.recordset[0]?.at).toBeInstanceOf(Date);
+
+    expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe(true);
+    expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe(false);
+    const result = await pool.request().query<{ taskState: string; sessionStatus: string; endReason: string; leaseOwner: string | null }>(
+      `SELECT t.state AS taskState, s.status AS sessionStatus, s.end_reason AS endReason, t.lease_owner AS leaseOwner
+        FROM dbo.tasks AS t JOIN dbo.sandbox_sessions AS s ON s.task_id = t.id WHERE s.id = ${sandboxSessionId}`);
+    expect(result.recordset).toEqual([{
+      taskState: 'NeedsAttention', sessionStatus: 'Crashed', endReason: 'crashed', leaseOwner: null,
+    }]);
+    const activity = await pool.request().query<{ kind: string; title: string; link: string }>(
+      `SELECT kind, title, link FROM dbo.activity WHERE link = N'task:${task.id}' AND kind = N'state_changed'`);
+    expect(activity.recordset).toContainEqual({
+      kind: 'state_changed', title: 'Sandbox heartbeat detected a crash', link: `task:${task.id}`,
+    });
+    expect(published).toHaveLength(1);
+    expect(published[0]).toMatchObject({
+      taskId: task.id,
+      type: 'state_changed',
+      summary: 'Sandbox heartbeat detected a crash',
+      payload: { from: 'Running', to: 'NeedsAttention', reason: 'sandbox_crashed' },
+      source: 'backend',
+    });
+  });
+
   it('creates, updates, lists, and archives projects through the SQL store', async () => {
     const store = createProjectStore(pool);
     const repo = `${database}/project`;
@@ -389,6 +456,7 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     ["INSERT dbo.sandbox_sessions (task_id, foundry_session_id, agent_version, size, image, status) VALUES (1, N'bad-size', N'1', N'4x8', N'image', N'Active')", 'CK_sandbox_sessions_size'],
     ["INSERT dbo.sandbox_sessions (task_id, foundry_session_id, agent_version, size, image, status) VALUES (1, N'bad-status', N'1', N'1x2', N'image', N'active')", 'CK_sandbox_sessions_status'],
     ["INSERT dbo.sandbox_sessions (task_id, foundry_session_id, agent_version, size, image, status) VALUES (1, N'', N'1', N'1x2', N'image', N'Active')", 'CK_sandbox_sessions_foundry_session_id'],
+    ["INSERT dbo.sandbox_sessions (task_id, foundry_session_id, agent_version, agent_name, size, image, status) VALUES (1, N'bad-agent', N'1', N'', N'1x2', N'image', N'Active')", 'CK_sandbox_sessions_agent_name'],
     ["INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status) VALUES (1, N'i', N'other', N'a', N'running')", 'CK_sandbox_turns_mode'],
     ["INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status) VALUES (1, N'i', N'task', N'a', N'Running')", 'CK_sandbox_turns_status'],
     ["INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status) VALUES (1, N'', N'task', N'a', N'running')", 'CK_sandbox_turns_invocation_id'],

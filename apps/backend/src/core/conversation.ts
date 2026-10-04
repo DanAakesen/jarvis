@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import type { BackendModule } from '../modules.js';
 import type {
   ConversationChannel,
@@ -72,10 +73,92 @@ const historySchema = {
   additionalProperties: false,
 };
 
+function streamEvent(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
 export const conversationModule: BackendModule = {
   id: 'conversation',
   tools: [],
   registerRoutes: async (app) => {
+    app.post<{
+      Params: { sessionId: string };
+      Body: { text: string };
+    }>('/conversation/sessions/:sessionId/turns', {
+      schema: {
+        params: { type: 'object', properties: { sessionId: idSchema }, required: ['sessionId'], additionalProperties: false },
+        body: {
+          type: 'object',
+          properties: { text: { type: 'string', minLength: 1, maxLength: 20_000 } },
+          required: ['text'],
+          additionalProperties: false,
+        },
+        response: { 400: errorResponse, 404: errorResponse, 503: errorResponse },
+      },
+    }, async (request, reply) => {
+      const store = app.conversationStore;
+      const agent = app.conversationAgent;
+      if (!store) return reply.code(503).send({ error: 'Conversation storage unavailable' });
+      if (!agent) return reply.code(503).send({ error: 'Chat is unavailable until the Jarvis agent is configured' });
+      const { sessionId } = request.params;
+      if (!validId(sessionId)) return reply.code(400).send({ error: 'Invalid conversation session ID' });
+      const text = request.body.text.trim();
+      if (!text) return reply.code(400).send({ error: 'Message text cannot be empty' });
+
+      const session = await store.getSession(sessionId);
+      if (!session || session.endedAt !== null) return reply.code(404).send({ error: 'Active chat session not found' });
+      if (session.channel !== 'chat') return reply.code(400).send({ error: 'Session is not a chat session' });
+      const authorization = request.headers.authorization;
+      if (!authorization) return reply.code(401).send({ error: 'Unauthorized' });
+
+      const userMessage = await store.addMessage({ sessionId, role: 'dan', text, model: null });
+      if (!userMessage) return reply.code(404).send({ error: 'Active chat session not found' });
+
+      const controller = new AbortController();
+      const abortOnClose = () => {
+        if (!reply.raw.writableEnded) controller.abort();
+      };
+      request.raw.once('aborted', abortOnClose);
+      reply.raw.once('close', abortOnClose);
+      reply.header('Content-Type', 'text/event-stream; charset=utf-8')
+        .header('Cache-Control', 'no-cache, no-transform')
+        .header('X-Accel-Buffering', 'no');
+      const stream = Readable.from((async function* () {
+        yield streamEvent('user', userMessage);
+        let answer = '';
+        try {
+          for await (const delta of agent.stream({
+            messageId: userMessage.id,
+            text,
+            language: session.language,
+          }, authorization, controller.signal)) {
+            answer += delta;
+            if (Buffer.byteLength(answer) > 512 * 1024) throw new Error('Chat response exceeded the size limit');
+            yield streamEvent('delta', { text: delta });
+          }
+          if (!answer.trim()) throw new Error('Chat response was empty');
+          const assistantMessage = await store.addMessage({
+            sessionId,
+            role: 'jarvis',
+            text: answer,
+            model: null,
+          });
+          if (!assistantMessage) throw new Error('Chat session ended');
+          yield streamEvent('done', assistantMessage);
+        } catch {
+          if (!controller.signal.aborted) {
+            yield streamEvent('error', {
+              error: 'Jarvis could not finish the reply. A task action may still have completed; check its status before trying again.',
+            });
+          }
+        } finally {
+          request.raw.removeListener('aborted', abortOnClose);
+          reply.raw.removeListener('close', abortOnClose);
+        }
+      })());
+      return reply.send(stream);
+    });
+
     app.post<{ Body: { channel: ConversationChannel; language: ConversationLanguage } }>('/conversation/sessions', {
       schema: {
         body: {

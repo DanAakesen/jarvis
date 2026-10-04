@@ -47,7 +47,7 @@ session as `agent_session_id` to resume, steer, or pause.
 
 | Operation | JSON body |
 | --- | --- |
-| Start or resume | `{"agent":"copilot","task":"..."}` (or `codex`) |
+| Start or resume | `{"agent":"copilot","task":"...","model":"gpt-5.4"}` (or `codex` with optional `"reasoning":"high"`) |
 | Steer | `{"agent":"copilot","mode":"steer","message":"..."}` |
 | Pause | `{"mode":"pause"}` |
 | Credential probe | `{"agent":"copilot","probe":"key-vault"}` |
@@ -59,6 +59,12 @@ timestamps. Renewal results contain only expiry/status metadata; those
 allowlisted dates may persist with invocation status, never prompts, secret
 values, or general task results. Pause uses ACP cancellation; a later turn
 reloads the persisted ACP session.
+The backend passes the effective model selected from the task override or
+settings default; `default` or an omitted value leaves the provider default
+unchanged. P2-05 owns dispatch-time settings resolution. Copilot receives `--model` when specified. Codex uses ACP config
+options `model` and `reasoning_effort`; the runner verifies the selected value
+and persists it with session metadata so resumed/steered turns keep the task's
+original choice. Reasoning is accepted only for Codex.
 Every agent prompt, including resumed and recovered turns, is prefixed with
 instructions to commit and push small work-in-progress changes to the existing
 task branch after each meaningful step. Agents must not force-push or push to

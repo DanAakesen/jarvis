@@ -11,12 +11,16 @@ import { createEventHub } from './core/event-hub.js';
 import type { ToolCallStore } from './core/tool-calls.js';
 import { conversationModule } from './core/conversation.js';
 import type { ConversationStore } from './core/conversation-store.js';
+import type { ConversationAgent } from './core/chat-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
 import type { ProjectStore } from './factory/projects.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
 import type { CredentialStatusStore } from './credentials/credential-status.js';
+import type { SandboxHeartbeat } from './factory/heartbeat.js';
+import type { ContainerAppScaler } from './operations/container-app-scale.js';
+import { createSleepModule } from './operations/sleep.js';
 
 export interface BuildAppOptions {
   readonly auth?: TokenVerifier;
@@ -28,6 +32,9 @@ export interface BuildAppOptions {
   readonly settingsStore?: SettingsStore;
   readonly credentialStatusStore?: CredentialStatusStore;
   readonly conversationStore?: ConversationStore;
+  readonly sandboxHeartbeat?: SandboxHeartbeat;
+  readonly conversationAgent?: ConversationAgent;
+  readonly containerAppScaler?: ContainerAppScaler | null;
 }
 
 declare module 'fastify' {
@@ -39,6 +46,8 @@ declare module 'fastify' {
     settingsStore: SettingsStore | null;
     credentialStatusStore: CredentialStatusStore | null;
     conversationStore: ConversationStore | null;
+    sandboxHeartbeat: SandboxHeartbeat | null;
+    conversationAgent: ConversationAgent | null;
   }
 }
 
@@ -93,6 +102,16 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
-  registerModules(app, options.modules ?? [coreModule, conversationModule, factoryModule]);
+  app.decorate('sandboxHeartbeat', options.sandboxHeartbeat ?? null);
+  if (options.sandboxHeartbeat) {
+    app.addHook('onClose', async () => { await options.sandboxHeartbeat!.stop(); });
+  }
+  app.decorate('conversationAgent', options.conversationAgent ?? null);
+  registerModules(app, options.modules ?? [
+    coreModule,
+    conversationModule,
+    factoryModule,
+    createSleepModule(options.containerAppScaler ?? null),
+  ]);
   return app;
 }

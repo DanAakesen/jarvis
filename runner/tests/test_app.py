@@ -47,8 +47,11 @@ def test_key_vault_probe_accepts_deployment_payload_without_task(monkeypatch):
     assert set(body) == {"key_vault_access", "session_id"}
 
 
-def test_agent_command_is_explicit():
+def test_agent_command_passes_copilot_model_without_changing_codex_command():
     assert app._agent_command("copilot") == ["copilot", "--acp", "--stdio", "--allow-all"]
+    assert app._agent_command("copilot", "gpt-5.4") == [
+        "copilot", "--acp", "--stdio", "--allow-all", "--model", "gpt-5.4",
+    ]
     assert app._agent_command("codex") == ["codex-acp"]
 
 
@@ -71,9 +74,11 @@ def test_state_event_is_bounded(tmp_path, monkeypatch):
 
 def test_session_and_task_metadata_are_persisted_without_prompt_or_result(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
-    state = app.TaskState("invocation", "foundry-session", "copilot", "secret prompt")
+    state = app.TaskState("invocation", "foundry-session", "codex", "secret prompt")
     state.result = {"response": "secret result"}
     state.event("started")
+    state.model = "gpt-5.4"
+    state.reasoning = "high"
     app._persist_acp_session(state, "acp-session")
 
     task_metadata = json.loads(app._task_state_path("foundry-session", "invocation").read_text())
@@ -81,10 +86,113 @@ def test_session_and_task_metadata_are_persisted_without_prompt_or_result(tmp_pa
     assert "secret prompt" not in json.dumps(task_metadata)
     assert "secret result" not in json.dumps(task_metadata)
     assert acp_metadata["acp_session_id"] == "acp-session"
+    assert app._load_acp_session("foundry-session", "codex") == {
+        "acp_session_id": "acp-session", "model": "gpt-5.4", "reasoning": "high",
+    }
     restored = app._load_task("invocation")
     assert restored is not None
     assert restored.session_id == "foundry-session"
     assert restored.task == ""
+
+
+def test_codex_options_are_applied_and_confirmed_over_acp(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    state = app.TaskState("i", "s", "codex", "task", model="gpt-5.4", reasoning="high")
+    client = app.ACPClient([], tmp_path, state, {})
+    requests = []
+
+    async def request(method, params):
+        requests.append((method, params))
+        if method == "session/new":
+            return {"sessionId": "new-session"}
+        if method == "session/set_config_option":
+            return {"configOptions": [{"id": params["configId"], "currentValue": params["value"]}]}
+        return {"stopReason": "end_turn"}
+
+    client.request = request
+    result = asyncio.run(client.run("task"))
+
+    assert result["acp_session_id"] == "new-session"
+    assert requests[1:3] == [
+        ("session/set_config_option", {
+            "sessionId": "new-session", "configId": "model", "value": "gpt-5.4",
+        }),
+        ("session/set_config_option", {
+            "sessionId": "new-session", "configId": "reasoning_effort", "value": "high",
+        }),
+    ]
+    assert requests[-1][0] == "session/prompt"
+
+
+def test_codex_option_mismatch_fails_instead_of_reporting_success(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    state = app.TaskState("i", "s", "codex", "task", model="unsupported")
+    client = app.ACPClient([], tmp_path, state, {})
+
+    async def request(method, params):
+        if method == "session/new":
+            return {"sessionId": "new-session"}
+        if method == "session/set_config_option":
+            return {"configOptions": [{"id": "model", "currentValue": "default"}]}
+        raise AssertionError(f"Unexpected ACP method {method}")
+
+    client.request = request
+    with pytest.raises(RuntimeError, match="did not apply"):
+        asyncio.run(client.run("task"))
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        ({}, None),
+        ({"model": "default"}, None),
+        ({"model": "gpt-5.4"}, "gpt-5.4"),
+    ],
+)
+def test_optional_model_config(payload, expected):
+    assert app._optional_config(payload, "model", 100) == expected
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"model": " "},
+        {"model": "--not-an-option"},
+        {"model": "x" * 101},
+        {"model": "gpt-5.4\n--allow-all"},
+    ],
+)
+def test_optional_model_config_rejects_invalid_values(payload):
+    with pytest.raises(ValueError):
+        app._optional_config(payload, "model", 100)
+
+
+def test_invoke_accepts_effective_provider_options(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "tasks", {})
+    monkeypatch.setattr(app, "tasks_lock", asyncio.Lock())
+    monkeypatch.setattr(app.asyncio, "create_task", lambda coroutine: coroutine.close())
+    payload = {"agent": "codex", "task": "Work", "model": "gpt-5.4", "reasoning": "high"}
+    body = json.dumps(payload).encode()
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/invocations",
+            "headers": [(b"content-type", b"application/json")],
+            "state": {"invocation_id": "inv", "session_id": "session"},
+        },
+        receive,
+    )
+    response = asyncio.run(app.invoke(request))
+
+    assert response.status_code == 200
+    assert app.tasks["inv"].model == "gpt-5.4"
+    assert app.tasks["inv"].reasoning == "high"
 
 
 def test_git_credential_helper_uses_process_environment(tmp_path):
@@ -551,7 +659,7 @@ def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch):
         return {"github_token": "not-a-real-token", "copilot_token": "not-a-real-seat-token"}
 
     monkeypatch.setattr(app, "_credentials_for", credentials)
-    monkeypatch.setattr(app, "_agent_command", lambda agent: [sys.executable, str(fixture)])
+    monkeypatch.setattr(app, "_agent_command", lambda agent, model=None: [sys.executable, str(fixture)])
     state = app.TaskState("failed-init", "s", "copilot", "task")
 
     async def exercise():

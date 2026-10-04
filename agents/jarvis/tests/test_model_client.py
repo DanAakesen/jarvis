@@ -18,7 +18,7 @@ from model_client import (
     parse_max_output_tokens,
     responses_base_url,
 )
-from state import ModelMessage
+from state import ModelMessage, ModelSettings
 
 
 class FakeStream:
@@ -418,3 +418,35 @@ async def test_reasoning_effort_requests_encrypted_reasoning() -> None:
     assert request is not None
     assert request["reasoning"] == {"effort": "low"}
     assert request["include"] == ["reasoning.encrypted_content"]
+
+
+@pytest.mark.asyncio
+async def test_model_requests_use_the_settings_captured_for_each_session() -> None:
+    transport = FakeOpenAI([], rounds=[[completed()], [completed()]])
+    model = AzureOpenAIResponsesClient(
+        client=transport,  # type: ignore[arg-type]
+        credential=None,
+        model_name="deployment-default",
+        server_address="example.test",
+        system_prompt="system",
+        max_output_tokens=32,
+        tools=FakeBackend().tools(),
+    )
+
+    for settings in (
+        ModelSettings("gpt-5.6-luna", "none"),
+        ModelSettings("gpt-5.4-mini", "high"),
+    ):
+        _ = [
+            chunk
+            async for chunk in model.complete(
+                [ModelMessage("user", "Hej")], settings=settings
+            )
+        ]
+
+    first, second = transport.responses.requests
+    assert first["model"] == "gpt-5.6-luna"
+    assert "reasoning" not in first
+    assert second["model"] == "gpt-5.4-mini"
+    assert second["reasoning"] == {"effort": "high"}
+    await model.close()

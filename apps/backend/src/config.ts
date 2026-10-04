@@ -1,7 +1,7 @@
 import type { Level } from 'pino';
 import { loadAuthConfig, type AuthConfig } from './auth/config.js';
 import { ConfigurationError } from './configuration-error.js';
-import { normalizeVoiceLiveEndpoint } from './voice/relay.js';
+import { normalizeFoundryProjectEndpoint, normalizeVoiceLiveEndpoint } from './voice/relay.js';
 export { ConfigurationError } from './configuration-error.js';
 
 export interface BackendConfig {
@@ -10,9 +10,13 @@ export interface BackendConfig {
   logLevel: Level;
   applicationInsightsConnectionString?: string;
   voiceLiveEndpoint?: string;
-  foundryRuntimeEndpoint?: string;
-  foundryAdminEndpoint?: string;
+  foundryEndpoints?: {
+    admin: string;
+    runtime: string;
+  };
   foundryRunnerAgentName?: string;
+  chatAgentUrl?: string;
+  foundryProjectEndpoint?: string;
   auth: AuthConfig;
 }
 
@@ -37,6 +41,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     if (!valid) throw new ConfigurationError('STATIC_WEB_APP_ORIGIN must be an HTTPS origin without a path');
   } else if (env.NODE_ENV === 'production') {
     throw new ConfigurationError('STATIC_WEB_APP_ORIGIN is required in production');
+  }
+
+  const foundryAdminEndpoint = env.FOUNDRY_ADMIN_ENDPOINT;
+  const foundryRuntimeEndpoint = env.FOUNDRY_RUNTIME_ENDPOINT;
+  if ((foundryAdminEndpoint === undefined) !== (foundryRuntimeEndpoint === undefined)) {
+    throw new ConfigurationError('FOUNDRY_ADMIN_ENDPOINT and FOUNDRY_RUNTIME_ENDPOINT must be configured together');
+  }
+  if (foundryAdminEndpoint !== undefined && foundryRuntimeEndpoint !== undefined) {
+    validateFoundryEndpoint(foundryAdminEndpoint, '.services.ai.azure.com', 'FOUNDRY_ADMIN_ENDPOINT');
+    validateFoundryEndpoint(foundryRuntimeEndpoint, '.cognitiveservices.azure.com', 'FOUNDRY_RUNTIME_ENDPOINT');
   }
 
   const connectionString = env.APPLICATIONINSIGHTS_CONNECTION_STRING;
@@ -67,35 +81,29 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     }
   }
 
-  const foundryRuntimeEndpoint = env.FOUNDRY_RUNTIME_ENDPOINT;
-  const foundryAdminEndpoint = env.FOUNDRY_ADMIN_ENDPOINT;
+  let chatAgentUrl: string | undefined;
+  if (env.JARVIS_CHAT_AGENT_URL !== undefined) {
+    try {
+      const url = new URL(env.JARVIS_CHAT_AGENT_URL.trim());
+      if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.search || url.hash) {
+        throw new Error();
+      }
+      chatAgentUrl = url.toString().replace(/\/+$/, '');
+    } catch {
+      throw new ConfigurationError('JARVIS_CHAT_AGENT_URL must be a secure HTTPS URL without credentials, query, or fragment');
+    }
+  }
+  let foundryProjectEndpoint: string | undefined;
+  if (env.FOUNDRY_PROJECT_ENDPOINT !== undefined) {
+    try {
+      foundryProjectEndpoint = normalizeFoundryProjectEndpoint(env.FOUNDRY_PROJECT_ENDPOINT.trim());
+    } catch {
+      throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT must be a secure Azure AI project URL');
+    }
+  }
   const foundryRunnerAgentName = env.FOUNDRY_RUNNER_AGENT_NAME;
-  const foundryConfigured = [foundryRuntimeEndpoint, foundryAdminEndpoint, foundryRunnerAgentName]
-    .some((value) => value !== undefined);
-  if (foundryConfigured && (!foundryRuntimeEndpoint || !foundryAdminEndpoint || !foundryRunnerAgentName)) {
-    throw new ConfigurationError('FOUNDRY_RUNTIME_ENDPOINT, FOUNDRY_ADMIN_ENDPOINT and FOUNDRY_RUNNER_AGENT_NAME must be configured together');
-  }
-  if (env.NODE_ENV === 'production' && !foundryConfigured) {
-    throw new ConfigurationError('Foundry runner configuration is required in production');
-  }
-  if (foundryConfigured) {
-    const validEndpoint = (value: string, hostSuffix: string) => {
-      try {
-        const url = new URL(value);
-        return url.protocol === 'https:' && url.hostname.endsWith(hostSuffix) && !url.port &&
-          !url.username && !url.password && !url.search && !url.hash &&
-          /^\/api\/projects\/[^/]+\/?$/u.test(url.pathname);
-      } catch { return false; }
-    };
-    if (!validEndpoint(foundryRuntimeEndpoint as string, '.cognitiveservices.azure.com')) {
-      throw new ConfigurationError('FOUNDRY_RUNTIME_ENDPOINT must be an HTTPS Foundry project endpoint');
-    }
-    if (!validEndpoint(foundryAdminEndpoint as string, '.services.ai.azure.com')) {
-      throw new ConfigurationError('FOUNDRY_ADMIN_ENDPOINT must be an HTTPS Foundry project endpoint');
-    }
-    if (!/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName as string)) {
-      throw new ConfigurationError('FOUNDRY_RUNNER_AGENT_NAME must be a valid agent name');
-    }
+  if (foundryRunnerAgentName !== undefined && !/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName)) {
+    throw new ConfigurationError('FOUNDRY_RUNNER_AGENT_NAME must be a valid agent name');
   }
 
   return {
@@ -105,10 +113,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),
     ...(connectionString === undefined ? {} : { applicationInsightsConnectionString: connectionString }),
     ...(voiceLiveEndpoint === undefined ? {} : { voiceLiveEndpoint }),
-    ...(foundryConfigured ? {
-      foundryRuntimeEndpoint: foundryRuntimeEndpoint as string,
-      foundryAdminEndpoint: foundryAdminEndpoint as string,
-      foundryRunnerAgentName: foundryRunnerAgentName as string,
-    } : {}),
+    ...(foundryAdminEndpoint === undefined || foundryRuntimeEndpoint === undefined ? {} : {
+      foundryEndpoints: { admin: foundryAdminEndpoint, runtime: foundryRuntimeEndpoint },
+    }),
+    ...(foundryRunnerAgentName === undefined ? {} : { foundryRunnerAgentName }),
+    ...(chatAgentUrl === undefined ? {} : { chatAgentUrl }),
+    ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
   };
+}
+
+function validateFoundryEndpoint(value: string, hostSuffix: string, name: string): void {
+  let url: URL;
+  try { url = new URL(value); }
+  catch { throw new ConfigurationError(`${name} must be a valid Foundry project endpoint`); }
+  if (url.protocol !== 'https:' || !url.hostname.endsWith(hostSuffix) || url.port ||
+      url.username || url.password || url.search || url.hash ||
+      !/^\/api\/projects\/[^/]+\/?$/u.test(url.pathname)) {
+    throw new ConfigurationError(`${name} must be a secure Foundry project endpoint`);
+  }
 }

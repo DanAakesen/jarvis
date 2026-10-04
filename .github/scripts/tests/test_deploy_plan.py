@@ -7,7 +7,7 @@ from deploy_plan import changed_files, plan
 
 
 def selected(result):
-    return {part for part in ("infra", "backend", "web") if result[part]}
+    return {part for part in ("infra", "backend", "web", "agent") if result[part]}
 
 
 class DeployPlanTests(unittest.TestCase):
@@ -16,6 +16,7 @@ class DeployPlanTests(unittest.TestCase):
         self.assertEqual(selected(plan("push", ["apps/backend/src/app.ts"])), {"backend"})
         self.assertEqual(selected(plan("push", ["db/migrations/0001_init.sql"])), {"backend"})
         self.assertEqual(selected(plan("push", ["apps/web/src/App.tsx"])), {"web"})
+        self.assertEqual(selected(plan("push", ["agents/jarvis/main.py"])), {"agent"})
         self.assertEqual(
             selected(plan("push", ["apps/web/config.json", "db/migrations/down/0001_init.sql"])),
             {"backend", "web"},
@@ -34,7 +35,7 @@ class DeployPlanTests(unittest.TestCase):
             ".github/scripts/deploy_smoke.py",
         ):
             with self.subTest(path=path):
-                self.assertEqual(selected(plan("push", [path])), {"infra", "backend", "web"})
+                self.assertEqual(selected(plan("push", [path])), {"infra", "backend", "web", "agent"})
 
     def test_documentation_only_deploys_nothing(self):
         result = plan("push", ["README.md", "docs/architecture-flows.html", "apps/web/README.md", "infra/README.md"])
@@ -45,9 +46,9 @@ class DeployPlanTests(unittest.TestCase):
         self.assertEqual(selected(plan("push", ["runner/app.py", ".github/scripts/plan_status.py"])), set())
 
     def test_manual_run_and_unknown_base_deploy_everything(self):
-        self.assertEqual(selected(plan("workflow_dispatch", ["README.md"])), {"infra", "backend", "web"})
-        self.assertEqual(selected(plan("workflow_dispatch", [], superseded=True)), {"infra", "backend", "web"})
-        self.assertEqual(selected(plan("push", None)), {"infra", "backend", "web"})
+        self.assertEqual(selected(plan("workflow_dispatch", ["README.md"])), {"infra", "backend", "web", "agent"})
+        self.assertEqual(selected(plan("workflow_dispatch", [], superseded=True)), {"infra", "backend", "web", "agent"})
+        self.assertEqual(selected(plan("push", None)), {"infra", "backend", "web", "agent"})
 
     def test_superseded_or_unchanged_push_deploys_nothing(self):
         self.assertEqual(selected(plan("push", [], superseded=True)), set())

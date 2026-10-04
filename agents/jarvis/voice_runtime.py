@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import socket
@@ -30,10 +31,12 @@ from azure.ai.agentserver.invocations.voice import (
     VoiceAgentServerHost,
 )
 
+from chat_runtime import ChatContextLoader, load_verified_history, register_chat_route
 from jarvis_tools import current_conversation, current_turn
 from model_contract import StreamingModelClient
 from response_coordinator import ResponseCoordinator
 from state import (
+    DEFAULT_MODEL_SETTINGS,
     MAX_MESSAGE_CHARACTERS,
     InputClaim,
     SessionState,
@@ -136,6 +139,14 @@ class VoiceRuntime:
                 )
             )
             return
+        try:
+            state.model_settings = await self._model_client.session_settings()
+        except asyncio.CancelledError:
+            state.terminating = True
+            raise
+        except Exception:
+            state.model_settings = DEFAULT_MODEL_SETTINGS
+            logger.warning("Could not load Jarvis settings; using default session settings")
         try:
             await session.send(SessionReady())
             state.activate()
@@ -386,11 +397,14 @@ class VoiceRuntime:
 
 def create_app(
     model_client: StreamingModelClient,
+    *,
+    chat_context_loader: ChatContextLoader = load_verified_history,
     **host_options: Any,
 ) -> VoiceAgentServerHost:
     """Create a Voice host with isolated application state."""
     runtime = VoiceRuntime(model_client)
     app = VoiceAgentServerHost(**host_options)
     runtime.bind(app)
+    register_chat_route(app, model_client, chat_context_loader)
     app.state.voice_runtime = runtime
     return app

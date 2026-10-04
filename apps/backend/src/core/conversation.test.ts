@@ -52,6 +52,13 @@ function storeFixture(overrides: Partial<ConversationStore> = {}) {
       endedAt: null,
     })),
     endSession: vi.fn(async () => true),
+    getSession: vi.fn(async () => ({
+      id: '41',
+      channel: 'chat' as const,
+      language: 'da' as const,
+      startedAt,
+      endedAt: null,
+    })),
     addMessage: vi.fn<ConversationStore['addMessage']>(async () => message),
     getHistory: vi.fn(async () => history),
     ...overrides,
@@ -76,6 +83,122 @@ describe('conversation routes', () => {
     expect(response.statusCode).toBe(201);
     expect(response.json()).toMatchObject({ id: '41', channel: 'chat', language: 'da' });
     expect(store.createSession).toHaveBeenCalledWith({ channel: 'voice', language: 'en' });
+  });
+
+  it('stores a user turn and streams and persists the assistant response', async () => {
+    const store = storeFixture();
+    const chatAgent = {
+      stream: vi.fn(async function* () {
+        yield 'Hej';
+        yield ', Dan.';
+      }),
+    };
+    const app = buildApp(config, createLogger(config, {
+      trackTrace: vi.fn(), flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}),
+    }, new Writable({ write(_chunk, _encoding, done) { done(); } })), {
+      auth,
+      conversationStore: store,
+      conversationAgent: chatAgent,
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: { text: 'Hej Jarvis' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(response.body).toContain('event: user');
+    expect(response.body).toContain('event: delta');
+    expect(response.body).toContain('event: done');
+    expect(chatAgent.stream).toHaveBeenCalledWith({
+      messageId: '42',
+      text: 'Hej Jarvis',
+      language: 'da',
+    }, headers.authorization, expect.any(AbortSignal));
+    expect(store.addMessage).toHaveBeenCalledWith({
+      sessionId: '41',
+      role: 'dan',
+      text: 'Hej Jarvis',
+      model: null,
+    });
+    expect(store.addMessage).toHaveBeenCalledWith({
+      sessionId: '41',
+      role: 'jarvis',
+      text: 'Hej, Dan.',
+      model: null,
+    });
+  });
+
+  it('rejects voice sessions and explains agent unavailability before saving a message', async () => {
+    const store = storeFixture({
+      getSession: vi.fn(async () => ({
+        id: '41',
+        channel: 'voice',
+        language: 'da',
+        startedAt,
+        endedAt: null,
+      })),
+    });
+    const chatAgent = { stream: vi.fn(async function* () { yield 'Hello'; }) };
+    const app = buildApp(config, createLogger(config, {
+      trackTrace: vi.fn(), flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}),
+    }, new Writable({ write(_chunk, _encoding, done) { done(); } })), {
+      auth,
+      conversationStore: store,
+      conversationAgent: chatAgent,
+    });
+    apps.push(app);
+    const voice = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: { text: 'Hello' },
+    });
+    const unavailable = await createApp(store).inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: { text: 'Hello' },
+    });
+
+    expect(voice.statusCode).toBe(400);
+    expect(voice.json().error).toContain('not a chat session');
+    expect(unavailable.statusCode).toBe(503);
+    expect(store.addMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not persist a chat response after an agent stream fails', async () => {
+    const store = storeFixture();
+    const chatAgent = {
+      stream: vi.fn(async function* () {
+        yield 'Partial';
+        throw new Error('provider detail');
+      }),
+    };
+    const app = buildApp(config, createLogger(config, {
+      trackTrace: vi.fn(), flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}),
+    }, new Writable({ write(_chunk, _encoding, done) { done(); } })), {
+      auth,
+      conversationStore: store,
+      conversationAgent: chatAgent,
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: { text: 'Hello' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('event: error');
+    expect(response.body).not.toContain('provider detail');
+    expect(store.addMessage).toHaveBeenCalledTimes(1);
   });
 
   it('rejects invalid session fields and unauthenticated callers', async () => {

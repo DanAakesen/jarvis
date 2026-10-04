@@ -19,6 +19,9 @@ if [[ -z "$image" ]]; then
 fi
 
 parameters=(backendIdentityResourceId="$identity" sqlAdminGroupObjectId="$sql_group")
+if [[ -n "${ENTRA_JARVIS_AGENT_OBJECT_ID:-}" ]]; then
+  parameters+=(jarvisAgentObjectId="$ENTRA_JARVIS_AGENT_OBJECT_ID")
+fi
 if [[ -n "$image" ]]; then
   parameters+=(backendImage="$image")
 else

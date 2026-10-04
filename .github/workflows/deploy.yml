@@ -1,6 +1,7 @@
 # Production deploy for main (P0-11). Deploys only the parts changed since the
 # last successful Deploy run: infra/ -> Bicep; apps/backend/ or db/ -> backend
-# image to ACR and Container Apps; apps/web/ -> Static Web Apps. Shared files
+# image to ACR and Container Apps; apps/web/ -> Static Web Apps; agents/jarvis/
+# -> ACR and a Foundry hosted-agent version. Shared files
 # (root package files, workflows, deploy scripts) and manual runs deploy
 # everything; documentation-only pushes do not start a run. The concurrency
 # group is shared with Runner deploy: one deploy at a time, queued in order,
@@ -27,6 +28,7 @@ env:
   SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
   RESOURCE_GROUP: rg-jarvis
   INFRA_DEPLOYMENT: jarvis-infra
+  ENTRA_JARVIS_AGENT_OBJECT_ID: ${{ vars.ENTRA_JARVIS_AGENT_OBJECT_ID }}
 
 jobs:
   plan:
@@ -41,6 +43,7 @@ jobs:
       infra: ${{ steps.plan.outputs.infra }}
       backend: ${{ steps.plan.outputs.backend }}
       web: ${{ steps.plan.outputs.web }}
+      agent: ${{ steps.plan.outputs.agent }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -137,6 +140,159 @@ jobs:
           echo "::error::The new backend revision did not become ready in 15 minutes; the previous revision keeps serving."
           exit 1
 
+  agent:
+    name: Jarvis agent (ACR and Foundry)
+    needs: [plan, infra, backend]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.agent == 'true' && needs.infra.result != 'failure' && needs.backend.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Load infrastructure outputs
+        run: |
+          az deployment group show --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --query properties.outputs --output json --only-show-errors >"$RUNNER_TEMP/infra-outputs.json"
+          {
+            echo "REGISTRY=$(jq -er .containerRegistryName.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "REGISTRY_HOST=$(jq -er .containerRegistryLoginServer.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "BACKEND_APP=$(jq -er .backendAppName.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "BACKEND_URL=https://$(jq -er .backendFqdn.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "FOUNDRY_ADMIN=$(jq -er .foundryAdminEndpoint.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "FOUNDRY_ACCOUNT=$(jq -er .foundryAccountName.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "FOUNDRY_PROJECT=$(jq -er .foundryProjectName.value "$RUNNER_TEMP/infra-outputs.json")"
+          } >>"$GITHUB_ENV"
+      - name: Grant the deploy identity access to the Foundry project
+        run: |
+          deploy_principal=$(jq -er .deploy.servicePrincipalId infra/bootstrap.output.json)
+          project_id="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.CognitiveServices/accounts/$FOUNDRY_ACCOUNT/projects/$FOUNDRY_PROJECT"
+          project_identity=$(az resource show --ids "$project_id" --api-version 2025-04-01-preview --query identity.principalId --output tsv --subscription "$SUBSCRIPTION_ID" --only-show-errors)
+          [[ -n "$project_identity" ]] || { echo "::error::Foundry project has no managed identity."; exit 1; }
+          ensure_role() {
+            local principal="$1" role="$2" scope="$3"
+            local count
+            count=$(az role assignment list --scope "$scope" --fill-principal-name false --output json --subscription "$SUBSCRIPTION_ID" --only-show-errors |
+              jq --arg principal "$principal" --arg role "$role" --arg scope "$scope" '[.[] | select((.principalId | ascii_downcase) == ($principal | ascii_downcase) and .roleDefinitionName == $role and ((.scope | ascii_downcase) == ($scope | ascii_downcase)))] | length')
+            if [[ "$count" == 0 ]]; then
+              az role assignment create --assignee-object-id "$principal" --assignee-principal-type ServicePrincipal --role "$role" --scope "$scope" --subscription "$SUBSCRIPTION_ID" --output none --only-show-errors
+            fi
+          }
+          account_id="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.CognitiveServices/accounts/$FOUNDRY_ACCOUNT"
+          ensure_role "$deploy_principal" "Foundry Project Manager" "$project_id"
+          ensure_role "$deploy_principal" "Foundry User" "$project_id"
+          ensure_role "$project_identity" "Foundry User" "$account_id"
+      - name: Build the Jarvis agent image in ACR
+        run: |
+          az acr build --registry "$REGISTRY" --image "jarvis-agent:$IMAGE_TAG" --file agents/jarvis/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --only-show-errors agents/jarvis
+          digest=$(az acr manifest show-metadata --registry "$REGISTRY" --name "jarvis-agent:$IMAGE_TAG" --subscription "$SUBSCRIPTION_ID" --query digest --output tsv --only-show-errors)
+          [[ "$digest" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || { echo "::error::ACR agent image has no valid digest."; exit 1; }
+          echo "AGENT_IMAGE=$REGISTRY_HOST/jarvis-agent@$digest" >>"$GITHUB_ENV"
+      - name: Create and activate the Foundry hosted-agent version
+        id: hosted-agent
+        run: |
+          connections="$FOUNDRY_ADMIN/connections?api-version=v1"
+          for attempt in $(seq 1 20); do
+            if az rest --method get --url "$connections" --resource https://ai.azure.com/ --output none --only-show-errors 2>/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == 20 ]]; then
+              echo "::error::The Foundry project is not ready for agent deployment."
+              exit 1
+            fi
+            sleep 15
+          done
+          definition=$(jq -cn --arg image "$AGENT_IMAGE" --arg backend "$BACKEND_URL" '{
+            definition: {
+              kind: "hosted",
+              cpu: "1",
+              memory: "2Gi",
+              container_configuration: {image: $image},
+              protocol_versions: [{protocol: "invocations", version: "2.0.0"}],
+              environment_variables: {
+                AZURE_AI_MODEL_DEPLOYMENT_NAME: "gpt-5.6-luna",
+                JARVIS_BACKEND_URL: $backend
+              },
+              session_configuration: {idle_timeout_seconds: 120}
+            }
+          }')
+          versions="$FOUNDRY_ADMIN/agents/jarvis/versions"
+          az rest --method post --url "$versions?api-version=v1" --resource https://ai.azure.com/ --headers Content-Type=application/json --body "$definition" --output json --only-show-errors >"$RUNNER_TEMP/agent-version-created.json"
+          version=$(jq -er '.version | tostring' "$RUNNER_TEMP/agent-version-created.json")
+          version_url="$versions/$version?api-version=v1"
+          for attempt in $(seq 1 90); do
+            az rest --method get --url "$version_url" --resource https://ai.azure.com/ --output json --only-show-errors >"$RUNNER_TEMP/agent-version.json"
+            status=$(jq -r '.status // ""' "$RUNNER_TEMP/agent-version.json")
+            if [[ "$status" == active ]]; then
+              break
+            fi
+            if [[ "$status" == failed || "$attempt" == 90 ]]; then
+              echo "::error::Foundry agent version $version failed or did not become active."
+              exit 1
+            fi
+            sleep 10
+          done
+          patch=$(jq -cn --arg version "$version" '{
+            agent_endpoint: {
+              version_selector: {version_selection_rules: [{agent_version: $version, traffic_percentage: 100, type: "FixedRatio"}]},
+              protocol_configuration: {invocations: {}}
+            }
+          }')
+          az rest --method patch --url "$FOUNDRY_ADMIN/agents/jarvis?api-version=v1" --resource https://ai.azure.com/ --headers Content-Type=application/merge-patch+json --body "$patch" --output none --only-show-errors
+          az rest --method get --url "$FOUNDRY_ADMIN/agents/jarvis?api-version=v1" --resource https://ai.azure.com/ --output json --only-show-errors >"$RUNNER_TEMP/agent.json"
+          principal=$(jq -r '.instance_identity.principal_id // empty' "$RUNNER_TEMP/agent.json")
+          if [[ -z "$principal" ]]; then
+            principal=$(jq -r '.instance_identity.principal_id // empty' "$RUNNER_TEMP/agent-version.json")
+          fi
+          [[ "$principal" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || { echo "::error::Foundry agent has no valid instance identity."; exit 1; }
+          echo "AGENT_PRINCIPAL=$principal" >>"$GITHUB_ENV"
+          {
+            echo "version=$version"
+            echo "principal=$principal"
+          } >>"$GITHUB_OUTPUT"
+      - name: Allow this identity in the backend
+        run: |
+          az containerapp update --name "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --set-env-vars "ENTRA_JARVIS_AGENT_OBJECT_ID=$AGENT_PRINCIPAL" --output none --only-show-errors
+          for attempt in $(seq 1 30); do
+            az containerapp show --name "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --output json --only-show-errors >"$RUNNER_TEMP/backend-app.json"
+            latest=$(jq -r '.properties.latestRevisionName // ""' "$RUNNER_TEMP/backend-app.json")
+            ready=$(jq -r '.properties.latestReadyRevisionName // ""' "$RUNNER_TEMP/backend-app.json")
+            if [[ -n "$latest" && "$latest" == "$ready" ]] && curl --fail --silent --show-error --max-time 20 "$BACKEND_URL/health"; then
+              echo
+              echo "Backend revision $latest is healthy with the hosted-agent identity configured."
+              exit 0
+            fi
+            echo "Waiting for backend revision $latest to become healthy (attempt $attempt/30)."
+            sleep 30
+          done
+          echo "::error::Backend did not become healthy after configuring the hosted-agent identity."
+          exit 1
+      - name: Deployment summary
+        if: always()
+        env:
+          VERSION: ${{ steps.hosted-agent.outputs.version }}
+          PRINCIPAL: ${{ steps.hosted-agent.outputs.principal }}
+        run: |
+          {
+            echo "### Jarvis agent"
+            echo
+            echo "- Foundry hosted-agent version: \`${VERSION:-not created}\`"
+            echo "- Instance identity principal ID: \`${PRINCIPAL:-not available}\`"
+            echo "- Backend URL: \`$BACKEND_URL\`"
+            echo
+            if [[ -n "$PRINCIPAL" ]]; then
+              echo "Run \`./infra/bootstrap.ps1 -JarvisAgentPrincipalId '$PRINCIPAL'\` once to assign \`Jarvis.Tools\` and persist \`ENTRA_JARVIS_AGENT_OBJECT_ID\` for future Bicep deployments."
+            fi
+            echo "Factory tool calls and \`/me\` authorization still require live verification after bootstrap."
+          } >>"$GITHUB_STEP_SUMMARY"
+
   web:
     name: Web (Static Web Apps)
     needs: [plan, infra, backend]
@@ -202,8 +358,8 @@ jobs:
 
   smoke:
     name: Smoke checks
-    needs: [plan, infra, backend, web]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.plan.outputs.infra == 'true' || needs.plan.outputs.backend == 'true') && needs.infra.result != 'failure' && needs.backend.result != 'failure' && needs.web.result != 'failure' }}
+    needs: [plan, infra, backend, web, agent]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.plan.outputs.infra == 'true' || needs.plan.outputs.backend == 'true' || needs.plan.outputs.agent == 'true') && needs.infra.result != 'failure' && needs.backend.result != 'failure' && needs.web.result != 'failure' && needs.agent.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     permissions:
