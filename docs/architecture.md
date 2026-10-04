@@ -551,6 +551,7 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | Size | 1 vCPU / 2 GiB default; 2 vCPU / 4 GiB for .NET (3.5× faster restore). Never 0.5 / 1 (L3). |
 | Disk | Measured 6 GiB writable at every size (Microsoft documents a budget of up to 20 GiB at ≥1 vCPU with about 20 % reserved, not configurable), shared by image, `$HOME`, `/files`, and `/tmp`; about 3 GiB free with a .NET image. The runner reports total, used and free bytes at task-turn start and checks free space every 15 seconds; below the configurable `JARVIS_DISK_LOW_THRESHOLD_BYTES` (default 1 GiB), it reports `disk_low`, stops the turn, and the backend moves the task to NeedsAttention. The live measurement remains a post-merge check (P6-07). The agent builds single projects and keeps package caches small; full builds run in GitHub Actions (L23). |
 | Runner contract | Start, steer, pause, resume, cancel, and events. The host can change without changing the backend. |
+| Task workspace | P2-13 start requests carry `repository` (`owner/name`), `defaultBranch`, and `branch`. The dispatcher persists `tasks.branch`; the runner clones through its existing Git credential helper, checks out the remote task branch or creates it from the default branch, and runs ACP in that checkout. Resume retains workspace metadata. A new session supplied with the persisted task branch restores pushed commits; the user-facing recovery action/history remains P2-10. |
 | Adapter | Python; lives only in the sandbox image. The backend stays Node. |
 | Steer and pause | ACP `session/cancel` stops the current turn; the next turn continues the same conversation with `session/load` (L4, L5). |
 | Idle timeout | 2 minutes without requests shuts the sandbox down; files and the conversation survive an idle shutdown. |
@@ -571,6 +572,19 @@ a build can exhaust disk. `disk_low` and the NeedsAttention transition commit
 together with reason `disk_low`; the deployment setting defaults to 1 GiB. The
 runner event, SQL Server integration, and task-detail display are locally covered;
 live Foundry disk measurement remains post-merge.
+
+P2-13 compares task-branch commits before and after each agent turn. An
+`end_turn` without a new task-branch commit emits `session_question` with the
+last agent message. The backend records the question and moves a Running or
+PauseRequested task to NeedsAttention with reason `session_question` in the same
+transaction, then publishes committed events.
+Repository-access and Git failures remain failures, not successful turns.
+Local Git/ACP and backend contracts cover this flow; live Copilot and Codex
+pushes on `DanAakesen/jarvis-test-target` are the coordinator's post-merge check.
+New checkouts receive repository-local Git author defaults using the existing
+`github-actions[bot]` automation identity, so an empty sandbox HOME can commit.
+Resume preserves existing author settings; commit authorship is separate from
+the credential helper's push authentication.
 
 P6-05 classifies a Codex ACP prompt rejection whose error data carries
 `codexErrorInfo: "usageLimitExceeded"` (the codex-acp 2.1.1 shape when the

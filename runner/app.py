@@ -46,6 +46,8 @@ DISK_CHECK_INTERVAL_SECONDS = 15
 TASK_STATE_FILE = "task-state.json"
 TASK_STATE_DIR = "invocations"
 ACP_SESSION_FILE = "acp-session.json"
+WORKSPACE_FILE = "workspace.json"
+GIT_TIMEOUT_SECONDS = 120
 LOGGER = logging.getLogger("jarvis.runner")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 # Identifies this container instance; a resume after idle deprovisioning shows a new value.
@@ -108,7 +110,7 @@ class RunnerEventPublisher:
         token = await self.credential.get_token(self.api_scope)
         data = event["data"]
         summary = next(
-            (data[key] for key in ("summary", "text", "error", "message")
+            (data[key] for key in ("summary", "text", "error", "message", "question")
              if isinstance(data.get(key), str) and data[key].strip()),
             event["kind"].replace("_", " "),
         )
@@ -194,6 +196,10 @@ class TaskState:
     mode: str = "task"
     model: str | None = None
     reasoning: str | None = None
+    repository: str | None = None
+    default_branch: str | None = None
+    branch: str | None = None
+    last_agent_message: str = ""
     status: str = "queued"
     started_at: float = field(default_factory=time.time)
     finished_at: float | None = None
@@ -238,6 +244,10 @@ class DiskLowExceeded(Exception):
 
 class CodexUsageLimitReached(RuntimeError):
     """codex-acp rejected the prompt because the ChatGPT plan's Codex usage limit is reached."""
+
+
+class WorkspaceError(RuntimeError):
+    """A safe, credential-free workspace failure."""
 
 
 def _is_codex_usage_limit(error: Any) -> bool:
@@ -489,6 +499,45 @@ def _optional_config(payload: dict[str, Any], key: str, max_length: int) -> str 
     return None if value == "default" else value
 
 
+def _workspace_config(payload: dict[str, Any]) -> dict[str, str]:
+    if not isinstance(payload, dict):
+        raise ValueError("Workspace configuration must be an object")
+    repository = _required_string(payload, "repository")
+    if (repository != payload["repository"] or len(repository) > 140
+            or not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]{1,100}", repository)
+            or repository.split("/")[1] in {".", ".."}):
+        raise ValueError("'repository' must be a GitHub owner/name")
+    result = {"repository": repository}
+    for key in ("defaultBranch", "branch"):
+        value = _required_string(payload, key)
+        if (value != payload[key] or len(value) > 255
+                or value.startswith(("-", "/"))
+                or any(character.isspace() or ord(character) < 32 or ord(character) == 127
+                       or character in "~^:?*[\\" for character in value)
+                or ".." in value or "//" in value or value.endswith(("/", "."))
+                or "@{" in value
+                or any(part.startswith(".") or part.endswith(".lock") for part in value.split("/"))
+                or value == "HEAD"):
+            raise ValueError(f"'{key}' must be a valid Git branch")
+        result[key] = value
+    if result["branch"] in {result["defaultBranch"], "main", "master"}:
+        raise ValueError("'branch' must be a separate task branch")
+    return result
+
+
+def _session_workspace(session_id: str, payload: dict[str, Any]) -> dict[str, str]:
+    path = _session_dir(session_id) / WORKSPACE_FILE
+    if not path.exists():
+        return _workspace_config(payload)
+    try:
+        saved = _workspace_config(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError):
+        raise ValueError("Persisted workspace metadata is unreadable") from None
+    if any(key in payload and payload[key] != value for key, value in saved.items()):
+        raise ValueError("Workspace configuration cannot change within a session")
+    return saved
+
+
 async def _key_vault_secret(name: str) -> str:
     value, _, _ = await _key_vault_secret_details(name)
     return value
@@ -719,6 +768,7 @@ class ACPClient:
         self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
         self._reader_task: asyncio.Task[None] | None = None
         self.acp_session_id: str | None = persisted_session_id
+        self._agent_message_active = False
         self._secrets = [env[key] for key in ("GH_TOKEN", "COPILOT_GITHUB_TOKEN") if env.get(key)]
         if env.get("CODEX_HOME"):
             auth_path = Path(env["CODEX_HOME"]) / "auth.json"
@@ -795,6 +845,22 @@ class ACPClient:
                            if approved and approved.get("optionId") else {"outcome": "cancelled"})
                 await self._respond(message.get("id"), {"outcome": outcome})
             elif "method" in message:
+                params = message.get("params", {})
+                if message.get("method") == "session/update" and isinstance(params, dict):
+                    update = params.get("update", {})
+                    if isinstance(update, dict) and update.get("sessionUpdate") == "agent_message_chunk":
+                        content = update.get("content", {})
+                        if isinstance(content, dict) and content.get("type") == "text":
+                            text = content.get("text")
+                            if isinstance(text, str):
+                                if not self._agent_message_active:
+                                    self.state.last_agent_message = ""
+                                self.state.last_agent_message = self._redact(
+                                    self.state.last_agent_message + text
+                                )[-2000:]
+                                self._agent_message_active = True
+                    else:
+                        self._agent_message_active = False
                 self.state.event(
                     "acp_notification",
                     method=message.get("method"),
@@ -877,6 +943,8 @@ class ACPClient:
                 if selected is None or selected.get("currentValue") != value:
                     raise RuntimeError(f"Codex did not apply the requested {config_id} option")
         self.state.event("agent_turn", agent=self.state.agent)
+        self.state.last_agent_message = ""
+        self._agent_message_active = False
         result = await self.request(
             "session/prompt",
             {
@@ -946,6 +1014,106 @@ def _credential_helper(worktree: Path) -> Path:
     return helper
 
 
+def _repository_url(repository: str) -> str:
+    return f"https://github.com/{repository}.git"
+
+
+async def _git(cwd: Path, env: dict[str, str], *args: str, allow_missing: bool = False) -> str | None:
+    process = None
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "git", *args, cwd=str(cwd), env=env,
+            stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        output, _ = await asyncio.wait_for(process.communicate(), timeout=GIT_TIMEOUT_SECONDS)
+        if process.returncode == 1 and allow_missing:
+            return None
+        if process.returncode != 0:
+            raise WorkspaceError("Task repository Git operation failed")
+        return output.decode("utf-8").strip()
+    except (OSError, UnicodeError, asyncio.TimeoutError):
+        raise WorkspaceError("Task repository Git operation failed or timed out") from None
+    finally:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+
+
+async def _workspace_head(state: TaskState, project: Path, env: dict[str, str]) -> str:
+    branch = await _git(project, env, "symbolic-ref", "--quiet", "--short", "HEAD")
+    if branch != state.branch:
+        raise WorkspaceError("Task repository is not on the task branch")
+    head = await _git(project, env, "rev-parse", "--verify", "HEAD")
+    if not head or not re.fullmatch(r"[0-9a-f]{40,64}", head):
+        raise WorkspaceError("Task repository has no valid commit")
+    return head
+
+
+async def _configure_git_identity(project: Path, env: dict[str, str]) -> None:
+    # Reuse the repository's automation identity, never a person's credentials.
+    for key, value in (
+        ("user.name", "github-actions[bot]"),
+        ("user.email", "41898282+github-actions[bot]@users.noreply.github.com"),
+    ):
+        if not await _git(project, env, "config", "--local", "--get", key, allow_missing=True):
+            await _git(project, env, "config", "--local", key, value)
+
+
+async def _prepare_workspace(state: TaskState, root: Path, env: dict[str, str]) -> tuple[Path, str]:
+    try:
+        config = _session_workspace(state.session_id, {
+            "repository": state.repository, "defaultBranch": state.default_branch, "branch": state.branch,
+        })
+    except ValueError:
+        raise WorkspaceError("Task repository configuration is invalid") from None
+    project = root / "project"
+    remote = _repository_url(config["repository"])
+    if not project.exists():
+        _write_json(root / WORKSPACE_FILE, config)
+        try:
+            await _git(root, env, "clone", "--no-checkout", "--", remote, str(project))
+        except BaseException as exc:
+            # Git owns this newly created directory; a failed clone must not
+            # leave a partial checkout that could be mistaken for a resumed task.
+            if project.exists():
+                shutil.rmtree(project)
+            if isinstance(exc, WorkspaceError):
+                raise WorkspaceError("Task repository clone failed; verify repository access") from None
+            raise
+        try:
+            existing = await _git(
+                project, env, "show-ref", "--verify", "--quiet",
+                f"refs/remotes/origin/{config['branch']}", allow_missing=True,
+            )
+            source = config["branch"] if existing is not None else config["defaultBranch"]
+            await _git(project, env, "checkout", "-b", config["branch"], f"refs/remotes/origin/{source}", "--")
+            # Never inherit the default branch as the task branch's push target.
+            await _git(project, env, "config", f"branch.{config['branch']}.merge", f"refs/heads/{config['branch']}")
+            await _configure_git_identity(project, env)
+            return project, await _workspace_head(state, project, env)
+        except BaseException:
+            shutil.rmtree(project)
+            raise
+    else:
+        if not (root / WORKSPACE_FILE).exists():
+            raise WorkspaceError("Task repository has no persisted workspace configuration")
+        origin = await _git(project, env, "remote", "get-url", "origin")
+        if origin != remote:
+            raise WorkspaceError("Task repository origin does not match the session")
+        await _configure_git_identity(project, env)
+    return project, await _workspace_head(state, project, env)
+
+
+async def _turn_has_commit(state: TaskState, project: Path, env: dict[str, str], before: str) -> bool:
+    after = await _workspace_head(state, project, env)
+    if after == before:
+        return False
+    if await _git(project, env, "merge-base", "--is-ancestor", before, after, allow_missing=True) is None:
+        raise WorkspaceError("Task branch no longer contains the turn's starting commit")
+    return True
+
+
 async def _stop_session_client(session_id: str) -> None:
     client = session_clients.pop(session_id, None)
     if client is not None:
@@ -989,7 +1157,8 @@ async def _run_task(
         lock_acquired = True
         if state.cancel_requested:
             return
-        client = session_clients.get(state.session_id)
+        if state.session_id in session_clients:
+            raise WorkspaceError("Task session still has an active provider")
         if client is None:
             app_tokens_enabled = (
                 state.task_id is not None and os.environ.get("JARVIS_GITHUB_APP_TOKEN_ENABLED") == "true"
@@ -1024,6 +1193,7 @@ async def _run_task(
             if state.task_id is not None:
                 env["JARVIS_TASK_ID"] = state.task_id
                 env["JARVIS_SESSION_ID"] = state.session_id
+            project, starting_commit = await _prepare_workspace(state, worktree, env)
             if state.agent == "copilot":
                 env["COPILOT_GITHUB_TOKEN"] = credentials["copilot_token"]
             else:
@@ -1038,7 +1208,7 @@ async def _run_task(
                 state.reasoning = persisted_session["reasoning"]
             client = ACPClient(
                 _agent_command(state.agent, state.model),
-                worktree,
+                project,
                 state,
                 env,
                 persisted_session_id=(
@@ -1054,8 +1224,17 @@ async def _run_task(
             state.status = STOPPED_STATUS[state.stop_requested]
             state.event(state.status, result=state.result)
         else:
+            has_commit = await _turn_has_commit(state, project, env, starting_commit)
             state.status = "completed"
-            state.event("completed", result=state.result)
+            response = state.result.get("response", {})
+            if isinstance(response, dict) and response.get("stopReason") == "end_turn" and not has_commit:
+                state.event(
+                    "session_question",
+                    question=state.last_agent_message or "The agent ended without a new commit.",
+                    result=state.result,
+                )
+            else:
+                state.event("completed", result=state.result)
     except asyncio.CancelledError:
         state.status = "cancelled"
         state.event("cancelled")
@@ -1073,7 +1252,7 @@ async def _run_task(
             state.event("failed", error=state.error, reason="codex_usage_limit")
         elif state.status != "cancelled":
             state.status = "failed"
-            state.error = f"Runner task failed: {type(exc).__name__}"
+            state.error = str(exc) if isinstance(exc, WorkspaceError) else f"Runner task failed: {type(exc).__name__}"
             state.event("failed", error=state.error)
     finally:
         try:
@@ -1297,6 +1476,7 @@ async def invoke(request: Request) -> Response:
         reasoning = _optional_config(payload, "reasoning", 32)
         if agent == "copilot" and reasoning is not None:
             raise ValueError("'reasoning' is only supported for Codex")
+        workspace = _session_workspace(session_id, payload)
     except ValueError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
     state = TaskState(
@@ -1307,6 +1487,9 @@ async def invoke(request: Request) -> Response:
         task_id=task_id,
         model=model,
         reasoning=reasoning,
+        repository=workspace["repository"],
+        default_branch=workspace["defaultBranch"],
+        branch=workspace["branch"],
     )
     async with tasks_lock:
         tasks[invocation_id] = state

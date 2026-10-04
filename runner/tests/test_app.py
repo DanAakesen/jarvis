@@ -84,7 +84,7 @@ def test_disk_low_threshold_is_configurable(monkeypatch):
         app._disk_low_threshold_bytes()
 
 
-def test_low_disk_emits_snapshot_and_stops_the_turn(tmp_path, monkeypatch):
+def test_low_disk_emits_snapshot_and_stops_the_turn(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})
@@ -184,7 +184,7 @@ def test_task_events_are_pushed_in_order_with_task_and_invocation_identity(tmp_p
     ]
 
 
-def test_steer_after_event_is_delivered_before_the_new_turn(tmp_path, monkeypatch):
+def test_steer_after_event_is_delivered_before_the_new_turn(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})
@@ -303,6 +303,13 @@ def test_runner_event_publisher_uses_identity_and_bounds_event_payload(monkeypat
             3,
             {"at": 1.0, "kind": "agent_output", "data": {"text": "x" * (app.MAX_EVENT_PAYLOAD_BYTES + 1)}},
         )
+        await publisher.publish(
+            "42", "invocation", 4,
+            {"at": 2.0, "kind": "session_question", "data": {
+                "question": "Which behaviour do you want?",
+                "result": {"response": {"usage": {"input_tokens": 123, "premium_requests": 1}}},
+            }},
+        )
         await publisher.close()
 
     asyncio.run(exercise())
@@ -314,6 +321,11 @@ def test_runner_event_publisher_uses_identity_and_bounds_event_payload(monkeypat
     assert len(request_options["json"]["summary"]) == 2000
     assert request_options["json"]["payload"] == {
         "invocationId": "invocation", "eventIndex": 3, "truncated": True,
+    }
+    assert sent[1][1]["json"]["summary"] == "Which behaviour do you want?"
+    assert sent[1][1]["json"]["payload"]["data"]["question"] == "Which behaviour do you want?"
+    assert sent[1][1]["json"]["payload"]["data"]["result"]["response"]["usage"] == {
+        "input_tokens": 123, "premium_requests": 1,
     }
 
 
@@ -421,7 +433,10 @@ def test_invoke_accepts_effective_provider_options(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "tasks", {})
     monkeypatch.setattr(app, "tasks_lock", asyncio.Lock())
     monkeypatch.setattr(app.asyncio, "create_task", lambda coroutine: coroutine.close())
-    payload = {"agent": "codex", "task": "Work", "task_id": "42", "model": "gpt-5.4", "reasoning": "high"}
+    payload = {
+        "agent": "codex", "task": "Work", "task_id": "42", "model": "gpt-5.4", "reasoning": "high",
+        "repository": "owner/project", "defaultBranch": "main", "branch": "jarvis/task-42",
+    }
     body = json.dumps(payload).encode()
 
     async def receive():
@@ -496,7 +511,7 @@ def test_app_token_tasks_do_not_read_the_legacy_github_secret(monkeypatch):
     assert requested == ["jarvis-copilot"]
 
 
-def test_task_uses_an_app_token_and_configures_per_push_credentials(tmp_path, monkeypatch):
+def test_task_uses_an_app_token_and_configures_per_push_credentials(tmp_path, monkeypatch, local_workspace):
     work_root = tmp_path / "work root"
     monkeypatch.setattr(app, "WORK_ROOT", work_root)
     monkeypatch.setattr(app, "session_clients", {})
@@ -998,7 +1013,7 @@ def test_client_redacts_credential_values_in_nested_output(tmp_path):
         "content": ["token=[redacted]", {"text": "[redacted]"}]}
 
 
-def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch):
+def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})
@@ -1041,7 +1056,7 @@ def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch):
     ],
 )
 def test_codex_usage_limit_failure_is_reported_distinctly(
-    tmp_path, monkeypatch, codex_error_info, expected_error, expected_reason
+    tmp_path, monkeypatch, local_workspace, codex_error_info, expected_error, expected_reason
 ):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
@@ -1138,7 +1153,7 @@ def test_cancel_queued_turn_prevents_work_after_session_lock(tmp_path, monkeypat
     asyncio.run(exercise())
 
 
-def test_next_turn_waits_for_provider_cleanup(tmp_path, monkeypatch):
+def test_next_turn_waits_for_provider_cleanup(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})
