@@ -347,7 +347,10 @@ describe('committed domain schema (groups 1-7)', () => {
       deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok', mapping: failedDeployment,
     });
     expect(alertNotifier).toHaveBeenCalledExactlyOnceWith({
-      type: 'deployment_failure', dedupeKey: `deployment:${failedDeployment.id}`,
+      type: 'deployment_failure',
+      dedupeKey: `deployment:${failedDeployment.id}`,
+      title: 'Deployment failed: production',
+      link: `release:${releaseId}`,
     });
 
     const tasks = createTaskStore(pool, createEventHub<TaskEventMessage>());
