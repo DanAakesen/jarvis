@@ -13,7 +13,7 @@ export interface RunningTask {
   startedAt: string;
 }
 
-export type ActivityCategory = 'attention' | 'release' | 'credential';
+export type ActivityCategory = 'attention' | 'release' | 'credential' | 'alert';
 
 export interface ActivityItem {
   id: string;
@@ -35,6 +35,7 @@ export const activityCategories: readonly { id: ActivityCategory; heading: strin
   { id: 'attention', heading: 'Needs attention', empty: 'No tasks need attention.' },
   { id: 'release', heading: 'Releases and deployments', empty: 'No recent releases or deployments.' },
   { id: 'credential', heading: 'Credential warnings', empty: 'No credential warnings.' },
+  { id: 'alert', heading: 'Alerts', empty: 'No active alerts.' },
 ];
 
 export const agentNames: Record<CodingAgent, string> = { codex: 'Codex', copilot: 'Copilot' };

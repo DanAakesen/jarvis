@@ -82,6 +82,7 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
             outcome: mapping ? 'ok' : 'ignored',
             ...(mapping ? { mapping } : {}),
           });
+          if (inserted) app.nowEventHub.publish({ type: 'refresh' });
         } catch {
           request.log.error('github.webhook_delivery_store_failed');
           return reply.code(503).send({ error: 'Webhook storage unavailable' });

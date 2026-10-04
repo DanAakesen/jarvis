@@ -71,6 +71,8 @@ jobs:
     if: needs.plan.outputs.infra == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      JARVIS_BUDGET_CONTACT_EMAILS: ${{ secrets.JARVIS_BUDGET_CONTACT_EMAILS }}
     permissions:
       contents: read
       id-token: write
@@ -95,6 +97,7 @@ jobs:
       id-token: write
     env:
       IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      JARVIS_BUDGET_CONTACT_EMAILS: ${{ secrets.JARVIS_BUDGET_CONTACT_EMAILS }}
     steps:
       - uses: actions/checkout@v4
       - uses: azure/login@v2

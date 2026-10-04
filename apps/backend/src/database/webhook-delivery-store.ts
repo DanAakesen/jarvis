@@ -1,4 +1,7 @@
 import sql from 'mssql';
+import type { AlertNotifier, ActivityAlert } from '../alerts.js';
+import { notifyAlert } from '../alerts.js';
+import { insertActivityAlert } from './alert-store.js';
 import type { WebhookDeliveryStore } from '../github/webhook-delivery.js';
 import type { GithubWebhookMapping } from '../github/webhook-mapping.js';
 
@@ -10,7 +13,7 @@ function bindNumbers(request: sql.Request, values: readonly number[]): string {
   }).join(', ');
 }
 
-async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhookMapping): Promise<void> {
+async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhookMapping): Promise<ActivityAlert | undefined> {
   const request = new sql.Request(transaction).input('repository', sql.NVarChar(140), mapping.repository);
 
   if (mapping.kind === 'pull_request') {
@@ -36,7 +39,7 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
             (task_id, project_id, number, branch, head_sha, state, opened_at, merged_at)
           VALUES (@taskId, @projectId, @number, @branch, @headSha, @state, @openedAt, @mergedAt);
       END;`);
-    return;
+    return undefined;
   }
 
   if (mapping.kind === 'check_run') {
@@ -51,7 +54,7 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
       IF @projectId IS NOT NULL
         UPDATE dbo.pull_requests SET checks = @checks
         WHERE project_id = @projectId AND (${numberFilter}head_sha = @headSha);`);
-    return;
+    return undefined;
   }
 
   if (mapping.kind === 'push') {
@@ -73,7 +76,7 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
       UPDATE dbo.workflow_runs SET release_id = @releaseId
       WHERE project_id = @projectId AND head_sha = @sha AND release_id IS NULL;
     END;`);
-    return;
+    return undefined;
   }
 
   if (mapping.kind === 'workflow_run') {
@@ -145,7 +148,7 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
               WHEN @conclusion = N'failure' THEN N'failed' ELSE N'building' END
           WHERE id = @releaseId;
       END;`);
-    return;
+    return undefined;
   }
 
   request
@@ -179,9 +182,32 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
         released_at = CASE WHEN @status = N'success' THEN @at ELSE released_at END
       WHERE id = @releaseId;
   END;`);
+  if (mapping.status !== 'failure') return undefined;
+  const project = await new sql.Request(transaction)
+    .input('repository', sql.NVarChar(140), mapping.repository)
+    .input('deploymentId', sql.BigInt, mapping.id)
+    .query<{ projectId: string; releaseId: string | null }>(`DECLARE @projectId bigint = (
+        SELECT id FROM dbo.projects WHERE repo = @repository);
+      SELECT CAST(@projectId AS varchar(19)) AS projectId,
+        CAST((SELECT release_id FROM dbo.deployments WHERE github_deployment_id = @deploymentId)
+          AS varchar(19)) AS releaseId;`);
+  const projectId = project.recordset[0]?.projectId;
+  if (!projectId) return undefined;
+  const alert: ActivityAlert = {
+    type: 'deployment_failure',
+    dedupeKey: `deployment:${mapping.id}`,
+    title: `Deployment failed: ${mapping.environment}`,
+    link: project.recordset[0]?.releaseId
+      ? `release:${project.recordset[0].releaseId}`
+      : `project:${projectId}`,
+  };
+  return await insertActivityAlert(transaction, alert) ? alert : undefined;
 }
 
-export function createWebhookDeliveryStore(pool: sql.ConnectionPool): WebhookDeliveryStore {
+export function createWebhookDeliveryStore(
+  pool: sql.ConnectionPool,
+  alertNotifier?: AlertNotifier,
+): WebhookDeliveryStore {
   return {
     async record({ deliveryId, event, outcome, mapping }) {
       const transaction = new sql.Transaction(pool);
@@ -196,8 +222,9 @@ export function createWebhookDeliveryStore(pool: sql.ConnectionPool): WebhookDel
             INSERT INTO dbo.webhook_deliveries (delivery_id, event, received_at, processed_at, outcome)
             VALUES (@deliveryId, @event, @receivedAt, @receivedAt, @outcome);`);
         recordingDelivery = false;
-        if (mapping) await applyMapping(transaction, mapping);
+        const alert = mapping ? await applyMapping(transaction, mapping) : undefined;
         await transaction.commit();
+        if (alert) notifyAlert(alertNotifier, alert);
         return true;
       } catch (error) {
         await transaction.rollback().catch(() => undefined);
