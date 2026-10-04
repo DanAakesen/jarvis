@@ -22,7 +22,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Images | Azure Container Registry: backend and sandbox images | Decided |
 | Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-16 |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
-| Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (application role `Jarvis.Tools`) is accepted only on the tool routes (P4-01) | Browser and backend contracts checked offline in #9; agent policy checked offline in P4-01; real Entra sign-in, agent tokens and deployed origin remain unverified pending the P4-08 main deployment and bootstrap |
+| Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (application role `Jarvis.Tools`) is accepted only on the agent-enabled routes: tools (P4-01), turn context (P4-04) and its effective Jarvis-settings read (P4-07) | Browser and backend contracts checked offline in #9; agent policy checked offline in P4-01/P4-04/P4-07; real Entra sign-in, agent tokens and deployed origin remain unverified pending the P4-08 main deployment and bootstrap |
 | Board updates | Server-sent events (SSE) over `fetch`, so the bearer token can be sent | Decided |
 | Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment is P4-08 |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
@@ -87,8 +87,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   The SQL adapter is injected only when database configuration exists; the API
   returns 503 without it. The model catalog offers deployed Jarvis models and
   only provider defaults for Codex and Copilot because their available-model
-  catalog values have not been verified. Future session/task creation reads
-  these defaults; existing sessions and tasks are not updated.
+  catalog values have not been verified. The agent-only `GET /agent/settings`
+  route returns only the effective Jarvis model and reasoning effort to the
+  `Jarvis.Tools` principal. The hosted agent reads it before acknowledging a new
+  session and holds that snapshot for the session; if the read is unavailable,
+  it logs a warning and uses the defaults. Future task creation reads these
+  defaults; existing sessions and tasks are not updated.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
@@ -517,10 +521,13 @@ The Danish backend connector uses the Foundry project endpoint from `FOUNDRY_PRO
 ### Jarvis agent
 
 `agents/jarvis` (P4-01) is the ported voice-prototype agent: the Voice Live Bridge
-runtime, response coordinator, strict action rules for spoken Danish replies and the `gpt-5.6-luna` tool loop
-over the Responses API. It defines no tools itself. Each turn loads the backend
-catalogue from `GET /tools` (cached for 60 seconds) and sends each model tool call
-to `POST /tools/{name}`. The agent gets a token for `api://<jarvis-api>/.default`
+runtime, response coordinator, strict action rules for spoken Danish replies and
+a per-session model tool loop over the Responses API. At session start it reads
+effective model and reasoning settings from the agent-only `GET /agent/settings`
+route, then uses the immutable snapshot for each model request in that session.
+It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
+(cached for 60 seconds) and sends each model tool call to `POST /tools/{name}`.
+The agent gets a token for `api://<jarvis-api>/.default`
 from its platform identity through `DefaultAzureCredential`; the same credential
 reaches the model when no API key is set. The backend result is passed back to the
 model unchanged. Only `outcome: "ok"` counts as done.
