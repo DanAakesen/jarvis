@@ -76,7 +76,7 @@ export function createTaskRecoveryStore(pool: sql.ConnectionPool, eventHub: Task
               AND session.foundry_session_id = @foundrySessionId AND session.status = N'Active'
           INNER JOIN dbo.sandbox_turns AS turn
             ON turn.sandbox_session_id = session.id AND turn.invocation_id = @invocationId
-              AND turn.status = N'running'
+              AND turn.status IN (N'running', N'completed')
           WHERE task.state = N'Running';`);
       return recordset[0]?.taskId ?? null;
     },

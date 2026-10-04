@@ -20,6 +20,7 @@ interface Task {
   request: string;
   agent: Agent;
   state: TaskState;
+  latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
   activity: string | null;
   attemptCount: number;
   branch: string | null;
@@ -82,6 +83,8 @@ function isTask(value: unknown): value is Task {
     typeof value.title === 'string' && typeof value.request === 'string' &&
     (value.agent === 'codex' || value.agent === 'copilot') &&
     taskStates.includes(value.state as TaskState) &&
+    (value.latestSessionEndReason === undefined || value.latestSessionEndReason === null ||
+      ['done', 'cancelled', 'crashed', 'idle', 'idle_expired'].includes(String(value.latestSessionEndReason))) &&
     (typeof value.activity === 'string' || value.activity === null) &&
     typeof value.attemptCount === 'number' && Number.isSafeInteger(value.attemptCount) &&
     value.attemptCount >= 0 && (typeof value.branch === 'string' || value.branch === null) &&
@@ -516,6 +519,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                               getAccessToken={getAccessToken}
                               taskId={task.id}
                               state={task.state}
+                              latestSessionEndReason={task.latestSessionEndReason}
                               onComplete={() => setReloadKey((value) => value + 1)}
                             />
                           </article>

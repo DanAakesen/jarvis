@@ -40,7 +40,7 @@ export interface DispatcherStore {
   hasPendingProjectPolicyMerge(taskId: string): Promise<boolean>;
   recordControlTurn(target: TaskControlTarget, accepted: InvocationAccepted, message: string): Promise<boolean>;
   recordResumedTurn(target: TaskControlTarget, accepted: InvocationAccepted): Promise<RunningSandbox>;
-  endTaskSessions(taskId: string, state: string): Promise<string[]>;
+  endTaskSessions(taskId: string, state: string, invocationCompleted?: boolean): Promise<string[]>;
 }
 
 export interface TaskControlTarget extends RunningSandbox, TaskWorkspace {
@@ -191,9 +191,16 @@ export class TaskDispatcher implements TaskController {
   }
 
   async control(taskId: string, command: TaskControlCommand): Promise<TaskControlResult> {
-    const task = await this.tasks.get(taskId, 1, 0);
+    let task = await this.tasks.get(taskId, 1, 0);
     if (!task) return { kind: 'not-found' };
-    if (command.action === 'recover') return this.recover(task);
+    if (command.action === 'recover') {
+      if (task.state === 'Running' && task.latestSessionEndReason === 'idle_expired') {
+        const attention = await this.tasks.transition(taskId, 'NeedsAttention');
+        if (attention.kind !== 'ok') return transitionResult(attention.kind);
+        task = { ...task, ...attention.task };
+      }
+      return this.recover(task);
+    }
     let target = await this.store.getControlTarget(taskId);
     if (task.state === 'Paused' && target?.sessionStatus === 'Active') {
       const ended = await this.store.endTaskSessions(taskId, 'Paused');
@@ -351,15 +358,18 @@ export class TaskDispatcher implements TaskController {
 
   private async acceptCompleted(sandbox: RunningSandbox): Promise<boolean> {
     const taskId = await this.recoveryStore?.getRunningTaskForSession(sandbox);
-    if (!taskId) return this.recoveryStore !== undefined;
+    if (!this.recoveryStore) return true;
+    if (!taskId) return false;
     const detail = await this.tasks.get(taskId, recoveryEventLimit, 0);
-    if (!detail || detail.state !== 'Running') return true;
+    if (!detail) return false;
+    if (detail.state === 'NeedsAttention') return false;
+    if (detail.state !== 'Running') return true;
     const workspace = await this.workspaceFor?.(detail) ?? null;
     const verified = workspace !== null && await (this.verifyDelivery?.(workspace) ?? Promise.resolve(false));
     const nextState = verified ? 'Done' : 'NeedsAttention';
     const transition = await this.tasks.transition(taskId, nextState, verified);
     if (transition.kind !== 'ok') return false;
-    const ended = await this.store.endTaskSessions(taskId, nextState);
+    const ended = await this.store.endTaskSessions(taskId, nextState, true);
     ended.forEach((id) => this.heartbeat.untrack(id));
     return true;
   }
@@ -375,7 +385,12 @@ export class TaskDispatcher implements TaskController {
       const state = typeof payload === 'object' && payload !== null && 'to' in payload
         ? (payload as { to?: unknown }).to
         : undefined;
-      if (state === 'Paused' || state === 'NeedsAttention' || state === 'Done' || state === 'Cancelled') {
+      const reason = typeof payload === 'object' && payload !== null && 'reason' in payload
+        ? (payload as { reason?: unknown }).reason
+        : undefined;
+      const keepCompletedQuestionSession = state === 'NeedsAttention' && reason === 'session_question';
+      if (!keepCompletedQuestionSession &&
+        (state === 'Paused' || state === 'NeedsAttention' || state === 'Done' || state === 'Cancelled')) {
         void this.store.endTaskSessions(event.taskId, state)
           .then((sessionIds) => sessionIds.forEach((id) => this.heartbeat.untrack(id)))
           .catch(this.onError);

@@ -63,9 +63,14 @@ const controlTarget: TaskControlTarget = {
   branch: 'jarvis/task-42',
 };
 
-function harness(store: DispatcherStore, startTask = vi.fn(async () => ({
+function harness(
+  store: DispatcherStore,
+  startTask = vi.fn(async () => ({
   invocationId: 'invocation-1', sessionId: 'session-1', status: 'queued' as const, agent: 'codex' as const,
-})), taskRecord: TaskRecord = controlTask) {
+  })),
+  taskRecord: TaskRecord = controlTask,
+  options: DispatcherOptions = {},
+) {
   const events: TaskEventHub = createEventHub<TaskEventMessage>();
   const transition = vi.fn(async (_id: string, state: TaskRecord['state']) => ({
     kind: 'ok' as const, task: { ...taskRecord, state },
@@ -93,7 +98,7 @@ function harness(store: DispatcherStore, startTask = vi.fn(async () => ({
   const cancel = vi.fn(async (invocationId: string) => ({ invocationId, status: 'cancelled' as const }));
   const deleteSession = vi.fn(async () => {});
   const clientFor = vi.fn(() => ({ startTask, steer, pause, resume, cancel, deleteSession }));
-  const dispatcher = new TaskDispatcher(store, tasks, settings, clientFor, heartbeat, events);
+  const dispatcher = new TaskDispatcher(store, tasks, settings, clientFor, heartbeat, events, options);
   return { dispatcher, events, settings, startTask, transition, track, untrack, clientFor, steer, pause, resume, cancel, deleteSession };
 }
 
@@ -196,6 +201,23 @@ describe('task dispatcher', () => {
     });
     await vi.waitFor(() => expect(untrack).toHaveBeenCalledWith('53'));
     expect(store.endTaskSessions).toHaveBeenCalledWith('42', state);
+    await dispatcher.stop();
+  });
+
+  it('keeps a completed session-question session monitored for idle expiry', async () => {
+    const store = idleStore();
+    const { dispatcher, events, untrack } = harness(store);
+    dispatcher.start();
+    await vi.waitFor(() => expect(store.claimNext).toHaveBeenCalledOnce());
+    events.publish({
+      id: '4', taskId: '42', type: 'state_changed', summary: null,
+      payload: { from: 'Running', to: 'NeedsAttention', reason: 'session_question' },
+      payloadTruncated: false, source: 'backend', at: new Date().toISOString(),
+    });
+    await flush();
+
+    expect(store.endTaskSessions).not.toHaveBeenCalled();
+    expect(untrack).not.toHaveBeenCalled();
     await dispatcher.stop();
   });
 
@@ -411,6 +433,46 @@ describe('task dispatcher', () => {
 });
 
 describe('task crash recovery', () => {
+  it('continues an idle-expired Running task in a new sandbox on its existing branch', async () => {
+    const idleExpiredTask: TaskRecord = {
+      ...controlTask, state: 'Running', latestSessionEndReason: 'idle_expired',
+    };
+    const recoveryStore: TaskRecoveryStore = {
+      getRunningTaskForSession: vi.fn(async () => null),
+      claimRecovery: vi.fn(async () => ({ kind: 'claimed', task })),
+    };
+    const startTask = vi.fn(async () => ({
+      invocationId: 'continued-invocation',
+      sessionId: 'continued-session',
+      status: 'queued' as const,
+      agent: 'codex' as const,
+    }));
+    const { dispatcher, transition, track } = harness(idleStore(), startTask, idleExpiredTask, {
+      recoveryStore,
+      workspaceFor: vi.fn(async (current) => ({
+        repository: 'DanAakesen/jarvis',
+        defaultBranch: 'main',
+        branch: current.branch!,
+      })),
+    });
+
+    await expect(dispatcher.control('42', { action: 'recover' }))
+      .resolves.toMatchObject({ kind: 'ok', task: { state: 'Running' } });
+
+    expect(transition).toHaveBeenCalledWith('42', 'NeedsAttention');
+    expect(recoveryStore.claimRecovery).toHaveBeenCalledOnce();
+    expect(startTask).toHaveBeenCalledWith(expect.objectContaining({
+      repository: 'DanAakesen/jarvis',
+      defaultBranch: 'main',
+      branch: idleExpiredTask.branch,
+      taskId: '42',
+    }));
+    expect(track).toHaveBeenCalledWith(expect.objectContaining({
+      invocationId: 'continued-invocation',
+      foundrySessionId: 'continued-session',
+    }));
+  });
+
   it.each([true, false])('restarts a crashed task from its branch and gates completion on GitHub evidence (%s)', async (deliveryVerified) => {
     vi.useFakeTimers();
     let state: TaskRecord['state'] = 'Running';

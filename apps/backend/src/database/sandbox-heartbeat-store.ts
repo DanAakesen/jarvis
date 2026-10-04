@@ -16,10 +16,13 @@ export function createSandboxHeartbeatStore(pool: sql.ConnectionPool, eventHub: 
         CAST(s.id AS varchar(19)) AS sandboxSessionId, s.foundry_session_id AS foundrySessionId,
         s.agent_name AS agentName, activeTurn.invocation_id AS invocationId
         FROM dbo.sandbox_sessions AS s
-        JOIN dbo.tasks AS t ON t.id = s.task_id AND t.state IN (N'Running', N'PauseRequested')
+        JOIN dbo.tasks AS t ON t.id = s.task_id
         CROSS APPLY (
           SELECT TOP (1) invocation_id FROM dbo.sandbox_turns
-          WHERE sandbox_session_id = s.id AND status = N'running'
+          WHERE sandbox_session_id = s.id AND (
+            (status = N'running' AND t.state IN (N'Running', N'PauseRequested'))
+            OR (status = N'completed' AND t.state IN (N'Running', N'PauseRequested', N'NeedsAttention'))
+          )
           ORDER BY started_at DESC, id DESC
         ) AS activeTurn
         WHERE s.status = N'Active' AND s.agent_name IS NOT NULL;`);
@@ -83,7 +86,7 @@ export function createSandboxHeartbeatStore(pool: sql.ConnectionPool, eventHub: 
       }
     },
 
-    async markNeedsAttention(sandboxSessionId, question) {
+    async markNeedsAttention(sandboxSessionId, question, invocationId, invocationCompleted = false) {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
@@ -98,6 +101,52 @@ export function createSandboxHeartbeatStore(pool: sql.ConnectionPool, eventHub: 
           return false;
         }
 
+        let turnStatus: string | undefined;
+        if (invocationId) {
+          const turn = await new sql.Request(transaction)
+            .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+            .input('invocationId', sql.NVarChar(255), invocationId)
+            .query<{ status: string }>(`SELECT status FROM dbo.sandbox_turns WITH (UPDLOCK, ROWLOCK)
+              WHERE sandbox_session_id = @sandboxSessionId AND invocation_id = @invocationId;`);
+          turnStatus = turn.recordset[0]?.status;
+        }
+
+        const attentionQuestion = typeof question === 'string' ? question.trim().slice(0, 500) : '';
+        if (!attentionQuestion && (invocationCompleted || turnStatus === 'completed')) {
+          const ended = await new sql.Request(transaction)
+            .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+            .query(`UPDATE dbo.sandbox_sessions SET status = N'Ended', ended_at = SYSUTCDATETIME(),
+              end_reason = N'idle_expired' WHERE id = @sandboxSessionId AND status = N'Active';`);
+          if ((ended.rowsAffected[0] ?? 0) !== 1) {
+            await transaction.rollback();
+            return false;
+          }
+
+          const summary = 'Sandbox session expired after its invocation completed';
+          const payload = { reason: 'idle_expired', ...(invocationId ? { invocationId } : {}) };
+          const event = await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(taskId))
+            .input('eventType', sql.NVarChar(64), 'sandbox_idle_expired')
+            .input('summary', sql.NVarChar(2000), summary)
+            .input('payload', sql.NVarChar(sql.MAX), JSON.stringify(payload))
+            .query<InsertedCrashEventRow>(`INSERT dbo.task_events (task_id, type, summary, payload, source)
+              OUTPUT CAST(inserted.id AS varchar(19)) AS id, inserted.type, inserted.summary,
+                inserted.payload, CAST(0 AS bit) AS payloadTruncated, inserted.source,
+                inserted.at, CAST(inserted.task_id AS varchar(19)) AS taskId
+              VALUES (@taskId, @eventType, @summary, @payload, N'backend');
+              INSERT dbo.activity (area, kind, title, link)
+              VALUES (N'factory', @eventType, @summary, CONCAT(N'task:', @taskId));`);
+          const row = event.recordset[0];
+          if (!row) throw new Error('Sandbox expiry event insert returned no row');
+          await transaction.commit();
+          eventHub.publish({
+            ...row,
+            payload,
+            at: row.at instanceof Date ? row.at.toISOString() : new Date(row.at).toISOString(),
+          });
+          return true;
+        }
+
         const task = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, BigInt(taskId))
           .query<{ state: string }>('SELECT state FROM dbo.tasks WITH (UPDLOCK, ROWLOCK) WHERE id = @taskId;');
@@ -107,7 +156,6 @@ export function createSandboxHeartbeatStore(pool: sql.ConnectionPool, eventHub: 
           return false;
         }
 
-        const attentionQuestion = typeof question === 'string' ? question.trim().slice(0, 500) : '';
         await new sql.Request(transaction)
           .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
           .input('status', sql.NVarChar(16), attentionQuestion ? 'Ended' : 'Crashed')

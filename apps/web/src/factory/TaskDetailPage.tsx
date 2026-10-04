@@ -43,6 +43,7 @@ interface TaskDetail {
   modelOverride: string | null;
   reasoningOverride: string | null;
   state: TaskState;
+  latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
   attemptCount: number;
   branch: string | null;
   createdAt: string;
@@ -122,6 +123,8 @@ function isTaskDetail(value: unknown): value is TaskDetail {
     (value.modelOverride === null || typeof value.modelOverride === 'string') &&
     (value.reasoningOverride === null || typeof value.reasoningOverride === 'string') &&
     taskStates.includes(value.state as TaskState) && typeof value.attemptCount === 'number' &&
+    (value.latestSessionEndReason === undefined || value.latestSessionEndReason === null ||
+      ['done', 'cancelled', 'crashed', 'idle', 'idle_expired'].includes(String(value.latestSessionEndReason))) &&
     Number.isSafeInteger(value.attemptCount) && value.attemptCount >= 0 &&
     (typeof value.branch === 'string' || value.branch === null) && isDate(value.createdAt) &&
     (value.startedAt === null || isDate(value.startedAt)) &&
@@ -507,9 +510,16 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
               getAccessToken={getAccessToken}
               taskId={task.id}
               state={task.state}
+              latestSessionEndReason={task.latestSessionEndReason}
               onComplete={(state) => setLoaded((current) =>
                 current.key === requestKey && current.value.status === 'ready'
-                  ? { ...current, value: { ...current.value, task: { ...current.value.task, state } } }
+                  ? {
+                    ...current,
+                    value: {
+                      ...current.value,
+                      task: { ...current.value.task, state, latestSessionEndReason: null },
+                    },
+                  }
                   : current)}
             />
             <div className="action-row">

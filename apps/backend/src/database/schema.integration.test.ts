@@ -893,6 +893,67 @@ describe('committed domain schema (groups 1-7)', () => {
     expect(sandbox.recordset).toEqual([{ status: 'Ended', endReason: 'done' }]);
   });
 
+  it('ends an idle-expired completed session without changing the task state', async () => {
+    const eventHub = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, eventHub);
+    const project = await createProjectStore(pool).create({
+      name: 'Idle expiry fixture', repo: `${database}/idle-expiry`, default_branch: 'main',
+      default_agent: 'copilot', policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
+    });
+    const task = await taskStore.create({
+      projectId: project.id, title: 'Continue after expiry', request: 'Continue the completed turn',
+    });
+    if (!task) throw new Error('Idle expiry task was not created');
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    const sandboxSessionId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+      VALUES (${task.id}, N'idle-expiry-session', N'1', N'jarvis-runner-base-1x2', N'1x2',
+        N'jarvis-runner-base@sha256:fixture', N'Active')`);
+    const invocationId = `idle-expiry-${randomUUID()}`;
+    await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .input('invocationId', sql.NVarChar(255), invocationId)
+      .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+        VALUES (@sandboxSessionId, @invocationId, N'task', N'idle-expiry-acp', N'running');`);
+    await taskStore.recordEvent({
+      taskId: task.id,
+      type: 'session_question',
+      summary: 'The agent needs a clarification.',
+      source: 'runner',
+      payload: { invocationId, eventIndex: 1, data: { question: 'Which license?' } },
+    });
+
+    const heartbeatStore = createSandboxHeartbeatStore(pool, eventHub);
+    expect((await heartbeatStore.listRunning()).some((sandbox) =>
+      sandbox.sandboxSessionId === String(sandboxSessionId))).toBe(true);
+    const published: TaskEventMessage[] = [];
+    eventHub.subscribe((event) => published.push(event));
+    expect(await heartbeatStore.markNeedsAttention(
+      String(sandboxSessionId), undefined, invocationId,
+    )).toBe(true);
+
+    const detail = await taskStore.get(task.id, 10, 0);
+    expect(detail).toMatchObject({
+      state: 'NeedsAttention',
+      latestSessionEndReason: 'idle_expired',
+      events: expect.arrayContaining([expect.objectContaining({
+        type: 'sandbox_idle_expired',
+        payload: { reason: 'idle_expired', invocationId },
+      })]),
+    });
+    const turn = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .input('invocationId', sql.NVarChar(255), invocationId)
+      .query<{ status: string }>(`SELECT status FROM dbo.sandbox_turns
+        WHERE sandbox_session_id = @sandboxSessionId AND invocation_id = @invocationId;`);
+    expect(turn.recordset).toEqual([{ status: 'completed' }]);
+    expect(published).toHaveLength(1);
+    expect(published[0]).toMatchObject({ type: 'sandbox_idle_expired', taskId: task.id });
+    expect(await heartbeatStore.markNeedsAttention(
+      String(sandboxSessionId), undefined, invocationId,
+    )).toBe(false);
+  });
+
   it('creates, updates, lists, and archives projects through the SQL store', async () => {
     const store = createProjectStore(pool);
     const repo = `${database}/project`;
