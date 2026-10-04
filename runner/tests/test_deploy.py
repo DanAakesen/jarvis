@@ -37,6 +37,26 @@ def test_definition_uses_small_tiers_and_nonsecret_settings(tier, cpu, memory):
         "JARVIS_DISK_LOW_THRESHOLD_BYTES": str(1024**3),
     }
 
+    enabled = deploy.definition(
+        "registry/runner@sha256:digest", tier, "https://vault.vault.azure.net/",
+        "https://backend.example", "api://00000000-0000-4000-8000-000000000000/.default",
+        github_app_tokens_enabled=True,
+    )
+    assert enabled["environment_variables"]["JARVIS_GITHUB_APP_TOKEN_ENABLED"] == "true"
+    assert "GITHUB_APP_ID" not in enabled["environment_variables"]
+
+
+def test_github_app_token_deployment_flag_is_explicit_and_validated(monkeypatch):
+    monkeypatch.setenv("GITHUB_APP_ID", "123456")
+    monkeypatch.delenv("JARVIS_GITHUB_APP_TOKEN_ENABLED", raising=False)
+    assert deploy._github_app_tokens_enabled("123456") is False
+    assert deploy._github_app_tokens_enabled("123456", "true") is True
+    assert deploy._github_app_tokens_enabled("123456", "false") is False
+    with pytest.raises(ValueError, match="must be true or false"):
+        deploy._github_app_tokens_enabled("123456", "yes")
+    with pytest.raises(ValueError, match="GITHUB_APP_ID is required"):
+        deploy._github_app_tokens_enabled("", "true")
+
 
 def test_disk_low_threshold_setting_is_forwarded_and_validated(monkeypatch):
     monkeypatch.setenv("JARVIS_DISK_LOW_THRESHOLD_BYTES", "2048")

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -474,12 +475,88 @@ def test_configured_live_events_require_valid_task_ids(tmp_path, monkeypatch, ta
 
 def test_git_credential_helper_uses_process_environment(tmp_path):
     helper = app._credential_helper(tmp_path)
-    assert helper.read_text() == (
-        "#!/bin/sh\n"
-        "printf 'username=x-access-token\\npassword=%s\\n' \"$GH_TOKEN\"\n"
-    )
+    content = helper.read_text()
+    assert content.startswith("#!/bin/sh\nexec ")
+    assert str(Path(app.__file__).with_name("git_credential_helper.py")) in content
+    assert content.endswith(' "$@"\n')
     if os.name != "nt":
         assert helper.stat().st_mode & 0o777 == 0o700
+
+
+def test_app_token_tasks_do_not_read_the_legacy_github_secret(monkeypatch):
+    requested = []
+
+    async def read_secret(name):
+        requested.append(name)
+        return f"not-a-real-{name}"
+
+    monkeypatch.setattr(app, "_key_vault_secret", read_secret)
+    credentials = asyncio.run(app._credentials_for("copilot", include_github_token=False))
+    assert credentials == {"copilot_token": "not-a-real-jarvis-copilot"}
+    assert requested == ["jarvis-copilot"]
+
+
+def test_task_uses_an_app_token_and_configures_per_push_credentials(tmp_path, monkeypatch):
+    work_root = tmp_path / "work root"
+    monkeypatch.setattr(app, "WORK_ROOT", work_root)
+    monkeypatch.setattr(app, "session_clients", {})
+    monkeypatch.setattr(app, "session_locks", {})
+    monkeypatch.setenv("JARVIS_BACKEND_URL", "https://backend.example")
+    monkeypatch.setenv("JARVIS_API_SCOPE", "api://00000000-0000-4000-8000-000000000000/.default")
+    monkeypatch.setenv("JARVIS_GITHUB_APP_TOKEN_ENABLED", "true")
+    token_requests = []
+    monkeypatch.setattr(
+        app, "get_installation_token",
+        lambda *args: (token_requests.append(args) or "ghs_app-token", "DanAakesen/jarvis-test-target"),
+    )
+    captured_env = {}
+
+    class Publisher:
+        async def publish(self, *_args):
+            pass
+
+        async def close(self):
+            pass
+
+    class Client:
+        def __init__(self, _command, _cwd, _state, env, **_kwargs):
+            captured_env.update(env)
+
+        async def start(self):
+            pass
+
+        async def run(self, _task):
+            return {"text": "done"}
+
+        async def stop(self):
+            pass
+
+    async def credentials(agent, *, include_github_token=True):
+        assert agent == "copilot"
+        assert include_github_token is False
+        return {"copilot_token": "not-a-real-seat-token"}
+
+    monkeypatch.setattr(app, "RunnerEventPublisher", lambda *_args: Publisher())
+    monkeypatch.setattr(app, "ACPClient", Client)
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    state = app.TaskState("app-token-task", "app-token-session", "copilot", "Work", task_id="42")
+
+    asyncio.run(app._run_task(state))
+
+    assert state.status == "completed"
+    assert token_requests == [(
+        "https://backend.example",
+        "api://00000000-0000-4000-8000-000000000000/.default",
+        "42",
+    )]
+    assert captured_env["GH_TOKEN"] == "ghs_app-token"
+    assert captured_env["GIT_CONFIG_COUNT"] == "2"
+    assert captured_env["GIT_CONFIG_VALUE_0"] == (
+        f"!{shlex.quote(str(work_root / 'app-token-session' / '.git-credential-helper'))}"
+    )
+    assert captured_env["GIT_CONFIG_KEY_1"] == "credential.useHttpPath"
+    assert captured_env["GIT_CONFIG_VALUE_1"] == "true"
+    assert captured_env["JARVIS_TASK_ID"] == "42"
 
 
 def test_acp_loads_a_persisted_session_with_protocol_fixture(tmp_path, monkeypatch):

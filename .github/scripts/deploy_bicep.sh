@@ -19,6 +19,13 @@ if [[ -z "$image" ]]; then
 fi
 
 parameters=(backendIdentityResourceId="$identity" sqlAdminGroupObjectId="$sql_group")
+if [[ -n "${GITHUB_APP_ID:-}" ]]; then
+  [[ "$GITHUB_APP_ID" =~ ^[1-9][0-9]{0,19}$ ]] || {
+    echo "::error::GITHUB_APP_ID must be a positive decimal identifier"
+    exit 1
+  }
+  parameters+=(githubAppId="$GITHUB_APP_ID")
+fi
 if [[ -n "${ENTRA_JARVIS_AGENT_OBJECT_ID:-}" ]]; then
   parameters+=(jarvisAgentObjectId="$ENTRA_JARVIS_AGENT_OBJECT_ID")
 fi

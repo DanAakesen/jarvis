@@ -40,8 +40,29 @@ async function requestJson(
     redirect: 'error',
   });
   if (!response.ok) throw new Error('GitHub App request failed');
-  const text = await response.text();
-  if (Buffer.byteLength(text) > maxResponseBytes) throw new Error('GitHub App response is too large');
+  const contentLength = response.headers.get('content-length');
+  if (contentLength !== null && Number(contentLength) > maxResponseBytes) {
+    throw new Error('GitHub App response is too large');
+  }
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('GitHub App response is invalid');
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxResponseBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error('GitHub App response is too large');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const text = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
   const payload = object(JSON.parse(text) as unknown);
   if (!payload) throw new Error('GitHub App response is invalid');
   return payload;

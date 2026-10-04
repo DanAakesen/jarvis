@@ -92,6 +92,7 @@ stateDiagram-v2
 - The authenticated tasks API creates board tasks only for active projects, lists tasks with project, agent, state, period and search filters, and returns task details with a bounded, pageable event history. API responses are capped at 1 MiB; oversized event payloads are explicitly marked truncated. New tasks always start Ready and record their creation event.
 - Task state belongs to the backend. State changes must follow this lifecycle; clients cannot write state directly, and Done requires verified project-policy/GitHub completion.
 - Coding agents push small work-in-progress commits to the existing task branch after each meaningful step. They never force-push or push to `main`, and report commit or push failures.
+- Git pushes use a one-hour GitHub App installation token scoped to the task's repository. The runner authenticates to the backend for each Git credential request; the App private key remains in Key Vault and is never sent to a sandbox. Keep the legacy GitHub token path available until the App flow passes its live sandbox push check.
 - **Checks loop:** when a pull request's checks fail, Jarvis sends the failing log back to the same task; the agent fixes and pushes again.
 - **Done** follows the project policy and verified GitHub results, never the agent's own report.
 - Show observed milestones; use percentages only when measurable. Show stale or disconnected status and reconcile after reconnect.

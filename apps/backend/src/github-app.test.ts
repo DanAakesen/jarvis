@@ -71,5 +71,8 @@ describe('GitHub App installation tokens', () => {
 
     fetchImpl.mockResolvedValueOnce(new Response('{}', { status: 403 }));
     await expect(issuer.issue('DanAakesen/repo')).rejects.toThrow('GitHub App request failed');
+
+    fetchImpl.mockResolvedValueOnce(new Response('x'.repeat(16 * 1024 + 1)));
+    await expect(issuer.issue('DanAakesen/repo')).rejects.toThrow('response is too large');
   });
 });

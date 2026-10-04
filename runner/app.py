@@ -15,8 +15,10 @@ import logging
 import math
 import os
 import re
+import shlex
 import shutil
 import socket
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
@@ -32,6 +34,7 @@ from azure.ai.agentserver.invocations import InvocationAgentServerHost
 import httpx
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from github_token import get_installation_token
 
 
 APP_VERSION = "0.2.0"
@@ -675,18 +678,18 @@ async def _renew_codex_login(session_id: str, min_days_left: float, force: bool 
         auth_path.unlink(missing_ok=True)
 
 
-async def _credentials_for(agent: str) -> dict[str, str]:
-    github_token = await _key_vault_secret(GITHUB_TOKEN_SECRET)
+async def _credentials_for(agent: str, *, include_github_token: bool = True) -> dict[str, str]:
+    github_token = await _key_vault_secret(GITHUB_TOKEN_SECRET) if include_github_token else None
     if agent == "copilot":
-        return {
-            "github_token": github_token,
-            "copilot_token": await _key_vault_secret(COPILOT_TOKEN_SECRET),
-        }
+        credentials = {"copilot_token": await _key_vault_secret(COPILOT_TOKEN_SECRET)}
+        if github_token is not None:
+            credentials["github_token"] = github_token
+        return credentials
     if agent == "codex":
-        return {
-            "github_token": github_token,
-            "codex_login": await _key_vault_secret("codex-login"),
-        }
+        credentials = {"codex_login": await _key_vault_secret("codex-login")}
+        if github_token is not None:
+            credentials["github_token"] = github_token
+        return credentials
     raise ValueError("agent must be 'copilot' or 'codex'")
 
 
@@ -933,9 +936,10 @@ def _agent_command(agent: str, model: str | None = None) -> list[str]:
 
 def _credential_helper(worktree: Path) -> Path:
     helper = worktree / ".git-credential-helper"
+    helper_script = Path(__file__).with_name("git_credential_helper.py")
     helper.write_text(
         "#!/bin/sh\n"
-        "printf 'username=x-access-token\\npassword=%s\\n' \"$GH_TOKEN\"\n",
+        f"exec {shlex.quote(sys.executable)} {shlex.quote(str(helper_script))} \"$@\"\n",
         encoding="utf-8",
     )
     helper.chmod(0o700)
@@ -987,7 +991,19 @@ async def _run_task(
             return
         client = session_clients.get(state.session_id)
         if client is None:
-            credentials = await _credentials_for(state.agent)
+            app_tokens_enabled = (
+                state.task_id is not None and os.environ.get("JARVIS_GITHUB_APP_TOKEN_ENABLED") == "true"
+            )
+            if app_tokens_enabled:
+                credentials = await _credentials_for(state.agent, include_github_token=False)
+                backend_url = os.environ["JARVIS_BACKEND_URL"]
+                api_scope = os.environ["JARVIS_API_SCOPE"]
+                token, _repository = await asyncio.to_thread(
+                    get_installation_token, backend_url, api_scope, state.task_id,
+                )
+                credentials["github_token"] = token
+            else:
+                credentials = await _credentials_for(state.agent)
             if state.cancel_requested:
                 return
             env = os.environ.copy()
@@ -997,11 +1013,16 @@ async def _run_task(
             # runner-owned filesystem instead.
             env["HOME"] = str(worktree)
             env["XDG_CACHE_HOME"] = str(worktree / ".cache")
-            env["GH_TOKEN"] = credentials["github_token"]
+            if "github_token" in credentials:
+                env["GH_TOKEN"] = credentials["github_token"]
             env["GIT_CONFIG_NOSYSTEM"] = "1"
-            env["GIT_CONFIG_COUNT"] = "1"
+            env["GIT_CONFIG_COUNT"] = "2"
             env["GIT_CONFIG_KEY_0"] = "credential.helper"
-            env["GIT_CONFIG_VALUE_0"] = f"!{_credential_helper(worktree)}"
+            env["GIT_CONFIG_VALUE_0"] = f"!{shlex.quote(str(_credential_helper(worktree)))}"
+            env["GIT_CONFIG_KEY_1"] = "credential.useHttpPath"
+            env["GIT_CONFIG_VALUE_1"] = "true"
+            if state.task_id is not None:
+                env["JARVIS_TASK_ID"] = state.task_id
             if state.agent == "copilot":
                 env["COPILOT_GITHUB_TOKEN"] = credentials["copilot_token"]
             else:
@@ -1245,7 +1266,10 @@ async def invoke(request: Request) -> Response:
     if payload.get("probe") == "key-vault":
         credentials: dict[str, str] = {}
         try:
-            credentials = await _credentials_for(agent)
+            if os.environ.get("JARVIS_GITHUB_APP_TOKEN_ENABLED") == "true":
+                credentials = await _credentials_for(agent, include_github_token=False)
+            else:
+                credentials = await _credentials_for(agent)
             return JSONResponse({"key_vault_access": True, "session_id": session_id})
         except Exception:
             # Keep probe responses Boolean-only so an exception cannot expose
