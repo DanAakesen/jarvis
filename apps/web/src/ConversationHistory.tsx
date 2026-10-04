@@ -53,11 +53,6 @@ export function ConversationHistory({
   const [turnError, setTurnError] = useState('');
 
   useEffect(() => {
-    setWorking('chat-turn', sending);
-    return () => setWorking('chat-turn', false);
-  }, [sending, setWorking]);
-
-  useEffect(() => {
     let active = true;
     void loadConversationHistory(client, config).then((page) => {
       if (!active) return;
@@ -100,6 +95,7 @@ export function ConversationHistory({
     event.preventDefault();
     const text = draft.trim();
     if (!text || sending) return;
+    setWorking('chat-turn', true);
     setSending(true);
     setTurnError('');
     setHistoryError('');
@@ -141,6 +137,7 @@ export function ConversationHistory({
         setReload((value) => value + 1);
       }
     } finally {
+      setWorking('chat-turn', false);
       setSending(false);
     }
   }

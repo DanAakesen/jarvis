@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ConversationHistory } from './ConversationHistory';
+import { JarvisActivityProvider } from './activity-provider';
+import { useJarvisActivity } from './activity-context';
 
 const { loadConversationHistory, createChatSession, sendChatTurn } = vi.hoisted(() => ({
   loadConversationHistory: vi.fn(),
@@ -38,6 +40,11 @@ function renderConversation(historyRefresh = 0) {
       <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
     </MemoryRouter>,
   );
+}
+
+function ActivityProbe() {
+  const { working } = useJarvisActivity();
+  return <output data-testid="activity">{working ? 'working' : 'idle'}</output>;
 }
 
 beforeEach(() => {
@@ -150,6 +157,31 @@ describe('ConversationHistory', () => {
       expect.any(Function),
       expect.any(Function),
     );
+  });
+
+  it('keeps chat activity active until an in-flight turn settles after unmount', async () => {
+    let finish: ((value: typeof assistantMessage) => void) | undefined;
+    sendChatTurn.mockImplementation(async () => new Promise((resolve) => { finish = resolve; }));
+    const content = (showConversation: boolean) => (
+      <JarvisActivityProvider>
+        <MemoryRouter>
+          <ActivityProbe />
+          {showConversation && <ConversationHistory client={client} config={config} />}
+        </MemoryRouter>
+      </JarvisActivityProvider>
+    );
+    const view = render(content(true));
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'Hello Jarvis' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(screen.getByTestId('activity').textContent).toBe('working');
+
+    view.rerender(content(false));
+    expect(screen.getByTestId('activity').textContent).toBe('working');
+    finish?.(assistantMessage);
+    await waitFor(() => expect(screen.getByTestId('activity').textContent).toBe('idle'));
   });
 
   it('shows partial text and recovery guidance after an interrupted reply', async () => {
