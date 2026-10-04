@@ -7,6 +7,7 @@ import { JarvisPage } from './JarvisPage';
 import { NotFoundPage, SignInPage } from './pages';
 import { SettingsPage } from './SettingsPage';
 import { useSignIn, type SignInSession } from './useSignIn';
+import { Workspace } from './Workspace';
 
 type ShellIconName = 'home' | 'factory' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close';
 
@@ -146,6 +147,11 @@ function Shell({ signedIn, config, session }: { signedIn: boolean; config: Publi
       </header>
       <main id="content" className="shell-main" tabIndex={-1}>
         <Outlet />
+        {signedIn && (
+          <div className="workspace-shell-area" hidden={pathname !== '/'}>
+            <Workspace views={[]} />
+          </div>
+        )}
       </main>
       <footer className="bottom-bar">
         {signedIn && config.backendUrl && (
