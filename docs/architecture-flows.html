@@ -384,7 +384,7 @@ const FLOWS = [
     summary: "The backend checks each running task, stores its events, and updates the board and voice.",
     nodes: [
       { id: "ctx", lane: "runner", col: 1, s: "context", from: [[5, "work"]], t: "From 5: agent working", d: "Events recorded per invocation." },
-      { id: "live", lane: "runner", col: 2, s: "assumed", t: "Runner pushes live events", d: "Files changed, tests, commits: sent to the backend as they happen.", ev: "Not built. The runner already records these events (prototype telemetry)." },
+      { id: "live", lane: "runner", col: 2, s: "proven", t: "Runner pushes live events", d: "Task-scoped events go to the backend as they happen.", ev: "P2-03 adds authenticated POST /factory/sandbox-events, task-ID propagation, bounded ordered delivery, and a dedicated Jarvis.Runner.Events role. Offline contracts pass; Azure role assignment and live delivery remain post-merge checks." },
       { id: "poll", lane: "backend", col: 2, s: "proven", t: "Sandbox heartbeat", d: "Checks active invocations about once a minute; updates last_heartbeat_at.", ev: "P2-06 tests the backend poller against recorded Foundry responses. It reloads active sessions at startup and keeps registered sessions in memory, so it does not query SQL while idle. Live Azure polling remains unverified." },
       { id: "store", lane: "data", col: 3, s: "proven", t: "Store task event and activity", d: "Both records commit together in Azure SQL.", ev: "P1-05's task-store event API and state transitions write task_events and activity in one transaction." },
       { id: "push", lane: "backend", col: 4, s: "proven", t: "Publish to in-process hub", d: "Connected subscribers receive committed events synchronously.", ev: "Backend tests verify publication follows SQL persistence and reaches a subscriber within one second. P1-06 adds the authenticated SSE endpoint, heartbeat and replay.", href: DOC.sse },
@@ -393,7 +393,7 @@ const FLOWS = [
       { id: "say", lane: "voice", col: 7, s: "proven", t: "Speak the answer", d: "Ryan HD in English, Harper in Danish.", ev: "Voice prototype: replies spoken in Danish (Harper) and English (Ryan HD, British butler persona) through Voice Live.", href: VR },
     ],
     edges: [
-      ["ctx", "live", "docs", ""], ["live", "store", "docs", "event"], ["ctx", "poll", "proven", "heartbeat"], ["poll", "store", "docs", ""], ["store", "push", "proven", "publish"],
+      ["ctx", "live", "proven", ""], ["live", "store", "proven", "event"], ["ctx", "poll", "proven", "heartbeat"], ["poll", "store", "docs", ""], ["store", "push", "proven", "publish"],
       ["push", "card", "docs", "event"], ["store", "sum", "docs", "read"], ["sum", "say", "proven", "text"],
     ],
   },

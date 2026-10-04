@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
+import type { TokenVerifier } from '../auth/verify.js';
 import type { RunningTaskContextSnapshot, TaskDetail, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -62,7 +63,9 @@ const context: RunningTaskContextSnapshot = {
 
 function fixture(
   overrides: Partial<TaskStore> = {},
-  auth = async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
+  auth: TokenVerifier = async () => ({
+    objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan',
+  }),
 ) {
   const store: TaskStore = {
     create: vi.fn(async () => task),
@@ -181,6 +184,69 @@ describe('factory tasks API', () => {
     expect(response.json()).toEqual(context);
     expect(store.getRunningContext).toHaveBeenCalledOnce();
     expect(taskList.statusCode).toBe(403);
+  });
+
+  it('records validated runner events through the task store', async () => {
+    const recordEvent = vi.fn(async (event) => ({
+      id: '21',
+      taskId: event.taskId,
+      type: event.type,
+      summary: event.summary ?? null,
+      payload: event.payload ?? null,
+      payloadTruncated: false,
+      source: event.source,
+      at: task.createdAt,
+    } satisfies TaskEventMessage));
+    const { app, store } = fixture(
+      { recordEvent },
+      async () => ({
+        kind: 'jarvis-runner',
+        objectId: '11111111-1111-4111-8111-111111111111',
+        tenantId: config.auth.tenantId,
+      }),
+    );
+    const response = await app.inject({
+      method: 'POST',
+      url: '/factory/sandbox-events',
+      headers,
+      payload: { taskId: '42', type: 'agent_output', summary: 'Updating tests', payload: { text: '...' } },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual({ eventId: '21' });
+    expect(recordEvent).toHaveBeenCalledWith({
+      taskId: '42', type: 'agent_output', summary: 'Updating tests', payload: { text: '...' }, source: 'runner',
+    });
+    expect(store.recordEvent).toBe(recordEvent);
+  });
+
+  it('rejects runner events from users and validates event identifiers', async () => {
+    const user = fixture();
+    expect((await user.app.inject({
+      method: 'POST',
+      url: '/factory/sandbox-events',
+      headers,
+      payload: { taskId: '42', type: 'started' },
+    })).statusCode).toBe(403);
+    expect(user.store.recordEvent).not.toHaveBeenCalled();
+
+    const runner = fixture({}, async () => ({
+      kind: 'jarvis-runner',
+      objectId: '11111111-1111-4111-8111-111111111111',
+      tenantId: config.auth.tenantId,
+    }));
+    for (const payload of [
+      { taskId: '0', type: 'started' },
+      { taskId: '9223372036854775808', type: 'started' },
+      { taskId: '42', type: 'Invalid event' },
+      { taskId: '42', type: 'started', summary: 'x'.repeat(2001) },
+    ]) {
+      const response = await runner.app.inject({
+        method: 'POST', url: '/factory/sandbox-events', headers, payload,
+      });
+      expect(response.statusCode, JSON.stringify(payload)).toBe(400);
+    }
+    expect(runner.store.recordEvent).not.toHaveBeenCalled();
   });
 
   it('returns 404 for missing tasks and rejects malformed identifiers', async () => {

@@ -37,8 +37,8 @@ export interface FoundryClientOptions {
 export interface RequestOptions { signal?: AbortSignal }
 /** Effective task configuration; the dispatcher resolves overrides before settings defaults. */
 export type TaskRequest =
-  | { agent: "copilot"; task: string; model?: string }
-  | { agent: "codex"; task: string; model?: string; reasoning?: string };
+  | { agent: "copilot"; task: string; taskId?: string; model?: string }
+  | { agent: "codex"; task: string; taskId?: string; model?: string; reasoning?: string };
 export interface InvocationAccepted {
   invocationId: string;
   sessionId: string;
@@ -95,12 +95,23 @@ function option(value: unknown, name: string, limit: number): string | undefined
 function taskBody(request: TaskRequest): JsonObject {
   const model = option(request.model, "model", 100);
   const reasoning = request.agent === "codex" ? option(request.reasoning, "reasoning", 32) : undefined;
+  const taskId = taskIdentifier(request.taskId);
   return {
     agent: agent(request.agent),
     task: text(request.task, "task"),
+    ...(taskId === undefined ? {} : { task_id: taskId }),
     ...(model === undefined ? {} : { model }),
     ...(reasoning === undefined ? {} : { reasoning }),
   };
+}
+
+function taskIdentifier(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !/^[1-9][0-9]{0,18}$/u.test(value) ||
+      BigInt(value) > 9_223_372_036_854_775_807n) {
+    throw new TypeError("taskId must be a positive SQL bigint identifier");
+  }
+  return value;
 }
 
 function agent(value: unknown): CodingAgent {
@@ -165,9 +176,16 @@ export class FoundryClient {
     return this.accepted(body, "start", undefined, request.agent);
   }
 
-  async steer(sessionId: string, codingAgent: CodingAgent, message: string, options: RequestOptions = {}): Promise<InvocationAccepted> {
+  async steer(
+    sessionId: string,
+    codingAgent: CodingAgent,
+    message: string,
+    options: RequestOptions & { taskId?: string } = {},
+  ): Promise<InvocationAccepted> {
+    const taskId = taskIdentifier(options.taskId);
     const body = await this.runtimeRequest("steer", "protocols/invocations", "POST", {
       agent: agent(codingAgent), mode: "steer", message: text(message, "message"),
+      ...(taskId === undefined ? {} : { task_id: taskId }),
     }, identifier(sessionId, "sessionId"), options);
     return this.accepted(body, "steer", sessionId, codingAgent);
   }

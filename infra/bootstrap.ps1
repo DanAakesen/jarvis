@@ -9,8 +9,8 @@
       - Resource group
       - Entra app 'jarvis-github-deploy' with a GitHub OIDC federated credential (main branch, immutable-ID subject),
         Contributor and Role Based Access Control Administrator on the resource group
-      - Entra app 'jarvis-api' (scope access_as_user, only Dan assigned; application role Jarvis.Tools
-        for the hosted Jarvis agent) and 'jarvis-web' (SPA, pre-authorized)
+      - Entra app 'jarvis-api' (scope access_as_user, roles Jarvis.Tools and
+        Jarvis.Runner.Events) and 'jarvis-web' (SPA, pre-authorized)
       - User-assigned managed identity for the backend, and the Entra group 'jarvis-sql-admins'
         (Dan + backend identity) used as the Azure SQL Entra admin
       - The private GitHub repository and its Actions variables (IDs only; no secrets)
@@ -23,6 +23,7 @@
     ./infra/bootstrap.ps1
     ./infra/bootstrap.ps1 -WebRedirectUris 'http://localhost:5173','https://<name>.azurestaticapps.net'
     ./infra/bootstrap.ps1 -JarvisAgentPrincipalId '<instance_identity.principal_id of the deployed agent>'
+    ./infra/bootstrap.ps1 -JarvisRunnerPrincipalIds '<base-1x2-id>','<base-2x4-id>','<dotnet-1x2-id>','<dotnet-2x4-id>'
 #>
 [CmdletBinding()]
 param(
@@ -35,7 +36,9 @@ param(
     [string[]]$WebRedirectUris = @('http://localhost:5173'),
     # Hosted Jarvis agent identity; known only after the agent is deployed. Empty skips the assignment.
     [ValidatePattern('^$|^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$')]
-    [string]$JarvisAgentPrincipalId = ''
+    [string]$JarvisAgentPrincipalId = '',
+    [ValidatePattern('^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$')]
+    [string[]]$JarvisRunnerPrincipalIds = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -160,13 +163,18 @@ $webApp = Get-OrCreateApp 'jarvis-web'
 $apiApp = Invoke-Graph GET "/applications/$($apiApp.id)"
 $scope = $apiApp.api.oauth2PermissionScopes | Where-Object { $_.value -eq 'access_as_user' }
 $scopeId = if ($scope) { $scope.id } else { [guid]::NewGuid().ToString() }
-# Application role for the hosted Jarvis agent's app-only token; the backend accepts it only on the tool routes.
+# Separate app roles scope the hosted Jarvis agent and coding runners to their backend routes.
 $toolsRole = @($apiApp.appRoles) | Where-Object { $_ -and $_.value -eq 'Jarvis.Tools' } | Select-Object -First 1
 $toolsRoleId = if ($toolsRole) { $toolsRole.id } else { [guid]::NewGuid().ToString() }
-$appRoles = @(@($apiApp.appRoles) | Where-Object { $_ -and $_.value -ne 'Jarvis.Tools' } |
+$runnerEventsRole = @($apiApp.appRoles) | Where-Object { $_ -and $_.value -eq 'Jarvis.Runner.Events' } | Select-Object -First 1
+$runnerEventsRoleId = if ($runnerEventsRole) { $runnerEventsRole.id } else { [guid]::NewGuid().ToString() }
+$appRoles = @(@($apiApp.appRoles) | Where-Object { $_ -and $_.value -notin @('Jarvis.Tools', 'Jarvis.Runner.Events') } |
     Select-Object id, value, allowedMemberTypes, isEnabled, displayName, description) + @(@{   # origin is read-only
     id = $toolsRoleId; value = 'Jarvis.Tools'; allowedMemberTypes = @('Application'); isEnabled = $true
     displayName = 'Call Jarvis tools'; description = 'The hosted Jarvis agent lists and calls backend tools.'
+}) + @(@{
+    id = $runnerEventsRoleId; value = 'Jarvis.Runner.Events'; allowedMemberTypes = @('Application'); isEnabled = $true
+    displayName = 'Record sandbox events'; description = 'A coding runner records events for its assigned task.'
 })
 Invoke-Graph PATCH "/applications/$($apiApp.id)" @{
     identifierUris = @("api://$($apiApp.appId)")
@@ -208,6 +216,19 @@ if ($JarvisAgentPrincipalId) {
         } | Out-Null
     }
     Write-Host "   Jarvis.Tools assigned to agent $JarvisAgentPrincipalId"
+}
+foreach ($runnerPrincipalId in @($JarvisRunnerPrincipalIds | Sort-Object -Unique)) {
+    if ($runnerPrincipalId -eq $OwnerObjectId -or $runnerPrincipalId -eq $JarvisAgentPrincipalId) {
+        throw 'A runner principal ID must differ from the owner and hosted Jarvis agent IDs.'
+    }
+    $runnerAssigned = @((Invoke-Graph GET "/servicePrincipals/$($apiSp.id)/appRoleAssignedTo").value) |
+        Where-Object { $_.principalId -eq $runnerPrincipalId -and $_.appRoleId -eq $runnerEventsRoleId }
+    if (-not $runnerAssigned) {
+        Invoke-Graph POST "/servicePrincipals/$($apiSp.id)/appRoleAssignedTo" @{
+            principalId = $runnerPrincipalId; resourceId = $apiSp.id; appRoleId = $runnerEventsRoleId
+        } | Out-Null
+    }
+    Write-Host "   Jarvis.Runner.Events assigned to runner $runnerPrincipalId"
 }
 Write-Host "   redirect URIs: $($WebRedirectUris -join ', ')"
 

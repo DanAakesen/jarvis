@@ -47,6 +47,14 @@ describe("Foundry runner wire contract", () => {
     });
   });
 
+  it("passes the SQL task ID for runner event attribution", async () => {
+    const { client, fetch } = setup();
+    await client.startTask({ agent: "copilot", task: "Work", taskId: "42" });
+    expect(request(fetch).body).toEqual({ agent: "copilot", task: "Work", task_id: "42" });
+    await expect(client.startTask({ agent: "copilot", task: "Work", taskId: "9223372036854775808" }))
+      .rejects.toBeInstanceOf(TypeError);
+  });
+
   it("omits provider defaults and reasoning for Copilot", async () => {
     const { client, fetch } = setup();
     await client.startTask({ agent: "copilot", task: "Work", model: "default" });
@@ -59,6 +67,14 @@ describe("Foundry runner wire contract", () => {
     expect(accepted.invocationId).toBe("capture-steer");
     expect(request(fetch).url.searchParams.get("agent_session_id")).toBe("capture-session");
     expect(request(fetch).body).toEqual({ agent: "copilot", mode: "steer", message: "Change the requirement" });
+  });
+
+  it("keeps the task ID when a steer starts a new runner invocation", async () => {
+    const { client, fetch } = setup(fixtures["steer"]);
+    await client.steer("capture-session", "copilot", "Change the requirement", { taskId: "42" });
+    expect(request(fetch).body).toEqual({
+      agent: "copilot", mode: "steer", message: "Change the requirement", task_id: "42",
+    });
   });
 
   it.each(["pause_active", "pause_idle"])("preserves %s acknowledgement without declaring the turn paused", async (fixture) => {
@@ -77,6 +93,12 @@ describe("Foundry runner wire contract", () => {
     expect((await client.resume("capture-session", { agent: "copilot", task: "Continue" })).sessionId).toBe("capture-session");
     expect(request(fetch).body).toEqual({ agent: "copilot", task: "Continue" });
     expect(request(fetch).url.searchParams.get("agent_session_id")).toBe("capture-session");
+  });
+
+  it("passes the task ID when resuming runner events", async () => {
+    const { client, fetch } = setup(fixtures["resume"]);
+    await client.resume("capture-session", { agent: "copilot", task: "Continue", taskId: "42" });
+    expect(request(fetch).body).toEqual({ agent: "copilot", task: "Continue", task_id: "42" });
   });
 
   it("forwards Codex model and reasoning when resuming", async () => {

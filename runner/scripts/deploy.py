@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -29,15 +30,33 @@ def az(subscription: str, *arguments: str):
     return json.loads(result.stdout) if result.stdout.strip() else None
 
 
-def definition(image: str, tier: str, vault_uri: str) -> dict:
+def definition(image: str, tier: str, vault_uri: str, backend_url: str, api_scope: str) -> dict:
     cpu, memory = TIERS[tier]
     return {
         "kind": "hosted", "cpu": cpu, "memory": memory,
         "container_configuration": {"image": image},
         "protocol_versions": [{"protocol": "invocations", "version": "2.0.0"}],
-        "environment_variables": {"KEY_VAULT_URI": vault_uri, "JARVIS_WORK_ROOT": "/files/jarvis"},
+        "environment_variables": {
+            "KEY_VAULT_URI": vault_uri,
+            "JARVIS_WORK_ROOT": "/files/jarvis",
+            "JARVIS_BACKEND_URL": backend_url,
+            "JARVIS_API_SCOPE": api_scope,
+        },
         "session_configuration": {"idle_timeout_seconds": 120},
     }
+
+
+def backend_settings(outputs: dict, bootstrap: dict) -> tuple[str, str]:
+    hostname = outputs["backendFqdn"]["value"]
+    backend_url = f"https://{hostname}"
+    parsed = urlparse(backend_url)
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.port is not None
+            or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
+        raise ValueError("Invalid backend URL")
+    identifier_uri = bootstrap["api"]["identifierUri"]
+    if not re.fullmatch(r"api://[\da-fA-F]{8}(-[\da-fA-F]{4}){3}-[\da-fA-F]{12}", identifier_uri):
+        raise ValueError("Invalid Jarvis API identifier URI")
+    return backend_url, f"{identifier_uri}/.default"
 
 
 class Foundry:
@@ -112,7 +131,16 @@ def grant_named(subscription: str, principal: str, role: str, scope: str) -> Non
     grant(subscription, principal, definitions[0]["name"], scope)
 
 
-def deploy(foundry: Foundry, subscription: str, outputs: dict, image: str, name: str, tier: str) -> dict:
+def deploy(
+    foundry: Foundry,
+    subscription: str,
+    outputs: dict,
+    image: str,
+    name: str,
+    tier: str,
+    backend_url: str,
+    api_scope: str,
+) -> dict:
     admin = outputs["foundryAdminEndpoint"]["value"]
     runtime = outputs["foundryRuntimeEndpoint"]["value"]
     vault_name = outputs["keyVaultName"]["value"]
@@ -125,7 +153,9 @@ def deploy(foundry: Foundry, subscription: str, outputs: dict, image: str, name:
     foundry.wait_for_route(f"{admin}/connections?api-version=v1")
     versions = f"{admin}/agents/{name}/versions"
     version = foundry.request("POST", f"{versions}?api-version=v1",
-                              {"definition": definition(image, tier, vault["properties"]["vaultUri"])})
+                              {"definition": definition(
+                                  image, tier, vault["properties"]["vaultUri"], backend_url, api_scope,
+                              )})
     version_number = version.get("version")
     if version_number is None:
         raise RuntimeError("Foundry did not return an agent version")
@@ -182,13 +212,14 @@ def main() -> None:
     parser.add_argument("--state", type=Path, required=True)
     args = parser.parse_args()
     outputs = json.loads(args.outputs.read_text())
+    bootstrap = json.loads(Path("infra/bootstrap.output.json").read_text())
+    backend_url, api_scope = backend_settings(outputs, bootstrap)
     for key, suffix in (("foundryAdminEndpoint", ".services.ai.azure.com"),
                         ("foundryRuntimeEndpoint", ".cognitiveservices.azure.com")):
         endpoint = urlparse(outputs[key]["value"])
         if endpoint.scheme != "https" or not (endpoint.hostname or "").endswith(suffix):
             raise ValueError(f"Invalid {key}")
     # Bootstrap grants ARM Contributor and RBAC Administrator, not Foundry data-plane access.
-    bootstrap = json.loads(Path("infra/bootstrap.output.json").read_text())
     scope = (f"/subscriptions/{args.subscription}/resourceGroups/rg-jarvis/providers/"
              f"Microsoft.CognitiveServices/accounts/{outputs['foundryAccountName']['value']}")
     project = f"{scope}/projects/{outputs['foundryProjectName']['value']}"
@@ -210,7 +241,10 @@ def main() -> None:
                 raise RuntimeError("ACR image has no manifest digest")
             image = f"{outputs['containerRegistryLoginServer']['value']}/jarvis-runner-{tech}@{digest}"
             for tier in TIERS:
-                result = deploy(foundry, args.subscription, outputs, image, f"jarvis-runner-{tech}-{tier}", tier)
+                result = deploy(
+                    foundry, args.subscription, outputs, image, f"jarvis-runner-{tech}-{tier}",
+                    tier, backend_url, api_scope,
+                )
                 results.append(result)
                 args.state.write_text(json.dumps(results, indent=2) + "\n")
     finally:

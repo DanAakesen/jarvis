@@ -118,13 +118,15 @@ child logger bindings as well as log arguments, dropping request/provider secret
 
 The factory module exposes authenticated `POST /factory/tasks`, filtered and
 paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event
-history. It validates active projects and bounded request/query inputs. Clients
-cannot update task state directly; the task store serializes backend transitions,
-checks the lifecycle, and records state events atomically. Completion can reach
-Done only through a trusted call that confirms completion. The browser and hosted
-agent service identities do not receive a task-state bypass. Responses are capped
-at 1 MiB, and event payloads above 4 KiB are omitted with an explicit truncation
-flag.
+history. It validates active projects and bounded request/query inputs. Runner
+identities with the `Jarvis.Runner.Events` app role may only call
+`POST /factory/sandbox-events`; it validates task/event fields and records source
+`runner` through `TaskStore.recordEvent`. Clients cannot update task state directly;
+the task store serializes backend transitions, checks the lifecycle, and records
+state events atomically. Completion can reach Done only through a trusted call that
+confirms completion. The browser and hosted agent service identities do not receive
+a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
+are omitted with an explicit truncation flag.
 
 `GET /operations/sleep` reports the Container App's configured minimum replicas;
 `PUT /operations/sleep` accepts only awake (1) or asleep (0). Both routes use the
@@ -174,16 +176,18 @@ permission receive 403. These early denials retain CORS response headers only
 for the exact approved browser origins, so sign-in can inspect their status.
 ID tokens and other app-only tokens are not authorized here.
 
-The hosted Jarvis agent is the one service identity (P4-01). When
+The hosted Jarvis agent is the tools service identity (P4-01). When
 `ENTRA_JARVIS_AGENT_OBJECT_ID` is set, a verified token whose `oid` matches it must
 carry the `Jarvis.Tools` application role, no delegated `scp`, and `idtyp` absent
 or `app`; otherwise 403. Its principal goes to `request.agentPrincipal`, never
 `request.principal`, and only routes with `config: { jarvisAgent: true }` accept it:
-`GET /tools`, `GET /factory/context` and `POST /tools/{name}`. Every other route,
-including `/me` and the task APIs, returns 403. Unset or empty configuration
-denies the agent. The role is created by `infra/bootstrap.ps1`; `jarvis-api`
-already requires role assignment, so Entra issues the agent a token only after
-`-JarvisAgentPrincipalId` assigns the role (P4-08).
+`GET /tools`, `GET /factory/context`, and `POST /tools/{name}`. Coding runner
+identities receive a separate `Jarvis.Runner.Events` app role and are accepted only
+on `POST /factory/sandbox-events`; their principal is kept separately as
+`request.runnerPrincipal`. The bootstrap script assigns this role only to the
+runner principals supplied after Runner deploy. All other routes, including `/me`
+and task APIs, reject runner identities. `jarvis-api` requires role assignment, so
+Entra issues app-only tokens only to explicitly assigned principals.
 
 JWKS lookups have a five-second timeout, a 30-second refresh cooldown and a
 ten-minute key cache. Provider outages fail closed. Only object ID, tenant ID,
@@ -394,7 +398,7 @@ These boxes are responsibilities; they do not each need a separate service.
 | Retries | Attempt count and next-attempt time on the task row; after the limit, Needs attention. |
 | Sandbox heartbeat | At startup, the backend loads active sandbox turns once; the dispatcher registers new turns. Each registered invocation is checked immediately and about once a minute, and `last_heartbeat_at` is updated after a valid response. The poller holds active sessions in memory and makes no recurring SQL reads while idle. |
 | Crash detection | Two consecutive HTTP 424/404/5xx responses, with a confirming poll after 30 s; the task and sandbox session are updated in one transaction, then the committed task event is published through the in-process hub. Event gaps alone never trigger it (L22). |
-| Live progress | The runner pushes sandbox events to the backend; every runner event is stored. |
+| Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. Browser streaming is P1-06. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`. No polling. |
 | Board updates | The backend pushes to the board with SSE; the browser reconnects and reconciles. |
 | Idle | No SQL queries while no task is Ready, Running, or waiting for a retry. The dispatcher wakes on task changes and on the next retry time, not by polling. |
@@ -453,8 +457,14 @@ unverified.
 - Invocation metadata is stored separately for each turn, with path-safe IDs and
   backward reads of earlier session records. Idle recreation retains earlier
   status lookups; prompts, results, and credentials are omitted (L28).
-- Live event push (#29) and coordinated renewal scheduling (#34) remain later
-  work. P2-09 prepends task-branch commit/push instructions to every ACP prompt,
+- P2-03 sends runner events in order using an app-only token for
+  `api://<jarvis-api>/.default`. The runner deployment receives the backend origin
+  and API scope; `infra/bootstrap.ps1 -JarvisRunnerPrincipalIds ...` assigns the
+  separate events role to its four runner identities. Each event is bounded to
+  256 KiB; a failed delivery marks the invocation failed and is not silently
+  reported as success. Offline contracts pass; Azure identity assignment and live
+  event delivery remain unverified.
+- P2-09 prepends task-branch commit/push instructions to every ACP prompt,
   including resumed and recovered turns; offline tests cover these paths. Live
   intermediate-commit acceptance awaits P2-07. See
   [runner instructions](../runner/README.md).
