@@ -95,4 +95,23 @@ describe('task event stream client', () => {
     })).rejects.toThrow('Invalid task ID.');
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('can start after the event included in the board snapshot', async () => {
+    const controller = new AbortController();
+    fetchMock.mockImplementationOnce(async (_input, init) => {
+      expect(init?.headers).toMatchObject({ 'Last-Event-ID': '18' });
+      controller.abort();
+      return eventStream();
+    });
+
+    await streamTaskEvents<TaskEvent>({
+      backendUrl: 'https://api.example.com',
+      taskId: '42',
+      lastEventId: '18',
+      getAccessToken,
+      onEvent: () => {},
+      signal: controller.signal,
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });

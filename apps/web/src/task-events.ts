@@ -4,6 +4,7 @@ const maxSseEventLength = 1024 * 1024;
 export interface TaskEventStreamOptions<T extends { id: string }> {
   backendUrl: string;
   taskId: string;
+  lastEventId?: string;
   getAccessToken: () => Promise<string>;
   onEvent: (event: T) => void;
   signal: AbortSignal;
@@ -84,6 +85,7 @@ async function readEvents(
 export async function streamTaskEvents<T extends { id: string }>({
   backendUrl,
   taskId,
+  lastEventId: initialEventId,
   getAccessToken,
   onEvent,
   signal,
@@ -91,8 +93,12 @@ export async function streamTaskEvents<T extends { id: string }>({
   if (!/^[1-9][0-9]{0,18}$/.test(taskId) || BigInt(taskId) > maxSqlBigInt) {
     throw new TypeError('Invalid task ID.');
   }
+  if (initialEventId !== undefined &&
+    (!/^(?:0|[1-9][0-9]{0,18})$/.test(initialEventId) || BigInt(initialEventId) > maxSqlBigInt)) {
+    throw new TypeError('Invalid event ID.');
+  }
 
-  let lastEventId: string | undefined;
+  let lastEventId = initialEventId;
   let reconnectDelay = 1000;
   while (!signal.aborted) {
     try {
@@ -106,6 +112,7 @@ export async function streamTaskEvents<T extends { id: string }>({
         signal,
       });
       if (!response.ok) {
+        await response.body?.cancel().catch(() => {});
         if (response.status < 500 && response.status !== 429) throw new TaskEventStreamError(response.status);
       } else if (!response.body) {
         throw new Error('Task event stream returned no response body.');

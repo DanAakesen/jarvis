@@ -149,7 +149,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Sandbox sessions: start, end, size, end reason, heartbeat state | — |
 | Usage: sandbox minutes and DKK; Codex/Copilot turns and any reported usage | — |
 
-The backend persists each task event and state change to the task history and activity feed together, then publishes the committed event for live clients.
+The backend persists each task event and state change to the task history and activity feed together, then publishes the committed event for live clients. The authenticated live feed resumes from the last delivered event after reconnect so updates missed while disconnected are replayed without duplicate timeline entries.
 
 #### Software Factory — release view (per project)
 
