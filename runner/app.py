@@ -231,6 +231,15 @@ class DiskLowExceeded(Exception):
     pass
 
 
+class CodexUsageLimitReached(RuntimeError):
+    """codex-acp rejected the prompt because the ChatGPT plan's Codex usage limit is reached."""
+
+
+def _is_codex_usage_limit(error: Any) -> bool:
+    data = error.get("data") if isinstance(error, dict) else None
+    return isinstance(data, dict) and data.get("codexErrorInfo") == "usageLimitExceeded"
+
+
 tasks: dict[str, TaskState] = {}
 session_clients: dict[str, ACPClient] = {}
 session_locks: dict[str, asyncio.Lock] = {}
@@ -828,6 +837,8 @@ class ACPClient:
         )
         response = await asyncio.wait_for(future, timeout=timeout_seconds)
         if "error" in response:
+            if _is_codex_usage_limit(response["error"]):
+                raise CodexUsageLimitReached(f"ACP {method} failed: Codex usage limit reached")
             raise RuntimeError(f"ACP {method} failed: {response['error']}")
         return response.get("result", {})
 
@@ -1032,6 +1043,10 @@ async def _run_task(
             # A forced stop after the cancel timeout closes the ACP stream.
             state.status = STOPPED_STATUS[state.stop_requested]
             state.event(state.status, forced=True, error=type(exc).__name__)
+        elif state.status != "cancelled" and isinstance(exc, CodexUsageLimitReached):
+            state.status = "failed"
+            state.error = "Codex usage limit reached"
+            state.event("failed", error=state.error, reason="codex_usage_limit")
         elif state.status != "cancelled":
             state.status = "failed"
             state.error = f"Runner task failed: {type(exc).__name__}"

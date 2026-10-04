@@ -279,10 +279,31 @@ Backend commands:
 | SQL Server migration and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
 | Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
+| P6-05 SQL Server parallel load test (CI `Database` job; prints a `P6-05 load:` summary line) | `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher-load.integration.test.ts` (isolated loopback SQL Server only) |
+| Focused P6-05 runner Codex limit test | `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_usage_limit` |
 | Start compiled backend | `npm start --workspace @jarvis/backend` (after its build) |
 | Build then start backend | `npm run dev --workspace @jarvis/backend` |
 | Health request | `curl --fail http://localhost:3000/health` → `{"status":"ok"}` |
 | Production container (GitHub Actions only; no Docker in an agent sandbox) | `docker build --file apps/backend/Dockerfile --tag jarvis-backend .` from the repository root |
+
+Live parallel load test (P6-08; Dan runs it, because agents have no production
+access):
+
+1. Check that the latest Deploy on `main` passed and includes P6-05. The dispatcher
+   now sends `task_id`; earlier backends could not start any task (L59). Codex
+   and Copilot credentials must be current in Settings.
+2. Create two or three projects on private test repositories (for example
+   `DanAakesen/jarvis-test-target` and a second one created with
+   `gh repo create --private`). Set global max parallel tasks to 4 and project
+   limits to 2/2/1.
+3. Note the remaining Codex allowance on the Jarvis ChatGPT account's Codex usage
+   page. Then create about eight small tasks across the projects, alternating
+   Codex and Copilot.
+4. Watch the board and task details. Record the maximum number Running at once,
+   the time from Ready to Running, every Needs attention reason (a Codex
+   `failed` event reads `Codex usage limit reached`), and sandbox minutes/DKK from
+   the Usage page. Afterwards, note the Codex allowance again.
+5. Record the results as a dated entry in [decisions.md](decisions.md).
 
 The factory tasks API provides authenticated create, filtered list, detail, and
 state-aware control routes. The controls route accepts only `steer`, `pause`,

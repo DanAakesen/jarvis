@@ -201,7 +201,7 @@ export class TaskDispatcher implements TaskController {
       try {
         accepted = await this.clientFor(target.agentName).resume(
           target.foundrySessionId,
-          await this.taskRequest(task),
+          await this.taskRequest(taskId, task),
         );
         const running = await this.store.recordResumedTurn(target, accepted);
         this.heartbeat.track(running);
@@ -318,7 +318,7 @@ export class TaskDispatcher implements TaskController {
 
     let request: TaskRequest;
     try {
-      request = await this.taskRequest(task);
+      request = await this.taskRequest(task.taskId, task);
     } catch (error) {
       await this.fail(task, error, true);
       return;
@@ -351,7 +351,10 @@ export class TaskDispatcher implements TaskController {
     });
   }
 
-  private async taskRequest(task: Pick<TaskRecord, 'agent' | 'request' | 'modelOverride' | 'reasoningOverride'>): Promise<TaskRequest> {
+  private async taskRequest(
+    taskId: string,
+    task: Pick<TaskRecord, 'agent' | 'request' | 'modelOverride' | 'reasoningOverride'>,
+  ): Promise<TaskRequest> {
     const stored = await this.settings.read();
     const providerSettings = task.agent === 'codex'
       ? defaultSettings.codex
@@ -362,6 +365,7 @@ export class TaskDispatcher implements TaskController {
       ? {
         agent: 'codex',
         task: task.request,
+        taskId,
         ...(model === 'default' ? {} : { model }),
         ...((task.reasoningOverride ??
           configuredValue(stored['codex.reasoning_effort'], defaultSettings.codex.reasoning, maxSettingsReasoningLength)) === 'default'
@@ -372,6 +376,7 @@ export class TaskDispatcher implements TaskController {
       : {
         agent: 'copilot',
         task: task.request,
+        taskId,
         ...(model === 'default' ? {} : { model }),
       };
     return request;

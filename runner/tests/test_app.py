@@ -954,6 +954,54 @@ def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch):
     asyncio.run(exercise())
 
 
+@pytest.mark.parametrize(
+    ("codex_error_info", "expected_error", "expected_reason"),
+    [
+        ("usageLimitExceeded", "Codex usage limit reached", "codex_usage_limit"),
+        ("serverOverloaded", "Runner task failed: RuntimeError", None),
+    ],
+)
+def test_codex_usage_limit_failure_is_reported_distinctly(
+    tmp_path, monkeypatch, codex_error_info, expected_error, expected_reason
+):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "session_clients", {})
+    monkeypatch.setattr(app, "session_locks", {})
+    fixture = tmp_path / "codex_limit.py"
+    fixture.write_text(
+        "import json, sys\n"
+        "for line in sys.stdin:\n"
+        "    message = json.loads(line)\n"
+        "    method = message.get('method')\n"
+        "    if method == 'session/prompt':\n"
+        "        reply = {'error': {'code': -32603, 'message': 'Internal error', 'data': {\n"
+        "            'message': 'Provider limit text', 'codexErrorInfo': "
+        f"{codex_error_info!r}"
+        "}}}\n"
+        "    elif method == 'session/new':\n"
+        "        reply = {'result': {'sessionId': 'codex-session'}}\n"
+        "    else:\n"
+        "        reply = {'result': {}}\n"
+        "    print(json.dumps({'jsonrpc': '2.0', 'id': message['id'], **reply}), flush=True)\n"
+    )
+
+    async def credentials(agent):
+        assert agent == "codex"
+        return {"github_token": "not-a-real-token", "codex_login": "{}"}
+
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    monkeypatch.setattr(app, "_agent_command", lambda agent, model=None: [sys.executable, str(fixture)])
+    state = app.TaskState("codex-limit", "s", "codex", "task")
+
+    asyncio.run(app._run_task(state))
+
+    assert state.status == "failed"
+    assert state.error == expected_error
+    failed = [event["data"] for event in state.events if event["kind"] == "failed"]
+    assert failed[-1].get("reason") == expected_reason
+    assert "Provider limit text" not in json.dumps(failed)
+
+
 def test_cancel_during_credential_fetch_never_starts_provider(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
