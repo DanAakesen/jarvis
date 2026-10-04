@@ -84,13 +84,16 @@ export const conversationModule: BackendModule = {
   registerRoutes: async (app) => {
     app.post<{
       Params: { sessionId: string };
-      Body: { text: string };
+      Body: { text: string; screenContext?: string };
     }>('/conversation/sessions/:sessionId/turns', {
       schema: {
         params: { type: 'object', properties: { sessionId: idSchema }, required: ['sessionId'], additionalProperties: false },
         body: {
           type: 'object',
-          properties: { text: { type: 'string', minLength: 1, maxLength: 20_000 } },
+          properties: {
+            text: { type: 'string', minLength: 1, maxLength: 20_000 },
+            screenContext: { type: 'string', minLength: 1, maxLength: 5_000 },
+          },
           required: ['text'],
           additionalProperties: false,
         },
@@ -105,6 +108,9 @@ export const conversationModule: BackendModule = {
       if (!validId(sessionId)) return reply.code(400).send({ error: 'Invalid conversation session ID' });
       const text = request.body.text.trim();
       if (!text) return reply.code(400).send({ error: 'Message text cannot be empty' });
+      if (request.body.screenContext !== undefined && !request.body.screenContext.trim()) {
+        return reply.code(400).send({ error: 'Screen context cannot be empty' });
+      }
 
       const session = await store.getSession(sessionId);
       if (!session || session.endedAt !== null) return reply.code(404).send({ error: 'Active chat session not found' });
@@ -132,6 +138,7 @@ export const conversationModule: BackendModule = {
             messageId: userMessage.id,
             text,
             language: session.language,
+            ...(request.body.screenContext === undefined ? {} : { screenContext: request.body.screenContext }),
           }, authorization, controller.signal)) {
             answer += delta;
             if (Buffer.byteLength(answer) > 512 * 1024) throw new Error('Chat response exceeded the size limit');

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PublicConfig } from '../config/public-config';
 import { VoiceOrb } from './VoiceOrb';
 import { BrowserVoiceClient, type VoiceLanguage, type VoiceStatus } from './voice-client';
+import type { ScreenShareController } from './screen-sharing';
 
 const initialMessage = 'Start voice to speak with Jarvis. Your microphone opens after the voice session is ready.';
 
@@ -23,16 +24,20 @@ export function VoiceControls({
   config,
   language = 'da',
   onSessionEnded,
+  screenShare,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
   language?: VoiceLanguage;
   onSessionEnded?: () => void;
+  screenShare?: ScreenShareController;
 }) {
   const client = useRef<BrowserVoiceClient | null>(null);
   const [status, setStatus] = useState<VoiceStatus>('stopped');
   const [message, setMessage] = useState(initialMessage);
   const [muted, setMuted] = useState(false);
+  const [screenSessionId, setScreenSessionId] = useState<string | null>(null);
+  const [screenError, setScreenError] = useState('');
   const active = status !== 'stopped' && status !== 'error';
   const pending = status === 'connecting' || status === 'reconnecting' || status === 'stopping';
 
@@ -42,22 +47,38 @@ export function VoiceControls({
   }, []);
 
   const start = () => {
+    setScreenSessionId(null);
     const voice = new BrowserVoiceClient({
       backendUrl: config.backendUrl,
       getAccessToken: () => accessToken(authClient, config),
       language,
       ...(onSessionEnded ? { onSessionEnded } : {}),
+      onSessionReady: setScreenSessionId,
+      onScreenRequest: () => { void inspectAndSendScreen(); },
       onStatus: (nextStatus, nextMessage) => {
         setStatus(nextStatus);
         setMessage(nextMessage);
         if (nextStatus === 'stopped' || nextStatus === 'error') {
           client.current = null;
+          setScreenSessionId(null);
+          screenShare?.stop();
           setMuted(false);
         }
       },
     });
     client.current = voice;
     voice.start();
+  };
+
+  const inspectAndSendScreen = async () => {
+    if (!screenShare || !screenSessionId || !client.current) return;
+    setScreenError('');
+    try {
+      const description = await screenShare.inspect(screenSessionId);
+      client.current.sendScreenContext(description);
+    } catch (reason) {
+      setScreenError(reason instanceof Error ? reason.message : 'Jarvis could not inspect the shared screen.');
+    }
   };
 
   const stop = () => {
@@ -89,7 +110,12 @@ export function VoiceControls({
         >
           {muted ? 'Unmute' : 'Mute'}
         </button>
+        <button className="secondary-button" type="button" onClick={() => void inspectAndSendScreen()}
+          disabled={!active || !screenShare?.sharing || !screenSessionId || pending}>
+          Look at screen
+        </button>
       </div>
+      {screenError && <p role="alert">{screenError}</p>}
     </>
   );
 }

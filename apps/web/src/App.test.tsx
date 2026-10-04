@@ -190,19 +190,17 @@ describe('App shell', () => {
     expect(screen.getByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
   });
 
-  it('keeps Screen sharing and Camera visibly unavailable until their features are built', async () => {
+  it('keeps Camera unavailable while screen sharing is available in the conversation', async () => {
     await renderSignedIn();
 
-    for (const [name, explanation] of [
-      ['Share screen', 'Unavailable until screen sharing is built.'],
-      ['Camera', 'Unavailable until camera support is built.'],
-    ] as const) {
-      const button = screen.getByRole('button', { name });
-      expect(button).toHaveProperty('disabled', true);
-      expect(button.getAttribute('aria-describedby')).not.toBeNull();
-      expect(document.getElementById(button.getAttribute('aria-describedby')!)?.textContent).toBe(explanation);
-      expect(button.parentElement?.getAttribute('title')).toBe(explanation);
-    }
+    const camera = screen.getByRole('button', { name: 'Camera' });
+    expect(camera).toHaveProperty('disabled', true);
+    expect(camera.getAttribute('aria-describedby')).not.toBeNull();
+    expect(document.getElementById(camera.getAttribute('aria-describedby')!)?.textContent)
+      .toBe('Unavailable until camera support is built.');
+    expect(camera.parentElement?.getAttribute('title')).toBe('Unavailable until camera support is built.');
+    expect(within(screen.getByRole('region', { name: 'Conversation' }))
+      .getByRole('button', { name: 'Share screen' })).toHaveProperty('disabled', false);
   });
 
   it('opens and closes the contextual shell panel without replacing page content', async () => {

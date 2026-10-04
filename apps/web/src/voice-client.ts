@@ -23,6 +23,8 @@ export interface VoiceClientOptions {
   language?: VoiceLanguage;
   onStatus: (status: VoiceStatus, message: string) => void;
   onSessionEnded?: () => void;
+  onSessionReady?: (sessionId: string) => void;
+  onScreenRequest?: (transcript: string) => void;
   createSocket?: (url: string, protocols: string[]) => VoiceSocket;
   createAudio?: () => VoiceAudio;
   delay?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -326,6 +328,7 @@ export class BrowserVoiceClient {
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
   private stopOpenSocket: VoiceSocket | undefined;
   private stopOpenHandler: (() => void) | undefined;
+  private sessionReady = false;
 
   constructor(private readonly options: VoiceClientOptions) {
     this.language = options.language ?? 'da';
@@ -389,6 +392,14 @@ export class BrowserVoiceClient {
   setMuted(muted: boolean): void {
     this.muted = muted;
     this.audio.setMuted(muted);
+  }
+
+  sendScreenContext(description: string): void {
+    if (!this.running || !this.sessionReady || description.trim().length === 0 ||
+        description.length > 5_000 || this.socket?.readyState !== WebSocket.OPEN) {
+      throw new Error('The active voice session is not ready for screen context.');
+    }
+    this.socket.send(JSON.stringify({ type: 'jarvis.screen.context', description }));
   }
 
   private publish(status: VoiceStatus, message: string): void {
@@ -499,8 +510,17 @@ export class BrowserVoiceClient {
   private receive(data: unknown): void {
     const event = decodeEvent(data);
     if (!event || typeof event.type !== 'string') return;
-    if (event.type === 'jarvis.session.ended') {
+    if (event.type === 'jarvis.session.ready') {
+      if (typeof event.sessionId === 'string' && /^[1-9]\d{0,18}$/u.test(event.sessionId)) {
+        this.sessionReady = true;
+        this.options.onSessionReady?.(event.sessionId);
+      }
+    } else if (event.type === 'jarvis.session.ended') {
       this.finishStop(true);
+    } else if (event.type === 'conversation.item.input_audio_transcription.completed' &&
+        typeof event.transcript === 'string' &&
+        /\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen)\b/iu.test(event.transcript)) {
+      this.options.onScreenRequest?.(event.transcript);
     } else if (event.type === 'input_audio_buffer.speech_started' || event.type === 'speech_started') {
       this.audio.stopPlayback();
       this.playbackAllowed = false;
@@ -523,6 +543,7 @@ export class BrowserVoiceClient {
 
   private finishStop(sessionEnded: boolean, failed = false): void {
     this.running = false;
+    this.sessionReady = false;
     this.stopping = false;
     if (this.stopTimer !== undefined) clearTimeout(this.stopTimer);
     this.stopTimer = undefined;
