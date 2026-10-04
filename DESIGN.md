@@ -50,7 +50,18 @@ event timeline.
 
 ## Visual direction
 
-Not chosen. Add the selected direction, reference images, and findings here.
+Dan's brief (4 October 2026): the UI should be stunning, with rich styling and motion, and feel alive when Jarvis is doing something, especially in voice mode. Three original animated concepts are in [docs/ui/concepts](docs/ui/concepts/README.md) with screenshots. Selected on autopilot for Dan's review: **Concept B, living aurora**, as the default dark appearance, and **Concept C, daylight studio**, as the light appearance. Concept A's precise ring and tick detail is not used.
+
+- **Why B:** its slowly flowing light field and fluid orb make Jarvis feel alive, and the orb's shape follows the audio level and runtime state, so the motion carries information rather than decoration. The futuristic assistant identity is the product reason for its restrained glow and translucent windows.
+- **Motion language:** state changes and Jarvis's actions animate in place (orb morph per state, shimmer on the window Jarvis is updating, rows slide into tables, windows carry across when voice starts and the orb grows from the composer's small orb). Motion is interruptible, uses transform and opacity, pauses in hidden tabs, and falls back to fades with readable state labels under reduced motion.
+- **Light appearance (C):** warm neutral surfaces and editorial typography with an ink-particle orb, so light mode keeps the same states and motion vocabulary.
+- **Constraints kept:** every orb state is also labelled in text; no gradient text, no emoji icons, no lone coloured borders; sample data appears in the concepts only.
+
+Token values belong in `apps/web/src/styles.css`; P8-20 (#282) implements this visual and motion system across the shell.
+
+## Voice end (P8-12, decided 4 October 2026)
+
+Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop and inside the bottom dock, right of the orb, on phone. Ending voice collapses the orb back into the composer's small orb. A natural spoken ending also ends voice; the small composer orb only starts voice.
 
 ## Foundation shell (P0-02)
 
@@ -141,6 +152,13 @@ P3-11 rechecked Settings and Projects in Chromium 154 at 390 and 1280 px with
 scratch-only auth and API mocks. New-project settings save, the Projects page has
 no create link or form, and neither width overflows; controls remain at least
 44 px high. Live Entra and Azure SQL behavior remains unverified.
+P3-13 keeps installed repositories below managed projects in the same neutral
+layout. Each unmanaged repository shows its owner/name, last push, and language
+with a single **Manage with Jarvis** action; the existing toolbar refreshes both
+projects and repositories. Chromium 154 checks at 390 and 1280 px exercised
+management without a form and explicit refresh. Neither width overflowed, buttons
+were 44 px high, and there were no browser errors. Live GitHub App, Entra, and
+Azure SQL behavior remains unverified.
 
 ## Task view (P1-08)
 

@@ -46,7 +46,15 @@ class Backend:
     ) -> None:
         self.catalogue = [CREATE_TASK] if catalogue is None else catalogue
         self.settings = (
-            {"model": "gpt-5.6-luna", "reasoningEffort": "none"}
+            {
+                "model": "gpt-5.6-luna",
+                "reasoningEffort": "none",
+                "personality": {
+                    "tone": "british_butler",
+                    "responseStyle": "concise",
+                    "customInstructions": "",
+                },
+            }
             if settings is None
             else settings
         )
@@ -129,7 +137,15 @@ async def test_new_backend_tools_appear_after_the_cache_expires() -> None:
 
 
 async def test_loads_effective_model_settings_for_a_new_session() -> None:
-    backend = Backend(settings={"model": "gpt-5.6-luna", "reasoningEffort": "high"})
+    backend = Backend(settings={
+        "model": "gpt-5.6-luna",
+        "reasoningEffort": "high",
+        "personality": {
+            "tone": "warm",
+            "responseStyle": "detailed",
+            "customInstructions": "Use plain language.",
+        },
+    })
     client = make_client(backend)
 
     settings = await client.model_settings()
@@ -139,6 +155,9 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
     assert str(request.url) == "https://backend.example/agent/settings"
     assert request.headers["authorization"] == "Bearer " + TOKEN
     assert (settings.model, settings.reasoning_effort) == ("gpt-5.6-luna", "high")
+    assert (settings.tone, settings.response_style, settings.custom_instructions) == (
+        "warm", "detailed", "Use plain language."
+    )
 
 
 @pytest.mark.parametrize(
@@ -150,6 +169,17 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
         {"model": "", "reasoningEffort": "none"},
         {"model": "x" * 101, "reasoningEffort": "none"},
         {"model": "deployment", "reasoningEffort": "unsupported"},
+        {"model": "deployment", "reasoningEffort": "none", "personality": {"tone": "unknown"}},
+        {
+            "model": "deployment",
+            "reasoningEffort": "none",
+            "personality": {"responseStyle": "unknown"},
+        },
+        {
+            "model": "deployment",
+            "reasoningEffort": "none",
+            "personality": {"customInstructions": "x" * 2_001},
+        },
     ],
 )
 async def test_invalid_or_unavailable_model_settings_fail_session_start(settings: Any) -> None:
