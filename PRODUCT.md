@@ -188,6 +188,12 @@ the last-release field is explicitly unavailable rather than inferred.
 | Global: max parallel tasks; sleep switch | Change |
 | Credentials: name, expiry, last renewal, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
 
+The backend checks Codex daily and renews only when the access token has three
+days or less remaining and no Codex task is running. Credential dates and
+status are non-secret Key Vault metadata; failed renewal is visible as
+"Action needed". Manual renewal and re-seed controls remain disabled until an
+operator workflow is available.
+
 The settings API validates choices against the server's available-model catalog.
 The coding-agent catalog currently offers only each provider's default. P2-11
 verifies the runner path for explicit model values: Copilot uses its CLI `--model`
