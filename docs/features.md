@@ -40,6 +40,7 @@ Status as of 4 October 2026.
 | Software Factory tools | Ask Jarvis to list projects and tasks, create tasks, and steer, pause, resume or cancel tasks | Voice/chat | Main page | Built | P4-10 |
 | Model switching by voice | "Use Codex with high reasoning", "switch Jarvis to the faster model" | Voice/chat | — | In progress | P7-11 |
 | Live status by voice | Jarvis announces important task changes and answers "what's going on?" | Voice/chat | — | In progress | P7-12 |
+| Long-term memory | Recall relevant stated preferences, project facts, decisions and unfinished tasks with Dan's source; inspect, correct or forget them | Voice/chat | — | In progress | P7-13 |
 | Live voice test | Dan's verdict on Danish and English voice | Voice/chat | — | In progress | P5-07 |
 | Reflex layer | Instant acknowledgement and fast routing of simple commands (Jev) | Voice/chat | — | Planned | P7-04 |
 

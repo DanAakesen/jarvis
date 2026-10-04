@@ -12,6 +12,8 @@ import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
 import { createAlertActivityStore } from './alert-store.js';
 import { createDispatcherStore } from './dispatcher-store.js';
+import { createConversationStore } from './conversation-store.js';
+import { createMemoryStore } from './memory-store.js';
 import {
   createTaskEventArchive,
   type TaskEventArchiveBlobStore,
@@ -30,8 +32,9 @@ const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'credential_status', 'deployments', 'jarvis_sessions', 'messages', 'projects',
-  'pull_requests', 'releases', 'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives',
-  'task_events', 'tasks', 'tool_calls', 'usage', 'webhook_deliveries', 'workflow_runs',
+  'memory_deletions', 'memory_history', 'memories', 'pull_requests', 'releases', 'sandbox_sessions',
+  'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks', 'tool_calls', 'usage',
+  'webhook_deliveries', 'workflow_runs',
 ];
 
 async function tables(): Promise<string[]> {
@@ -83,7 +86,7 @@ afterAll(async () => {
   await administrator.close();
 });
 
-describe('committed domain schema (groups 1-7)', () => {
+describe('committed domain schema (groups 1-8)', () => {
   it('boots the committed migration manifest twice without duplicate ledger rows', async () => {
     const committed = await readMigrations();
     expect(await applyMigrations(pool, committed)).toEqual(committed.map((migration) => migration.name));
@@ -110,6 +113,92 @@ describe('committed domain schema (groups 1-7)', () => {
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
       'UX_activity_alert_key',
     ]);
+  });
+
+  it('retains source-linked memory across sessions and store restarts, then forgets without deleting sources', async () => {
+    const conversations = createConversationStore(pool);
+    const firstSession = await conversations.createSession({ channel: 'chat', language: 'en' });
+    const firstSource = await conversations.addMessage({
+      sessionId: firstSession.id, role: 'dan', text: 'I prefer English for Jarvis.', model: null,
+    });
+    const secondSession = await conversations.createSession({ channel: 'voice', language: 'da' });
+    const secondSource = await conversations.addMessage({
+      sessionId: secondSession.id, role: 'dan', text: 'I prefer Danish for voice.', model: null,
+    });
+
+    const firstStore = createMemoryStore(pool);
+    await firstStore.initialize();
+    const searchSetup = await pool.request().query<{
+      fulltext_installed: boolean;
+      fulltext_indexed: boolean;
+    }>(`SELECT CONVERT(bit, CASE WHEN FULLTEXTSERVICEPROPERTY(N'IsFullTextInstalled') = 1
+          THEN 1 ELSE 0 END) AS fulltext_installed,
+        CONVERT(bit, CASE WHEN EXISTS (
+          SELECT 1 FROM sys.fulltext_indexes WHERE object_id = OBJECT_ID(N'dbo.memories')
+        ) THEN 1 ELSE 0 END) AS fulltext_indexed;`);
+    if (searchSetup.recordset[0]?.fulltext_installed) {
+      expect(searchSetup.recordset[0]?.fulltext_indexed).toBe(true);
+    }
+    const initial = await firstStore.save({
+      category: 'preference',
+      key: 'language',
+      content: 'Dan prefers English for Jarvis.',
+      sourceMessageId: firstSource.id,
+      embedding: null,
+    }, new AbortController().signal);
+    const repeated = await firstStore.save({
+      category: 'preference',
+      key: 'language',
+      content: 'Dan prefers English for Jarvis.',
+      sourceMessageId: firstSource.id,
+      embedding: null,
+    }, new AbortController().signal);
+    const changed = await firstStore.save({
+      category: 'preference',
+      key: 'language',
+      content: 'Dan prefers Danish for Jarvis voice.',
+      sourceMessageId: secondSource.id,
+      embedding: null,
+    }, new AbortController().signal);
+
+    expect(initial).toMatchObject({ created: true, changed: true, memory: { revision: 1 } });
+    expect(repeated).toMatchObject({ created: false, changed: false, memory: { revision: 1 } });
+    expect(changed).toMatchObject({
+      created: false,
+      changed: true,
+      memory: { id: initial.memory.id, revision: 2, sourceMessageId: secondSource.id },
+    });
+
+    const afterRestart = createMemoryStore(pool);
+    await afterRestart.initialize();
+    const recalled = await afterRestart.list(5, new AbortController().signal);
+    expect(recalled.memories).toHaveLength(1);
+    expect(recalled.memories[0]).toMatchObject({
+      id: initial.memory.id,
+      content: 'Dan prefers Danish for Jarvis voice.',
+      sourceMessageId: secondSource.id,
+      revision: 2,
+    });
+    const versions = await afterRestart.history(initial.memory.id, 10, new AbortController().signal);
+    expect(versions.map(({ revision, sourceMessageId }) => ({ revision, sourceMessageId }))).toEqual([
+      { revision: 2, sourceMessageId: secondSource.id },
+      { revision: 1, sourceMessageId: firstSource.id },
+    ]);
+
+    const forgotten = await afterRestart.forget(
+      initial.memory.id, secondSource.id, new AbortController().signal,
+    );
+    expect(forgotten).toEqual({ category: 'preference', key: 'language' });
+    const afterForget = createMemoryStore(pool);
+    await afterForget.initialize();
+    expect((await afterForget.list(5, new AbortController().signal)).memories).toEqual([]);
+    const retainedSources = await pool.request().input('firstId', sql.BigInt, BigInt(firstSource.id))
+      .input('secondId', sql.BigInt, BigInt(secondSource.id))
+      .query('SELECT COUNT(*) AS count FROM dbo.messages WHERE id IN (@firstId, @secondId) AND role = N\'dan\';');
+    expect(retainedSources.recordset[0]?.count).toBe(2);
+    const deletionLog = await pool.request().input('memoryId', sql.BigInt, BigInt(initial.memory.id))
+      .query('SELECT COUNT(*) AS count FROM dbo.memory_deletions WHERE memory_id = @memoryId;');
+    expect(deletionLog.recordset[0]?.count).toBe(1);
   });
 
   it('ignores a concurrently repeated webhook delivery ID', async () => {

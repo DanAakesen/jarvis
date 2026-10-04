@@ -292,7 +292,7 @@ browser sign-in and deployment verification remain #11.
 ## Database startup and migration ownership
 
 The process creates one `mssql` pool when SQL settings are supplied and shares
-that process-owned pool with the tool-call and task stores. Production
+that process-owned pool with the tool-call, conversation, memory and task stores. Production
 configuration requires an Azure SQL host, database and user-assigned identity
 client ID; `azure-active-directory-msi-app-service` delegates token acquisition
 and renewal to Tedious/Azure Identity. TLS certificate validation stays enabled.
@@ -484,6 +484,41 @@ endpoint already comes from Bicep. No schema migration or custom `/chat` route i
 needed. The store passes a disposable SQL Server integration test, not a
 production Azure SQL test. Live Foundry chat streaming and a tool-call row linked
 to its stored message remain a post-merge Azure acceptance check.
+
+### Long-term memory (P7-13)
+
+The core memory module registers `memory_remember`, `memory_search`, `memory_list`,
+`memory_history`, `memory_correct` and `memory_forget`. Writes verify the referenced
+stored message is a Dan message; chat uses its stored message ID, and voice resolves
+the persisted transcript item ID to the transcript's stored message. Only the hosted
+agent may search/list/history without a current message ID, and those source-less
+read-only calls are not persisted as tool calls. All writes remain source-linked.
+Successful changes return a backend-built confirmation; retrieval errors remain
+errors, not empty results. For source-backed memory calls, the generic
+`tool_calls` audit keeps only the operation outcome, not memory arguments/results,
+so forgetting does not leave a second saved copy in that audit.
+
+The SQL store keeps one current memory per stable category/key, source-linked
+revisions, and a content-free forget audit. Same-key updates serialize in SQL;
+unchanged content and source are idempotent. Forget removes the current row and its
+history, not the conversation or source message. Search returns at most five
+memories with up to 500 characters of the current Dan source text. It uses
+`text-embedding-3-small` and cosine vector distance when the SQL vector type exists,
+falls back to full-text search when embeddings or vector search are unavailable,
+then uses bounded substring matching when SQL full-text is not installed. Each
+response identifies its search method and whether more results may exist.
+
+`0012_long_term_memory.sql` conditionally adds the `vector(1536)` column. The
+memory-store startup runs the idempotent
+`db/migrations/setup/0012_long_term_memory.sql` after migrations commit; this
+creates the full-text catalog/index when installed, outside Azure SQL's required
+migration transaction. Bicep deploys a sequential
+Global Standard capacity-1 `text-embedding-3-small` model alongside the existing
+Foundry deployments and sets `JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME`. The backend's
+existing managed identity and Foundry User role call the project embeddings endpoint
+using `https://ai.azure.com/.default`; no key is added. The existing Deploy workflow
+and startup migration runner provide repeatable, idempotent provisioning; no
+separate portal setup or memory-specific bootstrap is required.
 
 ```mermaid
 flowchart LR
@@ -881,7 +916,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (the SSE hub and dispatcher run in one process; more copies need Web PubSub, see Ideas in PLAN.md); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID` |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (the SSE hub and dispatcher run in one process; more copies need Web PubSub, see Ideas in PLAN.md); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID` |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Azure Monitor action group | `jarvis-alerts` | Email receivers from required `budgetContactEmails`; no SMS/voice receivers |
 | Log alert rules | Deployment failure, sandbox crash, credential expiry | Stateful scheduled-query rules on `AppTraces`; group by hashed alert condition and send through `jarvis-alerts` |
@@ -892,6 +927,12 @@ The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **A
 Required deployment parameters are `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `foundryNameTimestamp`, and `budgetContactEmails`; the comma-separated email list comes from protected GitHub secret `JARVIS_BUDGET_CONTACT_EMAILS`. `backendImage` and `jarvisAgentObjectId` are optional. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed.
 
 PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. Both `gpt-5.6-luna` and `gpt-realtime-2.1` use Global Standard capacity 1, configured independently. Dan accepted this starting allocation; adjust it if testing demonstrates rate limits. Exact model-specific limits and regional quota availability remain to be verified in P0-16. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
+
+P7-13 adds a sequential Global Standard capacity-1 `text-embedding-3-small`
+deployment after `gpt-realtime-2.1`, with the backend deployment name supplied to
+the Container App by Bicep. This small pay-as-you-go deployment is used only for
+memory embeddings; a model or vector capability failure falls back to lexical
+retrieval. Normal Bicep deployment is idempotent and does not require a portal step.
 
 `sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, and `budgetStartDate` to `2026-10-01T00:00:00Z`. Budget notification emails are required through `budgetContactEmails`; actual cost is interpreted in the subscription billing currency, which remains to be confirmed as DKK.
 

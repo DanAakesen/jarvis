@@ -360,6 +360,25 @@ resource gptRealtime21Deployment 'Microsoft.CognitiveServices/accounts/deploymen
   }
 }
 
+resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'text-embedding-3-small'
+  dependsOn: [
+    gptRealtime21Deployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 1
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'text-embedding-3-small'
+      version: '1'
+    }
+  }
+}
+
 resource foundryAcrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(registry.id, foundryProject.id, acrPullRoleId)
   scope: registry
@@ -600,6 +619,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'JARVIS_CHAT_AGENT_NAME'
               value: 'jarvis'
+            }
+            {
+              name: 'JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME'
+              value: memoryEmbeddingDeployment.name
             }
             {
               name: 'BACKEND_CONTAINER_APP_RESOURCE_ID'

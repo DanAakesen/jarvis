@@ -221,6 +221,8 @@ Verified in Codex cloud for P0-02:
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
+| Focused P7-13 memory-tool, embedding, and migration tests | `npm test --workspace @jarvis/backend -- --run src/core/memory.test.ts src/core/memory-embeddings.test.ts src/database/migrations.test.ts` |
+| P7-13 isolated SQL migration/store contracts | `npm run test:database --workspace @jarvis/backend` |
 | Focused P3-05 failed-check tests | `npm test --workspace @jarvis/backend -- src/database/checks-loop-blob.test.ts src/database/checks-loop-store.test.ts src/github/checks-loop.test.ts src/github/actions-logs.test.ts src/github/webhook.test.ts src/core/settings.test.ts src/github-app.test.ts` |
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
@@ -388,6 +390,13 @@ application-defined SSE reply. Never expose or log the delegated token. Without
 the agent name, chat remains unavailable and returns a visible 503; live Azure
 streaming and tool-call linkage require the post-merge acceptance check.
 
+P7-13 also uses `FOUNDRY_PROJECT_ENDPOINT` and the Bicep-provided
+`JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME` (`text-embedding-3-small`) with the
+backend managed identity and `https://ai.azure.com/.default` scope. This setting
+is optional for local development: memory retrieval falls back to SQL full-text
+or substring search when embeddings are not configured or unavailable. No API
+key or browser credential is used.
+
 Production runner calls use the optional paired `FOUNDRY_RUNTIME_ENDPOINT` and
 `FOUNDRY_ADMIN_ENDPOINT`, plus `FOUNDRY_RUNNER_AGENT_NAME`. Bicep supplies the
 project URLs and `jarvis-runner-node-1x2`; these are non-secret settings. When
@@ -494,7 +503,10 @@ as Needs attention.
   `0001_core_tables.sql` contains groups 1–3; `0002_sandbox_operations.sql`
   contains groups 4 and 6; `0003_sandbox_agent_name.sql` adds the heartbeat's
   Foundry routing field, and P6-03's `0005_task_event_archives.sql` indexes
-  committed Blob chunks for on-demand task-history reads.
+  committed Blob chunks for on-demand task-history reads. P7-13's
+  `0012_long_term_memory.sql` adds durable source-linked memories and conditional
+  vector/full-text capabilities; startup applies it through the existing locked,
+  checksummed migration runner.
   See [migration guide](../db/migrations/README.md).
 - Offline checks: `npm test --workspace @jarvis/backend`,
   `npm run lint --workspace @jarvis/backend`,
@@ -512,6 +524,16 @@ as Needs attention.
   and authenticates with its existing managed identity. No local credential or
   manual Azure setup is needed. Archive/restore contracts use a fake Blob store;
   the live Azure archive/restore check must happen after merge.
+- P7-13 needs no separate portal or bootstrap action. The existing Deploy workflow
+  reapplies Bicep and the backend startup migration applies `0012` through the
+  idempotent migration runner. Memory-store startup executes the idempotent
+  `db/migrations/setup/0012_long_term_memory.sql` after the migration transaction
+  commits. After merge, the coordinator checks that Deploy creates the
+  `text-embedding-3-small` deployment and that the backend is healthy;
+  then verify a harmless memory through chat and voice, a later session after a
+  backend restart, list/history, correction and forgetting. Confirm forgetting
+  prevents recall while original conversation records remain. Never use sensitive
+  real data for the smoke test.
 
 Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 

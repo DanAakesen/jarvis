@@ -53,6 +53,9 @@ import { createGitHubDeliveryHandler } from './github/delivery.js';
 import { createAlertNotifier } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
+import { createMemoryStore } from './database/memory-store.js';
+import { createMemoryModule } from './core/memory.js';
+import { createFoundryMemoryEmbedder } from './core/memory-embeddings.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 
 try {
@@ -70,6 +73,7 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  const memoryStore = database ? createMemoryStore(database.pool) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const nowEventHub = createEventHub<NowFeedUpdate>();
   const alertNotifier = createAlertNotifier(telemetry);
@@ -128,6 +132,18 @@ try {
         return token.token;
       },
     )
+    : undefined;
+  const memoryEmbedder = config.foundryProjectEndpoint &&
+    config.foundryMemoryEmbeddingDeploymentName && credential
+    ? createFoundryMemoryEmbedder({
+      projectEndpoint: config.foundryProjectEndpoint,
+      deploymentName: config.foundryMemoryEmbeddingDeploymentName,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry memory embedding identity unavailable');
+        return token.token;
+      },
+    })
     : undefined;
   const foundryClients = new Map<string, FoundryClient>();
   const taskEventArchive = database && archiveStorageAccount && credential
@@ -247,6 +263,12 @@ try {
       } : {}),
     }),
   ];
+  if (memoryStore) {
+    modules.push(createMemoryModule({
+      store: memoryStore,
+      ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
+    }));
+  }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
       getToken: async (scope, signal) => {
@@ -345,6 +367,7 @@ try {
   try {
     if (database) {
       await database.initialize();
+      await memoryStore?.initialize();
       logger.info('database.ready');
     }
     if (!stopping) {

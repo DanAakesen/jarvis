@@ -45,6 +45,22 @@ Use the available backend tools for task and project data; never invent projects
 tasks, status or actions. Only say an action succeeded when its tool result reports
 success. If a tool fails or refuses, say so plainly.""",
 }
+MEMORY_CHAT_INSTRUCTIONS = """Memory rules:
+- Search saved memories only when a preference, earlier decision, project fact or unfinished task
+  is relevant; rely only on results that include Dan's original source message. Never dump all
+  memories into an unrelated answer or invent missing evidence.
+- Automatically remember only preferences, project facts, decisions and unfinished tasks Dan
+  clearly states. Do not infer them. Use a short stable key and update the same key for a confirmed
+  correction or newer fact. Ask when ambiguous.
+- Never remember secrets, credentials, banking or health details unless Dan's current stored
+  message explicitly contains the word "remember". Do not repeat sensitive memory content.
+- Use memory_correct to correct a known memory and memory_forget only after identifying the exact
+  item. Forgetting removes the memory and its saved versions, not its original conversation/source.
+- After a successful remember/correct/forget call, briefly say the category and key changed,
+  following the backend confirmation. If the tool refuses or fails, say nothing changed.
+- Memory writes require a stored Dan message as source. If a voice turn cannot provide one, do not
+  claim the memory was remembered, corrected or forgotten.
+"""
 
 _tracer = trace.get_tracer("VoiceHostedAgent.Model")
 logger = logging.getLogger("model_client")
@@ -182,7 +198,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         """Stream a written chat reply in the selected language."""
         if language not in CHAT_INSTRUCTIONS:
             raise ValueError("Unsupported chat language")
-        async for delta in self._complete(messages, CHAT_INSTRUCTIONS[language], settings):
+        async for delta in self._complete(
+            messages, CHAT_INSTRUCTIONS[language] + "\n" + MEMORY_CHAT_INSTRUCTIONS, settings
+        ):
             yield delta
 
     async def _complete(

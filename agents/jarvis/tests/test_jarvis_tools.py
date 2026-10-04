@@ -19,6 +19,7 @@ from jarvis_tools import (
     api_scope,
     backend_base_url,
     backend_settings_from_environment,
+    current_turn,
     model_tools,
 )
 
@@ -30,6 +31,16 @@ CREATE_TASK = {
         "type": "object",
         "properties": {"project": {"type": "string"}, "text": {"type": "string"}},
         "required": ["project", "text"],
+        "additionalProperties": False,
+    },
+}
+MEMORY_SEARCH = {
+    "name": "memory_search",
+    "description": "Find relevant source-linked memories.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {"query": {"type": "string"}},
+        "required": ["query"],
         "additionalProperties": False,
     },
 }
@@ -217,6 +228,34 @@ async def test_calls_a_tool_with_identity_and_message_id_and_relays_the_backend_
         "result": {"id": 7, "state": "Ready"},
         "confirmation": "Done: create_task succeeded.",
     }
+
+
+async def test_voice_turn_passes_its_stored_transcript_item_id_to_tools() -> None:
+    backend = Backend()
+    client = make_client(backend)
+    await client.tools()
+    token = current_turn.set("item_abc123")
+    try:
+        await client.call("create_task", "{}", None)
+    finally:
+        current_turn.reset(token)
+
+    request = backend.requests[-1]
+    assert request.headers["x-jarvis-voice-item-id"] == "item_abc123"
+    assert "x-jarvis-message-id" not in request.headers
+
+
+async def test_voice_can_search_memory_without_a_persisted_source_message() -> None:
+    backend = Backend(catalogue=[CREATE_TASK, MEMORY_SEARCH])
+    client = make_client(backend)
+    await client.tools()
+
+    await client.call("memory_search", '{"query": "earlier decision"}', None)
+
+    request = backend.requests[-1]
+    assert request.url.path == "/tools/memory_search"
+    assert "x-jarvis-message-id" not in request.headers
+    assert "x-jarvis-voice-item-id" not in request.headers
 
 
 async def test_relays_a_refused_backend_outcome_unchanged() -> None:

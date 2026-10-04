@@ -201,6 +201,7 @@ function registerVoiceRoute(
       }
       if (!role || !text || !text.trim() || text.length > MAX_TRANSCRIPT_CHARACTERS ||
           savedTranscripts.size >= MAX_TRANSCRIPTS_PER_SESSION) return;
+      if (role === 'dan') delete request.jarvisMemorySourceMessageId;
       const stableId = typeof itemId === 'string' && itemId.length <= 128
         ? itemId
         : typeof event.event_id === 'string' && event.event_id.length <= 128
@@ -216,14 +217,18 @@ function registerVoiceRoute(
         return;
       }
       if (!savedTranscripts.has(key)) savedTranscripts.add(key);
+      const sourceItemId = role === 'dan' && typeof itemId === 'string' &&
+        /^[A-Za-z0-9_-]{1,128}$/u.test(itemId) ? itemId : undefined;
       transcriptQueue = transcriptQueue.then(async () => {
         const message = await store.addMessage({
           sessionId: sessionId!,
           role,
           text: text.trim(),
           model: role === 'jarvis' && english ? ENGLISH_REALTIME_MODEL : null,
+          ...(sourceItemId ? { sourceItemId } : {}),
         });
         if (!message) throw new Error('Voice transcript was not stored');
+        if (role === 'dan') request.jarvisMemorySourceMessageId = message.id;
       }).catch(() => {
         transcriptPersistenceFailed = true;
         request.log.warn('voice.transcript_persistence_failed');
@@ -293,6 +298,8 @@ function registerVoiceRoute(
       pendingToolCalls += 1;
       toolCallsInResponse = true;
       toolQueue = toolQueue.then(async () => {
+        if (controller.signal.aborted) return;
+        await transcriptQueue;
         if (controller.signal.aborted) return;
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]);
         const output = await executeRealtimeToolCall(call, app.jarvisTools, request, signal);

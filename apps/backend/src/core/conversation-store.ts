@@ -50,7 +50,9 @@ export interface ConversationStore {
     readonly role: ConversationRole;
     readonly text: string;
     readonly model: string | null;
+    readonly sourceItemId?: string;
   }): Promise<ConversationMessage | null>;
+  getDanMessageIdBySourceItemId(sourceItemId: string): Promise<string | null>;
   getHistory(input: {
     readonly limit: number;
     readonly before?: string;
