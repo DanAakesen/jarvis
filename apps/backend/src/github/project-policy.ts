@@ -16,6 +16,10 @@ export interface PolicyPullRequest {
 
 export interface ProjectPolicyStore {
   getPullRequest(repository: string, number: number): Promise<PolicyPullRequest | null>;
+  withActiveTask<T>(
+    taskId: string,
+    operation: () => Promise<T>,
+  ): Promise<{ kind: 'active'; value: T } | { kind: 'inactive' }>;
 }
 
 interface ProjectPolicyOptions {
@@ -275,10 +279,15 @@ export function createProjectPolicyEvaluator({
       }
 
       mergeRequested = true;
-      const result = await requestJson(fetchImpl, `${path}/merge`, token, {
+      const merge = await store.withActiveTask(candidate.taskId, () => requestJson(fetchImpl, `${path}/merge`, token, {
         merge_method: 'squash',
         sha: pullRequest.headSha,
-      });
+      }));
+      if (merge.kind === 'inactive') {
+        await recordReason(candidate.taskId, 'The task is no longer active; automatic merge was not attempted.');
+        return;
+      }
+      const result = merge.value;
       if (result.merged !== true) {
         await recordReason(candidate.taskId, 'GitHub did not confirm the squash merge.');
         return;
