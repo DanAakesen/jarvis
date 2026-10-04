@@ -1,5 +1,6 @@
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
+import { withTaskPolicyLock as withProjectPolicyTaskLock } from './task-policy-lock.js';
 import type { DispatcherStore, DispatchClaimResult, TaskControlTarget } from '../factory/dispatcher.js';
 import type { RunningSandbox } from '../factory/heartbeat.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
@@ -92,6 +93,18 @@ async function insertEvent(
 
 export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEventHub): DispatcherStore {
   return {
+    async withTaskPolicyLock<T>(taskId: string, operation: () => Promise<T>) {
+      return withProjectPolicyTaskLock(pool, taskId, async () => operation());
+    },
+    async hasPendingProjectPolicyMerge(taskId: string) {
+      const { recordset } = await databaseReadRequest(pool)
+        .input('taskId', sql.BigInt, BigInt(taskId))
+        .query<{ pending: boolean }>(`SELECT CONVERT(bit, CASE WHEN EXISTS (
+          SELECT 1 FROM dbo.task_events
+          WHERE task_id = @taskId AND type = N'project_policy_merge_requested'
+        ) THEN 1 ELSE 0 END) AS pending;`);
+      return recordset[0]?.pending === true;
+    },
     async claimNext(owner, leaseSeconds, maxAttempts): Promise<DispatchClaimResult> {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();

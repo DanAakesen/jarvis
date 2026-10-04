@@ -81,6 +81,7 @@ stateDiagram-v2
     Running --> NeedsAttention: Blocked, failed, active sandbox crashed, or disk_low
     NeedsAttention --> Running: Continue or recover
     Running --> Done: Project policy satisfied
+    NeedsAttention --> Done: Verified project policy satisfied
     Ready --> Cancelled: Cancel
     Running --> Cancelled: Cancel
     Paused --> Cancelled: Cancel
@@ -98,7 +99,7 @@ stateDiagram-v2
 - Task state belongs to the backend. State changes must follow this lifecycle; clients cannot write state directly, and Done requires verified GitHub branch and pull-request evidence rather than the provider's completion report alone.
 - Coding agents push small work-in-progress commits to the existing task branch after each meaningful step. They never force-push or push to `main`, and report commit or push failures.
 - Git pushes use a one-hour GitHub App installation token scoped to the task's repository. The runner authenticates to the backend for each Git credential request; the App private key remains in Key Vault and is never sent to a sandbox. Keep the legacy GitHub token path available until the App flow passes its live sandbox push check.
-- **Checks loop:** when a pull request's checks fail, Jarvis sends the failing log back to the same task; the agent fixes and pushes again.
+- **Checks loop:** when a task pull request's required workflow fails, Jarvis stores bounded failing-job logs in private Blob storage and sends a bounded diagnostic plus the log reference to the same running task through its existing steer path. The agent fixes and pushes again. A configurable attempt limit (default 3, range 0–10; 0 disables automatic repair) moves exhausted or unavailable repairs to Needs attention. No GitHub token enters the sandbox.
 - **Done** follows the project policy and verified GitHub results, never the agent's own report.
 - Show observed milestones; use percentages only when measurable. Show stale or disconnected status and reconcile after reconnect.
 - Changing the provider (Codex ↔ Copilot) on a running task is out of scope for now.
@@ -107,11 +108,12 @@ stateDiagram-v2
 
 | Policy | Allowed outcome |
 | --- | --- |
-| **Deliver a PR** | Implement, test, push a task branch, and open or update a pull request. Stop at a green PR. |
-| **Complete without deployment** | Also merge when the project's merge rules pass. |
+| **Deliver a PR** | Implement, test, push a task branch, and open or update a pull request. Stop at a non-draft PR with green checks; mark Done without merging. |
+| **Complete without deployment** | Also squash-merge with the GitHub App when checks are green, the PR is not a draft, its branch is up to date, and GitHub reports it mergeable. Mark Done after the signed merge webhook is persisted. |
 
 - Merge rules and Done are Dan's choices per project.
-- Permissions are enforced in the backend and runner, and GitHub branch protection is respected.
+- The backend applies policy only from task-linked P3-04 GitHub records and current GitHub API state; an agent report never marks a task Done. `NeedsAttention` can become Done only after that verification.
+- The GitHub merge endpoint enforces repository branch protection and required checks. A refusal is recorded on the task and leaves it unfinished.
 
 ### New projects
 
@@ -135,6 +137,7 @@ Global defaults on the settings page; a task can override the coding-agent model
 | Codex | Model and reasoning effort | Codex default |
 | Copilot | Model | Copilot default |
 | Global | Max parallel tasks; sleep switch | Set by Dan |
+| Backend global setting | Maximum automatic check-fix attempts (`global.max_check_attempts`) | 3 (0–10; 0 disables automatic repair) |
 | New projects | Owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | `DanAakesen`, private, `DanAakesen/templates`, Copilot, Deliver a PR, 1, `main` |
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
@@ -276,3 +279,16 @@ The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-l
 - Memory design (Decision 6).
 - What usage Codex and Copilot report per turn ([data model](docs/data-model.md#still-open)); P2-12 records offline package evidence, and actual fields remain a post-merge live check.
 - Whether Foundry sandboxes can get the documented 20 GiB disk (Decision 9).
+
+## Shared UI direction (4 October 2026; planned)
+
+The confirmed requirements and proposed feature placement are in [ui.md](ui.md).
+Jarvis has one typing shell with expandable navigation and context panels, and a
+fullscreen voice workspace with a runtime-state-driven orb. Jarvis can create and
+arrange temporary views of accessible data, while Dan can override layouts and
+move/resize windows. Tabs retain minimised views within the active workspace.
+Voice is explicitly started; the always-available assistant does not continuously
+listen. Desktop and phone layouts follow the mode/window rules in ui.md. Theme
+variables can be changed on demand and persist until changed again. Banking and
+Fitness and Health are future areas; their detailed integrations remain deferred.
+This is planned behaviour, not a claim that the existing frontend implements it.

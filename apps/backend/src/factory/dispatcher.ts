@@ -36,6 +36,8 @@ export interface DispatcherStore {
     invocationId: string;
   }): Promise<string>;
   getControlTarget(taskId: string): Promise<TaskControlTarget | null>;
+  withTaskPolicyLock<T>(taskId: string, operation: () => Promise<T>): Promise<T>;
+  hasPendingProjectPolicyMerge(taskId: string): Promise<boolean>;
   recordControlTurn(target: TaskControlTarget, accepted: InvocationAccepted, message: string): Promise<boolean>;
   recordResumedTurn(target: TaskControlTarget, accepted: InvocationAccepted): Promise<RunningSandbox>;
   endTaskSessions(taskId: string, state: string, invocationCompleted?: boolean): Promise<string[]>;
@@ -271,14 +273,24 @@ export class TaskDispatcher implements TaskController {
     }
     if (task.state === 'Running' && (!activeTurn || !target)) return { kind: 'unavailable' };
     if (task.state === 'Paused' && !target) return { kind: 'unavailable' };
-    if (task.state === 'Running' && target) {
-      try {
-        await this.clientFor(target.agentName).cancel(target.invocationId);
-      } catch {
-        return { kind: 'failed' };
+    const cancellation = await this.store.withTaskPolicyLock(taskId, async () => {
+      const latestTask = await this.tasks.get(taskId, 1, 0);
+      if (!latestTask || latestTask.state !== task.state) return { kind: 'state-changed' as const };
+      if (await this.store.hasPendingProjectPolicyMerge(taskId)) return { kind: 'merge-pending' as const };
+      if (task.state === 'Running' && target) {
+        try {
+          await this.clientFor(target.agentName).cancel(target.invocationId);
+        } catch {
+          return { kind: 'cancel-failed' as const };
+        }
       }
+      return { kind: 'transitioned' as const, result: await this.tasks.transition(taskId, 'Cancelled') };
+    });
+    if (cancellation.kind === 'cancel-failed') return { kind: 'failed' };
+    if (cancellation.kind === 'state-changed' || cancellation.kind === 'merge-pending') {
+      return { kind: 'invalid-transition' };
     }
-    const cancelled = await this.tasks.transition(taskId, 'Cancelled');
+    const cancelled = cancellation.result;
     if (cancelled.kind !== 'ok') return transitionResult(cancelled.kind);
     let cleanupFailed = false;
     if (target) {

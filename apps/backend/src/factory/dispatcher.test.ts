@@ -109,6 +109,8 @@ function idleStore(nextAttemptAt: string | null = null): DispatcherStore {
     failStart: vi.fn(async () => {}),
     recordStarted: vi.fn(async () => '53'),
     getControlTarget: vi.fn(async () => null),
+    withTaskPolicyLock: vi.fn(async (_taskId: string, operation: () => Promise<unknown>) => operation()),
+    hasPendingProjectPolicyMerge: vi.fn(async () => false),
     recordControlTurn: vi.fn(async () => true),
     recordResumedTurn: vi.fn(async () => ({
       sandboxSessionId: '54',
@@ -359,6 +361,47 @@ describe('task dispatcher', () => {
     expect(cancel).not.toHaveBeenCalled();
     expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Cancelled');
     expect(deleteSession).toHaveBeenCalledWith('session-1');
+  });
+
+  it('serializes running-task cancellation with project-policy merges', async () => {
+    const sequence: string[] = [];
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => controlTarget),
+      withTaskPolicyLock: vi.fn(async (_taskId: string, operation: () => Promise<unknown>) => {
+        sequence.push('lock-start');
+        const result = await operation();
+        sequence.push('lock-end');
+        return result;
+      }),
+    };
+    const { dispatcher, cancel, transition } = harness(store);
+    cancel.mockImplementation(async (invocationId) => {
+      sequence.push('cancel');
+      return { invocationId, status: 'cancelled' as const };
+    });
+    transition.mockImplementation(async (_taskId, state) => {
+      sequence.push('transition');
+      return { kind: 'ok' as const, task: { ...controlTask, state } };
+    });
+
+    await dispatcher.control('42', { action: 'cancel' });
+
+    expect(sequence).toEqual(['lock-start', 'cancel', 'transition', 'lock-end']);
+  });
+
+  it('refuses cancellation while an accepted merge awaits its signed webhook', async () => {
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => controlTarget),
+      hasPendingProjectPolicyMerge: vi.fn(async () => true),
+    };
+    const { dispatcher, cancel, transition } = harness(store);
+
+    await expect(dispatcher.control('42', { action: 'cancel' })).resolves.toEqual({ kind: 'invalid-transition' });
+
+    expect(cancel).not.toHaveBeenCalled();
+    expect(transition).not.toHaveBeenCalled();
   });
 
   it('reports a failed Foundry session deletion after cancelling the task', async () => {

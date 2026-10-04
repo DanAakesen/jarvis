@@ -42,7 +42,13 @@ import { createNowFeedStore } from './database/now-feed-store.js';
 import { createRepoAdminRepositoryCreator } from './credentials/repo-admin.js';
 import { createGitHubAppTokenIssuer } from './github-app.js';
 import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js';
+import { createChecksLoopStore } from './database/checks-loop-store.js';
+import { createChecksLoopBlobStore } from './database/checks-loop-blob.js';
+import { createGitHubActionsLogClient } from './github/actions-logs.js';
+import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
+import { createProjectPolicyStore } from './database/project-policy-store.js';
+import { createProjectPolicyEvaluator } from './github/project-policy.js';
 import { createGitHubDeliveryVerifier } from './github/delivery.js';
 
 try {
@@ -173,6 +179,13 @@ try {
   const projectStore = database ? createProjectStore(database.pool) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool) : null;
+  const projectPolicyEvaluator = database && taskStore && githubAppTokenIssuer
+    ? createProjectPolicyEvaluator({
+      store: createProjectPolicyStore(database.pool),
+      tasks: taskStore,
+      tokenIssuer: githubAppTokenIssuer,
+    })
+    : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const dispatcher = database && taskStore && settingsStore && sandboxHeartbeat && config.foundryEndpoints
     ? new TaskDispatcher(
@@ -198,9 +211,35 @@ try {
       },
     )
     : undefined;
+  const checksLoop = database && archiveStorageAccount && credential && githubAppTokenIssuer &&
+    taskStore && settingsStore && dispatcher
+    ? createChecksLoop({
+      store: createChecksLoopStore(database.pool),
+      logs: createGitHubActionsLogClient(githubAppTokenIssuer),
+      blobs: createChecksLoopBlobStore(
+        new BlobServiceClient(
+          `https://${archiveStorageAccount}.blob.core.windows.net`,
+          credential,
+        ).getContainerClient('logs'),
+      ),
+      settings: settingsStore,
+      tasks: taskStore,
+      controller: dispatcher,
+      onError: () => logger.warn('github.checks_loop_recovery_failed'),
+    })
+    : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
-    createGithubWebhookModule({ deliveryStore: webhookDeliveryStore, getSecret: getWebhookSecret }),
+    createGithubWebhookModule({
+      deliveryStore: webhookDeliveryStore,
+      getSecret: getWebhookSecret,
+      ...(checksLoop || projectPolicyEvaluator ? {
+        onMapping: async (mapping) => {
+          await checksLoop?.handleMapping(mapping);
+          await projectPolicyEvaluator?.handle(mapping);
+        },
+      } : {}),
+    }),
   ];
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
@@ -236,6 +275,7 @@ try {
     eventHub,
     ...(conversationAgent ? { conversationAgent } : {}),
   });
+  if (checksLoop) app.addHook('onClose', async () => { await checksLoop.stop(); });
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
@@ -277,6 +317,7 @@ try {
       await sandboxHeartbeat?.start();
       dispatcher?.start();
       await app.listen({ port: config.port, host: '0.0.0.0' });
+      void checksLoop?.start();
       taskEventArchiveJob?.start();
       logger.info({ port: config.port }, 'server.listening');
     }

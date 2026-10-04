@@ -1,6 +1,6 @@
 # Design
 
-No visual direction is chosen yet. Dan designs each page by giving an image generator the page's data points and actions from [PRODUCT.md](PRODUCT.md#page-requirements), then picks a direction. Record the chosen direction, references, and findings here. Requirements stay in PRODUCT.md; token values go in code.
+The shared shell and voice-workspace structure were agreed with Dan on 4 October 2026; final styling remains open. See [the complete UI discussion and wireframes](ui.md). Dan designs each page by giving an image generator the page's data points and actions from [PRODUCT.md](PRODUCT.md#page-requirements), then picks a direction. Record the chosen direction, references, and findings here. Requirements stay in PRODUCT.md; token values go in code.
 
 ## Design goals
 
@@ -230,3 +230,21 @@ reconnect, mute, and stop states with mocked relay/audio APIs. Physical
 microphone and speaker behavior remains unverified. Stop shows "Saving voice
 session…" until the backend has recorded usage, then refreshes conversation
 history.
+
+## Next-generation shared shell (design agreed, not implemented)
+
+[ui.md](ui.md) records the confirmed structure, open questions, feature-placement
+proposals and eight static wireframes. Typing uses a thin left icon rail,
+expandable left navigation, thin top/bottom bars, a contextual right panel and
+a central tabbed workspace. Settings is top-right. Voice hides the shell and
+composer, using a full-page background and a state-driven orb: centred alone,
+left of content windows on desktop, bottom-docked behind one main phone view.
+Windows can tile, overlap, minimise into tabs and be restored by Dan or Jarvis.
+
+Existing windows carry between modes by default. The optional minimise-on-voice
+setting defaults off; when enabled, voice begins with only the orb and windows
+remain docked on return to typing. Otherwise the earlier shell layout returns.
+Generated views are temporary; theme values persist. Small-orb input controls
+start voice explicitly. Glass/transparency and futuristic styling are exploratory;
+white wireframe windows are not a selected final treatment. Existing screen
+documentation below/above describes current implementation, not this future shell.

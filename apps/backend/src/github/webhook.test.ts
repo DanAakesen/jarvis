@@ -44,10 +44,14 @@ function payloadFor(event: string) {
 
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function fixture(getSecret: () => Promise<string | undefined> = async () => secret) {
+function fixture(
+  getSecret: () => Promise<string | undefined> = async () => secret,
+  onMapping?: (mapping: NonNullable<WebhookDeliveryInput['mapping']>) => Promise<void>,
+) {
   const deliveries = new Map<string, WebhookDeliveryInput>();
   const module: BackendModule = createGithubWebhookModule({
     getSecret,
+    ...(onMapping ? { onMapping } : {}),
     deliveryStore: {
       async record(input) {
         if (deliveries.has(input.deliveryId)) return false;
@@ -132,6 +136,76 @@ describe('GitHub webhook receiver', () => {
     expect(duplicate.statusCode).toBe(202);
     expect(duplicate.json()).toEqual({ status: 'duplicate' });
     expect(deliveries.size).toBe(1);
+  });
+
+  it('sends completed failed workflow runs to the checks loop and allows webhook retries', async () => {
+    const onMapping = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary log storage failure'))
+      .mockResolvedValueOnce(undefined);
+    const { app, deliveries } = fixture(async () => secret, onMapping);
+    const payload = payloadFor('workflow_run') as { workflow_run: Record<string, unknown>; repository: typeof repository };
+    payload.workflow_run['conclusion'] = 'failure';
+    const body = Buffer.from(JSON.stringify(payload));
+
+    const first = await deliver(app, 'delivery-failed-run', 'workflow_run', body);
+    expect(first.statusCode).toBe(503);
+    expect(deliveries.size).toBe(1);
+    expect(onMapping).toHaveBeenCalledOnce();
+
+    const retry = await deliver(app, 'delivery-failed-run', 'workflow_run', body);
+    expect(retry.statusCode).toBe(202);
+    expect(retry.json()).toEqual({ status: 'duplicate' });
+    expect(onMapping).toHaveBeenCalledTimes(2);
+    expect(onMapping.mock.calls[0]?.[0]).toMatchObject({
+      kind: 'workflow_run', id: 1_900_000_000_001, conclusion: 'failure',
+    });
+  });
+
+  it('evaluates project policy only after persisted webhook mapping and retries duplicate deliveries', async () => {
+    const order: string[] = [];
+    const getSecret = async () => secret;
+    const onMapping = vi.fn(async () => { order.push('policy'); });
+    const deliveries = new Map<string, WebhookDeliveryInput>();
+    const module: BackendModule = createGithubWebhookModule({
+      getSecret,
+      onMapping,
+      deliveryStore: {
+        async record(input) {
+          order.push('persist');
+          if (deliveries.has(input.deliveryId)) return false;
+          deliveries.set(input.deliveryId, input);
+          return true;
+        },
+      },
+    });
+    const app = buildApp(loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' }), undefined, {
+      modules: [module],
+    });
+    apps.push(app);
+
+    expect((await deliver(app, 'delivery-1')).statusCode).toBe(202);
+    expect((await deliver(app, 'delivery-1')).json()).toEqual({ status: 'duplicate' });
+    expect(order).toEqual(['persist', 'policy', 'persist', 'policy']);
+    expect(onMapping).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns a retryable failure when policy evaluation fails after persistence', async () => {
+    let unavailable = true;
+    const onMapping = vi.fn(async () => {
+      if (unavailable) throw new Error('private provider details');
+    });
+    const { app, deliveries } = fixture(async () => secret, onMapping);
+
+    const failed = await deliver(app, 'delivery-1');
+    expect(failed.statusCode).toBe(503);
+    expect(failed.json()).toEqual({ error: 'Webhook processing unavailable' });
+    expect(deliveries.size).toBe(1);
+
+    unavailable = false;
+    const retried = await deliver(app, 'delivery-1');
+    expect(retried.statusCode).toBe(202);
+    expect(retried.json()).toEqual({ status: 'duplicate' });
+    expect(onMapping).toHaveBeenCalledTimes(2);
   });
 
   it('rejects a signature for different raw bytes before writing a delivery', async () => {
