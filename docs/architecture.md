@@ -13,7 +13,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces for the two apps, one root lockfile | Implemented in P0-01; empty app builds verified in Codex cloud |
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
-| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller and sleep switch | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle |
+| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller and sleep switch | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle; P1-12 implements the authenticated sleep API and board control; live managed-identity ARM operation remains unverified |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton, core/factory module registration and P1-03 projects API implemented; remaining domain APIs and SSE are in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
 | Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, and heartbeat agent routing in #32; deployed heartbeat verification remains open |
@@ -22,7 +22,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Images | Azure Container Registry: backend and sandbox images | Decided |
 | Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-16 |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
-| Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (application role `Jarvis.Tools`) is accepted only on the tool routes (P4-01) | Browser and backend contracts checked offline in #9; agent policy checked offline in P4-01; real Entra sign-in, agent tokens and deployed origin remain unverified pending the P4-08 main deployment and bootstrap |
+| Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (application role `Jarvis.Tools`) is accepted only on the agent-enabled routes: tools (P4-01), turn context (P4-04) and its effective Jarvis-settings read (P4-07) | Browser and backend contracts checked offline in #9; agent policy checked offline in P4-01/P4-04/P4-07; real Entra sign-in, agent tokens and deployed origin remain unverified pending the P4-08 main deployment and bootstrap |
 | Board updates | Server-sent events (SSE) over `fetch`, so the bearer token can be sent | Decided |
 | Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment is P4-08 |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
@@ -86,9 +86,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   partial update transactionally to whitelisted `global` rows in `dbo.settings`.
   The SQL adapter is injected only when database configuration exists; the API
   returns 503 without it. The model catalog offers deployed Jarvis models and
-  only verified provider defaults for Codex and Copilot until P2-11 verifies
-  their CLI model options. Future session/task creation reads these defaults;
-  existing sessions and tasks are not updated.
+  only provider defaults for Codex and Copilot because their available-model
+  catalog values have not been verified. The agent-only `GET /agent/settings`
+  route returns only the effective Jarvis model and reasoning effort to the
+  `Jarvis.Tools` principal. The hosted agent reads it before acknowledging a new
+  session and holds that snapshot for the session; if the read is unavailable,
+  it logs a warning and uses the defaults. Future task creation reads these
+  defaults; existing sessions and tasks are not updated.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
@@ -121,6 +125,20 @@ Done only through a trusted call that confirms completion. The browser and hoste
 agent service identities do not receive a task-state bypass. Responses are capped
 at 1 MiB, and event payloads above 4 KiB are omitted with an explicit truncation
 flag.
+
+`GET /operations/sleep` reports the Container App's configured minimum replicas;
+`PUT /operations/sleep` accepts only awake (1) or asleep (0). Both routes use the
+root's Dan-only authentication. The backend targets only its Bicep-configured
+Container App resource ID and obtains an ARM token with its user-assigned
+managed identity. Before requesting sleep, the task store checks for Ready or
+Running tasks under an exclusive SQL application lock; task creation and state
+transitions use the matching shared lock, held through their writes. The lock
+remains held through the bounded ARM request, closing the race with new active
+tasks. Refusal is a 409; unavailable ARM configuration or failures return a
+sanitized service error. The custom role grants only Container App read/write
+and is assigned at the backend app. Endpoint, refusal, lock, and ARM request
+contracts are tested offline and against SQL Server; live Azure authorization
+and scaling remain unverified.
 
 The factory registers authenticated `GET /factory/projects`,
 `POST /factory/projects`, `PATCH /factory/projects/:id`, and
@@ -257,23 +275,34 @@ P4-03 adds the authenticated `/conversation/sessions` API to the shared backend.
 `POST /conversation/sessions` starts one `jarvis_sessions` row per chat or voice
 sitting, `POST /conversation/sessions/{id}/messages` appends a bounded message to
 an active session, and `POST /conversation/sessions/{id}/end` idempotently records
-its end.
+its end. P4-06 adds `POST /conversation/sessions/{id}/turns` for an active chat
+session. It stores Dan's bounded message first and streams `user`, `delta`, `done`,
+or `error` SSE events; a complete assistant reply is stored before `done`.
 `GET /conversation/history` reads the one continuous conversation across sessions
 in pages of 50 (maximum 100), ordered oldest-to-newest within each page and
 continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
 
+When `JARVIS_CHAT_AGENT_URL` is configured, the backend forwards the caller's
+delegated token and the stored source-message ID to the hosted agent's `/chat`
+route, then relays its text stream. The agent verifies the caller through the
+backend's `/me` route, confirms the exact source message in stored history, and
+uses at most 20 earlier messages / 32,000 characters as context. Its existing
+Responses tool loop records calls against Dan's message ID using the agent
+identity. The backend persists only a completed assistant response; an
+interrupted turn leaves Dan's message visible and the UI warns that an action may
+have completed. The browser never receives agent credentials.
+
 The conversation store shares the process-owned SQL pool and uses the existing
 group-one schema; no migration or new service is required. Tool calls continue to
 be written by the P4-02 dispatcher against their source message. The task schema
 already requires `origin_message_id` for non-board tasks; task-creation write
 paths remain in P1-04/P4-01. The global authentication hook keeps these routes
-restricted to Dan. Store, API and web behavior are tested offline; Azure SQL and
-live Entra behavior remain unverified. The store also passes a disposable SQL
-Server integration test, not a production Azure SQL test. The main page reads
-history now; message sending and session lifecycle wiring remain with chat and
-voice tasks (P4-06/P5-03/P5-04).
+restricted to Dan. Store, API, agent route and web behavior are tested offline;
+Azure SQL, live Entra and the configured Foundry agent URL remain unverified.
+The store also passes a disposable SQL Server integration test, not a production
+Azure SQL test. P4-08 must deploy the custom route and configure the backend URL.
 
 ```mermaid
 flowchart LR
@@ -369,9 +398,9 @@ These boxes are responsibilities; they do not each need a separate service.
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`. No polling. |
 | Board updates | The backend pushes to the board with SSE; the browser reconnects and reconciles. |
 | Idle | No SQL queries while no task is Ready, Running, or waiting for a retry. The dispatcher wakes on task changes and on the next retry time, not by polling. |
-| Always on | The backend runs with a minimum of 1 replica, so the heartbeat never stops. The board's sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while tasks run. The backend does not query SQL while idle, so the database can still pause. |
+| Always on | The backend normally runs with a minimum of 1 replica, so the heartbeat never stops. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready or Running. The backend does not query SQL while idle, so the database can still pause. |
 
-Scale settings are revision-scope in Container Apps, so the sleep switch creates a new revision; that is acceptable because it is used only when nothing runs.
+Scale settings are revision-scope in Container Apps, so the sleep switch creates a new revision; that is acceptable because it is used only when nothing runs. The SQL application lock blocks new active-task writes between the idle check and the ARM update.
 
 ## Coding sandbox
 
@@ -388,7 +417,7 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | Idle timeout | 2 minutes without requests shuts the sandbox down; files and the conversation survive an idle shutdown. |
 | Crash | Files and conversation since the last persist point are lost; a new agent version does not restart running sessions. Recovery starts a new session from the task branch with the task history from SQL; the agent pushes often (L22). |
 | Endpoints | Administration (connections, versions): `*.services.ai.azure.com`. Sessions and Invocations: `*.cognitiveservices.azure.com` (L10). |
-| Settings | Model and reasoning per task: `codex-acp` (`model`, `model_reasoning_effort`) and Copilot `--model`; **verify** in P2. |
+| Settings | The Foundry invocation carries the effective `model` and, for Codex, `reasoning`. Copilot CLI 1.0.91 accepts `--model`; `@agentclientprotocol/codex-acp` 2.1.1 applies `model` and `reasoning_effort` through `session/set_config_option`. The runner retains the effective values with the ACP session so steer/resume does not pick up changed defaults. The dispatcher (P2-05) still resolves task overrides over settings defaults. |
 
 ### Production runner implementation
 
@@ -396,6 +425,16 @@ Issue #28 ports the adapter to `runner/` with task, steer, pause, resume, cancel
 credential probe, and Codex renewal handlers. Prototype crash-test mode is removed.
 Local Python tests exercise ACP subprocess fixtures; production Azure acceptance
 remains pending #11 and the main-branch runner workflow.
+
+P2-11 extends the invocation body with the effective model and optional Codex
+reasoning effort. Copilot receives a non-default model as a separate `--model`
+argument; Codex receives non-default values with ACP `session/set_config_option`
+(`model`, then `reasoning_effort`) and the runner verifies the returned current
+value. The ACP session metadata preserves those choices across process recreation.
+The dispatcher must pass the task override when present, otherwise the settings
+default; its settings-store integration remains P2-05. No model catalog values
+beyond provider default have been enabled, and live provider selection remains
+unverified.
 
 - Node/Python use the small base image; a separate .NET image adds SDK 8.0.419.
   Both expose 1 vCPU / 2 GiB and 2 vCPU / 4 GiB variants. The default stays 1×2;
@@ -489,7 +528,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Area | Design | Evidence |
 | --- | --- | --- |
 | Browser connection | Browser connects to the backend's authenticated `/voice` WebSocket using its delegated API token in the WebSocket subprotocol. When `VOICE_LIVE_ENDPOINT` is configured, the backend obtains a Voice Live-scoped token with `DefaultAzureCredential`, pins the `gpt-realtime-2.1` model, and opens the upstream connection; provider credentials never enter the browser or URL. | Backend configuration and a local mock verify endpoint validation, authentication, relay, and model pinning. P0-16 must configure the endpoint and provider identity; Azure interoperability and browser audio are unverified. |
-| Danish path | Browser microphone → Voice Live voice agent (`kind: voice`) → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | 20/20 Danish commands, 4/4 status answers |
+| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | Local mock tests verify the Danish route and relay; the hash-locked provisioner definition sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live deployment, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
 | English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | Local mock tests verify the server-owned session update; browser audio and live Voice Live behavior remain unverified pending P0-16/P5-04. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Voice calls are not yet persisted as messages/tool-call rows; P4-03/P5-06 own conversation and voice history. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
@@ -500,15 +539,20 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Interruption | The client stops playback on Voice Live's `speech_started` | Detected in 0.6 s |
 | Reconnect | Reconnect automatically when the voice bridge ends | L21 |
 
-P5-03 pins the English model and Ryan HD in the backend. P5-05 will connect language and voice selection to settings; Danish voice provisioning and history remain separate tasks.
+P5-03 pins the English model and Ryan HD in the backend. P5-02 provides Danish voice provisioning; P5-05 will connect language and voice selection to settings, and P5-06 owns voice history.
+
+The Danish backend connector uses the Foundry project endpoint from `FOUNDRY_PROJECT_ENDPOINT` and a server-side Azure Identity token. Bicep grants the backend managed identity the `Foundry User` role on the project. After a successful `Deploy`, its smoke step grants the workflow's deploy identity `Foundry User`; the `Danish voice agent` workflow then creates/updates `jarvis-voice-mai` when provisioning inputs change, or by manual dispatch. It uses a hash-locked SDK to wrap the hosted agent `jarvis`. Browser audio remains P5-04.
 
 ### Jarvis agent
 
 `agents/jarvis` (P4-01) is the ported voice-prototype agent: the Voice Live Bridge
-runtime, response coordinator, strict action rules for spoken Danish replies and the `gpt-5.6-luna` tool loop
-over the Responses API. It defines no tools itself. Each turn loads the backend
-catalogue from `GET /tools` (cached for 60 seconds) and sends each model tool call
-to `POST /tools/{name}`. The agent gets a token for `api://<jarvis-api>/.default`
+runtime, response coordinator, strict action rules for spoken Danish replies and
+a per-session model tool loop over the Responses API. At session start it reads
+effective model and reasoning settings from the agent-only `GET /agent/settings`
+route, then uses the immutable snapshot for each model request in that session.
+It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
+(cached for 60 seconds) and sends each model tool call to `POST /tools/{name}`.
+The agent gets a token for `api://<jarvis-api>/.default`
 from its platform identity through `DefaultAzureCredential`; the same credential
 reaches the model when no API key is set. The backend result is passed back to the
 model unchanged. Only `outcome: "ok"` counts as done.
@@ -542,6 +586,7 @@ record. Deployment to Foundry and live agent tokens are P4-08.
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID. The hosted Jarvis agent is assigned the application role `Jarvis.Tools` and may call only the tool routes.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
+- The backend identity has `Foundry User` on the Foundry project for the Danish voice relay.
 - Secrets only in Key Vault; none in code, images, environment variables, or logs.
 
 ## Bicep resources
@@ -559,11 +604,11 @@ record. Deployment to Foundry and live agent tokens are P4-08.
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (the SSE hub and dispatcher run in one process; more copies need Web PubSub, see Ideas in PLAN.md); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), and optional `ENTRA_JARVIS_AGENT_OBJECT_ID` |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (the SSE hub and dispatcher run in one process; more copies need Web PubSub, see Ideas in PLAN.md); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `FOUNDRY_PROJECT_ENDPOINT`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID` |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Monthly budget | `jarvis-monthly` | Resource-group scoped; 300 in the subscription billing currency, monthly from 1 October 2026 (fixed start date; Azure rejects changing it), actual-cost alerts above 80 % and 100 % to resource group owners |
 
-The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, **Key Vault Secrets User** at the vault, and **Foundry User** on the Foundry project for runtime status polling. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live Azure connectivity and role-assignment verification remain pending.
+The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling and the Danish voice agent), and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live sleep-switch role assignment and ARM behavior remain unverified until the change is deployed.
 
 Required deployment parameters are the full `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` and `jarvisAgentObjectId` are optional. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed.
 

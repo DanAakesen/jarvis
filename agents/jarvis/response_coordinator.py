@@ -426,7 +426,9 @@ class ResponseCoordinator:
         item_id = new_item_id()
         first_chunk = True
         request = operation.state.history.create_request(prompt)
-        async for chunk in self._model_client.complete(request):
+        async for chunk in self._model_client.complete(
+            request, settings=operation.state.model_settings
+        ):
             encoded = len(chunk.encode("utf-8"))
             if len(chunks) >= MAX_OUTPUT_CHUNKS or utf8_bytes + encoded > MAX_OUTPUT_UTF8_BYTES:
                 raise RuntimeError("Model output exceeded sample limits")

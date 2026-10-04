@@ -26,13 +26,25 @@ from jarvis_tools import (
     model_tools,
 )
 from model_contract import StreamingModelClient
-from state import ModelMessage
+from state import ModelMessage, ModelSettings
 
 FOUNDRY_TOKEN_SCOPE = "https://ai.azure.com/.default"
 DEFAULT_SYSTEM_PROMPT = INSTRUCTIONS
 DEFAULT_MAX_OUTPUT_TOKENS = 512
 MAX_OUTPUT_TOKENS = 4096
 MAX_TOOL_ROUNDS = 5
+CHAT_INSTRUCTIONS = {
+    "da": """You are Jarvis, Dan's personal AI assistant for his software factory.
+Reply in natural Danish, using concise written language and markdown only when it helps.
+Use the available backend tools for task and project data; never invent projects,
+tasks, status or actions. Only say an action succeeded when its tool result reports
+success. If a tool fails or refuses, say so plainly.""",
+    "en": """You are Jarvis, Dan's personal AI assistant for his software factory.
+Reply in clear, natural English, using concise written language and markdown only when it helps.
+Use the available backend tools for task and project data; never invent projects,
+tasks, status or actions. Only say an action succeeded when its tool result reports
+success. If a tool fails or refuses, say so plainly.""",
+}
 
 _tracer = trace.get_tracer("VoiceHostedAgent.Model")
 logger = logging.getLogger("model_client")
@@ -149,8 +161,40 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         """Short, secret-free status of the backend tools for troubleshooting."""
         return self._tools.diagnostics()
 
-    async def complete(self, messages: Sequence[ModelMessage]) -> AsyncIterator[str]:
+    async def session_settings(self) -> ModelSettings:
+        """Load the effective settings that this hosted session will retain."""
+        return await self._tools.model_settings()
+
+    async def complete(
+        self, messages: Sequence[ModelMessage], *, settings: ModelSettings | None = None
+    ) -> AsyncIterator[str]:
         """Run the Jarvis tool loop and stream the spoken text of each model round."""
+        async for delta in self._complete(messages, self._system_prompt, settings):
+            yield delta
+
+    async def complete_chat(
+        self,
+        messages: Sequence[ModelMessage],
+        language: str,
+        *,
+        settings: ModelSettings | None = None,
+    ) -> AsyncIterator[str]:
+        """Stream a written chat reply in the selected language."""
+        if language not in CHAT_INSTRUCTIONS:
+            raise ValueError("Unsupported chat language")
+        async for delta in self._complete(messages, CHAT_INSTRUCTIONS[language], settings):
+            yield delta
+
+    async def _complete(
+        self,
+        messages: Sequence[ModelMessage],
+        instructions: str,
+        settings: ModelSettings | None,
+    ) -> AsyncIterator[str]:
+        model_name = settings.model if settings is not None else self.model_name
+        reasoning_effort = (
+            settings.reasoning_effort if settings is not None else self._reasoning_effort
+        )
         model_input: list[Any] = [
             {"role": message.role, "content": message.content} for message in messages
         ]
@@ -160,7 +204,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             attributes={
                 "gen_ai.operation.name": "chat",
                 "gen_ai.provider.name": "Azure OpenAI",
-                "gen_ai.request.model": self.model_name,
+                "gen_ai.request.model": model_name,
                 "server.address": self.server_address,
             },
         ) as span:
@@ -183,8 +227,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     first_text_ms: int | None = None
                     final = None
                     request: dict[str, Any] = {
-                        "model": self.model_name,
-                        "instructions": self._system_prompt,
+                        "model": model_name,
+                        "instructions": instructions,
                         "input": model_input,
                         "max_output_tokens": self._max_output_tokens,
                         "store": False,
@@ -192,8 +236,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     }
                     if tools:
                         request["tools"] = tools
-                    if self._reasoning_effort:
-                        request["reasoning"] = {"effort": self._reasoning_effort}
+                    if reasoning_effort and reasoning_effort != "none":
+                        request["reasoning"] = {"effort": reasoning_effort}
                         request["include"] = ["reasoning.encrypted_content"]
                     stream = await self._client.responses.create(**request)
                     async with stream:

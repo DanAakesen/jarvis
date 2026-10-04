@@ -29,7 +29,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 
 | Area | Requirement |
 | --- | --- |
-| **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice). |
+| **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. |
 | **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
 | **Updates** | Events update state and progress live, without manual refresh. |
 | **Assignment** | One active coding agent per task. |
@@ -44,7 +44,7 @@ Only phase 1 is in scope now. Banking, health and fitness, calendar, and other a
 | **Project settings** | Per project: how far agents may go (deliver a PR, or complete without deployment), merge rules, sandbox size. |
 | **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models; updates affect new sessions and tasks, not running work. |
 | **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. |
-| **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. The hosted Jarvis agent has its own identity and may only list and call tools. No passwords in Jarvis. |
+| **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. The hosted Jarvis agent has its own identity; it may read only its effective model settings and list and call tools. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Memory** | One continuous conversation will need compaction and memory over time; the memory design is deferred. |
 | **Turn context** | Each model turn receives current running-task status and recent events plus a bounded recent-message window, so typical status questions do not need a separate task-list model round. |
@@ -117,6 +117,8 @@ Global defaults on the settings page; a task can override the coding-agent model
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
+Danish voice uses the authenticated backend `/voice/da` WebSocket to a provisioned Foundry Voice Live agent. The agent bridges to the hosted Jarvis agent, uses MAI Transcribe with language `da` and the Danish phrase list, and fixes Harper to `da-DK`.
+
 ### Page requirements
 
 Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
@@ -125,10 +127,10 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 | Data points | Actions |
 | --- | --- |
-| Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
+| Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, streamed replies, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
 | Voice state: listening, thinking, speaking; what Jarvis heard; latency | Interrupt by speaking; mute |
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings | Open a task, release, or project; dismiss an activity item |
-| Backend state: awake or asleep | Sleep switch (refused while tasks run) |
+| Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready or Running |
 
 #### Software Factory — task view
 
@@ -187,10 +189,14 @@ the last-release field is explicitly unavailable rather than inferred.
 | Credentials: name, expiry, last renewal, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
 
 The settings API validates choices against the server's available-model catalog.
-Until provider model support is verified, Codex and Copilot use their provider
-defaults. The global parallel-task limit is a whole number from 1 to 100. Voice
-sample playback, the sleep switch, and credential data/actions remain visibly
-unavailable with an explanation until their owning services exist.
+The coding-agent catalog currently offers only each provider's default. P2-11
+verifies the runner path for explicit model values: Copilot uses its CLI `--model`
+option; Codex uses the ACP `model` and `reasoning_effort` session options. Task
+overrides take precedence over settings defaults when the dispatcher supplies
+the effective values. Actual provider/model availability still needs a live
+task. The global parallel-task limit is a whole number from 1 to 100. The
+sleep switch is on the main page; voice sample playback and credential
+data/actions remain visibly unavailable until their owning services exist.
 
 #### Usage and cost
 

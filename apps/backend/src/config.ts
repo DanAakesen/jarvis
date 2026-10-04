@@ -1,7 +1,7 @@
 import type { Level } from 'pino';
 import { loadAuthConfig, type AuthConfig } from './auth/config.js';
 import { ConfigurationError } from './configuration-error.js';
-import { normalizeVoiceLiveEndpoint } from './voice/relay.js';
+import { normalizeFoundryProjectEndpoint, normalizeVoiceLiveEndpoint } from './voice/relay.js';
 export { ConfigurationError } from './configuration-error.js';
 
 export interface BackendConfig {
@@ -14,6 +14,8 @@ export interface BackendConfig {
     admin: string;
     runtime: string;
   };
+  chatAgentUrl?: string;
+  foundryProjectEndpoint?: string;
   auth: AuthConfig;
 }
 
@@ -78,6 +80,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     }
   }
 
+  let chatAgentUrl: string | undefined;
+  if (env.JARVIS_CHAT_AGENT_URL !== undefined) {
+    try {
+      const url = new URL(env.JARVIS_CHAT_AGENT_URL.trim());
+      if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.search || url.hash) {
+        throw new Error();
+      }
+      chatAgentUrl = url.toString().replace(/\/+$/, '');
+    } catch {
+      throw new ConfigurationError('JARVIS_CHAT_AGENT_URL must be a secure HTTPS URL without credentials, query, or fragment');
+    }
+  }
+  let foundryProjectEndpoint: string | undefined;
+  if (env.FOUNDRY_PROJECT_ENDPOINT !== undefined) {
+    try {
+      foundryProjectEndpoint = normalizeFoundryProjectEndpoint(env.FOUNDRY_PROJECT_ENDPOINT.trim());
+    } catch {
+      throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT must be a secure Azure AI project URL');
+    }
+  }
+
   return {
     auth: loadAuthConfig(env),
     port: Number(port),
@@ -88,6 +111,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryAdminEndpoint === undefined || foundryRuntimeEndpoint === undefined ? {} : {
       foundryEndpoints: { admin: foundryAdminEndpoint, runtime: foundryRuntimeEndpoint },
     }),
+    ...(chatAgentUrl === undefined ? {} : { chatAgentUrl }),
+    ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
   };
 }
 

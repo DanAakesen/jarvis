@@ -35,7 +35,10 @@ export interface FoundryClientOptions {
 }
 
 export interface RequestOptions { signal?: AbortSignal }
-export interface TaskRequest { agent: CodingAgent; task: string }
+/** Effective task configuration; the dispatcher resolves overrides before settings defaults. */
+export type TaskRequest =
+  | { agent: "copilot"; task: string; model?: string }
+  | { agent: "codex"; task: string; model?: string; reasoning?: string };
 export interface InvocationAccepted {
   invocationId: string;
   sessionId: string;
@@ -78,6 +81,26 @@ function text(value: unknown, name: string): string {
     throw new TypeError(`${name} must contain 1–65536 characters`);
   }
   return value;
+}
+
+function option(value: unknown, name: string, limit: number): string | undefined {
+  if (value === undefined || value === "default") return undefined;
+  if (typeof value !== "string" || !value.trim() || value.trimStart().startsWith("-") || value.length > limit ||
+      [...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
+    throw new TypeError(`${name} must be a valid option of at most ${limit} characters`);
+  }
+  return value;
+}
+
+function taskBody(request: TaskRequest): JsonObject {
+  const model = option(request.model, "model", 100);
+  const reasoning = request.agent === "codex" ? option(request.reasoning, "reasoning", 32) : undefined;
+  return {
+    agent: agent(request.agent),
+    task: text(request.task, "task"),
+    ...(model === undefined ? {} : { model }),
+    ...(reasoning === undefined ? {} : { reasoning }),
+  };
 }
 
 function agent(value: unknown): CodingAgent {
@@ -137,7 +160,7 @@ export class FoundryClient {
 
   async startTask(request: TaskRequest, options: RequestOptions = {}): Promise<InvocationAccepted> {
     const body = await this.runtimeRequest("start", "protocols/invocations", "POST", {
-      agent: agent(request.agent), task: text(request.task, "task"),
+      ...taskBody(request),
     }, undefined, options);
     return this.accepted(body, "start", undefined, request.agent);
   }
@@ -160,7 +183,7 @@ export class FoundryClient {
   /** Caller uses this only after a clean pause/idle shutdown; crash recovery starts a new session. */
   async resume(sessionId: string, request: TaskRequest, options: RequestOptions = {}): Promise<InvocationAccepted> {
     const body = await this.runtimeRequest("resume", "protocols/invocations", "POST", {
-      agent: agent(request.agent), task: text(request.task, "task"),
+      ...taskBody(request),
     }, identifier(sessionId, "sessionId"), options);
     return this.accepted(body, "resume", sessionId, request.agent);
   }

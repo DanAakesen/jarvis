@@ -218,6 +218,37 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     return { settings: mergeSettings(parseStoredValues(stored)), options: settingsOptions };
   });
 
+  app.get('/agent/settings', {
+    config: { jarvisAgent: true },
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: { model: { type: 'string' }, reasoningEffort: { type: 'string' } },
+          required: ['model', 'reasoningEffort'],
+          additionalProperties: false,
+        },
+        403: {
+          type: 'object',
+          properties: { error: { type: 'string' } },
+          required: ['error'],
+          additionalProperties: false,
+        },
+        503: {
+          type: 'object',
+          properties: { error: { type: 'string' } },
+          required: ['error'],
+          additionalProperties: false,
+        },
+      },
+    },
+  }, async (request, reply) => {
+    if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
+    if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
+    const settings = mergeSettings(parseStoredValues(await app.settingsStore.read()));
+    return { model: settings.jarvis.model, reasoningEffort: settings.jarvis.reasoning };
+  });
+
   app.patch('/settings', { schema: { body: settingsPatchSchema } }, async (request, reply) => {
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const body = request.body as { settings: unknown };

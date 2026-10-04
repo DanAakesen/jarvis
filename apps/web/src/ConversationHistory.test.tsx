@@ -1,11 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { ConversationHistory } from './ConversationHistory';
 
-const { loadConversationHistory } = vi.hoisted(() => ({
+const { loadConversationHistory, createChatSession, sendChatTurn } = vi.hoisted(() => ({
   loadConversationHistory: vi.fn(),
+  createChatSession: vi.fn(),
+  sendChatTurn: vi.fn(),
 }));
-vi.mock('./conversation-history', () => ({ loadConversationHistory }));
+vi.mock('./conversation-history', () => ({ loadConversationHistory, createChatSession, sendChatTurn }));
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com' };
 const client = {} as never;
@@ -20,44 +23,56 @@ const message = {
   at: '2026-10-03T12:00:00.000Z',
   toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'ok' as const, taskId: '77' }],
 };
+const session = { id: '41', language: 'da' as const };
+const userMessage = {
+  id: '51', sessionId: '41', role: 'dan' as const, text: 'Hello Jarvis', model: null, at: '2026-10-03T12:01:00.000Z',
+};
+const assistantMessage = {
+  id: '52', sessionId: '41', role: 'jarvis' as const, text: 'I am ready.', model: null, at: '2026-10-03T12:02:00.000Z',
+};
+
+function renderConversation() {
+  return render(
+    <MemoryRouter>
+      <ConversationHistory client={client} config={config} />
+    </MemoryRouter>,
+  );
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
+  createChatSession.mockResolvedValue(session);
 });
 
 describe('ConversationHistory', () => {
-  it('shows persisted messages and tool-call task references', async () => {
-    const refused = {
-      ...message,
-      toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'refused' as const, taskId: null }],
-    };
-    loadConversationHistory.mockResolvedValue({ messages: [refused], nextCursor: null });
-    render(<ConversationHistory client={client} config={config} />);
+  it('shows persisted tool outcomes and task links', async () => {
+    loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });
+    renderConversation();
 
     expect(await screen.findByText('I started the task.')).not.toBeNull();
-    expect(screen.getByText('factory_create_task · refused')).not.toBeNull();
-    expect(screen.getByRole('heading', { name: 'Conversation history' })).not.toBeNull();
+    expect(screen.getByText('factory_create_task · ok')).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Task #77' }).getAttribute('href')).toBe('/factory/tasks/77');
   });
 
   it('shows loading and empty states', async () => {
     let resolve: ((value: { messages: []; nextCursor: null }) => void) | undefined;
     loadConversationHistory.mockReturnValue(new Promise((done) => { resolve = done; }));
-    render(<ConversationHistory client={client} config={config} />);
+    renderConversation();
 
     expect(screen.getByRole('status').textContent).toBe('Loading conversation history…');
     resolve?.({ messages: [], nextCursor: null });
-    expect(await screen.findByText('No conversation history yet.')).not.toBeNull();
+    expect(await screen.findByText('No messages yet. Send a message to begin the conversation.')).not.toBeNull();
   });
 
   it('offers a retry after a history failure', async () => {
     loadConversationHistory.mockRejectedValueOnce(new Error('History unavailable'));
-    render(<ConversationHistory client={client} config={config} />);
+    renderConversation();
 
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'History unavailable');
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByText('No conversation history yet.')).not.toBeNull();
+    expect(await screen.findByText('No messages yet. Send a message to begin the conversation.')).not.toBeNull();
     expect(loadConversationHistory).toHaveBeenCalledTimes(2);
   });
 
@@ -65,7 +80,7 @@ describe('ConversationHistory', () => {
     const older = { ...message, id: '40', text: 'An earlier message.', toolCalls: [] };
     loadConversationHistory.mockResolvedValueOnce({ messages: [message], nextCursor: '40' })
       .mockResolvedValueOnce({ messages: [older], nextCursor: null });
-    render(<ConversationHistory client={client} config={config} />);
+    renderConversation();
     await screen.findByText('I started the task.');
 
     fireEvent.click(screen.getByRole('button', { name: 'Load older history' }));
@@ -76,5 +91,71 @@ describe('ConversationHistory', () => {
     expect(renderedMessages[0]?.textContent).toContain('An earlier message.');
     expect(renderedMessages[1]?.textContent).toContain('I started the task.');
     expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config, '40');
+  });
+
+  it('streams a reply while keeping the send control pending', async () => {
+    let finish: ((value: typeof assistantMessage) => void) | undefined;
+    const savedHistory = [userMessage, assistantMessage].map((saved) => ({
+      ...saved,
+      channel: 'chat' as const,
+      language: 'da' as const,
+      toolCalls: [],
+    }));
+    loadConversationHistory.mockResolvedValueOnce({ messages: [], nextCursor: null })
+      .mockResolvedValueOnce({ messages: savedHistory, nextCursor: null });
+    sendChatTurn.mockImplementation(async (_client, _config, _session, _text, onUser, onDelta) => {
+      onUser(userMessage);
+      onDelta('I am');
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Hello Jarvis' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByLabelText('Jarvis reply in progress')).toHaveProperty('textContent', 'I am');
+    expect(screen.getByRole('status').textContent).toBe('Jarvis is replying…');
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
+    finish?.(assistantMessage);
+
+    expect(await screen.findByText('I am ready.')).not.toBeNull();
+    expect(createChatSession).toHaveBeenCalledWith(client, config, 'da');
+    expect(sendChatTurn).toHaveBeenCalledWith(
+      client,
+      config,
+      session,
+      'Hello Jarvis',
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+    );
+  });
+
+  it('shows partial text and recovery guidance after an interrupted reply', async () => {
+    const savedUser = {
+      ...userMessage,
+      channel: 'chat' as const,
+      language: 'da' as const,
+      toolCalls: [],
+    };
+    loadConversationHistory.mockResolvedValueOnce({ messages: [], nextCursor: null })
+      .mockResolvedValueOnce({ messages: [savedUser], nextCursor: null });
+    sendChatTurn.mockImplementationOnce(async (_client, _config, _session, _text, onUser, onDelta) => {
+      onUser(userMessage);
+      onDelta('Partial');
+      throw new Error('A task action may still have completed; check its status before trying again.');
+    });
+    renderConversation();
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'Start a task' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'A task action may still have completed; check its status before trying again.',
+    );
+    expect(await screen.findByText('Partial reply, interrupted: Partial')).not.toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('value', '');
   });
 });

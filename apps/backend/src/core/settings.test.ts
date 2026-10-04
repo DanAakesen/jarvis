@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
+import type { TokenVerifier } from '../auth/verify.js';
 import { flattenSettings, type SettingsStore } from './settings.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -20,9 +21,13 @@ function createStore(): { store: SettingsStore; values: Record<string, unknown> 
   return { store, values };
 }
 
-function fixture(settingsStore?: SettingsStore) {
+function fixture(settingsStore?: SettingsStore, auth: TokenVerifier = async () => ({
+  objectId: config.auth.ownerObjectId,
+  tenantId: config.auth.tenantId,
+  displayName: 'Dan',
+})) {
   const app = buildApp(config, undefined, {
-    auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+    auth,
     ...(settingsStore ? { settingsStore } : {}),
   });
   apps.push(app);
@@ -79,6 +84,36 @@ describe('settings API', () => {
       'voice.default_language': '"en"',
       'global.max_parallel_tasks': '4',
     });
+  });
+
+  it('returns only effective Jarvis model settings to the agent identity', async () => {
+    const { store } = createStore();
+    await store.write({ jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' } });
+    const app = fixture(store, async () => ({
+      kind: 'jarvis-agent',
+      objectId: '00000000-0000-0000-0000-000000000001',
+      tenantId: config.auth.tenantId,
+    }));
+
+    const response = await app.inject({ url: '/agent/settings', headers: authorization });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ model: 'gpt-5.6-luna', reasoningEffort: 'high' });
+  });
+
+  it('does not expose agent settings to Dan or when persistence is unavailable', async () => {
+    const dan = fixture(createStore().store);
+    const noStore = fixture(undefined, async () => ({
+      kind: 'jarvis-agent',
+      objectId: '00000000-0000-0000-0000-000000000001',
+      tenantId: config.auth.tenantId,
+    }));
+
+    const denied = await dan.inject({ url: '/agent/settings', headers: authorization });
+    const unavailable = await noStore.inject({ url: '/agent/settings', headers: authorization });
+
+    expect(denied.statusCode).toBe(403);
+    expect(unavailable.statusCode).toBe(503);
   });
 
   it.each([

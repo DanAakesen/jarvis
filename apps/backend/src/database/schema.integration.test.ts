@@ -106,6 +106,8 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     const row = await pool.request().query<{ state: string; priority: number; attempt_count: number }>(
       `SELECT state, priority, attempt_count FROM dbo.tasks WHERE id = ${String(task)}`);
     expect(row.recordset).toEqual([{ state: 'Running', priority: 0, attempt_count: 0 }]);
+    await pool.request().input('taskId', sql.BigInt, BigInt(task))
+      .query('UPDATE dbo.tasks SET state = N\'Done\' WHERE id = @taskId;');
   });
 
   it('creates, filters, reads and transitions tasks with transactional history', async () => {
@@ -120,6 +122,10 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     const created = await store.create({ projectId, title: 'Task API contract', request: 'Exercise SQL task operations' });
     expect(created).toMatchObject({ projectId, agent: 'copilot', source: 'board', state: 'Ready' });
     if (!created) throw new Error('Task API fixture task was not created');
+    let idleOperationRan = false;
+    expect(await store.withNoActiveTasks(async () => { idleOperationRan = true; }))
+      .toEqual({ kind: 'active' });
+    expect(idleOperationRan).toBe(false);
 
     expect(await store.list({
       projectId, agent: 'copilot', state: 'Ready', search: 'contract',
@@ -175,6 +181,8 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     await transition(created.id, 'Running');
     await transition(created.id, 'Done', true);
     expect((await store.transition(created.id, 'Running')).kind).toBe('invalid-transition');
+    await expect(store.withNoActiveTasks(async () => 'scale updated'))
+      .resolves.toEqual({ kind: 'idle', value: 'scale updated' });
 
     const readyCancel = await store.create({ projectId, title: 'Cancel ready', request: 'Cancel before start' });
     if (!readyCancel) throw new Error('Ready task fixture was not created');

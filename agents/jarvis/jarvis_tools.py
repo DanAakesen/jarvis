@@ -21,6 +21,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+from state import ModelSettings
+
 logger = logging.getLogger("jarvis_tools")
 
 INSTRUCTIONS = """You are Jarvis, Dan's voice assistant for his software factory.
@@ -90,6 +92,22 @@ TokenProvider = Callable[[], Awaitable[str]]
 
 class BackendUnavailable(RuntimeError):
     """The tool catalogue could not be loaded; the turn fails visibly."""
+
+
+def _model_settings(value: Any) -> ModelSettings:
+    if not isinstance(value, dict):
+        raise ValueError("invalid Jarvis settings")
+    model = value.get("model")
+    reasoning_effort = value.get("reasoningEffort")
+    if (
+        not isinstance(model, str)
+        or not model.strip()
+        or len(model) > 100
+        or any(ord(character) < 32 or ord(character) == 127 for character in model)
+        or reasoning_effort not in {"none", "low", "medium", "high"}
+    ):
+        raise ValueError("invalid Jarvis settings")
+    return ModelSettings(model, reasoning_effort)
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,6 +232,25 @@ class BackendToolClient:
             self._catalogue = catalogue
             self._loaded_at = self._clock()
             return catalogue
+
+    async def model_settings(self) -> ModelSettings:
+        """Read effective Jarvis settings to snapshot for one new session."""
+        try:
+            headers = {"Authorization": _bearer(await self._token())}
+            async with self._http.stream(
+                "GET", f"{self._base_url}/agent/settings", headers=headers
+            ) as response:
+                if response.status_code != 200:
+                    raise RuntimeError(
+                        f"GET /agent/settings returned HTTP {response.status_code}"
+                    )
+                body = json.loads(await _read_bounded(response))
+            return _model_settings(body)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self.last_error = f"settings: {type(exc).__name__}"
+            raise BackendUnavailable("Jarvis settings are unavailable") from exc
 
     async def _load(self) -> tuple[BackendTool, ...]:
         headers = {"Authorization": _bearer(await self._token())}

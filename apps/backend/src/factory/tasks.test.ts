@@ -70,6 +70,7 @@ function fixture(
     get: vi.fn(async () => detail),
     getRunningContext: vi.fn(async () => context),
     transition: vi.fn(async () => ({ kind: 'ok' as const, task })),
+    withNoActiveTasks: vi.fn(async (operation) => ({ kind: 'idle' as const, value: await operation() })),
     recordEvent: vi.fn(async (event) => ({
       id: '20',
       taskId: event.taskId,

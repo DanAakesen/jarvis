@@ -2,6 +2,7 @@ import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import { ActivityPanel } from './ActivityPanel';
 import type { NowFeed } from './activity';
+import { BackendSleepControl } from './BackendSleepControl';
 import { ConversationHistory } from './ConversationHistory';
 import './ConversationHistory.css';
 
@@ -26,28 +27,10 @@ export function JarvisPage({
         <section className="panel" aria-labelledby="conversation-heading">
           <h2 id="conversation-heading">Conversation</h2>
           <p id="conversation-status">
-            Chat isn&apos;t connected yet, so you can&apos;t send new messages. Previously saved messages from chat and
-            voice sessions appear below.
+            Chat messages are saved across sessions. Jarvis streams each reply; if a reply is interrupted, check task
+            status before sending another request.
           </p>
           <ConversationHistory client={client} config={config} />
-          <form className="composer" onSubmit={(event) => event.preventDefault()}>
-            <label htmlFor="message">Message Jarvis</label>
-            <textarea id="message" name="message" rows={3} disabled aria-describedby="conversation-status" />
-            <div className="action-row">
-              <button className="primary-button" type="submit" disabled aria-describedby="conversation-status">Send</button>
-            </div>
-          </form>
-
-          <fieldset className="choice-group">
-            <legend>Language</legend>
-            <p id="language-status" className="hint">Switching between Danish and English arrives with chat and voice.</p>
-            <label className="choice">
-              <input type="radio" name="language" value="da" disabled aria-describedby="language-status" /> Danish
-            </label>
-            <label className="choice">
-              <input type="radio" name="language" value="en" disabled aria-describedby="language-status" /> English
-            </label>
-          </fieldset>
 
           <section aria-labelledby="voice-heading">
             <h3 id="voice-heading">Voice</h3>
@@ -66,13 +49,7 @@ export function JarvisPage({
           <ActivityPanel feed={nowFeed} />
           <section className="panel" aria-labelledby="backend-heading">
             <h2 id="backend-heading">Backend</h2>
-            <p id="backend-status">
-              Whether the backend is awake or asleep isn&apos;t reported yet. The sleep switch will be refused while
-              tasks run.
-            </p>
-            <div className="action-row">
-              <button className="secondary-button" type="button" disabled aria-describedby="backend-status">Put the backend to sleep</button>
-            </div>
+            <BackendSleepControl client={client} config={config} />
           </section>
         </div>
       </div>
