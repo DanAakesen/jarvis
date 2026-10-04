@@ -253,6 +253,8 @@ viewport overflowed and the browser reported no errors. This verifies the web
 form against mocks, not live Entra, backend, or SQL. The P8-13 theme controls
 are not present here, so theme UI persistence and applying a Jarvis tool result
 to an already-open shell remain unverified.
+The P8-17 SQL Server integration suite passed in Database CI run `37233600074`;
+running it locally still requires the isolated loopback SQL Server configuration.
 P1-12 was inspected at 390 and 1440 px with mocked sleep-status, scale, refusal,
 and failure responses; sleep/wake, refusal, retry, and the Settings link worked
 without horizontal overflow or browser errors. Mocks do not verify ARM scaling.
