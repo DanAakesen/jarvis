@@ -28,7 +28,7 @@ def test_needs_attention_marker_is_bounded_and_requires_a_question():
     assert app._needs_attention_question(f"{app.NEEDS_ATTENTION_MARKER} {'x' * 700}") == "x" * 500
 
 
-def test_runner_reports_agent_question_as_needs_attention(tmp_path, monkeypatch):
+def test_runner_reports_agent_question_as_needs_attention(tmp_path, monkeypatch, local_workspace):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "session_clients", {})
     monkeypatch.setattr(app, "session_locks", {})

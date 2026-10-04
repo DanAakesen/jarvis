@@ -13,7 +13,7 @@ describe('backend configuration', () => {
       '', 'http://kv-jarvis.vault.azure.net/', 'https://vault.example/', 'https://kv-jarvis.vault.azure.net/secrets',
       'https://kv-jarvis.vault.azure.net/?token=secret',
     ]) {
-      expect(() => loadConfig({ KEY_VAULT_URI })).toThrow(/^KEY_VAULT_URI must be a secure Azure Key Vault origin$/);
+      expect(() => loadConfig({ KEY_VAULT_URI })).toThrow(/^KEY_VAULT_URI must be a secure Azure Key Vault URL$/);
     }
   });
   it('accepts a configured HTTPS origin and backend-only telemetry string', () => {
