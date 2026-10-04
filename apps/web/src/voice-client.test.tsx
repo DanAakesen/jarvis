@@ -44,7 +44,7 @@ function audioAdapter(onOpen?: () => void) {
   return {
     prepare: vi.fn(async () => {}),
     open: vi.fn(async () => { onOpen?.(); }),
-    play: vi.fn(),
+    play: vi.fn(() => 0.5),
     stopPlayback: vi.fn(),
     hasPlayback: vi.fn(() => false),
     setPlaybackEndedHandler: vi.fn((handler: () => void) => { playbackEnded = handler; }),
@@ -71,14 +71,15 @@ afterEach(() => {
 });
 
 describe('BrowserVoiceClient', () => {
-  it('warms the Danish voice agent before opening microphone capture', async () => {
+  it('warms the Danish voice agent but only opens microphone capture after explicit activation', async () => {
+    const statuses: string[] = [];
     let opened = false;
     const audio = audioAdapter(() => { opened = true; });
     let socket: MockSocket | undefined;
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com/',
       getAccessToken: async () => 'token',
-      onStatus: () => {},
+      onStatus: (status) => statuses.push(status),
       createAudio: () => audio,
       createSocket: (url, protocols) => {
         socket = new MockSocket(url, protocols);
@@ -88,6 +89,9 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
+    await until(() => statuses.includes('ready'));
+    expect(audio.open).not.toHaveBeenCalled();
+    await client.enableMicrophone();
     await until(() => opened);
 
     expect(socket?.url).toBe('wss://api.example.com/voice/da');
@@ -123,7 +127,7 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
-    await until(() => statuses.includes('listening'));
+    await until(() => statuses.includes('ready'));
     client.stop();
 
     expect(socket?.sent.at(-1)).toEqual({ type: 'jarvis.session.end' });
@@ -172,12 +176,14 @@ describe('BrowserVoiceClient', () => {
   it('stops current playback when speech starts', async () => {
     const audio = audioAdapter();
     const statuses: string[] = [];
+    const audioLevels: number[] = [];
     let socket: MockSocket | undefined;
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com',
       getAccessToken: async () => 'token',
       language: 'en',
       onStatus: (status) => statuses.push(status),
+      onAudioLevel: (level) => audioLevels.push(level),
       createAudio: () => audio,
       createSocket: (url, protocols) => {
         socket = new MockSocket(url, protocols);
@@ -187,11 +193,15 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
+    await until(() => statuses.includes('ready'));
+    await client.enableMicrophone();
     await until(() => audio.open.mock.calls.length === 1);
     socket?.receive({ type: 'response.created' });
     expect(statuses.at(-1)).toBe('thinking');
     socket?.receive({ type: 'response.audio.delta', delta: 'AQID' });
+    expect(audioLevels).toContain(0.5);
     socket?.receive({ type: 'input_audio_buffer.speech_started' });
+    expect(audioLevels.at(-1)).toBe(0);
     socket?.receive({ type: 'response.audio.delta', delta: 'BAUG' });
 
     expect(audio.play).toHaveBeenCalledWith('AQID');
@@ -218,6 +228,8 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
+    await until(() => statuses.includes('ready'));
+    await client.enableMicrophone();
     await until(() => audio.open.mock.calls.length === 1);
     socket?.receive({ type: 'response.created' });
     socket?.receive({ type: 'response.audio.delta', delta: 'AQID' });
@@ -251,26 +263,33 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
+    await until(() => statuses.includes('ready'));
+    await client.enableMicrophone();
     await until(() => audio.open.mock.calls.length === 1);
     const firstSocket = sockets[0];
     if (!firstSocket) throw new Error('The initial voice socket was not created.');
+    client.setMuted(true);
     firstSocket.disconnect();
-    await until(() => audio.open.mock.calls.length === 2);
+    await until(() => statuses.filter((status) => status === 'ready').length === 2);
 
     expect(statuses).toContain('reconnecting');
     expect(sockets).toHaveLength(2);
+    expect(audio.open).toHaveBeenCalledOnce();
+    await client.enableMicrophone();
     expect(audio.open).toHaveBeenCalledTimes(2);
+    expect(audio.setMuted).toHaveBeenLastCalledWith(false);
     client.stop();
   });
 
   it('uses a changed language for the next session without changing the active relay', async () => {
+    const statuses: string[] = [];
     const audio = audioAdapter();
     const sockets: MockSocket[] = [];
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com',
       getAccessToken: async () => 'token',
       language: 'en',
-      onStatus: () => {},
+      onStatus: (status) => statuses.push(status),
       createAudio: () => audio,
       createSocket: (url, protocols) => {
         const socket = new MockSocket(url, protocols);
@@ -282,11 +301,62 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
-    await until(() => audio.open.mock.calls.length === 1);
+    await until(() => statuses.includes('ready'));
     client.setLanguage('da');
     const firstSocket = sockets[0];
     if (!firstSocket) throw new Error('The voice socket was not created.');
     expect(firstSocket.url).toBe('wss://api.example.com/voice');
     client.stop();
+  });
+
+  it('allows an explicit retry after microphone permission is denied', async () => {
+    const audio = audioAdapter();
+    audio.open.mockRejectedValueOnce(new Error('Permission denied'));
+    const statuses: string[] = [];
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      onStatus: (status) => statuses.push(status),
+      createAudio: () => audio,
+      createSocket: (url, protocols) => new MockSocket(url, protocols),
+    });
+    clients.push(client);
+    await client.enableMicrophone();
+    expect(audio.open).not.toHaveBeenCalled();
+    client.start();
+    await until(() => statuses.includes('ready'));
+    await client.enableMicrophone();
+    expect(statuses.at(-1)).toBe('ready');
+    expect(audio.open).toHaveBeenCalledOnce();
+    await client.enableMicrophone();
+    expect(statuses.at(-1)).toBe('listening');
+    expect(audio.open).toHaveBeenCalledTimes(2);
+  });
+
+  it('closes capture if voice stops while microphone permission is pending', async () => {
+    const audio = audioAdapter();
+    let resolve!: () => void;
+    audio.open.mockImplementationOnce(() => new Promise<void>((done) => { resolve = done; }));
+    const statuses: string[] = [];
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      onStatus: (status) => statuses.push(status),
+      createAudio: () => audio,
+      createSocket: (url, protocols) => new MockSocket(url, protocols),
+    });
+    clients.push(client);
+    client.start();
+    await until(() => statuses.includes('ready'));
+    const pending = client.enableMicrophone();
+    await client.enableMicrophone();
+    expect(audio.open).toHaveBeenCalledOnce();
+    client.stop();
+    audio.closeInput.mockClear();
+    resolve();
+    await pending;
+    expect(audio.closeInput).toHaveBeenCalled();
+    expect(statuses).not.toContain('listening');
+    expect(statuses.at(-1)).toBe('stopped');
   });
 });

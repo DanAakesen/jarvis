@@ -1,4 +1,4 @@
-import { DefaultAzureCredential } from '@azure/identity';
+import { ClientSecretCredential, DefaultAzureCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { buildApp } from './app.js';
 import { BlobServiceClient } from '@azure/storage-blob';
@@ -60,6 +60,8 @@ import { createAlertActivityStore } from './database/alert-store.js';
 import { createGraphClient } from './graph/client.js';
 import { createNotesModule } from './notes/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
+import { createGraphClient as createOutlookGraphClient } from './outlook/graph-client.js';
+import { createOutlookModule } from './outlook/tools.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
@@ -91,7 +93,7 @@ try {
   const nowEventHub = createEventHub<NowFeedUpdate>();
   const alertNotifier = createAlertNotifier(telemetry);
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
-    config.foundryEndpoints || config.githubAppId || config.teams || sleepResourceId
+    config.foundryEndpoints || config.githubAppId || config.graphAppId || config.teams || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -117,6 +119,33 @@ try {
     : undefined;
   const githubAppKeyVault = config.githubAppId && config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
+    : undefined;
+  const graphSecretClient = config.graphAppId && config.keyVaultUri && credential
+    ? new SecretClient(config.keyVaultUri, credential)
+    : undefined;
+  let graphCredentialRequest: Promise<ClientSecretCredential> | undefined;
+  const outlookModule = config.graphAppId && config.graphTimeZone && graphSecretClient
+    ? createOutlookModule(createOutlookGraphClient({
+      getToken: async (scope, signal) => {
+        graphCredentialRequest ??= graphSecretClient.getSecret('jarvis-outlook-client-secret')
+          .then(({ value }) => {
+            if (!value || !value.trim() || value.length > 10_000 || /[\r\n]/u.test(value)) {
+              throw new Error('Outlook app credential is unavailable');
+            }
+            return new ClientSecretCredential(config.auth.tenantId, config.graphAppId!, value);
+          })
+          .catch((error: unknown) => {
+            graphCredentialRequest = undefined;
+            throw error;
+          });
+        const token = await (await graphCredentialRequest).getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Outlook Graph token is unavailable');
+        return token.token;
+      },
+    }), {
+      mailboxObjectId: config.auth.ownerObjectId,
+      timeZone: config.graphTimeZone,
+    })
     : undefined;
   const getGitHubAppPrivateKey = async () => {
     if (!githubAppKeyVault) throw new Error('GitHub App private key is unavailable');
@@ -304,6 +333,7 @@ try {
     : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
+    ...(outlookModule ? [outlookModule] : []),
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
       getSecret: getWebhookSecret,

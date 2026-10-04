@@ -10,7 +10,7 @@ import {
   type RealtimeFunctionCall,
 } from './realtime.js';
 import type { BackendModule } from '../modules.js';
-import type { ConversationRole } from '../core/conversation-store.js';
+import type { ConversationMessage, ConversationRole } from '../core/conversation-store.js';
 import { defaultSettings, readSettings } from '../core/settings.js';
 
 export const VOICE_LIVE_SCOPE = 'https://ai.azure.com/.default';
@@ -166,6 +166,7 @@ function registerVoiceRoute(
     let responseDone = false;
     let toolQueue = Promise.resolve();
     let sessionId: string | undefined;
+    let latestDanMessage: ConversationMessage | undefined;
     let transcriptQueue = Promise.resolve();
     let transcriptPersistenceFailed = false;
     let lastScreenContextAt = 0;
@@ -226,6 +227,7 @@ function registerVoiceRoute(
           model: role === 'jarvis' && english ? ENGLISH_REALTIME_MODEL : null,
         });
         if (!message) throw new Error('Voice transcript was not stored');
+        if (role === 'dan') latestDanMessage = message;
       }).catch(() => {
         transcriptPersistenceFailed = true;
         request.log.warn('voice.transcript_persistence_failed');
@@ -302,11 +304,17 @@ function registerVoiceRoute(
       toolQueue = toolQueue.then(async () => {
         if (controller.signal.aborted) return;
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]);
-        const output = await executeRealtimeToolCall(call, app.jarvisTools, request, signal);
-        sendUpstream({
-          type: 'conversation.item.create',
-          item: { type: 'function_call_output', call_id: call.call_id, output },
-        });
+        await transcriptQueue;
+        if (latestDanMessage) request.jarvisConversationMessage = latestDanMessage;
+        try {
+          const output = await executeRealtimeToolCall(call, app.jarvisTools, request, signal);
+          sendUpstream({
+            type: 'conversation.item.create',
+            item: { type: 'function_call_output', call_id: call.call_id, output },
+          });
+        } finally {
+          delete request.jarvisConversationMessage;
+        }
       }).catch(() => close(1011, 'Voice connection failed')).finally(() => {
         pendingToolCalls -= 1;
         resumeAfterTools();

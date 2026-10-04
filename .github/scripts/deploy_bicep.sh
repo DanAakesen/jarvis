@@ -48,6 +48,17 @@ if [[ -n "${JARVIS_PC_BRIDGE_CLIENT_ID:-}" ]]; then
   }
   parameters+=(pcBridgeClientId="$JARVIS_PC_BRIDGE_CLIENT_ID")
 fi
+if [[ -n "${JARVIS_GRAPH_APP_ID:-}" || -n "${JARVIS_GRAPH_TIME_ZONE:-}" ]]; then
+  [[ "${JARVIS_GRAPH_APP_ID:-}" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]] || {
+    echo "::error::JARVIS_GRAPH_APP_ID must be a UUID when Outlook is enabled."
+    exit 1
+  }
+  [[ "${JARVIS_GRAPH_TIME_ZONE:-}" =~ ^[A-Za-z_+-]+(/[A-Za-z0-9_+-]+)+$ ]] || {
+    echo "::error::JARVIS_GRAPH_TIME_ZONE must be an IANA time zone when Outlook is enabled."
+    exit 1
+  }
+  parameters+=(jarvisGraphAppId="$JARVIS_GRAPH_APP_ID" jarvisGraphTimeZone="$JARVIS_GRAPH_TIME_ZONE")
+fi
 if [[ -n "${ENTRA_JARVIS_AGENT_OBJECT_ID:-}" ]]; then
   parameters+=(jarvisAgentObjectId="$ENTRA_JARVIS_AGENT_OBJECT_ID")
 fi

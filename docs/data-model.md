@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 4 October 2026 for P7-03. Scope: the Jarvis core and the Software Factory only. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 4 October 2026 for P7-03 and P7-09. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, and headless Outlook tools. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -108,6 +108,8 @@ P7-06 records only the bridge's current status in the existing `activity` table.
 The refresh is published after the status transaction commits. Commands, window
 titles, URLs, paths, access tokens, and message contents are not persisted as
 bridge activity.
+
+P7-09 adds no Outlook tables or migration. Pending calendar/mail writes are held only in the single backend process for up to ten minutes and are discarded on expiry or restart; a later verified Dan message must match the exact confirmation phrase before the backend executes the write. Outlook tool arguments and results are redacted from persisted tool-call records. Mail bodies are passed to the model only for the current bounded search result and are not recorded as tool-call data.
 
 ## 1 · Jarvis core
 
