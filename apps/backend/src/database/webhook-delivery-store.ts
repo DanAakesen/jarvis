@@ -98,7 +98,8 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
           WHERE project_id = @projectId AND (${numberFilter}head_sha = @headSha)
           ORDER BY id DESC);
         DECLARE @releaseId bigint = (
-          SELECT id FROM dbo.releases WHERE project_id = @projectId AND sha = @headSha);
+          SELECT id FROM dbo.releases WITH (UPDLOCK, HOLDLOCK)
+          WHERE project_id = @projectId AND sha = @headSha);
         IF @releaseId IS NULL AND @workflow = N'Release' AND @trigger = N'push'
           AND EXISTS (SELECT 1 FROM dbo.projects WHERE id = @projectId AND default_branch = @branch)
         BEGIN

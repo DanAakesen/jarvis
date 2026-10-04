@@ -201,6 +201,61 @@ describe('committed domain schema (groups 1-7)', () => {
     ]);
   });
 
+  it('links a release workflow and deployment delivered before the main push', async () => {
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Out-of-order release fixture', N'DanAakesen/release-${randomUUID().slice(0, 8)}', N'main',
+        N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const { record } = createWebhookDeliveryStore(pool);
+    const repo = (await pool.request()
+      .input('projectId', sql.Int, projectId)
+      .query<{ repo: string }>('SELECT repo FROM dbo.projects WHERE id = @projectId')).recordset[0]!.repo;
+    const sha = 'c'.repeat(40);
+    const at = '2026-10-04T12:00:00.000Z';
+
+    await record({
+      deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok',
+      mapping: {
+        kind: 'workflow_run', repository: repo, id: 1_900_000_000_003, name: 'Release', event: 'push',
+        branch: 'main', headSha: sha, runNumber: 8, pullRequestNumbers: [],
+        status: 'completed', conclusion: 'success', startedAt: at, completedAt: at,
+      },
+    });
+    await record({
+      deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok',
+      mapping: {
+        kind: 'deployment_status', repository: repo, id: 1_900_000_000_004, sha,
+        environment: 'production', status: 'success', at,
+      },
+    });
+    await record({
+      deliveryId: randomUUID(), event: 'push', outcome: 'ok',
+      mapping: { kind: 'push', repository: repo, ref: 'refs/heads/main', sha, at },
+    });
+
+    const { recordset: releases } = await pool.request()
+      .input('projectId', sql.Int, projectId)
+      .input('sha', sql.Char(40), sha)
+      .query<{ count: number }>(`SELECT COUNT(*) AS count FROM dbo.releases
+        WHERE project_id = @projectId AND sha = @sha;`);
+    expect(releases).toEqual([{ count: 1 }]);
+
+    const { recordset } = await pool.request()
+      .input('projectId', sql.Int, projectId)
+      .input('sha', sql.Char(40), sha)
+      .query(`SELECT r.version, r.status, CAST(r.id AS varchar(19)) AS releaseId,
+          CAST(w.release_id AS varchar(19)) AS runReleaseId,
+          CAST(d.release_id AS varchar(19)) AS deploymentReleaseId
+        FROM dbo.releases AS r
+        LEFT JOIN dbo.workflow_runs AS w ON w.project_id = r.project_id AND w.head_sha = r.sha
+        LEFT JOIN dbo.deployments AS d ON d.release_id = r.id
+        WHERE r.project_id = @projectId AND r.sha = @sha;`);
+    expect(recordset).toHaveLength(1);
+    expect(recordset[0]).toMatchObject({ version: '8', status: 'released' });
+    expect(recordset[0]?.runReleaseId).toBe(recordset[0]?.releaseId);
+    expect(recordset[0]?.deploymentReleaseId).toBe(recordset[0]?.releaseId);
+  });
+
   it('reads running tasks and categorized activity and persists dismissals', async () => {
     const projectId = await scalar(`INSERT dbo.projects
       (name, repo, default_branch, default_agent, policy, sandbox_size, tech)

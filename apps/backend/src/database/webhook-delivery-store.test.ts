@@ -82,6 +82,7 @@ describe('webhook delivery store', () => {
     });
 
     const workflowRunSql = query.mock.calls[1]?.[0];
+    expect(workflowRunSql).toContain('SELECT id FROM dbo.releases WITH (UPDLOCK, HOLDLOCK)');
     expect(workflowRunSql).toContain("IF @releaseId IS NULL AND @workflow = N'Release' AND @trigger = N'push'");
     expect(workflowRunSql).toContain('default_branch = @branch');
     expect(workflowRunSql).toContain('VALUES (@projectId, CONVERT(nvarchar(100), @runNumber), @headSha');
