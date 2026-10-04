@@ -28,7 +28,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
 | Voice | Danish: Voice Live voice bridge, MAI Transcribe, Harper. English: `gpt-realtime-2.1` speech to speech, Ryan HD. Browser traffic uses an authenticated backend WebSocket relay; provider credentials stay server-side. | Relay design selected; local mock spike verified, Azure interoperability unverified |
-| Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, and P3-05 processes failed task-PR checks |
+| Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, P3-05 processes failed task-PR checks, and P3-07 creates one default-branch release per project/SHA with runs and deployments linked by SHA. |
 | Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest, future Playwright board checks and SQL container tests | Web/backend implemented in P0-02/P0-03; remaining checks in their tasks |
 
 ## Web skeleton and configuration
@@ -133,7 +133,7 @@ secret `github-app-webhook-secret`, and records the `X-GitHub-Delivery` ID and
 event in `dbo.webhook_deliveries`. An atomic, serialized insert returns 202 for
 new and duplicate deliveries. The five subscribed event types are marked `ok`;
 valid unhandled events such as GitHub's setup `ping` are marked `ignored`.
-Only delivery metadata is stored; event-to-domain mapping belongs to P3-04.
+Only delivery metadata is stored; P3-04 and P3-07 map allowlisted event fields to the project records.
 `KEY_VAULT_URI` is supplied by Bicep, and the backend managed identity reads and
 caches the secret after its first successful Key Vault lookup. Missing Key Vault
 configuration or secret fails webhook requests with 503, not an unsigned fallback.
@@ -738,6 +738,9 @@ read the task branch and find a pull request with that branch as its head. A
 provider `completed` status cannot transition a task to Done if either GitHub
 record is missing; failed or malformed API responses fail closed.
 
+P3-07 creates one release per project and default-branch SHA even when a `Release`
+workflow run arrives before its matching push event. The later push reconciles the
+run; workflow runs and deployments link to releases by project and SHA.
 
 **Codex login rules** (Pro login only; no API key):
 
