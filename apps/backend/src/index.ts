@@ -1,5 +1,5 @@
+import { DefaultAzureCredential } from '@azure/identity';
 import { buildApp } from './app.js';
-import { DefaultAzureCredential, ManagedIdentityCredential } from '@azure/identity';
 import { ConfigurationError, loadConfig } from './config.js';
 import { createLogger, createTelemetry } from './logging.js';
 import { shutdown } from './shutdown.js';
@@ -11,6 +11,7 @@ import { createProjectStore } from './database/project-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
+import { createCredentialStatusStore } from './database/credential-status-store.js';
 import { createSandboxHeartbeatStore } from './database/sandbox-heartbeat-store.js';
 import { createEventHub } from './core/event-hub.js';
 import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
@@ -29,40 +30,28 @@ import { createHttpConversationAgent } from './core/chat-agent.js';
 import { FoundryClient, FoundryClientError } from './foundry/client.js';
 import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
+import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
 
 try {
   const config = loadConfig();
   const databaseConfig = loadDatabaseConfig();
   const sleepResourceId = process.env.BACKEND_CONTAINER_APP_RESOURCE_ID;
-  const sleepIdentityClientId = process.env.SQL_MANAGED_IDENTITY_CLIENT_ID;
-  if (sleepResourceId && !sleepIdentityClientId) {
+  const managedIdentityClientId = process.env.SQL_MANAGED_IDENTITY_CLIENT_ID;
+  if (sleepResourceId && !managedIdentityClientId) {
     throw new ConfigurationError('SQL_MANAGED_IDENTITY_CLIENT_ID is required for backend scaling');
   }
-  const sleepCredential = sleepResourceId && sleepIdentityClientId
-    ? new ManagedIdentityCredential(sleepIdentityClientId)
-    : undefined;
-  const containerAppScaler = sleepResourceId && sleepCredential
-    ? createArmContainerAppScaler({
-      resourceId: sleepResourceId,
-      getToken: async (scope, signal) => {
-        const token = await sleepCredential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Container Apps managed identity unavailable');
-        return token.token;
-      },
-    })
-    : null;
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
-  const credential = config.voiceLiveEndpoint || config.foundryProjectEndpoint || config.foundryEndpoints
-    ? new DefaultAzureCredential(process.env.SQL_MANAGED_IDENTITY_CLIENT_ID
-      ? { managedIdentityClientId: process.env.SQL_MANAGED_IDENTITY_CLIENT_ID }
+  const credential = config.voiceLiveEndpoint || config.foundryProjectEndpoint || config.foundryEndpoints || sleepResourceId
+    ? new DefaultAzureCredential(managedIdentityClientId
+      ? { managedIdentityClientId }
       : {})
     : undefined;
   const foundryClients = new Map<string, FoundryClient>();
   const clientFor = (agentName: string) => {
-    if (!config.foundryEndpoints || !credential) throw new Error('Foundry heartbeat is not configured');
+    if (!config.foundryEndpoints || !credential) throw new Error('Foundry runner is not configured');
     let client = foundryClients.get(agentName);
     if (!client) {
       client = new FoundryClient({
@@ -89,6 +78,16 @@ try {
       },
     })
     : undefined;
+  const containerAppScaler = sleepResourceId && credential
+    ? createArmContainerAppScaler({
+      resourceId: sleepResourceId,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Container Apps managed identity unavailable');
+        return token.token;
+      },
+    })
+    : null;
   const taskStore = database ? createTaskStore(database.pool, eventHub) : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const dispatcher = database && taskStore && settingsStore && sandboxHeartbeat && config.foundryEndpoints
@@ -102,7 +101,9 @@ try {
       { onError: () => logger.warn('dispatcher.operation_failed') },
     )
     : undefined;
-  const modules: BackendModule[] = [coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler)];
+  const modules: BackendModule[] = [
+    coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
+  ];
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
       getToken: async (scope, signal) => {
@@ -116,6 +117,7 @@ try {
         : {}),
     }));
   }
+  const credentialStatusStore = database ? createCredentialStatusStore(database.pool) : undefined;
   const app = buildApp(config, logger, {
     modules,
     ...(database && taskStore && settingsStore ? {
@@ -125,6 +127,7 @@ try {
       conversationStore: createConversationStore(database.pool),
       taskStore,
     } : {}),
+    ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
     eventHub,
     ...(config.chatAgentUrl ? { conversationAgent: createHttpConversationAgent(config.chatAgentUrl) } : {}),
@@ -132,6 +135,18 @@ try {
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
+  if (database && credential && config.foundryEndpoints && config.foundryRunnerAgentName) {
+    const client = clientFor(config.foundryRunnerAgentName);
+    let stopCodexRenewal: (() => void) | undefined;
+    app.addHook('onClose', async () => { stopCodexRenewal?.(); });
+    app.addHook('onReady', async () => {
+      stopCodexRenewal = startDailyCodexRenewalJob(
+        app.credentialStatusStore!,
+        client,
+        (outcome) => logger.info({ outcome }, 'credentials.codex_renewal'),
+      );
+    });
+  }
   if (database && !sandboxHeartbeat) logger.warn('sandbox_heartbeat.configuration_missing');
   if (!telemetry) logger.info('telemetry.stdout_only');
 

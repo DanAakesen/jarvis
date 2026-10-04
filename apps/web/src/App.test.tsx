@@ -146,13 +146,9 @@ describe('App shell', () => {
     expect(screen.getByRole('radio', { name: 'Danish' })).toHaveProperty('checked', true);
     expect(screen.getByRole('radio', { name: 'English' })).toHaveProperty('disabled', false);
 
-    const explained = [
-      ['button', 'Start voice', /Voice isn't available yet/],
-      ['button', 'Mute', /Voice isn't available yet/],
-    ] as const;
-    for (const [role, name, description] of explained) {
-      expect(screen.getByRole(role, { name, description })).toHaveProperty('disabled', true);
-    }
+    expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'Mute' })).toHaveProperty('disabled', true);
+    expect(screen.getByText(/microphone opens after the voice session is ready/)).not.toBeNull();
     expect(await screen.findByText('The backend is awake.')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Put the backend to sleep' })).toHaveProperty('disabled', false);
   });

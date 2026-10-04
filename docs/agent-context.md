@@ -301,6 +301,16 @@ validates it through `/me` and verifies the source message through
 `/conversation/history`. Never expose the authorization header to the browser
 or log it.
 
+Production runner calls use the optional paired `FOUNDRY_RUNTIME_ENDPOINT` and
+`FOUNDRY_ADMIN_ENDPOINT`, plus `FOUNDRY_RUNNER_AGENT_NAME`. Bicep supplies the
+project URLs and `jarvis-runner-node-1x2`; these are non-secret settings. When
+configured, the backend uses its shared `DefaultAzureCredential`, selected with
+`SQL_MANAGED_IDENTITY_CLIENT_ID`. The daily Codex renewal job requires database
+and Foundry runner configuration, and uses the SQL credential lease; the task
+dispatcher must start Codex work through `TaskStore.transition` so both
+operations serialize. Bicep retains one `Foundry User` assignment for the
+backend identity at project scope.
+
 Backend authentication defaults to the nonsecret identities in
 `infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and
 `ENTRA_OWNER_OBJECT_ID` may override those UUIDs at startup. The API expects an

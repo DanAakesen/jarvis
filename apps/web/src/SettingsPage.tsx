@@ -29,7 +29,14 @@ interface SettingsOptions {
   copilotModels: string[];
 }
 
-interface SettingsResponse { settings: Settings; options: SettingsOptions }
+interface CredentialStatus {
+  name: 'codex-login' | 'copilot-token';
+  expiresAt: string | null;
+  lastRenewedAt: string | null;
+  status: 'ok' | 'renew_soon' | 'failed' | 'unknown';
+}
+
+interface SettingsResponse { settings: Settings; options: SettingsOptions; credentials: CredentialStatus[] }
 type LoadState = 'loading' | 'ready' | 'error';
 
 const optionLabels: Record<string, string> = {
@@ -55,6 +62,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
   if (!isObject(value) || !isObject(value.settings) || !isObject(value.options)) return false;
   const settings = value.settings;
   const options = value.options;
+  const credentials = value.credentials;
   const optionKeys: (keyof SettingsOptions)[] = [
     'jarvisModels', 'reasoningEfforts', 'speechToTextModels', 'englishModels',
     'englishVoices', 'danishVoices', 'languages', 'codexModels',
@@ -62,6 +70,11 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
   ];
   const validOptions = optionKeys.every((key) =>
     Array.isArray(options[key]) && (options[key] as unknown[]).every((item) => typeof item === 'string'));
+  const validCredentials = Array.isArray(credentials) && credentials.every((item) =>
+    isObject(item) && (item.name === 'codex-login' || item.name === 'copilot-token') &&
+    (item.status === 'ok' || item.status === 'renew_soon' || item.status === 'failed' || item.status === 'unknown') &&
+    (item.expiresAt === null || (typeof item.expiresAt === 'string' && Number.isFinite(Date.parse(item.expiresAt)))) &&
+    (item.lastRenewedAt === null || (typeof item.lastRenewedAt === 'string' && Number.isFinite(Date.parse(item.lastRenewedAt)))));
   return isObject(settings.jarvis) && isObject(settings.voice) && isObject(settings.codex) &&
     isObject(settings.copilot) && isObject(settings.global) &&
     typeof settings.jarvis.model === 'string' && typeof settings.jarvis.reasoning === 'string' &&
@@ -71,7 +84,26 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     typeof settings.codex.model === 'string' && typeof settings.codex.reasoning === 'string' &&
     typeof settings.copilot.model === 'string' && typeof settings.global.maxParallelTasks === 'number' &&
     Number.isSafeInteger(settings.global.maxParallelTasks) &&
-    settings.global.maxParallelTasks >= 1 && settings.global.maxParallelTasks <= 100 && validOptions;
+    settings.global.maxParallelTasks >= 1 && settings.global.maxParallelTasks <= 100 &&
+    validOptions && validCredentials;
+}
+
+const credentialNames: Record<CredentialStatus['name'], string> = {
+  'codex-login': 'Codex login',
+  'copilot-token': 'Copilot token',
+};
+const credentialStatusLabels: Record<CredentialStatus['status'], string> = {
+  ok: 'OK',
+  renew_soon: 'Renew soon',
+  failed: 'Action needed',
+  unknown: 'Unknown',
+};
+
+function formatCredentialDate(value: string | null): string {
+  if (value === null) return 'Not recorded';
+  return `${new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC',
+  }).format(new Date(value))} UTC`;
 }
 
 function changedSettings(before: Settings, after: Settings): SettingsPatch {
@@ -145,6 +177,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
   const [savedSettings, setSavedSettings] = useState<Settings | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [options, setOptions] = useState<SettingsOptions | null>(null);
+  const [credentials, setCredentials] = useState<CredentialStatus[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState(backendUrl ? '' : 'Settings are unavailable until the backend is deployed.');
@@ -162,6 +195,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       setSavedSettings(result.settings);
       setSettings(result.settings);
       setOptions(result.options);
+      setCredentials(result.credentials);
       setState('ready');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Settings could not be loaded. Try again.');
@@ -177,6 +211,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       setSavedSettings(result.settings);
       setSettings(result.settings);
       setOptions(result.options);
+      setCredentials(result.credentials);
       setState('ready');
     }).catch((cause: unknown) => {
       if (!active) return;
@@ -307,8 +342,22 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
           <section className="settings-section" aria-labelledby="credentials-heading">
             <h2 id="credentials-heading">Credentials</h2>
             <p className="settings-explanation" id="credential-actions-help">
-              Credential names, expiry, last renewal and status will appear here. Secret values are never shown.
+              Renewal runs daily when no Codex task is active. Manual renewal and re-seed instructions are unavailable here. Secret values are never shown.
             </p>
+            {credentials.length === 0
+              ? <p role="status">No credential status has been recorded yet.</p>
+              : (
+                <div className="settings-grid">
+                  {credentials.map((credential) => (
+                    <div className="settings-field" key={credential.name}>
+                      <strong>{credentialNames[credential.name]}</strong>
+                      <span>Status: {credentialStatusLabels[credential.status]}</span>
+                      <span>Expires: {formatCredentialDate(credential.expiresAt)}</span>
+                      <span>Last renewed: {formatCredentialDate(credential.lastRenewedAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             <div className="settings-actions">
               <button className="secondary-button" type="button" disabled aria-describedby="credential-actions-help">Trigger Codex renewal</button>
               <button className="secondary-button" type="button" disabled aria-describedby="credential-actions-help">Open re-seed instructions</button>

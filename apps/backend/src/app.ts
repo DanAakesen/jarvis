@@ -17,6 +17,7 @@ import type { TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-s
 import type { ProjectStore } from './factory/projects.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
+import type { CredentialStatusStore } from './credentials/credential-status.js';
 import type { SandboxHeartbeat } from './factory/heartbeat.js';
 import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
@@ -29,6 +30,7 @@ export interface BuildAppOptions {
   readonly taskStore?: TaskStore;
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
+  readonly credentialStatusStore?: CredentialStatusStore;
   readonly conversationStore?: ConversationStore;
   readonly sandboxHeartbeat?: SandboxHeartbeat;
   readonly conversationAgent?: ConversationAgent;
@@ -42,6 +44,7 @@ declare module 'fastify' {
     taskStore: TaskStore | null;
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
+    credentialStatusStore: CredentialStatusStore | null;
     conversationStore: ConversationStore | null;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
@@ -73,7 +76,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.register(cors, {
     origin: (origin, callback) => callback(null, origin === undefined || origins.has(origin)),
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Last-Event-ID'],
     credentials: false,
     strictPreflight: true,
   });
@@ -97,6 +100,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('taskStore', options.taskStore ?? null);
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('settingsStore', options.settingsStore ?? null);
+  app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
   app.decorate('sandboxHeartbeat', options.sandboxHeartbeat ?? null);
   if (options.sandboxHeartbeat) {
