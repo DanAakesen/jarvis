@@ -505,6 +505,8 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
       default_agent: 'copilot', policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
     });
 
+    const taskStore = createTaskStore(pool, createEventHub<TaskEventMessage>());
+
     const task = await taskStore.create({
       projectId: project.id, title: 'Heartbeat fixture', request: 'Exercise heartbeat persistence',
     });
