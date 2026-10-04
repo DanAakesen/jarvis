@@ -256,8 +256,8 @@ Goal: one complete Jarvis front end that exposes the existing and P7 features on
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P8-01 | [#211](https://github.com/DanAakesen/jarvis/issues/211) | Design session with Dan: the coordinator prepares a feature inventory (on screen, voice only, or both) and layout sketches; the result goes into DESIGN.md and the build is split into P8 issues | Dan approves the design; P8 build issues created | None | In progress |
-| P8-02 | [#230](https://github.com/DanAakesen/jarvis/issues/230) | Copilot breaks ui.md into frontend implementation issues with full coverage and no duplicates | UI coverage report; PLAN.md tasks and GitHub issues created with acceptance criteria and dependency links | None; use the UI design delivery PR as source until merged | Not started |
-| P8-03 | [#231](https://github.com/DanAakesen/jarvis/issues/231) | Copilot breaks ui.md into enabling tools, contracts, runtime state, data access and business-logic issues | Logic coverage report; PLAN.md tasks and GitHub issues created with acceptance criteria and dependency links | None; use the UI design delivery PR as source until merged | Not started |
+| P8-02 | [#230](https://github.com/DanAakesen/jarvis/issues/230) | Copilot breaks ui.md into frontend implementation issues with full coverage and no duplicates | UI coverage report; PLAN.md tasks and GitHub issues created with acceptance criteria and dependency links | None; use the UI design delivery PR as source until merged | In progress |
+| P8-03 | [#231](https://github.com/DanAakesen/jarvis/issues/231) | Copilot breaks ui.md into enabling tools, contracts, runtime state, data access and business-logic issues | Logic coverage report; PLAN.md tasks and GitHub issues created with acceptance criteria and dependency links | None; use the UI design delivery PR as source until merged | In progress |
 
 ### Out of scope for phase 1
 
