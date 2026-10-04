@@ -191,7 +191,7 @@ Dan's manual setup checklist:
 
    In **GitHub → Settings → Developer settings → GitHub Apps → Jarvis Software Factory → Webhook**, set the URL to `https://<backendFqdn>/github/webhooks`, choose `application/json`, paste the same secret, enable the webhook, and subscribe to `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. Save the settings, remove the temporary local copy, and inspect **Recent Deliveries** for a successful 2xx response to GitHub's initial `ping`. The receiver records that signed but unsupported event as ignored. Never put either copy in source control or logs.
 
-Status, 4 October 2026: Dan registered the App, installed it on all repositories of his account, trimmed its permissions, and stored `github-app-private-key` in Key Vault (P3-10). P3-02 code is merged but its live token issuance and sandbox push are not yet verified. The webhook receiver (P3-03) is implemented; webhook secret provisioning, App URL configuration, and live delivery remain Dan's post-merge steps. The receiver caches the secret after its first successful lookup, so restart the backend when rotating it.
+Status, 4 October 2026: Dan registered the App, installed it on all repositories of his account, trimmed its permissions, and stored `github-app-private-key` in Key Vault (P3-10). P3-02 code is merged but its live token issuance and sandbox push are not yet verified. The webhook receiver (P3-03) is implemented; webhook secret provisioning, App URL configuration, and live delivery remain Dan's post-merge steps. P3-05 uses a separate repository-scoped token with only Actions read permission in the backend, stores failed-job logs in the existing private `logs` container, and never passes that token to the sandbox. The backend setting `global.max_check_attempts` defaults to 3 and accepts 0–10; 0 disables automatic repairs. The receiver caches the webhook secret after its first successful lookup, so restart the backend when rotating it.
 
 ## Setup and commands
 
@@ -220,6 +220,7 @@ Verified in Codex cloud for P0-02:
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
+| Focused P3-05 failed-check tests | `npm test --workspace @jarvis/backend -- src/database/checks-loop-blob.test.ts src/database/checks-loop-store.test.ts src/github/checks-loop.test.ts src/github/actions-logs.test.ts src/github/webhook.test.ts src/core/settings.test.ts src/github-app.test.ts` |
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |

@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
-import { mapGithubWebhook } from './webhook-mapping.js';
+import { mapGithubWebhook, type GithubWebhookMapping } from './webhook-mapping.js';
 import type { WebhookDeliveryStore } from './webhook-delivery.js';
 
 const acceptedEvents = new Set([
@@ -14,6 +14,7 @@ const acceptedEvents = new Set([
 interface WebhookOptions {
   readonly deliveryStore: WebhookDeliveryStore | null;
   readonly getSecret: () => Promise<string | undefined>;
+  readonly onWorkflowRun?: (mapping: Extract<GithubWebhookMapping, { kind: 'workflow_run' }>) => Promise<void>;
 }
 
 function uniqueHeader(request: { raw: { rawHeaders: string[] }; headers: Record<string, unknown> }, name: string): string | undefined {
@@ -80,6 +81,14 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
             outcome: mapping ? 'ok' : 'ignored',
             ...(mapping ? { mapping } : {}),
           });
+          if (mapping?.kind === 'workflow_run' && options.onWorkflowRun) {
+            try {
+              await options.onWorkflowRun(mapping);
+            } catch {
+              request.log.error('github.checks_loop_failed');
+              return reply.code(503).send({ error: 'Webhook processing unavailable' });
+            }
+          }
           return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
         } catch {
           request.log.error('github.webhook_delivery_store_failed');

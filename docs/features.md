@@ -80,7 +80,7 @@ Status as of 4 October 2026.
 | New projects defaults | Owner, visibility, templates, agent, policy, limits for new projects | Screen | Settings | Built | P3-11 |
 | Webhook receiver | GitHub events are verified and recorded once | Background | — | Built (live webhook setup pending) | P3-03 |
 | PR, run, release and deploy records | Webhook events stored as pull requests, workflow runs, releases, deployments | Background | — | In progress | P3-04 |
-| Checks loop | A failed PR check is sent back to the task; the agent fixes it | Background | Task detail | Planned | P3-05 |
+| Checks loop | A failed task-PR check is stored in private Blob and sent to the same task; bounded repairs move to Needs attention when exhausted | Background | Task detail | Built | P3-05 |
 | Project policy and merge | Stop at a green PR, or merge automatically when rules pass | Background | Project settings | Planned | P3-06 |
 | Release records | One release per merge to `main`, linked to runs and deployments | Background | — | Planned | P3-07 |
 | Release view | Git graph, releases, runs and deployments per project | Screen | Release view | Planned | P3-08 |

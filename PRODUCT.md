@@ -97,7 +97,7 @@ stateDiagram-v2
 - Task state belongs to the backend. State changes must follow this lifecycle; clients cannot write state directly, and Done requires verified project-policy/GitHub completion.
 - Coding agents push small work-in-progress commits to the existing task branch after each meaningful step. They never force-push or push to `main`, and report commit or push failures.
 - Git pushes use a one-hour GitHub App installation token scoped to the task's repository. The runner authenticates to the backend for each Git credential request; the App private key remains in Key Vault and is never sent to a sandbox. Keep the legacy GitHub token path available until the App flow passes its live sandbox push check.
-- **Checks loop:** when a pull request's checks fail, Jarvis sends the failing log back to the same task; the agent fixes and pushes again.
+- **Checks loop:** when a task pull request's required workflow fails, Jarvis stores bounded failing-job logs in private Blob storage and sends a bounded diagnostic plus the log reference to the same running task through its existing steer path. The agent fixes and pushes again. A configurable attempt limit (default 3, range 0–10; 0 disables automatic repair) moves exhausted or unavailable repairs to Needs attention. No GitHub token enters the sandbox.
 - **Done** follows the project policy and verified GitHub results, never the agent's own report.
 - Show observed milestones; use percentages only when measurable. Show stale or disconnected status and reconcile after reconnect.
 - Changing the provider (Codex ↔ Copilot) on a running task is out of scope for now.
@@ -134,6 +134,7 @@ Global defaults on the settings page; a task can override the coding-agent model
 | Codex | Model and reasoning effort | Codex default |
 | Copilot | Model | Copilot default |
 | Global | Max parallel tasks; sleep switch | Set by Dan |
+| Backend global setting | Maximum automatic check-fix attempts (`global.max_check_attempts`) | 3 (0–10; 0 disables automatic repair) |
 | New projects | Owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | `DanAakesen`, private, `DanAakesen/templates`, Copilot, Deliver a PR, 1, `main` |
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.

@@ -44,7 +44,10 @@ function payloadFor(event: string) {
 
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function fixture(getSecret: () => Promise<string | undefined> = async () => secret) {
+function fixture(
+  getSecret: () => Promise<string | undefined> = async () => secret,
+  onWorkflowRun?: Parameters<typeof createGithubWebhookModule>[0]['onWorkflowRun'],
+) {
   const deliveries = new Map<string, WebhookDeliveryInput>();
   const module: BackendModule = createGithubWebhookModule({
     getSecret,
@@ -55,6 +58,7 @@ function fixture(getSecret: () => Promise<string | undefined> = async () => secr
         return true;
       },
     },
+    ...(onWorkflowRun ? { onWorkflowRun } : {}),
   });
   const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
   const app = buildApp(config, undefined, { modules: [module] });
@@ -132,6 +136,29 @@ describe('GitHub webhook receiver', () => {
     expect(duplicate.statusCode).toBe(202);
     expect(duplicate.json()).toEqual({ status: 'duplicate' });
     expect(deliveries.size).toBe(1);
+  });
+
+  it('sends completed failed workflow runs to the checks loop and allows webhook retries', async () => {
+    const onWorkflowRun = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary log storage failure'))
+      .mockResolvedValueOnce(undefined);
+    const { app, deliveries } = fixture(async () => secret, onWorkflowRun);
+    const payload = payloadFor('workflow_run') as { workflow_run: Record<string, unknown>; repository: typeof repository };
+    payload.workflow_run['conclusion'] = 'failure';
+    const body = Buffer.from(JSON.stringify(payload));
+
+    const first = await deliver(app, 'delivery-failed-run', 'workflow_run', body);
+    expect(first.statusCode).toBe(503);
+    expect(deliveries.size).toBe(1);
+    expect(onWorkflowRun).toHaveBeenCalledOnce();
+
+    const retry = await deliver(app, 'delivery-failed-run', 'workflow_run', body);
+    expect(retry.statusCode).toBe(202);
+    expect(retry.json()).toEqual({ status: 'duplicate' });
+    expect(onWorkflowRun).toHaveBeenCalledTimes(2);
+    expect(onWorkflowRun.mock.calls[0]?.[0]).toMatchObject({
+      kind: 'workflow_run', id: 1_900_000_000_001, conclusion: 'failure',
+    });
   });
 
   it('rejects a signature for different raw bytes before writing a delivery', async () => {
