@@ -489,6 +489,7 @@ h3 { margin: 24px 0 8px; font-size: 17px; font-weight: 650; line-height: 1.3; }
   .app-shell[data-navigation-open="false"][data-context-open="true"] .shell-main { grid-row: 3; }
   .app-shell[data-navigation-open="false"][data-context-open="true"] .bottom-bar { grid-row: 4; }
   .app-shell[data-navigation-open="true"][data-context-open="true"] { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+  .app-shell[data-navigation-open="true"][data-context-open="true"] .area-rail { grid-row: 1 / 6; }
   .app-shell[data-navigation-open="true"][data-context-open="true"] .area-sidebar { grid-row: 2; }
   .app-shell[data-navigation-open="true"][data-context-open="true"] .context-panel { grid-row: 3; }
   .app-shell[data-navigation-open="true"][data-context-open="true"] .shell-main { grid-row: 4; }
