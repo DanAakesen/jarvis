@@ -28,8 +28,9 @@ const administrator = new sql.ConnectionPool({ ...configuration, database: 'mast
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
-  'activity', 'artifacts', 'credential_status', 'jarvis_sessions', 'messages', 'projects', 'sandbox_sessions',
-  'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks', 'tool_calls', 'usage', 'webhook_deliveries',
+  'activity', 'artifacts', 'credential_status', 'deployments', 'jarvis_sessions', 'messages', 'projects',
+  'pull_requests', 'releases', 'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives',
+  'task_events', 'tasks', 'tool_calls', 'usage', 'webhook_deliveries', 'workflow_runs',
 ];
 
 async function tables(): Promise<string[]> {
@@ -81,7 +82,7 @@ afterAll(async () => {
   await administrator.close();
 });
 
-describe('committed domain schema (groups 1-4, 6 and 7)', () => {
+describe('committed domain schema (groups 1-7)', () => {
   it('boots the committed migration manifest twice without duplicate ledger rows', async () => {
     const committed = await readMigrations();
     expect(await applyMigrations(pool, committed)).toEqual(committed.map((migration) => migration.name));
@@ -98,10 +99,14 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
       `SELECT name FROM sys.indexes WHERE name IN (
         N'IX_tasks_state_next_attempt_at', N'IX_task_events_task_id_at', N'IX_sandbox_sessions_task_id_status',
         N'IX_sandbox_turns_sandbox_session_id_started_at', N'IX_artifacts_task_id_at',
-        N'IX_task_event_archives_task_first_at') ORDER BY name`);
+        N'IX_task_event_archives_task_first_at', N'IX_pull_requests_project_head_sha',
+        N'IX_workflow_runs_project_head_sha', N'IX_releases_project_created_at',
+        N'IX_deployments_release_id_at') ORDER BY name`);
     expect(recordset.map((row) => row.name)).toEqual([
-      'IX_artifacts_task_id_at', 'IX_sandbox_sessions_task_id_status', 'IX_sandbox_turns_sandbox_session_id_started_at',
-      'IX_task_event_archives_task_first_at', 'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at',
+      'IX_artifacts_task_id_at', 'IX_deployments_release_id_at', 'IX_pull_requests_project_head_sha',
+      'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
+      'IX_sandbox_turns_sandbox_session_id_started_at', 'IX_task_event_archives_task_first_at',
+      'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
     ]);
   });
 
@@ -116,6 +121,83 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
       .query(`SELECT delivery_id AS deliveryId, event, outcome FROM dbo.webhook_deliveries
         WHERE delivery_id = @deliveryId;`);
     expect(recordset).toEqual([{ deliveryId, event: 'push', outcome: 'ok' }]);
+  });
+
+  it('maps signed event fields into linked project records and ignores duplicate payload changes', async () => {
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Webhook fixture', N'DanAakesen/webhook-${randomUUID().slice(0, 8)}', N'main',
+        N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const { record } = createWebhookDeliveryStore(pool);
+    const repo = (await pool.request()
+      .input('projectId', sql.Int, projectId)
+      .query<{ repo: string }>('SELECT repo FROM dbo.projects WHERE id = @projectId')).recordset[0]!.repo;
+    const now = new Date('2026-10-04T12:00:00Z');
+    const headSha = 'a'.repeat(40);
+    const releaseSha = 'b'.repeat(40);
+
+    await record({
+      deliveryId: randomUUID(), event: 'pull_request', outcome: 'ok',
+      mapping: {
+        kind: 'pull_request', repository: repo, number: 23, branch: 'feature/webhook',
+        headSha, state: 'merged', openedAt: now.toISOString(), mergedAt: now.toISOString(),
+      },
+    });
+    await record({
+      deliveryId: randomUUID(), event: 'check_run', outcome: 'ok',
+      mapping: {
+        kind: 'check_run', repository: repo, headSha, pullRequestNumbers: [23],
+        status: 'completed', conclusion: 'success',
+      },
+    });
+    const pushDeliveryId = randomUUID();
+    await record({
+      deliveryId: pushDeliveryId, event: 'push', outcome: 'ok',
+      mapping: { kind: 'push', repository: repo, ref: 'refs/heads/main', sha: releaseSha, at: now.toISOString() },
+    });
+    await record({
+      deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok',
+      mapping: {
+        kind: 'workflow_run', repository: repo, id: 1_900_000_000_001, name: 'Release', event: 'push',
+        branch: 'main', headSha: releaseSha, pullRequestNumbers: [23], status: 'completed', conclusion: 'success',
+        startedAt: now.toISOString(), completedAt: now.toISOString(),
+      },
+    });
+    await record({
+      deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok',
+      mapping: {
+        kind: 'deployment_status', repository: repo, id: 1_900_000_000_002, sha: releaseSha,
+        environment: 'production', status: 'success', at: now.toISOString(),
+      },
+    });
+    await expect(record({
+      deliveryId: pushDeliveryId, event: 'push', outcome: 'ok',
+      mapping: { kind: 'push', repository: repo, ref: 'refs/heads/main', sha: headSha, at: now.toISOString() },
+    })).resolves.toBe(false);
+
+    const prs = await pool.request().input('projectId', sql.Int, projectId)
+      .query(`SELECT number, branch, head_sha AS headSha, state, checks, opened_at AS openedAt, merged_at AS mergedAt
+        FROM dbo.pull_requests WHERE project_id = @projectId;`);
+    expect(prs.recordset).toEqual([{
+      number: 23, branch: 'feature/webhook', headSha, state: 'merged', checks: 'passed', openedAt: now, mergedAt: now,
+    }]);
+    const runs = await pool.request().input('projectId', sql.Int, projectId)
+      .query(`SELECT github_run_id AS runId, workflow, [trigger], status, conclusion, pull_request_id AS pullRequestId,
+        release_id AS releaseId FROM dbo.workflow_runs WHERE project_id = @projectId;`);
+    expect(runs.recordset).toEqual([{
+      runId: 1_900_000_000_001, workflow: 'Release', trigger: 'push', status: 'completed', conclusion: 'success',
+      pullRequestId: expect.any(Number), releaseId: expect.any(Number),
+    }]);
+    const releases = await pool.request().input('projectId', sql.Int, projectId)
+      .query(`SELECT version, sha, status FROM dbo.releases WHERE project_id = @projectId;`);
+    expect(releases.recordset).toEqual([{ version: releaseSha, sha: releaseSha, status: 'released' }]);
+    const deployments = await pool.request()
+      .input('releaseId', sql.Int, releases.recordset.length ? runs.recordset[0]!.releaseId : null)
+      .query(`SELECT github_deployment_id AS deploymentId, environment, status FROM dbo.deployments
+        WHERE release_id = @releaseId;`);
+    expect(deployments.recordset).toEqual([
+      { deploymentId: 1_900_000_000_002, environment: 'production', status: 'success' },
+    ]);
   });
 
   it('reads running tasks and categorized activity and persists dismissals', async () => {
