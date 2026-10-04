@@ -2,7 +2,7 @@
 
 Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. P0-01 provides the monorepo folders. P0-02 and P0-03 implement the web and backend skeletons. Statuses below distinguish implementation, design, and prototype evidence.
 
-- Requirements: [PRODUCT.md](../PRODUCT.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L36): [decisions.md](decisions.md).
+- Requirements: [PRODUCT.md](../PRODUCT.md). Feature summaries: [features.md](features.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L36): [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
 - **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–15 show each flow as swimlanes, coloured by evidence (prototype/offline-tested, documented, assumed). Open it in a browser.
 
@@ -362,6 +362,13 @@ tool routes accept Dan's delegated token and opt in to the Jarvis agent identity
 process shutdown behavior are preserved.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
+
+P4-10 registers the Software Factory's `list_projects`, `list_tasks`, `get_task`,
+`create_task`, `steer_task`, `pause_task`, `resume_task`, and `cancel_task` tools.
+They call the injected project/task stores and task controller, so the same
+validation and lifecycle state machine serve HTTP, chat and voice. Task details sent
+to a tool contain bounded event summaries, not event payloads. The project and task
+tool overview is in [features.md](features.md).
 
 ### New project creation (P3-12)
 
