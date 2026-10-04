@@ -2,10 +2,12 @@ import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { projectRoutes } from './projects.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
-import type { CreateTaskInput, TaskListFilters } from './task-store.js';
+import type { CreateTaskInput, TaskEventMessage, TaskListFilters } from './task-store.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxResponseBytes = 1024 * 1024;
+const eventReplayPageSize = 200;
+const maxPendingEvents = 1000;
 const taskStateSchema = { type: 'string', enum: taskStates };
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
 
@@ -131,6 +133,102 @@ export const factoryModule: BackendModule = {
       const detail = await store.get(request.params.id, request.query.eventLimit ?? 100, request.query.eventOffset ?? 0);
       if (!detail) return reply.code(404).send({ error: 'Task not found' });
       return sendBounded(reply, detail);
+    });
+
+    app.get<{ Params: { id: string } }>('/factory/tasks/:id/events', {
+      schema: {
+        params: { type: 'object', properties: { id: idSchema }, required: ['id'], additionalProperties: false },
+      },
+    }, async (request, reply) => {
+      const store = app.taskStore;
+      if (!store) return reply.code(503).send({ error: 'Task service unavailable' });
+      const taskId = request.params.id;
+      if (!isSqlBigInt(taskId)) return reply.code(400).send({ error: 'Invalid task ID' });
+
+      const headerCount = request.raw.rawHeaders.filter((_value, index) =>
+        index % 2 === 0 && request.raw.rawHeaders[index]?.toLowerCase() === 'last-event-id').length;
+      const rawEventId = request.headers['last-event-id'];
+      if (headerCount > 1 || (rawEventId !== undefined && typeof rawEventId !== 'string') ||
+        (typeof rawEventId === 'string' && !/^(?:0|[1-9][0-9]{0,18})$/.test(rawEventId))) {
+        return reply.code(400).send({ error: 'Invalid event ID' });
+      }
+      const afterEventId = rawEventId ?? '0';
+      if (BigInt(afterEventId) > maxSqlBigInt) return reply.code(400).send({ error: 'Invalid event ID' });
+      if (!await store.get(taskId, 1, 0)) return reply.code(404).send({ error: 'Task not found' });
+
+      const response = reply.raw;
+      let closed = false;
+      let replaying = true;
+      let pending: TaskEventMessage[] = [];
+      const replayedIds = new Set<string>();
+      const cleanup = () => {
+        if (closed) return;
+        closed = true;
+        clearInterval(heartbeat);
+        unsubscribe();
+      };
+      const end = () => {
+        cleanup();
+        if (!response.writableEnded) response.end();
+      };
+      const writeEvent = (event: TaskEventMessage) => {
+        if (closed || BigInt(event.id) <= BigInt(afterEventId) || replayedIds.has(event.id)) return !closed;
+        replayedIds.add(event.id);
+        if (!response.write(`id: ${event.id}\nevent: task\ndata: ${JSON.stringify(event)}\n\n`)) {
+          end();
+          return false;
+        }
+        return true;
+      };
+      const unsubscribe = app.eventHub.subscribe((event) => {
+        if (event.taskId !== taskId || closed) return;
+        if (replaying) {
+          if (pending.length >= maxPendingEvents) {
+            end();
+            return;
+          }
+          pending.push(event);
+        } else {
+          writeEvent(event);
+        }
+      });
+      reply.hijack();
+      const heartbeat = setInterval(() => {
+        if (!response.write(': heartbeat\n\n')) end();
+      }, 25_000);
+      response.once('close', cleanup);
+      response.once('error', end);
+      response.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+      response.flushHeaders();
+
+      const replay = async () => {
+        let cursor = afterEventId;
+        while (!closed) {
+          const events = await store.getEventsAfter(taskId, cursor, eventReplayPageSize);
+          if (!events.length) break;
+          for (const event of events) {
+            if (closed) return;
+            if (!writeEvent(event)) return;
+            cursor = event.id;
+          }
+          if (events.length < eventReplayPageSize) break;
+        }
+        if (closed) return;
+        replaying = false;
+        const buffered = pending.sort((left, right) =>
+          BigInt(left.id) < BigInt(right.id) ? -1 : BigInt(left.id) > BigInt(right.id) ? 1 : 0);
+        pending = [];
+        for (const event of buffered) {
+          if (!writeEvent(event)) return;
+        }
+      };
+      void replay().catch(end);
+      return reply;
     });
 
     app.get('/factory/context', { config: { jarvisAgent: true } }, async (_request, reply) => {

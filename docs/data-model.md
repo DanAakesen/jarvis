@@ -78,7 +78,7 @@ flowchart LR
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
-P5-03 does not create `jarvis_sessions`, `messages`, or `tool_calls`; the realtime tool round-trip is backend-executed but not persisted yet. P4-03 owns conversation persistence, and P5-06 owns voice transcripts and usage. No schema or migration changes are part of P5-03.
+P5-03 and P5-04 do not create `jarvis_sessions`, `messages`, or `tool_calls`; realtime tool calls and browser audio are not persisted yet. P4-03 owns conversation persistence, and P5-06 owns voice transcripts and usage. No schema or migration changes are part of P5-03 or P5-04.
 
 ## 1 · Jarvis core
 
@@ -227,12 +227,12 @@ erDiagram
     }
 ```
 
-- **The queue is `tasks` itself (Decision 3, option A).** The dispatcher takes the oldest `Ready` task within the project's and the global limit, sets `lease_owner` and `lease_until`, and starts a sandbox. A lease that expires means the dispatcher died, and another may take over.
-- **Retries:** `attempt_count` and `next_attempt_at`; after the limit the task moves to `NeedsAttention`.
+- **The queue is `tasks` itself (Decision 3, option A).** The dispatcher takes the highest-priority oldest eligible `Ready` task within the global and project limits. A transaction-owned `jarvis.task-dispatcher` app lock serializes capacity checks and claims; `lease_owner` and `lease_until` reserve a startup slot. Expired startup leases move to `NeedsAttention`, not another start, because the remote start may have succeeded before the dispatcher stopped.
+- **Retries:** `attempt_count` increments for each leased start. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; `next_attempt_at` gates each retry. Ambiguous Foundry start outcomes are not replayed and move to `NeedsAttention`.
 - `task_events` stores **every** task event (Dan's choice: maximum freedom for the UI). It is append-only, drives the card's live updates (via SSE) and the task's history, and is the only fast-growing table; archive by age. Each event also creates a `factory` activity row with its type as `kind`, its summary (or type) as title, and `task:<id>` as link.
 - `origin_message_id` links a task to the message in Jarvis's conversation that created it. The existing schema requires this reference for non-board tasks; board tasks may omit it.
 - P1-04 creates a board task only for an active project, using the project's default agent unless the request selects one. Task creation and its `created` event share a transaction. Backend state transitions lock the task row, enforce the product lifecycle, and write a `state_changed` event in that transaction; `Done` requires a trusted, verified-completion call. There is no client state-update route.
-- P1-05 writes each task event and its activity row in the same transaction. `TaskStore.recordEvent` is the producer API for future runner and backend event sources; JSON payloads are capped at 1 MiB. The in-process hub publishes only after commit; payloads over 4 KiB are omitted from the published event and marked truncated. The P1-06 SSE endpoint adds authenticated streaming, heartbeat and reconnect replay.
+- P1-05 writes each task event and its activity row in the same transaction. `TaskStore.recordEvent` is the producer API for future runner and backend event sources; JSON payloads are capped at 1 MiB. The in-process hub publishes only after commit; payloads over 4 KiB are omitted from the published event and marked truncated. P1-06's authenticated SSE endpoint reads missed events from `task_events` by ascending ID in bounded pages, buffers live hub publications during replay, and suppresses overlapping IDs. The fetch client reconnects with the last delivered ID; the stream sends a heartbeat comment every 25 seconds. No schema change is needed.
 - `GET /factory/tasks` filters by project, agent, state, creation period and search, with bounded offset pagination. `GET /factory/tasks/:id` returns the task and a bounded, pageable event slice. Responses are capped at 1 MiB; event payloads over 4 KiB are omitted and marked truncated.
 
 ## 4 · Sandbox
@@ -278,7 +278,7 @@ erDiagram
     }
 ```
 
-- A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22).
+- A task can have several sessions: a crash ends one session, and recovery starts a new one from the branch (L22). The dispatcher records `agent_name` for heartbeat routing. `agent_version = 'active'` and `image` records the selected Foundry runner route (for example `jarvis-runner-base-1x2`); the Invocations start response does not expose the resolved version number or container digest.
 - The sandbox heartbeat updates `last_heartbeat_at`; it needs the session's `agent_name` to address the Foundry runtime. Live runner events update `last_event_at` and add `task_events`.
 - Large content (logs, CI logs, transcripts) lives in Blob; SQL keeps only the path.
 - The schema checks sandbox sizes, statuses, turn modes, end reasons and artifact kinds against these vocabularies. UTC `datetime2` end and heartbeat/event timestamps cannot precede their start.

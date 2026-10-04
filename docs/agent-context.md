@@ -277,13 +277,14 @@ preflight route are public; explicit OPTIONS business endpoints are protected.
 
 `FOUNDRY_ADMIN_ENDPOINT` and `FOUNDRY_RUNTIME_ENDPOINT` are optional HTTPS Foundry
 project endpoints, supplied by Bicep in production. Configure both to enable
-sandbox heartbeats; if absent, the backend starts with heartbeat disabled and logs
-a warning. The backend identity uses `DefaultAzureCredential` with the SQL
-managed-identity client ID and has Foundry User on the project. The sandbox
-heartbeat reloads active sessions at startup; P2-05 dispatcher code must persist
-each session's `agent_name`, register it with `app.sandboxHeartbeat.track()`, and
-remove finished sessions with `untrack()`.
-Heartbeat tests use recorded responses and do not verify live Foundry access.
+sandbox dispatch and heartbeats; if absent, the backend starts with both disabled.
+The backend identity uses `DefaultAzureCredential` with the SQL
+managed-identity client ID and has Foundry User on the project. At startup, the
+heartbeat reloads active sessions once; the dispatcher writes `agent_name` for
+new sessions, calls `track()` after the SQL commit, and `untrack()` when sessions
+end. The dispatcher wakes on task events and retry deadlines, not SQL polling;
+expired start leases go to Needs attention rather than replaying a possibly
+accepted Foundry start. Offline tests do not verify live Foundry access.
 
 The optional `VOICE_LIVE_ENDPOINT` enables `/voice`; it must be a secure Azure
 Voice Live WebSocket endpoint without credentials in its URL. The backend pins

@@ -23,7 +23,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); 300 DKK budget alert | Offline logging/export adapter implemented in P0-03; live ingestion and budget deployment pending P0-16 |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Decided 3 October 2026 |
 | Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (application role `Jarvis.Tools`) is accepted only on the agent-enabled routes: tools (P4-01), turn context (P4-04) and its effective Jarvis-settings read (P4-07) | Browser and backend contracts checked offline in #9; agent policy checked offline in P4-01/P4-04/P4-07; the P4-08 main deployment and bootstrap succeeded. Live Dan sign-in and deployed chat invocation remain to verify |
-| Board updates | Server-sent events (SSE) over `fetch`, so the bearer token can be sent | Decided |
+| Board updates | Authenticated server-sent events (SSE) over `fetch`, so the bearer token can be sent. Reconnects resume from `Last-Event-ID`; persisted task events replay before buffered live hub events, with duplicate IDs suppressed. A comment heartbeat is sent every 25 seconds. | Implemented and tested offline; SQL Server integration and deployed streaming remain unverified |
 | Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
@@ -398,14 +398,14 @@ These boxes are responsibilities; they do not each need a separate service.
 
 | Part | Design |
 | --- | --- |
-| Queue | The Azure SQL task table. The dispatcher picks Ready rows within the concurrency limit. |
-| Retries | Attempt count and next-attempt time on the task row; after the limit, Needs attention. |
+| Queue | The Azure SQL task table. A transaction-owned dispatcher app lock serializes claims across replicas; Ready rows are leased only when both global and project limits allow them. Active Running tasks and unexpired startup leases consume capacity. |
+| Retries | `attempt_count` and `next_attempt_at` on the task row. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; ambiguous Foundry starts and exhausted attempts move to Needs attention. Expired startup leases move to Needs attention rather than being replayed, avoiding duplicate remote sessions. |
 | Sandbox heartbeat | At startup, the backend loads active sandbox turns once; the dispatcher registers new turns. Each registered invocation is checked immediately and about once a minute, and `last_heartbeat_at` is updated after a valid response. The poller holds active sessions in memory and makes no recurring SQL reads while idle. |
 | Crash detection | Two consecutive HTTP 424/404/5xx responses, with a confirming poll after 30 s; the task and sandbox session are updated in one transaction, then the committed task event is published through the in-process hub. Event gaps alone never trigger it (L22). |
 | Live progress | The runner pushes sandbox events to the backend; every runner event is stored. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`. No polling. |
-| Board updates | The backend pushes to the board with SSE; the browser reconnects and reconciles. |
-| Idle | No SQL queries while no task is Ready, Running, or waiting for a retry. The dispatcher wakes on task changes and on the next retry time, not by polling. |
+| Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. The fetch client reconnects with its last delivered ID and ignores repeats. |
+| Idle | The dispatcher subscribes to committed task events and schedules only the next retry deadline. After its startup scan, it makes no recurring SQL queries while idle; there is no polling timer. |
 | Always on | The backend normally runs with a minimum of 1 replica, so the heartbeat never stops. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready or Running. The backend does not query SQL while idle, so the database can still pause. |
 
 Scale settings are revision-scope in Container Apps, so the sleep switch creates a new revision; that is acceptable because it is used only when nothing runs. The SQL application lock blocks new active-task writes between the idle check and the ARM update.
@@ -425,7 +425,7 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | Idle timeout | 2 minutes without requests shuts the sandbox down; files and the conversation survive an idle shutdown. |
 | Crash | Files and conversation since the last persist point are lost; a new agent version does not restart running sessions. Recovery starts a new session from the task branch with the task history from SQL; the agent pushes often (L22). |
 | Endpoints | Administration (connections, versions): `*.services.ai.azure.com`. Sessions and Invocations: `*.cognitiveservices.azure.com` (L10). |
-| Settings | The Foundry invocation carries the effective `model` and, for Codex, `reasoning`. Copilot CLI 1.0.91 accepts `--model`; `@agentclientprotocol/codex-acp` 2.1.1 applies `model` and `reasoning_effort` through `session/set_config_option`. The runner retains the effective values with the ACP session so steer/resume does not pick up changed defaults. The dispatcher (P2-05) still resolves task overrides over settings defaults. |
+| Settings | The Foundry invocation carries the effective `model` and, for Codex, `reasoning`. Copilot CLI 1.0.91 accepts `--model`; `@agentclientprotocol/codex-acp` 2.1.1 applies `model` and `reasoning_effort` through `session/set_config_option`. The runner retains the effective values with the ACP session so steer/resume does not pick up changed defaults. P2-05 resolves task overrides before settings defaults. |
 
 ### Production runner implementation
 
@@ -439,10 +439,9 @@ reasoning effort. Copilot receives a non-default model as a separate `--model`
 argument; Codex receives non-default values with ACP `session/set_config_option`
 (`model`, then `reasoning_effort`) and the runner verifies the returned current
 value. The ACP session metadata preserves those choices across process recreation.
-The dispatcher must pass the task override when present, otherwise the settings
-default; its settings-store integration remains P2-05. No model catalog values
-beyond provider default have been enabled, and live provider selection remains
-unverified.
+The dispatcher passes the task override when present, otherwise the settings
+default. No model catalog values beyond provider default have been enabled, and
+live provider selection remains unverified.
 
 - Node/Python use the small base image; a separate .NET image adds SDK 8.0.419.
   Both expose 1 vCPU / 2 GiB and 2 vCPU / 4 GiB variants. The default stays 1×2;
@@ -542,9 +541,9 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 
 | Area | Design | Evidence |
 | --- | --- | --- |
-| Browser connection | Browser connects to the backend's authenticated `/voice` WebSocket using its delegated API token in the WebSocket subprotocol. When `VOICE_LIVE_ENDPOINT` is configured, the backend obtains a Voice Live-scoped token with `DefaultAzureCredential`, pins the `gpt-realtime-2.1` model, and opens the upstream connection; provider credentials never enter the browser or URL. | Backend configuration and a local mock verify endpoint validation, authentication, relay, and model pinning. P0-16 must configure the endpoint and provider identity; Azure interoperability and browser audio are unverified. |
-| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | Local mock tests verify the Danish route and relay; the hash-locked provisioner definition sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent was deployed by P4-08. |
-| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | Local mock tests verify the server-owned session update; browser audio and live Voice Live behavior remain unverified pending P0-16/P5-04. |
+| Browser connection | Browser connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. It captures and sends mono 24 kHz PCM only after the relay is ready; provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, interruption, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
+| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then captures audio. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
+| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | The client waits for the backend-configured session before opening the microphone. Local mock tests verify server-owned session settings and client event handling; real browser audio and live Voice Live behavior remain unverified pending P0-16. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Voice calls are not yet persisted as messages/tool-call rows; P4-03/P5-06 own conversation and voice history. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
 | Jarvis model | `gpt-5.6-luna`, reasoning `none`, strict action rules (L16) | ≈0.003 DKK per command |
@@ -554,9 +553,9 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Interruption | The client stops playback on Voice Live's `speech_started` | Detected in 0.6 s |
 | Reconnect | Reconnect automatically when the voice bridge ends | L21 |
 
-P5-03 pins the English model and Ryan HD in the backend. P5-02 provides Danish voice provisioning; P5-05 will connect language and voice selection to settings, and P5-06 owns voice history.
+P5-03 pins the English model and Ryan HD in the backend. P5-04 implements browser PCM capture/playback, stops playback when speech starts, reconnects after a relay drop, and exposes language selection for the next session. P5-02 provides Danish voice provisioning; P5-05 owns the language toggle and voice settings, and P5-06 owns voice history.
 
-The Danish backend connector uses the Foundry project endpoint from `FOUNDRY_PROJECT_ENDPOINT` and a server-side Azure Identity token. Bicep grants the backend managed identity the `Foundry User` role on the project. After a successful `Deploy`, its smoke step grants the workflow's deploy identity `Foundry User`; the `Danish voice agent` workflow then creates/updates `jarvis-voice-mai` when provisioning inputs change, or by manual dispatch. It uses a hash-locked SDK to wrap the hosted agent `jarvis`. Browser audio remains P5-04.
+The Danish backend connector uses the Foundry project endpoint from `FOUNDRY_PROJECT_ENDPOINT` and a server-side Azure Identity token. Bicep grants the backend managed identity the `Foundry User` role on the project. After a successful `Deploy`, its smoke step grants the workflow's deploy identity `Foundry User`; the `Danish voice agent` workflow then creates/updates `jarvis-voice-mai` when provisioning inputs change, or by manual dispatch. It uses a hash-locked SDK to wrap the hosted agent `jarvis`. The P5-04 client is implemented and locally tested; live browser audio remains unverified.
 
 ### Jarvis agent
 

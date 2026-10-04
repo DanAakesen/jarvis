@@ -307,6 +307,25 @@ export function createTaskStore(pool: sql.ConnectionPool, eventHub: TaskEventHub
       };
     },
 
+    async getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]> {
+      const result = await pool.request()
+        .input('taskId', sql.BigInt, BigInt(taskId))
+        .input('eventId', sql.BigInt, BigInt(eventId))
+        .input('limit', sql.Int, limit)
+        .query<EventRow>(`SELECT TOP (@limit) CAST(id AS varchar(19)) AS id, type, summary,
+          CASE WHEN DATALENGTH(payload) > 4096 THEN NULL ELSE payload END AS payload,
+          CAST(CASE WHEN DATALENGTH(payload) > 4096 THEN 1 ELSE 0 END AS bit) AS payloadTruncated,
+          source, at
+          FROM dbo.task_events WHERE task_id = @taskId AND id > @eventId
+          ORDER BY id ASC;`);
+      return result.recordset.map((event) => ({
+        ...event,
+        taskId,
+        payload: parsePayload(event.payload),
+        at: iso(event.at) as string,
+      }));
+    },
+
     async getRunningContext() {
       const result = await pool.request()
         .input('taskLimit', sql.Int, runningContextTaskLimit + 1)

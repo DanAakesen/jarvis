@@ -311,6 +311,11 @@ describe('committed domain schema (groups 1-4 and 6)', () => {
     expect((await store.transition(task.id, 'Running')).kind).toBe('ok');
     expect(delivered.map(({ type }) => type)).toEqual(['created', 'files_changed', 'state_changed']);
     expect(delivered.map(({ taskId }) => taskId)).toEqual([task.id, task.id, task.id]);
+    expect(await store.getEventsAfter(task.id, delivered[0]!.id, 1)).toEqual([runnerEvent]);
+    expect(await store.getEventsAfter(task.id, runnerEvent.id, 1)).toMatchObject([
+      { id: delivered[2]!.id, taskId: task.id, type: 'state_changed' },
+    ]);
+    expect(await store.getEventsAfter(task.id, delivered[2]!.id, 1)).toEqual([]);
 
     await expect(store.recordEvent({
       taskId: '9223372036854775807',

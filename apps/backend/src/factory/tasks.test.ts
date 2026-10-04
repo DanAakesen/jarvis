@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
+import { createEventHub } from '../core/event-hub.js';
 import type { RunningTaskContextSnapshot, TaskDetail, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -64,10 +65,15 @@ function fixture(
   overrides: Partial<TaskStore> = {},
   auth = async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
 ) {
+  const eventHub = createEventHub<TaskEventMessage>();
   const store: TaskStore = {
     create: vi.fn(async () => task),
     list: vi.fn(async () => [task]),
     get: vi.fn(async () => detail),
+    getEventsAfter: vi.fn(async (taskId, eventId, limit) => detail.events
+      .filter((event) => BigInt(event.id) > BigInt(eventId))
+      .slice(0, limit)
+      .map((event) => ({ ...event, taskId }))),
     getRunningContext: vi.fn(async () => context),
     transition: vi.fn(async () => ({ kind: 'ok' as const, task })),
     withNoActiveTasks: vi.fn(async (operation) => ({ kind: 'idle' as const, value: await operation() })),
@@ -85,10 +91,11 @@ function fixture(
   };
   const app = buildApp(config, undefined, {
     taskStore: store,
+    eventHub,
     auth,
   });
   apps.push(app);
-  return { app, store };
+  return { app, store, eventHub };
 }
 
 afterEach(async () => {
@@ -166,6 +173,80 @@ describe('factory tasks API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(detail);
     expect(store.get).toHaveBeenCalledWith('42', 20, 2);
+  });
+
+  it('authenticates the event stream and validates resume IDs', async () => {
+    const { app, store } = fixture();
+    expect((await app.inject({ url: '/factory/tasks/42/events' })).statusCode).toBe(401);
+    expect((await app.inject({
+      url: '/factory/tasks/42/events',
+      headers: { ...headers, 'last-event-id': '9223372036854775808' },
+    })).statusCode).toBe(400);
+    expect((await app.inject({
+      url: '/factory/tasks/9223372036854775808/events', headers,
+    })).statusCode).toBe(400);
+    expect(store.getEventsAfter).not.toHaveBeenCalled();
+  });
+
+  it('replays after Last-Event-ID without duplicating a concurrently published event and sends heartbeats', async () => {
+    const replayed = {
+      id: '20',
+      taskId: '42',
+      type: 'progress',
+      summary: 'Tests passed',
+      payload: null,
+      payloadTruncated: false,
+      source: 'runner' as const,
+      at: '2026-10-03T12:01:00.000Z',
+    };
+    const later = { ...replayed, id: '21', summary: 'Changes pushed' };
+    let publishDuringReplay = true;
+    const { app, eventHub, store } = fixture({
+      getEventsAfter: vi.fn(async (taskId, eventId, limit) => {
+        if (publishDuringReplay && eventId === '19') {
+          publishDuringReplay = false;
+          eventHub.publish(replayed);
+          await Promise.resolve();
+        }
+        return [replayed].filter((event) => event.taskId === taskId && BigInt(event.id) > BigInt(eventId)).slice(0, limit);
+      }),
+    });
+    const timerSpy = vi.spyOn(globalThis, 'setInterval');
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+    const response = await fetch(`${address}/factory/tasks/42/events`, {
+      headers: { ...headers, 'last-event-id': '19' },
+      signal: controller.signal,
+    });
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const reader = response.body!.getReader();
+    let text = '';
+    const readFrame = async (frame: string) => {
+      while (!text.includes(frame)) {
+        const result = await reader.read();
+        if (result.done) throw new Error('Event stream ended unexpectedly');
+        text += new TextDecoder().decode(result.value);
+      }
+      const index = text.indexOf('\n\n');
+      const current = text.slice(0, index + 2);
+      text = text.slice(index + 2);
+      return current;
+    };
+    try {
+      expect(await readFrame('id: 20')).toContain('"id":"20"');
+      expect(store.getEventsAfter).toHaveBeenCalledWith('42', '19', 200);
+      const interval = timerSpy.mock.calls.find(([, delay]) => delay === 25_000)?.[0];
+      expect(interval).toBeDefined();
+      interval?.();
+      expect(await readFrame(': heartbeat')).toBe(': heartbeat\n\n');
+
+      eventHub.publish(later);
+      expect(await readFrame('id: 21')).toContain('"id":"21"');
+    } finally {
+      controller.abort();
+      await reader.cancel().catch(() => {});
+      timerSpy.mockRestore();
+    }
   });
 
   it('returns the bounded running-task context only to the Jarvis agent', async () => {
