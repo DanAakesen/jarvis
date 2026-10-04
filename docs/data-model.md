@@ -166,7 +166,16 @@ erDiagram
   P3-11 adds `new_projects.owner`, `new_projects.visibility`,
   `new_projects.templates_repository`, `new_projects.default_agent`,
   `new_projects.policy`, `new_projects.max_parallel_tasks`, and
-  `new_projects.default_branch` to the same global settings scope.
+  `new_projects.default_branch` to the same global settings scope. P8-17 adds `appearance.theme` (light by
+  default; light/dark/system), optional `appearance.accent`,
+  `appearance.accent-secondary`, `appearance.surface-tint`,
+  `appearance.background`, `appearance.glow`, `appearance.motion`,
+  `appearance.radius`, and `appearance.density`, plus
+  `voice.minimize_windows_on_voice_start` (boolean, default false). Theme
+  tokens are validated as JSON scalars: colors are `#RRGGBB`, backgrounds are
+  `living-aurora` or `daylight-studio`, glow is 0–1, motion is full/calm/reduced,
+  radius is 0–24, and density is compact/comfortable. Optional keys are in the
+  SQL read whitelist even before they have a stored value.
   Values are JSON scalars. Model/voice/language/reasoning choices are validated
   against the backend catalog; Codex/Copilot catalogs currently contain only
   `default`. P2-11 verified that the runner can apply explicit model overrides
@@ -178,8 +187,13 @@ erDiagram
   100. New-project owner and repository values are validated as GitHub
   identifiers; visibility, agent, and policy use closed catalogs; task limits
   are integers from 1 to 100; branch names reject invalid Git ref characters.
-  No migration is needed. Partial writes are transactional; settings are defaults
-  for future sessions/tasks, not live updates or history. At the start of a hosted Jarvis
+  No migration is needed. Partial writes are transactional. Model, voice, project,
+  and task settings provide defaults rather than changing running work; appearance
+  is a persisted UI preference. Tool-originated changes do not themselves push to
+  an open client; applying them without reload depends on P8-13 and remains
+  unverified. Settings have no history. Generated views and window arrangement
+  are not represented in `settings` and remain temporary.
+  At the start of a hosted Jarvis
   session, the agent keeps the effective model and reasoning effort in memory for
   that session; the snapshot is not persisted.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes. The authenticated Now-feed read excludes `dismissed_at` rows; dismissing sets the UTC timestamp without deleting the activity record. P6-02 writes alerts in the same transaction as the condition where available, with a unique filtered `alert_key` index to suppress repeats. Keys identify deployment, sandbox session, credential expiry timestamp, or budget month; the feed never displays the key.

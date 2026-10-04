@@ -126,14 +126,16 @@ Dan never fills in a project form. He gives Jarvis, by voice or chat, a project 
 
 ### Settings
 
-Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered.
+Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered. Appearance and the optional voice-start window preference are persisted; generated views and window arrangement remain temporary.
 
 | Area | Setting | Default |
 | --- | --- | --- |
 | Jarvis | Model and reasoning effort | `gpt-5.6-luna`, reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
+| Appearance | Light, dark, or system mode; approved theme tokens | Light |
 | Voice | Speech to text | MAI Transcribe |
 | Voice | Voice per language | English: Ryan HD (British butler persona, addresses Dan as "sir"); Danish: Harper (MAI-Voice-2) |
 | Voice | Default language | Danish |
+| Voice | Minimise all windows when starting voice | Off |
 | Codex | Model and reasoning effort | Codex default |
 | Copilot | Model | Copilot default |
 | Global | Max parallel tasks; sleep switch | Set by Dan |
@@ -228,7 +230,8 @@ the last-release field is explicitly unavailable rather than inferred.
 | Data points | Actions |
 | --- | --- |
 | Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
-| Voice: speech-to-text model, voice per language, default language | Change; play a voice sample |
+| Appearance: light/dark/system and approved theme tokens | Change (persisted across visits) |
+| Voice: speech-to-text model, voice per language, default language, minimise windows on voice start (off by default) | Change; play a voice sample |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
 | New projects: owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | Change (applies to projects Jarvis registers) |

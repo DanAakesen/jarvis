@@ -126,6 +126,8 @@ and the same labelled field grid as the other sections. Two columns make related
 the form stacks on narrow screens. Save feedback stays beside the save action,
 and loading, recovery, and unavailable actions remain explicit. Credentials show text status, expiry, and last-updated dates without secret
 values; manual renewal and reseed controls remain disabled with an explanation.
+The Voice section includes a labelled “Minimise all windows when starting voice”
+checkbox, off by default, saved with the other settings.
 The sleep control also remains disabled until its owning workflow exists; no
 new visual direction or palette is introduced. Checked in Chromium at
 390 and 1280 px with mock auth/settings: no horizontal overflow, controls at

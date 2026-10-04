@@ -107,6 +107,18 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   repository, default agent, policy, per-project task limit, and default branch;
   these defaults reuse the existing settings table and are available to future
   project registration without changing the project API.
+  P8-17 adds global appearance mode and optional theme-token scalars plus
+  `voice.minimize_windows_on_voice_start` (default `false`) through the same
+  settings store. Appearance is bounded to light/dark/system; colors use
+  `#RRGGBB`, background uses the named visual presets, glow is 0–1, motion and
+  density use closed catalogs, and radius is 0–24. The registered `set_theme`
+  Jarvis tool validates its token patch and writes through `SettingsStore`;
+  the existing dispatcher records `ok`, `refused`, or sanitized `error`
+  outcomes. Successful calls return the accepted token patch. These values use
+  the existing JSON-scalar settings rows, without a migration. Window/view state
+  remains client-owned and is not stored. Applying tool-originated changes to an
+  already-open client without reload depends on the P8-13 consumer and remains
+  unverified.
   The SQL adapter is injected only when database configuration exists; the API
   returns 503 without it. The model catalog offers deployed Jarvis models and
   only provider defaults for Codex and Copilot because their available-model

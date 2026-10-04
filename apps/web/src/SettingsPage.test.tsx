@@ -11,6 +11,7 @@ const settings = {
     englishVoice: 'en-GB-Ryan:DragonHDLatestNeural',
     danishVoice: 'da-DK-Harper:MAI-Voice-2',
     defaultLanguage: 'da' as 'da' | 'en',
+    minimizeWindowsOnVoiceStart: false,
   },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
@@ -172,6 +173,30 @@ describe('SettingsPage', () => {
     expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
     const [, request] = fetchMock.mock.calls[1]!;
     expect(JSON.parse(String(request?.body))).toEqual({ settings: { newProjects: updated.newProjects } });
+  });
+
+  it('defaults voice window minimisation off and persists a changed preference', async () => {
+    const user = userEvent.setup();
+    const updated = {
+      ...settings,
+      voice: { ...settings.voice, minimizeWindowsOnVoiceStart: true },
+    };
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()))
+      .mockResolvedValueOnce(response(settingsResponse(updated)));
+    renderSettingsPage();
+
+    const toggle = await screen.findByRole('checkbox', { name: 'Minimise all windows when starting voice' });
+    expect(toggle).toHaveProperty('checked', false);
+    await user.click(toggle);
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    expect(await screen.findByRole('checkbox', { name: 'Minimise all windows when starting voice' }))
+      .toHaveProperty('checked', true);
+    const [, request] = fetchMock.mock.calls[1]!;
+    expect(JSON.parse(String(request?.body))).toEqual({
+      settings: { voice: { minimizeWindowsOnVoiceStart: true } },
+    });
   });
 
   it('offers retry when settings cannot be loaded', async () => {
