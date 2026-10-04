@@ -11,6 +11,7 @@ import {
 } from './realtime.js';
 import type { BackendModule } from '../modules.js';
 import type { ConversationRole } from '../core/conversation-store.js';
+import { createVoiceStatusAnnouncer } from './status-updates.js';
 
 export const VOICE_LIVE_SCOPE = 'https://ai.azure.com/.default';
 export const VOICE_SUBPROTOCOL = 'jarvis.voice.v1';
@@ -165,6 +166,9 @@ function registerVoiceRoute(
     let responseDone = false;
     let toolQueue = Promise.resolve();
     let sessionId: string | undefined;
+    let userSpeaking = false;
+    let assistantResponding = false;
+    let statusAnnouncer: ReturnType<typeof createVoiceStatusAnnouncer> | undefined;
     let transcriptQueue = Promise.resolve();
     let transcriptPersistenceFailed = false;
     let finalization: Promise<void> | undefined;
@@ -244,6 +248,7 @@ function registerVoiceRoute(
 
     const close = (code: number, reason: string) => {
       controller.abort();
+      statusAnnouncer?.close();
       if (upstream) closeSocket(upstream, code, reason);
       void finalizeSession().then(
         () => closeSocket(browser, code, reason),
@@ -262,6 +267,22 @@ function registerVoiceRoute(
       });
     };
 
+    if (english) {
+      statusAnnouncer = createVoiceStatusAnnouncer({
+        taskEvents: app.eventHub,
+        nowEvents: app.nowEventHub,
+        canSpeak: () => !controller.signal.aborted && !endRequested && !userSpeaking && !assistantResponding &&
+          !toolCallsInResponse && pendingToolCalls === 0 && upstream?.readyState === WebSocket.OPEN,
+        speak: (text) => {
+          assistantResponding = true;
+          sendUpstream({
+            type: 'response.create',
+            response: { instructions: `Briefly announce this status update to Dan: ${text}` },
+          });
+        },
+      });
+    }
+
     const flushQueued = () => {
       configured = true;
       for (const message of queued) {
@@ -277,7 +298,9 @@ function registerVoiceRoute(
       if (controller.signal.aborted || !responseDone || !toolCallsInResponse || pendingToolCalls > 0) return;
       responseDone = false;
       toolCallsInResponse = false;
+      assistantResponding = true;
       sendUpstream({ type: 'response.create' });
+      statusAnnouncer?.flush();
     };
 
     const runToolCall = (call: RealtimeFunctionCall) => {
@@ -343,11 +366,13 @@ function registerVoiceRoute(
     });
     browser.once('close', () => {
       controller.abort();
+      statusAnnouncer?.close();
       if (upstream) closeSocket(upstream, 1000, 'Browser disconnected');
       void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
     });
     browser.once('error', () => {
       controller.abort();
+      statusAnnouncer?.close();
       if (upstream) closeSocket(upstream, 1011, 'Voice connection failed');
       void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
     });
@@ -364,6 +389,10 @@ function registerVoiceRoute(
         });
         upstream.on('message', (data, binary) => {
           const event = parseVoiceEvent(data, binary);
+          if (event?.type === 'input_audio_buffer.speech_started') userSpeaking = true;
+          if (event?.type === 'input_audio_buffer.speech_stopped') userSpeaking = false;
+          if (event?.type === 'response.created') assistantResponding = true;
+          if (event?.type === 'response.done') assistantResponding = false;
           if (english && event?.type === 'response.function_call_arguments.done') {
             runToolCall(event as unknown as RealtimeFunctionCall);
             return;
@@ -371,6 +400,9 @@ function registerVoiceRoute(
           if (english && event?.type === 'response.done' && toolCallsInResponse) {
             responseDone = true;
             resumeAfterTools();
+          }
+          if (event?.type === 'input_audio_buffer.speech_stopped' || event?.type === 'response.done') {
+            statusAnnouncer?.flush();
           }
           if (event) persistTranscript(event);
           if (browser.readyState === WebSocket.OPEN) {

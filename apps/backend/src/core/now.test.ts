@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
+import type { ToolCallStore } from './tool-calls.js';
 import { createEventHub } from './event-hub.js';
 import type { NowFeed, NowFeedEventHub, NowFeedStore } from './now.js';
 
@@ -31,9 +32,9 @@ function fixture(store?: NowFeedStore, auth: TokenVerifier = async () => ({
   objectId: config.auth.ownerObjectId,
   tenantId: config.auth.tenantId,
   displayName: 'Dan',
-})) {
+}), toolCallStore?: ToolCallStore) {
   const nowEventHub: NowFeedEventHub = createEventHub();
-  const app = buildApp(config, undefined, { auth, nowFeedStore: store, nowEventHub });
+  const app = buildApp(config, undefined, { auth, nowFeedStore: store, nowEventHub, toolCallStore });
   apps.push(app);
   return { app, nowEventHub };
 }
@@ -99,6 +100,45 @@ describe('Now feed API', () => {
 
     expect(response.statusCode).toBe(400);
     expect(store.dismiss).not.toHaveBeenCalled();
+  });
+
+  it('registers get_status_summary on the authenticated backend tool route without exposing feed text', async () => {
+    const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
+    const toolCallStore: ToolCallStore = { record: vi.fn(async () => {}) };
+    const { app } = fixture(store, undefined, toolCallStore);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/get_status_summary',
+      headers: { ...headers, 'x-jarvis-message-id': '12' },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      tool: 'get_status_summary',
+      outcome: 'ok',
+      result: { summary: 'The Now feed shows 1 running task, 1 task needing attention, 0 release or deployment updates, 0 credential warnings.' },
+    });
+    expect(JSON.stringify(response.json())).not.toContain('Sandbox crashed');
+    expect(JSON.stringify(response.json())).not.toContain('Ship the feed');
+    expect(store.read).toHaveBeenCalledOnce();
+    expect(toolCallStore.record).toHaveBeenCalledOnce();
+  });
+
+  it('rejects unauthenticated and unexpected status-tool input before reading the feed', async () => {
+    const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
+    const toolCallStore: ToolCallStore = { record: vi.fn(async () => {}) };
+    const { app } = fixture(store, undefined, toolCallStore);
+
+    expect((await app.inject({ method: 'POST', url: '/tools/get_status_summary', payload: {} })).statusCode).toBe(401);
+    expect((await app.inject({
+      method: 'POST',
+      url: '/tools/get_status_summary',
+      headers,
+      payload: { taskId: '42' },
+    })).statusCode).toBe(400);
+    expect(store.read).not.toHaveBeenCalled();
   });
 
   it('streams authenticated refresh events after a task event', async () => {

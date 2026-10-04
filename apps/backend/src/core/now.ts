@@ -35,9 +35,9 @@ export interface NowFeedStore {
   dismiss(id: string): Promise<boolean>;
 }
 
-export interface NowFeedUpdate {
-  type: 'refresh';
-}
+export type NowFeedUpdate =
+  | { type: 'refresh' }
+  | { type: 'status'; kind: 'pull_request_ready' | 'deployment_failed' };
 
 export type NowFeedEventHub = EventHub<NowFeedUpdate>;
 

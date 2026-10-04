@@ -4,10 +4,11 @@ import { ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
 import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
+import { getStatusSummaryTool } from './status.js';
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [],
+  tools: [getStatusSummaryTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);
