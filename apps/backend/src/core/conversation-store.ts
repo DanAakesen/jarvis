@@ -29,6 +29,7 @@ export interface ConversationToolCall {
 export interface ConversationHistoryMessage extends ConversationMessage {
   readonly channel: ConversationChannel;
   readonly language: ConversationLanguage;
+  readonly voiceMinutes: number | null;
   readonly toolCalls: readonly ConversationToolCall[];
 }
 

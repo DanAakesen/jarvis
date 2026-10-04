@@ -57,7 +57,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   (`src/factory/`) owns `/factory/tasks`, `/factory/tasks/:id`,
   `/factory/projects`, `/factory/projects/new`, `/factory/projects/:id` and
   `/factory/releases/:id`;
-  invalid IDs show not found. `/settings` is the shared settings entry. P1-11
+  invalid IDs show not found. The Usage area (`src/usage/`) owns `/usage` and
+  reads the signed-in user's usage report. `/settings` is the shared settings entry. P1-11
   implements it as a responsive form for Jarvis, voice, coding-agent defaults
   and the global task limit; remaining voice samples, sleep and credential
   controls are visibly disabled until their owning services exist.
@@ -335,6 +336,16 @@ calculates a live estimate for an open interval. Rates use the documented
 Sweden Central vCPU/memory basis: 0.8901 DKK/hour for 1×2 and 1.7802 DKK/hour
 for 2×4; actual billed amounts may differ. SQL Server integration and live
 provider reporting remain post-merge checks.
+
+P6-01 adds an authenticated read-only `GET /usage?period=7d|30d|90d|all`.
+The SQL store groups existing `dbo.usage` rows by task, project, agent, source,
+and metric; it suppresses DKK for Codex/Copilot, includes period-clipped live
+sandbox estimates without writing rows, and caps the result at 1,000 groups with
+an explicit truncation flag. The Usage page groups those rows by project, agent,
+or source and links task rows to task detail. Existing voice rows are included
+when present; P5-06 remains the writer. Route/store/web contract tests pass, but
+Chromium inspection at 390/1280 px verifies local mocked interactions.
+Live Azure SQL and provider/voice report data remain unverified.
 
 P6-03's backend job checks for events older than 90 days hourly, in bounded SQL
 batches, and uploads deterministic per-task blobs before deleting each batch in
@@ -637,7 +648,8 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Browser connection | Browser connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. It captures and sends mono 24 kHz PCM only after the relay is ready; provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, interruption, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
 | Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then captures audio. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
 | English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | The client waits for the backend-configured session before opening the microphone. Local mock tests verify server-owned session settings and client event handling; real browser audio and live Voice Live behavior remain unverified pending P0-16. |
-| English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Voice calls are not yet persisted as messages/tool-call rows; P4-03/P5-06 own conversation and voice history. |
+| English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Completed voice transcripts are persisted as messages; voice tool calls are not stored as `tool_calls`. |
+| Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
 | Jarvis model | `gpt-5.6-luna`, reasoning `none`, strict action rules (L16) | ≈0.003 DKK per command |
 | Voices | English: `en-GB-Ryan:DragonHDLatestNeural`. Danish: `en-US-Harper:MAI-Voice-2` locked to `da-DK` with `voice_locale`. Language toggle in the UI. | Chosen by Dan from samples |
@@ -646,7 +658,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Interruption | The client stops playback on Voice Live's `speech_started` | Detected in 0.6 s |
 | Reconnect | Reconnect automatically when the voice bridge ends | L21 |
 
-P5-03 pins the English model and Ryan HD in the backend. P5-04 implements browser PCM capture/playback, stops playback when speech starts, reconnects after a relay drop, and exposes language selection for the next session. P5-02 provides Danish voice provisioning; P5-05 owns the language toggle and voice settings, and P5-06 owns voice history.
+P5-03 pins the English model and Ryan HD in the backend. P5-04 implements browser PCM capture/playback, stops playback when speech starts, reconnects after a relay drop, and exposes language selection for the next session. P5-02 provides Danish voice provisioning; P5-05 owns the language toggle and voice settings. P5-06 persists completed transcripts and voice minutes without a migration; voice minutes measure connected relay duration, not speaking time.
 
 The Danish backend connector uses the Foundry project endpoint from `FOUNDRY_PROJECT_ENDPOINT` and a server-side Azure Identity token. Bicep grants the backend managed identity the `Foundry User` role on the project. After a successful `Deploy`, its smoke step grants the workflow's deploy identity `Foundry User`; the `Danish voice agent` workflow then creates/updates `jarvis-voice-mai` when provisioning inputs change, or by manual dispatch. It uses a hash-locked SDK to wrap the hosted agent `jarvis`. The P5-04 client is implemented and locally tested; live browser audio remains unverified.
 

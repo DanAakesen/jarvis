@@ -1,7 +1,9 @@
 export type VoiceLanguage = 'da' | 'en';
-export type VoiceStatus = 'stopped' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'reconnecting' | 'error';
+export type VoiceStatus = 'stopped' | 'connecting' | 'stopping' | 'listening' | 'thinking' | 'speaking' | 'reconnecting' | 'error';
 
-type VoiceSocket = Pick<WebSocket, 'addEventListener' | 'removeEventListener' | 'send' | 'close'>;
+type VoiceSocket = Omit<Pick<WebSocket, 'addEventListener' | 'removeEventListener' | 'send' | 'close' | 'readyState'>, 'readyState'> & {
+  readonly readyState: number;
+};
 
 export interface VoiceAudio {
   prepare(): Promise<void>;
@@ -20,6 +22,7 @@ export interface VoiceClientOptions {
   getAccessToken: () => Promise<string>;
   language?: VoiceLanguage;
   onStatus: (status: VoiceStatus, message: string) => void;
+  onSessionEnded?: () => void;
   createSocket?: (url: string, protocols: string[]) => VoiceSocket;
   createAudio?: () => VoiceAudio;
   delay?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -29,6 +32,7 @@ const SAMPLE_RATE = 24_000;
 const CONNECTION_TIMEOUT_MS = 20_000;
 const WARMUP_TIMEOUT_MS = 60_000;
 const MAX_RECONNECTS = 8;
+const STOP_TIMEOUT_MS = 15_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -318,6 +322,10 @@ export class BrowserVoiceClient {
   private microphoneOpen = false;
   private playbackAllowed = false;
   private responseFinished = false;
+  private stopping = false;
+  private stopTimer: ReturnType<typeof setTimeout> | undefined;
+  private stopOpenSocket: VoiceSocket | undefined;
+  private stopOpenHandler: (() => void) | undefined;
 
   constructor(private readonly options: VoiceClientOptions) {
     this.language = options.language ?? 'da';
@@ -340,13 +348,38 @@ export class BrowserVoiceClient {
   }
 
   stop(): void {
-    this.running = false;
-    this.controller?.abort();
-    this.controller = undefined;
-    this.socket?.close(1000, 'Voice stopped');
-    this.socket = undefined;
-    this.audio.dispose();
-    this.publish('stopped', 'Voice is off.');
+    if (!this.running || this.stopping) return;
+    const socket = this.socket;
+    if (!socket || socket.readyState === WebSocket.CLOSED) {
+      this.finishStop(false);
+      return;
+    }
+    this.stopping = true;
+    this.audio.closeInput();
+    this.audio.stopPlayback();
+    this.publish('stopping', 'Saving voice session…');
+    this.stopTimer = setTimeout(() => this.finishStop(false, true), STOP_TIMEOUT_MS);
+    if (socket.readyState === WebSocket.CONNECTING) {
+      this.stopOpenSocket = socket;
+      this.stopOpenHandler = () => {
+        if (this.socket === socket && this.stopping) this.sendStopRequest(socket);
+      };
+      socket.addEventListener('open', this.stopOpenHandler, { once: true });
+      return;
+    }
+    if (socket.readyState !== WebSocket.OPEN) {
+      this.finishStop(false, true);
+      return;
+    }
+    this.sendStopRequest(socket);
+  }
+
+  private sendStopRequest(socket: VoiceSocket): void {
+    try {
+      socket.send(JSON.stringify({ type: 'jarvis.session.end' }));
+    } catch {
+      this.finishStop(false, true);
+    }
   }
 
   setLanguage(language: VoiceLanguage): void {
@@ -416,6 +449,11 @@ export class BrowserVoiceClient {
             }
             break;
           }
+          if (this.stopping) {
+            this.audio.closeInput();
+            await waitForClose(socket, signal);
+            break;
+          }
           this.microphoneOpen = true;
           this.playbackAllowed = true;
           this.audio.setMuted(this.muted);
@@ -439,6 +477,10 @@ export class BrowserVoiceClient {
           this.audio.closeInput();
         }
         if (!this.running || signal.aborted) break;
+        if (this.stopping) {
+          this.finishStop(false, true);
+          break;
+        }
         if (reconnects > MAX_RECONNECTS) {
           this.running = false;
           this.publish('error', 'Voice could not reconnect. Stop voice and try again.');
@@ -457,7 +499,9 @@ export class BrowserVoiceClient {
   private receive(data: unknown): void {
     const event = decodeEvent(data);
     if (!event || typeof event.type !== 'string') return;
-    if (event.type === 'input_audio_buffer.speech_started' || event.type === 'speech_started') {
+    if (event.type === 'jarvis.session.ended') {
+      this.finishStop(true);
+    } else if (event.type === 'input_audio_buffer.speech_started' || event.type === 'speech_started') {
       this.audio.stopPlayback();
       this.playbackAllowed = false;
       this.responseFinished = false;
@@ -475,5 +519,27 @@ export class BrowserVoiceClient {
       this.responseFinished = true;
       if (!this.audio.hasPlayback()) this.publish('listening', 'Listening for your voice.');
     }
+  }
+
+  private finishStop(sessionEnded: boolean, failed = false): void {
+    this.running = false;
+    this.stopping = false;
+    if (this.stopTimer !== undefined) clearTimeout(this.stopTimer);
+    this.stopTimer = undefined;
+    if (this.stopOpenSocket && this.stopOpenHandler) {
+      this.stopOpenSocket.removeEventListener('open', this.stopOpenHandler);
+    }
+    this.stopOpenSocket = undefined;
+    this.stopOpenHandler = undefined;
+    this.controller?.abort();
+    this.controller = undefined;
+    this.socket?.close(1000, 'Voice stopped');
+    this.socket = undefined;
+    this.audio.dispose();
+    this.publish(
+      failed ? 'error' : 'stopped',
+      failed ? 'Voice session could not be saved. Stop voice and try again.' : 'Voice is off.',
+    );
+    if (sessionEnded) this.options.onSessionEnded?.();
   }
 }

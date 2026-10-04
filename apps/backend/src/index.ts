@@ -13,6 +13,7 @@ import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
 import { createCredentialStatusStore } from './database/credential-status-store.js';
+import { createUsageStore } from './database/usage-store.js';
 import { createSandboxHeartbeatStore } from './database/sandbox-heartbeat-store.js';
 import { loadTaskEventArchiveStorageAccount } from './database/task-event-archive-config.js';
 import { createTaskEventArchiveBlobStore } from './database/task-event-archive-blob.js';
@@ -162,6 +163,7 @@ try {
       taskStore,
       ...(dispatcher ? { taskController: dispatcher } : {}),
       nowFeedStore: createNowFeedStore(database.pool),
+      usageStore: createUsageStore(database.pool),
     } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),

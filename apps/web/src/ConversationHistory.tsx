@@ -18,6 +18,7 @@ function asHistoryMessage(message: ChatMessage, language: 'da' | 'en'): Conversa
     ...message,
     channel: 'chat',
     language,
+    voiceMinutes: null,
     toolCalls: [],
   };
 }
@@ -29,9 +30,11 @@ function validTaskId(value: string | null): value is string {
 export function ConversationHistory({
   client,
   config,
+  historyRefresh = 0,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
+  historyRefresh?: number;
 }) {
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -51,6 +54,7 @@ export function ConversationHistory({
     let active = true;
     void loadConversationHistory(client, config).then((page) => {
       if (!active) return;
+      setHistoryError('');
       setMessages(page.messages);
       setNextCursor(page.nextCursor);
     }).catch((reason: unknown) => {
@@ -60,7 +64,7 @@ export function ConversationHistory({
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [client, config, reload]);
+  }, [client, config, historyRefresh, reload]);
 
   function retry() {
     setLoading(true);
@@ -134,6 +138,8 @@ export function ConversationHistory({
     }
   }
 
+  const displayedVoiceUsage = new Set<string>();
+
   return (
     <section className="conversation-history" aria-label="Conversation messages and controls">
       {loading ? (
@@ -156,32 +162,40 @@ export function ConversationHistory({
           )}
           {historyError && <p role="alert" className="history-error">{historyError}</p>}
           <ol className="conversation-messages" aria-label="Messages between Dan and Jarvis">
-            {messages.map((message) => (
-              <li className="conversation-message" key={message.id}>
-                <div className="message-heading">
-                  <strong>{message.role === 'dan' ? 'Dan' : 'Jarvis'}</strong>
-                  <time dateTime={message.at}>{new Date(message.at).toLocaleString()}</time>
-                </div>
-                <p className="message-language">
-                  {message.channel === 'voice' ? 'Voice' : 'Chat'} · {message.language === 'da' ? 'Danish' : 'English'}
-                </p>
-                <p>{message.text}</p>
-                {message.toolCalls.length > 0 && (
-                  <ul className="message-tools" aria-label="Tool calls">
-                    {message.toolCalls.map((call) => (
-                      <li key={call.id}>
-                        <span className="tool-call">{call.tool} · {call.outcome}</span>
-                        {validTaskId(call.taskId) && (
-                          <Link className="task-reference" to={`/factory/tasks/${call.taskId}`}>
-                            Task #{call.taskId}
-                          </Link>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
+            {messages.map((message) => {
+              const voiceUsageText = message.channel === 'voice' && message.voiceMinutes != null &&
+                !displayedVoiceUsage.has(message.sessionId)
+                ? ` · ${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(message.voiceMinutes)} voice minutes`
+                : '';
+              if (voiceUsageText) displayedVoiceUsage.add(message.sessionId);
+              return (
+                <li className="conversation-message" key={message.id}>
+                  <div className="message-heading">
+                    <strong>{message.role === 'dan' ? 'Dan' : 'Jarvis'}</strong>
+                    <time dateTime={message.at}>{new Date(message.at).toLocaleString()}</time>
+                  </div>
+                  <p className="message-language">
+                    {message.channel === 'voice' ? 'Voice' : 'Chat'} · {message.language === 'da' ? 'Danish' : 'English'}
+                    {voiceUsageText}
+                  </p>
+                  <p>{message.text}</p>
+                  {message.toolCalls.length > 0 && (
+                    <ul className="message-tools" aria-label="Tool calls">
+                      {message.toolCalls.map((call) => (
+                        <li key={call.id}>
+                          <span className="tool-call">{call.tool} · {call.outcome}</span>
+                          {validTaskId(call.taskId) && (
+                            <Link className="task-reference" to={`/factory/tasks/${call.taskId}`}>
+                              Task #{call.taskId}
+                            </Link>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
           </ol>
         </>
       )}

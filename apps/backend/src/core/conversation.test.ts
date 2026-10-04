@@ -21,6 +21,7 @@ const history = {
     ...message,
     channel: 'chat' as const,
     language: 'da' as const,
+    voiceMinutes: null,
     toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'refused' as const, taskId: null }],
   }],
   nextCursor: null,

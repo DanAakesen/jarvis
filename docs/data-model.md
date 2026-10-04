@@ -84,7 +84,7 @@ flowchart LR
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
-P5-03 and P5-04 do not create `jarvis_sessions`, `messages`, or `tool_calls`; realtime tool calls and browser audio are not persisted yet. P4-03 owns conversation persistence, and P5-06 owns voice transcripts and usage. No schema or migration changes are part of P5-03 or P5-04.
+P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. Realtime voice tool calls are not stored in `tool_calls`. The existing group-one and group-seven schemas support this; no migration is needed.
 
 ## 1 · Jarvis core
 
@@ -142,7 +142,7 @@ erDiagram
 ```
 
 - **One continuous conversation.** Jarvis has a single thread; each chat or voice sitting is a `jarvis_session` within it. Over time the thread needs compaction and memory (Decision 6, deferred); `messages` keeps the full record either way.
-- P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language and tool name, outcome, and task ID, not tool arguments or results. The main page reads history; P4-06 sends chat turns through the session turn endpoint, while voice clients use the session/message write endpoints in P5-03/P5-04. No schema migration was needed.
+- P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language, voice minutes when recorded, and tool name, outcome, and task ID, not tool arguments or results. The main page reads history; P4-06 sends chat turns through the session turn endpoint, while the authenticated voice relay creates voice sessions and stores completed transcript events. No schema migration was needed.
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
 - P4-04's agent-only turn context reads up to 20 running tasks and their three latest `task_events` from the existing tables. It selects task status/activity and event type, summary, source, and time; it excludes task requests and event payloads, and clips summaries to 400 characters. No schema or migration change is needed.
 - The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; any other failure is stored as a generic error. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. P4-06 stores the source message before P4-09 sends its ID and the delegated token in the application payload to the hosted agent through Foundry Invocations. The agent registers its chat handler with that protocol, verifies the caller and message through the backend, and sets the message ID in the per-turn context used by tool calls. P4-04's running-task context is fetched by the model client on every turn. No data-model or migration change is required.
@@ -408,7 +408,7 @@ erDiagram
         string metric "minutes, input_tokens, output_tokens, turns, premium_requests"
         decimal quantity
         decimal cost_dkk "null for subscription use (Codex, Copilot)"
-        string source_event_id "nullable; runner invocation/event identity"
+        string source_event_id "nullable; runner identity or voice session ID"
         datetime at
     }
 ```
@@ -417,7 +417,7 @@ erDiagram
 | --- | --- | --- |
 | Sandbox | Session start to end (`sandbox_sessions`) × size | Yes, ≈ 0.89 DKK per hour at 1 vCPU / 2 GiB |
 | Jarvis model | Token usage per model round | Yes, list price per model |
-| Voice | Voice minutes per `jarvis_session` | Yes, estimated |
+| Voice | Connected relay duration per `jarvis_session` | Yes, estimated |
 | Codex | Turns, and tokens if `codex-acp` reports them | No: ChatGPT Pro subscription; usage shown only. Actual live report fields remain to verify |
 | Copilot | Turns, and premium requests if Copilot CLI reports them | No: Copilot seat; usage shown only. Actual live report fields remain to verify |
 
@@ -433,7 +433,19 @@ does not establish their exact fields; Copilot documentation explains quota
 consumption but not a per-turn ACP report. Authenticated live runs remain
 necessary to verify either provider's actual report.
 
-- Views sum `usage` per task, per project and per period, so Dan sees when Codex and Copilot were used and what each task cost.
+P5-06 writes one `voice`/`minutes` row when a voice session ends, linked by
+`jarvis_session_id`; the session ID is the idempotency key. Session end and
+usage insertion share one SQL transaction. The history query returns that
+session total with its messages, and the main page displays it once per sitting.
+
+- P6-01 reads `usage` without changing its writers. The authenticated usage report
+  sums rows by task, project, agent, source and metric for 7-, 30-, 90-day or
+  all-time periods; the page groups the breakdown by project, agent or source.
+  Codex/Copilot cost is always null. Active sandbox estimates are calculated
+  read-only and clipped to the selected period. The API returns at most 1,000
+  grouped breakdowns and marks partial results so displayed subtotals are not
+  mistaken for full-period totals. Existing voice rows are included when P5-06
+  has written them.
 
 ## Physical schema (groups 1–3)
 

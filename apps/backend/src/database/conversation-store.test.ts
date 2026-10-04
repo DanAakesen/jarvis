@@ -84,9 +84,9 @@ describe('SQL conversation store', () => {
       recordset: [],
       recordsets: [
         [
-          { id: '10', session_id: '1', channel: 'chat', language: 'da', role: 'dan', text: 'Older', model: null, at: new Date('2026-10-03T12:00:00Z') },
-          { id: '11', session_id: '1', channel: 'voice', language: 'en', role: 'jarvis', text: 'Started', model: 'gpt-5.6-luna', at: new Date('2026-10-03T12:01:00Z') },
-          { id: '12', session_id: '1', channel: 'chat', language: 'da', role: 'dan', text: 'Newest', model: null, at: new Date('2026-10-03T12:02:00Z') },
+          { id: '10', session_id: '1', channel: 'chat', language: 'da', role: 'dan', text: 'Older', model: null, voice_minutes: null, at: new Date('2026-10-03T12:00:00Z') },
+          { id: '11', session_id: '1', channel: 'voice', language: 'en', role: 'jarvis', text: 'Started', model: 'gpt-realtime-2.1', voice_minutes: 2.5, at: new Date('2026-10-03T12:01:00Z') },
+          { id: '12', session_id: '1', channel: 'chat', language: 'da', role: 'dan', text: 'Newest', model: null, voice_minutes: null, at: new Date('2026-10-03T12:02:00Z') },
         ],
         [
           { id: '90', message_id: '11', tool: 'factory_create_task', outcome: 'ok', task_id: '77' },
@@ -105,7 +105,8 @@ describe('SQL conversation store', () => {
           language: 'en',
           role: 'jarvis',
           text: 'Started',
-          model: 'gpt-5.6-luna',
+          model: 'gpt-realtime-2.1',
+          voiceMinutes: 2.5,
           at: new Date('2026-10-03T12:01:00Z'),
           toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'ok', taskId: '77' }],
         },
@@ -117,6 +118,7 @@ describe('SQL conversation store', () => {
           role: 'dan',
           text: 'Newest',
           model: null,
+          voiceMinutes: null,
           at: new Date('2026-10-03T12:02:00Z'),
           toolCalls: [{ id: '91', tool: 'factory_list_tasks', outcome: 'refused', taskId: null }],
         },
@@ -141,5 +143,8 @@ describe('SQL conversation store', () => {
     expect(query.mock.calls[0]?.[0]).toContain('ended_at IS NULL');
     const missing = fixture({ recordset: [{ session_exists: 0 }], recordsets: [], rowsAffected: [0] });
     await expect(missing.store.endSession('42')).resolves.toBe(false);
+    expect(query.mock.calls[0]?.[0]).toContain("INSERT INTO dbo.usage (jarvis_session_id, source, metric, quantity, source_event_id, at)");
+    expect(query.mock.calls[0]?.[0]).toContain('DATEDIFF_BIG(MILLISECOND, started_at, ended_at)');
+    expect(query.mock.calls[0]?.[0]).toContain("WHERE channel = N'voice'");
   });
 });

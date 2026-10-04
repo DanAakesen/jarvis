@@ -132,7 +132,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 | Data points | Actions |
 | --- | --- |
-| Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, streamed replies, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
+| Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, streamed replies, tool-call chips (tool, outcome, link to task), and voice minutes per sitting | Type a message; start or stop voice; switch Danish/English |
 | Voice state: connecting, listening, thinking, speaking, reconnecting; what Jarvis heard; latency | Start or stop browser voice; interrupt by speaking; mute |
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready, Running, or PauseRequested |
@@ -232,6 +232,8 @@ data/actions remain visibly unavailable until their owning services exist.
 | Data points | Actions |
 | --- | --- |
 | Per task, project, and period: sandbox minutes and DKK; Jarvis model tokens and DKK; voice minutes and DKK; Codex and Copilot usage (no DKK) | Change period; group by project, agent, or source; open a task |
+
+The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-linked metric rows in project, agent, or source groups. DKK values are shown only when recorded; sandbox and voice costs are identified as estimates, and Codex/Copilot never display DKK. When more than 1,000 grouped rows match, the page says that its subtotals cover only the displayed rows.
 
 ## Constraints and integrations
 
