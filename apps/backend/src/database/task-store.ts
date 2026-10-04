@@ -11,6 +11,7 @@ import type {
   TaskRecord,
   TaskStore,
   TaskTransitionResult,
+  TaskUsageRecord,
 } from '../factory/task-store.js';
 import { canTransitionTask, type TaskState } from '../factory/task-lifecycle.js';
 import {
@@ -53,6 +54,15 @@ const runningContextSummaryLimit = 400;
 interface InsertedEventRow extends Omit<TaskEventRecord, 'at' | 'payload' | 'payloadTruncated'> {
   at: Date | string;
   payload: string | null;
+}
+
+interface UsageRow extends Omit<TaskUsageRecord, 'at'> {
+  at: Date | string;
+}
+
+interface UsageTaskRow {
+  projectId: string;
+  agent: 'codex' | 'copilot';
 }
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -162,6 +172,118 @@ async function insertTaskEvent(
     .query(`INSERT INTO dbo.activity (area, kind, title, link)
       VALUES (N'factory', @kind, @title, @link);`);
   return toTaskEvent(row, event.taskId);
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function reportedMetrics(event: RecordTaskEventInput, payload: unknown): {
+  sourceEventId: string;
+  metrics: { metric: 'input_tokens' | 'output_tokens' | 'premium_requests'; quantity: number }[];
+} | null {
+  if (event.source !== 'runner') return null;
+  const envelope = record(payload);
+  const invocationId = envelope?.invocationId;
+  const eventIndex = envelope?.eventIndex;
+  if (typeof invocationId !== 'string' || invocationId.length === 0 || invocationId.length > 255 ||
+    !Number.isSafeInteger(eventIndex) || (eventIndex as number) < 0) return null;
+  const data = record(envelope?.data);
+  const result = record(data?.result);
+  const response = record(result?.response);
+  const usage = record(response?.usage) ?? record(result?.usage);
+  if (!usage) return null;
+
+  const metrics: { metric: 'input_tokens' | 'output_tokens' | 'premium_requests'; quantity: number }[] = [];
+  for (const [metric, keys] of [
+    ['input_tokens', ['input_tokens', 'inputTokens']],
+    ['output_tokens', ['output_tokens', 'outputTokens']],
+    ['premium_requests', ['premium_requests', 'premiumRequests']],
+  ] as const) {
+    const quantity = keys.map((key) => usage[key]).find(Number.isSafeInteger);
+    if (typeof quantity === 'number' && quantity >= 0) metrics.push({ metric, quantity });
+  }
+  return { sourceEventId: `${invocationId}:${eventIndex}`, metrics };
+}
+
+async function insertUsage(
+  transaction: sql.Transaction,
+  taskId: string,
+  projectId: string,
+  source: TaskUsageRecord['source'],
+  metric: TaskUsageRecord['metric'],
+  quantity: number,
+  sourceEventId: string,
+): Promise<void> {
+  await new sql.Request(transaction)
+    .input('taskId', sql.BigInt, BigInt(taskId))
+    .input('projectId', sql.BigInt, BigInt(projectId))
+    .input('source', sql.NVarChar(16), source)
+    .input('metric', sql.NVarChar(32), metric)
+    .input('quantity', sql.Decimal(19, 6), quantity)
+    .input('sourceEventId', sql.NVarChar(300), sourceEventId)
+    .query(`IF NOT EXISTS (SELECT 1 FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
+        WHERE task_id = @taskId AND source = @source AND metric = @metric AND source_event_id = @sourceEventId)
+      INSERT dbo.usage (task_id, project_id, source, metric, quantity, source_event_id)
+      VALUES (@taskId, @projectId, @source, @metric, @quantity, @sourceEventId);`);
+}
+
+async function recordRunnerUsage(
+  transaction: sql.Transaction,
+  event: RecordTaskEventInput,
+  payload: unknown,
+): Promise<void> {
+  if (event.source !== 'runner') return;
+  const envelope = record(payload);
+  const invocationId = envelope?.invocationId;
+  const eventIndex = envelope?.eventIndex;
+  if (typeof invocationId !== 'string' || invocationId.length === 0 || invocationId.length > 255 ||
+    !Number.isSafeInteger(eventIndex) || (eventIndex as number) < 0) return;
+  const data = record(envelope?.data);
+  if (!data) return;
+  const isAgentTurn = event.type === 'agent_turn';
+  const reported = reportedMetrics(event, payload);
+  if (!isAgentTurn && (!reported || reported.metrics.length === 0)) return;
+  const taskResult = await new sql.Request(transaction)
+    .input('taskId', sql.BigInt, BigInt(event.taskId))
+    .query<UsageTaskRow>(`SELECT CAST(project_id AS varchar(19)) AS projectId, agent
+      FROM dbo.tasks WHERE id = @taskId;`);
+  const task = taskResult.recordset[0];
+  if (!task) return;
+  if (isAgentTurn && data.agent === task.agent) {
+    await insertUsage(
+      transaction, event.taskId, task.projectId, task.agent, 'turns', 1, `${invocationId}:turn`,
+    );
+  }
+  if (!reported) return;
+  for (const { metric, quantity } of reported.metrics) {
+    await insertUsage(
+      transaction, event.taskId, task.projectId, task.agent, metric, quantity, reported.sourceEventId,
+    );
+  }
+}
+
+async function taskUsage(executor: sql.ConnectionPool | sql.Transaction, taskId: string): Promise<TaskUsageRecord[]> {
+  const request = executor instanceof sql.Transaction ? new sql.Request(executor) : new sql.Request(executor);
+  const { recordset } = await request
+    .input('taskId', sql.BigInt, BigInt(taskId))
+    .query<UsageRow>(`SELECT CAST(id AS varchar(19)) AS id, source, metric, quantity, cost_dkk AS costDkk,
+        CAST(sandbox_session_id AS varchar(19)) AS sandboxSessionId, at,
+        CAST(CASE WHEN source = N'sandbox' THEN 1 ELSE 0 END AS bit) AS estimated
+      FROM dbo.usage WHERE task_id = @taskId
+      UNION ALL
+      SELECT CAST(NULL AS varchar(19)) AS id, N'sandbox' AS source, N'minutes' AS metric,
+        CONVERT(decimal(19,6), DATEDIFF_BIG(millisecond, started_at, SYSUTCDATETIME()) / 60000.0) AS quantity,
+        CONVERT(decimal(12,4), ROUND(DATEDIFF_BIG(millisecond, started_at, SYSUTCDATETIME()) / 3600000.0 *
+          CASE size WHEN N'1x2' THEN 0.8901 ELSE 1.7802 END, 4)) AS costDkk,
+        CAST(id AS varchar(19)) AS sandboxSessionId, SYSUTCDATETIME() AS at,
+        CAST(1 AS bit) AS estimated
+      FROM dbo.sandbox_sessions
+      WHERE task_id = @taskId AND status = N'Active' AND ended_at IS NULL
+      ORDER BY at, source, metric;`);
+  return recordset.map((row) => ({ ...row, at: iso(row.at) as string }));
 }
 
 async function rollback(transaction: sql.Transaction): Promise<void> {
@@ -308,6 +430,7 @@ export function createTaskStore(
             ORDER BY at ASC, id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
         return {
           ...toTask(row),
+          usage: await taskUsage(pool, id),
           events: eventsResult.recordset.map((event) => ({
             ...event,
             payload: parsePayload(event.payload),
@@ -330,6 +453,7 @@ export function createTaskStore(
         }
 
         const archivedPage = await eventArchive.prepareArchivedEvents(transaction, id, eventOffset, eventLimit);
+        const usage = await taskUsage(transaction, id);
         const remainingLimit = eventLimit - archivedPage.eventCount;
         let activeEvents: TaskEventRecord[] = [];
         if (remainingLimit > 0) {
@@ -352,7 +476,7 @@ export function createTaskStore(
         }
         await transaction.commit();
         const archivedEvents = await eventArchive.restoreArchivedEvents(archivedPage);
-        return { ...toTask(row), events: [...archivedEvents, ...activeEvents] };
+        return { ...toTask(row), events: [...archivedEvents, ...activeEvents], usage };
       } catch {
         await rollback(transaction);
         throw new Error('Task detail persistence failed');
@@ -514,6 +638,7 @@ export function createTaskStore(
       await transaction.begin();
       try {
         const publishedEvent = await insertTaskEvent(transaction, event, payload);
+        await recordRunnerUsage(transaction, event, event.payload);
         await transaction.commit();
         eventHub.publish(publishedEvent);
         return publishedEvent;
