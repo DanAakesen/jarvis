@@ -76,7 +76,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.register(cors, {
     origin: (origin, callback) => callback(null, origin === undefined || origins.has(origin)),
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Last-Event-ID'],
     credentials: false,
     strictPreflight: true,
   });
