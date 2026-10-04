@@ -22,8 +22,13 @@ describe('Teams presence monitoring', () => {
 
   it('polls immediately, serializes checks and aborts its active request on stop', async () => {
     vi.useFakeTimers();
-    let finish!: (value: unknown) => void;
-    const get = vi.fn((_path: string, _signal: AbortSignal) => new Promise<unknown>((resolve) => { finish = resolve; }));
+    let requestSignal!: AbortSignal;
+    const get = vi.fn((_path: string, signal: AbortSignal) => {
+      requestSignal = signal;
+      return new Promise<unknown>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      });
+    });
     const graph: GraphClient = { get, post: vi.fn() };
     const store = { observePresence: vi.fn(async () => ({ away: false })) } as unknown as AwayModeStore;
     const stop = startGraphPresenceMonitor(
@@ -32,8 +37,8 @@ describe('Teams presence monitoring', () => {
     expect(get).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(60_000);
     expect(get).toHaveBeenCalledOnce();
-    finish({ availability: 'Away' });
-    await vi.waitFor(() => expect(store.observePresence).toHaveBeenCalledWith(true));
     await stop();
+    expect(requestSignal.aborted).toBe(true);
+    expect(store.observePresence).not.toHaveBeenCalled();
   });
 });

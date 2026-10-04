@@ -2,7 +2,7 @@
 
 Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. P0-01 provides the monorepo folders. P0-02 and P0-03 implement the web and backend skeletons. Statuses below distinguish implementation, design, and prototype evidence.
 
-- Requirements: [PRODUCT.md](../PRODUCT.md). Feature summaries: [features.md](features.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L36): [decisions.md](decisions.md).
+- Requirements: [PRODUCT.md](../PRODUCT.md). Feature summaries: [features.md](features.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings: [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
 - **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–21 show each flow as swimlanes, coloured by evidence (prototype/offline-tested, documented, assumed). Open it in a browser.
 
@@ -13,7 +13,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces for the two apps, one root lockfile | Implemented in P0-01; empty app builds verified in Codex cloud |
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
-| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions; P3-14 opens or reuses an App-token PR after completed task work and leaves policy completion to P3-06; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; P7-03 adds managed-identity Teams notifications, expiring confirmations and Speech F0 fallback; live Azure behavior remains unverified |
+| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions; P3-14 opens or reuses an App-token PR after completed task work and leaves policy completion to P3-06; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; P7-03 adds managed-identity Teams notifications, expiring confirmations and Speech F0 fallback; P7-02 adds persisted away state and a managed-identity Graph presence monitor; live Azure behavior remains unverified |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0; `@microsoft/teams.apps` and `@microsoft/teams.cards` 2.1.0: schema validation, a plugin per area, SSE support, Bot Service adapter and Adaptive Cards | Skeleton, core/factory module registration and P1-03 projects API implemented; P7-03 adds the Teams module and fake-connector coverage; live Bot Service remains unverified |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
 | Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, group 5 in #42, heartbeat agent routing in #32, `idle_expired` session end reason in #226, and group 8 conversation/confirmation state in P7-03; deployed heartbeat verification remains open |
@@ -204,7 +204,8 @@ instead of inferring them. No backend route or persistence change is required.
 
 The main page's authenticated `GET /now` returns up to 100 running tasks with
 their project, agent, current activity and start time, plus up to 100
-non-dismissed attention, release/deployment and credential activity records.
+non-dismissed attention, release/deployment, credential and mode activity
+records, along with the current away/present state.
 The read derives attention from the latest activity for each task in
 `NeedsAttention`; other categories use their `activity.kind`. The
 `POST /now/activity/:id/dismiss` route updates `activity.dismissed_at`, returns
@@ -337,6 +338,32 @@ with `no-store` headers; they are not placed in SQL, task events, or logs.
 The matching Azure Speech resource is F0 with local key authentication disabled
 and a scoped Cognitive Services Speech User assignment. Tests use a fake
 connector and synthesizer; they do not verify a live Teams or Speech service.
+
+## Away mode (P7-02)
+
+`createAwayModeStore` persists one validated JSON state under the existing global
+`dbo.settings` key `away.mode.state`; no migration is needed. A mode transition
+and its `core/away_mode` activity row commit together, then refresh Now. The
+authenticated `set_away_mode` tool handles voice/chat commands. A request from an
+approved browser origin with Dan's verified delegated principal marks him present;
+the app-only hosted-agent principal cannot do so. `GET /now` displays the current
+mode and the main-page status makes it visible.
+
+The backend's managed identity reads
+`GET /users/{DanObjectId}/presence` once per minute. Only continuous Graph
+`Away`/`Offline` observations count; the persisted timer turns away mode on after
+ten minutes. Available/busy presence clears a pending timer but never turns an
+already active away mode off; only Dan's explicit return command or browser use
+does that. Unknown or invalid provider results do not advance the timer. While
+away, task-state messages go through the existing P7-03 Teams notifier and live
+browser Now/task streams suppress task updates. Existing high-impact operations
+continue to require the P7-03 Teams confirmation gate in every mode.
+
+The permission is not part of Bicep or application startup. After merge, a tenant
+administrator must review and grant the Microsoft Graph application role
+`Presence.Read.All` to `id-jarvis-backend` with the idempotent
+`infra/setup-away-presence.ps1` script. Local tests cannot verify tenant consent,
+real presence timing, Teams installation or live phone delivery.
 
 ## Database startup and migration ownership
 

@@ -4,6 +4,9 @@ import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { createEventHub } from './event-hub.js';
 import type { NowFeed, NowFeedEventHub, NowFeedStore } from './now.js';
+import type { AwayModeStore } from './away-mode.js';
+import type { TeamsNotificationService } from '../teams/service.js';
+import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: `${['Bear', 'er'].join('')} ${['e30', 'e30', 'sig'].join('.')}` };
@@ -81,6 +84,42 @@ describe('Now feed API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().awayMode).toBe(false);
     expect(awayModeStore.markPresent).toHaveBeenCalledOnce();
+  });
+
+  it('routes away task-state updates to Teams and withholds them from browser feeds', async () => {
+    const nowEventHub = createEventHub();
+    const update = vi.fn();
+    nowEventHub.subscribe(update);
+    const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
+    const awayModeStore = {
+      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null })),
+      set: vi.fn(),
+      markPresent: vi.fn(),
+      observePresence: vi.fn(),
+    } as unknown as AwayModeStore;
+    const notify = vi.fn(async () => {});
+    const app = buildApp(config, undefined, {
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
+      eventHub,
+      nowEventHub,
+      awayModeStore,
+      teamsNotifications: { notify } as unknown as TeamsNotificationService,
+    });
+    apps.push(app);
+
+    eventHub.publish({
+      id: '20',
+      taskId: '42',
+      type: 'state_changed',
+      summary: null,
+      payload: { from: 'Ready', to: 'Running' },
+      payloadTruncated: false,
+      source: 'backend',
+      at: '2026-10-04T00:00:00.000Z',
+    });
+
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith('info', 'Task 42 is now Running.'));
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('protects the read and returns unavailable when its store is missing', async () => {

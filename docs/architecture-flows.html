@@ -594,6 +594,24 @@ const FLOWS = [
     ],
   },
   {
+    name: "Away mode",
+    summary: "Dan's explicit command or ten minutes of Teams Away/Offline changes persisted mode; browser use returns him to present, and away task updates use P7-03 Teams.",
+    nodes: [
+      { id: "command", lane: "user", col: 1, s: "context", t: "Dan says leaving or back", d: "Voice/chat calls the authenticated set_away_mode tool; browser use is an explicit return-to-present signal." },
+      { id: "monitor", lane: "backend", col: 2, s: "proven", t: "Read Teams presence", d: "Managed identity polls `/users/{DanObjectId}/presence` every 60 seconds; only Away/Offline count toward the timer.", ev: "Graph parsing, bounded single-flight polling and abort-on-shutdown are unit-tested. Live identity permission and presence remain unverified." },
+      { id: "threshold", lane: "backend", col: 3, s: "proven", t: "Wait ten continuous minutes", d: "Persist the start time; available/busy clears a pending timer, unknown leaves it unchanged.", ev: "Transition tests cover the threshold and interruptions; SQL Server CI covers survival across store recreation." },
+      { id: "settings", lane: "data", col: 4, s: "proven", t: "Persist mode and activity", d: "Upsert `away.mode.state` in existing `dbo.settings`; a mode-change activity row commits with the state.", ev: "Uses the existing settings/activity schema; no migration." },
+      { id: "notify", lane: "backend", col: 5, s: "proven", t: "Route task updates", d: "Present: browser feeds; away: task-state messages to the existing P7-03 Teams notification service.", ev: "Backend route tests cover away notification and suppressing Now refresh; live Teams delivery remains unverified." },
+      { id: "now", lane: "board", col: 6, s: "proven", t: "Show mode in Now", d: "The signed-in main page shows the current mode and recent mode-change activity.", ev: "Backend response and React rendering tests cover both mode values." },
+      { id: "permission", lane: "user", col: 7, s: "docs", t: "Grant Graph application permission", d: "After merge, a tenant administrator reviews and runs `infra/setup-away-presence.ps1` for `Presence.Read.All`." },
+    ],
+    edges: [
+      ["command", "settings", "proven", "manual transition"], ["monitor", "threshold", "proven", "presence status"],
+      ["threshold", "settings", "proven", "ten minutes"], ["settings", "notify", "proven", "current mode"],
+      ["settings", "now", "proven", "GET /now + activity"], ["permission", "monitor", "docs", "managed-identity role"],
+    ],
+  },
+  {
     name: "Alerts",
     summary: "Four condition types appear once in the Now feed; the email-only Azure Monitor action group handles deployment, sandbox, credential and budget notifications.",
     nodes: [

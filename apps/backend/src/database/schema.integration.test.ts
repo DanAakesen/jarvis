@@ -11,6 +11,8 @@ import { createWebhookDeliveryStore } from './webhook-delivery-store.js';
 import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
 import { createAlertActivityStore } from './alert-store.js';
+import { createAwayModeStore } from './away-mode-store.js';
+import { presenceAwayThresholdMs } from '../core/away-mode.js';
 import { createDispatcherStore } from './dispatcher-store.js';
 import {
   createTaskEventArchive,
@@ -111,6 +113,38 @@ describe('committed domain schema (groups 1-7)', () => {
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
       'UX_activity_alert_key',
     ]);
+  });
+  it('persists away mode and an in-progress Teams presence timer across store recreation', async () => {
+    const startedAt = new Date('2026-10-04T12:00:00.000Z');
+    const firstStore = createAwayModeStore(pool);
+    await firstStore.observePresence(true, startedAt);
+
+    const onModeChanged = vi.fn();
+    const restartedStore = createAwayModeStore(pool, onModeChanged);
+    expect(await restartedStore.read()).toEqual({
+      away: false,
+      source: null,
+      changedAt: null,
+      presenceAwaySince: startedAt.toISOString(),
+    });
+
+    expect(await restartedStore.observePresence(
+      true,
+      new Date(startedAt.getTime() + presenceAwayThresholdMs),
+    )).toMatchObject({
+      away: true,
+      source: 'teams_presence',
+      presenceAwaySince: startedAt.toISOString(),
+    });
+    await restartedStore.set(false, new Date(startedAt.getTime() + presenceAwayThresholdMs + 1));
+    expect(await createAwayModeStore(pool).read()).toMatchObject({ away: false, source: 'manual' });
+    expect((await pool.request().query<{ kind: string; title: string }>(
+      `SELECT kind, title FROM dbo.activity WHERE area = N'core' ORDER BY id;`,
+    )).recordset).toEqual([
+      { kind: 'away_mode', title: 'Away mode is on' },
+      { kind: 'away_mode', title: 'Away mode is off' },
+    ]);
+    expect(onModeChanged).toHaveBeenCalledTimes(2);
   });
 
   it('ignores a concurrently repeated webhook delivery ID', async () => {

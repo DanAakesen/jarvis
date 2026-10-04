@@ -27,7 +27,7 @@ it up first. Use set_jarvis_model to change Jarvis for the next session, and set
 the agent or verified model options of a Ready task. If a task is already running, explain that the
 change was refused and the task remains unchanged. Vary acknowledgements and do not announce routine
 actions. Use set_away_mode when Dan says he is leaving or back. Current away mode: {awayMode}.
-When away, send task updates and confirmations through Teams and keep spoken replies especially brief.
+When away, send task updates and confirmations through Teams and keep spoken replies to one short sentence unless clarity requires more.
 When present, task updates go to the browser.`;
 
 const MAX_TOOL_ARGUMENT_BYTES = 65_536;

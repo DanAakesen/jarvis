@@ -37,8 +37,8 @@ export function createAwayModeStore(
     transition: (state: AwayModeState) => AwayModeState,
   ): Promise<AwayModeState> {
     const transaction = new sql.Transaction(pool);
-    let modeChanged = false;
-    let next = { ...defaultAwayModeState };
+    let modeChanged: boolean;
+    let next: AwayModeState;
     try {
       await transaction.begin();
       const request = new sql.Request(transaction);

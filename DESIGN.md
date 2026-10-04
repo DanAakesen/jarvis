@@ -101,12 +101,16 @@ sign-in; the header wraps on narrow screens.
   stays visible but disabled, and is linked to that explanation with
   `aria-describedby`. No sample messages, tasks or states are shown.
 - **Activity panel:** Running tasks, Needs attention, Releases and deployments,
-  Credential warnings, and Alerts, each with an empty state. Item titles open their
+  Credential warnings, Alerts, and the current away/present mode, with an empty
+  state for each activity group. Item titles open their
   task, release or project. Dismiss shows "Dismissing…", keeps the item and
   explains a failure, and returns focus to the Now heading after removal.
   The panel loads its backend snapshot, offers retry when unavailable, and
   labels reconnecting or unavailable live updates while keeping the last
   snapshot visible.
+- **Away mode (P7-02):** The Now panel uses a labelled text status for present or
+  away and retains the existing list hierarchy. Mode-change entries appear as
+  ordinary activity rows; no color-only status or separate dashboard treatment.
 - **Alerts (P6-02):** Keep alerts in the existing Now activity panel as a
   separate, dismissible "Alerts" group; retain the condition title, timestamp,
   and task/release/project link where one exists. Budget alerts have no invented

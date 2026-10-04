@@ -180,7 +180,9 @@ erDiagram
   `new_projects.templates_repository`, `new_projects.default_agent`,
   `new_projects.policy`, `new_projects.max_parallel_tasks`, and
   `new_projects.default_branch` to the same global settings scope.
-  Values are JSON scalars. Model/voice/language/reasoning choices are validated
+  Page-setting values are JSON scalars; the internal `away.mode.state` value is
+  a validated JSON object and is not exposed as an editable Settings field.
+  Model/voice/language/reasoning choices are validated
   against the backend catalog; Codex/Copilot catalogs currently contain only
   `default`. P2-11 verified that the runner can apply explicit model overrides
   (and Codex reasoning) through provider options. Task rows retain an optional
@@ -195,6 +197,12 @@ erDiagram
   for future sessions/tasks, not live updates or history. At the start of a hosted Jarvis
   session, the agent keeps the effective model and reasoning effort in memory for
   that session; the snapshot is not persisted.
+- P7-02 stores one validated JSON state object at global setting key
+  `away.mode.state`: `away`, transition source/time and the start time of a
+  pending Teams Away/Offline interval. The existing key/value schema needs no
+  migration. A confirmed mode transition also inserts a `core/away_mode` activity
+  row in the same SQL transaction; the Now feed displays these rows and reads the
+  current value directly from the setting.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes. The authenticated Now-feed read excludes `dismissed_at` rows; dismissing sets the UTC timestamp without deleting the activity record. P6-02 writes alerts in the same transaction as the condition where available, with a unique filtered `alert_key` index to suppress repeats. Keys identify deployment, sandbox session, credential expiry timestamp, or budget month; the feed never displays the key.
 
 ## 2 · Projects

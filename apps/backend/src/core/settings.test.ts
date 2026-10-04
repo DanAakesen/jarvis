@@ -4,6 +4,7 @@ import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { flattenSettings, type SettingsStore } from './settings.js';
 import type { CredentialStatusStore } from '../credentials/credential-status.js';
+import type { AwayModeStore } from './away-mode.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const authorization = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
@@ -26,11 +27,12 @@ function fixture(settingsStore?: SettingsStore, auth: TokenVerifier = async () =
   objectId: config.auth.ownerObjectId,
   tenantId: config.auth.tenantId,
   displayName: 'Dan',
-}), credentialStatusStore?: CredentialStatusStore) {
+}), credentialStatusStore?: CredentialStatusStore, awayModeStore?: AwayModeStore) {
   const app = buildApp(config, undefined, {
     auth,
     ...(settingsStore ? { settingsStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
+    ...(awayModeStore ? { awayModeStore } : {}),
   });
   apps.push(app);
   return app;
@@ -257,11 +259,17 @@ describe('settings API', () => {
         customInstructions: 'Prefer plain language.',
       },
     });
+    const awayModeStore = {
+      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null })),
+      set: vi.fn(),
+      markPresent: vi.fn(),
+      observePresence: vi.fn(),
+    } as unknown as AwayModeStore;
     const app = fixture(store, async () => ({
       kind: 'jarvis-agent',
       objectId: '00000000-0000-0000-0000-000000000001',
       tenantId: config.auth.tenantId,
-    }));
+    }), undefined, awayModeStore);
 
     const response = await app.inject({ url: '/agent/settings', headers: authorization });
 
@@ -274,6 +282,7 @@ describe('settings API', () => {
         responseStyle: 'balanced',
         customInstructions: 'Prefer plain language.',
       },
+      awayMode: true,
     });
   });
 

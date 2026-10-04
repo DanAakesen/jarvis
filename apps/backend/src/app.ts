@@ -145,13 +145,14 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
   const unsubscribeTaskEvents = app.eventHub.subscribe((event) => {
     void (async () => {
-      let away = false;
+      let state: Awaited<ReturnType<AwayModeStore['read']>> | undefined;
       try {
-        away = (await app.awayModeStore?.read())?.away ?? false;
+        state = await app.awayModeStore?.read();
       } catch {
         app.log.warn('away_mode.task_route_failed');
         return;
       }
+      const away = state?.away ?? false;
       if (!away) {
         app.nowEventHub.publish({ type: 'refresh' });
         return;
