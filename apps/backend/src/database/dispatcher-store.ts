@@ -454,6 +454,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
       // Concurrent session ends can deadlock on the usage upsert's range locks (L61). Each attempt is
       // one transaction that rolls back completely, so retrying cannot double-count usage.
       for (let attempt = 1; ; attempt += 1) {
+        let failure: number | undefined;
         const transaction = new sql.Transaction(pool);
         await transaction.begin();
         try {
@@ -516,13 +517,14 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
           return recordset.map(({ sandboxSessionId }) => sandboxSessionId);
         } catch (error) {
           await rollback(transaction);
-          const number = sqlErrorNumber(error);
-          if (number === 1205 && attempt < deadlockAttempts) {
-            await new Promise((resolve) => setTimeout(resolve, 20 * attempt + Math.floor(Math.random() * 20)));
-            continue;
-          }
-          throw new Error(`Sandbox session usage persistence failed${number === undefined ? '' : ` (SQL ${number})`}`);
+          failure = sqlErrorNumber(error);
         }
+        if (failure === 1205 && attempt < deadlockAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 20 * attempt + Math.floor(Math.random() * 20)));
+          continue;
+        }
+        // Only the SQL error number leaves this store; driver errors can contain SQL text.
+        throw new Error(`Sandbox session usage persistence failed${failure === undefined ? '' : ` (SQL ${failure})`}`);
       }
     },
   };
