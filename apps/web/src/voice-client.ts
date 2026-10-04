@@ -397,6 +397,7 @@ export class BrowserVoiceClient {
     const socket = this.socket;
     if (!socket || socket.readyState !== WebSocket.OPEN || !this.running || this.stopping ||
         !this.sessionReady || this.microphoneOpen || this.microphoneOpening) return;
+    this.muted = false;
     this.microphoneOpening = true;
     try {
       await this.audio.open((audio) => {

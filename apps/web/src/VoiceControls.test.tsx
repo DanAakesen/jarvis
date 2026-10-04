@@ -85,4 +85,31 @@ describe('VoiceControls', () => {
     expect(onSessionEnded).toHaveBeenCalledOnce();
     expect(screen.queryByRole('button', { name: 'Start voice' })).not.toBeNull();
   });
+
+  it('does not carry pending microphone permission into a new session', async () => {
+    render(<VoiceControls client={{} as PublicClientApplication} config={config} />);
+    const startSession = () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+      const instance = clients.instances.at(-1);
+      if (!instance) throw new Error('Voice client was not created.');
+      const options = instance.options as { onStatus: (status: 'ready', message: string) => void };
+      act(() => options.onStatus('ready', 'Microphone is off.'));
+      return instance;
+    };
+    const first = startSession();
+    let finishFirst!: () => void;
+    first.client.enableMicrophone.mockImplementationOnce(() => new Promise<void>((resolve) => { finishFirst = resolve; }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enable microphone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stop voice' }));
+
+    const second = startSession();
+    expect(screen.getByRole('button', { name: 'Enable microphone' })).toHaveProperty('disabled', false);
+    let finishSecond!: () => void;
+    second.client.enableMicrophone.mockImplementationOnce(() => new Promise<void>((resolve) => { finishSecond = resolve; }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enable microphone' }));
+    await act(async () => { finishFirst(); });
+    expect(screen.getByRole('button', { name: 'Enabling microphone…' })).toHaveProperty('disabled', true);
+    await act(async () => { finishSecond(); });
+    expect(screen.getByRole('button', { name: 'Enable microphone' })).toHaveProperty('disabled', false);
+  });
 });

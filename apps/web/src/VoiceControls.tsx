@@ -65,6 +65,7 @@ export function VoiceControls({
         if (nextStatus === 'stopped' || nextStatus === 'error') {
           client.current = null;
           setMuted(false);
+          setEnabling(false);
           onActiveChange?.(false);
         } else if (nextStatus === 'ready') {
           setMuted(false);
@@ -80,12 +81,13 @@ export function VoiceControls({
   };
 
   const enableMicrophone = async () => {
-    if (enabling) return;
+    const voice = client.current;
+    if (!voice || enabling) return;
     setEnabling(true);
     try {
-      await client.current?.enableMicrophone();
+      await voice.enableMicrophone();
     } finally {
-      setEnabling(false);
+      if (client.current === voice) setEnabling(false);
     }
   };
 

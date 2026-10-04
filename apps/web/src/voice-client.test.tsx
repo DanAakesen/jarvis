@@ -226,6 +226,7 @@ describe('BrowserVoiceClient', () => {
     await until(() => audio.open.mock.calls.length === 1);
     const firstSocket = sockets[0];
     if (!firstSocket) throw new Error('The initial voice socket was not created.');
+    client.setMuted(true);
     firstSocket.disconnect();
     await until(() => statuses.filter((status) => status === 'ready').length === 2);
 
@@ -234,6 +235,7 @@ describe('BrowserVoiceClient', () => {
     expect(audio.open).toHaveBeenCalledOnce();
     await client.enableMicrophone();
     expect(audio.open).toHaveBeenCalledTimes(2);
+    expect(audio.setMuted).toHaveBeenLastCalledWith(false);
     client.stop();
   });
 
