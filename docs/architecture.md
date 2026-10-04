@@ -273,6 +273,18 @@ process shutdown behavior are preserved.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
 
+P2-12 adds group 7 `dbo.usage`. Before each ACP prompt the runner sends an
+`agent_turn` event; the backend derives Codex/Copilot from the task row and
+idempotently stores the turn. It stores token or premium-request counts only when
+an ACP result or usage notification contains a nonnegative integer in the
+allowlisted `usage` fields. The provider's values are not inferred from a turn.
+When a sandbox session ends, the dispatcher stores its elapsed minutes and
+estimated DKK in the same transaction as the session/turn end updates. Task detail
+also calculates a live estimate for an open session. Rates use the documented
+Sweden Central vCPU/memory basis: 0.8901 DKK/hour for 1×2 and 1.7802 DKK/hour
+for 2×4; actual billed amounts may differ. SQL Server integration and live
+provider reporting remain post-merge checks.
+
 P6-03's backend job checks for events older than 90 days hourly, in bounded SQL
 batches, and uploads deterministic per-task blobs before deleting each batch in
 the same SQL transaction. The transaction-owned archive lock serializes archiving

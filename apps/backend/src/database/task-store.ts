@@ -193,7 +193,9 @@ function reportedMetrics(event: RecordTaskEventInput, payload: unknown): {
   const data = record(envelope?.data);
   const result = record(data?.result);
   const response = record(result?.response);
-  const usage = record(response?.usage) ?? record(result?.usage);
+  const params = record(data?.params);
+  const update = record(params?.update);
+  const usage = record(response?.usage) ?? record(result?.usage) ?? record(params?.usage) ?? record(update?.usage);
   if (!usage) return null;
 
   const metrics: { metric: 'input_tokens' | 'output_tokens' | 'premium_requests'; quantity: number }[] = [];
@@ -269,10 +271,16 @@ async function taskUsage(executor: sql.ConnectionPool | sql.Transaction, taskId:
   const request = executor instanceof sql.Transaction ? new sql.Request(executor) : new sql.Request(executor);
   const { recordset } = await request
     .input('taskId', sql.BigInt, BigInt(taskId))
-    .query<UsageRow>(`SELECT CAST(id AS varchar(19)) AS id, source, metric, quantity, cost_dkk AS costDkk,
+    .query<UsageRow>(`SELECT CAST(NULL AS varchar(19)) AS id, source, metric, SUM(quantity) AS quantity,
+        SUM(cost_dkk) AS costDkk, CAST(NULL AS varchar(19)) AS sandboxSessionId, MAX(at) AS at,
+        CAST(0 AS bit) AS estimated
+      FROM dbo.usage WHERE task_id = @taskId AND source <> N'sandbox'
+      GROUP BY source, metric
+      UNION ALL
+      SELECT CAST(id AS varchar(19)) AS id, source, metric, quantity, cost_dkk AS costDkk,
         CAST(sandbox_session_id AS varchar(19)) AS sandboxSessionId, at,
         CAST(CASE WHEN source = N'sandbox' THEN 1 ELSE 0 END AS bit) AS estimated
-      FROM dbo.usage WHERE task_id = @taskId
+      FROM dbo.usage WHERE task_id = @taskId AND source = N'sandbox'
       UNION ALL
       SELECT CAST(NULL AS varchar(19)) AS id, N'sandbox' AS source, N'minutes' AS metric,
         CONVERT(decimal(19,6), DATEDIFF_BIG(millisecond, started_at, SYSUTCDATETIME()) / 60000.0) AS quantity,

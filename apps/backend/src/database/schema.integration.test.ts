@@ -171,11 +171,21 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
         data: { result: { response: { usage: { input_tokens: 123, output_tokens: 45, premium_requests: 1 } } } },
       },
     });
+    await taskStore.recordEvent({
+      taskId: String(task),
+      type: 'acp_notification',
+      source: 'runner',
+      payload: {
+        invocationId: 'usage-invocation',
+        eventIndex: 9,
+        data: { params: { usage: { inputTokens: 124 } } },
+      },
+    });
     const usageDetail = await taskStore.get(String(task), 100, 0);
     expect(usageDetail?.usage).toEqual(expect.arrayContaining([
       expect.objectContaining({ source: 'sandbox', metric: 'minutes', sandboxSessionId: String(sandboxSession) }),
       expect.objectContaining({ source: 'codex', metric: 'turns', quantity: 1 }),
-      expect.objectContaining({ source: 'codex', metric: 'input_tokens', quantity: 123 }),
+      expect.objectContaining({ source: 'codex', metric: 'input_tokens', quantity: 247 }),
       expect.objectContaining({ source: 'codex', metric: 'output_tokens', quantity: 45 }),
       expect.objectContaining({ source: 'codex', metric: 'premium_requests', quantity: 1 }),
     ]));

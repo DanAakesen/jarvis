@@ -25,6 +25,16 @@ The repository `PLAN.md` status workflow is GitHub metadata; it does not add a J
 
 Events archived after 90 days load through the same task-detail timeline and pagination; the archive is invisible to the user.
 
+## Task usage (P2-12)
+
+The task detail route presents usage in a compact, semantic table rather than
+summary tiles. Each sandbox session has its own minutes and estimated DKK; agent
+turns and any provider-reported metrics remain separate rows, with no fabricated
+cost for subscription use. The neutral shell carries explicit loading, empty,
+failure/retry, and populated states. On narrow screens only the table scrolls
+horizontally; the page itself stays within the viewport. This is an interim
+task-detail surface until P1-09 builds the complete header and event timeline.
+
 ## Interactions to design
 
 - **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.

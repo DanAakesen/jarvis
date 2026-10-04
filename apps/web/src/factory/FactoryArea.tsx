@@ -88,13 +88,14 @@ function TaskUsagePage({ backendUrl, getAccessToken }: AreaProps) {
   const { taskId } = useParams();
   const [retry, setRetry] = useState(0);
   const [state, setState] = useState<
-    { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; usage: TaskUsageRecord[] }
-  >({ status: 'loading' });
+    { taskId: string | null; status: 'loading' } |
+    { taskId: string; status: 'error'; message: string } |
+    { taskId: string; status: 'ready'; usage: TaskUsageRecord[] }
+  >({ taskId: null, status: 'loading' });
 
   useEffect(() => {
     if (!taskId || !idPattern.test(taskId)) return;
     let current = true;
-    setState({ status: 'loading' });
     void (async () => {
       try {
         if (!backendUrl) throw new Error('Task data is unavailable until the backend is deployed.');
@@ -108,9 +109,10 @@ function TaskUsagePage({ backendUrl, getAccessToken }: AreaProps) {
           !value.usage.every(isUsageRecord)) {
           throw new Error('Jarvis returned invalid task usage. Try again.');
         }
-        if (current) setState({ status: 'ready', usage: value.usage });
+        if (current) setState({ taskId, status: 'ready', usage: value.usage });
       } catch (error) {
         if (current) setState({
+          taskId,
           status: 'error',
           message: error instanceof Error ? error.message : 'Jarvis could not load task usage. Try again.',
         });
@@ -120,6 +122,7 @@ function TaskUsagePage({ backendUrl, getAccessToken }: AreaProps) {
   }, [backendUrl, getAccessToken, retry, taskId]);
 
   if (!taskId || !idPattern.test(taskId)) return <NotFoundPage />;
+  const currentState = state.taskId === taskId ? state : { taskId, status: 'loading' as const };
   return (
     <section className="task-detail" aria-labelledby="task-heading">
       <h1 id="task-heading">Task {taskId}</h1>
@@ -129,19 +132,26 @@ function TaskUsagePage({ backendUrl, getAccessToken }: AreaProps) {
         <p className="task-usage-note">
           Sandbox cost is estimated from session time. Agent usage appears only when the provider reports it.
         </p>
-        {state.status === 'loading' && <p role="status">Loading task usage…</p>}
-        {state.status === 'error' && (
+        {currentState.status === 'loading' && <p role="status">Loading task usage…</p>}
+        {currentState.status === 'error' && (
           <div className="task-usage-feedback" role="alert">
-            <p>{state.message}</p>
-            <button className="secondary-button" type="button" onClick={() => setRetry((value) => value + 1)}>
+            <p>{currentState.message}</p>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                setState({ taskId, status: 'loading' });
+                setRetry((value) => value + 1);
+              }}
+            >
               Retry
             </button>
           </div>
         )}
-        {state.status === 'ready' && state.usage.length === 0 && (
+        {currentState.status === 'ready' && currentState.usage.length === 0 && (
           <p>No usage has been recorded for this task yet.</p>
         )}
-        {state.status === 'ready' && state.usage.length > 0 && (
+        {currentState.status === 'ready' && currentState.usage.length > 0 && (
           <div className="task-usage-table-wrap">
             <table className="task-usage-table">
               <caption>Usage entries for task {taskId}</caption>
@@ -149,7 +159,7 @@ function TaskUsagePage({ backendUrl, getAccessToken }: AreaProps) {
                 <tr><th scope="col">Source</th><th scope="col">Usage</th><th scope="col">Quantity</th><th scope="col">Cost</th></tr>
               </thead>
               <tbody>
-                {state.usage.map((item, index) => (
+                {currentState.usage.map((item, index) => (
                   <tr key={item.id ?? `${item.sandboxSessionId}-${item.metric}-${index}`}>
                     <th scope="row">{sourceLabel(item)}</th>
                     <td>{usageLabel(item.metric)}</td>

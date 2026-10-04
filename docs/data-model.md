@@ -392,11 +392,13 @@ erDiagram
         bigint id PK
         bigint task_id FK "nullable for Jarvis conversation use"
         bigint project_id FK "nullable"
+        bigint sandbox_session_id FK "nullable"
         bigint jarvis_session_id FK "nullable"
         string source "sandbox | jarvis_model | voice | codex | copilot"
         string metric "minutes, input_tokens, output_tokens, turns, premium_requests"
         decimal quantity
         decimal cost_dkk "null for subscription use (Codex, Copilot)"
+        string source_event_id "nullable; runner invocation/event identity"
         datetime at
     }
 ```
@@ -406,8 +408,20 @@ erDiagram
 | Sandbox | Session start to end (`sandbox_sessions`) × size | Yes, ≈ 0.89 DKK per hour at 1 vCPU / 2 GiB |
 | Jarvis model | Token usage per model round | Yes, list price per model |
 | Voice | Voice minutes per `jarvis_session` | Yes, estimated |
-| Codex | Turns, and tokens if `codex-acp` reports them | No: ChatGPT Pro subscription; usage shown only. To verify what is reported |
-| Copilot | Turns, and premium requests if Copilot CLI reports them | No: Copilot seat; usage shown only. To verify what is reported |
+| Codex | Turns, and tokens if `codex-acp` reports them | No: ChatGPT Pro subscription; usage shown only. Actual live report fields remain to verify |
+| Copilot | Turns, and premium requests if Copilot CLI reports them | No: Copilot seat; usage shown only. Actual live report fields remain to verify |
+
+P2-12's `0007_usage.sql` implements the table and its reverse migration. Sandbox
+rows are tied to a `sandbox_session_id`; their minute quantity and DKK estimate
+are written when that session ends, while an active session's elapsed estimate
+is computed by task detail. Agent turns are recorded immediately before an ACP
+prompt. Provider metrics are stored only from explicit numeric `usage` objects in
+ACP prompt results or usage notifications, with a runner invocation/event key to
+make repeated delivery idempotent. The task detail API and page expose those
+entries. Offline package documentation advertises Codex token-usage events but
+does not establish their exact fields; Copilot documentation explains quota
+consumption but not a per-turn ACP report. Authenticated live runs remain
+necessary to verify either provider's actual report.
 
 - Views sum `usage` per task, per project and per period, so Dan sees when Codex and Copilot were used and what each task cost.
 
@@ -460,5 +474,5 @@ migration; the history API accepts and displays all three outcomes.
 
 ## Still open
 
-- What usage Codex (`codex-acp`) and Copilot CLI report per turn (tokens, premium requests); **verify** in P2.
+- What usage Codex (`codex-acp`) and Copilot CLI actually report per turn (tokens, premium requests); offline package documentation was inspected in P2-12, but authenticated live runs remain the verification step.
 - How a dismissed `activity` item is stored. The main page can dismiss items (PRODUCT.md), but `activity` has no dismissal column. P1-13 adds one with its migration and updates this model.
