@@ -5,6 +5,7 @@ import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readDownMigration, readMigrations, revertMigration, type Migration } from './migrations.js';
 import { createTaskStore } from './task-store.js';
 import { createCredentialStatusStore } from './credential-status-store.js';
+import { createNowFeedStore } from './now-feed-store.js';
 import { createSettingsStore } from './settings-store.js';
 import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
@@ -101,6 +102,71 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
       'IX_artifacts_task_id_at', 'IX_sandbox_sessions_task_id_status', 'IX_sandbox_turns_sandbox_session_id_started_at',
       'IX_task_event_archives_task_first_at', 'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at',
     ]);
+  });
+
+  it('reads running tasks and categorized activity and persists dismissals', async () => {
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Now feed fixture', N'DanAakesen/now-${randomUUID().slice(0, 8)}', N'main',
+        N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const tasks = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    const running = await tasks.create({ projectId: String(projectId), title: 'Running feed task', request: 'Run' });
+    const needsAttention = await tasks.create({
+      projectId: String(projectId), title: 'Attention feed task', request: 'Run',
+    });
+    if (!running || !needsAttention) throw new Error('Now feed fixture tasks were not created');
+    expect((await tasks.transition(running.id, 'Running')).kind).toBe('ok');
+    expect((await tasks.transition(needsAttention.id, 'Running')).kind).toBe('ok');
+    expect((await tasks.transition(needsAttention.id, 'NeedsAttention')).kind).toBe('ok');
+    await pool.request().query(`UPDATE dbo.activity
+      SET at = DATEADD(day, 1, SYSUTCDATETIME())
+      WHERE area = N'factory' AND link = N'task:${needsAttention.id}';`);
+    const attentionActivity = await pool.request().query<{ id: string }>(`SELECT TOP (1)
+      CAST(id AS varchar(19)) AS id FROM dbo.activity
+      WHERE area = N'factory' AND link = N'task:${needsAttention.id}'
+      ORDER BY at DESC, id DESC;`);
+    const attentionActivityId = attentionActivity.recordset[0]?.id;
+    if (!attentionActivityId) throw new Error('Now feed attention activity was not created');
+
+    const releaseId = await scalar(`INSERT dbo.activity (area, kind, title, link)
+      VALUES (N'github', N'release_published', N'Release feed fixture', N'release:7');
+      UPDATE dbo.activity SET at = DATEADD(day, 1, SYSUTCDATETIME()) WHERE id = SCOPE_IDENTITY()`);
+    const credentialId = await scalar(`INSERT dbo.activity (area, kind, title, link)
+      VALUES (N'operations', N'credential_expiring', N'Credential feed fixture', NULL);
+      UPDATE dbo.activity SET at = DATEADD(day, 1, SYSUTCDATETIME()) WHERE id = SCOPE_IDENTITY()`);
+    const store = createNowFeedStore(pool);
+
+    const initial = await store.read();
+    expect((await tasks.transition(running.id, 'Cancelled')).kind).toBe('ok');
+    expect((await tasks.transition(needsAttention.id, 'Running')).kind).toBe('ok');
+    expect((await tasks.transition(needsAttention.id, 'Cancelled')).kind).toBe('ok');
+    expect(initial.items.length).toBeLessThanOrEqual(100);
+    expect(initial.items.map((item) => item.at)).toEqual(
+      [...initial.items].map((item) => item.at).sort((left, right) => right.localeCompare(left)),
+    );
+    expect(initial.running).toContainEqual(expect.objectContaining({
+      id: running.id,
+      title: 'Running feed task',
+      project: 'Now feed fixture',
+      agent: 'copilot',
+      startedAt: expect.any(String),
+    }));
+    expect(initial.items).toContainEqual(expect.objectContaining({
+      id: attentionActivityId,
+      category: 'attention',
+      title: expect.any(String),
+      link: `task:${needsAttention.id}`,
+    }));
+    expect(initial.items).toContainEqual(expect.objectContaining({
+      id: String(releaseId), category: 'release', title: 'Release feed fixture', link: 'release:7',
+    }));
+    expect(initial.items).toContainEqual(expect.objectContaining({
+      id: String(credentialId), category: 'credential', title: 'Credential feed fixture', link: null,
+    }));
+
+    expect(await store.dismiss(String(releaseId))).toBe(true);
+    expect((await store.read()).items.some((item) => item.id === String(releaseId))).toBe(false);
+    expect(await store.dismiss('9223372036854775807')).toBe(false);
   });
 
   it('stores valid records across the committed schema', async () => {

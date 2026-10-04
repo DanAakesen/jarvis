@@ -17,6 +17,7 @@ import type { TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-s
 import type { ProjectStore } from './factory/projects.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
+import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js';
 import type { CredentialStatusStore } from './credentials/credential-status.js';
 import type { SandboxHeartbeat } from './factory/heartbeat.js';
 import type { ContainerAppScaler } from './operations/container-app-scale.js';
@@ -31,6 +32,8 @@ export interface BuildAppOptions {
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
   readonly credentialStatusStore?: CredentialStatusStore;
+  readonly nowFeedStore?: NowFeedStore;
+  readonly nowEventHub?: NowFeedEventHub;
   readonly conversationStore?: ConversationStore;
   readonly sandboxHeartbeat?: SandboxHeartbeat;
   readonly conversationAgent?: ConversationAgent;
@@ -45,6 +48,8 @@ declare module 'fastify' {
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
     credentialStatusStore: CredentialStatusStore | null;
+    nowFeedStore: NowFeedStore | null;
+    nowEventHub: NowFeedEventHub;
     conversationStore: ConversationStore | null;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
@@ -99,6 +104,10 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
+  app.decorate('nowFeedStore', options.nowFeedStore ?? null);
+  app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
+  const unsubscribeTaskEvents = app.eventHub.subscribe(() => app.nowEventHub.publish({ type: 'refresh' }));
+  app.addHook('onClose', async () => { unsubscribeTaskEvents(); });
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);

@@ -1,25 +1,21 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
-import { ActivityPanel } from './ActivityPanel';
-import type { NowFeed } from './activity';
 import { BackendSleepControl } from './BackendSleepControl';
 import { ConversationHistory } from './ConversationHistory';
+import { NowFeedPanel } from './NowFeedPanel';
 import { VoiceControls } from './VoiceControls';
 import './ConversationHistory.css';
-
-const nowFeed: NowFeed = {
-  status: 'unavailable',
-  message: "Activity isn't available yet. Running tasks, tasks that need attention, releases, deployments and credential warnings will appear here.",
-};
 
 export function JarvisPage({
   name,
   client,
   config,
+  getAccessToken,
 }: {
   name: string;
   client: PublicClientApplication;
   config: PublicConfig;
+  getAccessToken: () => Promise<string>;
 }) {
   return (
     <div className="jarvis-page">
@@ -41,7 +37,7 @@ export function JarvisPage({
         </section>
 
         <div className="jarvis-side">
-          <ActivityPanel feed={nowFeed} />
+          <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} />
           <section className="panel" aria-labelledby="backend-heading">
             <h2 id="backend-heading">Backend</h2>
             <BackendSleepControl client={client} config={config} />

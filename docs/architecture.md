@@ -73,9 +73,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   (`src/activity.ts`): running tasks (title, project, agent, activity, start
   time) and activity items (category, title, `activity.link`, time). Only
   `task:<id>`, `release:<id>` and `project:<id>` links become routes. Dismissal
-  removes an item only after the injected action resolves. No backend feed
-  exists yet, so production shows the unavailable state; P1-13 adds the API and
-  live updates.
+  removes an item only after the backend confirms it. P1-13 loads this data
+  from authenticated `GET /now`, persists dismissal through
+  `POST /now/activity/:id/dismiss`, and refreshes snapshots from authenticated
+  `/now/events`. The panel identifies unavailable data and reconnecting or
+  unavailable live updates rather than claiming a stale snapshot is current.
 - `/me` inherits the root authentication hook. The verifier accepts only
   Dan's signed delegated API token and returns a bounded display name from its
   validated `name` claim, falling back to `Dan` if that optional claim is absent
@@ -135,6 +137,20 @@ stream's last event ID, and refreshes the filtered task snapshot after events.
 Connection and reconnection state is visible. The list API does not yet return
 pull-request, check, or usage values; cards mark those data points unavailable
 instead of inferring them. No backend route or persistence change is required.
+
+The main page's authenticated `GET /now` returns up to 100 running tasks with
+their project, agent, current activity and start time, plus up to 100
+non-dismissed attention, release/deployment and credential activity records.
+The read derives attention from the latest activity for each task in
+`NeedsAttention`; other categories use their `activity.kind`. The
+`POST /now/activity/:id/dismiss` route updates `activity.dismissed_at`, returns
+404 for an unknown ID, and is safe to repeat for an existing item. Task-event
+commits and dismissals invalidate the Now snapshot through `/now/events`; the
+browser reconnects and rereads the bounded snapshot. This stream is separate
+from task-history replay and has a 25-second heartbeat. These routes use the
+default Dan-only authentication. Offline API and SQL Server integration tests
+cover the contracts; deployed Entra, SQL and streaming behavior remain
+unverified.
 
 `GET /operations/sleep` reports the Container App's configured minimum replicas;
 `PUT /operations/sleep` accepts only awake (1) or asleep (0). Both routes use the

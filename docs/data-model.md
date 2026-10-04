@@ -19,6 +19,9 @@ sessions must populate it so the heartbeat can address the correct Foundry agent
 P6-03 adds `task_event_archives` in `0005_task_event_archives.sql`, indexing each
 committed event blob so interrupted uploads remain invisible and task history
 pages can locate the required blobs without listing the container.
+P1-13 adds nullable `activity.dismissed_at` in `0008_activity_dismissals.sql`;
+the feed omits dismissed activity while retaining it for history and supports
+reverting the column with the paired down migration.
 
 ## Overview
 
@@ -134,6 +137,7 @@ erDiagram
         string title
         string link "task:42, release:7"
         datetime at
+        datetime dismissed_at "nullable; hidden from the main-page feed"
     }
 ```
 
@@ -161,7 +165,7 @@ erDiagram
   sessions/tasks, not live updates or history. At the start of a hosted Jarvis
   session, the agent keeps the effective model and reasoning effort in memory for
   that session; the snapshot is not persisted.
-- `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes.
+- `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes. The authenticated Now-feed read excludes `dismissed_at` rows; dismissing sets the UTC timestamp without deleting the activity record.
 
 ## 2 · Projects
 
@@ -481,4 +485,3 @@ migration; the history API accepts and displays all three outcomes.
 ## Still open
 
 - What usage Codex (`codex-acp`) and Copilot CLI actually report per turn (tokens, premium requests); offline package documentation was inspected in P2-12, but authenticated live runs remain the verification step.
-- How a dismissed `activity` item is stored. The main page can dismiss items (PRODUCT.md), but `activity` has no dismissal column. P1-13 adds one with its migration and updates this model.

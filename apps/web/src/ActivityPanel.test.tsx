@@ -9,13 +9,13 @@ const feed: NowFeed = {
   status: 'ready',
   updatedAt: '2026-10-03T12:00:00Z',
   running: [
-    { id: 42, title: 'Add the release view', project: 'Jarvis', agent: 'codex', activity: 'Running tests', startedAt: '2026-10-03T10:55:00Z' },
+    { id: '42', title: 'Add the release view', project: 'Jarvis', agent: 'codex', activity: 'Running tests', startedAt: '2026-10-03T10:55:00Z' },
   ],
   items: [
-    { id: 1, category: 'attention', title: 'Sandbox crashed', link: 'task:43', at: '2026-10-03T11:50:00Z' },
-    { id: 2, category: 'release', title: 'Release 7 deployed', link: 'release:7', at: '2026-10-03T11:40:00Z' },
-    { id: 3, category: 'credential', title: 'Codex login expires in 3 days', link: null, at: '2026-10-03T09:00:00Z' },
-    { id: 4, category: 'release', title: 'Unexpected link', link: 'javascript:alert(1)', at: '2026-10-03T09:00:00Z' },
+    { id: '1', category: 'attention', title: 'Sandbox crashed', link: 'task:43', at: '2026-10-03T11:50:00Z' },
+    { id: '2', category: 'release', title: 'Release 7 deployed', link: 'release:7', at: '2026-10-03T11:40:00Z' },
+    { id: '3', category: 'credential', title: 'Codex login expires in 3 days', link: null, at: '2026-10-03T09:00:00Z' },
+    { id: '4', category: 'release', title: 'Unexpected link', link: 'javascript:alert(1)', at: '2026-10-03T09:00:00Z' },
   ],
 };
 
@@ -85,7 +85,7 @@ describe('activity panel', () => {
     expect(pending).toHaveProperty('disabled', true);
     await user.click(pending);
     expect(onDismiss).toHaveBeenCalledTimes(1);
-    expect(onDismiss).toHaveBeenCalledWith(1);
+    expect(onDismiss).toHaveBeenCalledWith('1');
 
     confirm();
     expect(await screen.findByText('No tasks need attention.')).not.toBeNull();
