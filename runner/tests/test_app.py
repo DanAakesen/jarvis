@@ -511,7 +511,7 @@ def test_app_token_tasks_do_not_read_the_legacy_github_secret(monkeypatch):
     assert requested == ["jarvis-copilot"]
 
 
-def test_task_uses_an_app_token_and_configures_per_push_credentials(tmp_path, monkeypatch):
+def test_task_uses_an_app_token_and_configures_per_push_credentials(tmp_path, monkeypatch, local_workspace):
     work_root = tmp_path / "work root"
     monkeypatch.setattr(app, "WORK_ROOT", work_root)
     monkeypatch.setattr(app, "session_clients", {})
