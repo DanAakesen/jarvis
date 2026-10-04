@@ -382,7 +382,7 @@ export class TaskDispatcher implements TaskController {
         payload: { reason: result.reason },
         source: 'backend',
       });
-      const transition = await this.tasks.transition(taskId, 'NeedsAttention');
+      const transition = await this.tasks.transition(taskId, 'NeedsAttention', false, 'pull_request_open_refused');
       if (transition.kind !== 'ok') return false;
       const ended = await this.store.endTaskSessions(taskId, 'NeedsAttention', true);
       ended.forEach((id) => this.heartbeat.untrack(id));
@@ -410,7 +410,7 @@ export class TaskDispatcher implements TaskController {
       const keepCompletedQuestionSession = state === 'NeedsAttention' && reason === 'session_question';
       if (!keepCompletedQuestionSession &&
         (state === 'Paused' || state === 'NeedsAttention' || state === 'Done' || state === 'Cancelled')) {
-        void this.store.endTaskSessions(event.taskId, state)
+        void this.store.endTaskSessions(event.taskId, state, reason === 'pull_request_open_refused')
           .then((sessionIds) => sessionIds.forEach((id) => this.heartbeat.untrack(id)))
           .catch(this.onError);
       }
