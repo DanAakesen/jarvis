@@ -4,6 +4,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **Accepted capability additions (4 October 2026):** P7-13–P7-16 plan long-term memory, source-linked web research, image/video generation and editable personality. P8-19 supplies the Personality settings UI. Memory/provider/retention choices are unresolved; no implementation or service spending is authorized by this planning change.
+
 - **UI planning (4 October 2026):** Dan agreed the shared shell/voice structure in [ui.md](ui.md). The frontend issue breakdown is P8-04–P8-13 with its coverage report in [docs/ui-implementation-coverage.md](docs/ui-implementation-coverage.md); P8-03 owns enabling logic and contracts. Final styling and deferred decisions remain open; no UI build is claimed complete.
 
 - **P6-06 (#67):** The operations runbook is drafted in [docs/runbook.md](docs/runbook.md); Dan's acceptance review and live production verification are pending.
@@ -239,7 +241,7 @@ Goal: Jarvis runs reliably and transparently day to day.
 
 ### P7 — Jarvis everywhere
 
-Goal: Dan reaches Jarvis away from the browser, and Jarvis can see, act on his PC, and use his calendar, mail and notes. Each task is headless (backend, Jarvis tool, tests, docs); its UI is P8. Tasks labelled `needs-decision` wait for Dan's answers in the issue. Microsoft services and free tiers only; costs and non-Microsoft parts are flagged in each issue (Jev is the agreed exception).
+Goal: Dan reaches Jarvis away from the browser, and Jarvis can see, act on his PC, and use his calendar, mail and notes. P7-13–P7-16 add long-term memory, web research, media generation and editable personality; unresolved storage/provider/cost choices stay explicit. Each task is headless (backend, Jarvis tool, tests, docs); its UI is P8. Tasks labelled `needs-decision` wait for Dan's answers in the issue. Microsoft services and free tiers only; costs and non-Microsoft parts are flagged in each issue (Jev is the agreed exception).
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -255,6 +257,10 @@ Goal: Dan reaches Jarvis away from the browser, and Jarvis can see, act on his P
 | P7-10 | [#208](https://github.com/DanAakesen/jarvis/issues/208) | Second brain: notes search through Graph search over a OneDrive notes folder | Jarvis quotes a known note with a link | P4-02 | Not started |
 | P7-11 | [#209](https://github.com/DanAakesen/jarvis/issues/209) | Model switching by voice for the Jarvis model and coding tasks, limited to verified options | Valid, invalid and refused cases tested | P2-11, P4-07, P4-02 | Complete |
 | P7-12 | [#210](https://github.com/DanAakesen/jarvis/issues/210) | Live status by voice: Jarvis announces selected Now-feed events and summarises status on request | Announcements merge bursts and never interrupt Dan | P5-03, P1-13 | In progress |
+| P7-13 | [#263](https://github.com/DanAakesen/jarvis/issues/263) | Remember preferences, decisions and unfinished work across sessions through durable memory and relevant retrieval, beyond the model context window; keep notes search and generated-view lifetime separate | Recall a confirmed preference, decision and unfinished task in a later session after restart; source-linked retrieval stays bounded; correction/forgetting prevents stale recall; tests cover conflicting facts, compaction, missing evidence and retrieval failure | P4-02, P4-03, P4-09 | Not started |
+| P7-14 | [#264](https://github.com/DanAakesen/jarvis/issues/264) | Jarvis searches the web, retrieves relevant pages and produces source-linked research for chat/voice and existing dynamic-view consumers | A real query yields retrieved sources and a synthesis with links; unsupported claims and unavailable pages are identified; fake-provider tests cover bounded results, timeout, partial results and cancellation; live acceptance uses the selected approved provider | P4-02, P4-09 | Not started |
+| P7-15 | [#265](https://github.com/DanAakesen/jarvis/issues/265) | Create image and video assets from Dan's requests through approved providers, track generation state and return artifacts for the existing workspace | One approved image request and one approved video request produce inspectable artifacts; failures never become success; tests cover pending/completed/failed/cancelled jobs and bounded retries; usage/cost and live provider limitations are documented | P4-02, P4-09 | Not started |
+| P7-16 | [#266](https://github.com/DanAakesen/jarvis/issues/266) | Persist Dan-editable personality preferences and custom instructions through the validated Settings backend; apply a consistent personality to chat and voice | Saved preferences apply to new chat and voice sessions consistently; reset restores the current chosen default; tests cover bounds, invalid updates, persistence and precedence; personality preferences never change identity, tool permissions or truthful action outcomes | P1-11, P4-09, P5-03 | Not started |
 
 ### P8 — Jarvis UI
 
@@ -280,7 +286,7 @@ P8-04–P8-13 are the frontend allocation, selected after checking `main` and bo
 
 ### Out of scope for phase 1
 
-Banking, health and fitness, and other areas; the memory design (Decision 6); a paid phone number for Jarvis; Azure Web PubSub; the Codex API-key fallback (see [Ideas](#ideas)).
+Banking, health and fitness, and other areas;  a paid phone number for Jarvis; Azure Web PubSub; the Codex API-key fallback (see [Ideas](#ideas)).
 
 ### P8 backend-enabling tasks
 
@@ -293,6 +299,7 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 | P8-16 | [#254](https://github.com/DanAakesen/jarvis/issues/254) | Publish a typed, ephemeral Jarvis activity contract for actual listening, thinking, tool-call and speaking states, including interruption, reconnect and failure transitions where reported by the runtime; coordinate speaking state with P7-12 announcements rather than duplicating them | Mocked chat and voice protocol tests prove state transitions use observed events, including tool start and recorded ok/refused/error outcome; no listening state appears before voice is ready; cancellation and disconnect end or fail the activity visibly; no transcript, tool arguments or secrets are copied into activity events; the voice workspace shows the matching runtime state in a local acceptance check | P4-05, P4-10, P5-03, P5-04, P7-12, P8-15 | Not started |
 | P8-17 | [#255](https://github.com/DanAakesen/jarvis/issues/255) | Persist confirmed UI preferences and safely update themes through the existing validated settings and Jarvis tool boundaries: light/dark mode, Dan-approved theme tokens, and “Minimise all windows when starting voice” defaulting off; do not persist generated views | Settings retain preferences across reloads while view/window state does not; token names and values are allowlisted and bounded; invalid updates fail without overwriting other settings; the registered theme tool reports truthful refused/error outcomes and updates an active UI without reload; offline API/store/tool tests and a local signed-in UI check cover theme persistence and the default-off toggle | P1-11, P4-02, P4-10, P8-18 | Not started |
 | P8-18 | [#256](https://github.com/DanAakesen/jarvis/issues/256) | **needs-decision:** Confirm the initial generated-view renderer/action catalogue and adjustable theme-token names/value types without treating examples or the five-theme proposal as requirements | Dan chooses and records the initial allowlists in the UI source before P8-14 or P8-17 implements them; the decision explicitly excludes arbitrary generated code and leaves visual styling/preset count open unless Dan decides otherwise | None | Not started |
+| P8-19 | [#267](https://github.com/DanAakesen/jarvis/issues/267) | Expose editable personality in Settings, under a Jarvis Personality section, using the backend contract from P7-16 | Dan can load, edit, save and reset personality with visible validation, pending/success/failure feedback; unsaved edits survive failed saves; keyboard and phone/desktop checks pass; explain that changes apply to new sessions | P1-11, P8-04, P7-16 | Not started |
 
 ### Confirm before P0
 

@@ -155,3 +155,18 @@ This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell c
 - P8-18 asks Dan to settle the initial renderer/action and theme-token allowlists before P8-14/P8-17 implements them. The five-theme example is not a requirement; implementation must not invent tokens or values.
 - Exact orb styling/animation and detailed mode-transition styling remain with the frontend/design work. Manual voice-end control/Escape remains the P8-12 `needs-decision` task; neither decision blocks the backend activity contract.
 - Banking and Fitness/Health integration detail remains deferred. Dan withdrew the proposed PC vendor integration; do not create an issue for it.
+
+## Additional accepted Jarvis capabilities (planned)
+
+| Feature | What Dan can do | Surface | Where | Status | Tasks |
+| --- | --- | --- | --- | --- | --- |
+| Long-term memory | Recall preferences, decisions and unfinished work across sessions; inspect, correct and forget retained memories | Voice/chat | Existing conversation; dedicated management UI undecided | Planned (storage, capture and retention decisions open) | P7-13 |
+| Web research | Search and retrieve web sources, synthesise findings with links and show results through dynamic views | Both | Conversation and dynamic workspace | Planned (provider and cost decision open) | P7-14; existing P8-06/P8-14/P8-15 consumers |
+| Image and video generation | Generate visual assets, inspect truthful job status and view the resulting artifacts | Both | Conversation and dynamic workspace | Planned (providers, cost and retention decisions open) | P7-15; existing P8-06/P8-14/P8-15 consumers |
+| Editable personality | Configure tone/response style and custom instructions consistently for chat and voice; reset to the current default | Both | Proposed Settings → Jarvis → Personality | Planned | P7-16, P8-19 |
+
+Dan accepted these features on 4 October 2026. No new provider or paid service
+was selected, and no implementation was started by this planning change. Notes
+search remains #208 and is not a replacement for long-term conversational memory.
+The first video's project was described as open source; its repository and
+licence have not yet been inspected, so code reuse is not a dependency.
