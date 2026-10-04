@@ -6,6 +6,16 @@ describe('backend configuration', () => {
   it('defaults to the infrastructure port and offline logs', () => {
     expect(loadConfig({})).toEqual({ port: 3000, logLevel: 'info', auth: loadAuthConfig({}) });
   });
+  it('accepts only a secure Key Vault origin', () => {
+    expect(loadConfig({ KEY_VAULT_URI: 'https://kv-jarvis.vault.azure.net/' }).keyVaultUri)
+      .toBe('https://kv-jarvis.vault.azure.net/');
+    for (const KEY_VAULT_URI of [
+      '', 'http://kv-jarvis.vault.azure.net/', 'https://vault.example/', 'https://kv-jarvis.vault.azure.net/secrets',
+      'https://kv-jarvis.vault.azure.net/?token=secret',
+    ]) {
+      expect(() => loadConfig({ KEY_VAULT_URI })).toThrow(/^KEY_VAULT_URI must be a secure Azure Key Vault origin$/);
+    }
+  });
   it('accepts a configured HTTPS origin and backend-only telemetry string', () => {
     const connectionString = 'InstrumentationKey=00000000-0000-0000-0000-000000000001;IngestionEndpoint=https://swedencentral-0.in.applicationinsights.azure.com/';
     const foundryRuntimeEndpoint = 'https://resource.cognitiveservices.azure.com/api/projects/jarvis';

@@ -18,6 +18,85 @@ def test_required_string_rejects_missing_and_blank():
         app._required_string({"task": " "}, "task")
 
 
+def test_needs_attention_marker_is_bounded_and_requires_a_question():
+    question = "Which license should this project use?"
+    text = f"Working\n{app.NEEDS_ATTENTION_MARKER} {question}\n"
+    assert app._needs_attention_question(text) == question
+    assert app._needs_attention_question(f"{app.NEEDS_ATTENTION_MARKER} ") is None
+    assert app._needs_attention_question("The task is complete.") is None
+    assert app._needs_attention_question(f"{app.NEEDS_ATTENTION_MARKER} {'x' * 700}") == "x" * 500
+
+
+def test_runner_reports_agent_question_as_needs_attention(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "session_clients", {})
+    monkeypatch.setattr(app, "session_locks", {})
+    monkeypatch.setenv("JARVIS_DISK_LOW_THRESHOLD_BYTES", "1000")
+    monkeypatch.setattr(app, "_disk_snapshot", lambda: {
+        "disk_total_bytes": 10_000,
+        "disk_used_bytes": 1_000,
+        "disk_free_bytes": 9_000,
+    })
+    monkeypatch.setenv("JARVIS_BACKEND_URL", "https://backend.example")
+    monkeypatch.setenv("JARVIS_API_SCOPE", "api://00000000-0000-4000-8000-000000000000/.default")
+    question = "Which license should this project use?"
+
+    class Publisher:
+        def __init__(self, *_args):
+            self.events = []
+
+        async def publish(self, _task_id, _invocation_id, _event_index, event):
+            self.events.append((event["kind"], event["data"]))
+
+        async def close(self):
+            pass
+
+    class Client:
+        def __init__(self, _command, _cwd, _state, _env, persisted_session_id=None):
+            pass
+
+        async def start(self):
+            pass
+
+        async def run(self, _task):
+            return {"jarvis_needs_attention": question}
+
+        async def stop(self):
+            pass
+
+    async def credentials(_agent):
+        return {"github_token": "not-a-real-token", "copilot_token": "not-a-real-seat-token"}
+
+    publisher = Publisher()
+    monkeypatch.setattr(app, "RunnerEventPublisher", lambda *_args: publisher)
+    monkeypatch.setattr(app, "ACPClient", Client)
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    state = app.TaskState("attention", "session", "copilot", "scaffold", task_id="42")
+
+    asyncio.run(app._run_task(state))
+
+    assert state.status == "needs_attention"
+    assert state.error == question
+    assert ("needs_attention", {"question": question}) in publisher.events
+    assert not any(kind == "completed" for kind, _data in publisher.events)
+
+
+def test_assistant_text_chunks_are_extracted_only_from_text_messages():
+    assert app._assistant_message_chunk({
+        "method": "session/update",
+        "params": {
+            "update": {
+                "sessionUpdate": "agent_message_chunk",
+                "content": {"type": "text", "text": "JARVIS_NEEDS_ATTENTION: "},
+            },
+        },
+    }) == "JARVIS_NEEDS_ATTENTION: "
+    assert app._assistant_message_chunk({
+        "method": "session/update",
+        "params": {"update": {"sessionUpdate": "tool_call", "content": {"type": "text", "text": "ignored"}}},
+    }) is None
+
+
 def test_key_vault_probe_accepts_deployment_payload_without_task(monkeypatch):
     async def fake_credentials(agent):
         assert agent == "copilot"

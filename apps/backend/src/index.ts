@@ -37,6 +37,7 @@ import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
 import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
 import { createNowFeedStore } from './database/now-feed-store.js';
+import { createRepoAdminRepositoryCreator } from './credentials/repo-admin.js';
 
 try {
   const config = loadConfig();
@@ -55,9 +56,20 @@ try {
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const credential = archiveStorageAccount || config.voiceLiveEndpoint || config.foundryProjectEndpoint || config.foundryEndpoints || sleepResourceId
+    || config.keyVaultUri
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
+    : undefined;
+  const projectRepositoryCreator = config.keyVaultUri && credential
+    ? createRepoAdminRepositoryCreator(
+      config.keyVaultUri,
+      async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Key Vault identity unavailable');
+        return token.token;
+      },
+    )
     : undefined;
   const conversationAgent = config.foundryProjectEndpoint && config.foundryChatAgentName && credential
     ? createFoundryInvocationConversationAgent(
@@ -157,6 +169,7 @@ try {
     modules,
     ...(database && taskStore && settingsStore ? {
       projectStore: createProjectStore(database.pool),
+      ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),

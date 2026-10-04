@@ -492,6 +492,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: storage.name
             }
             {
+              name: 'KEY_VAULT_URI'
+              value: keyVault.properties.vaultUri
+            }
+            {
               name: 'SQL_MANAGED_IDENTITY_CLIENT_ID'
               value: backendIdentity.properties.clientId
             }

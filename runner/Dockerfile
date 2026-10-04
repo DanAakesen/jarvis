@@ -12,6 +12,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 ARG GH_VERSION=2.98.0
 RUN apt-get update \
     && apt-get install --no-install-recommends -y ca-certificates git curl \
+    && curl --fail --silent --show-error --location \
+        https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -o /tmp/packages-microsoft-prod.deb \
+    && dpkg -i /tmp/packages-microsoft-prod.deb \
+    && rm /tmp/packages-microsoft-prod.deb \
+    && apt-get update \
+    && apt-get install --no-install-recommends -y powershell \
+    && pwsh --version \
     && rm -rf /var/lib/apt/lists/*
 RUN curl --fail --silent --show-error --location \
       "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" -o /tmp/gh.tar.gz \

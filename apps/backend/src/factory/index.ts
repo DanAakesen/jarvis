@@ -1,6 +1,7 @@
 import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { projectRoutes } from './projects.js';
+import { createProjectTool } from './new-project.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
 import type {
   CreateTaskInput, RecordTaskEventInput, TaskControlCommand, TaskEventMessage, TaskListFilters,
@@ -45,7 +46,7 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 
 export const factoryModule: BackendModule = {
   id: 'factory',
-  tools: [],
+  tools: [createProjectTool],
   registerRoutes: async (app) => {
     app.post<{ Body: CreateTaskInput }>('/factory/tasks', {
       schema: {

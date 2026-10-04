@@ -38,6 +38,7 @@ APP_VERSION = "0.2.0"
 WORK_ROOT = Path(os.environ.get("JARVIS_WORK_ROOT", "/files/jarvis"))
 MAX_EVENTS = 500
 MAX_EVENT_PAYLOAD_BYTES = 256 * 1024
+MAX_ATTENTION_QUESTION_LENGTH = 500
 DEFAULT_DISK_LOW_THRESHOLD_BYTES = 1024**3
 DISK_CHECK_INTERVAL_SECONDS = 15
 TASK_STATE_FILE = "task-state.json"
@@ -72,7 +73,25 @@ TASK_DELIVERY_INSTRUCTIONS = (
     "Before finishing, push remaining commits and report their commit IDs; explicitly "
     "report any commit or push failure."
 )
+NEEDS_ATTENTION_MARKER = "JARVIS_NEEDS_ATTENTION:"
 _LAST_REFRESH = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$")
+
+
+def _assistant_message_chunk(message: Any) -> str | None:
+    if not isinstance(message, dict) or message.get("method") != "session/update":
+        return None
+    params = message.get("params")
+    update = params.get("update") if isinstance(params, dict) else None
+    content = update.get("content") if isinstance(update, dict) else None
+    if (
+        isinstance(update, dict)
+        and update.get("sessionUpdate") == "agent_message_chunk"
+        and isinstance(content, dict)
+        and content.get("type") == "text"
+        and isinstance(content.get("text"), str)
+    ):
+        return content["text"]
+    return None
 
 
 class RunnerEventPublisher:
@@ -716,6 +735,7 @@ class ACPClient:
         self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
         self._reader_task: asyncio.Task[None] | None = None
         self.acp_session_id: str | None = persisted_session_id
+        self._assistant_text = ""
         self._secrets = [env[key] for key in ("GH_TOKEN", "COPILOT_GITHUB_TOKEN") if env.get(key)]
         if env.get("CODEX_HOME"):
             auth_path = Path(env["CODEX_HOME"]) / "auth.json"
@@ -792,10 +812,12 @@ class ACPClient:
                            if approved and approved.get("optionId") else {"outcome": "cancelled"})
                 await self._respond(message.get("id"), {"outcome": outcome})
             elif "method" in message:
+                params = message.get("params", {})
+                self._assistant_text += _assistant_message_chunk(message) or ''
                 self.state.event(
                     "acp_notification",
                     method=message.get("method"),
-                    params=message.get("params", {}),
+                    params=params,
                 )
 
         for future in self._pending.values():
@@ -873,6 +895,7 @@ class ACPClient:
                 )
                 if selected is None or selected.get("currentValue") != value:
                     raise RuntimeError(f"Codex did not apply the requested {config_id} option")
+        self._assistant_text = ""
         self.state.event("agent_turn", agent=self.state.agent)
         result = await self.request(
             "session/prompt",
@@ -886,7 +909,12 @@ class ACPClient:
                 ],
             },
         )
-        return {"acp_session_id": self.acp_session_id, "response": self._redact(result)}
+        question = _needs_attention_question(self._assistant_text)
+        return {
+            "acp_session_id": self.acp_session_id,
+            "response": self._redact(result),
+            **({"jarvis_needs_attention": question} if question else {}),
+        }
 
     async def cancel_turn(self) -> bool:
         """Send ACP session/cancel; the in-flight session/prompt then returns stopReason 'cancelled'."""
@@ -929,6 +957,17 @@ def _agent_command(agent: str, model: str | None = None) -> list[str]:
     if agent == "copilot" and model is not None:
         command.extend(["--model", model])
     return command
+
+
+def _needs_attention_question(text: str) -> str | None:
+    for line in reversed(text.splitlines()):
+        stripped = line.strip()
+        if not stripped.startswith(NEEDS_ATTENTION_MARKER):
+            continue
+        question = stripped[len(NEEDS_ATTENTION_MARKER):].strip()
+        if question:
+            return question[:MAX_ATTENTION_QUESTION_LENGTH]
+    return None
 
 
 def _credential_helper(worktree: Path) -> Path:
@@ -1031,6 +1070,15 @@ async def _run_task(
         if state.stop_requested:
             state.status = STOPPED_STATUS[state.stop_requested]
             state.event(state.status, result=state.result)
+        elif isinstance(state.result, dict) and isinstance(state.result.get("jarvis_needs_attention"), str):
+            question = state.result.pop("jarvis_needs_attention").strip()
+            if question:
+                state.status = "needs_attention"
+                state.error = question[:MAX_ATTENTION_QUESTION_LENGTH]
+                state.event("needs_attention", question=state.error)
+            else:
+                state.status = "completed"
+                state.event("completed", result=state.result)
         else:
             state.status = "completed"
             state.event("completed", result=state.result)
@@ -1328,7 +1376,7 @@ async def cancel_invocation(request: Request) -> Response:
     state = tasks.get(invocation_id)
     if not state:
         return JSONResponse({"error": "invocation not found"}, status_code=404)
-    if state.status in {"completed", "failed", "cancelled", "paused", "interrupted"}:
+    if state.status in {"completed", "failed", "cancelled", "paused", "interrupted", "needs_attention"}:
         return JSONResponse({"invocation_id": invocation_id, "status": state.status})
     first_cancel = not state.cancel_requested
     state.cancel_requested = True

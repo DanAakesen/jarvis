@@ -87,6 +87,8 @@ export interface CreateTaskInput {
   projectId: string;
   title: string;
   request: string;
+  source?: 'board' | 'chat';
+  originMessageId?: string;
   agent?: 'codex' | 'copilot';
   modelOverride?: string;
   reasoningOverride?: string;

@@ -32,6 +32,7 @@ live in `tools/package.json` and `tools/package-lock.json`.
 | Codex CLI | 0.157.0 |
 | Codex ACP adapter | 2.1.1 |
 | GitHub CLI | 2.98.0 |
+| PowerShell | 7 (Microsoft Debian package) |
 | .NET SDK (separate image) | 8.0.419 |
 
 The aggregate `CI` workflow runs runner lint and tests in its Python job and calls

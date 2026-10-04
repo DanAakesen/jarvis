@@ -15,6 +15,7 @@ import type { ConversationAgent } from './core/chat-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskController, TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
 import type { ProjectStore } from './factory/projects.js';
+import type { RepositoryCreator } from './factory/new-project.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
 import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js';
@@ -28,6 +29,7 @@ export interface BuildAppOptions {
   readonly auth?: TokenVerifier;
   readonly modules?: readonly BackendModule[];
   readonly projectStore?: ProjectStore;
+  readonly projectRepositoryCreator?: RepositoryCreator;
   readonly toolCallStore?: ToolCallStore;
   readonly taskStore?: TaskStore;
   readonly taskController?: TaskController;
@@ -46,6 +48,7 @@ export interface BuildAppOptions {
 declare module 'fastify' {
   interface FastifyInstance {
     projectStore: ProjectStore | null;
+    projectRepositoryCreator: RepositoryCreator | null;
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
     taskController: TaskController | null;
@@ -106,6 +109,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));
   app.decorate('projectStore', options.projectStore ?? null);
+  app.decorate('projectRepositoryCreator', options.projectRepositoryCreator ?? null);
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);
   app.decorate('taskController', options.taskController ?? null);

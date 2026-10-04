@@ -9,6 +9,7 @@ export interface BackendConfig {
   staticWebAppOrigin?: string;
   logLevel: Level;
   applicationInsightsConnectionString?: string;
+  keyVaultUri?: string;
   voiceLiveEndpoint?: string;
   foundryEndpoints?: {
     admin: string;
@@ -72,6 +73,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     if (!valid) throw new ConfigurationError('APPLICATIONINSIGHTS_CONNECTION_STRING is invalid');
   }
 
+  let keyVaultUri: string | undefined;
+  if (env.KEY_VAULT_URI !== undefined) {
+    try {
+      const url = new URL(env.KEY_VAULT_URI);
+      if (url.protocol !== 'https:' || !/^[a-z0-9-]+\.vault\.azure\.net$/iu.test(url.hostname) ||
+        url.port || url.username || url.password || !['', '/'].includes(url.pathname) || url.search || url.hash) {
+        throw new Error();
+      }
+      keyVaultUri = `${url.origin}/`;
+    } catch {
+      throw new ConfigurationError('KEY_VAULT_URI must be a secure Azure Key Vault origin');
+    }
+  }
+
   let voiceLiveEndpoint: string | undefined;
   if (env.VOICE_LIVE_ENDPOINT !== undefined) {
     try {
@@ -107,6 +122,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     logLevel: logLevel as Level,
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),
     ...(connectionString === undefined ? {} : { applicationInsightsConnectionString: connectionString }),
+    ...(keyVaultUri === undefined ? {} : { keyVaultUri }),
     ...(voiceLiveEndpoint === undefined ? {} : { voiceLiveEndpoint }),
     ...(foundryAdminEndpoint === undefined || foundryRuntimeEndpoint === undefined ? {} : {
       foundryEndpoints: { admin: foundryAdminEndpoint, runtime: foundryRuntimeEndpoint },

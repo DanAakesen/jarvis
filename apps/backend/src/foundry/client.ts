@@ -5,7 +5,7 @@ export const FOUNDRY_SCOPE = "https://ai.azure.com/.default";
 
 export type CodingAgent = "codex" | "copilot";
 export type InvocationStatus =
-  | "queued" | "running" | "completed" | "failed" | "cancelled"
+  | "queued" | "running" | "completed" | "failed" | "cancelled" | "needs_attention"
   | "cancelling" | "interrupted" | "paused" | "unknown";
 export type JsonObject = { [key: string]: unknown };
 export type FoundryErrorKind = "http" | "auth" | "timeout" | "aborted" | "transport" | "protocol";
@@ -61,7 +61,8 @@ export interface InvocationSnapshot extends InvocationAccepted {
 export interface CancelAcknowledgement { invocationId: string; status: InvocationStatus }
 
 const STATUSES = new Set<unknown>([
-  "queued", "running", "completed", "failed", "cancelled", "cancelling", "interrupted", "paused", "unknown",
+  "queued", "running", "completed", "failed", "cancelled", "needs_attention",
+  "cancelling", "interrupted", "paused", "unknown",
 ]);
 
 function object(value: unknown): value is JsonObject {
