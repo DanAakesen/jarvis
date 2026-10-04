@@ -8,6 +8,9 @@ creates data-model groups 1–3 (issue #15); `0002_sandbox_operations.sql` creat
 groups 4 and 6 (issue #27); `0009_github_release_records.sql` creates group 5
 (issue #42). `0010_idle_expired_sessions.sql` adds the `idle_expired`
 session end reason (P2-14, #226).
+`0011_alert_deduplication.sql` adds unique alert activity keys (P6-02, #63).
+`0014_teams_notifications.sql` adds the personal Teams conversation and
+expiring confirmation records (P7-03, #201).
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only

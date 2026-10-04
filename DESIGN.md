@@ -58,6 +58,7 @@ event timeline.
 ## Interactions to design
 
 - **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.
+- **Teams confirmation cards (P7-03):** one Adaptive Card headline names the action, body text gives its bounded summary, and ordinary supporting text states the five-minute expiry. Approve and Reject are explicit, distinct buttons; optional speech is a separate, non-autostarting audio attachment. This interaction lives in Teams and does not add browser UI.
 - **Language toggle:** Danish ↔ English, visible wherever voice is active.
 - **Task controls:** steer, pause, resume, cancel, recover after a crash, and continue after a completed turn's session expires. Show a clear pending state (for example, "Continuing…" while a fresh session starts).
 - **Sleep switch:** the main page shows configured awake/asleep state (minimum replicas 1/0), pending and failure feedback, and explains a refusal while any task is Ready or Running. Settings links to the main-page control.
@@ -136,7 +137,7 @@ sign-in; the header wraps on narrow screens.
 ## Settings (P1-11)
 
 Keep the Settings route within the shell's neutral foundation. Use one page
-headline and distinct form sections for Jarvis, Voice, Coding agents, Global,
+headline and distinct form sections for Appearance, Jarvis, Voice, Coding agents, Global,
 New projects, and Credentials. New-project controls use the documented defaults
 and the same labelled field grid as the other sections. Two columns make related controls easy to scan on wide screens;
 the form stacks on narrow screens. Save feedback stays beside the save action,
@@ -147,6 +148,22 @@ new visual direction or palette is introduced. Checked in Chromium at
 390 and 1280 px with mock auth/settings: no horizontal overflow, controls at
 least 44 px high, and save/disabled states visible. Live backend behavior remains
 unverified.
+
+P8-13 keeps the existing neutral visual foundation and adds light/dark palettes
+through semantic CSS variables in `apps/web/src/styles.css`. The Appearance
+section saves the selected mode immediately and applies only the accepted
+settings response across the shared shell. Both modes retain visible focus and
+high-contrast text, controls, feedback and surfaces. Custom and Jarvis-directed
+variable editing stays disabled with an explanation until P8-17 implements the
+validated settings/tool path using the token allowlist recorded in P8-18.
+Checked in Chromium at 1440px and 390px with scratch auth/settings mocks: a
+rejected update kept the current mode, retry and reload restored dark, and
+there was no horizontal overflow. Muted-text contrast against the page/surface
+was at least 6.25:1 in light mode and 8.99:1 in dark mode. Screenshots:
+[desktop light](docs/ui/screenshots/p8-13-theme-settings-desktop-light.png),
+[desktop dark](docs/ui/screenshots/p8-13-theme-settings-desktop-dark.png), and
+[phone dark](docs/ui/screenshots/p8-13-theme-settings-phone-dark.png). Live
+Entra and API/SQL behavior remain unverified.
 
 ## Projects (P1-10)
 

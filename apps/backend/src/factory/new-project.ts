@@ -67,15 +67,24 @@ export const createProjectTool: JarvisTool = {
     const settings = await readSettings(settingsStore);
     const defaults = settings.newProjects;
     const repo = `${defaults.owner}/${cleanName}`;
+    const notifications = request.server.teamsNotifications;
+    if (!notifications) {
+      throw new ToolRefusal('A Teams confirmation is required before creating a repository.');
+    }
     let repositoryUrl: string;
     try {
-      repositoryUrl = await projectRepositoryCreator.create({
-        owner: defaults.owner,
-        name: cleanName,
-        description: cleanDescription,
-        visibility: defaults.visibility,
-        defaultBranch: defaults.defaultBranch,
-      }, signal);
+      repositoryUrl = await notifications.runConfirmed(
+        'create_repository',
+        `Create the ${defaults.visibility} repository ${repo}: ${cleanDescription}`,
+        () => projectRepositoryCreator.create({
+          owner: defaults.owner,
+          name: cleanName,
+          description: cleanDescription,
+          visibility: defaults.visibility,
+          defaultBranch: defaults.defaultBranch,
+        }, signal),
+        signal,
+      );
     } catch (error) {
       const exists = typeof error === 'object' && error !== null &&
         'kind' in error && error.kind === 'conflict';
