@@ -38,6 +38,18 @@ describe('Workspace', () => {
     expect(within(canvas).getAllByRole('group')[0]?.getAttribute('aria-labelledby')).toContain('view-0');
   });
 
+  it('keeps views added during the active session in the current workspace', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<Workspace views={[views[0]!]} />);
+
+    await user.click(screen.getByRole('button', { name: 'Layer views' }));
+    rerender(<Workspace views={views} />);
+
+    expect(screen.getByRole('heading', { name: 'Research summary' })).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Sources' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Layer views' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('reorders tiled views and resizes with the keyboard', async () => {
     const user = userEvent.setup();
     render(<Workspace views={views} />);
