@@ -148,7 +148,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
           .input('maxAttempts', sql.Int, maxAttempts)
           .query<DispatchTaskRow>(`DECLARE @now datetime2(7) = SYSUTCDATETIME();
             DECLARE @globalLimit int = COALESCE((
-              SELECT TRY_CONVERT(int, JSON_VALUE(value, '$'))
+            SELECT TRY_CONVERT(int, value)
               FROM dbo.settings
               WHERE scope = N'global' AND [key] = N'global.max_parallel_tasks'
             ), 1);
