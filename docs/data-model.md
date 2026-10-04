@@ -19,7 +19,7 @@ sessions must populate it so the heartbeat can address the correct Foundry agent
 P6-03 adds `task_event_archives` in `0005_task_event_archives.sql`, indexing each
 committed event blob so interrupted uploads remain invisible and task history
 pages can locate the required blobs without listing the container.
-P1-13 adds nullable `activity.dismissed_at` in `0006_activity_dismissals.sql`;
+P1-13 adds nullable `activity.dismissed_at` in `0008_activity_dismissals.sql`;
 the feed omits dismissed activity while retaining it for history and supports
 reverting the column with the paired down migration.
 
@@ -251,6 +251,12 @@ erDiagram
 - P1-04 creates a board task only for an active project, using the project's default agent unless the request selects one. Task creation and its `created` event share a transaction. Backend state transitions lock the task row, enforce the product lifecycle, and write a `state_changed` event in that transaction; `Done` requires a trusted, verified-completion call. There is no client state-update route.
 - P1-05 writes each task event and its activity row in the same transaction. The runner-only `POST /factory/sandbox-events` validates its task-scoped input and calls `TaskStore.recordEvent` with source `runner` (no schema change); `recordEvent` is also the producer API for backend event sources; JSON payloads are capped at 1 MiB. The in-process hub publishes only after commit; payloads over 4 KiB are omitted from the published event and marked truncated. P1-06's authenticated SSE endpoint reads missed events from `task_events` by ascending ID in bounded pages, buffers live hub publications during replay, and suppresses overlapping IDs. The fetch client reconnects with the last delivered ID; the stream sends a heartbeat comment every 25 seconds. No schema change is needed.
 - `GET /factory/tasks` filters by project, agent, state, creation period and search, with bounded offset pagination. `GET /factory/tasks/:id` returns the task and a bounded, pageable event slice. Responses are capped at 1 MiB; event payloads over 4 KiB are omitted and marked truncated.
+- P1-08's board uses the task list and event stream without changing the schema. The current task-list contract has no pull-request, check, or usage fields, so those card values remain explicitly unavailable until the GitHub integration (P3-03/P3-04) and usage work (P2-12) supply them.
+- Runner task events carry disk readings in `payload.data`: `disk_snapshot` records
+  `disk_total_bytes`, `disk_used_bytes`, and `disk_free_bytes` at turn start, with
+  the configured `disk_low_threshold_bytes`. A `disk_low` event records the
+  threshold breach; its transaction moves a Running task to NeedsAttention with
+  reason `disk_low` and releases the task lease. No schema migration is required.
 
 ## 4 · Sandbox
 
@@ -396,11 +402,13 @@ erDiagram
         bigint id PK
         bigint task_id FK "nullable for Jarvis conversation use"
         bigint project_id FK "nullable"
+        bigint sandbox_session_id FK "nullable"
         bigint jarvis_session_id FK "nullable"
         string source "sandbox | jarvis_model | voice | codex | copilot"
         string metric "minutes, input_tokens, output_tokens, turns, premium_requests"
         decimal quantity
         decimal cost_dkk "null for subscription use (Codex, Copilot)"
+        string source_event_id "nullable; runner invocation/event identity"
         datetime at
     }
 ```
@@ -410,8 +418,20 @@ erDiagram
 | Sandbox | Session start to end (`sandbox_sessions`) × size | Yes, ≈ 0.89 DKK per hour at 1 vCPU / 2 GiB |
 | Jarvis model | Token usage per model round | Yes, list price per model |
 | Voice | Voice minutes per `jarvis_session` | Yes, estimated |
-| Codex | Turns, and tokens if `codex-acp` reports them | No: ChatGPT Pro subscription; usage shown only. To verify what is reported |
-| Copilot | Turns, and premium requests if Copilot CLI reports them | No: Copilot seat; usage shown only. To verify what is reported |
+| Codex | Turns, and tokens if `codex-acp` reports them | No: ChatGPT Pro subscription; usage shown only. Actual live report fields remain to verify |
+| Copilot | Turns, and premium requests if Copilot CLI reports them | No: Copilot seat; usage shown only. Actual live report fields remain to verify |
+
+P2-12's `0007_usage.sql` implements the table and its reverse migration. Sandbox
+rows are tied to a `sandbox_session_id`; their minute quantity and DKK estimate
+are written when that session ends, while an active session's elapsed estimate
+is computed by task detail. Agent turns are recorded immediately before an ACP
+prompt. Provider metrics are stored only from explicit numeric `usage` objects in
+ACP prompt results or usage notifications, with a runner invocation/event key to
+make repeated delivery idempotent. The task detail API and page expose those
+entries. Offline package documentation advertises Codex token-usage events but
+does not establish their exact fields; Copilot documentation explains quota
+consumption but not a per-turn ACP report. Authenticated live runs remain
+necessary to verify either provider's actual report.
 
 - Views sum `usage` per task, per project and per period, so Dan sees when Codex and Copilot were used and what each task cost.
 
@@ -464,4 +484,4 @@ migration; the history API accepts and displays all three outcomes.
 
 ## Still open
 
-- What usage Codex (`codex-acp`) and Copilot CLI report per turn (tokens, premium requests); **verify** in P2.
+- What usage Codex (`codex-acp`) and Copilot CLI actually report per turn (tokens, premium requests); offline package documentation was inspected in P2-12, but authenticated live runs remain the verification step.

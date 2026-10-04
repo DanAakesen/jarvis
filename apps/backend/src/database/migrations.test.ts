@@ -41,11 +41,11 @@ describe('committed SQL manifest', () => {
   });
   it('ships a reviewed down script for every committed migration', async () => {
     const migrations = await readMigrations();
-    expect(migrations.map((migration) => migration.name)).toEqual([
+    const names = migrations.map((migration) => migration.name);
+    expect(names).toEqual([
       '0001_core_tables.sql', '0002_sandbox_operations.sql', '0003_sandbox_agent_name.sql',
-      '0004_credential_renewal.sql',
-      '0005_task_event_archives.sql',
-      '0006_activity_dismissals.sql',
+      '0004_credential_renewal.sql', '0005_task_event_archives.sql', '0007_usage.sql',
+      '0008_activity_dismissals.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

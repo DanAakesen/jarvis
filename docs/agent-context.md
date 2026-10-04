@@ -244,6 +244,11 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
+P1-08 was inspected at 390 and 1280 px with scratch-only auth and project/task/SSE
+mocks. All six columns, task creation, filter submission, modal dismissal, and
+focus return worked; the page had no horizontal overflow, controls were at least
+44 px high, and no console errors occurred. The wide board scrolls within its
+own region. Mocks do not verify live Entra, Azure SQL, or deployed SSE.
 Never commit the stub or weaken sign-in in the app.
 
 Backend commands:
@@ -507,6 +512,9 @@ which takes a few minutes; Codex caches the result.
 Python checks use each package's `.venv`. For the runner, from `runner/`:
 `.venv/bin/python -m ruff check .` and `.venv/bin/python -m pytest -q`
 (verified in the P0-14 Copilot session after setup: ruff passed, 36 tests passed).
+P6-07 adds fake-filesystem coverage for snapshots, threshold configuration, and
+the low-disk stop. These offline checks do not verify the Foundry writable disk;
+Dan performs that measurement post-merge.
 
 ### Runner event identity (P2-03)
 
@@ -514,6 +522,10 @@ Runner deploy sets `JARVIS_BACKEND_URL` from the successful `jarvis-infra`
 outputs and `JARVIS_API_SCOPE` from the bootstrapped `jarvis-api` identifier URI.
 Each hosted runner sends events with its managed identity; the backend accepts
 only the `Jarvis.Runner.Events` app role on `POST /factory/sandbox-events`.
+Runner deploy sets `JARVIS_DISK_LOW_THRESHOLD_BYTES` from the same-named GitHub
+Actions repository variable, defaulting to `1073741824` bytes (1 GiB). The runner
+emits a disk snapshot at each task-turn start and checks free space every 15
+seconds; `disk_low` stops the current turn and lets the backend own the task state.
 
 After Runner deploy succeeds, use the four `principal_id` values in its
 `runner-deployment` artifact to assign the role:
@@ -617,6 +629,14 @@ P2-11 provider option verification uses `npm ci --prefix runner/tools` and
 `reasoning_effort` via ACP `session/set_config_option`; no live provider
 credentials are needed for these checks. Runner and Foundry contract tests
 exercise the local wire behavior, not authenticated model availability.
+
+P2-12 usage verification uses those pinned package docs and runner contracts.
+Offline inspection found that the Codex ACP README advertises token-usage events,
+without a confirmed field schema; the Copilot CLI README says each prompt consumes
+a premium request, without documenting a per-turn ACP report. Neither establishes
+what a live run sends. After merge, run one Codex task and one Copilot task, then
+check task detail against each runner event and the provider's actual response;
+record which token or premium-request fields, if any, were reported.
 
 The main-only [runner deploy workflow](../.github/workflows/runner-deploy.yml)
 requires Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME`, set to `jarvis-infra` after

@@ -130,6 +130,14 @@ confirms completion. The browser and hosted agent service identities do not rece
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
 
+P1-08's web board uses the authenticated project and task APIs for filters and
+task creation, requesting at most 100 newest matching tasks at a time. It opens
+the P1-06 authenticated fetch-SSE client for nonterminal tasks, resumes from each
+stream's last event ID, and refreshes the filtered task snapshot after events.
+Connection and reconnection state is visible. The list API does not yet return
+pull-request, check, or usage values; cards mark those data points unavailable
+instead of inferring them. No backend route or persistence change is required.
+
 The main page's authenticated `GET /now` returns up to 100 running tasks with
 their project, agent, current activity and start time, plus up to 100
 non-dismissed attention, release/deployment and credential activity records.
@@ -289,6 +297,18 @@ process shutdown behavior are preserved.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
 
+P2-12 adds group 7 `dbo.usage`. Before each ACP prompt the runner sends an
+`agent_turn` event; the backend derives Codex/Copilot from the task row and
+idempotently stores the turn. It stores token or premium-request counts only when
+an ACP result or usage notification contains a nonnegative integer in the
+allowlisted `usage` fields. The provider's values are not inferred from a turn.
+When a sandbox session ends, the dispatcher stores its elapsed minutes and
+estimated DKK in the same transaction as the session/turn end updates. Task detail
+also calculates a live estimate for an open session. Rates use the documented
+Sweden Central vCPU/memory basis: 0.8901 DKK/hour for 1×2 and 1.7802 DKK/hour
+for 2×4; actual billed amounts may differ. SQL Server integration and live
+provider reporting remain post-merge checks.
+
 P6-03's backend job checks for events older than 90 days hourly, in bounded SQL
 batches, and uploads deterministic per-task blobs before deleting each batch in
 the same SQL transaction. The transaction-owned archive lock serializes archiving
@@ -436,6 +456,7 @@ These boxes are responsibilities; they do not each need a separate service.
 | Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. Browser streaming is P1-06. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`. No polling. |
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. The fetch client reconnects with its last delivered ID and ignores repeats. |
+| Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. Live state is visible; PR/check/usage values stay unavailable until their owning data integrations exist. |
 | Idle | The dispatcher subscribes to committed task events and schedules only the next retry deadline. After its startup scan, it makes no recurring SQL queries while idle; there is no polling timer. |
 | Always on | The backend normally runs with a minimum of 1 replica, so the heartbeat never stops. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready or Running. The backend does not query SQL while idle, so the database can still pause. |
 
@@ -449,7 +470,7 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | --- | --- |
 | Host | Foundry Hosted Agents, one session per task. Container Apps Jobs is the fallback behind the same runner contract. |
 | Size | 1 vCPU / 2 GiB default; 2 vCPU / 4 GiB for .NET (3.5× faster restore). Never 0.5 / 1 (L3). |
-| Disk | Measured 6 GiB writable at every size (Microsoft documents a budget of up to 20 GiB at ≥1 vCPU with about 20 % reserved, not configurable), shared by image, `$HOME`, `/files`, and `/tmp`; about 3 GiB free with a .NET image. The runner reports disk per session (P6-07). The agent builds single projects and keeps package caches small; full builds run in GitHub Actions (L23). |
+| Disk | Measured 6 GiB writable at every size (Microsoft documents a budget of up to 20 GiB at ≥1 vCPU with about 20 % reserved, not configurable), shared by image, `$HOME`, `/files`, and `/tmp`; about 3 GiB free with a .NET image. The runner reports total, used and free bytes at task-turn start and checks free space every 15 seconds; below the configurable `JARVIS_DISK_LOW_THRESHOLD_BYTES` (default 1 GiB), it reports `disk_low`, stops the turn, and the backend moves the task to NeedsAttention. The live measurement remains a post-merge check (P6-07). The agent builds single projects and keeps package caches small; full builds run in GitHub Actions (L23). |
 | Runner contract | Start, steer, pause, resume, cancel, and events. The host can change without changing the backend. |
 | Adapter | Python; lives only in the sandbox image. The backend stays Node. |
 | Steer and pause | ACP `session/cancel` stops the current turn; the next turn continues the same conversation with `session/load` (L4, L5). |
@@ -464,6 +485,13 @@ Issue #28 ports the adapter to `runner/` with task, steer, pause, resume, cancel
 credential probe, and Codex renewal handlers. Prototype crash-test mode is removed.
 Local Python tests exercise ACP subprocess fixtures; production Azure acceptance
 remains pending #11 and the main-branch runner workflow.
+
+P6-07 reports writable-filesystem disk snapshots through the P2-03 runner event
+route, checks for low headroom during each active task turn, and stops work before
+a build can exhaust disk. `disk_low` and the NeedsAttention transition commit
+together with reason `disk_low`; the deployment setting defaults to 1 GiB. The
+runner event, SQL Server integration, and task-detail display are locally covered;
+live Foundry disk measurement remains post-merge.
 
 P2-11 extends the invocation body with the effective model and optional Codex
 reasoning effort. Copilot receives a non-default model as a separate `--model`

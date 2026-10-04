@@ -36,6 +36,17 @@ export interface TaskEventMessage extends TaskEventRecord {
   taskId: string;
 }
 
+export interface TaskUsageRecord {
+  id: string | null;
+  source: 'sandbox' | 'jarvis_model' | 'voice' | 'codex' | 'copilot';
+  metric: 'minutes' | 'input_tokens' | 'output_tokens' | 'turns' | 'premium_requests';
+  quantity: number;
+  costDkk: number | null;
+  sandboxSessionId: string | null;
+  at: string;
+  estimated: boolean;
+}
+
 export interface RecordTaskEventInput {
   taskId: string;
   type: string;
@@ -46,6 +57,7 @@ export interface RecordTaskEventInput {
 
 export interface TaskDetail extends TaskRecord {
   events: TaskEventRecord[];
+  usage: TaskUsageRecord[];
 }
 
 export interface RunningTaskContext {

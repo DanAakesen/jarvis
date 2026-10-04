@@ -312,28 +312,56 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
     },
 
     async endTaskSessions(taskId, state) {
-      const { recordset } = await pool.request()
-        .input('taskId', sql.BigInt, BigInt(taskId))
-        .input('state', sql.NVarChar(32), state)
-        .query<{ sandboxSessionId: string }>(`DECLARE @ended TABLE (id bigint NOT NULL);
-          UPDATE dbo.sandbox_sessions SET
-            status = CASE WHEN @state = N'Paused' THEN N'Idle' WHEN @state = N'NeedsAttention' THEN N'Crashed' ELSE N'Ended' END,
-            end_reason = CASE WHEN @state = N'Paused' THEN N'idle' WHEN @state = N'NeedsAttention' THEN N'crashed'
-              WHEN @state = N'Done' THEN N'done' ELSE N'cancelled' END,
-            ended_at = SYSUTCDATETIME()
-          OUTPUT inserted.id INTO @ended
-          WHERE task_id = @taskId AND status = N'Active';
-        IF @state = N'NeedsAttention'
-          INSERT @ended (id)
-          SELECT id FROM dbo.sandbox_sessions WHERE task_id = @taskId AND status = N'Crashed'
-            AND id NOT IN (SELECT id FROM @ended);
-        UPDATE dbo.sandbox_turns SET
-          status = CASE WHEN @state = N'Done' THEN N'completed'
-            WHEN @state = N'NeedsAttention' THEN N'failed' ELSE N'cancelled' END,
-          ended_at = SYSUTCDATETIME()
-        WHERE status = N'running' AND sandbox_session_id IN (SELECT id FROM @ended);
-        SELECT CAST(id AS varchar(19)) AS sandboxSessionId FROM @ended;`);
-      return recordset.map(({ sandboxSessionId }) => sandboxSessionId);
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        const { recordset } = await new sql.Request(transaction)
+          .input('taskId', sql.BigInt, BigInt(taskId))
+          .input('state', sql.NVarChar(32), state)
+          .query<{ sandboxSessionId: string }>(`DECLARE @ended TABLE (
+              id bigint NOT NULL PRIMARY KEY, task_id bigint NOT NULL,
+              started_at datetime2(7) NOT NULL, ended_at datetime2(7) NOT NULL, size nvarchar(8) NOT NULL
+            );
+            UPDATE dbo.sandbox_sessions SET
+              status = CASE WHEN @state = N'Paused' THEN N'Idle' WHEN @state = N'NeedsAttention' THEN N'Crashed' ELSE N'Ended' END,
+              end_reason = CASE WHEN @state = N'Paused' THEN N'idle' WHEN @state = N'NeedsAttention' THEN N'crashed'
+                WHEN @state = N'Done' THEN N'done' ELSE N'cancelled' END,
+              ended_at = SYSUTCDATETIME()
+            OUTPUT inserted.id, inserted.task_id, inserted.started_at, inserted.ended_at, inserted.size INTO @ended
+            WHERE task_id = @taskId AND status = N'Active';
+            IF @state = N'NeedsAttention'
+              INSERT @ended (id, task_id, started_at, ended_at, size)
+              SELECT s.id, s.task_id, s.started_at, s.ended_at, s.size
+              FROM dbo.sandbox_sessions AS s
+              WHERE s.task_id = @taskId AND s.status = N'Crashed'
+                AND NOT EXISTS (SELECT 1 FROM @ended WHERE id = s.id);
+            UPDATE s SET cost_estimate_dkk = CONVERT(decimal(12,4), ROUND(
+              DATEDIFF_BIG(millisecond, ended.started_at, ended.ended_at) / 3600000.0 *
+                CASE ended.size WHEN N'1x2' THEN 0.8901 ELSE 1.7802 END, 4))
+            FROM dbo.sandbox_sessions AS s
+            INNER JOIN @ended AS ended ON ended.id = s.id;
+            INSERT dbo.usage
+              (task_id, project_id, sandbox_session_id, source, metric, quantity, cost_dkk, at)
+            SELECT ended.task_id, task.project_id, ended.id, N'sandbox', N'minutes',
+              CONVERT(decimal(19,6), DATEDIFF_BIG(millisecond, ended.started_at, ended.ended_at) / 60000.0),
+              session.cost_estimate_dkk, ended.ended_at
+            FROM @ended AS ended
+            INNER JOIN dbo.tasks AS task ON task.id = ended.task_id
+            INNER JOIN dbo.sandbox_sessions AS session ON session.id = ended.id
+            WHERE NOT EXISTS (SELECT 1 FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
+              WHERE sandbox_session_id = ended.id AND source = N'sandbox' AND metric = N'minutes');
+            UPDATE dbo.sandbox_turns SET
+              status = CASE WHEN @state = N'Done' THEN N'completed'
+                WHEN @state = N'NeedsAttention' THEN N'failed' ELSE N'cancelled' END,
+              ended_at = SYSUTCDATETIME()
+            WHERE status = N'running' AND sandbox_session_id IN (SELECT id FROM @ended);
+            SELECT CAST(id AS varchar(19)) AS sandboxSessionId FROM @ended;`);
+        await transaction.commit();
+        return recordset.map(({ sandboxSessionId }) => sandboxSessionId);
+      } catch {
+        await rollback(transaction);
+        throw new Error('Sandbox session usage persistence failed');
+      }
     },
   };
 }
