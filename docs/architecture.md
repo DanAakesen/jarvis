@@ -117,11 +117,22 @@ handles SIGTERM/SIGINT with a five-second close and telemetry flush deadline.
 Browser requests allow only the exact configured `STATIC_WEB_APP_ORIGIN` and
 `http://localhost:5173`; other Origin values receive 403. A root `onRequest`
 authentication hook runs before CORS and protects current and future nested routes.
-Only the registered `/health` GET/HEAD and CORS-generated preflight route are
-public; explicit business OPTIONS handlers require authentication. The server
-generates request IDs and records only approved event names,
-methods, route templates, statuses and timings. A final output allowlist covers
-child logger bindings as well as log arguments, dropping request/provider secrets.
+Only the registered `/health` GET/HEAD, GitHub's signed webhook route, and
+CORS-generated preflight are public; explicit business OPTIONS handlers require
+authentication. `POST /github/webhooks` is the sole public business route and opts
+out of Entra authentication through its route configuration only. It accepts
+GitHub's JSON bytes unchanged, verifies `X-Hub-Signature-256` with the Key Vault
+secret `github-app-webhook-secret`, and records the `X-GitHub-Delivery` ID and
+event in `dbo.webhook_deliveries`. An atomic, serialized insert returns 202 for
+new and duplicate deliveries. The five subscribed event types are marked `ok`;
+valid unhandled events such as GitHub's setup `ping` are marked `ignored`.
+Only delivery metadata is stored; event-to-domain mapping belongs to P3-04.
+`KEY_VAULT_URI` is supplied by Bicep, and the backend managed identity reads and
+caches the secret after its first successful Key Vault lookup. Missing Key Vault
+configuration or secret fails webhook requests with 503, not an unsigned fallback.
+The server generates request IDs and records only approved event names, methods,
+route templates, statuses and timings. A final output allowlist covers child
+logger bindings as well as log arguments, dropping request/provider secrets.
 
 The factory module exposes authenticated `POST /factory/tasks`, filtered and
 paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event
@@ -647,7 +658,7 @@ GitHub host and path before returning credentials. The runner retries a 404
 session lookup with bounded delays to cover the interval before the backend
 persists the newly started Foundry session.
 
-App-token mode is explicitly opt-in through the Runner deploy Actions variable `JARVIS_GITHUB_APP_TOKEN_ENABLED` (default `false`); enabling it also requires `GITHUB_APP_ID`. Keep the legacy `jarvis-github` secret and runner read grant until the live post-merge push check against `DanAakesen/jarvis-test-target` succeeds. A separate `github-app-webhook-secret` is needed for P3-03; this flow does not implement or configure webhooks.
+App-token mode is explicitly opt-in through the Runner deploy Actions variable `JARVIS_GITHUB_APP_TOKEN_ENABLED` (default `false`); enabling it also requires `GITHUB_APP_ID`. Keep the legacy `jarvis-github` secret and runner read grant until the live post-merge push check against `DanAakesen/jarvis-test-target` succeeds. The same backend identity reads the separate `github-app-webhook-secret` for P3-03 webhook signature verification; Bicep supplies the vault URI. The App ID is configuration, not a secret.
 
 **Codex login rules** (Pro login only; no API key):
 

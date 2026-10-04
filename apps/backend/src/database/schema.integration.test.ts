@@ -7,6 +7,7 @@ import { createTaskStore } from './task-store.js';
 import { createCredentialStatusStore } from './credential-status-store.js';
 import { createNowFeedStore } from './now-feed-store.js';
 import { createSettingsStore } from './settings-store.js';
+import { createWebhookDeliveryStore } from './webhook-delivery-store.js';
 import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
 import { createDispatcherStore } from './dispatcher-store.js';
@@ -102,6 +103,19 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
       'IX_artifacts_task_id_at', 'IX_sandbox_sessions_task_id_status', 'IX_sandbox_turns_sandbox_session_id_started_at',
       'IX_task_event_archives_task_first_at', 'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at',
     ]);
+  });
+
+  it('ignores a concurrently repeated webhook delivery ID', async () => {
+    const store = createWebhookDeliveryStore(pool);
+    const deliveryId = randomUUID();
+    const input = { deliveryId, event: 'push', outcome: 'ok' as const };
+    const inserted = await Promise.all([store.record(input), store.record(input)]);
+    expect(inserted.sort()).toEqual([false, true]);
+    const { recordset } = await pool.request()
+      .input('deliveryId', sql.NVarChar(100), deliveryId)
+      .query(`SELECT delivery_id AS deliveryId, event, outcome FROM dbo.webhook_deliveries
+        WHERE delivery_id = @deliveryId;`);
+    expect(recordset).toEqual([{ deliveryId, event: 'push', outcome: 'ok' }]);
   });
 
   it('reads running tasks and categorized activity and persists dismissals', async () => {
