@@ -975,7 +975,7 @@ describe('committed domain schema (groups 1-7)', () => {
     const eventHub = createEventHub<TaskEventMessage>();
     const taskStore = createTaskStore(pool, eventHub);
     const project = await createProjectStore(pool).create({
-      name: 'Idle expiry fixture', repo: `${database}/idle-expiry`, default_branch: 'main',
+      name: 'Idle expiry fixture', repo: `${database}/idle-expiry-${type}`, default_branch: 'main',
       default_agent: 'copilot', policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
     });
     const task = await taskStore.create({
@@ -985,7 +985,7 @@ describe('committed domain schema (groups 1-7)', () => {
     expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
     const sandboxSessionId = await scalar(`INSERT dbo.sandbox_sessions
       (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
-      VALUES (${task.id}, N'idle-expiry-session', N'1', N'jarvis-runner-base-1x2', N'1x2',
+      VALUES (${task.id}, N'idle-expiry-session-${type}', N'1', N'jarvis-runner-base-1x2', N'1x2',
         N'jarvis-runner-base@sha256:fixture', N'Active')`);
     const invocationId = `idle-expiry-${randomUUID()}`;
     const recordCompletion = () => taskStore.recordEvent({
@@ -1015,7 +1015,7 @@ describe('committed domain schema (groups 1-7)', () => {
 
     const heartbeatStore = createSandboxHeartbeatStore(pool, eventHub);
     expect(await heartbeatStore.listRunning()).toContainEqual({
-      sandboxSessionId: String(sandboxSessionId), foundrySessionId: 'idle-expiry-session',
+      sandboxSessionId: String(sandboxSessionId), foundrySessionId: `idle-expiry-session-${type}`,
       agentName: 'jarvis-runner-base-1x2', invocationId, invocationCompleted: true,
     });
     expect(await heartbeatStore.markNeedsAttention(
@@ -1047,6 +1047,20 @@ describe('committed domain schema (groups 1-7)', () => {
     expect(await heartbeatStore.markNeedsAttention(
       String(sandboxSessionId), undefined, invocationId,
     )).toBe(false);
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    const continuedSessionId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+      VALUES (${task.id}, N'continued-session-${type}', N'1', N'jarvis-runner-base-1x2', N'1x2',
+        N'jarvis-runner-base@sha256:fixture', N'Active')`);
+    expect(await dispatcherStore.endTaskSessions(task.id, 'NeedsAttention')).toEqual([]);
+    expect(await dispatcherStore.endTaskSessions(task.id, 'NeedsAttention', true)).toEqual([]);
+    const continued = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(continuedSessionId))
+      .query<{ status: string; endReason: string | null }>(
+        'SELECT status, end_reason AS endReason FROM dbo.sandbox_sessions WHERE id = @sandboxSessionId;');
+    expect(continued.recordset).toEqual([{ status: 'Active', endReason: null }]);
+    expect((await taskStore.transition(task.id, 'Cancelled')).kind).toBe('ok');
+    await dispatcherStore.endTaskSessions(task.id, 'Cancelled');
   });
 
   it('creates, updates, lists, and archives projects through the SQL store', async () => {

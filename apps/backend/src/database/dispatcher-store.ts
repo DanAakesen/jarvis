@@ -484,7 +484,14 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
             .input('taskId', sql.BigInt, BigInt(taskId))
             .input('state', sql.NVarChar(32), state)
             .input('invocationCompleted', sql.Bit, invocationCompleted)
-            .query<{ sandboxSessionId: string }>(`DECLARE @ended TABLE (
+            .query<{ sandboxSessionId: string }>(`IF @state = N'NeedsAttention' AND NOT EXISTS (
+                SELECT 1 FROM dbo.tasks WITH (UPDLOCK, ROWLOCK)
+                WHERE id = @taskId AND state = N'NeedsAttention'
+              ) BEGIN
+                SELECT CAST(NULL AS varchar(19)) AS sandboxSessionId WHERE 1 = 0;
+                RETURN;
+              END;
+              DECLARE @ended TABLE (
                 id bigint NOT NULL PRIMARY KEY, task_id bigint NOT NULL,
                 started_at datetime2(7) NOT NULL, ended_at datetime2(7) NOT NULL, size nvarchar(8) NOT NULL
               );

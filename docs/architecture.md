@@ -599,6 +599,8 @@ Confirmed failure logs the committed outcome (`crashed`, `idle_expired`, or
 `needs_attention`) or `unchanged`; prompts, questions, response bodies, and
 credentials are not logged. SQL Server CI and the production task-state/expiry
 check remain unverified locally.
+NeedsAttention cleanup locks and rechecks the current task state, so delayed
+state-event handling cannot close a session started by subsequent recovery.
 
 Scale settings are revision-scope in Container Apps, so the sleep switch creates a new revision; that is acceptable because it is used only when nothing runs. The SQL application lock blocks new active-task writes between the idle check and the ARM update.
 
