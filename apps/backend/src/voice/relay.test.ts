@@ -11,6 +11,7 @@ import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
 import { coreModule } from '../core/index.js';
 import type { ConversationStore } from '../core/conversation-store.js';
+import type { SettingsStore } from '../core/settings.js';
 import { factoryModule } from '../factory/index.js';
 import type { BackendModule } from '../modules.js';
 import {
@@ -78,6 +79,7 @@ function appFor(
     })),
     getHistory: vi.fn(async () => ({ messages: [], nextCursor: null })),
   } satisfies ConversationStore,
+  settingsStore?: SettingsStore,
 ) {
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
   const app = buildApp(config, createLogger(config, undefined, output), {
@@ -96,6 +98,7 @@ function appFor(
       return { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId };
     },
     conversationStore,
+    ...(settingsStore ? { settingsStore } : {}),
   });
   app.server.on('connection', (socket) => appSockets.push(socket));
   apps.push(app);
@@ -113,6 +116,64 @@ async function openBrowser(url: string, protocols = [VOICE_SUBPROTOCOL, `jarvis.
 }
 
 describe('backend-relayed Voice Live WebSocket', () => {
+  it('snapshots saved personality preferences for each new English voice session', async () => {
+    const serverSessions: Record<string, unknown>[][] = [];
+    const pendingUpdates: ((session: Record<string, unknown>) => void)[] = [];
+    const values: Record<string, unknown> = {
+      'personality.tone': '"warm"',
+      'personality.response_style': '"balanced"',
+      'personality.custom_instructions': JSON.stringify('Use plain language.'),
+    };
+    const settingsStore: SettingsStore = {
+      read: async () => ({ ...values }),
+      write: async () => {},
+    };
+    const upstreamUrl = await echoServer((socket) => {
+      const received: Record<string, unknown>[] = [];
+      serverSessions.push(received);
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'session.update' && event.session !== null &&
+            typeof event.session === 'object' && !Array.isArray(event.session)) {
+          pendingUpdates.shift()?.(event.session as Record<string, unknown>);
+        }
+      });
+    });
+    const { app } = appFor(
+      (token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }),
+      vi.fn(async () => voiceToken),
+      [],
+      [],
+      undefined,
+      undefined,
+      settingsStore,
+    );
+    const nextSessionUpdate = () => new Promise<Record<string, unknown>>((resolve) => {
+      pendingUpdates.push(resolve);
+    });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const firstUpdate = nextSessionUpdate();
+    const first = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    const firstSession = await firstUpdate;
+    const firstInstructions = String(firstSession.instructions);
+    expect(firstInstructions).toContain('warm and supportive');
+    expect(firstInstructions).toContain(JSON.stringify('Use plain language.'));
+
+    values['personality.tone'] = '"direct"';
+    const secondUpdate = nextSessionUpdate();
+    await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    const secondSession = await secondUpdate;
+
+    expect(String(secondSession.instructions)).toContain('direct and matter-of-fact');
+    expect(serverSessions[0]?.filter(({ type }) => type === 'session.update')).toHaveLength(1);
+    expect(serverSessions[0]?.[0]).toMatchObject({ type: 'session.update' });
+    first.close();
+  });
+
   it('authenticates the browser and relays messages with only the backend Voice Live credential', async () => {
     const authorization = vi.fn();
     const upstreamUrl = await echoServer((socket, request) => {

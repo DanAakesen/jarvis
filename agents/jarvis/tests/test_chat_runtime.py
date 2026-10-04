@@ -12,7 +12,7 @@ from starlette.testclient import TestClient
 
 import chat_runtime
 from jarvis_tools import current_message_id
-from state import ModelMessage
+from state import ModelMessage, ModelSettings
 from voice_runtime import create_app
 
 TOKEN = "header.payload.signature"
@@ -27,7 +27,12 @@ class FakeModel:
         self.messages: tuple[ModelMessage, ...] = ()
         self.language = ""
         self.message_id: str | None = None
+        self.settings: ModelSettings | None = None
+        self.captured_settings: ModelSettings | None = None
         self.closed = False
+
+    async def session_settings(self) -> ModelSettings:
+        return self.settings or ModelSettings("gpt-5.6-luna", "none")
 
     async def complete(self, messages: Sequence[ModelMessage]) -> AsyncIterator[str]:
         del messages
@@ -35,10 +40,15 @@ class FakeModel:
             yield ""
 
     async def complete_chat(
-        self, messages: Sequence[ModelMessage], language: str
+        self,
+        messages: Sequence[ModelMessage],
+        language: str,
+        *,
+        settings: ModelSettings | None = None,
     ) -> AsyncIterator[str]:
         self.messages = tuple(messages)
         self.language = language
+        self.captured_settings = settings
         self.message_id = current_message_id.get()
         yield "Hej"
         yield " med dig."
@@ -63,6 +73,9 @@ def test_chat_streams_text_and_sets_tool_source_message() -> None:
         ]
 
     app, model = app_with(context)
+    model.settings = ModelSettings(
+        "gpt-5.6-luna", "none", "warm", "balanced", "Use plain Danish."
+    )
     with TestClient(app) as client:
         response = client.post(
             "/invocations",
@@ -87,6 +100,7 @@ def test_chat_streams_text_and_sets_tool_source_message() -> None:
     )
     assert model.language == "da"
     assert model.message_id == "42"
+    assert model.captured_settings == model.settings
     assert model.closed
 
 
@@ -133,9 +147,13 @@ def test_chat_rejects_unverified_messages_and_invalid_requests() -> None:
 def test_chat_stream_errors_are_sanitized() -> None:
     class FailedModel(FakeModel):
         async def complete_chat(
-            self, messages: Sequence[ModelMessage], language: str
+            self,
+            messages: Sequence[ModelMessage],
+            language: str,
+            *,
+            settings: ModelSettings | None = None,
         ) -> AsyncIterator[str]:
-            del messages, language
+            del messages, language, settings
             raise RuntimeError("provider secret")
             yield ""
 
