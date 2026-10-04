@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -147,6 +147,27 @@ describe('App shell', () => {
     const areas = screen.getByRole('navigation', { name: 'Areas' });
     expect(within(areas).getAllByRole('link').map((link) => link.textContent)).toEqual(['Software Factory', 'Usage']);
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
+  });
+
+  it('restores the accepted appearance across signed-in app routes', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/settings') {
+        return new Response(JSON.stringify({ settings: { appearance: { theme: 'dark' } } }));
+      }
+      if (path === '/now') {
+        return new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }));
+      }
+      if (path === '/database/status') return new Response(JSON.stringify({ waking: false }));
+      return new Response('{}');
+    });
+    await renderSignedIn();
+
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
+    await user.click(screen.getByRole('link', { name: 'Software Factory' }));
+    expect(await screen.findByRole('heading', { name: 'Tasks' })).not.toBeNull();
+    expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
   it('enables chat and explains the other unavailable main-page actions', async () => {

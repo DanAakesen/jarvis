@@ -5,32 +5,36 @@ import { DatabaseWakeStatus } from './DatabaseWakeStatus';
 import { JarvisPage } from './JarvisPage';
 import { NotFoundPage, SignInPage } from './pages';
 import { SettingsPage } from './SettingsPage';
+import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
 
 function Shell({ signedIn, config, session }: { signedIn: boolean; config: PublicConfig; session: SignInSession }) {
   return (
-    <div className="app">
-      <a className="skip-link" href="#content">Skip to content</a>
-      <header className="app-header">
-        <Link className="brand" to="/" aria-label="Jarvis home">Jarvis</Link>
-        {signedIn && (
-          <>
-            <nav className="area-links" aria-label="Areas">
-              {areas.map((area) => (
-                <NavLink key={area.id} className="nav-link" to={`/${area.path}`}>{area.label}</NavLink>
-              ))}
-            </nav>
-            <NavLink className="nav-link" to="/settings">Settings</NavLink>
-          </>
+    <ThemePreferenceProvider key={signedIn ? 'signed-in' : 'signed-out'}
+      enabled={signedIn} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}>
+      <div className="app">
+        <a className="skip-link" href="#content">Skip to content</a>
+        <header className="app-header">
+          <Link className="brand" to="/" aria-label="Jarvis home">Jarvis</Link>
+          {signedIn && (
+            <>
+              <nav className="area-links" aria-label="Areas">
+                {areas.map((area) => (
+                  <NavLink key={area.id} className="nav-link" to={`/${area.path}`}>{area.label}</NavLink>
+                ))}
+              </nav>
+              <NavLink className="nav-link" to="/settings">Settings</NavLink>
+            </>
+          )}
+        </header>
+        {signedIn && config.backendUrl && (
+          <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
         )}
-      </header>
-      {signedIn && config.backendUrl && (
-        <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
-      )}
-      <main id="content" tabIndex={-1}>
-        <Outlet />
-      </main>
-    </div>
+        <main id="content" tabIndex={-1}>
+          <Outlet />
+        </main>
+      </div>
+    </ThemePreferenceProvider>
   );
 }
 
