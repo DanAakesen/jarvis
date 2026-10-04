@@ -13,6 +13,7 @@ import { createProjectStore } from './database/project-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
+import { createTaskRecoveryStore } from './database/recovery-store.js';
 import { createCredentialStatusStore } from './database/credential-status-store.js';
 import { createUsageStore } from './database/usage-store.js';
 import { createSandboxHeartbeatStore } from './database/sandbox-heartbeat-store.js';
@@ -42,6 +43,7 @@ import { createRepoAdminRepositoryCreator } from './credentials/repo-admin.js';
 import { createGitHubAppTokenIssuer } from './github-app.js';
 import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js';
 import { createGithubWebhookModule } from './github/webhook.js';
+import { createGitHubDeliveryVerifier } from './github/delivery.js';
 
 try {
   const config = loadConfig();
@@ -168,6 +170,7 @@ try {
       },
     })
     : null;
+  const projectStore = database ? createProjectStore(database.pool) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool) : null;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
@@ -179,7 +182,20 @@ try {
       clientFor,
       sandboxHeartbeat,
       eventHub,
-      { onError: () => logger.warn('dispatcher.operation_failed') },
+      {
+        onError: () => logger.warn('dispatcher.operation_failed'),
+        recoveryStore: createTaskRecoveryStore(database.pool, eventHub),
+        workspaceFor: async (task) => {
+          if (!task.branch) return null;
+          const project = (await projectStore?.list())?.find(({ id }) => id === task.projectId);
+          return project
+            ? { repository: project.repo, defaultBranch: project.default_branch, branch: task.branch }
+            : null;
+        },
+        ...(githubAppTokenIssuer
+          ? { verifyDelivery: createGitHubDeliveryVerifier(githubAppTokenIssuer) }
+          : {}),
+      },
     )
     : undefined;
   const modules: BackendModule[] = [
@@ -204,7 +220,7 @@ try {
     modules,
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(database && taskStore && settingsStore ? {
-      projectStore: createProjectStore(database.pool),
+      ...(projectStore ? { projectStore } : {}),
       ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,

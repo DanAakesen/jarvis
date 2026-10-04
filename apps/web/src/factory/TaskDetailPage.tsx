@@ -501,7 +501,6 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
           </dl>
           <section className="task-detail-section task-actions" aria-labelledby="actions-heading">
             <h2 id="actions-heading">Task actions</h2>
-            <p id="task-actions-unavailable">Controls are available only when the task state permits them. Recovery is not available yet.</p>
             <p id="pull-request-unavailable">Pull-request links are not reported until the GitHub integration is available.</p>
             <TaskControls
               backendUrl={backendUrl}
@@ -514,9 +513,6 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
                   : current)}
             />
             <div className="action-row">
-              <button className="secondary-button" type="button" disabled aria-describedby="task-actions-unavailable">
-                Recover
-              </button>
               <button className="secondary-button" type="button" disabled aria-describedby="pull-request-unavailable">
                 Open pull request
               </button>

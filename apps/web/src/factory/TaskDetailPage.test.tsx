@@ -167,10 +167,11 @@ beforeEach(() => {
   streamHarness.lastEventIds.clear();
   taskEvents = [...task.events];
   taskState = 'NeedsAttention';
-  fetchMock.mockReset().mockImplementation(async (input) => {
+  fetchMock.mockReset().mockImplementation(async (input, init) => {
     const url = new URL(String(input));
     if (url.pathname === '/factory/tasks/42/controls') {
-      taskState = 'PauseRequested';
+      const body = JSON.parse(String((init as RequestInit | undefined)?.body)) as { action?: string };
+      taskState = body.action === 'recover' ? 'Running' : 'PauseRequested';
       return response({ ...task, state: taskState });
     }
     if (url.pathname === '/factory/projects') return response([project]);
@@ -232,13 +233,26 @@ describe('task detail page', () => {
     expect(screen.getByText('Chat')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
-    expect(screen.getByText('Task controls are unavailable while this task needs attention.')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Recover' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByText('Starts a new sandbox from the existing task branch and its recorded history.')).not.toBeNull();
     expect(screen.getByText('Live updates connected')).not.toBeNull();
     expect(streamHarness.lastEventIds.get('42')).toBe('24');
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.example.com/factory/tasks/42?eventLimit=100&eventOffset=0',
       expect.objectContaining({ headers: { Authorization: `${['Bear', 'er'].join('')} test-access-token` } }),
     );
+  });
+
+  it('removes Recover after recovery starts a Running session', async () => {
+    const user = userEvent.setup();
+    renderTaskPage();
+    await screen.findByRole('heading', { name: 'Keep disk headroom' });
+
+    await user.click(screen.getByRole('button', { name: 'Recover' }));
+
+    expect(await screen.findByText('Recovery started from the task branch.')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Recover' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Pause' })).not.toBeNull();
   });
 
   it('sends task controls from the detail page for a Running task', async () => {

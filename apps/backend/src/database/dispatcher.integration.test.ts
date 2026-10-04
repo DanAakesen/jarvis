@@ -8,6 +8,7 @@ import type { SandboxHeartbeat } from '../factory/heartbeat.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 import { createTaskStore } from './task-store.js';
 import { createDispatcherStore } from './dispatcher-store.js';
+import { createTaskRecoveryStore } from './recovery-store.js';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations } from './migrations.js';
 
@@ -61,7 +62,7 @@ function settings(): SettingsStore {
 }
 
 function heartbeat(): SandboxHeartbeat {
-  return { track: vi.fn(), untrack: vi.fn() } as unknown as SandboxHeartbeat;
+  return { track: vi.fn(), untrack: vi.fn(), setCompletionHandler: vi.fn() } as unknown as SandboxHeartbeat;
 }
 
 describe('dispatcher SQL coordination', () => {
@@ -194,6 +195,41 @@ describe('dispatcher SQL coordination', () => {
     )).recordset[0]?.count).toBe(1);
     expect((await taskStore.transition(task.id, 'Cancelled')).kind).toBe('ok');
     await createDispatcherStore(pool, events).endTaskSessions(task.id, 'Cancelled');
+  });
+
+  it('claims a NeedsAttention task once and persists its recovered sandbox session', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, events);
+    const task = await createTask(events, 'Recover crashed task');
+    const branch = `jarvis/task-${task.id}`;
+    await pool.request()
+      .input('taskId', sql.BigInt, BigInt(task.id))
+      .input('branch', sql.NVarChar(255), branch)
+      .query(`UPDATE dbo.tasks SET branch = @branch WHERE id = @taskId;`);
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    expect((await taskStore.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+
+    const recoveryStore = createTaskRecoveryStore(pool, events);
+    const ownerOne = randomUUID();
+    const ownerTwo = randomUUID();
+    const [first, second] = await Promise.all([
+      recoveryStore.claimRecovery(task.id, ownerOne, 120),
+      recoveryStore.claimRecovery(task.id, ownerTwo, 120),
+    ]);
+    const claim = first.kind === 'claimed' ? first : second.kind === 'claimed' ? second : undefined;
+    const owner = first.kind === 'claimed' ? ownerOne : ownerTwo;
+    if (!claim) throw new Error('The recovery claim was not acquired');
+    expect(claim).toMatchObject({ kind: 'claimed', task: { taskId: task.id } });
+    expect([first.kind, second.kind].filter((kind) => kind === 'claimed')).toHaveLength(1);
+
+    const dispatcherStore = createDispatcherStore(pool, events);
+    const sandboxSessionId = await dispatcherStore.recordStarted(owner, claim.task, 'jarvis-runner-base-1x2', {
+      sessionId: `recovered-${task.id}`,
+      invocationId: `recovered-invocation-${task.id}`,
+    });
+    expect((await taskStore.get(task.id, 10, 0))?.state).toBe('Running');
+    expect(await dispatcherStore.endTaskSessions(task.id, 'Cancelled')).toEqual([sandboxSessionId]);
+    expect((await taskStore.transition(task.id, 'Cancelled')).kind).toBe('ok');
   });
 
   it('reuses the Foundry session and accumulates sandbox usage across pause and resume', async () => {
