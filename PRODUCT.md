@@ -130,7 +130,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, tool-call chips (tool, outcome, link to task) | Type a message; start or stop voice; switch Danish/English |
 | Voice state: listening, thinking, speaking; what Jarvis heard; latency | Interrupt by speaking; mute |
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings | Open a task, release, or project; dismiss an activity item |
-| Backend state: awake or asleep | Sleep switch (refused while tasks run) |
+| Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready or Running |
 
 #### Software Factory — task view
 
@@ -194,9 +194,9 @@ verifies the runner path for explicit model values: Copilot uses its CLI `--mode
 option; Codex uses the ACP `model` and `reasoning_effort` session options. Task
 overrides take precedence over settings defaults when the dispatcher supplies
 the effective values. Actual provider/model availability still needs a live
-task. The global parallel-task limit is a whole number from 1 to 100. Voice
-sample playback, the sleep switch, and credential data/actions remain visibly
-unavailable with an explanation until their owning services exist.
+task. The global parallel-task limit is a whole number from 1 to 100. The
+sleep switch is on the main page; voice sample playback and credential
+data/actions remain visibly unavailable until their owning services exist.
 
 #### Usage and cost
 

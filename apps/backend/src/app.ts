@@ -16,6 +16,8 @@ import type { TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-s
 import type { ProjectStore } from './factory/projects.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
+import type { ContainerAppScaler } from './operations/container-app-scale.js';
+import { createSleepModule } from './operations/sleep.js';
 
 export interface BuildAppOptions {
   readonly auth?: TokenVerifier;
@@ -26,6 +28,7 @@ export interface BuildAppOptions {
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
   readonly conversationStore?: ConversationStore;
+  readonly containerAppScaler?: ContainerAppScaler | null;
 }
 
 declare module 'fastify' {
@@ -89,6 +92,11 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
-  registerModules(app, options.modules ?? [coreModule, conversationModule, factoryModule]);
+  registerModules(app, options.modules ?? [
+    coreModule,
+    conversationModule,
+    factoryModule,
+    createSleepModule(options.containerAppScaler ?? null),
+  ]);
   return app;
 }

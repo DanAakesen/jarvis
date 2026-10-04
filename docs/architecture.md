@@ -13,7 +13,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces for the two apps, one root lockfile | Implemented in P0-01; empty app builds verified in Codex cloud |
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
-| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | Health/logging/container skeleton implemented in P0-03; sleep switch and Azure deployment pending |
+| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, sleep switch | P1-12 implements the authenticated sleep API and board control; live managed-identity ARM operation remains unverified |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area, SSE support | Skeleton, core/factory module registration and P1-03 projects API implemented; remaining domain APIs and SSE are in their tasks |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
 | Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15 and groups 4 and 6 in #27; real Azure identity/deployment validation remains #11 |
@@ -125,6 +125,20 @@ Done only through a trusted call that confirms completion. The browser and hoste
 agent service identities do not receive a task-state bypass. Responses are capped
 at 1 MiB, and event payloads above 4 KiB are omitted with an explicit truncation
 flag.
+
+`GET /operations/sleep` reports the Container App's configured minimum replicas;
+`PUT /operations/sleep` accepts only awake (1) or asleep (0). Both routes use the
+root's Dan-only authentication. The backend targets only its Bicep-configured
+Container App resource ID and obtains an ARM token with its user-assigned
+managed identity. Before requesting sleep, the task store checks for Ready or
+Running tasks under an exclusive SQL application lock; task creation and state
+transitions use the matching shared lock, held through their writes. The lock
+remains held through the bounded ARM request, closing the race with new active
+tasks. Refusal is a 409; unavailable ARM configuration or failures return a
+sanitized service error. The custom role grants only Container App read/write
+and is assigned at the backend app. Endpoint, refusal, lock, and ARM request
+contracts are tested offline and against SQL Server; live Azure authorization
+and scaling remain unverified.
 
 The factory registers authenticated `GET /factory/projects`,
 `POST /factory/projects`, `PATCH /factory/projects/:id`, and
@@ -373,9 +387,9 @@ These boxes are responsibilities; they do not each need a separate service.
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`. No polling. |
 | Board updates | The backend pushes to the board with SSE; the browser reconnects and reconciles. |
 | Idle | No SQL queries while no task is Ready, Running, or waiting for a retry. The dispatcher wakes on task changes and on the next retry time, not by polling. |
-| Always on | The backend runs with a minimum of 1 replica, so the heartbeat never stops. The board's sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while tasks run. The backend does not query SQL while idle, so the database can still pause. |
+| Always on | The backend normally runs with a minimum of 1 replica, so the heartbeat never stops. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready or Running. The backend does not query SQL while idle, so the database can still pause. |
 
-Scale settings are revision-scope in Container Apps, so the sleep switch creates a new revision; that is acceptable because it is used only when nothing runs.
+Scale settings are revision-scope in Container Apps, so the sleep switch creates a new revision; that is acceptable because it is used only when nothing runs. The SQL application lock blocks new active-task writes between the idle check and the ARM update.
 
 ## Coding sandbox
 
@@ -579,11 +593,11 @@ record. Deployment to Foundry and live agent tokens are P4-08.
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (the SSE hub and dispatcher run in one process; more copies need Web PubSub, see Ideas in PLAN.md); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `FOUNDRY_PROJECT_ENDPOINT`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID` |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (the SSE hub and dispatcher run in one process; more copies need Web PubSub, see Ideas in PLAN.md); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `FOUNDRY_PROJECT_ENDPOINT`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID` |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Monthly budget | `jarvis-monthly` | Resource-group scoped; 300 in the subscription billing currency, monthly from 1 October 2026 (fixed start date; Azure rejects changing it), actual-cost alerts above 80 % and 100 % to resource group owners |
 
-The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, and **Key Vault Secrets User** at the vault. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); actual Azure connectivity and permissions remain to be checked by the first deployment.
+The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, **Key Vault Secrets User** at the vault, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live sleep-switch role assignment and ARM behavior remain unverified until the change is deployed.
 
 Required deployment parameters are the full `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` and `jarvisAgentObjectId` are optional. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed.
 

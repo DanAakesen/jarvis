@@ -123,6 +123,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 
 - `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
 - The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
+- Bicep sets `BACKEND_CONTAINER_APP_RESOURCE_ID` and grants `id-jarvis-backend` a custom role limited to Container App read/write on that app. The sleep API uses this fixed target and the existing `SQL_MANAGED_IDENTITY_CLIENT_ID` for ARM authentication. Local tests inject the scaler; a local app without an Azure managed identity cannot perform live scaling, and the Bicep build/lint checks do not verify the deployed role.
 - `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Confirm the billing currency is DKK and supply any required budget notification email addresses as appropriate. The first Azure deployment and real resource behavior are verified by the first Deploy run (P0-16), not by the local build/lint.
 - The [Deploy workflow](../.github/workflows/deploy.yml) is the only routine path to Azure: push to `main` deploys the parts changed since the last successful Deploy run; Dan's `workflow_dispatch` on `main` redeploys everything. Its Bicep deployment is always named `jarvis-infra`. Details: [production deploy](architecture.md#production-deploy-p0-11).
 - GitHub Actions OIDC: GitHub signs this repository's tokens with the immutable-ID subject `repo:DanAakesen@68902534/jarvis@1403065900:ref:refs/heads/main`, not `repo:DanAakesen/jarvis:ref:refs/heads/main`. `infra/bootstrap.ps1` reads the IDs with `gh api repos/DanAakesen/jarvis` and registers the federated credential `github-main-ids`. An `AADSTS700213` sign-in failure means the credential is missing: Dan re-runs bootstrap; the subject is printed under "Federated token details" in the `azure/login` step (L49).
@@ -216,10 +217,11 @@ Verified in Codex cloud for P0-02:
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |
 
 The web starts with the bootstrap identities and the public production backend
-origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). The URL
-is pending P0-16's first deployment; until configured, sign-in is visibly
-disabled. With a backend URL, MSAL signs in against the configured tenant and
-calls authenticated `/me`; only the backend-approved display name is shown.
+origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). With a
+backend URL, MSAL signs in against the configured tenant and calls authenticated
+`/me`; only the backend-approved display name is shown. The main-page sleep
+switch reads and updates the backend's configured replica count; the API refuses
+to sleep while tasks are Ready or Running.
 `Web CI` checks lint, tests, and root builds as part of the aggregate `CI`
 workflow (below). Local tests use signed fixture tokens and do not verify a live
 Entra tenant or Azure deployment.
@@ -233,6 +235,9 @@ Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
 returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
 P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised.
+P1-12 was inspected at 390 and 1440 px with mocked sleep-status, scale, refusal,
+and failure responses; sleep/wake, refusal, retry, and the Settings link worked
+without horizontal overflow or browser errors. Mocks do not verify ARM scaling.
 P1-10 was inspected at 390 and 1280 px with scratch-only project/task API mocks;
 list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no

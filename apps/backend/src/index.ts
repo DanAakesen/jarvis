@@ -1,5 +1,5 @@
 import { buildApp } from './app.js';
-import { DefaultAzureCredential } from '@azure/identity';
+import { DefaultAzureCredential, ManagedIdentityCredential } from '@azure/identity';
 import { ConfigurationError, loadConfig } from './config.js';
 import { createLogger, createTelemetry } from './logging.js';
 import { shutdown } from './shutdown.js';
@@ -21,15 +21,35 @@ import {
   createVoiceLiveConnector,
   createVoiceRelayModule,
 } from './voice/relay.js';
+import { createArmContainerAppScaler } from './operations/container-app-scale.js';
+import { createSleepModule } from './operations/sleep.js';
 
 try {
   const config = loadConfig();
   const databaseConfig = loadDatabaseConfig();
+  const sleepResourceId = process.env.BACKEND_CONTAINER_APP_RESOURCE_ID;
+  const sleepIdentityClientId = process.env.SQL_MANAGED_IDENTITY_CLIENT_ID;
+  if (sleepResourceId && !sleepIdentityClientId) {
+    throw new ConfigurationError('SQL_MANAGED_IDENTITY_CLIENT_ID is required for backend scaling');
+  }
+  const sleepCredential = sleepResourceId && sleepIdentityClientId
+    ? new ManagedIdentityCredential(sleepIdentityClientId)
+    : undefined;
+  const containerAppScaler = sleepResourceId && sleepCredential
+    ? createArmContainerAppScaler({
+      resourceId: sleepResourceId,
+      getToken: async (scope, signal) => {
+        const token = await sleepCredential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Container Apps managed identity unavailable');
+        return token.token;
+      },
+    })
+    : null;
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
-  const modules: BackendModule[] = [coreModule, conversationModule, factoryModule];
+  const modules: BackendModule[] = [coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler)];
   if (config.voiceLiveEndpoint || config.foundryProjectEndpoint) {
     const credential = new DefaultAzureCredential();
     modules.push(createVoiceRelayModule({
