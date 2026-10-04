@@ -100,7 +100,9 @@ sign-in; the header wraps on narrow screens.
   live sharing status in the conversation workflow, with a separate, explicit
   Look at screen action for chat and voice. Keep the status and Stop action
   visible while sharing; reuse the shared button, focus, and narrow-screen
-  wrapping conventions. Do not add camera controls or continuous capture.
+  wrapping conventions. This is the minimal P7 integration; P8-04 owns moving
+  the confirmed share control into the shared shell's top bar. Do not add camera
+  controls or continuous capture here.
   Scratch-auth Chromium checks at 390 and 1280 px exercised Share, the visible
   status/Stop action, a mocked chat inspection, and stream cleanup; neither
   viewport overflowed or reported console errors. Real display capture and the
