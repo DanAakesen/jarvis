@@ -146,6 +146,7 @@ erDiagram
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
 - P4-04's agent-only turn context reads up to 20 running tasks and their three latest `task_events` from the existing tables. It selects task status/activity and event type, summary, source, and time; it excludes task requests and event payloads, and clips summaries to 400 characters. No schema or migration change is needed.
 - The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; any other failure is stored as a generic error. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. P4-06 stores the source message before P4-09 sends its ID and the delegated token in the application payload to the hosted agent through Foundry Invocations. The agent registers its chat handler with that protocol, verifies the caller and message through the backend, and sets the message ID in the per-turn context used by tool calls. P4-04's running-task context is fetched by the model client on every turn. No data-model or migration change is required.
+- P3-12 `create_project` reuses `dbo.projects`, `dbo.tasks`, `dbo.messages`, and `dbo.tool_calls`: tool arguments/results contain the requested name/description and project/task identifiers, while the task uses `source = 'chat'` and references the calling message. The backend-only repository token is never persisted; the project starts with the `node`/`1x2` base defaults. No schema or migration change is required.
 - Session, message, history, task-origin, and tool-call behavior is covered by offline and disposable SQL Server tests; live Azure SQL writes have not been verified.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
 - P1-11 stores global defaults in the existing key/value table; missing keys use
@@ -253,9 +254,11 @@ erDiagram
 
 - **The queue is `tasks` itself (Decision 3, option A).** The dispatcher takes the highest-priority oldest eligible `Ready` task within the global and project limits. A transaction-owned `jarvis.task-dispatcher` app lock serializes capacity checks and claims; `lease_owner` and `lease_until` reserve a startup slot. Expired startup leases move to `NeedsAttention`, not another start, because the remote start may have succeeded before the dispatcher stopped.
 - **Retries:** `attempt_count` increments for each leased start. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; `next_attempt_at` gates each retry. Ambiguous Foundry start outcomes are not replayed and move to `NeedsAttention`.
+- P2-13 sets the existing `tasks.branch` to `jarvis/task-<id>` on dispatch when absent and preserves it for retries, resume, and recovery. No schema migration is needed. A runner `session_question` event stores the last agent message; its transaction moves a Running or PauseRequested task to NeedsAttention with reason `session_question` and releases its lease before publishing the events.
 - `task_events` stores **every** task event (Dan's choice: maximum freedom for the UI). It is append-only, drives the card's live updates (via SSE) and the task's history, and is the only fast-growing table; archive by age: a backend job moves events older than 90 days to private Blob Storage in bounded batches. The SQL rows are deleted only after their archive blobs upload successfully, and `task_event_archives` records the blob references in the same SQL transaction as deletion. Task-detail pages read only the indexed archived chunks they need and keep the same bounded pagination. The live `recordEvent` write path remains unchanged. Each event also creates a `factory` activity row with its type as `kind`, its summary (or type) as title, and `task:<id>` as link.
 - `origin_message_id` links a task to the message in Jarvis's conversation that created it. The existing schema requires this reference for non-board tasks; board tasks may omit it.
 - P1-04 creates a board task only for an active project, using the project's default agent unless the request selects one. Task creation and its `created` event share a transaction. Backend state transitions lock the task row, enforce the product lifecycle, and write a `state_changed` event in that transaction; `Done` requires GitHub verification of the task branch and a pull request in the configured repository. There is no client state-update route.
+- P3-12 creates its initial scaffold task through the same store and transaction, linked to the chat message that invoked `create_project`; a runner clarification becomes a normal `NeedsAttention` state-change event with a bounded question and ends the sandbox session as `Ended`/`done`, not `Crashed`.
 - P1-05 writes each task event and its activity row in the same transaction. The runner-only `POST /factory/sandbox-events` validates its task-scoped input and calls `TaskStore.recordEvent` with source `runner` (no schema change); `recordEvent` is also the producer API for backend event sources; JSON payloads are capped at 1 MiB. The in-process hub publishes only after commit; payloads over 4 KiB are omitted from the published event and marked truncated. P1-06's authenticated SSE endpoint reads missed events from `task_events` by ascending ID in bounded pages, buffers live hub publications during replay, and suppresses overlapping IDs. The fetch client reconnects with the last delivered ID; the stream sends a heartbeat comment every 25 seconds. No schema change is needed.
 - `GET /factory/tasks` filters by project, agent, state, creation period and search, with bounded offset pagination. `GET /factory/tasks/:id` returns the task and a bounded, pageable event slice (event limit up to 200; offset up to 10,000). P1-09 requests 100 at a time, loads additional pages on demand, and merges them with the authenticated SSE stream by event ID; archived and SQL events use the same order and response shape. Its optional `origin_message_id` lookup uses a single row from `/conversation/history`. Responses are capped at 1 MiB; event payloads over 4 KiB are omitted and marked truncated. No schema change is required for the detail page.
 - P1-08's board uses the task list and event stream without changing the schema. The current task-list contract has no pull-request, check, or usage fields, so those card values remain explicitly unavailable until the GitHub integration (P3-03/P3-04) and usage work (P2-12) supply them.
@@ -325,7 +328,7 @@ erDiagram
     releases ||--o{ deployments : "deployed as"
     pull_requests {
         bigint id PK
-        bigint task_id FK
+        bigint task_id FK "nullable"
         bigint project_id FK
         int number
         string branch
@@ -338,22 +341,22 @@ erDiagram
     workflow_runs {
         bigint id PK
         bigint project_id FK
-        bigint github_run_id
-        string workflow "ci | release"
-        string trigger "pull_request | push | tag"
+        bigint github_run_id UK "unique per project"
+        string workflow "GitHub workflow name"
+        string trigger "GitHub event"
         string head_sha
         bigint pull_request_id FK "nullable"
         bigint release_id FK "nullable"
         string status "queued | in_progress | completed"
         string conclusion "success | failure | cancelled"
         string log_artifact "blob path of the failing log"
-        datetime started_at
-        datetime completed_at
+        datetime started_at "nullable until started"
+        datetime completed_at "nullable until completed"
     }
     releases {
         bigint id PK
         bigint project_id FK
-        string version "build number of the merge"
+        string version "Release workflow run number, initially the merge SHA"
         string sha
         string status "building | deploying | released | failed"
         datetime created_at
@@ -362,6 +365,7 @@ erDiagram
     deployments {
         bigint id PK
         bigint release_id FK
+        bigint github_deployment_id UK
         string environment "production, ..."
         string status "queued | in_progress | success | failure"
         datetime at
@@ -369,7 +373,9 @@ erDiagram
 
 ```
 
-- **One release = one merge to `main`** (no tags). Filled from GitHub webhooks (`pull_request`, `check_run`, `workflow_run`, `deployment_status`, `push`), never by polling.
+- **One release = one push of a merge to the project's default branch** (no tags). A `push` creates it by project and SHA; a `Release` workflow run supplies the build number. `pull_request` updates its record, `check_run` updates the PR check summary, `workflow_run` upserts by GitHub run ID, and `deployment_status` upserts by GitHub deployment ID. The release view is filled from the subscribed GitHub webhooks, never by polling.
+- PRs are upserted by project and PR number; their task link is derived from a matching task branch. Workflow runs link to a matching PR and release by project/SHA. A deployment status is retained only when its SHA already identifies a release.
+- A delivery row and its mapped records commit in one serializable SQL transaction. A duplicate delivery ID leaves every mapped record unchanged. The receiver verifies the raw-body signature, then keeps only these mapped fields in memory; it never stores or logs webhook payloads or secrets.
 - **Commits are not stored.** The release area shows a horizontal git graph per project (branches as lines, commits as dots): commits and branches come from the GitHub API when the page opens or when Dan asks Jarvis; the dots are coloured from `pull_requests`, `workflow_runs`, `releases` and `deployments`.
 - A failed PR check stores the log in Blob, and the backend steers the task with it.
 - The release view reads `releases`, `workflow_runs` and `deployments`, plus commits from GitHub on demand.
@@ -395,8 +401,8 @@ erDiagram
     }
 ```
 
-- `webhook_deliveries` makes webhook handling idempotent: GitHub may deliver the same event twice. P3-03 verifies the signature before atomically storing the delivery ID, event, processing time, and outcome (`ok` for the five subscribed event types, `ignored` for other valid events such as `ping`); duplicate IDs leave the existing row unchanged.
-- No webhook payload or secret is stored here. P3-04 owns mapping signed event payloads into project records; no such mapping is performed by the receiver.
+- `webhook_deliveries` makes webhook handling idempotent: GitHub may deliver the same event twice. P3-03 verifies the signature before atomically storing the delivery ID, event, processing time, and outcome (`ok` for mapped events, `ignored` for other valid events such as `ping`); duplicate IDs leave the existing row unchanged.
+- No webhook payload or secret is stored here. P3-04 maps only the fields listed in group 5 to project records in the same transaction as the delivery row.
 - `credential_status` stores expiry/last-updated dates and status only, never secret values. Codex and Copilot start as `unknown`; Key Vault metadata and Codex renewal populate dates. A paired owner/expiry lease serializes Codex renewal against Codex task starts; unknown status alone does not block tasks, while a failed Codex renewal does.
 - Container App sleep state is read from Azure's configured minimum replicas; it is not persisted in `settings` or another SQL table. The sleep refusal check takes an exclusive transaction-owned application lock while task creation and state transitions take the shared lock, so no Ready, Running, or PauseRequested task can be introduced between the check and scale request. This adds no schema object.
 
@@ -486,7 +492,7 @@ migration; the history API accepts and displays all three outcomes.
 
 - `bigint` identity keys; UTC `datetime2` timestamps; states as short strings with check constraints.
 - JSON only for event payloads, tool arguments and settings values; never as the domain model.
-- Indexes: `tasks(state, next_attempt_at)` for the dispatcher; `task_events(task_id, at)`; `workflow_runs(head_sha)`; `usage(task_id)`, `usage(project_id, at)`; and an index supporting each foreign key.
+- Indexes: `tasks(state, next_attempt_at)` for the dispatcher; `task_events(task_id, at)`; `pull_requests(project_id, head_sha)`; `workflow_runs(project_id, head_sha)`; `releases(project_id, created_at)`; `deployments(release_id, at)`; `usage(task_id)`, `usage(project_id, at)`; and an index supporting each foreign key.
 - Every migration ships a reverse script in `db/migrations/down/`; CI applies, reverts and reapplies all of them.
 - Thousands of tasks over time are no concern; `task_events` is the only table that grows fast and can be archived by age.
 

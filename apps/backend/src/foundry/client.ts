@@ -5,7 +5,7 @@ export const FOUNDRY_SCOPE = "https://ai.azure.com/.default";
 
 export type CodingAgent = "codex" | "copilot";
 export type InvocationStatus =
-  | "queued" | "running" | "completed" | "failed" | "cancelled"
+  | "queued" | "running" | "completed" | "failed" | "cancelled" | "needs_attention"
   | "cancelling" | "interrupted" | "paused" | "unknown";
 export type JsonObject = { [key: string]: unknown };
 export type FoundryErrorKind = "http" | "auth" | "timeout" | "aborted" | "transport" | "protocol";
@@ -41,7 +41,7 @@ export interface TaskWorkspace {
   defaultBranch: string;
   branch: string;
 }
-export type TaskRequest = Partial<TaskWorkspace> & (
+export type TaskRequest = TaskWorkspace & (
   | { agent: "copilot"; task: string; taskId?: string; model?: string }
   | { agent: "codex"; task: string; taskId?: string; model?: string; reasoning?: string });
 export interface InvocationAccepted {
@@ -66,7 +66,8 @@ export interface InvocationSnapshot extends InvocationAccepted {
 export interface CancelAcknowledgement { invocationId: string; status: InvocationStatus }
 
 const STATUSES = new Set<unknown>([
-  "queued", "running", "completed", "failed", "cancelled", "cancelling", "interrupted", "paused", "unknown",
+  "queued", "running", "completed", "failed", "cancelled", "needs_attention",
+  "cancelling", "interrupted", "paused", "unknown",
 ]);
 
 function object(value: unknown): value is JsonObject {
@@ -101,23 +102,23 @@ function taskBody(request: TaskRequest): JsonObject {
   const model = option(request.model, "model", 100);
   const reasoning = request.agent === "codex" ? option(request.reasoning, "reasoning", 32) : undefined;
   const taskId = taskIdentifier(request.taskId);
-  const hasWorkspace = request.repository !== undefined || request.defaultBranch !== undefined || request.branch !== undefined;
-  if (hasWorkspace && (request.repository === undefined || request.defaultBranch === undefined || request.branch === undefined)) {
+  const workspaceInput = request as Partial<TaskWorkspace>;
+  if (workspaceInput.repository === undefined || workspaceInput.defaultBranch === undefined ||
+      workspaceInput.branch === undefined) {
     throw new TypeError("repository, defaultBranch and branch must be provided together");
   }
-  const workspace = hasWorkspace ? {
-    repository: repository(request.repository),
-    defaultBranch: branch(request.defaultBranch, "defaultBranch"),
-    branch: branch(request.branch, "branch"),
-  } : undefined;
-  if (workspace && (workspace.branch === workspace.defaultBranch ||
-    workspace.branch === "main" || workspace.branch === "master")) {
+  const repositoryName = repository(workspaceInput.repository);
+  const defaultBranch = branch(workspaceInput.defaultBranch, "defaultBranch");
+  const taskBranch = branch(workspaceInput.branch, "branch");
+  if (taskBranch === defaultBranch || taskBranch === "main" || taskBranch === "master") {
     throw new TypeError("branch must be a separate task branch");
   }
   return {
     agent: agent(request.agent),
     task: text(request.task, "task"),
-    ...(workspace ?? {}),
+    repository: repositoryName,
+    defaultBranch,
+    branch: taskBranch,
     ...(taskId === undefined ? {} : { task_id: taskId }),
     ...(model === undefined ? {} : { model }),
     ...(reasoning === undefined ? {} : { reasoning }),

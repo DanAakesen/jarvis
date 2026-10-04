@@ -9,7 +9,7 @@ import type {
   TaskControlCommand, TaskControlResult, TaskController, TaskDetail, TaskEventHub, TaskEventMessage, TaskRecord, TaskStore,
 } from './task-store.js';
 
-export interface DispatchClaim {
+export interface DispatchClaim extends TaskWorkspace {
   taskId: string;
   projectId: string;
   title: string;
@@ -41,7 +41,7 @@ export interface DispatcherStore {
   endTaskSessions(taskId: string, state: string): Promise<string[]>;
 }
 
-export interface TaskControlTarget extends RunningSandbox {
+export interface TaskControlTarget extends RunningSandbox, TaskWorkspace {
   taskId: string;
   agent: CodingAgent;
   request: string;
@@ -247,7 +247,7 @@ export class TaskDispatcher implements TaskController {
       try {
         accepted = await this.clientFor(target.agentName).resume(
           target.foundrySessionId,
-          await this.taskRequest(taskId, task),
+          await this.taskRequest(taskId, { ...task, ...target }),
         );
         const running = await this.store.recordResumedTurn(target, accepted);
         this.heartbeat.track(running);
@@ -459,11 +459,7 @@ export class TaskDispatcher implements TaskController {
 
   private async taskRequest(
     taskId: string,
-    task: Pick<TaskRecord, 'agent' | 'request' | 'modelOverride' | 'reasoningOverride'> & {
-      repository?: string;
-      defaultBranch?: string;
-      branch?: string | null;
-    },
+    task: Pick<TaskRecord, 'agent' | 'request' | 'modelOverride' | 'reasoningOverride'> & TaskWorkspace,
   ): Promise<TaskRequest> {
     const stored = await this.settings.read();
     const providerSettings = task.agent === 'codex'
@@ -476,11 +472,9 @@ export class TaskDispatcher implements TaskController {
         agent: 'codex',
         task: task.request,
         taskId,
-        ...(task.repository && task.defaultBranch && task.branch ? {
-          repository: task.repository,
-          defaultBranch: task.defaultBranch,
-          branch: task.branch,
-        } : {}),
+        repository: task.repository,
+        defaultBranch: task.defaultBranch,
+        branch: task.branch,
         ...(model === 'default' ? {} : { model }),
         ...((task.reasoningOverride ??
           configuredValue(stored['codex.reasoning_effort'], defaultSettings.codex.reasoning, maxSettingsReasoningLength)) === 'default'
@@ -492,11 +486,9 @@ export class TaskDispatcher implements TaskController {
         agent: 'copilot',
         task: task.request,
         taskId,
-        ...(task.repository && task.defaultBranch && task.branch ? {
-          repository: task.repository,
-          defaultBranch: task.defaultBranch,
-          branch: task.branch,
-        } : {}),
+        repository: task.repository,
+        defaultBranch: task.defaultBranch,
+        branch: task.branch,
         ...(model === 'default' ? {} : { model }),
       };
     return request;

@@ -14,6 +14,9 @@ interface RecoveryTaskRow {
   nextAttemptAt: Date | string | null;
   sandboxSize: '1x2' | '2x4';
   tech: string;
+  repository: string;
+  defaultBranch: string;
+  branch: string;
 }
 
 interface RecoveryEventRow extends Omit<TaskEventMessage, 'at' | 'payload'> {
@@ -89,7 +92,8 @@ export function createTaskRecoveryStore(pool: sql.ConnectionPool, eventHub: Task
           .query<RecoveryTaskRow>(`SELECT CAST(t.id AS varchar(19)) AS taskId, CAST(t.project_id AS varchar(19)) AS projectId,
               t.title, t.request, t.agent, t.model_override AS modelOverride,
               t.reasoning_override AS reasoningOverride, t.attempt_count AS attemptCount,
-              t.next_attempt_at AS nextAttemptAt, p.sandbox_size AS sandboxSize, p.tech
+            t.next_attempt_at AS nextAttemptAt, p.sandbox_size AS sandboxSize, p.tech,
+            p.repo AS repository, p.default_branch AS defaultBranch, t.branch
             FROM dbo.tasks AS t WITH (UPDLOCK, ROWLOCK)
             INNER JOIN dbo.projects AS p ON p.id = t.project_id AND p.active = 1
             WHERE t.id = @taskId AND t.state = N'NeedsAttention' AND t.branch IS NOT NULL

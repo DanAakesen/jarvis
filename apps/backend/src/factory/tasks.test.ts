@@ -379,6 +379,7 @@ describe('factory tasks API', () => {
     };
     try {
       expect(await readFrame('id: 20')).toContain('"id":"20"');
+      expect(await readFrame('event: ready')).toBe('event: ready\ndata: {}\n\n');
       expect(store.getEventsAfter).toHaveBeenCalledWith('42', '19', 200);
       const interval = timerSpy.mock.calls.find(([, delay]) => delay === 25_000)?.[0];
       expect(interval).toBeDefined();
@@ -388,6 +389,30 @@ describe('factory tasks API', () => {
       eventHub.publish(later);
       expect(await readFrame('id: 21')).toContain('"id":"21"');
     } finally {
+      controller.abort();
+      await reader.cancel().catch(() => {});
+      timerSpy.mockRestore();
+    }
+  });
+
+  it('signals an empty replay is ready only after SQL completes, not on a heartbeat', async () => {
+    let completeReplay!: (events: TaskEventMessage[]) => void;
+    const replay = new Promise<TaskEventMessage[]>((resolve) => { completeReplay = resolve; });
+    const { app } = fixture({ getEventsAfter: vi.fn(() => replay) });
+    const timerSpy = vi.spyOn(globalThis, 'setInterval');
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+    const response = await fetch(`${address}/factory/tasks/42/events`, { headers, signal: controller.signal });
+    const reader = response.body!.getReader();
+    try {
+      const interval = timerSpy.mock.calls.find(([, delay]) => delay === 25_000)?.[0];
+      expect(interval).toBeDefined();
+      interval?.();
+      expect(new TextDecoder().decode((await reader.read()).value)).toBe(': heartbeat\n\n');
+      completeReplay([]);
+      expect(new TextDecoder().decode((await reader.read()).value)).toBe('event: ready\ndata: {}\n\n');
+    } finally {
+      completeReplay([]);
       controller.abort();
       await reader.cancel().catch(() => {});
       timerSpy.mockRestore();

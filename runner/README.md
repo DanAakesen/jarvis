@@ -32,6 +32,7 @@ live in `tools/package.json` and `tools/package-lock.json`.
 | Codex CLI | 0.157.0 |
 | Codex ACP adapter | 2.1.1 |
 | GitHub CLI | 2.98.0 |
+| PowerShell | 7 (Microsoft Debian package) |
 | .NET SDK (separate image) | 8.0.419 |
 
 The aggregate `CI` workflow runs runner lint and tests in its Python job and calls
@@ -48,7 +49,7 @@ session as `agent_session_id` to resume, steer, or pause.
 
 | Operation | JSON body |
 | --- | --- |
-| Start or resume | `{"agent":"copilot","task":"...","task_id":"42","model":"gpt-5.4"}` (or `codex` with optional `"reasoning":"high"`) |
+| Start or resume | `{"agent":"copilot","task":"...","task_id":"42","repository":"owner/name","defaultBranch":"main","branch":"jarvis/task-42","model":"gpt-5.4"}` (or `codex` with optional `"reasoning":"high"`) |
 | Steer | `{"agent":"copilot","mode":"steer","message":"...","task_id":"42"}` |
 | Pause | `{"mode":"pause"}` |
 | Credential probe | `{"agent":"copilot","probe":"key-vault"}` |
@@ -77,6 +78,33 @@ Every agent prompt, including resumed and recovered turns, is prefixed with
 instructions to commit and push small work-in-progress changes to the existing
 task branch after each meaningful step. Agents must not force-push or push to
 `main`, and must report commit or push failures.
+New sessions require a GitHub `repository` (`owner/name`), `defaultBranch`, and a
+separate task `branch`. The runner clones into the session's `project/` directory
+using the existing Git credential helper, checks out the remote task branch if
+present, or creates it from the remote default branch. ACP runs inside that
+checkout; credentials, provider homes, and session metadata stay outside it.
+Branch names may contain Git-valid Unicode and punctuation such as `+`; unsafe
+ref syntax is rejected before running Git commands.
+Resume and steer reuse the persisted workspace configuration (fields may be
+omitted but cannot change); recovery into a new session clones the supplied task
+branch again. Existing worktrees retain local commits and uncommitted files.
+Workspace configuration is persisted before cloning. Failed clone/checkout setup
+removes only the newly created checkout, allowing a retry with the same
+configuration. Existing checkouts without verified session metadata are refused.
+Missing repository-local Git author settings default to the existing project
+automation identity, `github-actions[bot]`
+(`41898282+github-actions[bot]@users.noreply.github.com`). Existing author settings
+are preserved on resume. This is commit metadata, not Git authentication;
+provider-specific author setup is not required.
+Git operations have a 120-second timeout. Clone/access failures are reported
+without Git diagnostics or credentials; invalid origins, missing Git metadata,
+wrong branches, and rewritten history fail rather than reporting completion.
+An ACP `end_turn` with no new commit on the task branch emits `session_question`
+with the last agent message instead of `completed`. Its invocation is terminal
+(`completed`), but the question is not a delivery result. A new local commit
+does not prove it was pushed; the backend still verifies GitHub.
+Question events retain the sanitized provider result, including reported usage,
+so commit-free turns are accounted for like other completed turns.
 Cancel terminates the provider process. A `completed` runner turn is not proof
 of a branch or PR: the backend must verify GitHub before accepting delivery
 (L22). The filesystem persists only at Foundry checkpoints. Metadata is stored per

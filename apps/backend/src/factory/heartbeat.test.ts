@@ -95,6 +95,20 @@ describe('sandbox heartbeat', () => {
     await heartbeat.stop();
   });
 
+  it('moves a task to NeedsAttention with the agent question', async () => {
+    vi.useFakeTimers();
+    const running = recording.records['status_running']!;
+    const question = 'Which license should this project use?';
+    const body = { ...(running.body as Record<string, unknown>), status: 'needs_attention', error: question };
+    const { heartbeat, store } = setup([{ status_code: running.status_code, body }]);
+
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(store.markNeedsAttention).toHaveBeenCalledWith('7', question);
+    await heartbeat.stop();
+  });
+
   it.each([404, 424, 500, 503])('recognizes HTTP %i as a crash poll response', (statusCode) => {
     expect(isSandboxCrashResponse(new FoundryClientError('http', 'status', statusCode))).toBe(true);
   });

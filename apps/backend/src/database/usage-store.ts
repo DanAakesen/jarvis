@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import type { UsageEntry, UsageStore } from '../core/usage.js';
 
 interface UsageRow extends Omit<UsageEntry, 'at'> {
@@ -9,7 +10,7 @@ interface UsageRow extends Omit<UsageEntry, 'at'> {
 export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
   return {
     async list(from, to) {
-      const { recordset } = await pool.request()
+      const { recordset } = await databaseReadRequest(pool)
         .input('from', sql.DateTime2, from)
         .input('to', sql.DateTime2, to)
         .query<UsageRow>(`WITH usage_rows AS (

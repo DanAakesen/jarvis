@@ -8,13 +8,33 @@ installed Tedious implementation uses Azure Identity `ManagedIdentityCredential`
 This verifies driver support, not a live Azure token exchange.
 
 The process owns one pool, registers its close hook and explicitly awaits
-`initialize` before listening. Connection and requests have 120-second bounds;
-startup has a 300-second deadline and app-lock wait a 60-second bound. Initialization
+`initialize` before listening. Connection creation and pool acquisition attempts
+have 30-second bounds; executed queries retain their 120-second timeout.
+Startup has a 300-second deadline and app-lock wait a 60-second bound. Initialization
 must not move into a Fastify ready hook, whose default 10-second timeout conflicts
 with SQL auto-resume. On cancellation, active SQL requests are cancelled and the
 transaction rolls back. An in-flight connect cannot be forcibly closed by mssql;
 its owner closes it as soon as it settles and never starts a migration afterwards.
 The existing five-second process shutdown deadline bounds final disposal.
+
+Startup connection and on-demand pool acquisition retry Azure SQL resume errors
+40613, 40197, 40501 and connection/acquisition timeouts with exponential backoff
+(1, 2, 4, 8, then at most 10 seconds). Each wait has a strict 90-second total
+deadline, including an in-flight attempt and backoff. The `mssql` public `acquire`
+callback and promise overloads are preserved; retries happen before a request,
+transaction BEGIN or prepared statement executes. Explicitly marked independent,
+nonstreaming read queries also retry execution-phase resume errors. Read retries
+and their nested acquisitions share one 90-second budget from the original read
+start; ordinary reads without resume failures retain the 120-second query timeout.
+The marking is at reviewed store call sites, never inferred from SQL text.
+Writes, transactional reads, transaction BEGIN and prepared statements are never
+replayed after execution.
+Request cancellation and shutdown stop waits immediately. A late acquisition
+is released without executing SQL; late startup connections are closed.
+
+`database.isWaking()` reports whether any concurrent retry wait is active.
+Success, terminal failure, cancellation and shutdown settle each wait separately;
+this in-memory status never queries SQL and does not keep an idle database awake.
 
 No settings leaves the offline skeleton disconnected; partial settings fail
 startup. The pool has minimum zero, 30-second idle eviction, and socket-only

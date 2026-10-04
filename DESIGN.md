@@ -77,6 +77,11 @@ visual direction. The header contains the Jarvis home link, area navigation
 surface fill and full outline, never a lone edge. Navigation appears only after
 sign-in; the header wraps on narrow screens.
 
+- **Database wake (P1-14):** one shared, polite status message above the page
+  content reads “Waking Jarvis…” while the backend reports a resume wait.
+  Keep the current page and pending controls visible; do not infer this state
+  from elapsed time or replace it with an invented progress indicator.
+
 - **Main page:** the verified name is the headline. Conversation (chat,
   language, voice, and persisted history) is the wide column; "Now" and Backend
   sit beside it from 900 px and stack below it on narrower screens.
