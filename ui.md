@@ -537,4 +537,17 @@ placement and field arrangement have not been separately reviewed. Do not confla
 personality preferences with visual themes or model/voice selection.
 
 The detailed implementation tasks are in PLAN.md (P7-13–P7-16 and P8-19). Memory
-policy and research/media providers, costs and artifact retention remain open.
+policy is decided on #263; research and media providers, costs and artifact
+retention wait for Dan (#264, #265).
+
+## Initial allowlists (P8-18, decided 4 October 2026)
+
+No generated code ever runs: views are declarative JSON validated against these lists.
+
+| Kind | Allowed |
+| --- | --- |
+| Renderers | table (max 500 rows), list, detail (key-value), text (plain text plus a sanitised markdown subset: headings, lists, emphasis, links, code; no HTML), timeline, chart (line, bar or area; max 5 series and 1,000 points), task-card, status, image (HTTPS on allowlisted hosts: GitHub and the Jarvis Blob account; max 10 per view) |
+| Actions | open-route (Jarvis routes), open-link (github.com, *.azure.com, learn.microsoft.com), call-tool (registered backend tools through the existing tool route and confirmation rules), window operations (focus, minimise, restore, close, move, resize) |
+| Theme tokens | appearance (light, dark, system); accent and accent-secondary (sRGB hex); surface-tint (hex); background (a preset name from the visual system); glow (0 to 1); motion (full, calm, reduced; the OS reduced-motion setting always wins); radius (0 to 24 px); density (compact, comfortable) |
+
+The number of theme presets follows the visual-system work.

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
+import type { TokenVerifier } from '../auth/verify.js';
 import { loadConfig } from '../config.js';
+import type { SettingsStore } from '../core/settings.js';
+import type { ToolCallStore } from '../core/tool-calls.js';
+import type { GitHubRepositoryCatalog } from '../github-app.js';
 import { ProjectConflictError, type Project, type ProjectStore } from './projects.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -13,15 +17,35 @@ const project: Project = {
   policy: 'deliver_pr', merge_rules: null, sandbox_size: '1x2', tech: 'node', max_parallel_tasks: 1, active: true,
 };
 
+const repository = {
+  fullName: 'DanAakesen/second-project',
+  name: 'second-project',
+  defaultBranch: 'develop',
+  pushedAt: '2026-10-03T12:00:00Z',
+  language: 'C#',
+};
+
 function fixture(store: ProjectStore | null = {
   list: vi.fn(async () => [project]),
   create: vi.fn(async (input) => ({ ...project, ...input })),
   update: vi.fn(async (id, input) => id === project.id ? { ...project, ...input } : null),
   archive: vi.fn(async (id) => id === project.id),
-}) {
+}, options: {
+  catalog?: GitHubRepositoryCatalog;
+  settingsStore?: SettingsStore;
+  auth?: TokenVerifier;
+  toolCallStore?: ToolCallStore;
+} = {}) {
+  const catalog = options.catalog ?? {
+    list: vi.fn(async () => ({ repositories: [repository], fetchedAt: '2026-10-04T09:00:00.000Z' })),
+    detectTech: vi.fn(async () => 'dotnet'),
+  };
   const app = buildApp(config, undefined, {
     projectStore: store ?? undefined,
-    auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+    githubRepositoryCatalog: catalog,
+    settingsStore: options.settingsStore ?? { read: async () => ({}), write: async () => {} },
+    ...(options.toolCallStore ? { toolCallStore: options.toolCallStore } : {}),
+    auth: options.auth ?? (async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId })),
   });
   apps.push(app);
   return app;
@@ -45,6 +69,132 @@ describe('projects API', () => {
     expect(response.statusCode).toBe(201);
     expect(response.headers.location).toBe('/factory/projects/42');
     expect(response.json()).toEqual({ ...project, ...validInput });
+  });
+
+  it('lists installed repositories and refreshes the cache only on request', async () => {
+    const catalog = {
+      list: vi.fn(async () => ({ repositories: [repository], fetchedAt: '2026-10-04T09:00:00.000Z' })),
+      detectTech: vi.fn(async () => 'dotnet'),
+    };
+    const app = fixture(undefined, { catalog });
+
+    const response = await app.inject({ url: '/factory/repositories?refresh=true', headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.json()).toEqual({
+      repositories: [repository],
+      fetchedAt: '2026-10-04T09:00:00.000Z',
+    });
+    expect(catalog.list).toHaveBeenCalledWith('DanAakesen', true);
+    expect((await app.inject({ url: '/factory/repositories' })).statusCode).toBe(401);
+  });
+
+  it('registers an installed repository with New projects defaults and detected tech', async () => {
+    const created: Project = {
+      ...project,
+      name: repository.name,
+      repo: repository.fullName,
+      default_branch: repository.defaultBranch,
+      default_agent: 'codex',
+      policy: 'complete_without_deployment',
+      tech: 'dotnet',
+      max_parallel_tasks: 3,
+    };
+    const store: ProjectStore = {
+      list: vi.fn(async () => []),
+      create: vi.fn(async () => created),
+      update: vi.fn(async () => null),
+      archive: vi.fn(async () => false),
+    };
+    const catalog: GitHubRepositoryCatalog = {
+      list: vi.fn(async () => ({ repositories: [repository], fetchedAt: '2026-10-04T09:00:00.000Z' })),
+      detectTech: vi.fn(async () => 'dotnet'),
+    };
+    const settingsStore: SettingsStore = {
+      read: async () => ({
+        'new_projects.default_agent': '"codex"',
+        'new_projects.policy': '"complete_without_deployment"',
+        'new_projects.max_parallel_tasks': '3',
+      }),
+      write: async () => {},
+    };
+    const app = fixture(store, { catalog, settingsStore });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/factory/projects/manage',
+      headers,
+      payload: { repository: repository.fullName },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.headers.location).toBe('/factory/projects/42');
+    expect(response.json()).toEqual(created);
+    expect(catalog.list).toHaveBeenCalledWith('DanAakesen');
+    expect(catalog.detectTech).toHaveBeenCalledWith(repository);
+    expect(store.create).toHaveBeenCalledWith({
+      name: repository.name,
+      repo: repository.fullName,
+      default_branch: repository.defaultBranch,
+      default_agent: 'codex',
+      policy: 'complete_without_deployment',
+      merge_rules: null,
+      sandbox_size: '1x2',
+      tech: 'dotnet',
+      max_parallel_tasks: 3,
+    });
+  });
+
+  it('registers an installed repository through Jarvis tools and refuses unavailable repositories', async () => {
+    const create = vi.fn(async (input: Parameters<ProjectStore['create']>[0]) => ({ ...project, ...input }));
+    const store: ProjectStore = {
+      list: vi.fn(async () => []),
+      create,
+      update: vi.fn(async () => null),
+      archive: vi.fn(async () => false),
+    };
+    const catalog: GitHubRepositoryCatalog = {
+      list: vi.fn(async () => ({ repositories: [repository], fetchedAt: '2026-10-04T09:00:00.000Z' })),
+      detectTech: vi.fn(async () => 'dotnet'),
+    };
+    const toolCallStore: ToolCallStore = { record: vi.fn(async () => {}) };
+    const auth: TokenVerifier = async () => ({
+      kind: 'jarvis-agent',
+      objectId: '00000000-0000-0000-0000-000000000001',
+      tenantId: config.auth.tenantId,
+    });
+    const app = fixture(store, { catalog, toolCallStore, auth });
+    const result = await app.inject({
+      method: 'POST',
+      url: '/tools/manage_repository',
+      headers: { ...headers, 'x-jarvis-message-id': '7' },
+      payload: { repository: repository.fullName },
+    });
+
+    expect(result.statusCode).toBe(200);
+    expect(result.json()).toMatchObject({
+      tool: 'manage_repository',
+      outcome: 'ok',
+      result: { repo: repository.fullName, tech: 'dotnet' },
+    });
+    expect(create).toHaveBeenCalledOnce();
+    expect(toolCallStore.record).toHaveBeenCalledWith(expect.objectContaining({
+      messageId: '7', tool: 'manage_repository', outcome: 'ok',
+    }));
+
+    catalog.list = vi.fn(async () => ({ repositories: [], fetchedAt: '2026-10-04T09:00:00.000Z' }));
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/tools/manage_repository',
+      headers: { ...headers, 'x-jarvis-message-id': '8' },
+      payload: { repository: 'DanAakesen/not-installed' },
+    });
+    expect(refused.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'That repository is not available in the GitHub App installation.' },
+    });
+    expect(create).toHaveBeenCalledOnce();
   });
 
   it('accepts supported policy, sandbox, repository, tech, and concurrency values', async () => {

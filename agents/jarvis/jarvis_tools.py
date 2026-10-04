@@ -99,15 +99,31 @@ def _model_settings(value: Any) -> ModelSettings:
         raise ValueError("invalid Jarvis settings")
     model = value.get("model")
     reasoning_effort = value.get("reasoningEffort")
+    personality = value.get("personality", {})
+    if not isinstance(personality, dict):
+        raise ValueError("invalid Jarvis settings")
+    tone = personality.get("tone", "british_butler")
+    response_style = personality.get("responseStyle", "concise")
+    custom_instructions = personality.get("customInstructions", "")
     if (
         not isinstance(model, str)
         or not model.strip()
         or len(model) > 100
         or any(ord(character) < 32 or ord(character) == 127 for character in model)
         or reasoning_effort not in {"none", "low", "medium", "high"}
+        or not isinstance(tone, str)
+        or tone not in {"british_butler", "warm", "direct", "playful"}
+        or not isinstance(response_style, str)
+        or response_style not in {"concise", "balanced", "detailed"}
+        or not isinstance(custom_instructions, str)
+        or len(custom_instructions) > 2_000
+        or any(
+            ord(character) < 32 and character not in "\n\r\t"
+            for character in custom_instructions
+        )
     ):
         raise ValueError("invalid Jarvis settings")
-    return ModelSettings(model, reasoning_effort)
+    return ModelSettings(model, reasoning_effort, tone, response_style, custom_instructions)
 
 
 @dataclass(frozen=True, slots=True)
