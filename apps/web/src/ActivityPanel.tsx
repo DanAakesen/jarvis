@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import type { GeneratedView } from '@jarvis/contracts';
 import {
   activityCategories,
   activityHref,
@@ -10,6 +11,7 @@ import {
   type NowFeed,
   type NowFeedStreamStatus,
 } from './activity';
+import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 
 function useNow(enabled: boolean): number {
   const [now, setNow] = useState(() => Date.now());
@@ -39,6 +41,24 @@ export function ActivityPanel({ feed, onDismiss, onRetry, streamStatus }: {
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
+  const runningTasksView: Extract<GeneratedView, { renderer: 'list' }> | null = feed.status === 'ready' ? {
+    version: 1,
+    title: 'Running tasks',
+    renderer: 'list',
+    source: { id: 'now', status: 'complete', updatedAt: feed.updatedAt },
+    data: {
+      items: feed.running.map((task) => ({
+        title: task.title,
+        action: { type: 'open-route', route: `/factory/tasks/${task.id}` },
+        details: [
+          { label: 'Project', value: task.project },
+          { label: 'Agent', value: agentNames[task.agent] },
+          { label: 'Activity', value: task.activity },
+          { label: 'Duration', value: formatDuration(task.startedAt, now) },
+        ],
+      })),
+    },
+  } : null;
 
   async function dismiss(item: ActivityItem) {
     if (!onDismiss || pending.has(item.id)) return;
@@ -81,19 +101,7 @@ export function ActivityPanel({ feed, onDismiss, onRetry, streamStatus }: {
           <section aria-labelledby="now-running-heading">
             <h3 id="now-running-heading">Running tasks</h3>
             {feed.running.length === 0 ? <p>No tasks are running.</p> : (
-              <ul className="activity-list">
-                {feed.running.map((task) => (
-                  <li key={task.id}>
-                    <Link className="activity-title" to={`/factory/tasks/${task.id}`}>{task.title}</Link>
-                    <dl className="activity-meta">
-                      <dt>Project</dt><dd>{task.project}</dd>
-                      <dt>Agent</dt><dd>{agentNames[task.agent]}</dd>
-                      <dt>Activity</dt><dd>{task.activity}</dd>
-                      <dt>Duration</dt><dd>{formatDuration(task.startedAt, now)}</dd>
-                    </dl>
-                  </li>
-                ))}
-              </ul>
+              runningTasksView && <GeneratedViewRenderer view={runningTasksView} className="activity-list" />
             )}
           </section>
 

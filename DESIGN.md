@@ -253,7 +253,11 @@ Windows can tile, overlap, minimise into tabs and be restored by Dan or Jarvis.
 Existing windows carry between modes by default. The optional minimise-on-voice
 setting defaults off; when enabled, voice begins with only the orb and windows
 remain docked on return to typing. Otherwise the earlier shell layout returns.
-Generated views are temporary; theme values persist. Small-orb input controls
-start voice explicitly. Glass/transparency and futuristic styling are exploratory;
-white wireframe windows are not a selected final treatment. Existing screen
-documentation below/above describes current implementation, not this future shell.
+Generated views are temporary; theme values persist. P8-14 reuses the existing
+Now list treatment for its first signed-in fixture. Values render as React text
+and allowlisted links; view-provided markup is not interpreted. This does not
+select new window styling or implement the generated-view workspace. Small-orb
+input controls start voice explicitly. Glass/transparency and futuristic styling
+are exploratory; white wireframe windows are not a selected final treatment.
+Existing screen documentation below/above describes current implementation, not
+this future shell.

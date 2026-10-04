@@ -131,10 +131,10 @@ Status as of 4 October 2026.
 | Manual voice-end affordance | Choose the manual end control and Escape-key behavior without changing natural spoken ending | Both | Voice workspace | Planned (needs decision) | P8-12 |
 | Theme controls and client persistence | Use light/dark appearance and apply Jarvis-supplied theme variables across visits | Screen | Shared shell, Settings | Planned | P8-13 |
 | Agent-directed workspace views | Ask Jarvis to create, update, show, close, minimise, restore, focus, move and resize views, and change the layout or contextual panel | Both | Main page and voice workspace | Planned | P8-15 |
-| Generated data views | Inspect accessible information in temporary, typed views using registered renderers | Screen | Workspace | Planned | P8-14 |
+| Generated data views | Inspect accessible information in temporary, typed views using registered renderers | Screen | Now list fixture built; workspace UI remains planned | Contract built; full workspace rendering planned | P8-14, P8-06 |
 | Runtime activity | See Jarvis's actual listening, thinking, tool-call and speaking state | Both | Main page and voice workspace | Planned | P8-16 |
 | Persisted UI preferences and themes | Change light/dark theme values and choose whether windows minimise when voice starts | Screen | Settings and shell | Planned | P8-17 |
-| Generated-view and theme capabilities | Decide the initial safe renderer/action and adjustable theme-token allowlists | — | UI planning | Planned (needs decision) | P8-18 |
+| Generated-view and theme capabilities | Use the initial safe renderer/action and adjustable theme-token allowlists | — | UI planning | Built (P8-18 decision recorded) | P8-18 |
 
 ### Enabling-logic coverage
 
@@ -143,7 +143,7 @@ This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell c
 | Confirmed UI requirement in scope | Existing capability or issue | Coverage and owner |
 | --- | --- | --- |
 | Agent-callable view operations, layout changes and contextual-panel open/close | P4-02 (#49) supplies the authenticated tool registry and dispatch; P4-05 (#52) supplies honest confirmations; P4-10 (#219) registers Factory tools over existing services. None controls workspace views. | **Gap: P8-15.** Add validated, session-scoped workspace commands and delivery/acknowledgement to the active client. The browser owns geometry and presentation. |
-| Typed visual views over accessible data, including safe renderer capabilities and bounded detail | P1-03 (#17), P1-04 (#18), P1-13 (#136), P2-12 (#38), P3-07 (#45) and P6-03 (#64) provide bounded project, task, activity, usage, release and archived-event data; P4-10 (#219) exposes selected Factory data to Jarvis. | **Gap: P8-14.** Define the typed declarative view/data boundary and renderer identifiers over existing authorised data. Generated HTML, JavaScript and CSS are never executable input. The frontend renderer is P8-06. |
+| Typed visual views over accessible data, including safe renderer capabilities and bounded detail | P1-03 (#17), P1-04 (#18), P1-13 (#136), P2-12 (#38), P3-07 (#45) and P6-03 (#64) provide bounded project, task, activity, usage, release and archived-event data; P4-10 (#219) exposes selected Factory data to Jarvis. | **Contract built: P8-14.** Shared versioned schema/types validate tagged tool results and bound view data; the signed-in Now list is a safe local fixture. Full workspace renderers remain with P8-06. Generated HTML, JavaScript and CSS are never executable input. |
 | Listening, thinking, tool-call and speaking activity reflects actual runtime state | P5-03 (#57) and P5-04 (#58) provide the English/voice relay; chat streams user/delta/done/error; P4-05 records ok/refused/error tool outcomes. P7-12 (#210, in progress) announces selected status changes by voice, not orb/runtime activity. | **Gap: P8-16.** Normalize and publish ephemeral, typed activity transitions for the UI, coordinating speaking state with P7-12 without duplicating its announcements; orb presentation is P8-09. |
 | Voice/typing transitions preserve the active workspace; window create/close/minimise/restore/focus/move/resize and layout remain transient | `ui.md` confirms these workspace lifecycle rules. No backend view store or state-persistence task exists or is needed; P4-03/P5-06 retain conversation history/transcripts independently. | **Client behavior: P8-10/P8-11.** P8-15 carries agent-directed commands only. Ending voice or closing a view must not delete saved conversation or source data. |
 | Generated views are unsaved while theme preferences persist and can change dynamically | P1-11 (#25) provides the existing persistent, validated settings store and API, but its schema has no UI theme or voice-window preference. | **Gap: P8-17.** Extend the existing settings/tool path for confirmed preferences; the frontend applies updates dynamically under P8-13. Do not persist generated views. |
@@ -151,7 +151,6 @@ This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell c
 
 #### Deferred decisions (needs-decision)
 
-- The exact generated view/rendering and interactive-control catalogue is not yet defined; the examples in `ui.md` are possibilities, not a committed renderer list.
-- P8-18 asks Dan to settle the initial renderer/action and theme-token allowlists before P8-14/P8-17 implements them. The five-theme example is not a requirement; implementation must not invent tokens or values.
+- P8-18 settled the initial renderer/action and theme-token allowlists. The five-theme example remains optional; implementation must not invent tokens or values.
 - Exact orb styling/animation and detailed mode-transition styling remain with the frontend/design work. Manual voice-end control/Escape remains the P8-12 `needs-decision` task; neither decision blocks the backend activity contract.
 - Banking and Fitness/Health integration detail remains deferred. Dan withdrew the proposed PC vendor integration; do not create an issue for it.

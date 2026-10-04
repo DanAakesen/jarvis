@@ -4,13 +4,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 - Requirements: [PRODUCT.md](../PRODUCT.md). Feature summaries: [features.md](features.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L36): [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
-- **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–20 show each flow as swimlanes, coloured by evidence (prototype/offline-tested, documented, assumed). Open it in a browser.
+- **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–21 show each flow as swimlanes, coloured by evidence (prototype/offline-tested, documented, assumed). Open it in a browser.
 
 ## Stack overview
 
 | Area | Choice | Status |
 | --- | --- | --- |
-| Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces for the two apps, one root lockfile | Implemented in P0-01; empty app builds verified in Codex cloud |
+| Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `packages/contracts`, `agents/jarvis`, `runner`, `infra`, `db`; npm workspaces with one root lockfile | Shared browser/backend contracts added by P8-14; workspace builds and tests pass offline |
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions; P3-14 opens or reuses an App-token PR after completed task work and leaves policy completion to P3-06; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; live Azure behavior remains unverified |
@@ -79,6 +79,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `POST /now/activity/:id/dismiss`, and refreshes snapshots from authenticated
   `/now/events`. The panel identifies unavailable data and reconnecting or
   unavailable live updates rather than claiming a stale snapshot is current.
+  P8-14 adds `@jarvis/contracts`, a shared version-1 JSON Schema and matching
+  TypeScript discriminated union for the P8-18 renderer/action allowlists. The
+  authenticated `/tools/:name` boundary validates tagged generated-view results
+  against the schema and semantic bounds; `call-tool` actions must name a
+  registered tool, and image URLs must use GitHub or the configured task-archive
+  Blob host. The serialized view is capped at 256 KiB. The signed-in Now panel
+  builds a list view from its existing bounded `/now` response and renders
+  values through fixed React elements. No generated HTML, JavaScript or CSS is
+  interpreted. Views remain ephemeral; live Entra/Azure behavior is unverified.
   P6-02 adds a dismissible Alerts group backed by `activity.alert_key`. Failed
   deployment, confirmed sandbox crash and credential-expiry activity is inserted
   transactionally with its source change and emits a hashed Application Insights

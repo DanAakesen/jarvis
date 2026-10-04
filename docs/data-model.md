@@ -29,6 +29,11 @@ P6-02 adds nullable `activity.alert_key` and a filtered unique index in
 `0011_alert_deduplication.sql`; each event condition has one activity row and
 can be safely retried. Its down migration removes the index and column.
 
+P8-14 generated views are versioned JSON contracts in the shared
+`@jarvis/contracts` workspace. A view carries bounded source/page metadata but
+is not stored in SQL or Blob; source records retain their existing storage and
+retention. P8-14 adds no tables or migrations.
+
 ## Overview
 
 Seven groups. Arrows show the main references between groups.
