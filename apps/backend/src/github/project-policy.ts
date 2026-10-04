@@ -26,6 +26,8 @@ interface ProjectPolicyOptions {
   readonly store: ProjectPolicyStore;
   readonly tasks: Pick<TaskStore, 'transition' | 'recordEvent'>;
   readonly tokenIssuer: GitHubAppTokenIssuer;
+  readonly runConfirmed?: <T>(summary: string, action: () => Promise<T>) => Promise<T>;
+  readonly onConfirmationError?: () => void;
   readonly fetch?: typeof fetch;
 }
 
@@ -216,8 +218,12 @@ export function createProjectPolicyEvaluator({
   store,
   tasks,
   tokenIssuer,
+  runConfirmed,
+  onConfirmationError,
   fetch: fetchImpl = fetch,
 }: ProjectPolicyOptions) {
+  const pendingMerges = new Set<string>();
+
   async function recordReason(taskId: string, reason: string): Promise<void> {
     await tasks.recordEvent({
       taskId,
@@ -233,6 +239,59 @@ export function createProjectPolicyEvaluator({
     await store.withActiveTask(candidate.taskId, async () => {
       await tasks.transition(candidate.taskId, 'Done', true);
     });
+  }
+
+  async function requestConfirmedMerge(
+    candidate: PolicyPullRequest,
+    path: string,
+    token: string,
+    headSha: string,
+  ): Promise<void> {
+    if (!runConfirmed) {
+      await recordReason(candidate.taskId, 'Dan confirmation is unavailable; the merge was not attempted.');
+      return;
+    }
+    const key = `${candidate.repository}:${candidate.number}:${headSha}`;
+    if (pendingMerges.has(key)) return;
+    pendingMerges.add(key);
+    const process = async () => {
+      try {
+        const merge = await runConfirmed(
+          `Squash-merge pull request #${candidate.number} in ${candidate.repository} at ${headSha.slice(0, 7)}.`,
+          () => store.withActiveTask(candidate.taskId, async () => {
+            const result = await requestJson(fetchImpl, `${path}/merge`, token, {
+              merge_method: 'squash',
+              sha: headSha,
+            });
+            if (result.merged === true) {
+              await tasks.recordEvent({
+                taskId: candidate.taskId,
+                type: 'project_policy_merge_requested',
+                summary: 'GitHub accepted the squash merge; awaiting its pull request webhook.',
+                payload: { pullRequest: candidate.number },
+                source: 'backend',
+              });
+            }
+            return result;
+          }),
+        );
+        if (merge.kind === 'inactive') {
+          await recordReason(candidate.taskId, 'The task is no longer active; the approved merge was not attempted.');
+        } else if (merge.value.merged !== true) {
+          await recordReason(candidate.taskId, 'GitHub did not confirm the approved squash merge.');
+        }
+      } catch (error) {
+        const reason = error instanceof GithubRequestError && !error.rateLimited &&
+          error.status >= 400 && error.status < 500
+          ? 'GitHub refused the approved squash merge because merge rules or branch protection prevent it.'
+          : 'Dan rejected the merge or its approval expired; no merge was attempted.';
+        try { await recordReason(candidate.taskId, reason); }
+        catch { onConfirmationError?.(); }
+      } finally {
+        pendingMerges.delete(key);
+      }
+    };
+    void process().catch(() => onConfirmationError?.());
   }
 
   async function evaluate(candidate: PolicyPullRequest): Promise<void> {
@@ -255,7 +314,6 @@ export function createProjectPolicyEvaluator({
       return;
     }
 
-    let mergeRequested = false;
     try {
       const token = await tokenIssuer.issue(candidate.repository);
       const encodedRepository = candidate.repository.split('/').map(encodeURIComponent).join('/');
@@ -313,38 +371,10 @@ export function createProjectPolicyEvaluator({
         return;
       }
 
-      mergeRequested = true;
-      const merge = await store.withActiveTask(candidate.taskId, async () => {
-        const result = await requestJson(fetchImpl, `${path}/merge`, token, {
-          merge_method: 'squash',
-          sha: pullRequest.headSha,
-        });
-        if (result.merged === true) {
-          await tasks.recordEvent({
-            taskId: candidate.taskId,
-            type: 'project_policy_merge_requested',
-            summary: 'GitHub accepted the squash merge; awaiting its pull request webhook.',
-            payload: { pullRequest: candidate.number },
-            source: 'backend',
-          });
-        }
-        return result;
-      });
-      if (merge.kind === 'inactive') {
-        await recordReason(candidate.taskId, 'The task is no longer active; automatic merge was not attempted.');
-        return;
-      }
-      const result = merge.value;
-      if (result.merged !== true) {
-        await recordReason(candidate.taskId, 'GitHub did not confirm the squash merge.');
-        return;
-      }
+      await requestConfirmedMerge(candidate, path, token, pullRequest.headSha);
     } catch (error) {
       if (error instanceof GithubRequestError && !error.rateLimited && error.status >= 400 && error.status < 500) {
-        const reason = mergeRequested
-          ? 'GitHub refused the squash merge because merge rules or branch protection prevent it.'
-          : 'GitHub refused to verify the pull request state.';
-        await recordReason(candidate.taskId, reason);
+        await recordReason(candidate.taskId, 'GitHub refused to verify the pull request state.');
         return;
       }
       throw error;

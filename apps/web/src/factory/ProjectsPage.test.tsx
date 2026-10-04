@@ -112,8 +112,9 @@ describe('Projects page', () => {
     expect(within(row).getByText('Deliver a pull request')).not.toBeNull();
     expect(within(row).getByText('node')).not.toBeNull();
     expect(within(row).getByText('1')).not.toBeNull();
-    expect(within(row).getByText('Not available yet')).not.toBeNull();
-    expect(screen.getByText(/Last release data will appear when release tracking is connected/)).not.toBeNull();
+    expect(within(row).getByRole('link', { name: 'View releases' }).getAttribute('href'))
+      .toBe('/factory/projects/7/releases');
+    expect(screen.getByText(/Open a project's release view for its latest recorded build and deployment state/)).not.toBeNull();
     const available = screen.getByRole('article', { name: 'DanAakesen/second-project' });
     expect(within(available).getByText((_text, element) => element?.tagName === 'TIME').getAttribute('dateTime'))
       .toBe('2026-10-03T12:00:00Z');

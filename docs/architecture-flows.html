@@ -180,7 +180,11 @@ const LANES = {
   entra:    { name: "Microsoft Entra",  tech: "Tenant-specific OAuth 2.0 / OIDC" },
   graph:    { name: "Microsoft Graph",  tech: "OneDrive · Microsoft Search" },
   backend:  { name: "Backend",          tech: "Node.js · Container Apps" },
+  graph:    { name: "Microsoft Graph", tech: "Outlook calendar and mail" },
+  exchange: { name: "Exchange Online", tech: "RBAC for Applications · mailbox scope" },
   data:     { name: "SQL data",         tech: "Azure SQL · tasks, settings, events" },
+  teams:    { name: "Microsoft Teams",  tech: "Teams personal chat · Adaptive Cards" },
+  speech:   { name: "Azure Speech",     tech: "Speech F0 · text-to-speech" },
   blob:     { name: "Blob Storage",     tech: "Private logs · artifacts · task events" },
   vault:    { name: "Secrets",          tech: "Key Vault" },
   foundry:  { name: "Sandbox platform", tech: "Foundry Hosted Agents" },
@@ -196,7 +200,7 @@ const LANE_ORDER = Object.keys(LANES);
 const FLOWS = [
   {
     name: "Request",
-    summary: "Dan configures projects and asks for work on the board or by voice. The Projects page lists, edits, and archives managed projects, lists installed repositories for one-click registration, and shows New projects defaults in Settings. Jarvis can register existing repositories or create and scaffold new ones using those defaults; the sandbox can ask a clarification question through Needs attention. Running counts come from the task API and last-release data remains unavailable until release reads are connected. Chat and voice go to Jarvis; browser voice uses the authenticated backend relay.",
+    summary: "Dan configures projects and asks for work on the board or by voice. The Projects page lists, edits, and archives managed projects, lists installed repositories for one-click registration, and shows New projects defaults in Settings. Jarvis can register existing repositories or create and scaffold new ones using those defaults; the sandbox can ask a clarification question through Needs attention. Running counts come from the task API and last-release data remains unavailable until release reads are connected. Chat and voice go to Jarvis; browser voice uses the authenticated backend relay. P8-20 shows only observed chat/voice work in the top bar and actual voice state plus decoded playback level in the labelled orb; tool-call and workspace-window signals are not inferred.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "context", badge: "Start", t: "Dan wants a change", d: "For example: add dark mode to Jarvis.", ev: "Start of the user flow." },
       { id: "card", lane: "board", col: 2, s: "assumed", t: "Add a card", d: "Project, agent and task text.", ev: "Board requirement in PRODUCT.md; the board is not built yet." },
@@ -211,7 +215,8 @@ const FLOWS = [
       { id: "new-project-scaffold", lane: "runner", col: 8, s: "proven", t: "Scaffold in the sandbox", d: "Clone templates with the normal Git credential helper; run cpinit via PowerShell 7; fill PRODUCT.md/PLAN.md and add P3-09 workflows.", ev: "P3-12 runner marker tests and Runner CI image smoke check cover offline protocol and pwsh availability. Private template access and a live PR remain unverified." },
       { id: "new-project-attention", lane: "backend", col: 9, s: "proven", t: "Ask when details are missing", d: "A bounded question in the explicit marker moves the task to Needs attention.", ev: "P3-12 runner and heartbeat tests cover the terminal status and recorded question." },
       { id: "new-project-pr", lane: "github", col: 10, s: "proven", t: "Open the scaffold PR", d: "The coding agent opens a PR against the configured default branch.", ev: "The task prompt requires the PR; live repository creation and scaffold acceptance are the coordinator's post-merge check." },
-      { id: "chat", lane: "board", col: 4, s: "assumed", t: "Type to Jarvis", d: "Chat box on the board.", ev: "Design assumption: the board can also send free text to the Jarvis agent." },
+      { id: "chat", lane: "board", col: 4, s: "proven", t: "Send a chat turn", d: "The signed-in conversation page starts or reuses a session and streams the real reply.", ev: "P4-06/P4-09 tests cover the request and stream; P8-20 shows a top-bar working state only while that observed turn is active." },
+      { id: "visual-feedback", lane: "board", col: 7, s: "proven", t: "Show live, labelled feedback", d: "Chat/voice turns drive the shared working indicator; actual voice status and decoded playback PCM shape the accessible orb. The dark CSS aurora pauses in hidden tabs; reduced motion removes movement.", ev: "P8-20 Vitest and Chromium checks cover actual client state, audio level, reduced motion, hidden-tab pausing and desktop/phone layouts. Tool-call and window events remain unavailable until P8-16 and P8-06." },
       { id: "speak", lane: "voice", col: 2, s: "proven", t: "Speak Danish", d: "The browser authenticates to `/voice/da`, waits for session readiness and a silent `/diag` warm-up, then opens the microphone; speech start stops playback and relay closure reconnects.", ev: "P5-04 focused web tests cover warm-up ordering, interruption, reconnect, and next-session language selection. Real microphone/speaker behavior and live round-trip are unverified." },
       { id: "relay", lane: "backend", col: 3, s: "unknown", t: "Relay to Voice Live", d: "Backend authenticates the browser and forwards WebSocket messages to the provisioned Danish voice agent.", ev: "Local tests verify the `/voice/da` endpoint and bidirectional forwarding against a mock upstream. The workflow provisions MAI Transcribe (`da`, phrase list) and Harper (`da-DK`); live provisioning, Azure interoperability, and browser round-trip remain unverified pending P5-04 and Azure access." },
       { id: "stt", lane: "voice", col: 4, s: "proven", t: "Danish speech to text", d: "MAI Transcribe, language da: 0–1.8 % word errors.", ev: "Voice prototype V2: MAI Transcribe heard English names in Danish correctly; Azure Speech da-DK had 22–25 % word errors; no language set was unusable.", href: VR },
@@ -228,6 +233,7 @@ const FLOWS = [
       ["card", "create", "docs", "create task"], ["speak", "relay", "unknown", "audio"],
       ["relay", "stt", "unknown", "audio"],
       ["stt", "jin", "proven", "text"], ["chat", "jin", "docs", "text", { off: 32 }],
+      ["chat", "visual-feedback", "docs", "chat turn"], ["speak", "visual-feedback", "docs", "voice status + PCM"],
     ],
   },
   {
@@ -250,16 +256,16 @@ const FLOWS = [
   },
   {
     name: "Settings",
-    summary: "A signed-in user edits global defaults, or Jarvis uses its authenticated tool. The backend validates each value against its catalog and stores partial changes; future sessions and tasks read the defaults, including personality preferences for new chat and voice sessions.",
+    summary: "A signed-in user edits global defaults or appearance, or Jarvis uses its authenticated model-setting tool. The backend validates partial changes and stores them; the client applies only an accepted theme, and future sessions/tasks read their applicable defaults.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "context", t: "Dan opens Settings", d: "The app shell already has a verified sign-in." },
-      { id: "page", lane: "board", col: 2, s: "docs", t: "Load settings and choices", d: "The browser silently gets a delegated API token and calls `/settings`." },
-      { id: "read", lane: "backend", col: 3, s: "docs", t: "GET /settings", d: "Root authentication protects the settings route; unavailable SQL returns 503.", ev: "P1-11: route and browser tests cover authenticated reads and the unavailable state." },
-      { id: "edit", lane: "board", col: 4, s: "docs", t: "Change supported defaults", d: "The Settings UI for personality is P8-19. The API supports tone, response style, and up to 2,000 characters of custom instructions, alongside New projects defaults." },
-      { id: "validate", lane: "backend", col: 5, s: "proven", t: "Validate and whitelist", d: "Reject unknown keys, unsupported choices, invalid custom instructions, invalid project defaults, and out-of-range task limits.", ev: "P7-16 backend tests cover tone/style catalogs, instruction bounds, invalid updates, and no write on rejection." },
-      { id: "save", lane: "backend", col: 6, s: "proven", t: "PATCH /settings", d: "Persist only changed keys in one SQL transaction.", ev: "P7-16 route tests verify persistence/readback and reset through the existing SettingsStore; the SQL adapter uses parameterized settings keys/values." },
-      { id: "rows", lane: "data", col: 7, s: "docs", t: "Global rows in dbo.settings", d: "Reuses the P1-01 key/value table; no settings history." },
-      { id: "next", lane: "backend", col: 8, s: "proven", t: "Next session reads defaults", d: "Hosted chat reads settings per invocation; hosted voice snapshots them at session start; English realtime snapshots them when the backend configures a new relay. `set_jarvis_model` updates validated model/reasoning defaults for the next session. Personality changes response style only, not identity, tools, permissions, language, model, voice, or action truth. Tasks resolve overrides before saved provider settings.", ev: "P4-07 and P7-16 tests verify per-session settings and isolation; P7-11 tests verify model catalog validation and next-session updates. P2-11 verifies provider option forwarding offline. Live Azure session and provider behavior remain unverified." },
+      { id: "page", lane: "board", col: 2, s: "proven", t: "Load settings and theme", d: "The browser silently gets a delegated API token and calls `/settings`; the shell hydrates the saved appearance.", ev: "P1-11 and P8-13 tests cover authenticated settings reads, saved theme hydration, and the unavailable state." },
+      { id: "read", lane: "backend", col: 3, s: "proven", t: "GET /settings", d: "Root authentication protects the settings route; unavailable SQL returns 503." },
+      { id: "edit", lane: "board", col: 4, s: "proven", t: "Choose supported defaults", d: "The form offers catalog values, validated New projects defaults, personality preferences (P8-19), and light/dark appearance. `set_jarvis_model` updates validated model/reasoning defaults for the next session. Custom theme-variable editing stays disabled until its validated update path is implemented.", ev: "P8-13 web tests exercise mode controls and the disabled token editor; P7-16 supplies the personality settings contract; P7-11 tests cover model-setting updates." },
+      { id: "validate", lane: "backend", col: 5, s: "proven", t: "Validate and whitelist", d: "Reject unknown keys, unsupported models and choices, invalid reasoning/personality/project defaults, invalid custom instructions, out-of-range task limits, and themes other than light/dark.", ev: "P1-11 and P3-11 tests reject unsupported settings without writing; P7-16 covers personality bounds/catalogs; P7-11 covers model catalog validation; P8-13 verifies rejected themes preserve the accepted value." },
+      { id: "save", lane: "backend", col: 6, s: "proven", t: "PATCH /settings", d: "Persist only changed keys in one SQL transaction; return the effective accepted theme.", ev: "P7-16 route tests verify personality persistence/readback and reset through SettingsStore; P7-11 tests cover model-setting writes; P8-13 applies light/dark only after an accepted response, retaining the prior theme on rejection." },
+      { id: "rows", lane: "data", col: 7, s: "proven", t: "Global rows in dbo.settings", d: "Reuses the P1-01 key/value table; `appearance.theme` and personality preferences need no migration or settings history.", ev: "P8-13 API tests verify theme readback; P7-16 covers personality persistence through the existing store." },
+      { id: "next", lane: "backend", col: 8, s: "proven", t: "New session reads defaults", d: "Hosted chat reads personality settings per invocation; hosted Danish voice snapshots them at session start; English realtime snapshots them when the backend configures a new relay. Existing voice keeps its snapshot. Personality changes response style only, not identity, tools, permissions, language, model, voice, or action truth. Tasks continue to resolve overrides before saved defaults.", ev: "P7-16 backend and agent tests verify setting reads, per-session isolation, prompt precedence, and unchanged server-owned tool schemas. P4-07 and P7-11 cover model/reasoning reads and next-session updates; P2-05 handles task model overrides. Live Azure session and provider behavior remain unverified." },
     ],
     edges: [
       ["start", "page", "docs", "open"], ["page", "read", "docs", "token + GET"],
@@ -314,6 +320,26 @@ const FLOWS = [
       ["voiceUsage", "history", "proven", "voice minutes by session"],
       ["history", "main", "proven", "chronological page + cursor"],
       ["messageRow", "origin", "docs", "message reference"],
+    ],
+  },
+  {
+    name: "Screen sharing",
+    summary: "Dan explicitly shares a browser screen and requests an inspection; a backend-only vision call supplies transient context to the active chat or voice response.",
+    nodes: [
+      { id: "share", lane: "board", col: 1, s: "proven", t: "Share a window or screen", d: "Browser getDisplayMedia; status and Stop remain visible. Capture only after a user request." },
+      { id: "upload", lane: "backend", col: 2, s: "proven", t: "Authenticate and validate frame", d: "POST /screen/frames checks Dan's identity, active session, JPEG, 1 MiB size, and daily/three-second limits.", ev: "Focused route tests cover authentication, type/size bounds, refusal and the fake-model path." },
+      { id: "usage", lane: "data", col: 3, s: "proven", t: "Reserve frame usage", d: "Store screen_frames count; on inference success store token counts and estimated DKK. No frame data is persisted." },
+      { id: "model", lane: "model", col: 4, s: "unknown", t: "Describe with Foundry vision", d: "Backend managed identity calls the configured vision-capable deployment with the in-memory JPEG.", ev: "Fake-model contract is tested; live image support, managed-identity exchange and billed SKU remain coordinator checks." },
+      { id: "context", lane: "backend", col: 5, s: "proven", t: "Pass a transient description", d: "Send only a bounded, untrusted description to chat or voice response instructions; do not create transcript or task-event content." },
+      { id: "reply", lane: "board", col: 6, s: "proven", t: "Answer Dan", d: "Jarvis uses the description in the active reply; the share stream stops with voice or page teardown." },
+    ],
+    edges: [
+      ["share", "upload", "proven", "explicit request + JPEG"],
+      ["upload", "usage", "proven", "validated frame reservation"],
+      ["upload", "model", "unknown", "managed identity + in-memory image"],
+      ["model", "context", "proven", "bounded description"],
+      ["context", "reply", "proven", "separate transient context"],
+      ["usage", "reply", "docs", "frame and token usage"],
     ],
   },
   {
@@ -497,7 +523,7 @@ const FLOWS = [
   },
   {
     name: "Release",
-    summary: "After the merge, GitHub Actions builds, tests and deploys. Every step reaches the board's release view through GitHub webhooks; no polling.",
+    summary: "After the merge, GitHub Actions builds, tests and deploys. Webhooks update persisted release records; the project view fetches the Git graph from GitHub on demand.",
     nodes: [
       { id: "ctx", lane: "github", col: 1, s: "context", from: [[9, "merge"]], t: "From 9: merged to main" },
       { id: "wf", lane: "actions", col: 2, s: "docs", t: "Release workflow", d: "Build, test and upload an artifact on merge to main.", ev: "P3-09: copyable release workflow is in templates/github-actions/release.yml; see the adoption guide.", href: "github-actions-templates.md" },
@@ -507,7 +533,8 @@ const FLOWS = [
       { id: "receiver", lane: "backend", col: 3, s: "proven", t: "Verify and deduplicate webhook", d: "Check the raw-body HMAC; commit each `X-GitHub-Delivery` ID with its mapped rows in one transaction.", ev: "P3-03/04 offline route/store tests verify signatures, idempotency, and allowlisted input; the complete SQL Server integration suite passes locally." },
       { id: "rec", lane: "data", col: 4, s: "proven", t: "Delivery metadata", d: "Store event name, delivery ID, outcome and timestamps; never the payload or secret." },
       { id: "map", lane: "data", col: 5, s: "proven", t: "Map events into project records", d: "Map PRs, checks, workflow runs, default-branch releases and deployment statuses; correlate release records by project/SHA even when webhooks arrive out of order.", ev: "P3-04 mapper/route/store tests and the SQL Server integration suite cover linked records, duplicate deliveries, and a Release run/deployment arriving before the main push. Local SQL Server tests pass; live test-project delivery remains unverified." },
-      { id: "view", lane: "board", col: 5, s: "assumed", t: "Release view", d: "Commits, PRs, running / passed / failed, deployed." },
+      { id: "graph", lane: "github", col: 4, s: "proven", t: "Fetch branches and commits", d: "P3-08 fetches a bounded graph with a repository-scoped contents:read token; commits are not persisted." },
+      { id: "view", lane: "board", col: 5, s: "proven", t: "Release view", d: "Per-project releases, runs, deployments, and an on-demand horizontal commit graph.", ev: "P3-08 focused API/UI tests and scratch Chromium checks at 390 and 1280 px use mocked GitHub/API data; live Entra, SQL, and GitHub behavior remain unverified." },
       { id: "fail", lane: "backend", col: 5, s: "assumed", t: "Failed release: Needs attention", d: "Offer a fix task with the failing log." },
       { id: "ask", lane: "jarvis", col: 6, s: "assumed", t: "Answer release questions", d: "“Is the release out, sir?”" },
     ],
@@ -515,7 +542,8 @@ const FLOWS = [
       ["ctx", "wf", "docs", "push to main"], ["wf", "deploy", "docs", "tests passed"], ["deploy", "migrations", "docs", "backend startup"],
       ["wf", "receiver", "proven", "signed webhook"], ["deploy", "receiver", "proven", "deployment_status"],
       ["receiver", "rec", "proven", "insert once"], ["rec", "map", "proven", "P3-04"],
-      ["map", "view", "docs", "event"], ["map", "fail", "docs", "failed run"],
+      ["map", "view", "proven", "authenticated project read"], ["graph", "view", "proven", "branches + commits"],
+      ["map", "fail", "docs", "failed run"],
       ["fail", "view", "docs", "event"], ["map", "ask", "docs", "read"],
     ],
   },
@@ -566,6 +594,32 @@ const FLOWS = [
     ],
   },
   {
+    name: "Teams notifications",
+    summary: "After Dan starts a personal Teams chat, the backend can deliver proactive text, optional Speech F0 audio, and expiring approval cards. Only a verified one-time approval resumes a gated action.",
+    nodes: [
+      { id: "resources", lane: "actions", col: 1, s: "assumed", t: "Provision F0 services", d: "Deploy Azure Bot Service F0, its Teams channel, Speech F0 and the backend identity's Speech User role.", ev: "Bicep build/lint checks local resource shape only. Azure deployment, role propagation and free-tier quota remain unverified." },
+      { id: "install", lane: "user", col: 2, s: "assumed", t: "Start a personal chat", d: "Dan installs the bot and sends the first message using his Novaro account.", ev: "Required before a proactive conversation reference exists; coordinator phone setup remains pending." },
+      { id: "receive", lane: "backend", col: 3, s: "proven", t: "Verify bot activity", d: "Teams SDK verifies Bot Service authentication; the backend checks the personal channel, Dan's object ID and tenant.", ev: "Identity and channel checks are covered by fake-activity tests; live Bot Service authentication is unverified." },
+      { id: "reference", lane: "data", col: 4, s: "proven", t: "Persist safe conversation reference", d: "Save only the validated personal reference needed for proactive messages.", ev: "Parameterized store contracts and service tests cover owner binding and bounded reference fields; live Azure SQL is unverified." },
+      { id: "send", lane: "backend", col: 5, s: "proven", t: "Send a notification or card", d: "The backend sends short text, optional safe links, or an Adaptive Card with Approve, Reject and a five-minute expiry.", ev: "Fake-connector tests cover notification, card, approval and rejection behavior." },
+      { id: "teams", lane: "teams", col: 6, s: "assumed", t: "Deliver to Dan's phone", d: "Teams delivers the proactive message to Dan's installed personal chat.", ev: "Bot resource and Teams channel are authored in Bicep; live Teams installation and phone delivery remain unverified." },
+      { id: "speech", lane: "speech", col: 6, s: "proven", t: "Optionally synthesize a voice note", d: "Speech F0 returns bounded MP3 bytes; failure or exhausted free allowance keeps text delivery.", ev: "Fake synthesizer tests cover text fallback and an ephemeral audio URL; real F0 quota and playback remain unverified." },
+      { id: "response", lane: "backend", col: 7, s: "proven", t: "Validate and consume response", d: "The backend verifies Dan and the conversation, then atomically consumes an unexpired approval once.", ev: "Fake-store round trips cover approve, reject, expiry, unknown identity and replay; the action is not run for any refusal." },
+      { id: "action", lane: "backend", col: 8, s: "proven", t: "Resume the approved action", d: "Repository creation or automatic merge runs only after the confirmed wrapper returns approval.", ev: "Repository-creation and project-policy tests verify approval gating and fail-closed behavior when confirmation is unavailable." },
+    ],
+    edges: [
+      ["resources", "install", "assumed", "Teams channel"],
+      ["install", "receive", "assumed", "first personal message"],
+      ["receive", "reference", "proven", "Dan-only reference"],
+      ["reference", "send", "proven", "proactive send"],
+      ["send", "teams", "assumed", "text/card"],
+      ["send", "speech", "proven", "optional TTS"],
+      ["speech", "teams", "proven", "temporary audio URL"],
+      ["teams", "response", "assumed", "card submit"],
+      ["response", "action", "proven", "approved and consumed"],
+    ],
+  },
+  {
     name: "Alerts",
     summary: "Four condition types appear once in the Now feed; the email-only Azure Monitor action group handles deployment, sandbox, credential and budget notifications.",
     nodes: [
@@ -586,6 +640,29 @@ const FLOWS = [
       ["credential", "activity", "docs", "same transaction"], ["budget", "activity", "docs", "budget month"],
       ["activity", "now", "docs", "SSE refresh"], ["activity", "monitor", "docs", "hashed trace after commit"],
       ["monitor", "email", "docs", "app alert rules"], ["budget", "email", "docs", "native budget threshold"],
+    ],
+  },
+  {
+    name: "Outlook",
+    summary: "Backend calendar and mail tools use app-only Graph access scoped by Exchange Online RBAC; writes wait for an exact confirmation from a later Dan message.",
+    nodes: [
+      { id: "ctx", lane: "user", col: 1, s: "context", t: "Dan asks about Outlook" },
+      { id: "agent", lane: "jarvis", col: 2, s: "proven", t: "Call a registered tool", d: "Jarvis discovers the calendar and mail tools from the authenticated backend registry.", ev: "Registry discovery and dispatch contracts are covered by backend tests." },
+      { id: "backend", lane: "backend", col: 3, s: "proven", t: "Validate and fix mailbox", d: "Validate inputs and address only the configured Dan object ID; redact sensitive arguments/results from tool-call persistence.", ev: "Fake Graph/tool tests cover bounded inputs, fixed mailbox routing and redaction." },
+      { id: "credential", lane: "vault", col: 4, s: "assumed", t: "Read app credential", d: "Backend identity reads `jarvis-outlook-client-secret`; app ID and time zone are nonsecret deployment settings.", ev: "Key Vault wiring is implemented, but app registration, secret and deployed identity are not live-verified." },
+      { id: "scope", lane: "exchange", col: 5, s: "unknown", t: "Authorize only Dan's mailbox", d: "Exchange RBAC grants calendar, mail read/write and send roles within an exact primary-SMTP scope; no Entra Graph app permissions.", ev: "`infra/setup-outlook.ps1` creates the scope/roles but has not been run in Dan's tenant." },
+      { id: "graph", lane: "graph", col: 6, s: "assumed", t: "Read or perform confirmed write", d: "Bounded Graph calendar/mail requests use a fixed Graph origin; writes are never automatically retried.", ev: "Fake-client tests cover API requests and sanitized error handling. Live Graph token issuance and mailbox access remain unverified." },
+      { id: "stage", lane: "backend", col: 4, s: "proven", t: "Stage write; no side effect", d: "Calendar edits, reply drafts and sends remain pending with a one-time code for ten minutes.", ev: "Tests verify writes are not sent before confirmation and staged state expires." },
+      { id: "confirm", lane: "user", col: 7, s: "proven", t: "Dan confirms in a new message", d: "A later persisted Dan message must exactly match `confirm <8-digit-code>`; same-turn calls and other identities are refused.", ev: "Fake conversation messages cover same-turn, wrong-code and valid later-message cases." },
+      { id: "redact", lane: "data", col: 8, s: "proven", t: "Persist only safe tool metadata", d: "Outlook arguments and results are recorded as redacted markers; mail bodies stay out of tool-call logs.", ev: "Backend dispatcher tests cover sensitive-call redaction; live telemetry remains unverified." },
+    ],
+    edges: [
+      ["ctx", "agent", "docs", "voice/chat"], ["agent", "backend", "proven", "authenticated tool call"],
+      ["backend", "credential", "docs", "app-only secret"], ["backend", "scope", "unknown", "Graph roles"],
+      ["scope", "graph", "unknown", "allow only scoped mailbox"], ["graph", "backend", "assumed", "bounded response"],
+      ["backend", "stage", "proven", "write proposal"], ["stage", "confirm", "proven", "exact phrase"],
+      ["confirm", "backend", "proven", "later persisted message"], ["backend", "graph", "proven", "single write"],
+      ["backend", "redact", "proven", "safe metadata"],
     ],
   },
   {
@@ -797,7 +874,7 @@ function buildOverview() {
   return {
     name: "Complete flow", overview: true, offScale: OV.offScale, nodes, edges, segments, cols: offset,
     ordered: [...nodes].sort(byPosition),
-    summary: "All fourteen flows in one swimlane, in tab order. Arrows between segments show where each flow picks up; 11–14 run alongside. Select a box for details, or a segment title to open its tab.",
+    summary: "All flows in one swimlane, in tab order. Arrows between segments show where each flow picks up. Select a box for details, or a segment title to open its tab.",
   };
 }
 

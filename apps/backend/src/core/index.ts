@@ -85,7 +85,13 @@ export const coreModule: BackendModule = {
           request.raw.removeListener('aborted', abortOnRequest);
           reply.raw.removeListener('close', abortOnClose);
         }
-        await app.toolCallStore.record({ messageId, tool: tool.name, arguments: request.body, result, outcome });
+        await app.toolCallStore.record({
+          messageId,
+          tool: tool.name,
+          arguments: tool.sensitive ? { redacted: true } : request.body,
+          result: tool.sensitive ? { redacted: true } : result,
+          outcome,
+        });
         return { tool: tool.name, outcome, result, confirmation: confirmToolCall(tool.name, outcome, result) };
       });
     }

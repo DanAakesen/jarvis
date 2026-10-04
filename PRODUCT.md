@@ -38,15 +38,16 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | **Agent choice** | Codex or GitHub Copilot per task, regardless of project. |
 | **Subscriptions** | Codex uses Dan's ChatGPT Pro plan (Jarvis-only login); Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. No per-use billing for either. |
 | **Voice** | An open browser is enough. Danish and English with a language toggle; status requests and follow-ups. Voice Live credentials stay on the backend; the browser connects through an authenticated backend WebSocket relay. |
+| **Calendar and mail** | Jarvis reads today's agenda, finds free slots, searches and summarises mail, and prepares calendar changes, reply drafts, or messages to send. Every write waits for Dan's exact confirmation in a later message. Mail content is untrusted data, never instructions. |
 | **Notes** | Dan can ask what he wrote about; Jarvis searches the configured OneDrive notes folder and grounds its answer in returned snippets and links. |
 | **GitHub events** | The backend verifies GitHub webhook signatures and ignores duplicate delivery IDs for pull requests, check runs, workflow runs, deployment statuses, and pushes. Delivery payloads are mapped into project records separately. |
 | **Continuity** | Work continues when the browser or voice session closes. |
 | **Sandbox** | One sandbox per task: starts when work begins, closes after delivery or cancel. The agent runs targeted builds and tests only; no Docker. |
 | **Build and release** | Full builds, all tests, and releases run in GitHub Actions, as in Dan's normal workflow; never in the sandbox. Managed projects can copy the repository's PR-check and OIDC-release workflow templates and adapt their build and deployment commands. |
 | **Project settings** | Per project: how far agents may go (deliver a PR, or complete without deployment), merge rules, sandbox size. |
-| **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models; updates affect new sessions and tasks, not running work. |
+| **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models, plus the app-wide light/dark appearance; updates affect new sessions and tasks, not running work. |
 | **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. |
-| **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. For chat, the backend calls the hosted agent through Foundry Invocations with its managed identity; the agent verifies Dan's delegated token and stored source message through `/me` and conversation history. The agent has its own identity for reading model settings and listing/calling tools; coding runners use a separate app-only role restricted to task-event ingestion. No passwords in Jarvis. |
+| **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. For chat, the backend calls the hosted agent through Foundry Invocations with its managed identity; the agent verifies Dan's delegated token and stored source message through `/me` and conversation history. The agent has its own identity for reading model settings and listing/calling tools; coding runners use a separate app-only role restricted to task-event ingestion. Outlook uses a backend-only app identity with Exchange RBAC scoped to Dan's mailbox. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Database wake** | SQL connection acquisition and explicitly read-only queries retry resume errors 40613, 40197, 40501 and connection timeouts with backoff for up to 90 seconds. Signed-in pages show “Waking Jarvis…” only while the backend reports a database wait. An ambiguous write failure is never automatically replayed. |
 | **Memory** | One continuous conversation will need compaction and memory over time; long-term memory is now an accepted planned capability (P7-13); storage, retrieval and retention choices remain open. |
@@ -66,6 +67,7 @@ flowchart TB
 
 - Each area owns its pages and registers its tools with Jarvis. The backend exposes every registered tool's input schema and executes calls, recording each result so new modules become available without agent changes. Jarvis's reply about an action comes from that recorded result: a refused or failed call is reported as refused or failed, never as done. The Jarvis agent uses only these backend tools.
 - In chat and voice, Jarvis can list active projects and filtered tasks, inspect a task, create work, and steer, pause, resume, or cancel it. The backend applies the existing task validation and lifecycle rules to every action.
+- Outlook tools use the authenticated backend registry for agenda/free-slot reads, mail search, calendar changes, reply drafts and sending. The backend fixes the mailbox to Dan's Entra object ID, redacts Outlook tool inputs/results from persistence, and requires a one-time confirmation from a later verified Dan message before any write.
 - Page requirements list every data point and action, not the look. Dan creates the visual design from them with an image generator (see [DESIGN.md](DESIGN.md)).
 
 ### Task lifecycle
@@ -138,6 +140,7 @@ Dan can also change Jarvis's model or reasoning by chat or voice for the next se
 | Voice | Speech to text | MAI Transcribe |
 | Voice | Voice per language | English: Ryan HD (British butler persona, addresses Dan as "sir"); Danish: Harper (MAI-Voice-2) |
 | Voice | Default language | Danish |
+| Global | Screen inspections per day | 300 (configurable from 1 to 300) |
 | Codex | Model and reasoning effort | Codex default |
 | Copilot | Model | Copilot default |
 | Global | Max parallel tasks; sleep switch | Set by Dan |
@@ -147,6 +150,16 @@ Dan can also change Jarvis's model or reasoning by chat or voice for the next se
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
 Danish voice uses the authenticated backend `/voice/da` WebSocket to a provisioned Foundry Voice Live agent. The agent bridges to the hosted Jarvis agent, uses MAI Transcribe with language `da` and the Danish phrase list, and fixes Harper to `da-DK`.
+
+Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity. The vision description is separate, untrusted context for the active chat or voice reply; frames are held in memory only and never enter transcripts, logs, or task events. Stopping voice or leaving the page releases the shared stream.
+
+### Phone notifications and confirmations (P7-03)
+
+Jarvis sends Dan short text updates and Adaptive Card approval requests in a personal Teams chat. The backend stores only Dan's validated conversation reference after his first interaction; Bot Service activities must be from Dan's Entra object ID in the Novaro tenant. Confirmation cards offer Approve and Reject and expire after five minutes. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action.
+
+Azure Speech F0 may add a voice note to a notification or confirmation. If synthesis fails or the free allowance is exhausted, Jarvis still sends the text and never falls back to a paid tier. Speech audio is temporary and served through a short-lived opaque link.
+
+These actions always require Dan's confirmation: merge, delete, send mail, calendar changes, repository creation, computer use outside the browser, and anything that spends money. The backend must refuse a gated operation if Teams confirmation is unavailable. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
 
 Personality preferences are validated and persisted in Settings. They apply to new chat and voice sessions; changing or resetting them does not interrupt an active voice session. Reset restores the current British-butler, concise defaults and clears custom instructions. Preferences affect response style only, not Jarvis's identity, available tools, permissions, selected language, model or voice, or truthful reporting of action outcomes.
 
@@ -159,13 +172,16 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Data points | Actions |
 | --- | --- |
 | Conversation: messages (Dan, Jarvis) across chat and voice sessions, time, language, streamed replies, tool-call chips (tool, outcome, link to task), and voice minutes per sitting | Type a message; start or stop voice; switch Danish/English |
-| Voice state: connecting, listening, thinking, speaking, reconnecting; an accessible runtime-state orb and text alternative; what Jarvis heard; latency | Start or stop browser voice; interrupt by speaking; mute |
+| Voice state: connecting, listening, thinking, speaking, reconnecting; an accessible fluid orb whose shape follows the actual runtime state and decoded playback level; a text alternative; what Jarvis heard; latency | Start or stop browser voice; interrupt by speaking; mute |
+| Screen-share status while sharing; Jarvis's frame description appears only in the active response | Share/stop a screen or window; ask Jarvis to look at it from chat or voice |
 | "Now": running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings, and alerts for failed deployments, sandbox crashes, credential expiry, and the 80% monthly budget threshold | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready, Running, or PauseRequested |
 
-The "Now" panel reads current running tasks and the latest non-dismissed task-attention, release/deployment, credential-warning, and alert activity. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes, and expiring credentials are emailed through stateful Azure Monitor rules; the monthly Azure budget sends its 80% threshold through the same email-only action group. The backend reads actual budget spend on a bounded 15-minute schedule for the Now item. No SMS or voice notifications are sent; phone delivery is P7-03. Task changes, alerts, dismissals, and credential/budget alert writes refresh the panel through authenticated server-sent events; reconnecting states identify when the displayed snapshot may be stale.
+The "Now" panel reads current running tasks and the latest non-dismissed task-attention, release/deployment, credential-warning, and alert activity. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes, and expiring credentials are emailed through stateful Azure Monitor rules; the monthly Azure budget sends its 80% threshold through the same email-only action group. The backend reads actual budget spend on a bounded 15-minute schedule for the Now item. These existing activity alerts remain email-only; direct phone notifications and confirmations use Teams through P7-03. Task changes, alerts, dismissals, and credential/budget alert writes refresh the panel through authenticated server-sent events; reconnecting states identify when the displayed snapshot may be stale.
 
 The voice orb follows status transitions reported by the browser voice client and includes a text alternative. Unknown states are reported as unavailable, and motion is disabled when reduced motion is preferred. Tool-call activity remains explicitly unavailable until the runtime publishes that state (P8-16); the UI does not infer it from thinking or speech.
+
+The shared top bar reports when an actual chat turn or voice response is running. The orb's audio response uses decoded playback samples, not microphone input or an estimated level. The shell and current pages share the light/dark visual system; unavailable tool-call and workspace-window events are never inferred.
 
 #### Software Factory — task view
 
@@ -206,7 +222,7 @@ It checks free space every 15 seconds; below the configurable threshold it repor
 
 | Data points | Actions |
 | --- | --- |
-| Horizontal git graph: branches as lines, commits as dots (from GitHub on demand), coloured by PR, checks, release, and deployment state | Hover a dot for commit details; open commit, PR, or run on GitHub |
+| Horizontal git graph: branches as lines, commits as dots (from GitHub on demand), coloured by PR, checks, release, and deployment state | Hover or keyboard-focus a dot for commit and linked-state details; open its commit on GitHub; open linked PRs and runs from their records |
 | Releases (one per merge to `main`): build number, SHA, status, created and released time, linked tasks and PRs | Open a release; open its workflow runs |
 | Workflow runs: workflow, trigger, status, conclusion, duration | Open the run on GitHub; open the failing log |
 | Deployments: environment, status, time | Open the deployment |
@@ -243,6 +259,7 @@ the last-release field is explicitly unavailable rather than inferred.
 
 | Data points | Actions |
 | --- | --- |
+| Appearance: light or dark mode across all signed-in pages | Change; persist across visits |
 | Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
 | Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset (applies to new sessions) |
 | Voice: speech-to-text model, voice per language, default language | Change; play a voice sample |
@@ -271,9 +288,9 @@ data/actions remain visibly unavailable until their owning services exist.
 
 | Data points | Actions |
 | --- | --- |
-| Per task, project, and period: sandbox minutes and DKK; Jarvis model tokens and DKK; voice minutes and DKK; Codex and Copilot usage (no DKK) | Change period; group by project, agent, or source; open a task |
+| Per task, project, and period: sandbox minutes and DKK; Jarvis model tokens, screen frames and DKK; voice minutes and DKK; Codex and Copilot usage (no DKK) | Change period; group by project, agent, or source; open a task |
 
-The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-linked metric rows in project, agent, or source groups. DKK values are shown only when recorded; sandbox and voice costs are identified as estimates, and Codex/Copilot never display DKK. When more than 1,000 grouped rows match, the page says that its subtotals cover only the displayed rows.
+The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-linked metric rows in project, agent, or source groups. Screen-frame DKK uses the current documented Luna Global Standard token rates and is identified as an estimate; sandbox and voice costs are also estimates, and Codex/Copilot never display DKK. Unknown model rates remain unpriced. When more than 1,000 grouped rows match, the page says that its subtotals cover only the displayed rows.
 
 ## Constraints and integrations
 

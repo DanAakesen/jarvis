@@ -1,4 +1,7 @@
 export interface Settings {
+  appearance: {
+    theme: 'light' | 'dark';
+  };
   jarvis: {
     model: string;
     reasoning: string;
@@ -25,6 +28,7 @@ export interface Settings {
   global: {
     maxParallelTasks: number;
     maxCheckAttempts: number;
+    screenShareDailyFrameCap: number;
   };
   newProjects: {
     owner: string;
@@ -47,6 +51,7 @@ export interface SettingsStore {
 }
 
 export const defaultSettings: Settings = {
+  appearance: { theme: 'light' },
   jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
   personality: {
     tone: 'british_butler',
@@ -62,7 +67,7 @@ export const defaultSettings: Settings = {
   },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
-  global: { maxParallelTasks: 1, maxCheckAttempts: 3 },
+  global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300 },
   newProjects: {
     owner: 'DanAakesen',
     visibility: 'private',
@@ -75,6 +80,7 @@ export const defaultSettings: Settings = {
 };
 
 export const settingsOptions = {
+  themes: ['light', 'dark'],
   jarvisModels: ['gpt-5.6-luna'],
   reasoningEfforts: ['none', 'low', 'medium', 'high'],
   personalityTones: ['british_butler', 'warm', 'direct', 'playful'],
@@ -93,6 +99,7 @@ export const settingsOptions = {
 } as const;
 
 const settingKeys = {
+  appearance: { theme: 'appearance.theme' },
   jarvis: { model: 'jarvis.model', reasoning: 'jarvis.reasoning_effort' },
   personality: {
     tone: 'personality.tone',
@@ -111,6 +118,7 @@ const settingKeys = {
   global: {
     maxParallelTasks: 'global.max_parallel_tasks',
     maxCheckAttempts: 'global.max_check_attempts',
+    screenShareDailyFrameCap: 'global.screen_share_daily_frame_cap',
   },
   newProjects: {
     owner: 'new_projects.owner',
@@ -128,6 +136,7 @@ function isOption(value: unknown, options: readonly string[]): value is string {
 }
 
 function validSetting(area: keyof Settings, key: string, value: unknown): boolean {
+  if (area === 'appearance' && key === 'theme') return isOption(value, settingsOptions.themes);
   if (area === 'jarvis') {
     if (key === 'model') return isOption(value, settingsOptions.jarvisModels);
     if (key === 'reasoning') return isOption(value, settingsOptions.reasoningEfforts);
@@ -160,6 +169,9 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
   }
   if (area === 'global' && key === 'maxCheckAttempts') {
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 10;
+  }
+  if (area === 'global' && key === 'screenShareDailyFrameCap') {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 300;
   }
   if (area === 'newProjects') {
     if (key === 'owner') {
@@ -198,6 +210,10 @@ const settingsPatchSchema = {
       minProperties: 1,
       additionalProperties: true,
       properties: {
+        appearance: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: { theme: selectSchema(settingsOptions.themes) },
+        },
         jarvis: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
@@ -239,6 +255,7 @@ const settingsPatchSchema = {
           properties: {
             maxParallelTasks: { type: 'integer', minimum: 1, maximum: 100 },
             maxCheckAttempts: { type: 'integer', minimum: 0, maximum: 10 },
+            screenShareDailyFrameCap: { type: 'integer', minimum: 1, maximum: 300 },
           },
         },
         newProjects: {

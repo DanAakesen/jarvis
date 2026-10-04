@@ -1,4 +1,4 @@
-import { DefaultAzureCredential } from '@azure/identity';
+import { ClientSecretCredential, DefaultAzureCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { buildApp } from './app.js';
 import { BlobServiceClient } from '@azure/storage-blob';
@@ -10,6 +10,7 @@ import { createDatabase, registerDatabase } from './database/lifecycle.js';
 import { createToolCallStore } from './database/tool-call-store.js';
 import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
+import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
@@ -45,6 +46,7 @@ import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js
 import { createChecksLoopStore } from './database/checks-loop-store.js';
 import { createChecksLoopBlobStore } from './database/checks-loop-blob.js';
 import { createGitHubActionsLogClient } from './github/actions-logs.js';
+import { createGitHubReleaseGraphReader } from './github/release-graph.js';
 import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
@@ -56,10 +58,23 @@ import { createAlertActivityStore } from './database/alert-store.js';
 import { createGraphClient } from './graph/client.js';
 import { createNotesModule } from './notes/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
+import { createGraphClient as createOutlookGraphClient } from './outlook/graph-client.js';
+import { createOutlookModule } from './outlook/tools.js';
+import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
+import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
+import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
+import { createTeamsNotificationStore } from './database/teams-notification-store.js';
+import { createEphemeralAudioStore } from './teams/audio-store.js';
+import { createAzureSpeechSynthesizer } from './teams/speech.js';
+import { createTeamsBotModule, createTeamsConnector } from './teams/bot.js';
+import { createTeamsNotificationService } from './teams/service.js';
 
 try {
   const config = loadConfig();
   const databaseConfig = loadDatabaseConfig();
+  if (config.teams && !databaseConfig) {
+    throw new ConfigurationError('SQL is required for Teams conversations and confirmations');
+  }
   const archiveStorageAccount = loadTaskEventArchiveStorageAccount();
   if (databaseConfig && !archiveStorageAccount) {
     throw new ConfigurationError('TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT is required when SQL is configured');
@@ -76,7 +91,7 @@ try {
   const nowEventHub = createEventHub<NowFeedUpdate>();
   const alertNotifier = createAlertNotifier(telemetry);
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
-    config.foundryEndpoints || config.githubAppId || sleepResourceId
+    config.foundryEndpoints || config.githubAppId || config.graphAppId || config.teams || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -102,6 +117,33 @@ try {
     : undefined;
   const githubAppKeyVault = config.githubAppId && config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
+    : undefined;
+  const graphSecretClient = config.graphAppId && config.keyVaultUri && credential
+    ? new SecretClient(config.keyVaultUri, credential)
+    : undefined;
+  let graphCredentialRequest: Promise<ClientSecretCredential> | undefined;
+  const outlookModule = config.graphAppId && config.graphTimeZone && graphSecretClient
+    ? createOutlookModule(createOutlookGraphClient({
+      getToken: async (scope, signal) => {
+        graphCredentialRequest ??= graphSecretClient.getSecret('jarvis-outlook-client-secret')
+          .then(({ value }) => {
+            if (!value || !value.trim() || value.length > 10_000 || /[\r\n]/u.test(value)) {
+              throw new Error('Outlook app credential is unavailable');
+            }
+            return new ClientSecretCredential(config.auth.tenantId, config.graphAppId!, value);
+          })
+          .catch((error: unknown) => {
+            graphCredentialRequest = undefined;
+            throw error;
+          });
+        const token = await (await graphCredentialRequest).getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Outlook Graph token is unavailable');
+        return token.token;
+      },
+    }), {
+      mailboxObjectId: config.auth.ownerObjectId,
+      timeZone: config.graphTimeZone,
+    })
     : undefined;
   const getGitHubAppPrivateKey = async () => {
     if (!githubAppKeyVault) throw new Error('GitHub App private key is unavailable');
@@ -204,12 +246,42 @@ try {
     : null;
   const projectStore = database ? createProjectStore(database.pool) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
+  const teamsAudioStore = config.teams ? createEphemeralAudioStore() : undefined;
+  const teamsSpeech = config.teams && credential
+    ? createAzureSpeechSynthesizer(
+      config.teams.speechRegion,
+      async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Speech identity unavailable');
+        return token.token;
+      },
+    )
+    : undefined;
+  const teamsNotifications = config.teams && database && credential && teamsAudioStore
+    ? createTeamsNotificationService({
+      ownerObjectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+      publicOrigin: config.teams.audioOrigin,
+      store: createTeamsNotificationStore(database.pool),
+      connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
+      audioStore: teamsAudioStore,
+      ...(teamsSpeech ? { speech: teamsSpeech } : {}),
+    })
+    : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;
+  const releaseViewStore = database ? createReleaseViewStore(database.pool) : undefined;
+  const releaseGraphReader = githubAppTokenIssuer
+    ? createGitHubReleaseGraphReader(githubAppTokenIssuer)
+    : undefined;
   const projectPolicyEvaluator = database && taskStore && githubAppTokenIssuer
     ? createProjectPolicyEvaluator({
       store: createProjectPolicyStore(database.pool),
       tasks: taskStore,
       tokenIssuer: githubAppTokenIssuer,
+      ...(teamsNotifications ? {
+        runConfirmed: (summary, action) => teamsNotifications.runConfirmed('merge', summary, action),
+      } : {}),
+      onConfirmationError: () => logger.warn('project_policy.confirmation_failed'),
     })
     : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
@@ -256,6 +328,7 @@ try {
     : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
+    ...(outlookModule ? [outlookModule] : []),
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
       getSecret: getWebhookSecret,
@@ -267,6 +340,16 @@ try {
       } : {}),
     }),
   ];
+  if (database && settingsStore && config.foundryProjectEndpoint && credential) {
+    modules.push(createScreenVisionModule(new ScreenVisionService(
+      createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry screen identity unavailable');
+        return token.token;
+      }),
+      createScreenFrameUsageStore(database.pool),
+    )));
+  }
   if (graphClient) {
     modules.push(createNotesModule({
       graph: graphClient,
@@ -285,6 +368,14 @@ try {
       ...(config.foundryProjectEndpoint
         ? { connectDanish: createDanishVoiceConnector(config.foundryProjectEndpoint) }
         : {}),
+    }));
+  }
+  if (config.teams && teamsNotifications && teamsAudioStore) {
+    modules.push(await createTeamsBotModule({
+      clientId: config.teams.botAppId,
+      tenantId: config.teams.tenantId,
+      notificationService: teamsNotifications,
+      audioStore: teamsAudioStore,
     }));
   }
   const credentialStatusStore = database ? createCredentialStatusStore(database.pool, {
@@ -307,6 +398,8 @@ try {
   const app = buildApp(config, logger, {
     modules,
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
+    ...(releaseViewStore ? { releaseViewStore } : {}),
+    ...(releaseGraphReader ? { releaseGraphReader } : {}),
     ...(database && taskStore && settingsStore ? {
       ...(projectStore ? { projectStore } : {}),
       ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
@@ -325,6 +418,7 @@ try {
     eventHub,
     nowEventHub,
     ...(conversationAgent ? { conversationAgent } : {}),
+    ...(teamsNotifications ? { teamsNotifications } : {}),
   });
   if (checksLoop) app.addHook('onClose', async () => { await checksLoop.stop(); });
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
@@ -375,6 +469,7 @@ try {
       await database.initialize();
       logger.info('database.ready');
     }
+    await teamsNotifications?.expirePendingConfirmations();
     if (!stopping) {
       await sandboxHeartbeat?.start();
       dispatcher?.start();
