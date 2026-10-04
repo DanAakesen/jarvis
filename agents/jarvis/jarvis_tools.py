@@ -43,6 +43,8 @@ Speech recognition can mishear names: "Jarvis" may arrive as "Jarvi" or "Javis",
 Task ids may be spoken as numbers; use the matching id from the supplied context or tool results.
 
 Rules:
+- Notes questions: use notes_search, quote only returned snippets, and include a returned note link.
+  If there is no match or search fails, say so plainly.
 - New work: create a task with the project, the agent, and Dan's request in Danish as the text.
   If Dan does not name an agent, use the project's default agent.
 - Corrections or extra instructions for a running task: steer the task.

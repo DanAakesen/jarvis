@@ -53,6 +53,8 @@ import { createGitHubDeliveryHandler } from './github/delivery.js';
 import { createAlertNotifier } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
+import { createGraphClient } from './graph/client.js';
+import { createNotesModule } from './notes/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 
 try {
@@ -78,6 +80,15 @@ try {
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
+    : undefined;
+  const graphClient = credential
+    ? createGraphClient({
+      getToken: async (signal) => {
+        const token = await credential.getToken('https://graph.microsoft.com/.default', { abortSignal: signal });
+        if (!token) throw new Error('Microsoft Graph credentials are unavailable');
+        return token.token;
+      },
+    })
     : undefined;
   const projectRepositoryCreator = config.keyVaultUri && credential
     ? createRepoAdminRepositoryCreator(
@@ -247,6 +258,13 @@ try {
       } : {}),
     }),
   ];
+  if (graphClient) {
+    modules.push(createNotesModule({
+      graph: graphClient,
+      ownerObjectId: config.auth.ownerObjectId,
+      folderPath: config.notesFolderPath,
+    }));
+  }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
       getToken: async (scope, signal) => {

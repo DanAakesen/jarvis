@@ -113,7 +113,7 @@ Status as of 4 October 2026.
 | Computer use | Jarvis clicks and types on Dan's PC while he talks | Voice/chat | PC companion | Planned (needs decision) | P7-07 |
 | Camera | Jarvis sees through the webcam on request | Both | Main page | Planned | P7-08 |
 | Calendar and mail | Agenda, free slots, move meetings, search and draft mail | Voice/chat | — | Planned (needs decision) | P7-09 |
-| Second brain | Search Dan's notes and quote them | Voice/chat | — | Planned (needs decision) | P7-10 |
+| Second brain | Search Dan's configured OneDrive notes folder and quote snippets with links | Voice/chat | — | Implemented offline; Graph setup and live search pending | P7-10 |
 
 ## Jarvis UI enabling logic (P8-03)
 
