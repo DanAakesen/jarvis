@@ -140,12 +140,17 @@ erDiagram
   `voice.en.voice`, `voice.da.voice`, `voice.default_language`, `codex.model`,
   `codex.reasoning_effort`, `copilot.model`, and `global.max_parallel_tasks`.
   Values are JSON scalars. Model/voice/language/reasoning choices are validated
-  against the backend catalog; `default` for Codex/Copilot means defer to the
-  provider's own default until P2-11 verifies model overrides. The global task
-  limit is an integer from 1 to 100. Partial writes are transactional; settings
-  are defaults for future sessions/tasks, not live updates or history. At the
-  start of a hosted Jarvis session, the agent keeps the effective model and
-  reasoning effort in memory for that session; the snapshot is not persisted.
+  against the backend catalog; Codex/Copilot catalogs currently contain only
+  `default`. P2-11 verified that the runner can apply explicit model overrides
+  (and Codex reasoning) through provider options. Task rows retain an optional
+  model override and Codex reasoning override. The runner's ACP session metadata
+  retains the effective selection across resumed turns. P2-05 still owns
+  resolving task overrides before the applicable settings default. The global
+  task limit is an integer from 1 to
+  100. Partial writes are transactional; settings are defaults for future
+  sessions/tasks, not live updates or history. At the start of a hosted Jarvis
+  session, the agent keeps the effective model and reasoning effort in memory for
+  that session; the snapshot is not persisted.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes.
 
 ## 2 · Projects

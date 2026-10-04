@@ -16,7 +16,11 @@ import { coreModule } from './core/index.js';
 import { conversationModule } from './core/conversation.js';
 import { factoryModule } from './factory/index.js';
 import type { BackendModule } from './modules.js';
-import { createVoiceLiveConnector, createVoiceRelayModule } from './voice/relay.js';
+import {
+  createDanishVoiceConnector,
+  createVoiceLiveConnector,
+  createVoiceRelayModule,
+} from './voice/relay.js';
 
 try {
   const config = loadConfig();
@@ -26,7 +30,7 @@ try {
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const modules: BackendModule[] = [coreModule, conversationModule, factoryModule];
-  if (config.voiceLiveEndpoint) {
+  if (config.voiceLiveEndpoint || config.foundryProjectEndpoint) {
     const credential = new DefaultAzureCredential();
     modules.push(createVoiceRelayModule({
       getToken: async (scope, signal) => {
@@ -34,7 +38,10 @@ try {
         if (!token) throw new Error('Voice identity unavailable');
         return token.token;
       },
-      connect: createVoiceLiveConnector(config.voiceLiveEndpoint),
+      ...(config.voiceLiveEndpoint ? { connect: createVoiceLiveConnector(config.voiceLiveEndpoint) } : {}),
+      ...(config.foundryProjectEndpoint
+        ? { connectDanish: createDanishVoiceConnector(config.foundryProjectEndpoint) }
+        : {}),
     }));
   }
   const app = buildApp(config, logger, {

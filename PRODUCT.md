@@ -117,6 +117,8 @@ Global defaults on the settings page; a task can override the coding-agent model
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
+Danish voice uses the authenticated backend `/voice/da` WebSocket to a provisioned Foundry Voice Live agent. The agent bridges to the hosted Jarvis agent, uses MAI Transcribe with language `da` and the Danish phrase list, and fixes Harper to `da-DK`.
+
 ### Page requirements
 
 Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
@@ -187,8 +189,12 @@ the last-release field is explicitly unavailable rather than inferred.
 | Credentials: name, expiry, last renewal, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
 
 The settings API validates choices against the server's available-model catalog.
-Until provider model support is verified, Codex and Copilot use their provider
-defaults. The global parallel-task limit is a whole number from 1 to 100. Voice
+The coding-agent catalog currently offers only each provider's default. P2-11
+verifies the runner path for explicit model values: Copilot uses its CLI `--model`
+option; Codex uses the ACP `model` and `reasoning_effort` session options. Task
+overrides take precedence over settings defaults when the dispatcher supplies
+the effective values. Actual provider/model availability still needs a live
+task. The global parallel-task limit is a whole number from 1 to 100. Voice
 sample playback, the sleep switch, and credential data/actions remain visibly
 unavailable with an explanation until their owning services exist.
 

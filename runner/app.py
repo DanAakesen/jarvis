@@ -70,6 +70,8 @@ class TaskState:
     session_id: str
     agent: str
     task: str
+    model: str | None = None
+    reasoning: str | None = None
     status: str = "queued"
     started_at: float = field(default_factory=time.time)
     finished_at: float | None = None
@@ -180,7 +182,7 @@ def _load_task(invocation_id: str) -> TaskState | None:
     return None
 
 
-def _load_acp_session(session_id: str, agent: str) -> str | None:
+def _load_acp_session(session_id: str, agent: str) -> dict[str, str | None] | None:
     path = _session_metadata_path(session_id)
     if not path.exists():
         return None
@@ -193,7 +195,13 @@ def _load_acp_session(session_id: str, agent: str) -> str | None:
     session_id_value = saved.get("acp_session_id")
     if not isinstance(session_id_value, str) or not session_id_value:
         raise RuntimeError("Persisted ACP session metadata has no session id")
-    return session_id_value
+    model = saved.get("model")
+    reasoning = saved.get("reasoning")
+    if model is not None and not isinstance(model, str):
+        raise RuntimeError("Persisted ACP session metadata has an invalid model")
+    if reasoning is not None and not isinstance(reasoning, str):
+        raise RuntimeError("Persisted ACP session metadata has invalid reasoning")
+    return {"acp_session_id": session_id_value, "model": model, "reasoning": reasoning}
 
 
 def _persist_acp_session(state: TaskState, acp_session_id: str) -> None:
@@ -203,6 +211,8 @@ def _persist_acp_session(state: TaskState, acp_session_id: str) -> None:
             "agent": state.agent,
             "foundry_session_id": state.session_id,
             "acp_session_id": acp_session_id,
+            "model": state.model,
+            "reasoning": state.reasoning,
         },
     )
 
@@ -212,6 +222,18 @@ def _required_string(payload: dict[str, Any], key: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"'{key}' must be a non-empty string")
     return value.strip()
+
+
+def _optional_config(payload: dict[str, Any], key: str, max_length: int) -> str | None:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if (not isinstance(value, str) or not value.strip() or value.lstrip().startswith("-")
+            or len(value) > max_length
+            or any(ord(character) < 32 or ord(character) == 127 for character in value)):
+        raise ValueError(f"'{key}' must be a valid option of at most {max_length} characters")
+    value = value.strip()
+    return None if value == "default" else value
 
 
 async def _key_vault_secret(name: str) -> str:
@@ -575,6 +597,24 @@ class ACPClient:
                 raise RuntimeError("ACP server did not return a session id")
             _persist_acp_session(self.state, self.acp_session_id)
             self.state.event("acp_session", session_id=self.acp_session_id)
+        if self.state.agent == "codex":
+            for config_id, value in (("model", self.state.model), ("reasoning_effort", self.state.reasoning)):
+                if value is None:
+                    continue
+                configured = await self.request(
+                    "session/set_config_option",
+                    {"sessionId": self.acp_session_id, "configId": config_id, "value": value},
+                )
+                config_options = configured.get("configOptions")
+                selected = next(
+                    (
+                        option for option in config_options
+                        if isinstance(option, dict) and option.get("id") == config_id
+                    ) if isinstance(config_options, list) else (),
+                    None,
+                )
+                if selected is None or selected.get("currentValue") != value:
+                    raise RuntimeError(f"Codex did not apply the requested {config_id} option")
         result = await self.request(
             "session/prompt",
             {
@@ -625,8 +665,11 @@ class ACPClient:
             await asyncio.gather(self._reader_task, return_exceptions=True)
 
 
-def _agent_command(agent: str) -> list[str]:
-    return ["copilot", "--acp", "--stdio", "--allow-all"] if agent == "copilot" else ["codex-acp"]
+def _agent_command(agent: str, model: str | None = None) -> list[str]:
+    command = ["copilot", "--acp", "--stdio", "--allow-all"] if agent == "copilot" else ["codex-acp"]
+    if agent == "copilot" and model is not None:
+        command.extend(["--model", model])
+    return command
 
 
 def _credential_helper(worktree: Path) -> Path:
@@ -688,13 +731,18 @@ async def _run_task(state: TaskState) -> None:
                 env["CODEX_HOME"] = str(codex_home)
             # Do not retain secret strings in state or event payloads.
             credentials.clear()
-            persisted_session_id = _load_acp_session(state.session_id, state.agent)
+            persisted_session = _load_acp_session(state.session_id, state.agent)
+            if persisted_session is not None:
+                state.model = persisted_session["model"]
+                state.reasoning = persisted_session["reasoning"]
             client = ACPClient(
-                _agent_command(state.agent),
+                _agent_command(state.agent, state.model),
                 worktree,
                 state,
                 env,
-                persisted_session_id=persisted_session_id,
+                persisted_session_id=(
+                    persisted_session["acp_session_id"] if persisted_session is not None else None
+                ),
             )
             await client.start()
             session_clients[state.session_id] = client
@@ -876,11 +924,20 @@ async def invoke(request: Request) -> Response:
         )
     except ValueError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
+    try:
+        model = _optional_config(payload, "model", 100)
+        reasoning = _optional_config(payload, "reasoning", 32)
+        if agent == "copilot" and reasoning is not None:
+            raise ValueError("'reasoning' is only supported for Codex")
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
     state = TaskState(
         invocation_id=invocation_id,
         session_id=session_id,
         agent=agent,
         task=task,
+        model=model,
+        reasoning=reasoning,
     )
     async with tasks_lock:
         tasks[invocation_id] = state

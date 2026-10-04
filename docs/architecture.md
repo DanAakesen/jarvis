@@ -86,13 +86,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   partial update transactionally to whitelisted `global` rows in `dbo.settings`.
   The SQL adapter is injected only when database configuration exists; the API
   returns 503 without it. The model catalog offers deployed Jarvis models and
-  only verified provider defaults for Codex and Copilot until P2-11 verifies
-  their CLI model options. The agent-only `GET /agent/settings` route returns
-  only the effective Jarvis model and reasoning effort to the `Jarvis.Tools`
-  principal. The hosted agent reads it before acknowledging a new session and
-  holds that snapshot for the session; existing sessions and tasks are not
-  updated. If the read is unavailable, the agent logs a warning and uses the
-  default model and reasoning settings for that session.
+  only provider defaults for Codex and Copilot because their available-model
+  catalog values have not been verified. The agent-only `GET /agent/settings`
+  route returns only the effective Jarvis model and reasoning effort to the
+  `Jarvis.Tools` principal. The hosted agent reads it before acknowledging a new
+  session and holds that snapshot for the session; if the read is unavailable,
+  it logs a warning and uses the defaults. Future task creation reads these
+  defaults; existing sessions and tasks are not updated.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
@@ -392,7 +392,7 @@ Proven end to end with Copilot and Codex on 1–2 October 2026 ([report](referen
 | Idle timeout | 2 minutes without requests shuts the sandbox down; files and the conversation survive an idle shutdown. |
 | Crash | Files and conversation since the last persist point are lost; a new agent version does not restart running sessions. Recovery starts a new session from the task branch with the task history from SQL; the agent pushes often (L22). |
 | Endpoints | Administration (connections, versions): `*.services.ai.azure.com`. Sessions and Invocations: `*.cognitiveservices.azure.com` (L10). |
-| Settings | Model and reasoning per task: `codex-acp` (`model`, `model_reasoning_effort`) and Copilot `--model`; **verify** in P2. |
+| Settings | The Foundry invocation carries the effective `model` and, for Codex, `reasoning`. Copilot CLI 1.0.91 accepts `--model`; `@agentclientprotocol/codex-acp` 2.1.1 applies `model` and `reasoning_effort` through `session/set_config_option`. The runner retains the effective values with the ACP session so steer/resume does not pick up changed defaults. The dispatcher (P2-05) still resolves task overrides over settings defaults. |
 
 ### Production runner implementation
 
@@ -400,6 +400,16 @@ Issue #28 ports the adapter to `runner/` with task, steer, pause, resume, cancel
 credential probe, and Codex renewal handlers. Prototype crash-test mode is removed.
 Local Python tests exercise ACP subprocess fixtures; production Azure acceptance
 remains pending #11 and the main-branch runner workflow.
+
+P2-11 extends the invocation body with the effective model and optional Codex
+reasoning effort. Copilot receives a non-default model as a separate `--model`
+argument; Codex receives non-default values with ACP `session/set_config_option`
+(`model`, then `reasoning_effort`) and the runner verifies the returned current
+value. The ACP session metadata preserves those choices across process recreation.
+The dispatcher must pass the task override when present, otherwise the settings
+default; its settings-store integration remains P2-05. No model catalog values
+beyond provider default have been enabled, and live provider selection remains
+unverified.
 
 - Node/Python use the small base image; a separate .NET image adds SDK 8.0.419.
   Both expose 1 vCPU / 2 GiB and 2 vCPU / 4 GiB variants. The default stays 1×2;
@@ -493,7 +503,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Area | Design | Evidence |
 | --- | --- | --- |
 | Browser connection | Browser connects to the backend's authenticated `/voice` WebSocket using its delegated API token in the WebSocket subprotocol. When `VOICE_LIVE_ENDPOINT` is configured, the backend obtains a Voice Live-scoped token with `DefaultAzureCredential`, pins the `gpt-realtime-2.1` model, and opens the upstream connection; provider credentials never enter the browser or URL. | Backend configuration and a local mock verify endpoint validation, authentication, relay, and model pinning. P0-16 must configure the endpoint and provider identity; Azure interoperability and browser audio are unverified. |
-| Danish path | Browser microphone → Voice Live voice agent (`kind: voice`) → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | 20/20 Danish commands, 4/4 status answers |
+| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | Local mock tests verify the Danish route and relay; the hash-locked provisioner definition sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live deployment, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
 | English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler instructions, PCM audio, and the composed tool schemas. The browser cannot replace the session configuration or submit tool results. | Local mock tests verify the server-owned session update; browser audio and live Voice Live behavior remain unverified pending P0-16/P5-04. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Voice calls are not yet persisted as messages/tool-call rows; P4-03/P5-06 own conversation and voice history. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
@@ -504,7 +514,9 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Interruption | The client stops playback on Voice Live's `speech_started` | Detected in 0.6 s |
 | Reconnect | Reconnect automatically when the voice bridge ends | L21 |
 
-P5-03 pins the English model and Ryan HD in the backend. P5-05 will connect language and voice selection to settings; Danish voice provisioning and history remain separate tasks.
+P5-03 pins the English model and Ryan HD in the backend. P5-02 provides Danish voice provisioning; P5-05 will connect language and voice selection to settings, and P5-06 owns voice history.
+
+The Danish backend connector uses the Foundry project endpoint from `FOUNDRY_PROJECT_ENDPOINT` and a server-side Azure Identity token. Bicep grants the backend managed identity the `Foundry User` role on the project. After a successful `Deploy`, its smoke step grants the workflow's deploy identity `Foundry User`; the `Danish voice agent` workflow then creates/updates `jarvis-voice-mai` when provisioning inputs change, or by manual dispatch. It uses a hash-locked SDK to wrap the hosted agent `jarvis`. Browser audio remains P5-04.
 
 ### Jarvis agent
 
@@ -549,6 +561,7 @@ record. Deployment to Foundry and live agent tokens are P4-08.
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID. The hosted Jarvis agent is assigned the application role `Jarvis.Tools` and may call only the tool routes.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
+- The backend identity has `Foundry User` on the Foundry project for the Danish voice relay.
 - Secrets only in Key Vault; none in code, images, environment variables, or logs.
 
 ## Bicep resources
@@ -566,7 +579,7 @@ record. Deployment to Foundry and live agent tokens are P4-08.
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (the SSE hub and dispatcher run in one process; more copies need Web PubSub, see Ideas in PLAN.md); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), and optional `ENTRA_JARVIS_AGENT_OBJECT_ID` |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (the SSE hub and dispatcher run in one process; more copies need Web PubSub, see Ideas in PLAN.md); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `FOUNDRY_PROJECT_ENDPOINT`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID` |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Monthly budget | `jarvis-monthly` | Resource-group scoped; 300 in the subscription billing currency, monthly from 1 October 2026 (fixed start date; Azure rejects changing it), actual-cost alerts above 80 % and 100 % to resource group owners |
 
