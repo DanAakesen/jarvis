@@ -1,4 +1,7 @@
 export interface Settings {
+  appearance: {
+    theme: 'light' | 'dark';
+  };
   jarvis: {
     model: string;
     reasoning: string;
@@ -42,6 +45,7 @@ export interface SettingsStore {
 }
 
 export const defaultSettings: Settings = {
+  appearance: { theme: 'light' },
   jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
   voice: {
     speechToTextModel: 'mai-transcribe',
@@ -65,6 +69,7 @@ export const defaultSettings: Settings = {
 };
 
 export const settingsOptions = {
+  themes: ['light', 'dark'],
   jarvisModels: ['gpt-5.6-luna'],
   reasoningEfforts: ['none', 'low', 'medium', 'high'],
   speechToTextModels: ['mai-transcribe'],
@@ -81,6 +86,7 @@ export const settingsOptions = {
 } as const;
 
 const settingKeys = {
+  appearance: { theme: 'appearance.theme' },
   jarvis: { model: 'jarvis.model', reasoning: 'jarvis.reasoning_effort' },
   voice: {
     speechToTextModel: 'voice.stt.model',
@@ -111,6 +117,7 @@ function isOption(value: unknown, options: readonly string[]): value is string {
 }
 
 function validSetting(area: keyof Settings, key: string, value: unknown): boolean {
+  if (area === 'appearance' && key === 'theme') return isOption(value, settingsOptions.themes);
   if (area === 'jarvis') {
     if (key === 'model') return isOption(value, settingsOptions.jarvisModels);
     if (key === 'reasoning') return isOption(value, settingsOptions.reasoningEfforts);
@@ -170,6 +177,10 @@ const settingsPatchSchema = {
       minProperties: 1,
       additionalProperties: true,
       properties: {
+        appearance: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: { theme: selectSchema(settingsOptions.themes) },
+        },
         jarvis: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
