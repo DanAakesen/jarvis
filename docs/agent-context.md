@@ -283,7 +283,7 @@ Backend commands:
 | Purpose | Command |
 | --- | --- |
 | Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
-| SQL Server migration and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
+| SQL Server migration, webhook mapping, and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
 | Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
 | P6-05 SQL Server parallel load test (CI `Database` job; prints a `P6-05 load:` summary line) | `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher-load.integration.test.ts` (isolated loopback SQL Server only) |

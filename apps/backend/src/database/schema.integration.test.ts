@@ -186,8 +186,8 @@ describe('committed domain schema (groups 1-7)', () => {
       .query(`SELECT github_run_id AS runId, workflow, [trigger], status, conclusion, pull_request_id AS pullRequestId,
         release_id AS releaseId FROM dbo.workflow_runs WHERE project_id = @projectId;`);
     expect(runs.recordset).toEqual([{
-      runId: 1_900_000_000_001, workflow: 'Release', trigger: 'push', status: 'completed', conclusion: 'success',
-      pullRequestId: expect.any(Number), releaseId: expect.any(Number),
+      runId: '1900000000001', workflow: 'Release', trigger: 'push', status: 'completed', conclusion: 'success',
+      pullRequestId: '1', releaseId: '1',
     }]);
     const releases = await pool.request().input('projectId', sql.Int, projectId)
       .query(`SELECT version, sha, status FROM dbo.releases WHERE project_id = @projectId;`);
@@ -197,7 +197,7 @@ describe('committed domain schema (groups 1-7)', () => {
       .query(`SELECT github_deployment_id AS deploymentId, environment, status FROM dbo.deployments
         WHERE release_id = @releaseId;`);
     expect(deployments.recordset).toEqual([
-      { deploymentId: 1_900_000_000_002, environment: 'production', status: 'success' },
+      { deploymentId: '1900000000002', environment: 'production', status: 'success' },
     ]);
   });
 
