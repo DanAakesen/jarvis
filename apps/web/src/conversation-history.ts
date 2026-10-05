@@ -122,11 +122,12 @@ export async function createChatSession(
   client: PublicClientApplication,
   config: PublicConfig,
   language: 'da' | 'en',
+  signal?: AbortSignal,
 ): Promise<ChatSession> {
   const response = await chatResponse(client, config, '/conversation/sessions', {
     channel: 'chat',
     language,
-  });
+  }, 'application/json', undefined, signal);
   let value: unknown;
   try { value = await response.json(); } catch {
     throw new Error('Jarvis returned an invalid chat session.');

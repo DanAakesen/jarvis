@@ -258,7 +258,7 @@ describe('ConversationHistory', () => {
     finish?.(assistantMessage);
 
     expect(await screen.findByText('I am ready.')).not.toBeNull();
-    expect(createChatSession).toHaveBeenCalledWith(client, config, 'da');
+    expect(createChatSession).toHaveBeenCalledWith(client, config, 'da', expect.any(AbortSignal));
     expect(sendChatTurn).toHaveBeenCalledWith(
       client,
       config,
@@ -424,6 +424,42 @@ describe('ConversationHistory', () => {
     expect(sendChatTurn.mock.calls[1]?.[3]).toBe('Next after failure');
     await act(async () => finish({ ...assistantMessage, id: '54' }));
     expect(screen.getByRole('alert')).toBe(error);
+  });
+
+  it.each(['session', 'camera'] as const)('Stop advances the queue without waiting for pending %s setup', async (setup) => {
+    let finishSetup!: () => void;
+    const camera: CameraController = {
+      sharing: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(), stop: vi.fn(),
+      inspect: vi.fn(() => new Promise<{ description: string }>((resolve) => {
+        finishSetup = () => resolve({ description: 'A mug.' });
+      })),
+    };
+    if (setup === 'session') {
+      createChatSession.mockImplementationOnce(() => new Promise((resolve) => {
+        finishSetup = () => resolve(session);
+      }));
+    }
+    let finishTurn!: () => void;
+    sendChatTurn.mockImplementation((_client, _config, _session, text, onUser) => {
+      onUser({ ...userMessage, text });
+      return new Promise((resolve) => { finishTurn = () => resolve(assistantMessage); });
+    });
+    renderConversation(0, camera);
+    await screen.findByText('What’s on your mind?');
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: setup === 'camera' ? 'What am I holding?' : 'First' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(setup === 'camera' ? camera.inspect : createChatSession).toHaveBeenCalled());
+    fireEvent.change(input, { target: { value: 'Next' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: 'Stop reply' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(sendChatTurn.mock.calls[0]?.[3]).toBe('Next');
+    expect(screen.getByRole('alert').textContent).toContain('Reply stopped');
+    await act(async () => finishSetup());
+    expect(sendChatTurn).toHaveBeenCalledOnce();
+    await act(async () => finishTurn());
   });
 
   it('preserves an identical next draft when a stream error reports uncertain delivery after acceptance', async () => {
@@ -768,7 +804,7 @@ describe('ConversationHistory', () => {
     expect(screen.getByRole('button', { name: 'Danish' }).getAttribute('aria-pressed')).toBe('false');
     await user.type(input, 'Hello');
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(createChatSession).toHaveBeenCalledWith(client, config, 'en'));
+    await waitFor(() => expect(createChatSession).toHaveBeenCalledWith(client, config, 'en', expect.any(AbortSignal)));
   });
 
   it('auto-grows the frameless input, bounds long drafts and shrinks again', async () => {

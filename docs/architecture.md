@@ -842,7 +842,9 @@ the draft locally. A synchronous in-flight guard permits only one active
 `sendChatTurn`; its promise settles (including stream cleanup) before the next
 queued submission starts. Later drafts survive completion/errors, and failed
 turn feedback remains visible while the queue advances. Stop reply passes an
-AbortSignal through the existing fetch/stream cancellation path; component
+AbortSignal through session creation and the existing fetch/stream cancellation
+path; cancellable setup waits also prevent slow visual inspection from blocking
+the queue or sending the stopped message when inspection later finishes. Component
 unmount also aborts the active turn. Pending messages are in memory only and
 are not retained across navigation/reload.
 History pages and saved turn messages merge by ID in SQL's numeric-ID order;
