@@ -20,12 +20,13 @@ export interface ReflexClassification {
   readonly confidence: number;
   readonly needsConfirmation: boolean;
   readonly completeCommand?: boolean;
-  readonly contradictsExecuted?: boolean;
+  readonly contradictedAction?: string | null;
   readonly target: ReflexTarget | null;
 }
 
 export interface ReflexContext {
   readonly executed: readonly string[];
+  readonly executedActions?: readonly { readonly id: string; readonly summary: string }[];
   readonly partial?: boolean;
   readonly final?: boolean;
 }
@@ -168,9 +169,16 @@ export function createJevReflexClassifier(
           instructions: 'Does the latest stable transcript contain a new, complete command not already listed as executed?',
         };
         if (context.final && context.executed.length > 0) {
-          questions.contradicts_executed = {
-            type: 'noul',
-            instructions: 'Does this final transcript explicitly contradict one of the listed executed actions?',
+          const contradictedActionChoices: Record<string, string> = {
+            none: 'No listed executed action is explicitly contradicted.',
+          };
+          for (const action of context.executedActions ?? []) {
+            contradictedActionChoices[action.id] = action.summary;
+          }
+          questions.contradicted_action = {
+            type: 'choice',
+            instructions: 'Choose the one listed executed action explicitly contradicted by the final transcript, or none.',
+            criteria: contradictedActionChoices,
           };
         }
       }
@@ -229,29 +237,40 @@ export function createJevReflexClassifier(
         const completeCommand = context
           ? answer(answers, 'complete_command', 'noul')?.noul
           : undefined;
-        const contradiction = context?.final && context.executed.length > 0
-          ? answer(answers, 'contradicts_executed', 'noul')?.noul
+        const contradictionAnswer = context?.final && context.executed.length > 0
+          ? answer(answers, 'contradicted_action', 'choice')
           : undefined;
+        const contradictedAction = contradictionAnswer?.choice;
+        const contradictedActionChoices = new Set([
+          'none',
+          ...(context?.executedActions ?? []).map(({ id }) => id),
+        ]);
+        const selectedContradiction = typeof contradictedAction === 'string' &&
+          contradictedActionChoices.has(contradictedAction) ? contradictedAction : undefined;
         const intent = intentAnswer?.choice;
         const choice = routeAnswer?.choice;
         const routeConfidence = routeAnswer?.confidence;
         const confidenceScore = confidenceAnswer?.score;
         if (!validProbability(addressed) || !validProbability(confirmation) ||
             (context && !validProbability(completeCommand)) ||
-            (context?.final && context.executed.length > 0 && !validProbability(contradiction)) ||
+            (context?.final && context.executed.length > 0 &&
+             selectedContradiction === undefined) ||
             (intent !== 'action' && intent !== 'question' && intent !== 'other') ||
             typeof intentAnswer?.confidence !== 'number' || !validProbability(intentAnswer.confidence) ||
             typeof choice !== 'string' || !Object.hasOwn(choices, choice) ||
             !validProbability(routeConfidence) || !validProbability(confidenceScore)) return null;
 
+        const completeCommandScore = validProbability(completeCommand) ? completeCommand : undefined;
         const target = choice === 'main_agent' ? null : targets.find((item) => item.choice === choice) ?? null;
         return {
           addressed: addressed >= confidenceThreshold,
           intent,
           confidence: Math.min(intentAnswer.confidence, routeConfidence, confidenceScore),
           needsConfirmation: confirmation >= 0.5,
-          ...(completeCommand === undefined ? {} : { completeCommand: completeCommand >= confidenceThreshold }),
-          ...(contradiction === undefined ? {} : { contradictsExecuted: contradiction >= confidenceThreshold }),
+          ...(completeCommandScore === undefined ? {} : { completeCommand: completeCommandScore >= confidenceThreshold }),
+          ...(selectedContradiction === undefined ? {} : {
+            contradictedAction: selectedContradiction === 'none' ? null : selectedContradiction,
+          }),
           target,
         };
       } catch {
@@ -266,10 +285,12 @@ export async function executeReflexAction(
   request: FastifyRequest,
   messageId: string,
   signal: AbortSignal,
-  mode: 'partial' | 'final' = 'final',
+  mode: 'partial' | 'final' | 'undo' = 'final',
 ): Promise<ReflexActionResult | null> {
   const target = classification?.target;
   const partialSafe = target?.tool.name === 'pause_task' && target.tool.reflexSafe === true ||
+    target?.tool.name === 'pc_open' && target.arguments.target === 'app' &&
+      target.arguments.value === 'edge' ||
     target?.tool.name === 'pc_open' && target.arguments.target === 'url' &&
       typeof target.arguments.value === 'string' && safeHttpUrl(target.arguments.value);
   const modeSafe = mode === 'partial' ? partialSafe

@@ -28,12 +28,14 @@ const MAX_MESSAGE_BYTES = 1_048_576;
 const MAX_TRANSCRIPT_CHARACTERS = 20_000;
 const MAX_TRANSCRIPTS_PER_SESSION = 1_000;
 const MAX_REFLEX_ACTIONS_PER_TURN = 8;
+const MAX_REFLEX_CLASSIFICATIONS_PER_TURN = 8;
 const TOKEN_TIMEOUT_MS = 10_000;
 const CONNECTION_TIMEOUT_MS = 10_000;
 
 export type VoiceConnectionFactory = (token: string, signal: AbortSignal) => WebSocket;
 
 interface VoiceReflexLedgerEntry {
+  readonly id: string;
   readonly target: ReflexTarget;
   readonly signature: string;
   readonly result: ReflexActionResult;
@@ -45,6 +47,7 @@ interface VoiceReflexLedgerEntry {
 interface PartialTranscript {
   text: string;
   stableLength: number;
+  reflexRequests: number;
 }
 
 function actionSignature(target: ReflexTarget): string {
@@ -53,8 +56,9 @@ function actionSignature(target: ReflexTarget): string {
 
 function partialSafeTarget(target: ReflexTarget): boolean {
   if (target.tool.name === 'pause_task') return target.tool.reflexSafe === true;
-  if (target.tool.name !== 'pc_open' || target.arguments.target !== 'url' ||
-      typeof target.arguments.value !== 'string') return false;
+  if (target.tool.name !== 'pc_open') return false;
+  if (target.arguments.target === 'app' && target.arguments.value === 'edge') return true;
+  if (target.arguments.target !== 'url' || typeof target.arguments.value !== 'string') return false;
   try {
     const url = new URL(target.arguments.value);
     return (url.protocol === 'http:' || url.protocol === 'https:') &&
@@ -73,7 +77,7 @@ function browserUrlTargets(request: Parameters<typeof reflexTargets>[0], text: s
     targets.push({
       choice: 'partial_open_browser',
       tool,
-      arguments: { target: 'url', value: 'https://www.google.com/' },
+      arguments: { target: 'app', value: 'edge' },
     });
   }
   const destination = /(?:\b(?:go|navigate)\s+to\b|\b(?:gå|naviger)\s+til\b)\s+([^\s,;.!?]+)/iu.exec(text)?.[1];
@@ -293,6 +297,7 @@ function registerVoiceRoute(
     let firstActionLatencyMs: number | undefined;
     let speechStoppedAt: number | undefined;
     let speechToFirstWordMs: number | undefined;
+    let speechToFirstAudioMs: number | undefined;
     let metricsLogged = false;
     const sessionReady = store.createSession({ channel: 'voice', language })
       .then((session) => { sessionId = session.id; });
@@ -324,6 +329,9 @@ function registerVoiceRoute(
 
     const queueStablePartial = (itemId: string, text: string, receivedAt: number) => {
       stablePartialClauses += 1;
+      const state = partialTranscripts.get(itemId);
+      if (!state || state.reflexRequests >= MAX_REFLEX_CLASSIFICATIONS_PER_TURN) return;
+      state.reflexRequests += 1;
       pendingPartialReflex += 1;
       reflexPending = true;
       transcriptQueue = transcriptQueue.then(async () => {
@@ -339,7 +347,14 @@ function registerVoiceRoute(
           language,
           targets,
           controller.signal,
-          { executed: ledger.map(({ target, result }) => `${reflexSummary(target, result.outcome)}: ${result.note}`), partial: true },
+          {
+            executed: ledger.map(({ target, result }) => `${reflexSummary(target, result.outcome)}: ${result.note}`),
+            executedActions: ledger.map(({ id, target, result }) => ({
+              id,
+              summary: `${reflexSummary(target, result.outcome)}: ${result.note}`,
+            })),
+            partial: true,
+          },
         );
         const target = classification?.target;
         if (!classification?.completeCommand || !target || !partialSafeTarget(target)) return;
@@ -349,7 +364,12 @@ function registerVoiceRoute(
         const action = await executeReflexAction(classification, request, message.id, controller.signal, 'partial');
         if (!action) return;
         const entry: VoiceReflexLedgerEntry = {
-          target, signature, result: action, undone: false, undoAttempted: false,
+          id: `action-${ledger.length + 1}`,
+          target,
+          signature,
+          result: action,
+          undone: false,
+          undoAttempted: false,
         };
         ledger.push(entry);
         reflexLedger.set(itemId, ledger);
@@ -379,8 +399,7 @@ function registerVoiceRoute(
       if (typeof itemId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/u.test(itemId) ||
           typeof delta !== 'string' || !delta || reflexedItems.has(itemId) ||
           disabledPartialItems.has(itemId)) return;
-      partialTranscriptionDeltas += 1;
-      const state = partialTranscripts.get(itemId) ?? { text: '', stableLength: 0 };
+      const state = partialTranscripts.get(itemId) ?? { text: '', stableLength: 0, reflexRequests: 0 };
       if (!partialTranscripts.has(itemId) && partialTranscripts.size >= MAX_TRANSCRIPTS_PER_SESSION) return;
       if (state.text.length + delta.length > MAX_TRANSCRIPT_CHARACTERS) {
         partialTranscripts.delete(itemId);
@@ -412,6 +431,7 @@ function registerVoiceRoute(
         stablePartialClauses,
         firstActionLatencyMs: firstActionLatencyMs === undefined ? null : Number(firstActionLatencyMs.toFixed(2)),
         speechToFirstWordMs: speechToFirstWordMs === undefined ? null : Number(speechToFirstWordMs.toFixed(2)),
+        speechToFirstAudioMs: speechToFirstAudioMs === undefined ? null : Number(speechToFirstAudioMs.toFixed(2)),
       }, 'voice.reflex_metrics');
     };
 
@@ -431,23 +451,53 @@ function registerVoiceRoute(
           const classification = await app.reflexClassifier.classify(
             text,
             language,
-            await reflexTargets(request),
+            [
+              ...await reflexTargets(request),
+              ...browserUrlTargets(request, text),
+            ],
             controller.signal,
-            { executed: ledger.map(({ target, result }) => `${reflexSummary(target, result.outcome)}: ${result.note}`), final: true },
+            {
+              executed: ledger.map(({ target, result }) => `${reflexSummary(target, result.outcome)}: ${result.note}`),
+              executedActions: ledger.map(({ id, target, result }) => ({
+                id,
+                summary: `${reflexSummary(target, result.outcome)}: ${result.note}`,
+              })),
+              final: true,
+            },
           );
-          if (classification?.contradictsExecuted) {
-            for (const entry of [...ledger].reverse()) {
-              entry.undoAttempted = true;
-              const undo = await undoPartialReflexAction(entry.target, request, message.id, controller.signal);
-              entry.undoResult = undo;
-              if (undo?.outcome === 'ok') entry.undone = true;
+          const contradictedEntry = ledger.find(({ id }) => id === classification?.contradictedAction);
+          if (contradictedEntry) {
+            contradictedEntry.undoAttempted = true;
+            try {
+              const undo = await undoPartialReflexAction(
+                contradictedEntry.target,
+                request,
+                message.id,
+                controller.signal,
+              );
+              contradictedEntry.undoResult = undo;
+              if (undo?.outcome === 'ok') contradictedEntry.undone = true;
+            } catch {
+              contradictedEntry.undoResult = {
+                tool: 'undo',
+                outcome: 'error',
+                note: 'The undo attempt failed; the action may still be in effect.',
+              };
             }
           }
           const target = classification?.target;
-          const alreadyExecuted = target && ledger.some((entry) => entry.signature === actionSignature(target) &&
-            entry.result.outcome === 'ok' && !entry.undone);
+          const alreadyExecuted = target && (
+            ledger.some((entry) => entry.signature === actionSignature(target) && !entry.undone) ||
+            contradictedEntry?.signature === actionSignature(target)
+          );
           if (!alreadyExecuted) {
-            finalAction = await executeReflexAction(classification, request, message.id, controller.signal);
+            finalAction = await executeReflexAction(
+              classification,
+              request,
+              message.id,
+              controller.signal,
+              target?.tool.name === 'pc_open' ? 'partial' : 'final',
+            );
           }
         }
         if (controller.signal.aborted || endRequested) return;
@@ -575,6 +625,7 @@ function registerVoiceRoute(
     };
 
     const close = (code: number, reason: string) => {
+      logReflexMetrics();
       finishActiveToolActivities();
       if (!activityFinished) {
         publishActivity(code === 1000 || activityState === 'reconnecting' ? 'ended' : 'failed');
@@ -778,6 +829,7 @@ function registerVoiceRoute(
       }
       controller.abort();
       statusAnnouncer?.close();
+      logReflexMetrics();
       if (upstream) closeSocket(upstream, 1000, 'Browser disconnected');
       void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
     });
@@ -786,6 +838,7 @@ function registerVoiceRoute(
       publishActivity('failed');
       controller.abort();
       statusAnnouncer?.close();
+      logReflexMetrics();
       if (upstream) closeSocket(upstream, 1011, 'Voice connection failed');
       void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
     });
@@ -818,13 +871,31 @@ function registerVoiceRoute(
         });
         upstream.on('message', (data, binary) => {
           const event = parseVoiceEvent(data, binary);
+          if (event?.type === 'conversation.item.input_audio_transcription.delta') {
+            partialTranscriptionDeltas += 1;
+            receiveTranscriptionDelta(event);
+          }
           if (event?.type === 'input_audio_buffer.speech_started') {
             if (assistantResponding) publishActivity('interrupted');
             userSpeaking = true;
+            if (speechToFirstWordMs === undefined) speechStoppedAt = undefined;
           }
           if (event?.type === 'input_audio_buffer.speech_stopped') {
             userSpeaking = false;
+            speechStoppedAt = performance.now();
             statusAnnouncer?.flush();
+          }
+          if ((event?.type === 'response.audio_transcript.delta' ||
+               event?.type === 'response.output_audio_transcript.delta') &&
+              typeof event.delta === 'string' && event.delta.trim() &&
+              speechStoppedAt !== undefined && speechToFirstWordMs === undefined) {
+            speechToFirstWordMs = performance.now() - speechStoppedAt;
+          }
+          if ((event?.type === 'response.audio.delta' ||
+               event?.type === 'response.output_audio.delta') &&
+              typeof event.delta === 'string' && event.delta &&
+              speechStoppedAt !== undefined && speechToFirstAudioMs === undefined) {
+            speechToFirstAudioMs = performance.now() - speechStoppedAt;
           }
           if (event?.type === 'response.created') {
             assistantResponding = true;
@@ -850,7 +921,19 @@ function registerVoiceRoute(
               typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
               typeof event.transcript === 'string' && event.transcript.trim() &&
               event.transcript.length <= MAX_TRANSCRIPT_CHARACTERS) {
-            void handleEnglishEndOfTurn(event.item_id, event.transcript.trim());
+            void handleVoiceEndOfTurn(event.item_id, event.transcript.trim());
+          } else if (!english && event?.type === 'user.message' &&
+              typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
+              Array.isArray(event.content)) {
+            const text = event.content.flatMap((part) =>
+              part !== null && typeof part === 'object' && !Array.isArray(part) &&
+              (part as Record<string, unknown>).type === 'input_text' &&
+              typeof (part as Record<string, unknown>).text === 'string'
+                ? [(part as Record<string, unknown>).text as string]
+                : []).join('').trim();
+            if (text && text.length <= MAX_TRANSCRIPT_CHARACTERS) {
+              void handleVoiceEndOfTurn(event.item_id, text);
+            }
           } else if (english && event?.type === 'conversation.item.input_audio_transcription.failed') {
             sendUpstream({ type: 'response.create' });
           }
