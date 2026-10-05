@@ -826,6 +826,13 @@ continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
 
+P8-25 keeps chat draft and turn state in `ConversationHistory`: acceptance clears
+only the unchanged submitted draft, and later edits survive completion/errors.
+History pages and saved turn messages merge by ID in SQL's numeric-ID order;
+persisted entries replace optimistic metadata without removing absent entries.
+Older pagination retains its cursor across latest-page refreshes. These changes
+do not alter storage, SSE contracts, or the backend's first-byte latency.
+
 When `JARVIS_CHAT_AGENT_NAME` is configured, the backend uses its managed
 identity to call
 `POST {FOUNDRY_PROJECT_ENDPOINT}/agents/{agent_name}/endpoint/protocols/invocations?api-version=v1`

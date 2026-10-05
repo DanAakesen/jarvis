@@ -428,6 +428,23 @@ surface, without decorative borders. Dan's messages remain plain text. While a
 reply streams, an unmatched `**` is temporarily closed for rendering so an open
 bold span does not flash as literal Markdown; persisted text is unchanged.
 
+P8-25 clears the submitted draft when the saved user message arrives, not when
+the reply ends. Typing remains available throughout the turn; Send, DA/EN and
+voice entry remain disabled until it ends. There is no queued send. Later draft
+edits survive acceptance, success and interruption; a failed unsaved submission
+keeps its draft, while uncertain delivery warns against resending.
+Before the first delta, a labelled “Jarvis is thinking…” status uses a quiet
+opacity-pulsing dot, static under reduced motion. Once text arrives, the reply
+and caret render on the open transcript surface, never inside an input-like box.
+The input starts focused and the transcript opens at the bottom. History refresh
+merges by saved message ID without removing recent or previously loaded messages.
+Local Chromium evidence at 1440×900 and 390×844 in both themes:
+`docs/ui/screenshots/p8-25-{before,after,streaming,complete}-{dark,light}-{desktop,phone}.png`.
+The sequence is load → send “hi” → saved user message and thinking status →
+type “Next message” with Send disabled → first Markdown delta → saved reply and
+stale history refresh, with both messages and the next draft retained.
+Screenshots label mocked auth/SSE; they do not verify live Foundry latency.
+
 Window titles are drag handles; right/bottom edges and the corner resize. Each
 window keeps minimise, maximise and close in its title actions, with a 44px
 ellipsis disclosure for keyboard Arrange. The workspace header retains the
