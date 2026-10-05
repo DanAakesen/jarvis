@@ -283,13 +283,16 @@ try {
     foreach ($secret in $secrets) {
         $file = Write-SecretFile $secret.Name $secret.Value
         $stored = $false
-        for ($attempt = 1; $attempt -le 12; $attempt++) {
+        # Key Vault RBAC can take several minutes to apply to a new assignment (L95).
+        for ($attempt = 1; $attempt -le 24; $attempt++) {
             Invoke-Native {
                 & az keyvault secret set --vault-name $keyVaultName --name $secret.Name `
-                    --file $file --content-type text/plain --output none --only-show-errors
+                    --file $file --encoding utf-8 --content-type text/plain --subscription $SubscriptionId `
+                    --output none --only-show-errors
             }
             if ($LASTEXITCODE -eq 0) { $stored = $true; break }
-            Start-Sleep -Seconds 5
+            if ($attempt -eq 1) { Write-Host 'Waiting for temporary Key Vault access to take effect (up to six minutes)...' }
+            Start-Sleep -Seconds 15
         }
         if (-not $stored) { throw "Could not store Key Vault secret '$($secret.Name)'." }
     }
