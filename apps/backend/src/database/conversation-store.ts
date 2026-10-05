@@ -45,6 +45,7 @@ interface ToolCallRow {
   tool: string;
   outcome: 'ok' | 'refused' | 'error';
   task_id: string | null;
+  artifact_id: string | null;
 }
 
 function sessionFromRow(row: SessionRow): ConversationSession {
@@ -194,7 +195,10 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
 
           SELECT CONVERT(varchar(20), tc.id) AS id,
             CONVERT(varchar(20), tc.message_id) AS message_id, tc.tool, tc.outcome,
-            CONVERT(varchar(20), tc.task_id) AS task_id
+            CONVERT(varchar(20), tc.task_id) AS task_id,
+            CASE WHEN tc.tool = N'image_generation' AND tc.outcome = N'ok'
+              THEN TRY_CONVERT(varchar(36), TRY_CONVERT(uniqueidentifier, JSON_VALUE(tc.result, '$.artifactId')))
+              ELSE NULL END AS artifact_id
           FROM dbo.tool_calls AS tc
           INNER JOIN @history AS h ON h.id = tc.message_id
           ORDER BY tc.message_id, tc.id;`);
@@ -205,7 +209,16 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       const callsByMessage = new Map<string, ConversationToolCall[]>();
       for (const call of toolCallRows) {
         const calls = callsByMessage.get(call.message_id) ?? [];
-        calls.push({ id: call.id, tool: call.tool, outcome: call.outcome, taskId: call.task_id });
+        const artifactId = call.artifact_id && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(call.artifact_id)
+          ? call.artifact_id
+          : undefined;
+        calls.push({
+          id: call.id,
+          tool: call.tool,
+          outcome: call.outcome,
+          taskId: call.task_id,
+          ...(artifactId === undefined ? {} : { artifactId }),
+        });
         callsByMessage.set(call.message_id, calls);
       }
       const messages: ConversationHistoryMessage[] = pageRows.map((row) => ({

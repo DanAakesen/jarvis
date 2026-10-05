@@ -21,6 +21,13 @@ function auditToolArguments(toolName: string, value: unknown): unknown {
 }
 
 function auditToolResult(toolName: string, outcome: ToolCallOutcome, result: unknown): unknown {
+  if (toolName === 'image_generation') {
+    const artifactId = isObject(result) && typeof result.artifactId === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(result.artifactId)
+      ? result.artifactId
+      : undefined;
+    return outcome === 'ok' && artifactId ? { artifactId } : {};
+  }
   if (!toolName.startsWith('memory_')) return result;
   return {
     confirmation: outcome === 'ok'
@@ -151,7 +158,9 @@ export const coreModule: BackendModule = {
               messageId: messageId!,
               tool: tool.name,
               arguments: tool.sensitive ? { redacted: true } : auditToolArguments(tool.name, request.body),
-              result: tool.sensitive ? { redacted: true } : auditToolResult(tool.name, outcome, result),
+              result: tool.sensitive && tool.name !== 'image_generation'
+                ? { redacted: true }
+                : auditToolResult(tool.name, outcome, result),
               outcome,
             });
           } catch (error) {

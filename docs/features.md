@@ -167,11 +167,12 @@ This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell c
 | --- | --- | --- | --- | --- | --- |
 | Long-term memory | Recall preferences, decisions and unfinished work across sessions; inspect, correct and forget retained memories | Voice/chat | Existing conversation; dedicated management UI undecided | Planned (storage, capture and retention decisions open) | P7-13 |
 | Web research | Search and retrieve web sources, synthesise findings with links and show results through dynamic views | Both | Conversation and dynamic workspace | Planned (provider and cost decision open) | P7-14; existing P8-06/P8-14/P8-15 consumers |
-| Image and video generation | Generate visual assets, inspect truthful job status and view the resulting artifacts | Both | Conversation and dynamic workspace | Planned (providers, cost and retention decisions open) | P7-15; existing P8-06/P8-14/P8-15 consumers |
+| Image generation | Generate with Dan's ChatGPT/Codex subscription, inspect truthful job status, and view the private artifact in chat and the workspace | Both | Conversation and dynamic workspace | Implemented offline; live subscription/Blob acceptance pending; retention unresolved | P7-15; existing P8-06/P8-14/P8-15 consumers |
 | Editable personality | Set tone/response-style and custom-instruction defaults for new sessions; reset to the current default | Screen | Settings → Jarvis → Personality | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 
-Dan accepted these features on 4 October 2026. No new provider or paid service
-was selected, and no implementation was started by this planning change. Notes
-search remains #208 and is not a replacement for long-term conversational memory.
-The first video's project was described as open source; its repository and
-licence have not yet been inspected, so code reuse is not a dependency.
+Dan accepted these features on 4 October 2026. On 5 October he selected the
+existing ChatGPT/Codex subscription for image generation. Its usage is shared
+with coding tasks; no pay-per-image API or fallback is used. Video is deferred
+indefinitely to a separate issue, and artifact retention remains unresolved.
+Notes search remains #208 and is not a replacement for long-term conversational
+memory.

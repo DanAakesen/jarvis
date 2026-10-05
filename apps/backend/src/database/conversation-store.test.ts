@@ -91,6 +91,10 @@ describe('SQL conversation store', () => {
         [
           { id: '90', message_id: '11', tool: 'factory_create_task', outcome: 'ok', task_id: '77' },
           { id: '91', message_id: '12', tool: 'factory_list_tasks', outcome: 'refused', task_id: null },
+          {
+            id: '92', message_id: '12', tool: 'image_generation', outcome: 'ok', task_id: null,
+            artifact_id: '7b96c6a9-9f80-4a8b-8a73-51517fe37512',
+          },
         ],
       ],
       rowsAffected: [],
@@ -120,7 +124,13 @@ describe('SQL conversation store', () => {
           model: null,
           voiceMinutes: null,
           at: new Date('2026-10-03T12:02:00Z'),
-          toolCalls: [{ id: '91', tool: 'factory_list_tasks', outcome: 'refused', taskId: null }],
+          toolCalls: [
+            { id: '91', tool: 'factory_list_tasks', outcome: 'refused', taskId: null },
+            {
+              id: '92', tool: 'image_generation', outcome: 'ok', taskId: null,
+              artifactId: '7b96c6a9-9f80-4a8b-8a73-51517fe37512',
+            },
+          ],
         },
       ],
       nextCursor: '11',
@@ -129,6 +139,7 @@ describe('SQL conversation store', () => {
     expect(input).toHaveBeenNthCalledWith(1, 'take', sql.Int, 3);
     expect(input).toHaveBeenNthCalledWith(2, 'beforeId', sql.BigInt, 15n);
     expect(query.mock.calls[0]?.[0]).toContain('INNER JOIN @history AS h');
+    expect(query.mock.calls[0]?.[0]).toContain("JSON_VALUE(tc.result, '$.artifactId')");
   });
 
   it('ends a session idempotently and reports unknown sessions', async () => {

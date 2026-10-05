@@ -5,7 +5,8 @@ import { loadAuthConfig } from './auth/config.js';
 describe('backend configuration', () => {
   it('defaults to the infrastructure port and offline logs', () => {
     expect(loadConfig({})).toEqual({
-      port: 3000, logLevel: 'info', notesFolderPath: '/Jarvis/Notes', auth: loadAuthConfig({}),
+      port: 3000, logLevel: 'info', notesFolderPath: '/Jarvis/Notes', codexImageModel: 'gpt-5.5',
+      auth: loadAuthConfig({}),
     });
   });
   it('accepts a configured OneDrive notes folder and rejects unsafe paths', () => {
@@ -47,7 +48,14 @@ describe('backend configuration', () => {
         runtime: foundryRuntimeEndpoint,
       },
       foundryRunnerAgentName: 'jarvis-runner-node-1x2',
+      codexImageModel: 'gpt-5.5',
     });
+  });
+  it('accepts a configurable Codex image model and rejects unsafe option values', () => {
+    expect(loadConfig({ JARVIS_CODEX_TOOL_MODEL: 'gpt-5.5' }).codexImageModel).toBe('gpt-5.5');
+    for (const JARVIS_CODEX_TOOL_MODEL of ['', '-option', 'gpt-5.5\n--help']) {
+      expect(() => loadConfig({ JARVIS_CODEX_TOOL_MODEL })).toThrow('JARVIS_CODEX_TOOL_MODEL');
+    }
   });
   it('accepts only an HTTPS Azure Key Vault URI', () => {
     expect(loadConfig({ KEY_VAULT_URI: 'https://fixture.vault.azure.net/' }).keyVaultUri)

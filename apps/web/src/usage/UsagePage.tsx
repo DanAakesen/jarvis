@@ -30,6 +30,10 @@ interface UsageReport {
   entries: UsageEntry[];
   totalEntries: string;
   truncated: boolean;
+  dailyToolUsage: {
+    date: string;
+    tools: { tool: string; count: string }[];
+  };
 }
 
 type LoadState =
@@ -82,6 +86,12 @@ function isUsageReport(value: unknown): value is UsageReport {
     (value.from === null || isDate(value.from)) && isDate(value.to) &&
     Array.isArray(value.entries) && value.entries.length <= 1000 && value.entries.every(isUsageEntry) &&
     typeof value.totalEntries === 'string' && /^\d+$/.test(value.totalEntries) &&
+    isObject(value.dailyToolUsage) && typeof value.dailyToolUsage.date === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value.dailyToolUsage.date) &&
+    Array.isArray(value.dailyToolUsage.tools) && value.dailyToolUsage.tools.length <= 100 &&
+    value.dailyToolUsage.tools.every((tool) => isObject(tool) &&
+      typeof tool.tool === 'string' && tool.tool.length > 0 && tool.tool.length <= 64 &&
+      typeof tool.count === 'string' && /^\d+$/.test(tool.count)) &&
     typeof value.truncated === 'boolean';
 }
 
@@ -230,6 +240,17 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
               : `No DKK costs were reported for ${report.truncated ? 'the displayed entries' : 'this period'}.`}
             {' '}{report.from ? `Period starts ${dateTime(report.from)}.` : 'All recorded usage.'}
           </p>
+          <section className="usage-tool-counts" aria-labelledby="usage-tool-counts-heading">
+            <h2 id="usage-tool-counts-heading">Jarvis tool calls today (UTC)</h2>
+            <p>Recorded chat tool calls since 00:00 UTC, including successful, refused, and failed calls. Coding-agent turns are shown separately in usage entries.</p>
+            {report.dailyToolUsage.tools.length === 0
+              ? <p>No Jarvis tool calls were recorded today.</p>
+              : <ul>
+                {report.dailyToolUsage.tools.map(({ tool, count }) => (
+                  <li key={tool}><code>{tool}</code>: {quantityFormat.format(BigInt(count))}</li>
+                ))}
+              </ul>}
+          </section>
           {report.truncated && (
             <p className="usage-limit-note" role="status">
               Showing the latest {report.entries.length} of {report.totalEntries} usage breakdowns; totals below reflect the displayed rows only.

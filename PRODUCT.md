@@ -36,7 +36,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | **Plan tracking** | The repository's `PLAN.md` is the shared task-status view, with each task linked to its GitHub issue. An open issue with a worker label (`Codex`, `Copilot`, `Dan`, or `Jarvis`) or an open linked PR sets In progress (assignees are ignored), completed tasks set Complete, and all other tasks, including issues closed without completion, reset to Not started unless Blocked is set by hand. New task rows get a labelled issue with dependency links. |
 | **Parallel work** | Dan controls concurrency across projects; capacity depends on provider limits and compute. |
 | **Agent choice** | Codex or GitHub Copilot per task, regardless of project. |
-| **Subscriptions** | Codex uses Dan's ChatGPT Pro plan (Jarvis-only login); Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. No per-use billing for either. |
+| **Subscriptions** | Coding tasks and image generation use Dan's ChatGPT/Codex subscription through the Jarvis-only login; Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. Codex usage is shared with Dan's use; no per-image API billing or fallback is allowed. |
 | **Voice** | An open browser is enough. Danish and English with a language toggle; status requests and follow-ups. During English sessions, Jarvis announces selected task, pull-request, and deployment status changes in fixed short wording, merging bursts and waiting until the current voice turn is idle. Voice Live credentials stay on the backend; the browser connects through an authenticated backend WebSocket relay. |
 | **Reflex layer** | After a chat turn or English Voice Live end-of-turn, Jev classifies whether Dan addressed Jarvis and whether the request is an action, question, or other. Only high-confidence actions with no confirmation requirement may call an explicitly reflex-safe registered tool directly; uncertain, unsafe, and confirmation-requiring turns go to the main agent. |
 | **Phone workspace** | At phone width, one content view is foreground. Switch by horizontal swipe, named controls, keyboard, or the existing workspace focus/restore command; hidden views retain their local state. Typing shows only the small composer orb as the explicit voice-start control. Active voice docks below foreground content with End voice, and returns to the main space when all content is closed or minimised. Agent-delivered views and requests remain P8-15. |
@@ -50,7 +50,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | **Build and release** | Full builds, all tests, and releases run in GitHub Actions, as in Dan's normal workflow; never in the sandbox. Managed projects can copy the repository's PR-check and OIDC-release workflow templates and adapt their build and deployment commands. |
 | **Project settings** | Per project: how far agents may go (deliver a PR, or complete without deployment), merge rules, sandbox size. |
 | **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models, plus the app-wide light/dark appearance; updates affect new sessions and tasks, not running work. |
-| **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. |
+| **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. Show today's UTC Jarvis tool-call counts by tool, including refusals and failures; subscription usage has no fabricated DKK cost. |
 | **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. For chat, the backend calls the hosted agent through Foundry Invocations with its managed identity; the agent verifies Dan's delegated token and stored source message through `/me` and conversation history. The agent has its own identity for reading model settings and listing/calling tools; coding runners use a separate app-only role restricted to task-event ingestion. Outlook uses a backend-only app identity with Exchange RBAC scoped to Dan's mailbox. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Database wake** | SQL connection acquisition and explicitly read-only queries retry resume errors 40613, 40197, 40501 and connection timeouts with backoff for up to 90 seconds. Signed-in pages show “Waking Jarvis…” only while the backend reports a database wait. An ambiguous write failure is never automatically replayed. |
@@ -314,7 +314,7 @@ data/actions remain visibly unavailable until their owning services exist.
 | --- | --- |
 | Per task, project, and period: sandbox minutes and DKK; Jarvis model tokens, screen frames and DKK; voice minutes and DKK; Codex and Copilot usage (no DKK) | Change period; group by project, agent, or source; open a task |
 
-The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-linked metric rows in project, agent, or source groups. Screen-frame DKK uses the current documented Luna Global Standard token rates and is identified as an estimate; sandbox and voice costs are also estimates, and Codex/Copilot never display DKK. Unknown model rates remain unpriced. When more than 1,000 grouped rows match, the page says that its subtotals cover only the displayed rows.
+The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-linked metric rows in project, agent, or source groups, plus today's UTC Jarvis tool-call counts by tool (including successful, refused, and failed calls). Screen-frame DKK uses the current documented Luna Global Standard token rates and is identified as an estimate; sandbox and voice costs are also estimates, and Codex/Copilot never display DKK. Unknown model rates remain unpriced. When more than 1,000 grouped rows match, the page says that its subtotals cover only the displayed rows.
 
 ## Constraints and integrations
 
@@ -396,10 +396,11 @@ Dan accepted four additions after reviewing the supplied video transcript:
 - **Web research:** search and retrieve sources, synthesise findings with links
   and supply results to existing dynamic-view consumers. Provider and cost limits
   remain open; no service has been selected or provisioned.
-- **Image and video generation:** generate both kinds of assets on request,
-  expose truthful pending/completed/failed/cancelled state and return artifacts
-  to the workspace. Provider, costs and artifact retention remain open. Creating
-  assets is distinct from creating their temporary presentation views.
+- **Image generation:** generate images with Dan's ChatGPT/Codex subscription
+  through the existing hosted runner, expose truthful job outcomes, and save
+  private workspace artifacts for chat and workspace display. Usage is shared
+  with coding tasks; no pay-per-image API or fallback is allowed. Video is
+  deferred indefinitely to a separate issue. Artifact retention remains open.
 - **Editable personality:** persist Dan's tone/response-style preferences and
   custom instructions, applying the same configuration to new chat and voice
   sessions. Keep the current butler default until changed; personality does not
@@ -408,5 +409,6 @@ Dan accepted four additions after reviewing the supplied video transcript:
 
 Tasks: P7-13–P7-16 and the P8-19 Personality settings UI. P7-16 and P8-19 are
 implemented and tested offline; live Azure session and settings behavior remain
-unverified. P7-13–P7-15 remain planned. The existing Microsoft-first service and
-cost constraints remain in force.
+unverified. P7-13 and P7-15 are implemented offline with live checks pending;
+P7-14's provider/cost decision remains open. P7-15 reuses the existing
+ChatGPT/Codex subscription rather than provisioning an image-generation service.

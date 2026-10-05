@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createChatSession,
+  loadImageArtifactUrl,
   loadConversationHistory,
   sendChatTurn,
 } from './conversation-history';
@@ -41,6 +42,41 @@ describe('loadConversationHistory', () => {
     const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       request = { input, ...(init === undefined ? {} : { init }) };
       return new Response(JSON.stringify(history), { status: 200 });
+    });
+
+    describe('loadImageArtifactUrl', () => {
+      it('requests an owner-authorized artifact URL and accepts only trusted HTTPS Blob hosts', async () => {
+        const client = createClient();
+        const fetch = vi.fn(async () => new Response(JSON.stringify({
+          url: 'https://jarvisstore.blob.core.windows.net/artifacts/image.png?sp=r&spr=https',
+        }), { status: 200 }));
+        vi.stubGlobal('fetch', fetch);
+        const signal = new AbortController().signal;
+
+        await expect(loadImageArtifactUrl(
+          client as never,
+          config,
+          '7b96c6a9-9f80-4a8b-8a73-51517fe37512',
+          signal,
+        )).resolves.toBe('https://jarvisstore.blob.core.windows.net/artifacts/image.png?sp=r&spr=https');
+
+        expect(String(fetch.mock.calls[0]?.[0])).toContain(
+          '/factory/workspace-artifacts/images/7b96c6a9-9f80-4a8b-8a73-51517fe37512',
+        );
+        expect((fetch.mock.calls[0]?.[1]?.headers as Record<string, string>).Authorization)
+          .toBe(`${['Bear', 'er'].join(' ')} test-token`);
+        expect(fetch.mock.calls[0]?.[1]?.signal).toBe(signal);
+
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+          url: 'https://attacker.example/image.png',
+        }), { status: 200 })));
+        await expect(loadImageArtifactUrl(
+          client as never,
+          config,
+          '7b96c6a9-9f80-4a8b-8a73-51517fe37512',
+          signal,
+        )).rejects.toThrow('untrusted image artifact URL');
+      });
     });
 
     describe('chat turn API', () => {

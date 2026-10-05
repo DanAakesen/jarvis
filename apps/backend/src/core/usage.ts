@@ -18,8 +18,17 @@ export interface UsageEntry {
   estimated: boolean;
 }
 
+export interface DailyToolCount {
+  tool: string;
+  count: string;
+}
+
 export interface UsageStore {
-  list(from: Date | null, to: Date): Promise<{ entries: UsageEntry[]; totalEntries: string }>;
+  list(from: Date | null, to: Date): Promise<{
+    entries: UsageEntry[];
+    totalEntries: string;
+    dailyToolCounts?: DailyToolCount[];
+  }>;
 }
 
 const periodDays: Record<UsagePeriod, number | null> = {
@@ -52,11 +61,16 @@ export async function registerUsageRoutes(app: FastifyInstance) {
     const days = periodDays[period];
     const from = days === null ? null : new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
     const report = await app.usageStore.list(from, to);
+    const { dailyToolCounts = [], ...usageReport } = report;
     const result = {
       period,
       from: from?.toISOString() ?? null,
       to: to.toISOString(),
-      ...report,
+      ...usageReport,
+      dailyToolUsage: {
+        date: to.toISOString().slice(0, 10),
+        tools: dailyToolCounts,
+      },
       truncated: BigInt(report.totalEntries) > BigInt(report.entries.length),
     };
     if (Buffer.byteLength(JSON.stringify(result)) > maxResponseBytes) {

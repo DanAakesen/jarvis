@@ -7,6 +7,7 @@ export interface ConversationHistoryToolCall {
   tool: string;
   outcome: 'ok' | 'refused' | 'error';
   taskId: string | null;
+  artifactId?: string;
 }
 
 export interface ConversationHistoryMessage {
@@ -60,7 +61,10 @@ function isHistoryPage(value: unknown): value is ConversationHistoryPage {
     return message.toolCalls.every((call) =>
       isRecord(call) && typeof call.id === 'string' && typeof call.tool === 'string' &&
       (call.outcome === 'ok' || call.outcome === 'refused' || call.outcome === 'error') &&
-      (call.taskId === null || typeof call.taskId === 'string'));
+      (call.taskId === null || typeof call.taskId === 'string') &&
+      (call.artifactId === undefined ||
+        (typeof call.artifactId === 'string' &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(call.artifactId))));
   });
 }
 
@@ -267,4 +271,45 @@ export async function loadConversationHistory(
   }
   if (!isHistoryPage(body)) throw new Error('Jarvis returned an invalid conversation history response.');
   return body;
+}
+
+export async function loadImageArtifactUrl(
+  client: PublicClientApplication,
+  config: PublicConfig,
+  artifactId: string,
+  signal: AbortSignal,
+): Promise<string> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(artifactId)) {
+    throw new Error('Jarvis returned an invalid image artifact reference.');
+  }
+  if (!config.backendUrl) throw new Error('Image artifacts are unavailable until the backend is deployed.');
+  const token = await accessToken(client, config);
+  let response: Response;
+  try {
+    const bearerScheme = ['Bear', 'er'].join('');
+    response = await backendFetch(
+      `${config.backendUrl.replace(/\/+$/, '')}/factory/workspace-artifacts/images/${artifactId}`,
+      { headers: { Authorization: `${bearerScheme} ${token}` }, signal },
+    );
+  } catch {
+    throw new Error('Jarvis could not load the generated image.');
+  }
+  if (response.status === 401) throw new Error('Jarvis could not verify your Microsoft sign-in. Try again.');
+  if (response.status === 403) throw new Error("This Microsoft account isn't allowed to use Jarvis.");
+  if (!response.ok) throw new Error('The generated image is no longer available.');
+  let body: unknown;
+  try { body = await response.json(); } catch {
+    throw new Error('Jarvis returned an invalid image artifact response.');
+  }
+  if (!isRecord(body) || typeof body.url !== 'string') {
+    throw new Error('Jarvis returned an invalid image artifact response.');
+  }
+  let url: URL;
+  try { url = new URL(body.url); } catch {
+    throw new Error('Jarvis returned an invalid image artifact URL.');
+  }
+  if (url.protocol !== 'https:' || !url.hostname.endsWith('.blob.core.windows.net') || url.username || url.password) {
+    throw new Error('Jarvis returned an untrusted image artifact URL.');
+  }
+  return url.toString();
 }

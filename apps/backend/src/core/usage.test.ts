@@ -54,6 +54,7 @@ describe('usage report API', () => {
       to: to.toISOString(),
       entries: [entry],
       totalEntries: '1',
+      dailyToolUsage: { date: to.toISOString().slice(0, 10), tools: [] },
       truncated: false,
     });
     expect(store.list).toHaveBeenCalledWith(from, to);

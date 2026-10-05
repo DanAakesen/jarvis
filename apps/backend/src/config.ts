@@ -16,6 +16,7 @@ export interface BackendConfig {
     runtime: string;
   };
   foundryRunnerAgentName?: string;
+  codexImageModel: string;
   foundryChatAgentName?: string;
   foundryProjectEndpoint?: string;
   foundryMemoryEmbeddingDeploymentName?: string;
@@ -135,6 +136,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (foundryRunnerAgentName !== undefined && !/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName)) {
     throw new ConfigurationError('FOUNDRY_RUNNER_AGENT_NAME must be a valid agent name');
   }
+  const codexImageModel = env.JARVIS_CODEX_TOOL_MODEL ?? 'gpt-5.5';
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/u.test(codexImageModel)) {
+    throw new ConfigurationError('JARVIS_CODEX_TOOL_MODEL must be a valid Codex model name');
+  }
   const githubAppId = env.GITHUB_APP_ID;
   if (githubAppId !== undefined && !/^[1-9][0-9]{0,19}$/u.test(githubAppId)) {
     throw new ConfigurationError('GITHUB_APP_ID must be a positive decimal identifier');
@@ -224,6 +229,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
       foundryEndpoints: { admin: foundryAdminEndpoint, runtime: foundryRuntimeEndpoint },
     }),
     ...(foundryRunnerAgentName === undefined ? {} : { foundryRunnerAgentName }),
+    codexImageModel,
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),

@@ -44,6 +44,11 @@ export interface TaskWorkspace {
 export type TaskRequest = TaskWorkspace & (
   | { agent: "copilot"; task: string; taskId?: string; model?: string }
   | { agent: "codex"; task: string; taskId?: string; model?: string; reasoning?: string });
+export interface CodexToolRequest {
+  task: string;
+  artifactUploadKey: string;
+  model?: string;
+}
 export interface InvocationAccepted {
   invocationId: string;
   sessionId: string;
@@ -221,6 +226,22 @@ export class FoundryClient {
       agent: "codex", mode: "renew-codex", min_days_left: 3,
     }, undefined, options);
     return this.accepted(body, "renew-codex", undefined, "codex");
+  }
+
+  async startCodexTool(request: CodexToolRequest, options: RequestOptions = {}): Promise<InvocationAccepted> {
+    const task = text(request.task, "task");
+    if (task.length > 4096 || !/^[A-Za-z0-9_-]{43}$/u.test(request.artifactUploadKey)) {
+      throw new TypeError("Invalid Codex tool request");
+    }
+    const model = option(request.model, "model", 100);
+    const body = await this.runtimeRequest("codex-tool", "protocols/invocations", "POST", {
+      agent: "codex",
+      mode: "codex-tool",
+      task,
+      artifact_upload_key: request.artifactUploadKey,
+      ...(model === undefined ? {} : { model }),
+    }, undefined, options);
+    return this.accepted(body, "codex-tool", undefined, "codex");
   }
 
   async steer(

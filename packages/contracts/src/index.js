@@ -72,7 +72,7 @@ const listItem = object({
   action: { oneOf: [routeActionSchema, externalLinkActionSchema] },
 }, ['title']);
 const sourceSchema = object({
-  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage'] },
+  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation'] },
   status: { type: 'string', enum: ['complete', 'partial', 'unavailable'] },
   updatedAt: dateTime,
   reason: string(500),
@@ -254,7 +254,7 @@ function validAction(value, registeredTools) {
 }
 
 function validSource(source) {
-  if (!isObject(source) || !['now', 'factory.tasks', 'factory.projects', 'usage'].includes(source.id) ||
+  if (!isObject(source) || !['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation'].includes(source.id) ||
     !['complete', 'partial', 'unavailable'].includes(source.status) ||
     Object.keys(source).some((key) => !['id', 'status', 'updatedAt', 'reason', 'page'].includes(key))) return false;
   if (source.updatedAt !== undefined && (typeof source.updatedAt !== 'string' || Number.isNaN(Date.parse(source.updatedAt)))) return false;

@@ -59,6 +59,10 @@ export class WorkspaceCommandBroker {
   private readonly connections = new Map<string, WorkspaceConnection>();
   private readonly records = new Map<string, Map<string, CommandRecord>>();
 
+  isConnected(ownerId: string): boolean {
+    return this.connections.has(ownerId);
+  }
+
   connect(ownerId: string, send: WorkspaceEventSender): { sessionId: string; close: () => void } {
     const prior = this.connections.get(ownerId);
     if (prior) this.disconnect(ownerId, prior.sessionId);

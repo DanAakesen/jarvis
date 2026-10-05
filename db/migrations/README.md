@@ -13,6 +13,11 @@ session end reason (P2-14, #226).
 expiring confirmation records (P7-03, #201).
 `0015_screen_frame_usage.sql` adds the screen-frame usage metric and index
 (P7-05, #203).
+`0017_workspace_artifacts.sql` adds owner-scoped image artifact metadata for
+P7-15; private image bytes remain in the existing `artifacts` Blob container.
+`0018_refused_tool_calls.sql` records refused Jarvis tool calls so daily usage
+counts include all outcomes. Its down migration refuses to remove the constraint
+while refused rows exist, preserving their truthful outcomes.
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only

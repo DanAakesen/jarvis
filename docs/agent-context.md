@@ -240,6 +240,7 @@ Verified in Codex cloud for P0-02:
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
 | Focused P7-13 memory-tool, embedding, and migration tests | `npm test --workspace @jarvis/backend -- --run src/core/memory.test.ts src/core/memory-embeddings.test.ts src/database/migrations.test.ts` |
 | Focused P7-04 reflex, chat and voice tests | `npm test --workspace @jarvis/backend -- --run src/core/reflex.test.ts src/core/conversation.test.ts src/voice/relay.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py` |
+| Focused P7-15 image generation and artifact tests | `npm test --workspace @jarvis/backend -- --run src/core/image-generation.test.ts src/core/image-generation-routes.test.ts src/database/workspace-artifact-store.test.ts src/database/conversation-store.test.ts src/database/usage-store.test.ts src/core/usage.test.ts src/database/migrations.test.ts`; `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts src/usage/UsagePage.test.tsx`; `npm test --workspace @jarvis/contracts` |
 | P7-13 isolated SQL migration/store contracts | `npm run test:database --workspace @jarvis/backend` |
 | Focused P3-05 failed-check tests | `npm test --workspace @jarvis/backend -- src/database/checks-loop-blob.test.ts src/database/checks-loop-store.test.ts src/github/checks-loop.test.ts src/github/actions-logs.test.ts src/github/webhook.test.ts src/core/settings.test.ts src/github-app.test.ts` |
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
@@ -586,7 +587,10 @@ configured, the backend uses its shared `DefaultAzureCredential`, selected with
 and Foundry runner configuration, and uses the SQL credential lease; the task
 dispatcher must start Codex work through `TaskStore.transition` so both
 operations serialize. Bicep retains one `Foundry User` assignment for the
-backend identity at project scope.
+backend identity at project scope. P7-15 image generation uses the same runner
+and adds `JARVIS_CODEX_TOOL_MODEL` (default `gpt-5.5`); it is a model name, not a
+credential. The hosted runner uses its existing Key Vault Codex login. No API
+key or paid image API is configured.
 
 Backend authentication defaults to the nonsecret identities in
 `infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and
@@ -824,6 +828,16 @@ tabs or page contents.
   backend restart, list/history, correction and forgetting. Confirm forgetting
   prevents recall while original conversation records remain. Never use sensitive
   real data for the smoke test.
+- P7-15 image generation needs no new service or secret. The backend uses its
+  existing Foundry runner agent and Blob managed identity; migration `0017`
+  creates owner-scoped image metadata, and `0018` allows refused tool outcomes
+  to be recorded for the daily per-tool Usage count. `JARVIS_CODEX_TOOL_MODEL`
+  defaults to `gpt-5.5`; Dan locally verified Codex CLI 0.157.1 with his ChatGPT
+  login, but deployed Codex behavior is unverified. After merge, the coordinator
+  should ask for one approved image, verify its private Blob artifact in both
+  chat and the workspace, and confirm usage-limit errors remain visible. This
+  consumes the shared ChatGPT/Codex allowance; it is not a cost counter or a
+  per-image API charge. Video is deferred; retention has no automatic cleanup.
 
 Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
