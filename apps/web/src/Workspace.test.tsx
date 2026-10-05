@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRef, useMemo, useRef, useState } from 'react';
 import { Workspace, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { useWorkspaceCommands, WorkspaceCommandContext } from './workspace-command-state';
@@ -10,6 +10,19 @@ const views: WorkspaceView[] = [
   { id: 'research', title: 'Research summary', content: { status: 'ready', content: <p>Source-linked findings</p> } },
   { id: 'sources', title: 'Sources', content: { status: 'loading' } },
 ];
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+function phoneViewport() {
+  vi.stubGlobal('matchMedia', vi.fn(() => ({
+    matches: true,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })));
+}
 
 function arrangeTrigger(view: HTMLElement, title: string) {
   return within(view).getByRole('button', { name: `Arrange ${title}` });
@@ -47,6 +60,198 @@ function JarvisWorkspaceRequest() {
 }
 
 describe('Workspace', () => {
+  it('keeps one phone view foreground, retains content state and supports named and keyboard switching', async () => {
+    phoneViewport();
+    const user = userEvent.setup();
+    render(<Workspace views={[
+      { ...views[0]!, content: { status: 'ready', content: <input aria-label="Research note" defaultValue="Original" /> } },
+      views[1]!,
+    ]} />);
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.queryByRole('article', { name: 'Sources' })).toBeNull();
+    expect(screen.queryByText('Arrange')).toBeNull();
+    await user.type(screen.getByRole('textbox', { name: 'Research note' }), ' retained');
+    await user.click(screen.getByRole('button', { name: 'Show Sources' }));
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
+    expect(screen.getByRole('button', { name: 'Show Sources' }).getAttribute('aria-current')).toBe('true');
+    expect(document.querySelector('article[hidden]')?.hasAttribute('inert')).toBe(true);
+    screen.getByRole('button', { name: 'Show Sources' }).focus();
+    await user.keyboard('{Home}');
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Research summary' }));
+    expect((screen.getByRole('textbox', { name: 'Research note' }) as HTMLInputElement).value).toBe('Original retained');
+  });
+
+  it.each(['page', 'agent', 'mixed'] as const)('foregrounds phone %s views through existing commands without changing desktop order and falls back after close/minimise', async (source) => {
+    phoneViewport();
+    const user = userEvent.setup();
+    const controller = createRef<WorkspaceController>();
+    const onVisibleViewsChange = vi.fn();
+    const pageViews = source === 'page' ? views : source === 'mixed' ? views.slice(0, 1) : [];
+    render(<Workspace ref={controller} views={pageViews} onVisibleViewsChange={onVisibleViewsChange} />);
+    for (const view of views.slice(pageViews.length)) {
+      act(() => {
+        expect(controller.current?.dispatch({
+          commandId: `create-${view.id}`, operation: 'create', viewId: view.id,
+          view: {
+            version: 1, title: view.title, renderer: 'list',
+            source: { id: 'factory.tasks', status: 'complete' },
+            data: { items: [{ title: `${view.title} content` }] },
+          },
+        })).toBe(true);
+      });
+    }
+    act(() => { expect(controller.current?.dispatch({ commandId: 'focus-sources', operation: 'focus', viewId: 'sources' })).toBe(true); });
+    expect(screen.getByRole('article').getAttribute('aria-labelledby')).toContain('view-1');
+    expect(screen.getByText('Sources foreground.')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Minimise Sources' }));
+    expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Restore Sources' }));
+    await user.click(screen.getByRole('button', { name: 'Restore Sources' }));
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
+    await user.click(screen.getByRole('button', { name: 'Close Sources' }));
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Research summary' }));
+    act(() => { controller.current?.minimiseAll(); });
+    expect(controller.current?.hasVisibleViews()).toBe(false);
+    expect(onVisibleViewsChange).toHaveBeenLastCalledWith(false);
+    act(() => { expect(controller.current?.dispatch({ commandId: 'restore-research', operation: 'restore', viewId: 'research' })).toBe(true); });
+    expect(onVisibleViewsChange).toHaveBeenLastCalledWith(true);
+    expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Research summary' }));
+    act(() => { expect(controller.current?.dispatch({ commandId: 'focus-missing', operation: 'focus', viewId: 'missing' })).toBe(false); });
+    act(() => { expect(controller.current?.dispatch({ commandId: 'close-research', operation: 'close', viewId: 'research' })).toBe(true); });
+    expect(screen.queryByRole('article')).toBeNull();
+    expect(controller.current?.hasVisibleViews()).toBe(false);
+    expect(onVisibleViewsChange).toHaveBeenLastCalledWith(false);
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Workspace' }));
+  });
+
+  it('falls back from a closed page view to an updated agent view and announces its current title', () => {
+    phoneViewport();
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={[views[0]!]} />);
+    const generatedView = {
+      version: 1 as const, title: 'Agent sources', renderer: 'list' as const,
+      source: { id: 'factory.tasks' as const, status: 'complete' as const },
+      data: { items: [{ title: 'Agent findings' }] },
+    };
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'create-agent', operation: 'create', viewId: 'agent', view: generatedView,
+      })).toBe(true);
+    });
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'show-agent', operation: 'show', viewId: 'agent',
+      })).toBe(true);
+    });
+    expect(screen.getByText('Agent sources foreground.')).not.toBeNull();
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'update-agent', operation: 'update', viewId: 'agent',
+        view: { ...generatedView, title: 'Updated sources' },
+      })).toBe(true);
+    });
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'show-page', operation: 'show', viewId: 'research',
+      })).toBe(true);
+    });
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'close-page', operation: 'close', viewId: 'research',
+      })).toBe(true);
+    });
+    expect(screen.getByRole('article', { name: 'Updated sources' }).hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Updated sources' }));
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'focus-agent', operation: 'focus', viewId: 'agent',
+      })).toBe(true);
+    });
+    expect(screen.getByText('Updated sources foreground.')).not.toBeNull();
+  });
+
+  it('switches phone views on horizontal touch swipes but ignores scrolling, controls, small movements and cancellation', () => {
+    phoneViewport();
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={views} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    Object.defineProperties(canvas, {
+      setPointerCapture: { value: vi.fn() },
+      hasPointerCapture: { value: () => true },
+      releasePointerCapture: { value: vi.fn() },
+    });
+    function swipe(target: Element, dx: number, dy = 0, cancel = false) {
+      fireEvent.pointerDown(target, { pointerId: 1, pointerType: 'touch', isPrimary: true, clientX: 150, clientY: 100 });
+      if (cancel) fireEvent.pointerCancel(canvas, { pointerId: 1 });
+      else fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 150 + dx, clientY: 100 + dy });
+    }
+    const content = screen.getByText('Source-linked findings');
+    swipe(content, -20);
+    swipe(content, -70, 90);
+    swipe(content, -70, 0, true);
+    swipe(screen.getByRole('button', { name: 'Close Research summary' }), -70);
+    Object.defineProperties(content, { scrollWidth: { value: 500, configurable: true }, clientWidth: { value: 200, configurable: true } });
+    swipe(content, -70);
+    expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
+    Object.defineProperty(content, 'scrollWidth', { value: 0 });
+    swipe(content, -70);
+    expect(screen.getByRole('article', { name: 'Sources' })).not.toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
+    swipe(screen.getByText('Loading view…'), -70);
+    expect(screen.getByRole('article', { name: 'Sources' })).not.toBeNull();
+    swipe(screen.getByText('Loading view…'), 70);
+    expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
+  });
+
+  it('preserves desktop ordering across phone focus and a viewport resize', () => {
+    const media = { matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal('matchMedia', vi.fn(() => media));
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={views} />);
+    act(() => { expect(controller.current?.dispatch({ commandId: 'focus-sources', operation: 'focus', viewId: 'sources' })).toBe(true); });
+    act(() => {
+      media.matches = false;
+      media.addEventListener.mock.calls.forEach(([, listener]) => listener());
+    });
+    expect(screen.getAllByRole('article').map((view) => view.getAttribute('aria-labelledby')))
+      .toEqual([expect.stringContaining('view-0'), expect.stringContaining('view-1')]);
+    expect(screen.getByRole('heading', { name: 'Research summary' })).not.toBeNull();
+  });
+
+  it('keeps the desktop view being edited foreground and retains input focus when entering phone width', () => {
+    const media = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal('matchMedia', vi.fn(() => media));
+    render(<Workspace views={[
+      views[0]!,
+      { ...views[1]!, content: { status: 'ready', content: <input aria-label="Source note" defaultValue="Retained" /> } },
+    ]} />);
+    const input = screen.getByRole('textbox', { name: 'Source note' });
+    input.focus();
+    act(() => {
+      media.matches = true;
+      media.addEventListener.mock.calls.forEach(([, listener]) => listener());
+    });
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.getByRole('article', { name: 'Sources' })).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+    expect(screen.queryByRole('article', { name: 'Research summary' })).toBeNull();
+  });
+
+  it('reserves phone content space above the conditional voice dock and leaves no-content voice centred', () => {
+    const styles = readFileSync('src/ConversationHistory.css', 'utf8');
+    const phone = styles.slice(styles.indexOf('@media (max-width: 700px)'));
+    expect(phone).toContain('bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + 12px)');
+    expect(phone).toContain('[data-voice-has-windows="true"] .voice-orb-presentation');
+    expect(phone).toContain('[data-voice-has-windows="true"] .voice-end-control');
+    expect(phone).toContain('.voice-orb { width: clamp(160px, 55vw, 240px); }');
+    expect(phone).not.toContain('[data-voice-active="true"] .voice-orb-presentation { top: auto;');
+    const workspaceStyles = readFileSync('src/styles.css', 'utf8');
+    expect(workspaceStyles).toContain('.workspace-window[hidden] { display: none; transition: none; }');
+    expect(workspaceStyles).toContain('.workspace[data-phone="true"] .workspace-view-content { touch-action: pan-y pinch-zoom; }');
+  });
+
   it('shows an honest empty state without arrangement controls', () => {
     render(<Workspace views={[]} />);
 

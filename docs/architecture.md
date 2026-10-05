@@ -118,6 +118,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   mirrored to device storage for immediate shell reads. P8-14 provides the safe
   list renderer in the Now panel; generated workspace delivery is provided by
   P8-15, and tool-call activity remains P8-16. No workspace state is persisted.
+- P8-11 keeps phone foreground selection in the same mounted `Workspace`.
+  The existing focus/restore commands select a phone view without changing
+  desktop order. Background content stays mounted, hidden and inert; pointer
+  swipes and named keyboard controls share that controller. The existing
+  visible-view callback reserves content space above the phone voice dock and
+  returns the orb to the centre when no visible content remains. No backend,
+  persistence, public command contract or generated-view delivery is added.
 - P7-16 extends the same authenticated, validated `dbo.settings` key/value store
   with bounded personality preferences. Hosted chat and Danish voice read them
   for each new agent invocation/session; the backend snapshots them when it

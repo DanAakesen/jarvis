@@ -118,6 +118,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const contextPanel = useContextPanel();
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
+  const [phone, setPhone] = useState(() => window.matchMedia?.('(max-width: 700px)').matches ?? false);
   const workspaceCommands = useMemo(() => ({
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       if (command.operation === 'context-panel') {
@@ -162,6 +163,18 @@ function ShellLayout({ signedIn, config, session, camera }: {
     .filter(({ path }) => pathname === path || pathname.startsWith(`${path}/`))
     .sort((left, right) => right.path.length - left.path.length)[0]?.label;
   const navigationItems = activeArea?.navigation ?? [{ label: 'Conversation', path: '/' }];
+  const captureControls = <>
+    <UnavailableControl id="screen-share-status" label="Share screen" explanation="Share screen from Activity, sharing and backend in the conversation." icon="screen" />
+    <CameraControl camera={camera} />
+  </>;
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(max-width: 700px)');
+    if (!media) return;
+    const update = () => setPhone(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     if (!signedIn || !config.backendUrl) return;
@@ -289,8 +302,18 @@ function ShellLayout({ signedIn, config, session, camera }: {
                 <span className="topbar-working-compact" aria-hidden="true">Working</span>
               </span>
             )}
-            <UnavailableControl id="screen-share-status" label="Share screen" explanation="Share screen from Activity, sharing and backend in the conversation." icon="screen" />
-            <CameraControl camera={camera} />
+            {phone ? <details className="topbar-capture-menu" onKeyDown={(event) => {
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector('summary')?.focus();
+            }}>
+              <summary aria-label="Camera and sharing controls"><ShellIcon name="camera" /></summary>
+              <div className="topbar-capture-controls">
+                {captureControls}
+                <p className="topbar-capture-guidance">Share screen from Activity, sharing and backend in the conversation. Camera turns off when the session ends.</p>
+              </div>
+            </details> : captureControls}
             <button
               id="context-panel-toggle"
               className="topbar-icon-button"

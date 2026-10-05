@@ -74,7 +74,7 @@ export function VoiceControls({
         return;
       }
       const openDetails = Array.from(document.querySelectorAll<HTMLDetailsElement>('details[open]'))
-        .filter((details) => !details.closest('[hidden]'));
+        .filter((details) => !details.closest('[hidden], [inert]'));
       const focusedDetails = document.activeElement instanceof HTMLElement
         ? document.activeElement.closest<HTMLDetailsElement>('details[open]')
         : null;
@@ -180,6 +180,7 @@ export function VoiceControls({
       {active && (
         <button ref={stopButton} className="secondary-button voice-end-control" type="button"
           onClick={stop} disabled={status === 'stopping'} aria-describedby="voice-status">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
           End voice
         </button>
       )}
