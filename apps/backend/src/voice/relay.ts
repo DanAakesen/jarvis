@@ -49,7 +49,11 @@ function sharedBrowserIntent(text: string): boolean {
     .test(text);
 }
 
-export type VoiceConnectionFactory = (token: string, signal: AbortSignal) => WebSocket;
+export type VoiceConnectionFactory = (
+  token: string,
+  signal: AbortSignal,
+  agentSessionId?: string,
+) => WebSocket;
 
 interface VoiceReflexLedgerEntry {
   readonly id: string;
@@ -220,10 +224,10 @@ export function createDanishVoiceAgentEndpoint(projectEndpoint: string, sessionI
 }
 
 export function createDanishVoiceConnector(projectEndpoint: string): VoiceConnectionFactory {
-  return (token, signal) => {
+  return (token, signal, agentSessionId = randomUUID().replaceAll('-', '')) => {
     return new WebSocket(createDanishVoiceAgentEndpoint(
       projectEndpoint,
-      randomUUID().replaceAll('-', ''),
+      agentSessionId,
     ), {
       headers: {
         Authorization: ['Bearer', token].join(' '),

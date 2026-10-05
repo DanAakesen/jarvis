@@ -30,6 +30,10 @@ export interface BackendConfig {
     audioOrigin: string;
     speechRegion: string;
   };
+  phone?: {
+    acsEndpoint: string;
+    acsResourceId: string;
+  };
   auth: AuthConfig;
 }
 
@@ -154,6 +158,30 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     try { new Intl.DateTimeFormat('en-GB', { timeZone: googleTimeZone }); }
     catch { throw new ConfigurationError('JARVIS_GOOGLE_TIME_ZONE must be a supported time zone'); }
   }
+  const phoneEndpoint = env.JARVIS_PHONE_ACS_ENDPOINT;
+  const phoneResourceId = env.JARVIS_PHONE_ACS_RESOURCE_ID;
+  if ((phoneEndpoint === undefined) !== (phoneResourceId === undefined)) {
+    throw new ConfigurationError('JARVIS_PHONE_ACS_ENDPOINT and JARVIS_PHONE_ACS_RESOURCE_ID must be configured together');
+  }
+  let phone: BackendConfig['phone'];
+  if (phoneEndpoint !== undefined && phoneResourceId !== undefined) {
+    let endpoint: URL;
+    try { endpoint = new URL(phoneEndpoint); }
+    catch { throw new ConfigurationError('JARVIS_PHONE_ACS_ENDPOINT must be a secure ACS endpoint'); }
+    if (endpoint.protocol !== 'https:' || endpoint.port || endpoint.username || endpoint.password ||
+        endpoint.search || endpoint.hash || endpoint.pathname !== '/' ||
+        !(endpoint.hostname.endsWith('.communication.azure.com') ||
+          endpoint.hostname.endsWith('.communications.azure.net'))) {
+      throw new ConfigurationError('JARVIS_PHONE_ACS_ENDPOINT must be a secure ACS endpoint');
+    }
+    if (!/^\/subscriptions\/[\da-f-]+\/resourceGroups\/[a-z\d._()-]+\/providers\/Microsoft\.Communication\/communicationServices\/[a-z\d-]+$/iu.test(phoneResourceId)) {
+      throw new ConfigurationError('JARVIS_PHONE_ACS_RESOURCE_ID must be an Azure Communication Services resource ID');
+    }
+    if (!keyVaultUri || !env.VOICE_LIVE_ENDPOINT || !env.TEAMS_BOT_APP_ID) {
+      throw new ConfigurationError('Phone calling requires Key Vault, Voice Live, and Teams bot configuration');
+    }
+    phone = { acsEndpoint: endpoint.origin, acsResourceId: phoneResourceId.toLowerCase() };
+  }
   const monthlyBudgetResourceId = env.JARVIS_MONTHLY_BUDGET_RESOURCE_ID;
   if (monthlyBudgetResourceId !== undefined &&
     !/^\/subscriptions\/[\da-f-]+\/resourceGroups\/[a-z\d._()-]+\/providers\/Microsoft\.Consumption\/budgets\/[a-z\d._()-]+$/iu.test(monthlyBudgetResourceId)) {
@@ -229,6 +257,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(googleTimeZone === undefined ? {} : { googleTimeZone }),
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
     ...(teams ? { teams } : {}),
+    ...(phone ? { phone } : {}),
     notesFolderPath: notesFolderPath.replace(/\/+$/u, ''),
   };
 }

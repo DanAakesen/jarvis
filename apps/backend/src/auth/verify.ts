@@ -5,17 +5,30 @@ export interface UserPrincipal { objectId: string; tenantId: string; displayName
 export interface AgentPrincipal { kind: 'jarvis-agent'; objectId: string; tenantId: string }
 export interface RunnerPrincipal { kind: 'jarvis-runner'; objectId: string; tenantId: string }
 export interface PcBridgePrincipal { kind: 'jarvis-pc-bridge'; objectId: string; tenantId: string }
-export type TokenVerifier = (token: string) => Promise<UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal>;
+export interface PhoneEventGridPrincipal { kind: 'jarvis-phone-event-grid'; objectId: string; tenantId: string }
+export type TokenVerifier = (token: string) =>
+  Promise<UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal>;
 export const agentToolsRole = 'Jarvis.Tools';
 export const runnerEventsRole = 'Jarvis.Runner.Events';
-export function isAgentPrincipal(principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal): principal is AgentPrincipal {
+export function isAgentPrincipal(
+  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal,
+): principal is AgentPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-agent';
 }
-export function isRunnerPrincipal(principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal): principal is RunnerPrincipal {
+export function isRunnerPrincipal(
+  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal,
+): principal is RunnerPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-runner';
 }
-export function isPcBridgePrincipal(principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal): principal is PcBridgePrincipal {
+export function isPcBridgePrincipal(
+  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal,
+): principal is PcBridgePrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-pc-bridge';
+}
+export function isPhoneEventGridPrincipal(
+  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal,
+): principal is PhoneEventGridPrincipal {
+  return 'kind' in principal && principal.kind === 'jarvis-phone-event-grid';
 }
 export class AuthenticationDenied extends Error {
   constructor(public readonly statusCode: 401 | 403) { super('Authentication denied'); }
@@ -32,7 +45,7 @@ export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey):
     let payload;
     try {
       ({ payload } = await jwtVerify(token, jwks, {
-        algorithms: ['RS256'], issuer, audience: config.apiClientId,
+        algorithms: ['RS256'], issuer, audience: [config.apiClientId, `api://${config.apiClientId}`],
         requiredClaims: ['exp', 'nbf', 'iat', 'tid', 'ver', 'oid'],
         clockTolerance: 5,
       }));
@@ -55,6 +68,12 @@ export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey):
         throw new AuthenticationDenied(403);
       }
       return { kind: 'jarvis-runner', objectId, tenantId: config.tenantId };
+    }
+    if (config.phoneEventGridObjectId !== undefined && objectId === config.phoneEventGridObjectId) {
+      if (payload.scp !== undefined || (payload.idtyp !== undefined && payload.idtyp !== 'app')) {
+        throw new AuthenticationDenied(403);
+      }
+      return { kind: 'jarvis-phone-event-grid', objectId, tenantId: config.tenantId };
     }
     if (config.agentObjectId !== undefined && objectId === config.agentObjectId) {
       // The agent identity signs in app-only: an assigned application role and no delegated scope.

@@ -3,8 +3,9 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify
 import { localWebOrigin, type BackendConfig } from '../config.js';
 import {
   AuthenticationDenied, createTokenVerifier, isAgentPrincipal, isRunnerPrincipal,
-  isPcBridgePrincipal,
-  type AgentPrincipal, type PcBridgePrincipal, type RunnerPrincipal, type TokenVerifier, type UserPrincipal,
+  isPcBridgePrincipal, isPhoneEventGridPrincipal,
+  type AgentPrincipal, type PcBridgePrincipal, type PhoneEventGridPrincipal, type RunnerPrincipal,
+  type TokenVerifier, type UserPrincipal,
 } from './verify.js';
 
 declare module 'fastify' {
@@ -13,6 +14,7 @@ declare module 'fastify' {
     agentPrincipal: AgentPrincipal | null;
     runnerPrincipal: RunnerPrincipal | null;
     pcBridgePrincipal: PcBridgePrincipal | null;
+    phoneEventGridPrincipal: PhoneEventGridPrincipal | null;
   }
   // Service identities may call only the routes that explicitly opt in.
   interface FastifyContextConfig {
@@ -22,6 +24,9 @@ declare module 'fastify' {
     githubWebhook?: boolean;
     teamsBot?: boolean;
     teamsAudio?: boolean;
+    jarvisPhoneEvents?: boolean;
+    jarvisPhoneMedia?: boolean;
+    jarvisPhoneCallback?: boolean;
   }
 }
 
@@ -49,10 +54,13 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
   app.decorateRequest('agentPrincipal', null);
   app.decorateRequest('runnerPrincipal', null);
   app.decorateRequest('pcBridgePrincipal', null);
+  app.decorateRequest('phoneEventGridPrincipal', null);
   app.addHook('onRequest', async (request, reply) => {
     if (request.routeOptions.url === '/health' && ['GET', 'HEAD'].includes(request.method)) return;
     if (request.routeOptions.config?.githubWebhook === true) return;
     if (request.routeOptions.config?.teamsBot === true || request.routeOptions.config?.teamsAudio === true) return;
+    if (request.routeOptions.config?.jarvisPhoneMedia === true ||
+        request.routeOptions.config?.jarvisPhoneCallback === true) return;
     // Only the CORS plugin's generated OPTIONS route may run without a token.
     // Explicit business OPTIONS endpoints still require authentication.
     const origin = request.headers.origin;
@@ -80,9 +88,13 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       } else if (isPcBridgePrincipal(principal)) {
         if (request.routeOptions.config?.jarvisPcBridge !== true) throw new AuthenticationDenied(403);
         request.pcBridgePrincipal = principal;
+      } else if (isPhoneEventGridPrincipal(principal)) {
+        if (request.routeOptions.config?.jarvisPhoneEvents !== true) throw new AuthenticationDenied(403);
+        request.phoneEventGridPrincipal = principal;
       } else {
         if (request.routeOptions.config?.jarvisRunner === true ||
-            request.routeOptions.config?.jarvisPcBridge === true) throw new AuthenticationDenied(403);
+            request.routeOptions.config?.jarvisPcBridge === true ||
+            request.routeOptions.config?.jarvisPhoneEvents === true) throw new AuthenticationDenied(403);
         request.principal = principal;
       }
     } catch (error) {
