@@ -29,6 +29,11 @@ which the Deploy workflow uses only before ACR holds the first backend image.
 The workflow takes the IDs from `bootstrap.output.json` and deploys as
 `jarvis-infra`.
 
+The optional `codexToolModel` parameter defaults to `gpt-5.5` and sets the
+backend's `JARVIS_CODEX_TOOL_MODEL` for P7-14 web research and P7-15 image
+generation. It selects a model for the existing Codex subscription; it does not
+provision a search or image service or API key.
+
 The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`) fixed at
 `20261003200000` in [`main.parameters.json`](main.parameters.json); every deploy
 reuses it. A new value would create a new account and project, so change it only
@@ -46,3 +51,15 @@ authorized to assign Graph application roles. The script is safe to rerun. The
 backend fixes searches to Dan's OneDrive and filters both the Graph query and
 returned links to the configured folder. No Azure or OneDrive live check was
 performed by the coding agent.
+
+## Google Calendar and Gmail setup
+
+After the approved core deployment, Dan creates an OAuth **Desktop app** client
+in Google Cloud Console, enables the Gmail and Calendar APIs, and publishes the
+consent screen **In production**. From Windows PowerShell 5.1 at the repository
+root, run `& .\infra\setup-google.ps1`. The PKCE loopback flow stores the OAuth
+client ID, client secret, and refresh token only in the deployed Key Vault, then
+removes the temporary Key Vault Secrets Officer assignment. It sets
+`JARVIS_GOOGLE_TIME_ZONE` as a nonsecret GitHub Actions variable; deploy `main`
+afterwards to enable the tools. Exact console steps and Google consent scopes
+are in [agent context](../docs/agent-context.md#azure).

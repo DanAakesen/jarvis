@@ -25,15 +25,12 @@ param githubAppId string = ''
 
 @description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')
 param pcBridgeClientId string = ''
-@description('The non-secret Outlook app registration ID. Empty disables Outlook tools.')
-param jarvisGraphAppId string = ''
-@description('Codex model used for ChatGPT-subscription image generation.')
-@minLength(1)
-@maxLength(100)
-param codexImageModel string = 'gpt-5.5'
+@description('Dan’s IANA time zone used for Google Calendar day boundaries. Empty disables Google mail and calendar tools.')
+param jarvisGoogleTimeZone string = ''
 
-@description('Dan’s IANA time zone used for calendar-day boundaries.')
-param jarvisGraphTimeZone string = ''
+@description('A ChatGPT-supported model for Codex hosted-runner tools.')
+param codexToolModel string = 'gpt-5.5'
+
 
 @description('The subscription currency amount for the monthly resource group budget (300 DKK).')
 param monthlyBudgetAmount int = 300
@@ -59,6 +56,7 @@ var costManagementReaderRoleId = '72fafb9e-0641-4937-9268-a91bfd8191a3'
 // Custom role created by infra/bootstrap.ps1: the deploy identity cannot create role definitions (L54).
 var backendAppScaleRoleId = '985158cb-2c3c-5b9b-bd65-897ed9be3e36'
 var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
+var cognitiveServicesUserRoleId = 'a97b65f3-24c7-4388-baec-2e87135dc908'
 var speechUserRoleId = 'f2dc8367-1007-4938-bd23-fe263f013447'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var speechAccountName = 'speechjarvis${suffix}'
@@ -356,6 +354,16 @@ resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
   }
 }
 
+resource backendFoundrySpeechUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryAccount.id, backendIdentity.id, cognitiveServicesUserRoleId)
+  scope: foundryAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesUserRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' = {
   parent: foundryAccount
   name: 'jarvis-${foundryNameTimestamp}'
@@ -389,7 +397,8 @@ resource gpt56LunaDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   ]
   sku: {
     name: 'GlobalStandard'
-    capacity: 1
+    // Global Standard bills per token; capacity is only the rate limit (1 = 1K TPM, too low for one chat turn with tools, L91).
+    capacity: 100
   }
   properties: {
     model: {
@@ -408,7 +417,8 @@ resource gptRealtime21Deployment 'Microsoft.CognitiveServices/accounts/deploymen
   ]
   sku: {
     name: 'GlobalStandard'
-    capacity: 1
+    // Regional quota maximum for gpt-realtime-2.1 Global Standard (L91).
+    capacity: 10
   }
   properties: {
     model: {
@@ -427,7 +437,8 @@ resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deploym
   ]
   sku: {
     name: 'GlobalStandard'
-    capacity: 1
+    // Memory capture and search embed in bursts (L91).
+    capacity: 20
   }
   properties: {
     model: {
@@ -701,7 +712,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             }
             {
               name: 'JARVIS_CODEX_TOOL_MODEL'
-              value: codexImageModel
+              value: codexToolModel
             }
             {
               name: 'TEAMS_BOT_APP_ID'
@@ -734,14 +745,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               name: 'ENTRA_PC_BRIDGE_CLIENT_ID'
               value: pcBridgeClientId
             }
-          ], empty(jarvisGraphAppId) ? [] : [
+          ], empty(jarvisGoogleTimeZone) ? [] : [
             {
-              name: 'JARVIS_GRAPH_APP_ID'
-              value: jarvisGraphAppId
-            }
-            {
-              name: 'JARVIS_GRAPH_TIME_ZONE'
-              value: jarvisGraphTimeZone
+              name: 'JARVIS_GOOGLE_TIME_ZONE'
+              value: jarvisGoogleTimeZone
             }
           ])
           // Startup applies migrations before listening and may wait for the serverless database to resume (300-second deadline).
@@ -787,6 +794,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
     blobDataAssignment
     blobUserDelegatorAssignment
     taskEventsContainer
+    backendFoundrySpeechUserAssignment
     speechUserAssignment
   ]
 }

@@ -136,27 +136,41 @@ function confirmation(action: 'saved' | 'updated' | 'forgotten', categoryName: M
 export function createMemoryModule(options: MemoryModuleOptions): BackendModule {
   const { store, embedder } = options;
 
-  async function embed(content: string, signal: AbortSignal): Promise<{
+  async function embed(content: string, signal: AbortSignal, request: FastifyRequest): Promise<{
     readonly value: readonly number[] | null;
     readonly unavailable: boolean;
   }> {
     if (!store.supportsVectorSearch() || !embedder) return { value: null, unavailable: false };
+    const startedAt = performance.now();
     try {
-      return { value: await embedder.embed(content, signal), unavailable: false };
+      const value = await embedder.embed(content, signal);
+      request.log.info({
+        msg: 'memory.embedding',
+        outcome: 'ok',
+        durationMs: Math.max(0, performance.now() - startedAt),
+      }, 'memory.embedding');
+      return { value, unavailable: false };
     } catch (error) {
+      request.log.info({
+        msg: 'memory.embedding',
+        outcome: signal.aborted ? 'cancelled' : 'fallback',
+        durationMs: Math.max(0, performance.now() - startedAt),
+      }, 'memory.embedding');
       if (signal.aborted) throw error;
       return { value: null, unavailable: true };
     }
   }
 
-  async function search(query: string, signal: AbortSignal): Promise<MemorySearchResult> {
+  async function search(query: string, signal: AbortSignal, request: FastifyRequest): Promise<MemorySearchResult> {
     const terms = searchTerms(query);
     if (terms.length === 0) return { memories: [], method: 'substring', mayHaveMore: false };
     let fallbackReason: MemorySearchResult['fallbackReason'];
     if (store.supportsVectorSearch() && embedder) {
       let queryVector: readonly number[] | null = null;
       try {
-        queryVector = await embedder.embed(query, signal);
+        const embedded = await embed(query, signal, request);
+        queryVector = embedded.value;
+        if (embedded.unavailable) fallbackReason = 'embedding_unavailable';
       } catch (error) {
         if (signal.aborted) throw error;
         fallbackReason = 'embedding_unavailable';
@@ -207,7 +221,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         const key = memoryKey(input.key);
         const content = requiredString(input.content, 'content', 2000);
         const source = await sourceForWrite(store, request, signal, content);
-        const embedding = await embed(content, signal);
+        const embedding = await embed(content, signal, request);
         const saved = await store.save({
           category: kind, key, content, sourceMessageId: source.messageId, embedding: embedding.value,
         }, signal);
@@ -239,7 +253,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
       execute: async (value: unknown, request: FastifyRequest, signal: AbortSignal) => {
         checkPrincipal(request);
         const query = requiredString(asObject(value).query, 'search query', 500);
-        const result = await search(query, signal);
+        const result = await search(query, signal, request);
         return {
           memories: result.memories.map(memoryDetails),
           count: result.memories.length,
@@ -323,7 +337,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         const current = await store.history(id, 1, signal);
         const memory = current[0];
         if (!memory) throw new ToolRefusal('No saved memory with that ID exists. Nothing changed.');
-        const embedding = await embed(content, signal);
+        const embedding = await embed(content, signal, request);
         const corrected = await store.correct(id, {
           category: memory.category,
           key: memory.key,

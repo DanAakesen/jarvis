@@ -8,8 +8,14 @@ export interface ToolCallRecord {
   readonly outcome: ToolCallOutcome;
 }
 
+export interface CodexToolUsageCount {
+  readonly tool: 'web_research';
+  readonly count: string;
+}
+
 export interface ToolCallStore {
   record(call: ToolCallRecord): Promise<void>;
+  listCodexToolCalls?(from: Date, to: Date): Promise<CodexToolUsageCount[]>;
 }
 
 /**
@@ -42,7 +48,7 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
     return `Not done: ${tool} was refused.${typeof reason === 'string' ? ` ${reason}` : ''}`;
   }
   const failure = (result as { failure?: unknown; error?: unknown } | null)?.failure ??
-    (result as { error?: unknown } | null)?.error;
+    (tool === 'image_generation' ? (result as { error?: unknown } | null)?.error : undefined);
   if (typeof failure === 'string') return `Not done: ${tool} failed. ${failure}`;
   return `Not done: ${tool} failed.`;
 }

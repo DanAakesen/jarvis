@@ -12,6 +12,30 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it.each(['chat', 'voice-partial', 'voice-final'])('exports bounded %s reflex decisions without transcripts or arguments', (source) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const decision = {
+      source, addressed: true, intent: 'action', tool: 'workspace_command', confidence: '>0.8',
+      completeCommand: true, executed: true, reason: 'executed', latencyMs: 42,
+    };
+    logger.info({ ...decision, transcript: 'transcript-secret', arguments: { title: 'title-secret' } }, 'reflex.decision');
+    expect(JSON.parse(records[0]!)).toMatchObject({ ...decision, msg: 'reflex.decision' });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'reflex.decision', properties: { service: 'jarvis-backend', ...decision },
+    }));
+    logger.info({
+      source: 'source-secret', intent: 'intent-secret', tool: 'tool-secret', confidence: 'confidence-secret',
+      addressed: 'addressed-secret', completeCommand: 1, executed: 'executed-secret',
+      reason: 'reason-secret', latencyMs: 600_001,
+    }, 'reflex.decision');
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('latencyMs');
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+  });
+
   it('stays offline without configuration', async () => {
     expect(await createTelemetry()).toBeUndefined();
     expect(construct).not.toHaveBeenCalled();
@@ -71,5 +95,111 @@ describe('structured log export', () => {
     expect(sdk.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
       message: 'sandbox_heartbeat.decision', properties: { service: 'jarvis-backend' },
     }));
+  });
+  it('exports only bounded task-reconciliation decisions', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    const decision = {
+      taskId: '42', sandboxSessionId: '7', invocationId: 'invocation-1',
+      status: 'completed', decision: 'needs_attention',
+    };
+    logger.info({ ...decision, reason: 'provider-secret', prompt: 'prompt-secret' }, 'task_reconciliation.decision');
+    expect(JSON.parse(records[0]!)).toMatchObject({ ...decision, msg: 'task_reconciliation.decision' });
+    expect(sdk.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'task_reconciliation.decision',
+      properties: { service: 'jarvis-backend', ...decision },
+    }));
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it('rejects arbitrary task-reconciliation identifiers and decision text', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    logger.info({
+      taskId: 'task-secret', sandboxSessionId: 'session-secret', invocationId: 'invocation\nsecret',
+      status: 'status-secret', decision: 'decision-secret',
+    }, 'task_reconciliation.decision');
+    expect(records.join('')).not.toContain('secret');
+    expect(sdk.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'task_reconciliation.decision', properties: { service: 'jarvis-backend' },
+    }));
+  });
+  it('exports only allowlisted chat and memory timing fields', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    logger.info({
+      phase: 'jev', durationMs: 123.4, text: 'prompt-secret',
+    }, 'chat.latency');
+    logger.info({
+      outcome: 'ok', durationMs: 45.6, query: 'memory-secret',
+    }, 'memory.embedding');
+
+    expect(JSON.parse(records[0]!)).toMatchObject({
+      phase: 'jev', durationMs: 123.4, msg: 'chat.latency',
+    });
+    expect(JSON.parse(records[1]!)).toMatchObject({
+      outcome: 'ok', durationMs: 45.6, msg: 'memory.embedding',
+    });
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it('exports bounded chat and voice failure diagnostics', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    logger.warn({ failure: 'Chat agent unavailable (HTTP 400)', prompt: 'prompt-secret' }, 'conversation.reply_failed');
+    logger.warn({ closeCode: 1008, failure: 'Policy violation', language: 'da', token: 'token-secret' }, 'voice.upstream_closed');
+    logger.warn({ failure: 'bad\nsecret', httpStatus: 401, language: 'en' }, 'voice.upstream_error');
+
+    expect(JSON.parse(records[0]!)).toMatchObject({ msg: 'conversation.reply_failed', failure: 'Chat agent unavailable (HTTP 400)' });
+    expect(JSON.parse(records[1]!)).toMatchObject({ msg: 'voice.upstream_closed', closeCode: 1008, failure: 'Policy violation', language: 'da' });
+    expect(JSON.parse(records[2]!)).toMatchObject({ msg: 'voice.upstream_error', httpStatus: 401, language: 'en' });
+    expect(JSON.parse(records[2]!).failure).toBeUndefined();
+    expect(records.join('')).not.toContain('secret');
+  });
+  it('exports only bounded voice reflex metrics and never transcript content', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    logger.info({
+      language: 'en',
+      partialTranscriptionDeltas: 2,
+      speechRecognitionHypotheses: 3,
+      stablePartialClauses: 1,
+      firstActionLatencyMs: 12.34,
+      speechToFirstWordMs: null,
+      speechToFirstAudioMs: 13.56,
+      transcript: 'transcript-secret',
+      userMessage: 'message-secret',
+    }, 'voice.reflex_metrics');
+    const metric = {
+      language: 'en',
+      partialTranscriptionDeltas: 2,
+      speechRecognitionHypotheses: 3,
+      stablePartialClauses: 1,
+      firstActionLatencyMs: 12.34,
+      speechToFirstWordMs: null,
+      speechToFirstAudioMs: 13.56,
+      msg: 'voice.reflex_metrics',
+    };
+    expect(JSON.parse(records[0]!)).toMatchObject(metric);
+    expect(sdk.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'voice.reflex_metrics',
+      properties: {
+        service: 'jarvis-backend',
+        language: 'en',
+        partialTranscriptionDeltas: 2,
+        speechRecognitionHypotheses: 3,
+        stablePartialClauses: 1,
+        firstActionLatencyMs: 12.34,
+        speechToFirstWordMs: null,
+        speechToFirstAudioMs: 13.56,
+      },
+    }));
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
   });
 });

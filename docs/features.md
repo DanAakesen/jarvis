@@ -29,7 +29,7 @@ Status as of 5 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Sign-in | Sign in with his Microsoft account; everyone else is refused | Screen | All pages | Live | P0-08, P0-09 |
-| Chat | Type from the floating auto-growing composer, switch DA/EN, and read distinct messages with relative metadata and live streaming feedback; one continuous saved conversation with history and interruption recovery | Screen | Main page | Built | P4-03, P4-06, P4-09, P8-05, P8-21 |
+| Chat | Open at the latest messages with typing focus; Send/Enter queues messages immediately while replies stream; removable Dan bubbles show Queued and their captured language, with an accessible count; turns send sequentially after success, error or Stop reply; failed-turn feedback and next drafts survive queue progress; thinking precedes open-surface Markdown streaming; history refresh dedupes saved messages by ID. The queue is local to the mounted conversation, not persisted across navigation/reload; voice is unchanged | Screen | Main page | Built | P4-03, P4-06, P4-09, P8-05, P8-21, P8-24, P8-25, P8-26 |
 | English voice | Talk to Jarvis in English (gpt-realtime, Ryan HD, British butler persona) | Voice/chat | Main page | Built | P5-03, P5-04 |
 | Danish voice | Talk to Jarvis in Danish (MAI Transcribe, Harper) | Voice/chat | Main page | Built | P5-02, P5-04 |
 | Interrupt and reconnect | Interrupt Jarvis by speaking; voice reconnects automatically | Voice/chat | Main page | Built | P5-04 |
@@ -43,7 +43,7 @@ Status as of 5 October 2026.
 | Live status by voice | Jarvis announces important task changes and answers "what's going on?" | Voice/chat | — | Built (offline) | P7-12 |
 | Long-term memory | Recall relevant stated preferences, project facts, decisions and unfinished tasks with Dan's source; inspect, correct or forget them | Voice/chat | — | In progress | P7-13 |
 | Live voice test | Dan's verdict on Danish and English voice | Voice/chat | — | In progress | P5-07 |
-| Reflex layer | End-of-turn Jev classification and fast routing of high-confidence safe actions; uncertainty and confirmation-required actions go to the main agent | Voice/chat | Main page | In progress (offline) | P7-04 |
+| Reflex layer | Jev classifies stable voice clauses early with a per-turn ledger; only complete, high-confidence reversible actions execute on partials, and contradictions are undone where supported. Unsafe/confirmation-required actions wait for the final turn. | Voice/chat | Main page | Built offline; live verification pending | P7-04, P7-20 |
 
 ## Main page overview
 
@@ -98,7 +98,7 @@ Status as of 5 October 2026.
 | Personality preferences | Choose a tone and response style, and add bounded instructions for new chat and voice sessions | Both | Settings, chat and voice | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 | Credentials status | See credential expiry and renewal status (never values) | Screen | Settings | Built | P2-08 |
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |
-| Usage and cost | Sandbox, model, voice, Codex and Copilot usage per task, project, period; recorded Jarvis tool calls today by tool (not remaining ChatGPT quota or image cost) | Screen | Usage | Built | P2-12, P6-01, P7-15 |
+| Usage and cost | Sandbox, model, voice, Codex and Copilot usage per task, project, period, plus the current UTC-day web-research call count | Screen | Usage | Built offline | P2-12, P6-01, P7-14 |
 | Event archive | Old task events move to Blob and load on demand | Background | Task detail | Built | P6-03 |
 | Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Now + email | Main page; email-only Azure Monitor action group | Built (offline; live Azure delivery unverified) | P6-02 |
 | Backup drill | Database restore documented | Background | — | Planned | P6-04 |
@@ -108,16 +108,17 @@ Status as of 5 October 2026.
 
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
-| Teams calling | Call Jarvis from the Teams app (no paid number at first) | Phone | Teams | Planned (needs decision) | P7-01 |
+| Teams calling | Call Jarvis from the Teams app through ACS Call Automation; only Dan's verified Teams Entra identity is accepted | Phone | Teams | In progress; ACS relay and live call remain unverified | P7-01 |
 | Away mode | Toggle by voice/chat, automatic Teams Away/Offline detection after ten minutes, and automatic return to present on active browser use; see mode in Now and route task updates and approvals to Teams while away, browser while present | Both | Main page, Phone | Built offline; Graph admin consent and live phone check pending | P7-02 |
 | Phone confirmations | Receive Dan-only Teams notifications and approve or reject actions with optional Speech F0 voice notes | Phone | Teams | Built offline; live Azure/phone check pending | P7-03 |
-| Screen sharing | Share a screen or window; request an in-memory vision description in chat or voice | Both | Main page | Built (live acceptance pending) | P7-05 |
-| Local PC bridge | Jarvis opens HTTP(S) URLs, allow-listed apps, and folders under `C:\Repo` in VS Code; reports the active window title; or focuses a window by exact title | Voice/chat | PC companion | Built (offline; live Windows/Entra check unverified) | P7-06 |
+| Screen sharing | Share a screen or window; request an in-memory vision description and, for browser tasks, pass its selected display label only as transient context | Both | Main page | Built offline; live vision/form check pending | P7-05, P7-19 |
+| Local PC bridge | Jarvis opens websites in Dan's foreground Chrome when its extension is connected and automation is on; a disconnected extension falls back to the default browser with an explicit note. It also opens allow-listed apps and folders under `C:\Repo` in VS Code, reports the active window title, and focuses an exact-title window | Voice/chat | PC companion | Built (offline; live Windows/Chrome acceptance pending) | P7-06, P7-26 |
 | Ultrafast browser agent | Complete bounded Chrome tasks with Jev-selected operations and observed targets; TYPE text is generated by Foundry, DONE is independently checked, risky clicks require P7-03 approval, and current progress appears in a workspace window | Voice/chat | Backend `browser_do`; P8-15 workspace; PC bridge | Built offline; 0.07 ms fake median per step; live Jev/Foundry/Chrome/approval checks pending | P7-17 |
-| Chrome browser executor | With Dan's explicit bridge toggle on, list tabs, snapshot visible controls, and run fresh, unobstructed indexed actions in his signed-in Chrome; sensitive typing is blocked and risky clicks need confirmation | Voice/chat | PC companion; authenticated backend tools | Built offline; real Chrome check pending | P7-18 |
+| Chrome browser executor | With Dan's explicit bridge toggle on, open URLs in a new active tab and bring Chrome forward; list tabs, snapshot visible controls, and run fresh, unobstructed indexed actions in his signed-in Chrome. Sensitive typing is blocked and risky clicks need confirmation | Voice/chat | PC companion; authenticated backend tools | Built offline; foreground-tab acceptance in Dan's normal profile pending | P7-18, P7-26 |
+| Act on the shared tab | Resolve the page Dan shares from its transient title and vision description, ask if ambiguous, and run the bounded browser agent with spoken progress and “stop” | Voice/chat | Backend `browser_do_shared`; P8-15 workspace; PC bridge | Built offline; live form, voice and approval check pending | P7-19 |
 | Computer use | Jarvis clicks and types on Dan's PC while he talks | Voice/chat | PC companion | Planned (needs decision) | P7-07 |
 | Camera | Turn on the webcam from the shared shell and ask Jarvis by chat or voice to inspect a single frame; camera state times out and stops with the session | Both | Shared top bar, main conversation | Built offline; live camera/model check pending | P7-08 |
-| Calendar and mail | Agenda, free slots, create/move meetings, search and summarise mail, draft replies and send after exact confirmation | Voice/chat | Backend tools; no new page | Built offline; Graph/RBAC setup and live acceptance pending | P7-09 |
+| Calendar and mail | Google Calendar agenda, date-range search and next appointment, free slots, create/move meetings, Gmail search and summaries, reply drafts and sending after exact confirmation | Voice/chat | Backend tools; no new page | Built offline; Google OAuth setup and live range/next-event acceptance pending | P7-09, P7-22, P7-28 |
 | Second brain | Search Dan's configured OneDrive notes folder and quote snippets with links | Voice/chat | — | Implemented offline; Graph setup and live search pending | P7-10 |
 
 ## Jarvis UI enabling logic (P8-03)
@@ -168,7 +169,7 @@ This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell c
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Long-term memory | Recall preferences, decisions and unfinished work across sessions; inspect, correct and forget retained memories | Voice/chat | Existing conversation; dedicated management UI undecided | Planned (storage, capture and retention decisions open) | P7-13 |
-| Web research | Search and retrieve web sources, synthesise findings with links and show results through dynamic views | Both | Conversation and dynamic workspace | Planned (provider and cost decision open) | P7-14; existing P8-06/P8-14/P8-15 consumers |
+| Web research | Use the existing ChatGPT/Codex subscription for bounded, source-linked research in chat/voice and dynamic views | Both | Conversation and dynamic workspace | Built offline; live Codex/Foundry acceptance pending | P7-14; existing P8-06/P8-14/P8-15 consumers |
 | Image generation | Generate with Dan's ChatGPT/Codex subscription, inspect truthful job status, and view the private artifact in chat and the workspace | Both | Conversation and dynamic workspace | Implemented offline; live subscription/Blob acceptance pending; retention unresolved | P7-15; existing P8-06/P8-14/P8-15 consumers |
 | Editable personality | Set tone/response-style and custom-instruction defaults for new sessions; reset to the current default | Screen | Settings → Jarvis → Personality | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 

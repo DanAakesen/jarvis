@@ -5,6 +5,17 @@ import { FOUNDRY_SCOPE } from '../foundry/client.js';
 import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
+declare module 'fastify' {
+  interface FastifyRequest {
+    announceBrowserProgress?: () => void;
+    requireSharedScreenContext?: boolean;
+    sharedScreenContext?: {
+      readonly screenDescription: string;
+      readonly sharedWindowTitle?: string;
+    };
+  }
+}
+
 const jevEndpoint = 'https://api.typesafe.ai/v1/systemone';
 const jevModel = 'jev-latest';
 const jevTimeoutMs = 1_200;
@@ -95,6 +106,13 @@ export interface BrowserClauseInput {
   readonly previousActions?: readonly string[];
 }
 
+export interface SharedBrowserTaskInput {
+  readonly goal: string;
+  readonly screenDescription: string;
+  readonly sharedWindowTitle?: string;
+  readonly tabTitle?: string;
+}
+
 export interface BrowserClauseResult {
   readonly tabId: string;
   readonly step: number;
@@ -114,6 +132,7 @@ export interface BrowserTaskResult {
 export interface BrowserAgent {
   runClause(input: BrowserClauseInput, request: FastifyRequest, signal: AbortSignal): Promise<BrowserClauseResult>;
   runTask(input: BrowserClauseInput, request: FastifyRequest, signal: AbortSignal): Promise<BrowserTaskResult>;
+  runSharedTask(input: SharedBrowserTaskInput, request: FastifyRequest, signal: AbortSignal): Promise<BrowserTaskResult>;
 }
 
 export interface BrowserAgentLimits {
@@ -532,7 +551,9 @@ function validateSnapshot(value: unknown, tabId: string): value is BrowserSnapsh
 
 function validateTabs(value: unknown): value is { tabs: BrowserTab[]; nextOffset: number | null } {
   return isRecord(value) && Array.isArray(value.tabs) && value.tabs.length <= 20 &&
-    (value.nextOffset === null || Number.isInteger(value.nextOffset)) &&
+    (value.nextOffset === null ||
+      (typeof value.nextOffset === 'number' && Number.isInteger(value.nextOffset) &&
+        value.nextOffset >= 0 && value.nextOffset <= 5_000)) &&
     value.tabs.every((tab) => isRecord(tab) && typeof tab.id === 'string' &&
       typeof tab.title === 'string' && typeof tab.url === 'string' && typeof tab.focused === 'boolean');
 }
@@ -548,12 +569,26 @@ function browserExecutor(request: FastifyRequest): BrowserExecutor {
     async openUrl(url, signal) {
       const safe = safeUrl(url);
       if (!safe) throw new ToolRefusal('Only valid HTTP or HTTPS browser URLs can be opened.');
-      await invoke('pc_open', { target: 'url', value: safe }, signal);
+      const result = await invoke('pc_open', { target: 'url', value: safe }, signal);
+      if (isRecord(result) && typeof result.note === 'string') {
+        throw new ToolRefusal(result.note);
+      }
     },
     async listTabs(signal) {
-      const result = await invoke('pc_browser_tabs', {}, signal);
-      if (!validateTabs(result)) throw new ToolFailure('The browser tab list could not be read.');
-      return result.tabs;
+      const tabs: BrowserTab[] = [];
+      let offset: number | undefined;
+      for (let page = 0; page < 250; page += 1) {
+        const result = await invoke('pc_browser_tabs', offset === undefined ? {} : { offset }, signal);
+        if (!validateTabs(result)) throw new ToolFailure('The browser tab list could not be read.');
+        tabs.push(...result.tabs);
+        if (tabs.length > 5_000) throw new ToolFailure('The browser tab list exceeded its size limit.');
+        if (result.nextOffset === null) return tabs;
+        if (result.nextOffset <= (offset ?? 0) || result.tabs.length === 0) {
+          throw new ToolFailure('The browser tab list could not be read.');
+        }
+        offset = result.nextOffset;
+      }
+      throw new ToolFailure('The browser tab list exceeded its page limit.');
     },
     async snapshot(tabId, signal) {
       const result = await invoke('pc_browser_snapshot', { tabId }, signal);
@@ -627,6 +662,131 @@ async function chooseTab(
   if (focused.length === 1) return focused[0]!;
   if (tabs.length === 1) return tabs[0]!;
   throw new ToolRefusal('Choose the Chrome tab to use.');
+}
+
+const genericTabWords = new Set([
+  'a', 'an', 'and', 'are', 'browser', 'chrome', 'display', 'for', 'from', 'google',
+  'here', 'in', 'is', 'it', 'my', 'of', 'on', 'or', 'page', 'screen', 'shared',
+  'tab', 'the', 'this', 'to', 'website', 'window', 'with',
+]);
+
+function matchingWords(value: string): Set<string> {
+  return new Set(value.normalize('NFKD').toLocaleLowerCase('en-US')
+    .replace(/\p{M}/gu, '')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word.length >= 3 && !genericTabWords.has(word)));
+}
+
+function normalizedTitle(value: string): string {
+  return value.normalize('NFKD').toLocaleLowerCase('en-US')
+    .replace(/\p{M}/gu, '')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .join(' ');
+}
+
+function userMentionedTabTitle(request: FastifyRequest, title: string): boolean {
+  const voiceMessage = (request as FastifyRequest & {
+    jarvisConversationMessage?: { role?: unknown; text?: unknown };
+  }).jarvisConversationMessage;
+  const body = request.body;
+  const chatText = isRecord(body) && typeof body.text === 'string' ? body.text : undefined;
+  const text = voiceMessage?.role === 'dan' && typeof voiceMessage.text === 'string'
+    ? voiceMessage.text
+    : chatText;
+  if (!text) return false;
+
+  const titleWords = normalizedTitle(title).split(' ').filter(Boolean);
+  const messageWords = normalizedTitle(text).split(' ').filter(Boolean);
+  return titleWords.length > 0 && messageWords.some((_word, index) =>
+    titleWords.every((word, offset) => messageWords[index + offset] === word));
+}
+
+function sharedTabOptions(tabs: readonly BrowserTab[]): string {
+  return tabs.slice(0, 5).map((tab) => {
+    let host = '';
+    try { host = new URL(tab.url).hostname; } catch { /* Omit an invalid URL host. */ }
+    const title = cleanDisplay(tab.title) || 'Untitled tab';
+    return host ? `"${title}" (${cleanDisplay(host)})` : `"${title}"`;
+  }).join(', ');
+}
+
+function sharedTabScore(tab: BrowserTab, input: SharedBrowserTaskInput): number {
+  const title = input.sharedWindowTitle?.trim() ?? '';
+  const titleExact = title ? normalizedTitle(title) : '';
+  const tabTitle = normalizedTitle(tab.title);
+  if (titleExact && tabTitle === titleExact) return 10_000;
+
+  let host = '';
+  try { host = new URL(tab.url).hostname; } catch { /* Ignore invalid bridge URLs. */ }
+  const descriptionText = matchingWords(input.screenDescription);
+  const titleWords = matchingWords(title);
+  const candidateWords = matchingWords(`${tab.title} ${host}`);
+  let score = 0;
+  for (const word of candidateWords) {
+    if (titleWords.has(word)) score += 3;
+    else if (descriptionText.has(word)) score += 1;
+  }
+  return score;
+}
+
+function stronglyMatchesSharedContext(tab: BrowserTab, input: SharedBrowserTaskInput): boolean {
+  const tabWords = matchingWords(tab.title);
+  const titleWords = matchingWords(input.sharedWindowTitle ?? '');
+  const descriptionWords = matchingWords(input.screenDescription);
+  const titleMatches = [...tabWords].filter((word) => titleWords.has(word)).length;
+  const descriptionMatches = [...tabWords].filter((word) => descriptionWords.has(word)).length;
+  const titleThreshold = Math.min(2, titleWords.size);
+  if (descriptionWords.size < 2 || descriptionMatches < 2) return false;
+  if (titleWords.size > 0 && titleMatches < titleThreshold) return false;
+  return true;
+}
+
+function resolveSharedTab(
+  tabs: readonly BrowserTab[],
+  input: SharedBrowserTaskInput,
+): BrowserTab {
+  if (input.tabTitle !== undefined) {
+    const selected = tabs.filter(({ title }) => normalizedTitle(title) === normalizedTitle(input.tabTitle!));
+    if (selected.length === 1 && stronglyMatchesSharedContext(selected[0]!, input)) return selected[0]!;
+    if (selected.length === 1) {
+      throw new ToolRefusal('That Chrome tab does not match the current shared screen. Please share the intended tab and try again.');
+    }
+    if (selected.length > 1) {
+      throw new ToolRefusal(`More than one Chrome tab is named "${cleanDisplay(input.tabTitle)}". Please choose a different tab.`);
+    }
+    throw new ToolRefusal('That selected Chrome tab is no longer available. Please share the page again or choose another tab.');
+  }
+
+  const scores = tabs.map((tab) => sharedTabScore(tab, input));
+  const highest = Math.max(0, ...scores);
+  const matches = tabs.filter((_tab, index) => scores[index] === highest && highest > 0);
+  if (matches.length === 1 && stronglyMatchesSharedContext(matches[0]!, input)) return matches[0]!;
+  if (matches.length === 1) {
+    throw new ToolRefusal(`I can’t confidently match the shared screen to a Chrome tab. Which one should I use: ${sharedTabOptions(tabs)}?`);
+  }
+
+  if (matches.length > 1) {
+    throw new ToolRefusal(`I can’t tell which shared Chrome tab you mean. Which one should I use: ${sharedTabOptions(matches)}?`);
+  }
+  throw new ToolRefusal(tabs.length
+    ? `I couldn’t match the shared screen to an open Chrome tab. Which one should I use: ${sharedTabOptions(tabs)}?`
+    : 'There are no open Chrome tabs to match to the shared screen.');
+}
+
+function validateSharedTask(input: SharedBrowserTaskInput): void {
+  validateClause({ goal: input.goal });
+  if (typeof input.screenDescription !== 'string' || !input.screenDescription.trim() ||
+      input.screenDescription.length > 5_000 ||
+      hasControlCharacters(input.screenDescription.replace(/[\r\n\t]/gu, ''))) {
+    throw new ToolRefusal('A current shared-screen description is required to choose the Chrome tab.');
+  }
+  for (const title of [input.sharedWindowTitle, input.tabTitle]) {
+    if (title !== undefined && (typeof title !== 'string' || !title.trim() ||
+        title.length > 300 || hasControlCharacters(title))) {
+      throw new ToolRefusal('The shared Chrome tab context is invalid.');
+    }
+  }
 }
 
 function operationLabel(decision: BrowserDecision): string {
@@ -884,7 +1044,46 @@ export function createBrowserAgent(
     }
   }
 
-  return { runClause, runTask };
+  async function runSharedTask(
+    input: SharedBrowserTaskInput,
+    request: FastifyRequest,
+    signal: AbortSignal,
+  ): Promise<BrowserTaskResult> {
+    let task = input;
+    if (request.requireSharedScreenContext) {
+      if (!request.sharedScreenContext) {
+        throw new ToolRefusal('I need a current shared-screen frame before acting here. Please share a Chrome tab and try again.');
+      }
+      task = {
+        ...input,
+        ...request.sharedScreenContext,
+      };
+    }
+    validateSharedTask(task);
+    if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for browser actions.');
+    const userTitle = task.tabTitle && userMentionedTabTitle(request, task.tabTitle)
+      ? task.tabTitle
+      : undefined;
+    const resolutionInput: SharedBrowserTaskInput = {
+      goal: task.goal,
+      screenDescription: task.screenDescription,
+      ...(task.sharedWindowTitle === undefined ? {} : { sharedWindowTitle: task.sharedWindowTitle }),
+      ...(userTitle === undefined ? {} : { tabTitle: userTitle }),
+    };
+    let tab: BrowserTab;
+    try {
+      tab = resolveSharedTab(await browserExecutor(request).listTabs(signal), resolutionInput);
+    } catch (error) {
+      if (error instanceof ToolRefusal && error.message === 'The local PC bridge is offline.') {
+        throw new ToolRefusal('Chrome is offline. I can send the steps instead.');
+      }
+      throw error;
+    }
+    request.announceBrowserProgress?.();
+    return runTask({ goal: task.goal, tabId: tab.id }, request, signal);
+  }
+
+  return { runClause, runTask, runSharedTask };
 }
 
 function snapshotAction(
@@ -899,34 +1098,73 @@ function snapshotAction(
 export function createBrowserAgentModule(agent: BrowserAgent): BackendModule {
   return {
     id: 'browser-agent',
-    tools: [{
-      name: 'browser_do',
-      description: 'Use Jev to complete a bounded task in Dan’s Chrome using only fresh, observed elements. High-impact clicks use Dan’s confirmation. Stops on unsafe input, low confidence, time or step limits.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          goal: { type: 'string', minLength: 1, maxLength: maxGoalLength },
-          url: { type: 'string', minLength: 1, maxLength: 2_048 },
-          tabId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$' },
+    tools: [
+      {
+        name: 'browser_do',
+        description: 'Use Jev for website navigation and bounded tasks in Dan’s Chrome, opening requested URLs in a foreground tab. Use only fresh, observed elements; high-impact clicks require Dan’s confirmation. Stops on unsafe input, low confidence, time or step limits.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            goal: { type: 'string', minLength: 1, maxLength: maxGoalLength },
+            url: { type: 'string', minLength: 1, maxLength: 2_048 },
+            tabId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$' },
+          },
+          required: ['goal'],
+          additionalProperties: false,
         },
-        required: ['goal'],
-        additionalProperties: false,
+        reflexSafe: true,
+        sensitive: true,
+        execute: (input, request, signal) => {
+          if (!isRecord(input) || typeof input.goal !== 'string' ||
+              (input.url !== undefined && typeof input.url !== 'string') ||
+              (input.tabId !== undefined && typeof input.tabId !== 'string')) {
+            throw new ToolRefusal('Provide a browser goal and, optionally, one URL or tab.');
+          }
+          if (request.requireSharedScreenContext) {
+            return agent.runSharedTask({
+              goal: input.goal,
+              screenDescription: request.sharedScreenContext?.screenDescription ?? '',
+              ...(request.sharedScreenContext?.sharedWindowTitle
+                ? { sharedWindowTitle: request.sharedScreenContext.sharedWindowTitle }
+                : {}),
+            }, request, signal);
+          }
+          return agent.runTask({
+            goal: input.goal,
+            ...(input.url === undefined ? {} : { url: input.url }),
+            ...(input.tabId === undefined ? {} : { tabId: input.tabId }),
+          }, request, signal);
+        },
       },
-      reflexSafe: true,
-      sensitive: true,
-      execute: (input, request, signal) => {
-        if (!isRecord(input) || typeof input.goal !== 'string' ||
-            (input.url !== undefined && typeof input.url !== 'string') ||
-            (input.tabId !== undefined && typeof input.tabId !== 'string')) {
-          throw new ToolRefusal('Provide a browser goal and, optionally, one URL or tab.');
-        }
-        return agent.runTask({
-          goal: input.goal,
-          ...(input.url === undefined ? {} : { url: input.url }),
-          ...(input.tabId === undefined ? {} : { tabId: input.tabId }),
-        }, request, signal);
+      {
+        name: 'browser_do_shared',
+        description: 'When Dan asks you to act on the page he is sharing, use the current shared-screen context already supplied for this turn. Provide only the goal and, if Dan explicitly named a tab in this message, its exact title. It matches listed Chrome tabs, asks Dan to choose if ambiguous, and runs the bounded Jev browser agent on the match. Risky actions still require Dan’s confirmation.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            goal: { type: 'string', minLength: 1, maxLength: maxGoalLength },
+            tabTitle: { type: 'string', minLength: 1, maxLength: 300 },
+          },
+          required: ['goal'],
+          additionalProperties: false,
+        },
+        sensitive: true,
+        execute: (input, request, signal) => {
+          if (!isRecord(input) || typeof input.goal !== 'string' ||
+              (input.tabTitle !== undefined && typeof input.tabTitle !== 'string')) {
+            throw new ToolRefusal('Provide a browser goal and, only if Dan named it, the exact Chrome tab title.');
+          }
+          if (!request.requireSharedScreenContext || !request.sharedScreenContext) {
+            throw new ToolRefusal('I need a current shared-screen frame before acting here. Please share a Chrome tab and try again.');
+          }
+          return agent.runSharedTask({
+            goal: input.goal,
+            ...request.sharedScreenContext,
+            ...(input.tabTitle === undefined ? {} : { tabTitle: input.tabTitle }),
+          }, request, signal);
+        },
       },
-    }],
+    ],
     registerRoutes: async () => {},
   };
 }

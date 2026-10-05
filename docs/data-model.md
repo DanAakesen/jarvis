@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 5 October 2026 for P7-02, P7-03, P7-08, P7-09, P7-13 and P7-15. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, headless Outlook tools, long-term memory, and generated workspace image metadata. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 5 October 2026 for P7-01, P7-02, P7-03, P7-08, P7-13, P7-15 and P7-22. Scope: the Jarvis core, Software Factory, Teams calling, notification and confirmation state, Google Calendar/Gmail tools, long-term memory, and generated workspace image metadata. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -35,6 +35,11 @@ is added.
 P7-03 adds the Teams conversation and confirmation tables in
 `0014_teams_notifications.sql`; its down migration removes both tables and the
 confirmation expiry index.
+P7-01 adds `phone_sessions` and its link from `teams_confirmations` in
+`0017_phone_call_sessions.sql`. Each phone session references one
+`jarvis_sessions` row, uniquely records the Event Grid event and call, and keeps
+caller kind/ID, untrusted tier, status, and lifecycle timestamps. The migration
+does not store audio or transcripts. Live call orchestration is not implemented.
 P7-13 adds group 9 in `0016_long_term_memory.sql`: source-linked memories,
 revision history, a content-free deletion audit and nullable voice source-item IDs.
 The migration adds `vector(1536)` only when SQL exposes that type. After the
@@ -43,11 +48,11 @@ full-text catalog/index when installed; its paired down script removes memory ta
 and the voice source-item index/column.
 
 P7-15 adds cross-cutting `dbo.workspace_artifacts` metadata in
-`0017_workspace_artifacts.sql`; it is owner-scoped and references no conversation
+`0019_workspace_artifacts.sql`; it is owner-scoped and references no conversation
 or task by foreign key. Image bytes remain in the private Blob `artifacts`
 container. The tool result and `messages.tool_calls` retain only the artifact UUID;
 the browser resolves a fresh owner-authorized URL. There is no automatic artifact
-deletion while retention is unresolved. `0018_refused_tool_calls.sql` expands the
+deletion while retention is unresolved. `0018_tool_call_refused_outcome.sql` expands the
 existing tool-call outcome constraint to include runtime `refused` records, which
 the Usage page includes in its daily per-tool count. Its down migration refuses
 to restore the old constraint while refused rows exist.
@@ -103,6 +108,7 @@ flowchart LR
     subgraph PHONE["8 · Phone notifications"]
         teams_conversations
         teams_confirmations
+        phone_sessions
     end
     subgraph WORKSPACE["10 · Workspace artifacts"]
         workspace_artifacts
@@ -129,14 +135,16 @@ flowchart LR
 | 4 | Sandbox | The Foundry sessions that run a task, each turn, files kept in Blob | `sandbox_sessions`, `sandbox_turns`, `artifacts` |
 | 5 | GitHub and release | Pull requests, checks, the release view (commits fetched from GitHub on demand) | `pull_requests`, `workflow_runs`, `releases`, `deployments` |
 | 6 | Operations | Safe webhook handling, credential expiry warnings | `webhook_deliveries`, `credential_status` |
-| 7 | Usage and cost | Transparency per task and project: sandbox time, model tokens, voice, Codex and Copilot usage | `usage` |
-| 8 | Notifications and confirmations | Dan's validated Teams conversation and expiring approvals for Teams or browser delivery | `teams_conversations`, `teams_confirmations` |
+| 7 | Usage and cost | Transparency per task/project and current UTC-day web-research calls; the latter reuses group-one `tool_calls` | `usage` |
+| 8 | Phone, notifications and confirmations | Phone-call sessions plus Dan's validated Teams conversation and expiring approvals for Teams or browser delivery | `phone_sessions`, `teams_conversations`, `teams_confirmations` |
 | 9 | Long-term memory | Relevant source-linked preferences, project facts, decisions and unfinished tasks across sessions | `memories`, `memory_history`, `memory_deletions` |
 | 10 | Workspace artifacts | Owner-scoped image metadata for generated workspace/chat previews; image bytes are private Blob objects | `workspace_artifacts` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
-P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. P7-05 adds `screen_frames` to the Jarvis-model usage metrics in migration `0015_screen_frame_usage.sql`; P7-08 camera requests reuse the same frame reservations, token rows and rate/day cap, with no new migration or usage metric. The matching down migration removes those rows before restoring the prior constraint. Realtime voice tool calls are not stored in `tool_calls`.
+`tool_calls.outcome` is `ok`, `refused` or `error`. Migration 0018 added `refused` so a tool's explicit refusal is stored as such instead of failing the audit write (L96).
+
+P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. P7-20 may persist a source-linked voice message when a safe partial action runs, then updates that same `messages` row with the final transcript; its execution ledger stays in relay memory and the existing `tool_calls` audit. No schema change or migration is needed. P7-05 adds `screen_frames` to the Jarvis-model usage metrics in migration `0015_screen_frame_usage.sql`; P7-08 camera requests reuse the same frame reservations, token rows and rate/day cap, with no new migration or usage metric. The matching down migration removes those rows before restoring the prior constraint. Realtime voice tool calls are not stored in `tool_calls`.
 
 P8-16 activity is a separate typed, in-memory contract published on the existing
 owner-authenticated `/now/events` stream. It is discarded on process restart or
@@ -150,7 +158,7 @@ The refresh is published after the status transaction commits. Commands, window
 titles, URLs, paths, access tokens, and message contents are not persisted as
 bridge activity.
 
-P7-09 adds no Outlook tables or migration. Pending calendar/mail writes are held only in the single backend process for up to ten minutes and are discarded on expiry or restart; a later verified Dan message must match the exact confirmation phrase before the backend executes the write. Outlook tool arguments and results are redacted from persisted tool-call records. Mail bodies are passed to the model only for the current bounded search result and are not recorded as tool-call data.
+P7-22 adds no Google Calendar/Gmail tables or migration. Pending calendar/mail writes are held only in the single backend process for up to ten minutes and are discarded on expiry or restart; a later verified Dan message must match the exact confirmation phrase before the backend executes the write. Google tool arguments and results are redacted from persisted tool-call records. Mail bodies are passed to the model only for the current bounded search result and are not recorded as tool-call data.
 
 ## 1 · Jarvis core
 
@@ -209,11 +217,12 @@ erDiagram
 ```
 
 - **One continuous conversation.** Jarvis has a single thread; each chat or voice sitting is a `jarvis_session` within it. `messages` keeps the complete source record; compaction and generated views do not own durable memory or change conversation retention.
-- P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language, voice minutes when recorded, and tool name, outcome, and task ID, not tool arguments or results. The main page reads history; P4-06 sends chat turns through the session turn endpoint, while the authenticated voice relay creates voice sessions and stores completed transcript events. No schema migration was needed.
+- P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language, voice minutes when recorded, and tool name, outcome, and task ID, not tool arguments or results. The main page reads history; P4-06 sends chat turns through the session turn endpoint, while the authenticated voice relay creates voice sessions, replaces any stored partial transcript with its final text, and stores completed assistant transcripts. No schema migration was needed.
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
 - P4-04's agent-only turn context reads up to 20 running tasks and their three latest `task_events` from the existing tables. It selects task status/activity and event type, summary, source, and time; it excludes task requests and event payloads, and clips summaries to 400 characters. No schema or migration change is needed.
 - P7-13's `memories` row is keyed by category and stable key, has one current Dan source message, and optionally stores a 1536-dimensional embedding. `memory_history` keeps each replaced source-linked revision; `memory_deletions` records only the forgotten memory ID, request message ID and deletion time, never deleted content. Forget cascades to revisions but does not remove messages. Chat writes use the existing message ID; voice persists the provider transcript item ID on `messages` and resolves it to Dan's stored transcript before a write. Retrieval joins the current source message and returns bounded source text.
 - The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; `ToolFailure` stores a bounded safe explanation with an `error` outcome, while unexpected failures stay generic. P7-10 stores its bounded query and returned title/snippet/link values in this existing table; no new table or migration is needed. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. P4-06 stores the source message before P4-09 sends its ID and the delegated token in the application payload to the hosted agent through Foundry Invocations. The agent registers its chat handler with that protocol, verifies the caller and message through the backend, and sets the message ID in the per-turn context used by tool calls. P4-04's running-task context is fetched by the model client on every turn. No data-model or migration change is required.
+- P7-14 reuses `tool_calls` for its daily `web_research` count. Because the tool is sensitive, the audit stores neither the query nor returned answer/source text; the name, outcome, and timestamp remain. No research table, column, index, or migration is added.
 - P3-12 `create_project` reuses `dbo.projects`, `dbo.tasks`, `dbo.messages`, and `dbo.tool_calls`: tool arguments/results contain the requested name/description and project/task identifiers, while the task uses `source = 'chat'` and references the calling message. The backend-only repository token is never persisted; the project starts with the `node`/`1x2` base defaults. No schema or migration change is required.
 - Session, message, history, task-origin, and tool-call behavior is covered by offline and disposable SQL Server tests; live Azure SQL writes have not been verified.
 - `settings` holds the settings page. A task stores its own overrides on the `tasks` row.
@@ -579,6 +588,10 @@ Global Standard Global rates in
 2026 (1.3157 DKK/input million, 7.8941 DKK/output million), rounded to four
 decimal places. Usage marks screen-frame rows as estimated. The frame and its
 base64 request buffer are transient; neither is represented in the data model.
+P7-19's selected display label and bounded vision description are likewise
+request-only context for matching a live Chrome tab. They are excluded from
+conversation transcripts, task events and sensitive tool-call audit payloads;
+the existing `usage` frame/token accounting is the only persisted P7-05 data.
 
 ## 8 · Phone notifications
 
@@ -625,7 +638,7 @@ approval is atomically consumed before the backend invokes its action.
 | `projects` | `repo` is unique (case-insensitive) and shaped `owner/name` using `A–Z a–z 0–9 . _ -`; `max_parallel_tasks` ≥ 1, default 1; `active` defaults to 1; `merge_rules` is free text, nullable |
 | `tasks` | `state` defaults to `Ready`; `origin_message_id` is required unless `source = 'board'`; `lease_owner` and `lease_until` are both set or both null; `attempt_count` ≥ 0; `priority` defaults to 0; `started_at`/`finished_at` not before `created_at` |
 | `messages` | `model` and token counts are nullable (Dan's messages have none); token counts ≥ 0 |
-| `tool_calls` | `result` nullable; current outcome vocabulary is `ok`, `refused` or `error` (`0001` originally permitted only `ok`/`error`, expanded by `0018_refused_tool_calls.sql`); `task_id` nullable |
+| `tool_calls` | `result` nullable; current outcome vocabulary is `ok`, `refused` or `error` (`0001` originally permitted only `ok`/`error`, expanded by `0018_tool_call_refused_outcome.sql`); `task_id` nullable |
 | Foreign keys | No cascades. Projects are archived (`active = 0`), not deleted |
 | Indexes | Dispatcher `IX_tasks_state_next_attempt_at`; timeline `IX_task_events_task_id_at`; plus one per foreign key: `IX_messages_jarvis_session_id_at`, `IX_tasks_project_id_state` (also the per-project running count), filtered `IX_tasks_origin_message_id`, `IX_tool_calls_message_id`, filtered `IX_tool_calls_task_id` |
 
@@ -633,14 +646,14 @@ P6-03's `0005_task_event_archives.sql` adds the archive index table without chan
 the `task_events` producer schema. The API still validates every field (P1-03,
 P1-04); these checks are the last line of defence.
 
-`0017_workspace_artifacts.sql` stores `id` (`uniqueidentifier`), owner object ID,
+`0019_workspace_artifacts.sql` stores `id` (`uniqueidentifier`), owner object ID,
 PNG/JPEG content type, byte size (1 byte–5 MiB), and creation time, with an owner/time
 index. Blob objects use `workspace-images/<artifact UUID>.png` or `.jpg` in the
 existing private `artifacts` container; metadata does not contain the Blob path,
 prompt, or signed URL. Ownership is checked on every read. Successful image tool
 records may retain the UUID to support conversation history; SAS URLs are minted
-on demand and never persisted. The `0017` down migration drops metadata only and
-does not delete Blob objects. `0018_refused_tool_calls.sql` makes the runtime
+on demand and never persisted. The `0019` down migration drops metadata only and
+does not delete Blob objects. `0018_tool_call_refused_outcome.sql` makes the runtime
 `refused` outcome persistable so refused image requests remain visible and counted;
 its down migration refuses to proceed while refused rows exist.
 

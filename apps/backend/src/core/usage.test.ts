@@ -3,6 +3,7 @@ import type { TokenVerifier } from '../auth/verify.js';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { UsageEntry, UsageStore } from './usage.js';
+import type { ToolCallStore } from './tool-calls.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' ') };
@@ -27,8 +28,10 @@ function fixture(store: UsageStore | null = {
   list: vi.fn(async () => ({ entries: [entry], totalEntries: '1' })),
 }, auth: TokenVerifier = async () => ({
   objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan',
-})) {
-  const app = buildApp(config, undefined, { auth, usageStore: store ?? undefined });
+}), toolCallStore?: ToolCallStore) {
+  const app = buildApp(config, undefined, {
+    auth, usageStore: store ?? undefined, ...(toolCallStore ? { toolCallStore } : {}),
+  });
   apps.push(app);
   return app;
 }
@@ -52,12 +55,44 @@ describe('usage report API', () => {
       period: '7d',
       from: from.toISOString(),
       to: to.toISOString(),
+      codexToolCallsToday: null,
       entries: [entry],
       totalEntries: '1',
       dailyToolUsage: { date: to.toISOString().slice(0, 10), tools: [] },
       truncated: false,
     });
     expect(store.list).toHaveBeenCalledWith(from, to);
+  });
+
+  it('returns per-tool Codex counts for the UTC day', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(to);
+    const store: UsageStore = { list: vi.fn(async () => ({ entries: [], totalEntries: '0' })) };
+    const toolCallStore: ToolCallStore = {
+      record: vi.fn(async () => {}),
+      listCodexToolCalls: vi.fn(async () => [{ tool: 'web_research', count: '3' }]),
+    };
+    const response = await fixture(store, undefined, toolCallStore).inject({ url: '/usage', headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().codexToolCallsToday).toEqual([{ tool: 'web_research', count: '3' }]);
+    expect(toolCallStore.listCodexToolCalls).toHaveBeenCalledWith(
+      new Date('2026-10-04T00:00:00.000Z'),
+      new Date('2026-10-05T00:00:00.000Z'),
+    );
+  });
+
+  it('reports Codex counts unavailable without failing the rest of usage', async () => {
+    const store: UsageStore = { list: vi.fn(async () => ({ entries: [], totalEntries: '0' })) };
+    const toolCallStore: ToolCallStore = {
+      record: vi.fn(async () => {}),
+      listCodexToolCalls: vi.fn(async () => { throw new Error('database failed'); }),
+    };
+
+    const response = await fixture(store, undefined, toolCallStore).inject({ url: '/usage', headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().codexToolCallsToday).toBeNull();
   });
 
   it('defaults to 30 days and indicates when grouped entries are capped', async () => {

@@ -299,6 +299,141 @@ def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch)
     assert result == [ModelMessage("user", "Older"), ModelMessage("assistant", "Answer")]
 
 
+def test_follow_up_keeps_cross_session_refusal_and_emits_content_free_context_telemetry(
+    monkeypatch,
+) -> None:
+    refusal = "Jeg kunne ikke åbne Google, fordi Chrome-browserautomatisering er slået fra."
+    history = {
+        "messages": [
+            {"id": "10", "sessionId": "1", "role": "dan", "text": "Hvordan går det?",
+             "channel": "chat", "language": "da", "toolCalls": []},
+            {"id": "11", "sessionId": "1", "role": "jarvis", "text": "Jeg har det godt.",
+             "channel": "chat", "language": "da", "toolCalls": []},
+            {"id": "12", "sessionId": "1", "role": "dan", "text": "Hvad er status?",
+             "channel": "chat", "language": "da", "toolCalls": []},
+            {"id": "13", "sessionId": "1", "role": "jarvis", "text": "0 opgaver kører.",
+             "channel": "chat", "language": "da", "toolCalls": []},
+            {"id": "14", "sessionId": "2", "role": "dan", "text": "open google.com",
+             "channel": "chat", "language": "da", "toolCalls": []},
+            {"id": "15", "sessionId": "2", "role": "jarvis", "text": refusal,
+             "channel": "chat", "language": "da", "toolCalls": [
+                 {"id": "90", "tool": "pc_open", "outcome": "refused", "taskId": None}
+             ]},
+            {"id": "16", "sessionId": "3", "role": "dan", "text": "try again",
+             "channel": "chat", "language": "en", "toolCalls": []},
+        ],
+        "nextCursor": None,
+    }
+
+    class Response:
+        def __init__(self, status_code: int, data=None) -> None:
+            self.status_code = status_code
+            self.content = b"{}"
+            self._data = data or {}
+
+        def json(self):
+            return self._data
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, url, headers):
+            assert headers["Authorization"] == AUTHORIZATION
+            return Response(200, history) if url.endswith("limit=100") else Response(200)
+
+    class Span:
+        def __init__(self) -> None:
+            self.attributes = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def set_attribute(self, key, value):
+            self.attributes[key] = value
+
+    class Tracer:
+        def __init__(self) -> None:
+            self.spans = {}
+
+        def start_as_current_span(self, name):
+            span = Span()
+            self.spans[name] = span
+            return span
+
+    tracer = Tracer()
+    monkeypatch.setattr(
+        chat_runtime, "backend_settings_from_environment",
+        lambda: ("https://backend.example", "scope"),
+    )
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
+    monkeypatch.setattr(chat_runtime, "_tracer", tracer)
+
+    result = asyncio.run(
+        chat_runtime.load_verified_history(TOKEN, "16", "try again", "en")
+    )
+
+    assert result[-1] == ModelMessage("assistant", f"{refusal}\nTool outcomes: pc_open=refused")
+    assert result[-2] == ModelMessage("user", "open google.com")
+    attributes = tracer.spans["chat_context"].attributes
+    assert attributes["context.message_count"] == len(result) == 6
+    assert attributes["context.oldest_message_id"] == "10"
+    assert attributes["context.newest_message_id"] == "15"
+    assert attributes["context.previous_jarvis_message_included"] is True
+    assert attributes["context.total_characters"] == sum(len(message.content) for message in result)
+    assert all(refusal not in str(value) for value in attributes.values())
+
+
+def test_load_verified_history_requests_profile_and_history_concurrently(monkeypatch) -> None:
+    history = {
+        "messages": [
+            {"id": "42", "role": "dan", "text": "Current", "channel": "chat", "language": "en"},
+        ],
+        "nextCursor": None,
+    }
+    history_started = asyncio.Event()
+
+    class Response:
+        def __init__(self, status_code: int, data=None) -> None:
+            self.status_code = status_code
+            self.content = b"{}"
+            self._data = data or {}
+
+        def json(self):
+            return self._data
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, url, headers):
+            assert headers["Authorization"] == AUTHORIZATION
+            if url.endswith("/me"):
+                await asyncio.wait_for(history_started.wait(), timeout=1)
+                return Response(200)
+            history_started.set()
+            return Response(200, history)
+
+    monkeypatch.setattr(
+        chat_runtime, "backend_settings_from_environment",
+        lambda: ("https://backend.example", "scope"),
+    )
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
+
+    assert asyncio.run(
+        chat_runtime.load_verified_history(TOKEN, "42", "Current", "en")
+    ) == []
+
+
 def test_load_verified_history_rejects_a_message_that_does_not_match_storage(monkeypatch) -> None:
     class Response:
         status_code = 401

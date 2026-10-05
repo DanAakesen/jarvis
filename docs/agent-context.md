@@ -4,8 +4,9 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 
 ## Scope
 
-- Phase 1 is the Jarvis core and Software Factory; active P7 tasks may add their named headless capabilities. P7-09 adds calendar and mail tools only; P8 owns any UI. See [PRODUCT.md](../PRODUCT.md) and [PLAN.md](../PLAN.md).
+- Phase 1 is the Jarvis core and Software Factory; active P7 tasks may add their named headless capabilities. P7-22 provides Google Calendar and Gmail tools only; P8 owns any UI. See [PRODUCT.md](../PRODUCT.md) and [PLAN.md](../PLAN.md).
 - Do not add tables, pages, or code for Banking, Health and fitness, or other areas until their phase starts.
+- P7-19 browser actions use only current screen-share context plus the existing P7-17/P7-18 browser path; do not add a separate bridge, persist page data, or access the live Jev key.
 - Single user (Dan). Keep the design as small as the requirements allow.
 
 ## Sources
@@ -133,10 +134,9 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - The [Deploy workflow](../.github/workflows/deploy.yml) is the only routine path to Azure: push to `main` deploys the parts changed since the last successful Deploy run; Dan's `workflow_dispatch` on `main` redeploys everything. Its Bicep deployment is always named `jarvis-infra`. Details: [production deploy](architecture.md#production-deploy-p0-11).
 - GitHub Actions OIDC: GitHub signs this repository's tokens with the immutable-ID subject `repo:DanAakesen@68902534/jarvis@1403065900:ref:refs/heads/main`, not `repo:DanAakesen/jarvis:ref:refs/heads/main`. `infra/bootstrap.ps1` reads the IDs with `gh api repos/DanAakesen/jarvis` and registers the federated credential `github-main-ids`. An `AADSTS700213` sign-in failure means the credential is missing: Dan re-runs bootstrap; the subject is printed under "Federated token details" in the `azure/login` step (L49).
 - Dan's Azure CLI defaults to the Microsoft tenant: pass `--subscription` in every command and script (L7). For Microsoft Graph, get the token with `az account get-access-token --subscription <id> --resource-type ms-graph`; `--tenant` picks the wrong account.
-- Outlook app-only access is authorized only by Exchange Online RBAC for Applications scoped to Dan's exact mailbox. Do not grant Microsoft Graph app roles in Entra: those grants are additive to Exchange RBAC and can bypass its mailbox scope.
-- After the approved core deployment, Dan runs `./infra/setup-outlook.ps1 -MailboxUpn <Dan's mailbox UPN>` from a PowerShell 7 session with the Azure CLI on the bootstrap subscription, GitHub CLI authenticated to the repository, and `ExchangeOnlineManagement` connected-capable. The signed-in operator needs permission to register an Entra app, create Exchange app scopes/assignments, write the backend Key Vault secret, and update GitHub Actions variables. No agent runs this script or accesses the tenant.
-- The setup script creates/reuses `jarvis-outlook`, creates the exact `PrimarySmtpAddress` scope, assigns only `Application Calendars.ReadWrite`, `Application Mail.ReadWrite`, and `Application Mail.Send`, stores the one-year client credential as Key Vault secret `jarvis-outlook-client-secret`, and sets nonsecret `JARVIS_GRAPH_APP_ID` and `JARVIS_GRAPH_TIME_ZONE` GitHub variables. Keep Entra `requiredResourceAccess` empty. `-RotateCredential` updates Key Vault and removes older credentials created by this script; afterward run Deploy on `main` so the single backend replica reloads the credential/configuration.
-- After deployment and Exchange propagation (allow up to 30 minutes), verify the app can read Dan's agenda and test mailbox items, and is denied access to a different mailbox. Then create and move a test event only after the exact later-message confirmation; verify no change occurs for a wrong, expired, or same-turn code. Do not use real mail recipients for send tests. These live checks remain the coordinator's post-merge responsibility.
+- **Google Calendar and Gmail setup (Dan only):** Create a Google Cloud project and select it in the project picker. Open **APIs & Services → Library**, search for **Gmail API**, open it and click **Enable**; repeat for **Google Calendar API**. Open **Google Auth Platform → Branding** and configure the app name and support contact; under **Audience**, choose **External** for Dan's personal account. Under **Data Access**, add `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.compose`, `https://www.googleapis.com/auth/gmail.send`, and `https://www.googleapis.com/auth/calendar.events`. Return to **Audience** and click **Publish app** so the publishing status is **In production**, not **Testing**; Testing-mode refresh tokens expire after seven days. Google may show an unverified-app warning or require OAuth verification for restricted Gmail scopes.
+- In Google Auth Platform, open **Clients → Create client**, choose **Desktop app**, create the client, and keep its client ID and secret ready to enter into the hidden prompts. Do not download or commit the client file. On Dan's Windows machine, sign in to the expected Azure subscription and GitHub repository with their CLIs, open **Windows PowerShell 5.1** (not PowerShell 7), change to the repository root, and run exactly `& .\infra\setup-google.ps1`. The script runs loopback OAuth with PKCE, validates consent state, stores `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` in the deployed Key Vault, and removes the temporary vault role assignment it creates. It sets only nonsecret `JARVIS_GOOGLE_TIME_ZONE` as a GitHub Actions variable. Dan needs permission to create/delete role assignments and write Key Vault secrets; no coding agent runs this script or accesses the tenant.
+- After setup, deploy from `main` to enable the configured backend module. Verify agenda and mail reads for `danaakesen@gmail.com`, test event creation/move only after exact later-message confirmation, test a Gmail reply draft (Dan sends it from Gmail), and test sending only to an explicitly approved test recipient. Wrong, expired, and same-turn confirmation codes must not cause writes. Live Google consent, deployment, and API behavior remain unverified until Dan performs these checks.
 - P7-10 deploys `JARVIS_NOTES_FOLDER_PATH` from the `notesFolderPath` Bicep parameter (default `/Jarvis/Notes`). After merge, the coordinator must review and approve the broad Graph `Files.Read.All` application permission before running `./infra/setup-notes-search.ps1` with an administrator-authorized Azure CLI session. The script is idempotent and assigns the permission to `id-jarvis-backend`; Graph Search does not support `Sites.Selected`. The backend fixes the user to Dan and scopes queries and returned links to the configured folder. Live tenant consent and a known-note search remain unverified.
 - P7-02 reads Dan's Teams presence with the backend managed identity and requires the Microsoft Graph `Presence.Read.All` application role. After merge, a tenant administrator must review/grant that permission and run `./infra/setup-away-presence.ps1` from an Azure CLI session for the expected subscription. The script is idempotent and targets `id-jarvis-backend`; no Bicep or SQL migration is needed. Browser return is signaled by authenticated active-app requests to `POST /now/present`, not passive feed refreshes. Live consent, presence detection, Teams installation, and phone delivery remain unverified.
 - `az` runs through a `.cmd` file: avoid `&`, parentheses, and pipes inside arguments such as `--query` (L20); filter JSON in PowerShell instead.
@@ -208,12 +208,14 @@ Status, 4 October 2026: Dan registered the App, installed it on all repositories
 The repository uses npm workspaces for `apps/web`, `apps/backend`, and
 `packages/contracts`, one root lockfile, and shared strict TypeScript
 configuration. P8-14 keeps the versioned JSON Schema and browser/backend view
-types in the contracts workspace. P0-02 implements the web
+types in the contracts workspace; P7-14 adds the bounded typed web-research
+result contract there. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
 Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3), and P2-01 (#27) adds sandbox and operations groups 4 and 6.
 P0-04 adds the Bicep template; its first Azure deployment is P0-16. Bicep sets backend `KEY_VAULT_URI`; the backend uses its managed identity to read `github-app-webhook-secret`. Locally, the URI can be omitted; webhook requests then fail with 503. The secret is cached in memory after a successful lookup and requires a backend restart to rotate.
 P7-04 reads the Jev API key `jev-api-key` from the same Key Vault with the backend identity. Dan provisions it after merge with the coordinator's `set-jev-key.ps1` outside this repository; agents must not run that script or access the live key. The reflex uses the configured `jev-latest` model. Live Jev latency and Voice Live behavior are not covered by offline tests.
+P7-19 reuses that existing key and P7-18's default-off Chrome toggle; it adds no secret, environment variable, or setup command. Dan's live shared-form, Jev/Foundry, Voice Live, and confirmation checks remain post-merge work.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
 and Python 3.12.14 (`.python-version`, for future Python work). Install from the
@@ -236,11 +238,18 @@ Verified in Codex cloud for P0-02:
 | Focused P8-17 settings/theme checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
+| Focused P8-26 queue and cancellation tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-abort.test.tsx` |
 | Focused P7-08 camera, shell, chat and voice checks | `npm test --workspace @jarvis/web -- --run src/camera-capture.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/App.test.tsx src/voice-client.test.tsx`; `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/vision/screen.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
 | Focused P7-13 memory-tool, embedding, and migration tests | `npm test --workspace @jarvis/backend -- --run src/core/memory.test.ts src/core/memory-embeddings.test.ts src/database/migrations.test.ts` |
+| Focused P7-14 research tests | `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- --run src/core/web-research.test.ts src/core/usage.test.ts src/foundry/client.test.mts src/config.test.ts src/database/tool-call-store.test.ts`; `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_tool` |
 | Focused P7-04 reflex, chat and voice tests | `npm test --workspace @jarvis/backend -- --run src/core/reflex.test.ts src/core/conversation.test.ts src/voice/relay.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py` |
-| Focused P7-15 image generation and artifact tests | `npm test --workspace @jarvis/backend -- --run src/core/image-generation.test.ts src/core/image-generation-routes.test.ts src/database/workspace-artifact-store.test.ts src/database/conversation-store.test.ts src/database/usage-store.test.ts src/core/usage.test.ts src/database/migrations.test.ts`; `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts src/usage/UsagePage.test.tsx`; `npm test --workspace @jarvis/contracts` |
+| Focused P7-15 image generation and artifact tests | `npm test --workspace @jarvis/backend -- --run src/core/image-generation.test.ts src/core/image-generation-routes.test.ts src/database/workspace-artifact-store.test.ts src/database/conversation-store.test.ts src/database/usage-store.test.ts src/core/usage.test.ts src/database/migrations.test.ts`; `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts src/usage/UsagePage.test.tsx`; `npm test --workspace @jarvis/contracts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k 'codex_tool or image'` |
+| Focused P7-27 workspace reflex checks | `npm test --workspace @jarvis/backend -- --run src/core/reflex.test.ts src/core/workspace-commands.test.ts src/core/conversation.test.ts src/voice/relay.test.ts src/logging.test.ts`; `npm test --workspace @jarvis/web -- --run src/Workspace.test.tsx src/NowFeedPanel.test.tsx src/now-feed.test.ts src/App.test.tsx` |
+| Focused P7-23 chat latency checks | `npm test --workspace @jarvis/backend -- --run src/core/conversation.test.ts src/core/reflex.test.ts src/voice/relay.test.ts src/core/memory.test.ts src/core/memory-embeddings.test.ts src/logging.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py agents/jarvis/tests/test_jarvis_tools.py` |
+| Focused P7-30 cross-session follow-up checks | `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py`; `cd agents/jarvis && .venv/bin/python -m ruff check chat_runtime.py model_client.py tests/test_chat_runtime.py tests/test_model_client.py` |
+| Focused P7-20 streaming voice reflex checks | `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/core/reflex.test.ts src/database/conversation-store.test.ts src/voice/realtime.test.ts src/logging.test.ts`; `npm run lint --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_voice_provisioning.py` |
+| Focused P7-24 live partial-recognition checks | `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/voice/realtime.test.ts src/voice/speech-recognizer.test.ts src/logging.test.ts`; `npm test --workspace @jarvis/web -- --run src/voice-client.test.tsx`; `npm run lint --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
 | P7-13 isolated SQL migration/store contracts | `npm run test:database --workspace @jarvis/backend` |
 | Focused P3-05 failed-check tests | `npm test --workspace @jarvis/backend -- src/database/checks-loop-blob.test.ts src/database/checks-loop-store.test.ts src/github/checks-loop.test.ts src/github/actions-logs.test.ts src/github/webhook.test.ts src/core/settings.test.ts src/github-app.test.ts` |
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
@@ -266,6 +275,24 @@ Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
 returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
 P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised.
+
+P7-15's conversation image preview was inspected in Chromium at 1280×900 and
+390×844 using scratch-only signed-in and API fixtures. The existing history
+rendered the image artifact with its accessible name and caption; the image fit
+both viewports without horizontal overflow. The browser used a local illustration
+for layout inspection after the fixture returned a mock Blob URL. This verifies
+presentation only, not Codex generation, Blob authorization, or deployed
+workspace acceptance.
+
+P7-27 passed `npm test` (1,135 tests), `npm run lint`, and `npm run build`.
+Scratch-only auth/API fixtures in Chromium at 1440×1000 and 390×844 verified
+snapshot publication, tile/layer/enlarge, minimise/restore, context-panel
+open/close (including repeated idempotent opens), focus/close and restored
+agent-closed content. Reduced motion remained usable, with no phone overflow
+or page errors. Fake voice tests prove execution before the final transcript
+and no repeated final action. These checks do not prove live Jev/Foundry
+latency; the coordinator must measure “tile my windows” from chat send to
+visible layout change and verify it is under 1.5 seconds after deployment.
 P8-17 was inspected at 390 and 1280 px using a scratch-only signed-in auth stub
 and mock `/settings` and `/database/status` endpoints. The minimise-windows
 toggle was off initially, saved by PATCH, and still on after reload; neither
@@ -579,6 +606,19 @@ is optional for local development: memory retrieval falls back to SQL full-text
 or substring search when embeddings are not configured or unavailable. No API
 key or browser credential is used.
 
+P7-14 uses the same configured Foundry runner and the existing `codex-login`
+Key Vault secret; there is no Bing resource, search API key, new paid API, or
+manual provider setup. Bicep's `codexToolModel` parameter configures the backend
+setting `JARVIS_CODEX_TOOL_MODEL` (default `gpt-5.5`); the backend passes that
+model to runner mode `codex-tool`, tool `web_research`. The runner uses a fresh
+temporary workspace without a repository, disables Codex's `shell_tool`, and
+deletes the workspace and auth file after the invocation. Do not enable the
+shell tool or treat the read-only sandbox as a credential-file boundary.
+Offline tests use fake provider processes. After merge, the coordinator checks
+one harmless live query, its source URLs, explicit no-source behavior when
+applicable, usage-limit handling if naturally available, and the daily count;
+the coding agent must not access Azure or run live Codex acceptance.
+
 Production runner calls use the optional paired `FOUNDRY_RUNTIME_ENDPOINT` and
 `FOUNDRY_ADMIN_ENDPOINT`, plus `FOUNDRY_RUNNER_AGENT_NAME`. Bicep supplies the
 project URLs and `jarvis-runner-node-1x2`; these are non-secret settings. When
@@ -700,12 +740,16 @@ the companion on Dan's PC:
      -BridgeClientId <jarvis-pc-bridge-client-guid>
    ```
 
-   The installer stops an existing bridge process, copies app files under
-   `%LOCALAPPDATA%\Programs\Jarvis.PcBridge`, writes nonsecret settings under
-   `%LOCALAPPDATA%\Jarvis\PcBridge`, and creates a Startup shortcut. Launch the
-   installed executable once to sign in by device code; MSAL stores its refresh
-   cache with Windows DPAPI. Re-running the installer updates the files without
-   deleting that token cache. The bridge connects outbound and creates no
+   The installer stops existing tray and native-host processes, then retries file
+   copies briefly if Chrome restarts a native host during the update. It copies app
+   files under `%LOCALAPPDATA%\Programs\Jarvis.PcBridge`, updates only the
+   connection fields in `%LOCALAPPDATA%\Jarvis\PcBridge\settings.json`, and
+   creates a Startup shortcut. Existing browser automation and other user settings
+   are retained; the installer prints whether Chrome automation is on. If extension
+   files changed, reload the unpacked extension from `chrome://extensions`.
+   Launch the installed executable once to sign in by device code; MSAL stores its
+   refresh cache with Windows DPAPI. Re-running the installer updates the files
+   without deleting that token cache. The bridge connects outbound and creates no
    inbound firewall rule.
 4. Confirm the tray reports Online, then ask Jarvis to open an HTTP(S) URL or an
    allow-listed app. Check the authenticated Now feed for online/offline status.
@@ -716,63 +760,68 @@ folders below `C:\Repo` in VS Code, active-window title, and exact-title focus.
 Offline policy/protocol tests do not verify live Entra sign-in or Windows
 execution; those remain coordinator post-merge checks.
 
-### Chrome browser executor (P7-18)
+### Chrome browser executor (P7-18, P7-25)
 
 The tray menu includes a persisted **Chrome browser automation (off/on)**
-toggle; missing settings default to off. Do not enable it until Dan has chosen
-the Chrome profile and is present. The bridge never launches Chrome. CDP is
-read only from `http://127.0.0.1:9222/json/list`, and the companion rejects
-non-loopback WebSocket targets.
+toggle; missing settings default to off. The extension transport is selected
+when the Jarvis extension is connected in Dan's normal Chrome profile. The
+installer registers a Chrome native-messaging host under the current user's
+HKCU hive; the native host relays framed messages to the running tray bridge
+over a current-user-only named pipe. It adds no network listener. The extension
+uses only native messaging, does not declare `externally_connectable`, and
+attaches with Chrome's debugger API only while carrying out browser work; Chrome
+shows its debugger notification while attached and the executor detaches after
+an action, with a 30-second idle detach as recovery. The existing loopback CDP
+transport remains a fallback for a separately configured debugging endpoint.
 
-On Dan's Windows PC, use a dedicated Chrome user-data directory and sign in to
-Dan's Chrome profile there. Do not copy a profile or attach remote debugging to
-a profile that is already in use. Close Chrome, then start it with the loopback
-debug endpoint:
+Install the bridge using the steps above. In Dan's normal Chrome profile, open
+`chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and
+choose:
 
-```powershell
-$chrome = Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'
-if (-not (Test-Path $chrome)) {
-  $chrome = Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'
-}
-$profile = Join-Path $env:LOCALAPPDATA 'Jarvis\ChromeProfile'
-New-Item -ItemType Directory -Force -Path $profile | Out-Null
-Start-Process -FilePath $chrome -ArgumentList @(
-  '--remote-debugging-address=127.0.0.1',
-  '--remote-debugging-port=9222',
-  "--user-data-dir=`"$profile`""
-)
+```text
+%LOCALAPPDATA%\Programs\Jarvis.PcBridge\chrome-extension
 ```
 
-Sign in to that Chrome profile as Dan. Start the local test page from the
-repository root:
+This is a one-time step for the unpacked extension; a private Chrome Web Store
+release can replace it later. Do not create or copy a profile, or restart Chrome
+with `--remote-debugging-port`: since Chrome 136, remote debugging is ignored on
+the default user-data directory. Jarvis must use the profile Dan already uses.
+The extension calls `chrome.tabs` for tab discovery and uses fixed
+`chrome.debugger` CDP operations; a fixed `chrome.scripting` check verifies that
+the selected page can be scripted before debugger work starts.
+
+For local acceptance, start the test page server from the repository root:
 
 ```powershell
 python -m http.server 8765 --bind 127.0.0.1 --directory pc-bridge/test-pages
 ```
 
-Open `http://127.0.0.1:8765/browser-executor.html`. Right-click the Jarvis tray
-icon and explicitly turn on **Chrome browser automation**. With P7-17 available,
-ask Jarvis to list tabs and snapshot this local page, then test typing in
-**Ordinary text**, selecting **Two**, clicking **Safe click target**, and using
-**Toggle target cover** before attempting another click from the old snapshot.
-The covered click must be refused. Attempts to type in Password or One-time
-code must be blocked; **Send test message** must wait for Dan's P7-03
-confirmation and the local page must not send anything. Take a new snapshot
-after each page change. Then turn the tray toggle off and close the test server
-and Chrome.
+In Dan's normal Chrome, open `http://127.0.0.1:8765/browser-executor.html`,
+right-click the Jarvis tray icon, and explicitly turn on **Chrome browser
+automation**. With P7-17 available, ask Jarvis to list tabs and snapshot this
+page. Test typing in **Ordinary text**, selecting **Two**, clicking **Safe
+click target**, and using **Toggle target cover** before attempting another
+click from the old snapshot. The covered click must be refused. Attempts to
+type in Password or One-time code must be blocked; **Send test message** must
+wait for Dan's P7-03 confirmation and the local page must not send anything.
+Take a new snapshot after each page change. Then turn the tray toggle off and
+stop the test server. Live acceptance also requires “open google.com” and
+“search for X” in Dan's normal Chrome profile.
 
 From the repository root, the offline checks are:
 
 ```text
 dotnet test pc-bridge/Jarvis.PcBridge.Core.Tests/Jarvis.PcBridge.Core.Tests.csproj --configuration Release
 dotnet build pc-bridge/Jarvis.PcBridge/Jarvis.PcBridge.csproj --configuration Release
+pwsh -NoProfile -File pc-bridge/tests/BridgeInstaller.Helpers.Tests.ps1
 npm test --workspace @jarvis/backend -- --run src/pc-bridge/bridge.test.ts
 ```
 
-These fake-CDP tests do not prove Chrome version/profile behavior or the native
-tray interaction. Capture desktop evidence of the local page and covered/sensitive
-refusals in the PR after the Windows check; do not include unrelated personal
-tabs or page contents.
+Fake-CDP and fake-extension-port tests exercise the shared indexed-action
+contract; they do not prove Chrome profile behavior, native-host registration,
+or tray interaction. Live Chrome, physical confirmation delivery, and Dan's
+acceptance remain coordinator checks. Do not include unrelated personal tabs or
+page contents in evidence.
 
 ### Database access and migrations (#7)
 

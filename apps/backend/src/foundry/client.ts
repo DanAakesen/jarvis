@@ -4,6 +4,7 @@
 export const FOUNDRY_SCOPE = "https://ai.azure.com/.default";
 
 export type CodingAgent = "codex" | "copilot";
+export type CodexToolName = "web_research";
 export type InvocationStatus =
   | "queued" | "running" | "completed" | "failed" | "cancelled" | "needs_attention"
   | "cancelling" | "interrupted" | "paused" | "unknown";
@@ -92,6 +93,18 @@ function text(value: unknown, name: string): string {
     throw new TypeError(`${name} must contain 1–65536 characters`);
   }
   return value;
+}
+
+function codexToolRequest(tool: unknown, query: unknown, model: unknown): JsonObject {
+  if (tool !== "web_research") throw new TypeError("tool must be web_research");
+  if (typeof query !== "string" || !query.trim() || query.length > 2_000) {
+    throw new TypeError("query must contain 1–2000 characters");
+  }
+  const selectedModel = option(model, "model", 100);
+  if (selectedModel === undefined || selectedModel === "gpt-6.1-sol") {
+    throw new TypeError("model must be a supported ChatGPT Codex model");
+  }
+  return { agent: "codex", mode: "codex-tool", tool, query, model: selectedModel };
 }
 
 function option(value: unknown, name: string, limit: number): string | undefined {
@@ -228,19 +241,34 @@ export class FoundryClient {
     return this.accepted(body, "renew-codex", undefined, "codex");
   }
 
-  async startCodexTool(request: CodexToolRequest, options: RequestOptions = {}): Promise<InvocationAccepted> {
-    const task = text(request.task, "task");
-    if (task.length > 4096 || !/^[A-Za-z0-9_-]{43}$/u.test(request.artifactUploadKey)) {
+  async startCodexTool(request: CodexToolRequest, options?: RequestOptions): Promise<InvocationAccepted>;
+  async startCodexTool(tool: CodexToolName, query: string, model: string, options?: RequestOptions): Promise<InvocationAccepted>;
+  async startCodexTool(
+    requestOrTool: CodexToolRequest | CodexToolName,
+    optionsOrQuery: RequestOptions | string = {},
+    model?: string,
+    researchOptions: RequestOptions = {},
+  ): Promise<InvocationAccepted> {
+    if (typeof requestOrTool === "string") {
+      if (typeof optionsOrQuery !== "string" || model === undefined) throw new TypeError("Invalid Codex tool request");
+      const body = await this.runtimeRequest(
+        "codex-tool", "protocols/invocations", "POST",
+        codexToolRequest(requestOrTool, optionsOrQuery, model), undefined, researchOptions,
+      );
+      return this.accepted(body, "codex-tool", undefined, "codex");
+    }
+    const task = text(requestOrTool.task, "task");
+    if (task.length > 4096 || !/^[A-Za-z0-9_-]{43}$/u.test(requestOrTool.artifactUploadKey)) {
       throw new TypeError("Invalid Codex tool request");
     }
-    const model = option(request.model, "model", 100);
+    const imageModel = option(requestOrTool.model, "model", 100);
     const body = await this.runtimeRequest("codex-tool", "protocols/invocations", "POST", {
       agent: "codex",
       mode: "codex-tool",
       task,
-      artifact_upload_key: request.artifactUploadKey,
-      ...(model === undefined ? {} : { model }),
-    }, undefined, options);
+      artifact_upload_key: requestOrTool.artifactUploadKey,
+      ...(imageModel === undefined ? {} : { model: imageModel }),
+    }, undefined, typeof optionsOrQuery === "string" ? {} : optionsOrQuery);
     return this.accepted(body, "codex-tool", undefined, "codex");
   }
 

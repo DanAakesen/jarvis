@@ -5,7 +5,8 @@ import { loadAuthConfig } from './auth/config.js';
 describe('backend configuration', () => {
   it('defaults to the infrastructure port and offline logs', () => {
     expect(loadConfig({})).toEqual({
-      port: 3000, logLevel: 'info', notesFolderPath: '/Jarvis/Notes', codexImageModel: 'gpt-5.5',
+      port: 3000, logLevel: 'info', notesFolderPath: '/Jarvis/Notes', codexToolModel: 'gpt-5.5',
+      codexImageModel: 'gpt-5.5',
       auth: loadAuthConfig({}),
     });
   });
@@ -48,12 +49,14 @@ describe('backend configuration', () => {
         runtime: foundryRuntimeEndpoint,
       },
       foundryRunnerAgentName: 'jarvis-runner-node-1x2',
+      codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
     });
   });
-  it('accepts a configurable Codex image model and rejects unsafe option values', () => {
+  it('validates the configurable ChatGPT Codex tool model', () => {
+    expect(loadConfig({ JARVIS_CODEX_TOOL_MODEL: 'gpt-5.5' }).codexToolModel).toBe('gpt-5.5');
     expect(loadConfig({ JARVIS_CODEX_TOOL_MODEL: 'gpt-5.5' }).codexImageModel).toBe('gpt-5.5');
-    for (const JARVIS_CODEX_TOOL_MODEL of ['', '-option', 'gpt-5.5\n--help']) {
+    for (const JARVIS_CODEX_TOOL_MODEL of ['', 'gpt-6.1-sol', '../model', 'bad model', 'gpt-5.5\n--help']) {
       expect(() => loadConfig({ JARVIS_CODEX_TOOL_MODEL })).toThrow('JARVIS_CODEX_TOOL_MODEL');
     }
   });
@@ -148,34 +151,21 @@ describe('backend configuration', () => {
       expect(() => loadConfig({ GITHUB_APP_ID: '123456', KEY_VAULT_URI })).toThrow('KEY_VAULT_URI');
     }
   });
-  it('requires a valid Graph app ID, Key Vault, and time zone together', () => {
-    const appId = '12345678-1234-1234-1234-123456789abc';
+  it('requires Key Vault for Google credentials and validates the configured time zone', () => {
     const keyVault = 'https://jarvis.vault.azure.net/';
     expect(loadConfig({
-      JARVIS_GRAPH_APP_ID: appId,
-      JARVIS_GRAPH_TIME_ZONE: 'Europe/Copenhagen',
+      JARVIS_GOOGLE_TIME_ZONE: 'Europe/Copenhagen',
       KEY_VAULT_URI: keyVault,
     })).toMatchObject({
-      graphAppId: appId,
-      graphTimeZone: 'Europe/Copenhagen',
+      googleTimeZone: 'Europe/Copenhagen',
       keyVaultUri: keyVault,
     });
-    expect(() => loadConfig({ JARVIS_GRAPH_APP_ID: appId })).toThrow('KEY_VAULT_URI');
-    expect(() => loadConfig({ JARVIS_GRAPH_APP_ID: appId, KEY_VAULT_URI: keyVault }))
-      .toThrow('JARVIS_GRAPH_APP_ID and JARVIS_GRAPH_TIME_ZONE');
+    expect(() => loadConfig({ JARVIS_GOOGLE_TIME_ZONE: 'Europe/Copenhagen' }))
+      .toThrow('KEY_VAULT_URI');
     expect(() => loadConfig({
-      JARVIS_GRAPH_TIME_ZONE: 'Europe/Copenhagen',
-    })).toThrow('JARVIS_GRAPH_APP_ID and JARVIS_GRAPH_TIME_ZONE');
-    expect(() => loadConfig({
-      JARVIS_GRAPH_APP_ID: 'not-a-uuid',
-      JARVIS_GRAPH_TIME_ZONE: 'Europe/Copenhagen',
+      JARVIS_GOOGLE_TIME_ZONE: 'not/a-zone',
       KEY_VAULT_URI: keyVault,
-    })).toThrow('JARVIS_GRAPH_APP_ID');
-    expect(() => loadConfig({
-      JARVIS_GRAPH_APP_ID: appId,
-      JARVIS_GRAPH_TIME_ZONE: 'not/a-zone',
-      KEY_VAULT_URI: keyVault,
-    })).toThrow('JARVIS_GRAPH_TIME_ZONE');
+    })).toThrow('JARVIS_GOOGLE_TIME_ZONE');
   });
   it('validates the Azure budget resource ID used for budget polling', () => {
     const JARVIS_MONTHLY_BUDGET_RESOURCE_ID =

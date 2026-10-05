@@ -105,6 +105,28 @@ describe("Foundry runner wire contract", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("starts an isolated Codex web research tool invocation", async () => {
+    const { client, fetch } = setup({ ...(fixtures["task_start"] as object), agent: "codex" });
+    const query = "Research this safely; do not run $(commands)";
+    const accepted = await client.startCodexTool("web_research", query, "gpt-5.5");
+    expect(accepted.agent).toBe("codex");
+    expect(request(fetch).body).toEqual({
+      agent: "codex", mode: "codex-tool", tool: "web_research", query, model: "gpt-5.5",
+    });
+  });
+
+  it.each([
+    ["unsupported tool", "shell" as never, "query", "gpt-5.5"],
+    ["empty query", "web_research", " ", "gpt-5.5"],
+    ["oversized query", "web_research", "q".repeat(2_001), "gpt-5.5"],
+    ["rejected subscription model", "web_research", "query", "gpt-6.1-sol"],
+  ])("rejects invalid Codex tool request: %s", async (_name, tool, query, model) => {
+    const { client, fetch, getToken } = setup();
+    await expect(client.startCodexTool(tool, query, model)).rejects.toBeInstanceOf(TypeError);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(getToken).not.toHaveBeenCalled();
+  });
+
   it("passes effective model and Codex reasoning to new runner sessions", async () => {
     const { client, fetch } = setup({ ...(fixtures["task_start"] as object), agent: "codex" });
     await client.startTask({

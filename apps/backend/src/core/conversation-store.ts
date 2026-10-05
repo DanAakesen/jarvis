@@ -1,4 +1,4 @@
-export type ConversationChannel = 'chat' | 'voice';
+export type ConversationChannel = 'chat' | 'voice' | 'phone';
 export type ConversationLanguage = 'da' | 'en';
 export type ConversationRole = 'dan' | 'jarvis';
 
@@ -53,6 +53,7 @@ export interface ConversationStore {
     readonly model: string | null;
     readonly sourceItemId?: string;
   }): Promise<ConversationMessage | null>;
+  updateMessage?(messageId: string, text: string): Promise<ConversationMessage | null>;
   getDanMessageIdBySourceItemId(sourceItemId: string): Promise<string | null>;
   getHistory(input: {
     readonly limit: number;

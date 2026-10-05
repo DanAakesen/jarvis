@@ -5,18 +5,18 @@ import { ToolRefusal } from '../core/tool-registry.js';
 const ACTION_TTL_MS = 10 * 60_000;
 const MAX_PENDING_ACTIONS = 50;
 
-export type OutlookActionScope = 'calendar' | 'mail';
+export type GoogleActionScope = 'calendar' | 'mail';
 
 interface PendingAction {
   readonly code: string;
-  readonly scope: OutlookActionScope;
+  readonly scope: GoogleActionScope;
   readonly sourceMessageId: string;
   readonly createdAt: number;
   readonly summary: string;
   readonly execute: (signal: AbortSignal) => Promise<unknown>;
 }
 
-export class PendingOutlookActions {
+export class PendingGoogleActions {
   private readonly actions = new Map<string, PendingAction>();
 
   constructor(private readonly now: () => number = Date.now) {}
@@ -29,7 +29,7 @@ export class PendingOutlookActions {
   } {
     this.removeExpired();
     if (this.actions.size >= MAX_PENDING_ACTIONS) {
-      throw new Error('Too many pending Outlook actions');
+      throw new Error('Too many pending Google actions');
     }
     let code: string;
     do {
@@ -45,7 +45,7 @@ export class PendingOutlookActions {
   }
 
   async confirm(
-    scope: OutlookActionScope,
+    scope: GoogleActionScope,
     code: string,
     message: ConversationMessage | undefined,
     signal: AbortSignal,
@@ -59,7 +59,7 @@ export class PendingOutlookActions {
         BigInt(message.id) <= BigInt(action.sourceMessageId) ||
         message.at.getTime() <= action.createdAt ||
         message.text.trim().toLowerCase() !== `confirm ${code}`) {
-      throw new ToolRefusal('No Outlook change was made. Dan must send the exact confirmation phrase in a new message.');
+      throw new ToolRefusal('No Google change was made. Dan must send the exact confirmation phrase in a new message.');
     }
     this.actions.delete(code);
     return action.execute(signal);

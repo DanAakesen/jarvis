@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { CodexToolUsageCount } from './tool-calls.js';
 
 export type UsagePeriod = '7d' | '30d' | '90d' | 'all';
 export type UsageSource = 'sandbox' | 'jarvis_model' | 'voice' | 'codex' | 'copilot';
@@ -61,6 +62,16 @@ export async function registerUsageRoutes(app: FastifyInstance) {
     const days = periodDays[period];
     const from = days === null ? null : new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
     const report = await app.usageStore.list(from, to);
+    const todayStart = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
+    const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    let codexToolCallsToday: CodexToolUsageCount[] | null = null;
+    if (app.toolCallStore?.listCodexToolCalls) {
+      try {
+        codexToolCallsToday = await app.toolCallStore.listCodexToolCalls(todayStart, tomorrowStart);
+      } catch {
+        request.log.warn('usage.codex_tool_counts_unavailable');
+      }
+    }
     const { dailyToolCounts = [], ...usageReport } = report;
     const result = {
       period,
@@ -71,6 +82,7 @@ export async function registerUsageRoutes(app: FastifyInstance) {
         date: to.toISOString().slice(0, 10),
         tools: dailyToolCounts,
       },
+      codexToolCallsToday,
       truncated: BigInt(report.totalEntries) > BigInt(report.entries.length),
     };
     if (Buffer.byteLength(JSON.stringify(result)) > maxResponseBytes) {

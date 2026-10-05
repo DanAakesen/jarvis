@@ -27,6 +27,7 @@ interface UsageReport {
   period: UsagePeriod;
   from: string | null;
   to: string;
+  codexToolCallsToday: { tool: 'web_research'; count: string }[] | null;
   entries: UsageEntry[];
   totalEntries: string;
   truncated: boolean;
@@ -53,6 +54,7 @@ const usageAgents: UsageAgent[] = ['codex', 'copilot', 'jarvis'];
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const dkk = new Intl.NumberFormat('da-DK', { style: 'currency', currency: 'DKK', maximumFractionDigits: 4 });
 const quantityFormat = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 2 });
+const countFormat = new Intl.NumberFormat('en-GB');
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -84,6 +86,11 @@ function isUsageReport(value: unknown): value is UsageReport {
   return isObject(value) &&
     periods.some(({ value: period }) => period === value.period) &&
     (value.from === null || isDate(value.from)) && isDate(value.to) &&
+    (value.codexToolCallsToday === null || (Array.isArray(value.codexToolCallsToday) &&
+      value.codexToolCallsToday.length <= 10 && value.codexToolCallsToday.every((count) =>
+        isObject(count) && count.tool === 'web_research' &&
+        typeof count.count === 'string' && /^\d{1,19}$/.test(count.count) &&
+        BigInt(count.count) <= maxSqlBigInt))) &&
     Array.isArray(value.entries) && value.entries.length <= 1000 && value.entries.every(isUsageEntry) &&
     typeof value.totalEntries === 'string' && /^\d+$/.test(value.totalEntries) &&
     isObject(value.dailyToolUsage) && typeof value.dailyToolUsage.date === 'string' &&
@@ -256,6 +263,24 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
               Showing the latest {report.entries.length} of {report.totalEntries} usage breakdowns; totals below reflect the displayed rows only.
             </p>
           )}
+          <section className="usage-tool-counts" aria-labelledby="usage-tool-counts-heading">
+            <h2 id="usage-tool-counts-heading">Codex tool calls today (UTC)</h2>
+            <p>Counts include successful, refused, and failed web research calls.</p>
+            {report.codexToolCallsToday === null
+              ? <p role="status">Codex tool counts are unavailable.</p>
+              : report.codexToolCallsToday.length === 0
+                ? <p>No Codex tool calls were recorded today (UTC).</p>
+                : (
+                  <dl>
+                    {report.codexToolCallsToday.map(({ tool, count }) => (
+                      <div key={tool}>
+                        <dt>Web research</dt>
+                        <dd>{countFormat.format(BigInt(count))} calls</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+          </section>
           {report.entries.length === 0
             ? <p className="usage-empty">No usage was recorded in this period.</p>
             : [...groups.entries()].map(([key, group]) => {

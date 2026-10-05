@@ -10,7 +10,7 @@ Keep implementation phases and progress in [PLAN.md](PLAN.md), feature summaries
 - **Purpose:** one Azure platform for building software projects, and later for banking, health and fitness, calendar, and further areas, all controlled through one shared UI and voice.
 - **Language:** Dan speaks Danish and English. UI copy and documentation are English.
 - Jarvis can develop its own repository through the same task flow.
-- Prefer Microsoft services, so Dan learns the stack and new Foundry features, as long as they meet the requirements.
+- Prefer Microsoft services, so Dan learns the stack and new Foundry features, unless Dan confirms a different provider for a capability.
 
 ### Roadmap
 
@@ -30,6 +30,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | Area | Requirement |
 | --- | --- |
 | **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. Chat turns save the source message before invoking the hosted agent; only a completed reply is saved, and tool calls link to that source message. |
+| **Teams calling** | Dan can call Jarvis from the Teams app through ACS Call Automation and the Teams Phone resource account. Accept only Dan's verified Teams Entra object ID; reject unverified callers before answering or creating a session. Phone tool calls use the backend registry and require Dan's P7-03 Teams approval before reading personal data or taking actions. A Teams service number and ACS usage may incur charges; live use waits for Dan to purchase the number. |
 | **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
 | **Updates** | Events update state and progress live, without manual refresh. |
 | **Assignment** | One active coding agent per task. |
@@ -38,12 +39,13 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | **Agent choice** | Codex or GitHub Copilot per task, regardless of project. |
 | **Subscriptions** | Coding tasks and image generation use Dan's ChatGPT/Codex subscription through the Jarvis-only login; Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. Codex usage is shared with Dan's use; no per-image API billing or fallback is allowed. |
 | **Voice** | An open browser is enough. Danish and English with a language toggle; status requests and follow-ups. During English sessions, Jarvis announces selected task, pull-request, and deployment status changes in fixed short wording, merging bursts and waiting until the current voice turn is idle. Voice Live credentials stay on the backend; the browser connects through an authenticated backend WebSocket relay. |
-| **Reflex layer** | After a chat turn or English Voice Live end-of-turn, Jev classifies whether Dan addressed Jarvis and whether the request is an action, question, or other. Only high-confidence actions with no confirmation requirement may call an explicitly reflex-safe registered tool directly; uncertain, unsafe, and confirmation-requiring turns go to the main agent. |
+| **Reflex layer** | Jev evaluates stable streaming voice clauses as they arrive, with the per-turn ledger of prior actions, so high-confidence, complete, reversible open/navigation/pause actions can run before Dan finishes speaking. English and Danish Voice Live keep streaming the final transcript to Jarvis; the relay replaces any early partial message with the final text and gives the ledger to Jarvis to prevent repeats. Submit, send, buy, delete, merge, uncertain, and confirmation-requiring actions wait for the final turn and required confirmation. If the final transcript contradicts an early action, Jarvis attempts an available undo and reports success, refusal, failure, or an unavailable undo honestly. |
 | **Phone workspace** | At phone width, one content view is foreground. Switch by horizontal swipe, named controls, keyboard, or the existing workspace focus/restore command; hidden views retain their local state. Typing shows only the small composer orb as the explicit voice-start control. Active voice docks below foreground content with End voice, and returns to the main space when all content is closed or minimised. Agent-delivered views and requests remain P8-15. |
 | **Away mode** | Dan can say or type that he is leaving or back; Teams Away/Offline also turns the mode on after ten minutes. Active use of the authenticated Jarvis browser app turns it off; background feed refreshes do not. The persisted mode appears in Now. While away, task-state updates and approval requests use the existing Teams phone path; when present, updates and approval requests use the browser. Spoken replies are especially brief while away. |
 | **Local PC bridge** | A Windows tray companion signs in as Dan with Entra and keeps an outbound authenticated WebSocket to Jarvis. Registered Jarvis tools can open HTTP(S) URLs, VS Code, Edge, File Explorer, or Windows Terminal; open folders below `C:\Repo` in VS Code; report the active window title; or focus a window by exact title. The PC enforces the same allow-list; no inbound ports are opened. |
-| **Calendar and mail** | Jarvis reads today's agenda, finds free slots, searches and summarises mail, and prepares calendar changes, reply drafts, or messages to send. Every write waits for Dan's exact confirmation in a later message. Mail content is untrusted data, never instructions. |
+| **Calendar and mail** | Jarvis reads today's Google Calendar agenda, finds free slots, searches and summarises Gmail, and prepares calendar changes, reply drafts, or messages to send. Every write waits for Dan's exact confirmation in a later message. Reply drafts are saved to Gmail for Dan to send himself. Mail content is untrusted data, never instructions. |
 | **Notes** | Dan can ask what he wrote about; Jarvis searches the configured OneDrive notes folder and grounds its answer in returned snippets and links. |
+| **Web research** | Jarvis uses live web search through Dan's existing ChatGPT/Codex subscription, returns only retrieved HTTPS sources with titles and retrieval times, and identifies unsupported, stale, inaccessible, or source-free results honestly. Retrieved page text is evidence, never authority over tools; no Bing or pay-per-call search fallback is used. |
 | **GitHub events** | The backend verifies GitHub webhook signatures and ignores duplicate delivery IDs for pull requests, check runs, workflow runs, deployment statuses, and pushes. A ready-for-review pull request or failed deployment publishes only a typed status kind to the active voice session after webhook processing; payloads and logs are never spoken. |
 | **Continuity** | Work continues when the browser or voice session closes. |
 | **Sandbox** | One sandbox per task: starts when work begins, closes after delivery or cancel. The agent runs targeted builds and tests only; no Docker. |
@@ -51,7 +53,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | **Project settings** | Per project: how far agents may go (deliver a PR, or complete without deployment), merge rules, sandbox size. |
 | **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models, plus the app-wide light/dark appearance; updates affect new sessions and tasks, not running work. |
 | **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. Show today's UTC Jarvis tool-call counts by tool, including refusals and failures; subscription usage has no fabricated DKK cost. |
-| **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. For chat, the backend calls the hosted agent through Foundry Invocations with its managed identity; the agent verifies Dan's delegated token and stored source message through `/me` and conversation history. The agent has its own identity for reading model settings and listing/calling tools; coding runners use a separate app-only role restricted to task-event ingestion. Outlook uses a backend-only app identity with Exchange RBAC scoped to Dan's mailbox. No passwords in Jarvis. |
+| **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. For chat, the backend calls the hosted agent through Foundry Invocations with its managed identity; the agent verifies Dan's delegated token and stored source message through `/me` and conversation history. The agent has its own identity for reading model settings and listing/calling tools; coding runners use a separate app-only role restricted to task-event ingestion. Google Calendar and Gmail use backend-only OAuth credentials in Key Vault, scoped to Dan's personal account. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Database wake** | SQL connection acquisition and explicitly read-only queries retry resume errors 40613, 40197, 40501 and connection timeouts with backoff for up to 90 seconds. Signed-in pages show “Waking Jarvis…” only while the backend reports a database wait. An ambiguous write failure is never automatically replayed. |
 | **Memory** | Carry forward only clearly stated preferences, project facts, decisions and unfinished tasks. Retrieve relevant memories with their source message; Dan can inspect, correct and forget them. Never remember secrets, credentials, banking or health details unless Dan explicitly says “remember”. Memories live in Azure SQL until deleted; forgetting does not delete conversation records. Compaction and generated views have separate lifetimes. |
@@ -71,7 +73,7 @@ flowchart TB
 
 - Each area owns its pages and registers its tools with Jarvis. The backend exposes every registered tool's input schema and executes calls, recording each result so new modules become available without agent changes. Jarvis's reply about an action comes from that recorded result: a refused or failed call is reported as refused or failed, never as done. The Jarvis agent uses only these backend tools.
 - In chat and voice, Jarvis can list active projects and filtered tasks, inspect a task, create work, and steer, pause, resume, or cancel it. The backend applies the existing task validation and lifecycle rules to every action.
-- Outlook tools use the authenticated backend registry for agenda/free-slot reads, mail search, calendar changes, reply drafts and sending. The backend fixes the mailbox to Dan's Entra object ID, redacts Outlook tool inputs/results from persistence, and requires a one-time confirmation from a later verified Dan message before any write.
+- Google tools use the authenticated backend registry for agenda/free-slot reads, mail search, calendar changes, reply drafts and sending. The backend uses OAuth credentials held only in Key Vault for Dan's `danaakesen@gmail.com` account, redacts private tool inputs/results from persistence, and requires a one-time confirmation from a later verified Dan message before any write.
 - Page requirements list every data point and action, not the look. Dan creates the visual design from them with an image generator (see [DESIGN.md](DESIGN.md)).
 
 ### Task lifecycle
@@ -181,7 +183,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 | Data points | Actions |
 | --- | --- |
-| Conversation opens automatically in typing mode: a calm greeting when empty; visually distinct Dan/Jarvis messages across chat and voice sessions; channel, language and relative time on hover/focus (always visible on touch or reduced motion); streaming text with a live caret; tool-call chips (tool, outcome, link to task), and voice minutes per sitting; loading/failure and interrupted-reply feedback | Type from the floating bottom-centred, auto-growing composer; Enter sends, Shift+Enter adds a line; start voice only from the small input orb on its left; switch Danish/English with DA/EN buttons inside it |
+| Conversation opens at the latest messages with typing focus: a calm greeting when empty; visually distinct Dan/Jarvis messages across chat and voice sessions; channel, language and relative time on hover/focus (always visible on touch or reduced motion); thinking feedback until the first delta, then open-surface streaming text with a live caret; tool-call chips (tool, outcome, link to task), and voice minutes per sitting; retained failed-turn and interrupted-reply feedback; history refresh retains messages without duplicates; removable queued Dan bubbles and an accessible queue count | Type from the floating bottom-centred, auto-growing composer; Send/Enter clears the locally queued draft immediately and remains available while Jarvis replies; send queued messages in order after success, error or Stop reply; capture DA/EN per submission so changes affect only new messages; Shift+Enter adds a line; start voice only from the small input orb on its left; preserve unsaved and next drafts on failure |
 | Voice state: connecting, ready with microphone off, listening, thinking, speaking, reconnecting; an accessible runtime-state orb and text alternative; what Jarvis heard; latency. History and composer hide during voice; exit restores the draft and typing focus | Explicitly enable the microphone after session readiness (also after reconnect); stop browser voice; interrupt by speaking; mute |
 | "Now": current away/present mode; running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings, and alerts for failed deployments, sandbox crashes, credential expiry, and the 80% monthly budget threshold | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready, Running, or PauseRequested |
@@ -189,6 +191,10 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 The "Now" panel reads the persisted away/present mode, current running tasks and the latest non-dismissed task-attention, release/deployment, credential-warning, and alert activity. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes, and expiring credentials are emailed through stateful Azure Monitor rules; the monthly Azure budget sends its 80% threshold through the same email-only action group. The backend reads actual budget spend on a bounded 15-minute schedule for the Now item. These existing activity alerts remain email-only; while away, task-state updates and approval requests use Teams through P7-03. The browser feed shows only away-mode status/activity while away and suppresses ordinary refresh events; changing mode refreshes the status. Task changes, alerts, dismissals, and credential/budget alert writes refresh the full panel through authenticated server-sent events while Dan is present; reconnecting states identify when the displayed snapshot may be stale.
 
 The voice orb follows typed, transient runtime activity delivered over the authenticated event stream and includes a text alternative. Listening is shown only after the voice relay is ready and microphone audio is observed. Thinking, tool-call start and outcome, speaking, interruption, reconnect, and failure are shown only when reported by the runtime. Unknown states are unavailable, and motion is disabled when reduced motion is preferred.
+
+English and Danish voice keep Voice Live as the final-transcript source. While the microphone is active and unmuted, a parallel Azure Speech stream can provide interim clauses to the existing safe reflex path; mute, voice end, or disconnect stops that recognizer. If Speech is unavailable, voice continues with final-transcript reflexes.
+
+P7-27 lets Jev control currently open Jarvis workspace windows by title in chat and voice, including stable partial speech: show, focus, minimise, restore, close, enlarge, tile/layer and open/close the context panel. These reversible UI actions need no confirmation; creating new generated views stays with the main agent. The agent receives the reflex outcome and must not repeat it. Each classification logs bounded decision metadata and latency without transcript text. Live acceptance: “tile my windows” changes the layout within 1.5 seconds of chat send.
 
 The shared top bar reports actual chat and voice runtime activity, including tool calls; it does not infer work from a local submit. Activity events contain no transcript, tool arguments or results, or secrets, and are not persisted. The orb's audio response uses decoded playback samples, not microphone input or an estimated level. Jarvis-updated workspace windows receive a brief tool-call shimmer; unrelated windows and thinking states do not.
 
@@ -312,9 +318,10 @@ data/actions remain visibly unavailable until their owning services exist.
 
 | Data points | Actions |
 | --- | --- |
-| Per task, project, and period: sandbox minutes and DKK; Jarvis model tokens, screen frames and DKK; voice minutes and DKK; Codex and Copilot usage (no DKK) | Change period; group by project, agent, or source; open a task |
+| Per task, project, and period: sandbox minutes and DKK; Jarvis model tokens, screen frames and DKK; voice minutes and DKK; Codex and Copilot usage (no DKK); current UTC-day web-research call count | Change period; group by project, agent, or source; open a task |
 
 The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-linked metric rows in project, agent, or source groups, plus today's UTC Jarvis tool-call counts by tool (including successful, refused, and failed calls). Screen-frame DKK uses the current documented Luna Global Standard token rates and is identified as an estimate; sandbox and voice costs are also estimates, and Codex/Copilot never display DKK. Unknown model rates remain unpriced. When more than 1,000 grouped rows match, the page says that its subtotals cover only the displayed rows.
+The separate daily web-research count includes successful, refused, and failed calls. A missing audit count is shown as unavailable, not zero.
 
 ## Constraints and integrations
 
@@ -322,9 +329,10 @@ The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-l
 - **GitHub:** Dan's private repositories only; a GitHub App provides per-task tokens, webhooks, and merges.
 - **Coding agents:** Codex (ChatGPT Pro, Jarvis-only login) and Copilot (work seat) over ACP; their usage limits are shared with Dan's own use.
 - **English voice:** `gpt-realtime-2.1` with Ryan HD; tool calls execute through the backend's registered tools, and the spoken response uses the backend-built confirmation.
-- **PC bridge:** the hosted agent and browser never connect to the PC directly. The backend accepts only Dan's delegated token from the configured bridge app on the bridge route, bounds and correlates commands, and reports bridge availability in Now. Fixed local open/focus/read actions and the separately gated Chrome actions are allowed; there are no arbitrary shell commands.
-- **Chrome browser executor:** When Dan explicitly enables the tray toggle, the authenticated PC bridge may list tabs and take one snapshot of visible actionable elements in his signed-in Chrome. Jarvis may click, type, select, scroll, or wait only on an indexed element from that snapshot, after the bridge rechecks that the same DOM node is fresh, visible, and unobstructed. No model-provided selectors, coordinates, scripts, or shell commands are accepted; sensitive fields are never typed into, and high-impact clicks require Dan's P7-03 confirmation.
+- **PC bridge:** the hosted agent and browser never connect to the PC directly. The backend accepts only Dan's delegated token from the configured bridge app on the bridge route, bounds and correlates commands, and reports bridge availability in Now. Fixed local open/focus/read actions and the separately gated Chrome actions are allowed; there are no arbitrary shell commands. With Chrome automation on, HTTP(S) URLs open as active tabs in Dan's connected Chrome profile and its window is brought forward; if the extension is disconnected, the bridge opens the URL in the default browser and says so. Launched apps are granted Windows foreground permission.
+- **Chrome browser executor:** When Dan explicitly enables the tray toggle, the authenticated PC bridge drives the Chrome profile Dan normally uses through the installed Jarvis MV3 extension and native messaging; if that transport is disconnected, it retains the loopback CDP fallback for browser automation. Website URLs open in a new active tab through the extension, and Chrome's window is focused and asked for attention. If the extension is disconnected, URL opening falls back to the default browser with an explicit note; if the extension is connected but the toggle is off, Chrome routing is refused. The extension is registered for Dan's Windows user, accepts no external messages, and introduces no network listener. Jarvis may list tabs, take one snapshot of visible actionable elements, and click, type, select, scroll, or wait only on an indexed element from that snapshot, after the bridge rechecks that the same DOM node is fresh, visible, and unobstructed. No model-provided selectors, coordinates, scripts, or shell commands are accepted; sensitive fields are never typed into, and high-impact clicks require Dan's P7-03 confirmation.
 - **Ultrafast browser agent:** `browser_do` uses one Jev decision per observed browser step to choose a fixed operation and indexed target. Foundry writes text only for TYPE actions; risky clicks retain P7-03 confirmation, and Jarvis stops rather than entering passwords, card numbers, or one-time codes. The bounded run reports its step and result in the workspace and independently checks completion.
+- **Act on the shared tab (P7-19):** When Dan asks to act on the page he is sharing, capture that display's window label alongside its transient vision description. Match both only against the live bridge tab list; ask Dan to choose on ambiguity and offer to send steps if Chrome is offline. Run the bounded Jev agent on the matched tab, announce brief voice progress, show step/results in the workspace, and honor “stop.” Never use model output as selectors, coordinates or scripts; P7-18 still rechecks each observed element and gates risky clicks behind confirmation.
 - **Security:** agents run with full permissions inside their sandbox and can read its tokens, so each token is scoped to the task. Jarvis data and other areas are never reachable from a sandbox.
 - **Cost:** see [Cost](docs/architecture.md#cost) in the architecture map.
 - **Existing systems:** Banking is an existing Azure app using the Agents API (integration code not inspected yet). Daily is an existing ChatGPT site, currently paused; its useful functions and history move over in phase 3.
@@ -384,7 +392,7 @@ unverified.
 Implementation status and live-service limitations are tracked in PLAN.md and
 the UI coverage report.
 
-## Accepted capability additions (4 October 2026; planned)
+## Accepted capability additions (4–5 October 2026)
 
 Dan accepted four additions after reviewing the supplied video transcript:
 
@@ -395,8 +403,8 @@ Dan accepted four additions after reviewing the supplied video transcript:
   stay unsaved. Source-linked inspection, correction and forgetting are part of
   the implementation task. No literally unlimited capacity is promised.
 - **Web research:** search and retrieve sources, synthesise findings with links
-  and supply results to existing dynamic-view consumers. Provider and cost limits
-  remain open; no service has been selected or provisioned.
+  and supply results to existing dynamic-view consumers through Dan's existing
+  ChatGPT/Codex subscription. Bing grounding and pay-per-call search are excluded.
 - **Image generation:** generate images with Dan's ChatGPT/Codex subscription
   through the existing hosted runner, expose truthful job outcomes, and save
   private workspace artifacts for chat and workspace display. Usage is shared
@@ -408,8 +416,8 @@ Dan accepted four additions after reviewing the supplied video transcript:
   change tool permissions or honest reporting. Settings placement and form
   details are proposed in DESIGN.md and ui.md.
 
-Tasks: P7-13–P7-16 and the P8-19 Personality settings UI. P7-16 and P8-19 are
-implemented and tested offline; live Azure session and settings behavior remain
-unverified. P7-13 and P7-15 are implemented offline with live checks pending;
-P7-14's provider/cost decision remains open. P7-15 reuses the existing
-ChatGPT/Codex subscription rather than provisioning an image-generation service.
+Tasks: P7-13–P7-16 and the P8-19 Personality settings UI. P7-13, P7-14, P7-16,
+and P8-19 are implemented and tested offline; live Azure/Codex behavior remains
+unverified. P7-15 image generation is implemented offline with live subscription
+and Blob acceptance pending; video is deferred and artifact retention remains open.
+The existing Microsoft-first service and cost constraints remain in force.

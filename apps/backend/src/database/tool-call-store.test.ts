@@ -42,4 +42,22 @@ describe('SQL tool-call store', () => {
     })).rejects.toThrow('Tool call data is not JSON serializable');
     expect(query).not.toHaveBeenCalled();
   });
+
+  it('counts web research tool calls within a parameterized UTC day range', async () => {
+    const query = vi.fn(async () => ({ recordset: [{ tool: 'web_research' as const, count: '3' }] }));
+    const input = vi.fn();
+    const request = { input, query };
+    input.mockReturnValue(request);
+    const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
+    const from = new Date('2026-10-05T00:00:00.000Z');
+    const to = new Date('2026-10-06T00:00:00.000Z');
+
+    await expect(createToolCallStore(pool).listCodexToolCalls!(from, to)).resolves.toEqual([
+      { tool: 'web_research', count: '3' },
+    ]);
+
+    expect(input).toHaveBeenNthCalledWith(1, 'from', sql.DateTime2(7), from);
+    expect(input).toHaveBeenNthCalledWith(2, 'to', sql.DateTime2(7), to);
+    expect(query.mock.calls[0]?.[0]).toContain("WHERE tool = N'web_research' AND [at] >= @from AND [at] < @to");
+  });
 });

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ConversationHistory } from './ConversationHistory';
-import type { CameraController } from './screen-sharing';
+import type { CameraController, ScreenShareController } from './screen-sharing';
 import { JarvisActivityProvider } from './activity-provider';
 import { useJarvisActivity } from './activity-context';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
@@ -16,7 +16,8 @@ const { loadConversationHistory, loadImageArtifactUrl, createChatSession, sendCh
   sendChatTurn: vi.fn(),
   voiceSessions: [] as VoiceClientOptions[],
 }));
-vi.mock('./conversation-history', () => ({
+vi.mock('./conversation-history', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./conversation-history')>(),
   loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn,
 }));
 vi.mock('./voice-client', () => ({
@@ -134,6 +135,58 @@ describe('ConversationHistory', () => {
     expect(loadImageArtifactUrl).toHaveBeenCalledWith(client, config, artifactId, expect.any(AbortSignal));
   });
 
+  it('renders safe Markdown only for Jarvis history', async () => {
+    const markdown = [
+      '**Bold** and *italic* with `inline code`.',
+      '',
+      '- First item',
+      '- Second item',
+      '',
+      '```ts',
+      'const ready = true;',
+      '```',
+      '',
+      '[Web](https://example.com) [Email](mailto:dan@example.com) [Bad](javascript:alert(1)) [FTP](ftp://example.com)',
+      '',
+      '![Remote image](https://example.com/image.png)',
+      '',
+      '<script>alert(1)</script>',
+    ].join('\n');
+    loadConversationHistory.mockResolvedValue({
+      messages: [
+        { ...message, channel: 'chat', role: 'jarvis', text: markdown, toolCalls: [] },
+        { ...message, id: '44', role: 'dan', text: '**literal** <script>alert(1)</script>', toolCalls: [] },
+        { ...message, id: '45', text: '**voice transcript**', toolCalls: [] },
+      ],
+      nextCursor: null,
+    });
+    renderConversation();
+
+    const jarvis = (await screen.findByText('Bold')).closest('[data-speaker="jarvis"]');
+    expect(jarvis?.querySelector('.markdown-content strong')?.textContent).toBe('Bold');
+    expect(jarvis?.querySelector('.markdown-content em')?.textContent).toBe('italic');
+    expect(jarvis?.querySelector('p code')?.textContent).toBe('inline code');
+    expect(jarvis?.querySelectorAll('ul > li')).toHaveLength(2);
+    expect(jarvis?.querySelector('pre code')?.textContent?.trim()).toBe('const ready = true;');
+    expect(jarvis?.querySelector('script')).toBeNull();
+    expect(jarvis?.querySelector('img')).toBeNull();
+    expect(jarvis?.textContent).toContain('Remote image');
+
+    const links = [...(jarvis?.querySelectorAll('a') ?? [])];
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      'https://example.com',
+      'mailto:dan@example.com',
+    ]);
+    for (const link of links) {
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    }
+
+    const dan = screen.getByText('**literal** <script>alert(1)</script>').closest('[data-speaker="dan"]');
+    expect(dan?.querySelector(':scope > p strong, :scope > p script')).toBeNull();
+    expect(screen.getByText('**voice transcript**').closest('[data-speaker="jarvis"]')?.querySelector('.markdown-content')).toBeNull();
+  });
+
   it('shows loading and empty states', async () => {
     let resolve: ((value: { messages: []; nextCursor: null }) => void) | undefined;
     loadConversationHistory.mockReturnValue(new Promise((done) => { resolve = done; }));
@@ -142,6 +195,17 @@ describe('ConversationHistory', () => {
     expect(screen.getByRole('status').textContent).toBe('Loading conversation history…');
     resolve?.({ messages: [], nextCursor: null });
     expect(await screen.findByRole('heading', { name: 'What’s on your mind?' })).not.toBeNull();
+  });
+
+  it.each([{ messages: [] }, { messages: [message] }])('focuses the composer and scrolls to the latest message on load', async ({ messages }) => {
+    let resolve!: (page: { messages: typeof messages; nextCursor: null }) => void;
+    loadConversationHistory.mockReturnValue(new Promise((done) => { resolve = done; }));
+    renderConversation();
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Message Jarvis' }));
+    const transcript = screen.getByLabelText('Conversation history');
+    Object.defineProperty(transcript, 'scrollHeight', { value: 1200 });
+    await act(async () => resolve({ messages, nextCursor: null }));
+    expect(transcript.scrollTop).toBe(1200);
   });
 
   it('offers a retry after a history failure', async () => {
@@ -188,7 +252,7 @@ describe('ConversationHistory', () => {
     await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
   });
 
-  it('streams a reply while keeping the send control pending', async () => {
+  it('streams a reply while allowing new messages and language changes', async () => {
     let finish: ((value: typeof assistantMessage) => void) | undefined;
     const savedHistory = [userMessage, assistantMessage].map((saved) => ({
       ...saved,
@@ -200,7 +264,7 @@ describe('ConversationHistory', () => {
       .mockResolvedValueOnce({ messages: savedHistory, nextCursor: null });
     sendChatTurn.mockImplementation(async (_client, _config, _session, _text, onUser, onDelta) => {
       onUser(userMessage);
-      onDelta('I am');
+      onDelta('**I am');
       return new Promise((resolve) => { finish = resolve; });
     });
     renderConversation();
@@ -208,15 +272,19 @@ describe('ConversationHistory', () => {
     fireEvent.change(input, { target: { value: 'Hello Jarvis' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(await screen.findByLabelText('Jarvis reply in progress')).toHaveProperty('textContent', 'I am');
+    const streamedReply = await screen.findByLabelText('Jarvis reply in progress');
+    expect(streamedReply.textContent).toBe('I am');
+    expect(streamedReply.querySelector('strong')?.textContent).toBe('I am');
     expect(screen.getByRole('status').textContent).toBe('Jarvis is replying…');
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
-    expect(screen.getByRole('button', { name: 'English' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'English' })).toHaveProperty('disabled', false);
+    expect(input).toHaveProperty('disabled', false);
+    expect(input).toHaveProperty('value', '');
     expect(screen.getByLabelText('Jarvis reply in progress').querySelector('.streaming-caret')?.getAttribute('aria-hidden')).toBe('true');
     finish?.(assistantMessage);
 
     expect(await screen.findByText('I am ready.')).not.toBeNull();
-    expect(createChatSession).toHaveBeenCalledWith(client, config, 'da');
+    expect(createChatSession).toHaveBeenCalledWith(client, config, 'da', expect.any(AbortSignal));
     expect(sendChatTurn).toHaveBeenCalledWith(
       client,
       config,
@@ -226,7 +294,265 @@ describe('ConversationHistory', () => {
       expect.any(Function),
       expect.any(Function),
       undefined,
+      undefined,
+      expect.any(AbortSignal),
     );
+  });
+
+  it('shows thinking until the first delta and preserves the next draft through a stale history reload', async () => {
+    let accept!: () => void;
+    let delta!: (text: string) => void;
+    let finish!: (value: typeof assistantMessage) => void;
+    loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });
+    sendChatTurn.mockImplementation((_client, _config, _session, _text, onUser, onDelta) => {
+      accept = () => onUser(userMessage);
+      delta = onDelta;
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    renderConversation();
+    await screen.findByText(message.text);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(screen.getByRole('status').textContent).toBe('Jarvis is thinking…');
+    expect(screen.queryByLabelText('Jarvis reply in progress')).toBeNull();
+    expect(document.querySelector('.streaming-caret')).toBeNull();
+    expect(input).toHaveProperty('value', '');
+    act(() => accept());
+    expect(input).toHaveProperty('value', '');
+    fireEvent.change(input, { target: { value: 'My next message' } });
+    expect(sendChatTurn).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'Danish' })).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', true);
+    act(() => delta('I am'));
+    expect(screen.queryByText('Jarvis is thinking…')).toBeNull();
+    expect(screen.getByLabelText('Jarvis reply in progress').textContent).toBe('I am');
+    await act(async () => finish(assistantMessage));
+    await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
+    const list = screen.getByRole('list', { name: 'Messages between Dan and Jarvis' });
+    expect([...list.querySelectorAll(':scope > li')].map((item) => item.querySelector(':scope > p, .markdown-content')?.textContent))
+      .toEqual([message.text, userMessage.text, assistantMessage.text]);
+    expect(input).toHaveProperty('value', 'My next message');
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', false);
+  });
+
+  it('preserves edits made before acceptance and when an accepted reply fails', async () => {
+    let accept!: () => void;
+    let fail!: (error: Error) => void;
+    sendChatTurn.mockImplementation((_client, _config, _session, _text, onUser) => {
+      accept = () => onUser(userMessage);
+      return new Promise((_resolve, reject) => { fail = reject; });
+    });
+    renderConversation();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    fireEvent.change(input, { target: { value: 'Next draft before acceptance' } });
+    act(() => accept());
+    expect(input).toHaveProperty('value', 'Next draft before acceptance');
+    await act(async () => fail(new Error('Reply interrupted')));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Reply interrupted');
+    expect(input).toHaveProperty('value', 'Next draft before acceptance');
+    expect(screen.getByText(userMessage.text)).not.toBeNull();
+  });
+
+  it('does not resurrect a submitted draft when delivery is uncertain', async () => {
+    sendChatTurn.mockImplementation(async (_client, _config, _session, _text, _onUser, _onDelta, onUncertain) => {
+      onUncertain();
+      throw new Error('Delivery uncertain');
+    });
+    renderConversation();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Delivery uncertain');
+    expect(input).toHaveProperty('value', '');
+  });
+
+  it('queues in order, captures each language, removes a waiting message and ignores double Enter', async () => {
+    const finishes: (() => void)[] = [];
+    createChatSession.mockImplementation(async (_client, _config, language) => ({ id: '41', language }));
+    sendChatTurn.mockImplementation((_client, _config, _session, text, onUser) => {
+      const id = 51 + finishes.length * 2;
+      onUser({ ...userMessage, id: String(id), text });
+      return new Promise((resolve) => {
+        finishes.push(() => resolve({ ...assistantMessage, id: String(id + 1), text: `Reply to ${text}` }));
+      });
+    });
+    renderConversation();
+    await screen.findByText('What’s on your mind?');
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    const submit = (text: string) => {
+      fireEvent.change(input, { target: { value: text } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+    };
+    submit('First');
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    submit('Second');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    submit('Remove me');
+    fireEvent.click(screen.getByRole('button', { name: 'English' }));
+    submit('Third');
+    expect(screen.getByText('3 messages queued').getAttribute('aria-live')).toBe('polite');
+    const queue = screen.getByRole('list', { name: 'Queued messages' });
+    expect([...queue.querySelectorAll('li > p:first-of-type')].map((item) => item.textContent))
+      .toEqual(['Second', 'Remove me', 'Third']);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove queued message: Remove me' }));
+    expect(screen.getByText('2 messages queued')).not.toBeNull();
+    expect(sendChatTurn).toHaveBeenCalledOnce();
+    await act(async () => finishes[0]!());
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
+    expect(sendChatTurn.mock.calls[1]?.slice(2, 4)).toEqual([session, 'Second']);
+    expect(screen.getByText('1 message queued')).not.toBeNull();
+    await act(async () => finishes[1]!());
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(3));
+    expect(sendChatTurn.mock.calls[2]?.slice(2, 4)).toEqual([{ id: '41', language: 'en' }, 'Third']);
+    await act(async () => finishes[2]!());
+    expect(screen.queryByRole('list', { name: 'Queued messages' })).toBeNull();
+    expect(sendChatTurn.mock.calls.map((call) => call[3])).toEqual(['First', 'Second', 'Third']);
+  });
+
+  it.each(['error', 'abort'] as const)('keeps the failed turn visible and drains the queue after %s', async (outcome) => {
+    let fail!: (error: Error) => void;
+    let finish!: (message: typeof assistantMessage) => void;
+    sendChatTurn.mockImplementationOnce((_client, _config, _session, _text, onUser, onDelta, _uncertain, _context, _shared, signal) => {
+      onUser(userMessage);
+      onDelta('Partial');
+      return new Promise((_resolve, reject) => {
+        fail = reject;
+        signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      });
+    }).mockImplementationOnce((_client, _config, _session, text, onUser) => {
+      onUser({ ...userMessage, id: '53', text });
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    renderConversation();
+    await screen.findByText('What’s on your mind?');
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByLabelText('Jarvis reply in progress');
+    fireEvent.change(input, { target: { value: 'Next after failure' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    if (outcome === 'abort') {
+      fireEvent.click(screen.getByRole('button', { name: 'Stop reply' }));
+    } else {
+      await act(async () => fail(new Error('First turn failed')));
+    }
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
+    const error = screen.getByRole('alert');
+    expect(error.textContent).toContain(outcome === 'abort' ? 'Reply stopped' : 'First turn failed');
+    expect(error.closest('[data-speaker="dan"]')?.textContent).toContain(userMessage.text);
+    expect(screen.getByText('Partial reply, interrupted:')).not.toBeNull();
+    expect(sendChatTurn.mock.calls[1]?.[3]).toBe('Next after failure');
+    await act(async () => finish({ ...assistantMessage, id: '54' }));
+    expect(screen.getByRole('alert')).toBe(error);
+  });
+
+  it.each(['session', 'camera'] as const)('Stop advances the queue without waiting for pending %s setup', async (setup) => {
+    let finishSetup!: () => void;
+    const camera: CameraController = {
+      sharing: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(), stop: vi.fn(),
+      inspect: vi.fn(() => new Promise<{ description: string }>((resolve) => {
+        finishSetup = () => resolve({ description: 'A mug.' });
+      })),
+    };
+    if (setup === 'session') {
+      createChatSession.mockImplementationOnce(() => new Promise((resolve) => {
+        finishSetup = () => resolve(session);
+      }));
+    }
+    let finishTurn!: () => void;
+    sendChatTurn.mockImplementation((_client, _config, _session, text, onUser) => {
+      onUser({ ...userMessage, text });
+      return new Promise((resolve) => { finishTurn = () => resolve(assistantMessage); });
+    });
+    renderConversation(0, camera);
+    await screen.findByText('What’s on your mind?');
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: setup === 'camera' ? 'What am I holding?' : 'First' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(setup === 'camera' ? camera.inspect : createChatSession).toHaveBeenCalled());
+    fireEvent.change(input, { target: { value: 'Next' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: 'Stop reply' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(sendChatTurn.mock.calls[0]?.[3]).toBe('Next');
+    expect(screen.getByRole('alert').textContent).toContain('Reply stopped');
+    await act(async () => finishSetup());
+    expect(sendChatTurn).toHaveBeenCalledOnce();
+    await act(async () => finishTurn());
+  });
+
+  it('preserves an identical next draft when a stream error reports uncertain delivery after acceptance', async () => {
+    let fail!: () => void;
+    sendChatTurn.mockImplementation((_client, _config, _session, _text, onUser, _onDelta, onUncertain) => {
+      onUser(userMessage);
+      return new Promise((_resolve, reject) => {
+        fail = () => {
+          onUncertain();
+          reject(new Error('Stream interrupted'));
+        };
+      });
+    });
+    renderConversation();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(input).toHaveProperty('value', ''));
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    await act(async () => fail());
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Stream interrupted');
+    expect(input).toHaveProperty('value', userMessage.text);
+  });
+
+  it('dedupes refreshed history and updates persisted metadata without reordering optimistic messages', async () => {
+    const savedUser = { ...userMessage, channel: 'chat', language: 'da', toolCalls: message.toolCalls };
+    const savedAssistant = { ...assistantMessage, channel: 'chat', language: 'da', toolCalls: [] };
+    loadConversationHistory.mockResolvedValueOnce({ messages: [message], nextCursor: null })
+      .mockResolvedValueOnce({ messages: [savedUser, savedAssistant], nextCursor: null });
+    sendChatTurn.mockImplementation(async (_client, _config, _session, _text, onUser) => {
+      onUser(userMessage);
+      return assistantMessage;
+    });
+    renderConversation();
+    await screen.findByText(message.text);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Jarvis' }), { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getAllByRole('link', { name: 'Task #77' })).toHaveLength(2));
+    expect(screen.getByRole('list', { name: 'Messages between Dan and Jarvis' }).querySelectorAll(':scope > li')).toHaveLength(3);
+    expect(screen.getAllByText(userMessage.text)).toHaveLength(1);
+    expect(screen.getAllByText(assistantMessage.text)).toHaveLength(1);
+  });
+
+  it('dedupes overlapping older pages, orders large IDs exactly, and retains the older cursor on refresh', async () => {
+    const older = { ...message, id: '9007199254740992', text: 'Older' };
+    const newer = { ...message, id: '9007199254740993', text: 'Newer' };
+    loadConversationHistory.mockResolvedValueOnce({ messages: [newer], nextCursor: older.id })
+      .mockResolvedValueOnce({ messages: [older, newer], nextCursor: '40' })
+      .mockResolvedValueOnce({ messages: [newer], nextCursor: older.id })
+      .mockResolvedValueOnce({ messages: [message], nextCursor: null });
+    const content = (historyRefresh: number) => (
+      <JarvisActivityProvider><MemoryRouter>
+        <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
+      </MemoryRouter></JarvisActivityProvider>
+    );
+    const view = render(content(0));
+    await screen.findByText('Newer');
+    fireEvent.click(screen.getByRole('button', { name: 'Load older history' }));
+    await screen.findByText('Older');
+    view.rerender(content(1));
+    await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(3));
+    expect([...screen.getByRole('list', { name: 'Messages between Dan and Jarvis' }).querySelectorAll(':scope > li')]
+      .map((item) => item.querySelector(':scope > p')?.textContent)).toEqual(['Older', 'Newer']);
+    fireEvent.click(screen.getByRole('button', { name: 'Load older history' }));
+    await screen.findByText(message.text);
+    expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config, '40');
   });
 
   it('inspects the camera for a spoken-equivalent chat request and keeps the description transient', async () => {
@@ -237,7 +563,7 @@ describe('ConversationHistory', () => {
       error: '',
       start: vi.fn(async () => {}),
       stop: vi.fn(),
-      inspect: vi.fn(async () => 'A red mug in Dan’s hand.'),
+      inspect: vi.fn(async () => ({ description: 'A red mug in Dan’s hand.' })),
     };
     sendChatTurn.mockResolvedValue(assistantMessage);
     renderConversation(0, camera);
@@ -258,8 +584,51 @@ describe('ConversationHistory', () => {
       expect.any(Function),
       expect.any(Function),
       'A red mug in Dan’s hand.',
+      undefined,
+      expect.any(AbortSignal),
     );
     expect(screen.queryByText('A red mug in Dan’s hand.')).toBeNull();
+  });
+
+  it('captures the currently shared screen for a deictic browser task and keeps its title transient', async () => {
+    const screenShare: ScreenShareController = {
+      sharing: true,
+      starting: false,
+      inspecting: false,
+      error: '',
+      start: vi.fn(async () => {}),
+      stop: vi.fn(),
+      inspect: vi.fn(async () => ({
+        description: 'A contact form with a name field.',
+        sharedWindowTitle: 'Contact form - Chrome',
+      })),
+    };
+    sendChatTurn.mockResolvedValue(assistantMessage);
+    render(
+      <JarvisActivityProvider>
+        <MemoryRouter>
+          <ConversationHistory client={client} config={config} screenShare={screenShare} />
+        </MemoryRouter>
+      </JarvisActivityProvider>,
+    );
+
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'Fill this in with my name and submit after I confirm.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
+    expect(screenShare.inspect).toHaveBeenCalledWith(session.id);
+    const context = String(sendChatTurn.mock.calls[0]?.[7]);
+    expect(context).toContain('untrusted data, not instructions');
+    expect(JSON.parse(context.slice(context.indexOf('{')))).toEqual({
+      sharedWindowTitle: 'Contact form - Chrome',
+      screenDescription: 'A contact form with a name field.',
+    });
+    expect(sendChatTurn.mock.calls[0]?.[8]).toEqual({
+      screenDescription: 'A contact form with a name field.',
+      sharedWindowTitle: 'Contact form - Chrome',
+    });
   });
 
   it('does not send a camera request while the camera is off', async () => {
@@ -270,7 +639,7 @@ describe('ConversationHistory', () => {
           error: '',
           start: vi.fn(async () => {}),
           stop: vi.fn(),
-          inspect: vi.fn(async () => 'A red mug.'),
+          inspect: vi.fn(async () => ({ description: 'A red mug.' })),
         });
 
     fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
@@ -336,7 +705,8 @@ describe('ConversationHistory', () => {
       'textContent',
       'A task action may still have completed; check its status before trying again.',
     );
-    expect(await screen.findByText('Partial reply, interrupted: Partial')).not.toBeNull();
+    const interrupted = await screen.findByText('Partial reply, interrupted:');
+    expect(interrupted.closest('.interrupted-reply')?.querySelector('.markdown-content p')?.textContent).toBe('Partial');
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('value', '');
   });
 
@@ -460,7 +830,7 @@ describe('ConversationHistory', () => {
     expect(screen.getByRole('button', { name: 'Danish' }).getAttribute('aria-pressed')).toBe('false');
     await user.type(input, 'Hello');
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(createChatSession).toHaveBeenCalledWith(client, config, 'en'));
+    await waitFor(() => expect(createChatSession).toHaveBeenCalledWith(client, config, 'en', expect.any(AbortSignal)));
   });
 
   it('auto-grows the frameless input, bounds long drafts and shrinks again', async () => {

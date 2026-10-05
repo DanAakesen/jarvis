@@ -8,7 +8,7 @@ The shared shell and voice-workspace structure were agreed with Dan on 4 October
 - **One app, many areas.** One app shell with area navigation. The Software Factory is the first area; later areas (Banking, Health and fitness, Calendar) must fit without redesigning the shell.
 - **Live and honest.** State changes appear without refresh. Stale or disconnected data is shown as such; progress uses observed milestones, not invented percentages.
 - **Full transparency.** Every task shows what the agent did, what it used, and what it cost.
-- **Headless Outlook tools (P7-09).** Calendar and mail actions are available through conversation only; P8 owns any future visual surface. A staged change must state exactly what will happen and how to confirm it; mail text is treated as untrusted content.
+- **Headless Google tools (P7-22).** Google Calendar and Gmail actions are available through conversation only; P8 owns any future visual surface. A staged change must state exactly what will happen and how to confirm it; mail text is treated as untrusted content.
 
 ## Page set (phase 1)
 
@@ -20,7 +20,7 @@ The shared shell and voice-workspace structure were agreed with Dan on 4 October
 | Release view | Horizontal git graph per project (branches as lines, commits as dots), releases, workflow runs, deployments |
 | Projects | Project list and settings |
 | Settings | Models, reasoning, voices, limits, credential status |
-| Usage and cost | Usage by task, project, and period |
+| Usage and cost | Usage by task, project, and period, plus today's UTC web-research call count |
 
 The repository `PLAN.md` status workflow is GitHub metadata; it does not add a Jarvis UI control or visual state.
 
@@ -55,6 +55,15 @@ failure/retry, and populated states. On narrow screens only the table scrolls
 horizontally; the page itself stays within the viewport. Usage is part of the
 task detail response and appears alongside the task metadata, disk readings, and
 event timeline.
+
+## Web research usage (P7-14)
+
+The Usage page shows the recorded web-research calls for the current UTC day in a
+compact list beside period-based usage. Successful, refused, and failed calls
+count; an empty day and unavailable audit storage have distinct text states, and
+no subscription price is inferred. Research results keep their source title, URL,
+and backend receipt time in a typed result for the existing conversation and
+workspace consumers; those consumer windows remain owned by P8.
 
 ## Interactions to design
 
@@ -123,7 +132,9 @@ sign-in; the header wraps on narrow screens.
   Scratch-auth Chromium checks at 390 and 1280 px exercised Share, the visible
   status/Stop action, a mocked chat inspection, and stream cleanup; neither
   viewport overflowed or reported console errors. Real display capture and the
-  live backend/model remain unverified.
+  live backend/model remain unverified. P7-19 reuses these controls for shared-tab
+  tasks: an action request captures one fresh frame and its selected window label;
+  no new browser surface or persistent page content is introduced.
 - **Camera (P7-08):** the shared top-bar control explicitly starts/stops browser
   camera permission and shows an On/Off label on desktop; the pressed surface and
   camera icon retain the state on the narrowest phones. Chat and voice expose a
@@ -411,6 +422,44 @@ live caret beside readable text. Only a published tool-call state gets the
 running-tool shimmer; thinking is not treated as a tool call. Running Now tasks
 use a restrained sheen, while completed outcomes stay static.
 
+P8-24 keeps the established body typography for Jarvis's safe Markdown replies;
+inline and fenced code use the shared monospace face and theme-specific code
+surface, without decorative borders. Dan's messages remain plain text. While a
+reply streams, an unmatched `**` is temporarily closed for rendering so an open
+bold span does not flash as literal Markdown; persisted text is unchanged.
+
+P8-26 extends P8-25 with a local FIFO queue. Send/Enter clears the draft
+immediately into a Dan bubble; waiting bubbles sit below the current reply with
+a quiet “Queued · Danish/English” label and a labelled 44px remove control.
+A polite, atomic live region announces the queue count, including zero.
+Send and DA/EN remain available during replies; language is captured per
+submission. Voice entry stays disabled until chat finishes, with voice mode
+otherwise unchanged. Starting a queued turn keeps its bubble visible as
+“Sending” until the saved user message arrives. Success, error and Stop reply
+advance the queue; errors and any partial text stay beside the failed turn.
+Later drafts survive acceptance, success and interruption; a failed unsaved
+submission keeps its draft, while uncertain delivery warns against resending.
+Before the first delta, a labelled “Jarvis is thinking…” status uses a quiet
+opacity-pulsing dot, static under reduced motion. Once text arrives, the reply
+and caret render on the open transcript surface, never inside an input-like box.
+The input starts focused and the transcript opens at the bottom. History refresh
+merges by saved message ID without removing recent or previously loaded messages.
+Local Chromium evidence at 1440×900 and 390×844 in both themes:
+`docs/ui/screenshots/p8-25-{before,after,streaming,complete}-{dark,light}-{desktop,phone}.png`.
+The sequence is load → send “hi” → saved user message and thinking status →
+type “Next message” with Send disabled → first Markdown delta → saved reply and
+stale history refresh, with both messages and the next draft retained.
+Screenshots label mocked auth/SSE; they do not verify live Foundry latency.
+
+P8-26 Chromium evidence at 1440×900 and 390×844 in both themes:
+`docs/ui/screenshots/p8-26-queued-{dark,light}-{desktop,phone}.png`.
+The captures show a streaming reply with two queued messages. Browser checks
+exercised queue removal by keyboard, double Enter, per-message language,
+Stop/next and error/next, with no horizontal overflow or page exceptions.
+Queue bubbles reuse the existing short entrance transition, static under
+reduced motion; controls do not wait for animation. The fixture label identifies
+scratch-only auth and streamed API mocks, not a live backend/Foundry check.
+
 Window titles are drag handles; right/bottom edges and the corner resize. Each
 window keeps minimise, maximise and close in its title actions, with a 44px
 ellipsis disclosure for keyboard Arrange. The workspace header retains the
@@ -471,6 +520,8 @@ Concept B/C's translucent surfaces are the selected treatment; the earlier white
 wireframes remain structural references only.
 
 ## Temporary workspace composition (P8-06)
+
+P7-27 reuses these controls and states for Jev-directed chat/voice commands, without new chrome or styling. “Make the window bigger” uses a bounded large resize in layered mode and expands the existing row/column spans in tiled mode; command application never waits for animation. Context-panel opening preserves existing content and is idempotent. Agent-closed windows can be restored from a bounded in-memory cache, including after a contradicted voice partial; manual closes retain their discard behavior.
 
 The main workspace accepts an in-memory set of typed views. Desktop opens in a
 tiled arrangement and can switch to overlapping layers; using a layered window

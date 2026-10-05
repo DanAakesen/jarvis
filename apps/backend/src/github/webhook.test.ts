@@ -58,6 +58,7 @@ function fixture(
         deliveries.set(input.deliveryId, input);
         return true;
       },
+      async recordPullRequest() {},
     },
   });
   const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });

@@ -100,11 +100,16 @@ describe('BrowserVoiceClient', () => {
       'session.start',
       'conversation.item.create',
       'response.create',
+      'jarvis.microphone.active',
     ]);
     expect(socket?.sent[1]).toMatchObject({
       item: { content: [{ text: '/diag' }] },
     });
     expect(audio.open).toHaveBeenCalledOnce();
+    client.setMuted(true);
+    expect(socket?.sent.at(-1)?.type).toBe('jarvis.microphone.muted');
+    client.setMuted(false);
+    expect(socket?.sent.at(-1)?.type).toBe('jarvis.microphone.active');
     client.stop();
   });
 
@@ -172,20 +177,28 @@ describe('BrowserVoiceClient', () => {
     });
     socket?.receive({
       type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'Fill this in with my name and submit after I confirm.',
+    });
+    socket?.receive({
+      type: 'conversation.item.input_audio_transcription.completed',
       transcript: 'How is the weather?',
     });
-    client.sendScreenContext('A shared window shows a chart.');
+    client.sendScreenContext('A form with a name field.', 'Contact form - Chrome');
 
     expect(onSessionReady).toHaveBeenCalledWith('41');
     expect(onVisionRequest.mock.calls).toEqual([
       ['camera', 'What am I holding?'],
       ['camera', 'Hvad holder jeg?'],
       ['screen', 'Could you look at my screen?'],
+      ['screen', 'Fill this in with my name and submit after I confirm.'],
     ]);
     expect(socket?.sent.at(-1)).toEqual({
       type: 'jarvis.screen.context',
-      description: 'A shared window shows a chart.',
+      description: 'A form with a name field.',
+      sharedWindowTitle: 'Contact form - Chrome',
     });
+    client.sendScreenContextUnavailable();
+    expect(socket?.sent.at(-1)).toEqual({ type: 'jarvis.screen.context.unavailable' });
     expect(() => client.sendScreenContext('x'.repeat(5_001))).toThrow(/not ready/);
   });
 
