@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
+import type { FastifyRequest } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import type {
   ConversationChannel,
@@ -7,8 +8,10 @@ import type {
   ConversationRole,
 } from './conversation-store.js';
 import { executeReflexAction, reflexTargets } from './reflex.js';
+import type { ReflexClassifier } from './reflex.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
+const chatReflexBudgetMs = 800;
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$' };
 const errorResponse = {
   type: 'object',
@@ -80,6 +83,52 @@ function streamEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
+function logChatLatency(
+  request: FastifyRequest,
+  phase: 'reflex_targets' | 'jev' | 'agent_first_byte',
+  startedAt: number,
+): void {
+  request.log.info({
+    msg: 'chat.latency',
+    phase,
+    durationMs: Math.max(0, performance.now() - startedAt),
+  }, 'chat.latency');
+}
+
+async function runChatReflex(
+  request: FastifyRequest,
+  classifier: ReflexClassifier,
+  text: string,
+  language: ConversationLanguage,
+  messageId: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const budgetController = new AbortController();
+  const timeout = setTimeout(() => budgetController.abort(), chatReflexBudgetMs);
+  const classificationSignal = AbortSignal.any([signal, budgetController.signal]);
+  try {
+    const targetsStartedAt = performance.now();
+    const targets = await reflexTargets(request, text);
+    logChatLatency(request, 'reflex_targets', targetsStartedAt);
+    if (classificationSignal.aborted) return;
+
+    const jevStartedAt = performance.now();
+    const classification = await classifier.classify(
+      text,
+      language,
+      targets,
+      classificationSignal,
+    );
+    logChatLatency(request, 'jev', jevStartedAt);
+    if (classificationSignal.aborted) return;
+    await executeReflexAction(classification, request, messageId, signal);
+  } catch {
+    // Reflex is best effort; the agent stream owns the chat response.
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export const conversationModule: BackendModule = {
   id: 'conversation',
   tools: [],
@@ -132,7 +181,7 @@ export const conversationModule: BackendModule = {
         if (type !== 'thinking') activityFinished = true;
       };
       const abortOnClose = () => {
-        if (!reply.raw.writableEnded) controller.abort();
+        if (!reply.raw.writableFinished) controller.abort();
       };
       request.raw.once('aborted', abortOnClose);
       reply.raw.once('close', abortOnClose);
@@ -144,31 +193,41 @@ export const conversationModule: BackendModule = {
         let answer = '';
         publishActivity('thinking');
         try {
-          let reflexNote: string | undefined;
-          if (app.reflexClassifier) {
-            try {
-              const classification = await app.reflexClassifier.classify(
-                text,
-                session.language,
-                await reflexTargets(request, text),
-                controller.signal,
-              );
-              const action = await executeReflexAction(classification, request, userMessage.id, controller.signal);
-              reflexNote = action?.note;
-            } catch {
-              reflexNote = undefined;
-            }
-          }
-          for await (const delta of agent.stream({
+          const agentStartedAt = performance.now();
+          const agentIterator = agent.stream({
             messageId: userMessage.id,
             text,
             language: session.language,
             ...(request.body.screenContext === undefined ? {} : { screenContext: request.body.screenContext }),
-            ...(reflexNote ? { reflexNote } : {}),
-          }, authorization, controller.signal)) {
-            answer += delta;
-            if (Buffer.byteLength(answer) > 512 * 1024) throw new Error('Chat response exceeded the size limit');
-            yield streamEvent('delta', { text: delta });
+          }, authorization, controller.signal)[Symbol.asyncIterator]();
+          let next = agentIterator.next();
+          if (app.reflexClassifier) {
+            void runChatReflex(
+              request,
+              app.reflexClassifier,
+              text,
+              session.language,
+              userMessage.id,
+              controller.signal,
+            );
+          }
+          let firstByteLogged = false;
+          try {
+            while (true) {
+              const chunk = await next;
+              if (chunk.done) break;
+              const delta = chunk.value;
+              if (!firstByteLogged) {
+                firstByteLogged = true;
+                logChatLatency(request, 'agent_first_byte', agentStartedAt);
+              }
+              answer += delta;
+              if (Buffer.byteLength(answer) > 512 * 1024) throw new Error('Chat response exceeded the size limit');
+              yield streamEvent('delta', { text: delta });
+              next = agentIterator.next();
+            }
+          } finally {
+            await agentIterator.return?.();
           }
           if (!answer.trim()) throw new Error('Chat response was empty');
           const assistantMessage = await store.addMessage({

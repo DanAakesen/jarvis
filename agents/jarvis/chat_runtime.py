@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 import httpx
+from opentelemetry import trace
 from azure.ai.agentserver.invocations.voice import VoiceAgentServerHost
 from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
@@ -31,6 +32,7 @@ MAX_CONTEXT_CHARACTERS = 32_000
 MAX_OUTPUT_BYTES = 512 * 1024
 MESSAGE_ID = re.compile(r"^[1-9][0-9]{0,18}$")
 MAX_SQL_BIGINT = 9_223_372_036_854_775_807
+_tracer = trace.get_tracer("VoiceHostedAgent.Chat")
 
 ChatContextLoader = Callable[
     [str, str, str, str], Awaitable[Sequence[ModelMessage] | None]
@@ -45,14 +47,17 @@ async def load_verified_history(
 ) -> Sequence[ModelMessage] | None:
     backend_url, _ = backend_settings_from_environment()
     headers = {"Authorization": " ".join(("Bear" + "er", token))}
-    async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
-        profile = await client.get(f"{backend_url}/me", headers=headers)
+    with _tracer.start_as_current_span("chat_history_verification"):
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
+            profile, response = await asyncio.gather(
+                client.get(f"{backend_url}/me", headers=headers),
+                client.get(
+                    f"{backend_url}/conversation/history?limit={MAX_HISTORY_MESSAGES}",
+                    headers=headers,
+                ),
+            )
         if profile.status_code != 200:
             return None
-        response = await client.get(
-            f"{backend_url}/conversation/history?limit={MAX_HISTORY_MESSAGES}",
-            headers=headers,
-        )
     if response.status_code != 200 or len(response.content) > 1_048_576:
         raise RuntimeError("Conversation history is unavailable")
     page: Any = response.json()

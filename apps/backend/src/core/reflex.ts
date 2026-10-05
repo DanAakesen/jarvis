@@ -301,7 +301,8 @@ export async function executeReflexAction(
       classification.confidence < confidenceThreshold || classification.needsConfirmation ||
       !target || !modeSafe ||
       !request.principal || !request.server.toolCallStore) return null;
-  if (!request.validateInput(target.arguments, target.tool.inputSchema, 'body')) return null;
+  const validateInput = request.compileValidationSchema(target.tool.inputSchema, 'body');
+  if (!validateInput(target.arguments)) return null;
 
   const activityId = `reflex-${messageId}-${target.tool.name}`;
   request.server.jarvisActivityHub.publish({

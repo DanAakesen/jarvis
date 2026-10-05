@@ -20,10 +20,12 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
+from opentelemetry import trace
 
 from state import ModelSettings
 
 logger = logging.getLogger("jarvis_tools")
+_tracer = trace.get_tracer("VoiceHostedAgent.Tools")
 
 INSTRUCTIONS = """You are Jarvis, Dan's voice assistant for his software factory.
 Dan speaks Danish. Always answer in short, natural spoken Danish: one or two sentences,
@@ -265,22 +267,27 @@ class BackendToolClient:
 
     async def tools(self) -> tuple[BackendTool, ...]:
         """Return the cached catalogue, reloading it after its time to live."""
-        async with self._lock:
-            if (
-                self._catalogue is not None
-                and self._clock() - self._loaded_at < CATALOGUE_TTL_SECONDS
-            ):
-                return self._catalogue
-            try:
-                catalogue = await self._load()
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                self.last_error = f"catalogue: {type(exc).__name__}"
-                raise BackendUnavailable("The backend tool catalogue is unavailable") from exc
-            self._catalogue = catalogue
-            self._loaded_at = self._clock()
-            return catalogue
+        with _tracer.start_as_current_span("tool_catalogue") as span:
+            async with self._lock:
+                if (
+                    self._catalogue is not None
+                    and self._clock() - self._loaded_at < CATALOGUE_TTL_SECONDS
+                ):
+                    span.set_attribute("cache.hit", True)
+                    span.set_attribute("tool.count", len(self._catalogue))
+                    return self._catalogue
+                span.set_attribute("cache.hit", False)
+                try:
+                    catalogue = await self._load()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    self.last_error = f"catalogue: {type(exc).__name__}"
+                    raise BackendUnavailable("The backend tool catalogue is unavailable") from exc
+                self._catalogue = catalogue
+                self._loaded_at = self._clock()
+                span.set_attribute("tool.count", len(catalogue))
+                return catalogue
 
     async def model_settings(self) -> ModelSettings:
         """Read effective Jarvis settings to snapshot for one new session."""
@@ -334,59 +341,62 @@ class BackendToolClient:
 
     async def context(self) -> dict[str, Any]:
         """Fetch the bounded running-task snapshot for the next model turn."""
-        try:
-            headers = {"Authorization": _bearer(await self._token())}
-            async with self._http.stream(
-                "GET", f"{self._base_url}/factory/context", headers=headers
-            ) as response:
-                if response.status_code != 200:
-                    raise RuntimeError(f"GET /factory/context returned HTTP {response.status_code}")
-                body = json.loads(await _read_bounded(response))
-            if not isinstance(body, dict):
-                raise ValueError("invalid turn context")
-            tasks = body.get("runningTasks")
-            if (
-                not isinstance(tasks, list)
-                or len(tasks) > 20
-                or not isinstance(body.get("truncated"), bool)
-            ):
-                raise ValueError("invalid turn context")
-            for task in tasks:
+        with _tracer.start_as_current_span("turn_context"):
+            try:
+                headers = {"Authorization": _bearer(await self._token())}
+                async with self._http.stream(
+                    "GET", f"{self._base_url}/factory/context", headers=headers
+                ) as response:
+                    if response.status_code != 200:
+                        raise RuntimeError(f"GET /factory/context returned HTTP {response.status_code}")
+                    body = json.loads(await _read_bounded(response))
+                if not isinstance(body, dict):
+                    raise ValueError("invalid turn context")
+                tasks = body.get("runningTasks")
                 if (
-                    not isinstance(task, dict)
-                    or not isinstance(task.get("id"), str)
-                    or not isinstance(task.get("projectName"), str)
-                    or not isinstance(task.get("title"), str)
-                    or task.get("state") != "Running"
-                    or not isinstance(task.get("recentEvents"), list)
-                    or len(task["recentEvents"]) > 3
+                    not isinstance(tasks, list)
+                    or len(tasks) > 20
+                    or not isinstance(body.get("truncated"), bool)
                 ):
                     raise ValueError("invalid turn context")
-                for event in task["recentEvents"]:
+                for task in tasks:
                     if (
-                        not isinstance(event, dict)
-                        or not isinstance(event.get("type"), str)
-                        or not isinstance(event.get("source"), str)
-                        or not isinstance(event.get("at"), str)
-                        or (
-                            event.get("summary") is not None
-                            and not isinstance(event["summary"], str)
-                        )
+                        not isinstance(task, dict)
+                        or not isinstance(task.get("id"), str)
+                        or not isinstance(task.get("projectName"), str)
+                        or not isinstance(task.get("title"), str)
+                        or task.get("state") != "Running"
+                        or not isinstance(task.get("recentEvents"), list)
+                        or len(task["recentEvents"]) > 3
                     ):
                         raise ValueError("invalid turn context")
-            return body
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            self.last_error = f"context: {type(exc).__name__}"
-            raise BackendUnavailable("The backend turn context is unavailable") from exc
+                    for event in task["recentEvents"]:
+                        if (
+                            not isinstance(event, dict)
+                            or not isinstance(event.get("type"), str)
+                            or not isinstance(event.get("source"), str)
+                            or not isinstance(event.get("at"), str)
+                            or (
+                                event.get("summary") is not None
+                                and not isinstance(event["summary"], str)
+                            )
+                        ):
+                            raise ValueError("invalid turn context")
+                return body
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self.last_error = f"context: {type(exc).__name__}"
+                raise BackendUnavailable("The backend turn context is unavailable") from exc
 
     async def call(
         self, name: str, arguments_json: str | None, message_id: str | None
     ) -> dict[str, Any]:
         """Execute one model tool call; failures are returned, never raised as success."""
         self.calls += 1
-        result = await self._call(name, arguments_json, message_id)
+        span_name = "memory_retrieval" if name == "memory_search" else "backend_tool_call"
+        with _tracer.start_as_current_span(span_name, attributes={"tool.name": name}):
+            result = await self._call(name, arguments_json, message_id)
         if result.get("outcome") != "ok":
             self.last_error = f"{name}: {result.get('outcome')}"
         logger.info("Tool call finished; tool=%s outcome=%s", name, result.get("outcome"))
