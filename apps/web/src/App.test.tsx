@@ -410,14 +410,14 @@ describe('App shell', () => {
 
     const collapse = screen.getByRole('button', { name: 'Close area navigation' });
     collapse.focus();
-    await user.keyboard('{Enter}');
-    const expand = screen.getByRole('button', { name: 'Expand area navigation' });
+    await user.keyboard(' ');
+    const expand = await screen.findByRole('button', { name: 'Expand area navigation' });
     expect(expand.getAttribute('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(expand);
     expect(screen.queryByRole('navigation', { name: 'Jarvis' })).toBeNull();
 
     await user.keyboard('{Enter}');
-    expect(screen.getByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
+    expect(await screen.findByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
   });
 
   it('turns the camera on and off from the shared shell', async () => {
