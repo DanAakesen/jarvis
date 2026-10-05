@@ -661,6 +661,7 @@ export function createTaskStore(
       state: TaskState,
       completionVerified = false,
       eventReason?: string,
+      eventSummary?: string,
     ): Promise<TaskTransitionResult> {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
@@ -714,7 +715,7 @@ export function createTaskStore(
         const event: RecordTaskEventInput = {
           taskId: id,
           type: 'state_changed',
-          summary: 'Task state changed',
+          summary: eventSummary ?? 'Task state changed',
           payload: { from: current, to: state, ...(eventReason ? { reason: eventReason } : {}) },
           source: 'backend',
         };

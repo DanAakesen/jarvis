@@ -1,7 +1,9 @@
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
 import { withTaskPolicyLock as withProjectPolicyTaskLock } from './task-policy-lock.js';
-import type { DispatcherStore, DispatchClaimResult, TaskControlTarget } from '../factory/dispatcher.js';
+import type {
+  DispatcherStore, DispatchClaimResult, StaleRunningTask, TaskControlTarget,
+} from '../factory/dispatcher.js';
 import type { RunningSandbox } from '../factory/heartbeat.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 
@@ -235,6 +237,48 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
         await rollback(transaction);
         throw new Error('Dispatcher could not claim a task');
       }
+    },
+
+    async listStaleRunning(heartbeatBefore, limit) {
+      const { recordset } = await databaseReadRequest(pool)
+        .input('heartbeatBefore', sql.DateTime2(7), heartbeatBefore)
+        .input('limit', sql.Int, limit)
+        .query<StaleRunningTask>(`SELECT TOP (@limit) CAST(task.id AS varchar(19)) AS taskId,
+          CAST(session.id AS varchar(19)) AS sandboxSessionId,
+          session.foundry_session_id AS foundrySessionId, session.agent_name AS agentName,
+          turn.invocation_id AS invocationId, session.status AS sessionStatus
+          FROM dbo.tasks AS task
+          CROSS APPLY (
+            SELECT TOP (1) candidate.*
+            FROM dbo.sandbox_sessions AS candidate
+            WHERE candidate.task_id = task.id
+              AND (candidate.status = N'Active'
+                OR (candidate.status = N'Ended' AND candidate.end_reason = N'done'))
+            ORDER BY candidate.started_at DESC, candidate.id DESC
+          ) AS session
+          CROSS APPLY (
+            SELECT TOP (1) invocation_id, status
+            FROM dbo.sandbox_turns
+            WHERE sandbox_session_id = session.id AND status IN (N'running', N'completed')
+            ORDER BY started_at DESC, id DESC
+          ) AS turn
+          WHERE task.state = N'Running'
+            AND COALESCE(session.last_heartbeat_at, session.started_at) <= @heartbeatBefore
+          ORDER BY COALESCE(session.last_heartbeat_at, session.started_at), task.id;`);
+      return recordset;
+    },
+
+    async recordHeartbeat(sandboxSessionId, invocationId, invocationCompleted) {
+      await pool.request()
+        .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+        .input('invocationId', sql.NVarChar(255), invocationId)
+        .input('invocationCompleted', sql.Bit, invocationCompleted)
+        .query(`UPDATE dbo.sandbox_sessions SET last_heartbeat_at = SYSUTCDATETIME()
+          WHERE id = @sandboxSessionId AND status = N'Active';
+          IF @invocationCompleted = 1
+            UPDATE dbo.sandbox_turns SET status = N'completed', ended_at = SYSUTCDATETIME()
+            WHERE sandbox_session_id = @sandboxSessionId AND invocation_id = @invocationId
+              AND status = N'running';`);
     },
 
     async deferClaim(owner, task, delayMs) {
