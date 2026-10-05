@@ -8,23 +8,9 @@ export interface ConversationAgentInput {
   readonly reflexNote?: string;
 }
 
-export interface ConversationAgentOptions {
-  /** Reuses one Foundry agent session per chat conversation so turns hit a warm container. */
-  readonly agentSessionId?: string;
-}
-
 export interface ConversationAgent {
-  stream(
-    input: ConversationAgentInput,
-    authorization: string,
-    signal: AbortSignal,
-    options?: ConversationAgentOptions,
-  ): AsyncIterable<string>;
+  stream(input: ConversationAgentInput, authorization: string, signal: AbortSignal): AsyncIterable<string>;
 }
-
-const AGENT_SESSION_ID = /^[A-Za-z0-9_-]{1,128}$/u;
-// Statuses that mean the requested session no longer exists or can't be resumed.
-const SESSION_REJECTED_STATUSES = new Set([404, 409, 410]);
 
 const maxStreamBytes = 1024 * 1024;
 const requestTimeoutMs = 120_000;
@@ -79,36 +65,23 @@ export function createFoundryInvocationConversationAgent(
 ): ConversationAgent {
   const url = createFoundryInvocationsEndpoint(projectEndpoint, agentName);
   return {
-    async *stream(input, authorization, signal, options = {}) {
+    async *stream(input, authorization, signal) {
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
       const token = await getToken(FOUNDRY_AGENT_SCOPE, requestSignal);
       if (typeof token !== 'string' || !token.trim() || /[\r\n]/u.test(token)) {
         throw new Error('Foundry authentication unavailable');
       }
-      const body = JSON.stringify({ ...input, delegatedAuthorization: authorization });
-      const invoke = (agentSessionId: string | undefined) => {
-        const target = new URL(url);
-        if (agentSessionId !== undefined) target.searchParams.set('agent_session_id', agentSessionId);
-        return fetcher(target, {
-          method: 'POST',
-          redirect: 'error',
-          headers: {
-            Authorization: 'Bearer ' + token,
-            Accept: 'text/event-stream',
-            'Content-Type': 'application/json',
-          },
-          body,
-          signal: requestSignal,
-        });
-      };
-      const sessionId = options.agentSessionId !== undefined && AGENT_SESSION_ID.test(options.agentSessionId)
-        ? options.agentSessionId
-        : undefined;
-      let response = await invoke(sessionId);
-      if (sessionId !== undefined && SESSION_REJECTED_STATUSES.has(response.status)) {
-        await response.body?.cancel().catch(() => {});
-        response = await invoke(undefined);
-      }
+      const response = await fetcher(url, {
+        method: 'POST',
+        redirect: 'error',
+        headers: {
+          Authorization: 'Bearer ' + token,
+          Accept: 'text/event-stream',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ...input, delegatedAuthorization: authorization }),
+        signal: requestSignal,
+      });
       if (!response.ok || !response.body ||
           !response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream')) {
         throw new Error(`Chat agent unavailable (HTTP ${response.status})`);
