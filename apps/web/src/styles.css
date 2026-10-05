@@ -835,11 +835,11 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-limit-note { margin: 12px 0; }
 .task-release-bar {
   display: grid;
-  grid-template-columns: minmax(130px, .8fr) minmax(180px, 1fr) minmax(240px, 1.4fr) auto;
+  grid-template-columns: minmax(120px, .9fr) minmax(190px, 1.35fr) minmax(140px, 1.25fr) auto;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   margin: 0 0 20px;
-  padding: 16px;
+  padding: 10px 12px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-panel);
   background: var(--surface-translucent);
@@ -848,24 +848,26 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-release-project, .task-release-statuses, .task-release-commits { min-width: 0; }
 .task-release-project { display: grid; gap: 4px; }
 .task-release-project > a:first-child { font-weight: 700; }
-.task-release-project > a, .task-release-commits a { overflow-wrap: anywhere; }
+.task-release-project > a, .task-release-commits a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-release-project > span, .task-release-project code { font-size: 14px; }
-.task-release-statuses { display: grid; gap: 8px; margin: 0; }
+.task-release-statuses { display: flex; gap: 10px; margin: 0; }
 .task-release-statuses > div { min-width: 0; }
-.task-release-statuses dt { color: var(--text-muted); font-size: 13px; }
+.task-release-statuses dt { color: var(--text-muted); font-size: 12px; }
 .task-release-statuses dd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 0; font-size: 14px; }
-.task-release-statuses dd > a { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.task-release-commits h2 { margin: 0 0 6px; font-size: 15px; }
+.task-release-statuses dd > a { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 8px; }
+.task-release-statuses dd > a > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-release-statuses > div { flex: 1 1 0; }
+.task-release-commits h2 { margin: 0 0 3px; font-size: 13px; }
 .task-release-commits ol { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .task-release-commits li { display: grid; gap: 1px; min-width: 0; font-size: 13px; }
+.task-release-commits li:not(:first-child) { display: none; }
 .task-release-commits time, .task-release-stale { color: var(--text-muted); font-size: 12px !important; }
 .task-release-commits p { margin: 0; font-size: 13px; }
-.task-release-actions { display: grid; justify-items: stretch; gap: 8px; }
+.task-release-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .task-release-actions p { margin: 0; font-size: 13px; }
-.task-release-actions .secondary-button { margin: 0; }
+.task-release-actions .secondary-button { min-height: 40px; margin: 0; padding-inline: 10px; white-space: nowrap; }
 .factory-composer {
-  position: sticky;
-  z-index: 1;
+  position: static;
   bottom: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -1178,7 +1180,10 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 
 @media (max-width: 900px) {
   .task-release-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .task-release-statuses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .task-release-commits li:not(:first-child) { display: grid; }
   .task-release-actions { align-items: start; justify-items: start; }
+  .task-release-actions { justify-content: flex-start; flex-wrap: wrap; }
   .factory-composer { grid-template-columns: minmax(0, 1fr) auto; }
   .factory-composer textarea { grid-column: 1 / -1; grid-row: 1; }
   .factory-composer > p { grid-row: 3; }
@@ -1229,6 +1234,19 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .sidebar-link { flex: 1 1 120px; }
   .shell-main { grid-column: 2; grid-row: 2; padding: 28px 16px 36px; overflow: visible; }
   .context-panel { grid-column: 2; grid-row: 2; padding: 10px 16px; overflow: visible; background: var(--surface-translucent); border: 0; border-bottom: 1px solid var(--rule); }
+  .context-panel:has(.task-detail-panel) {
+    position: fixed;
+    z-index: 10;
+    inset: calc(var(--rail-size) + 8px) 8px 38px calc(var(--rail-size) + 8px);
+    max-height: none;
+    overflow: auto;
+    padding: 12px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--dialog-shadow);
+    backdrop-filter: blur(var(--surface-blur));
+  }
   .context-panel-heading { min-height: 36px; margin-bottom: 4px; }
   .bottom-bar { grid-column: 2; grid-row: 3; min-height: 30px; padding-inline: 10px; }
   .app-shell[data-navigation-open="true"]:not([data-context-open="true"]) { grid-template-rows: var(--rail-size) auto minmax(0, 1fr) auto; }
