@@ -119,15 +119,19 @@ describe('shared glass tokens', () => {
   it('gives the empty conversation readable glass placement clear of the orb', () => {
     const styles = readFileSync('src/ConversationHistory.css', 'utf8');
     const greeting = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'background');
-    const greetingPosition = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'right');
+    const greetingPosition = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'align-self');
     const headingFont = ruleDeclaration(styles, /\.conversation-greeting h2\s*\{([^}]*)\}/, 'font-family');
     const summary = ruleDeclaration(styles, /\.conversation-overview > summary\s*\{([^}]*)\}/, 'background');
+    const emptyTranscriptLayout = ruleDeclaration(
+      styles, /\.conversation-transcript:has\(\.conversation-greeting\)\s*\{([^}]*)\}/, 'display',
+    );
 
     expect(greeting).toBe('var(--surface-translucent)');
-    expect(greetingPosition).toBe('12px');
+    expect(greetingPosition).toBe('flex-end');
     expect(headingFont).toBe('var(--font-heading)');
     expect(summary).toBe('var(--surface-translucent)');
-    expect(styles).toContain('top: clamp(16px, 12vh, 100px)');
+    expect(emptyTranscriptLayout).toBe('flex');
+    expect(styles).toContain('padding: clamp(16px, 12vh, 100px) 12px');
     expect(styles).toContain('@media (max-width: 600px)');
   });
 
