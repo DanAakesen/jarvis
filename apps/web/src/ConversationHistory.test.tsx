@@ -394,7 +394,8 @@ describe('ConversationHistory', () => {
       voice.onStatus('speaking', 'Jarvis is speaking.');
       voice.onStatus('listening', 'Listening after interruption.');
     });
-    expect(screen.getByText('Listening after interruption.').getAttribute('role')).toBe('status');
+    expect(screen.getByRole('heading', { name: 'Listening' }).getAttribute('aria-live')).toBe('polite');
+    expect(screen.getByText('Listening after interruption.')).not.toBeNull();
     expect(onVoiceActiveChange).toHaveBeenCalledTimes(1);
 
     const menu = document.createElement('details');
