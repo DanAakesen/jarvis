@@ -486,6 +486,9 @@ and [`p8-32-empty-light-phone-390.png`](ui/screenshots/p8-32-empty-light-phone-3
 These use local API fixtures, do not verify live settings/provider behavior, and
 do not constitute approval of a light-mode mockup. Hardware GPU, physical
 devices, Safari, live voice, and P8-30 transition flicker remain unverified.
+Focused web tests also cover pending/rejected theme saves, invalid-token
+recovery, persisted system mode and stage activity/audio updates; shared
+contrast tests cover text, muted text, icons and focus on both glass roles.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

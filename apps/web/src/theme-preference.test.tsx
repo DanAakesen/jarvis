@@ -151,10 +151,20 @@ describe('ThemePreferenceProvider', () => {
 
     firstVisit.unmount();
     document.documentElement.dataset.theme = 'light';
-    renderPreference();
+    const secondVisit = renderPreference();
 
     expect(await screen.findByRole('radio', { name: 'Dark' })).toHaveProperty('checked', true);
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
+
+    await user.click(screen.getByRole('radio', { name: 'System' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'System' })).toHaveProperty('checked', true));
+    expect(storedTheme).toBe('system');
+
+    secondVisit.unmount();
+    document.documentElement.dataset.theme = 'dark';
+    renderPreference();
+    expect(await screen.findByRole('radio', { name: 'System' })).toHaveProperty('checked', true);
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('light'));
   });
 
   it('keeps the current theme while a save is pending and applies it only after acceptance', async () => {
