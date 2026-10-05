@@ -249,7 +249,7 @@ export const conversationModule: BackendModule = {
             text,
             language: session.language,
             ...(request.body.screenContext === undefined ? {} : { screenContext: request.body.screenContext }),
-          }, authorization, controller.signal, { agentSessionId: `chat-${sessionId}` })[Symbol.asyncIterator]();
+          }, authorization, controller.signal)[Symbol.asyncIterator]();
           let next = agentIterator.next();
           if (classifier && finishReflex) {
             void runChatReflex(
