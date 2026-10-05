@@ -21,6 +21,7 @@ if (-not [uri]::TryCreate($BackendUrl, [UriKind]::Absolute, [ref]$backendUri) -o
     ($backendUri.Scheme -ne 'https' -and -not ($backendUri.Scheme -eq 'http' -and $backendUri.IsLoopback))) {
     throw 'BackendUrl must be an HTTPS backend origin (or an HTTP loopback origin for local tests).'
 }
+$backendOrigin = $backendUri.GetLeftPart([UriPartial]::Authority)
 
 $source = (Resolve-Path -LiteralPath $PublishPath).Path
 $executable = Join-Path $source 'Jarvis.PcBridge.exe'
@@ -38,10 +39,29 @@ $settingsDirectory = Join-Path $local 'Jarvis\PcBridge'
 $startupDirectory = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)
 $settingsPath = Join-Path $settingsDirectory 'settings.json'
 $shortcutPath = Join-Path $startupDirectory 'Jarvis PC bridge.lnk'
+$extensionDirectory = Join-Path $installDirectory 'chrome-extension'
+Import-Module (Join-Path $PSScriptRoot 'BridgeInstaller.Helpers.psm1') -Force
+$sourceExtensionHash = Get-BridgeExtensionHash -Path (Join-Path $source 'chrome-extension')
+$installedExtensionHash = Get-BridgeExtensionHash -Path $extensionDirectory
 
-Get-Process -Name 'Jarvis.PcBridge' -ErrorAction SilentlyContinue | Stop-Process -Force
 New-Item -ItemType Directory -Path $installDirectory, $settingsDirectory -Force | Out-Null
-Copy-Item -Path (Join-Path $source '*') -Destination $installDirectory -Recurse -Force
+
+$copyAttempts = 5
+for ($attempt = 1; $attempt -le $copyAttempts; $attempt++) {
+    Get-Process -Name 'Jarvis.PcBridge' -ErrorAction SilentlyContinue |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+    try {
+        Copy-Item -Path (Join-Path $source '*') -Destination $installDirectory -Recurse -Force -ErrorAction Stop
+        break
+    }
+    catch {
+        if ($attempt -eq $copyAttempts) {
+            throw "Could not update the PC bridge after $copyAttempts attempts. Close Chrome and retry. $($_.Exception.Message)"
+        }
+
+        Start-Sleep -Milliseconds 400
+    }
+}
 
 $nativeHostManifestPath = Join-Path $installDirectory 'com.jarvis.pcbridge.json'
 $nativeHostManifest = [ordered]@{
@@ -56,15 +76,13 @@ $nativeHostKey = 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.jarvis.p
 New-Item -Path $nativeHostKey -Force | Out-Null
 Set-Item -Path $nativeHostKey -Value $nativeHostManifestPath
 
-$settings = [ordered]@{
-    BackendUrl = $backendUri.GetLeftPart([UriPartial]::Authority)
-    TenantId = $TenantId.ToString()
-    ApiClientId = $ApiClientId.ToString()
-    BridgeClientId = $BridgeClientId.ToString()
-} | ConvertTo-Json
-$temporarySettingsPath = "$settingsPath.tmp"
-[IO.File]::WriteAllText($temporarySettingsPath, $settings, [Text.UTF8Encoding]::new($false))
-Move-Item -LiteralPath $temporarySettingsPath -Destination $settingsPath -Force
+$browserAutomationEnabled = Update-BridgeSettings `
+    -Path $settingsPath `
+    -BackendUrl $backendOrigin `
+    -TenantId $TenantId.ToString() `
+    -ApiClientId $ApiClientId.ToString() `
+    -BridgeClientId $BridgeClientId.ToString()
+$extensionChanged = $sourceExtensionHash -ne $installedExtensionHash
 
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($shortcutPath)
@@ -75,5 +93,11 @@ $shortcut.Save()
 
 Write-Host 'Jarvis PC bridge installed for the current Windows user.'
 Write-Host "Configuration: $settingsPath"
+Write-Host "Chrome browser automation: $(if ($browserAutomationEnabled) { 'on' } else { 'off' })."
 Write-Host 'The bridge starts at sign-in and connects outbound; no inbound network listener is created.'
-Write-Host 'Load the installed chrome-extension folder once from chrome://extensions with Developer mode enabled.'
+if ($extensionChanged) {
+    Write-Host 'Chrome extension files changed. Reload the unpacked extension from chrome://extensions.'
+}
+else {
+    Write-Host 'Chrome extension files are unchanged; no reload is needed.'
+}

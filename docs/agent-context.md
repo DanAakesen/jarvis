@@ -715,12 +715,16 @@ the companion on Dan's PC:
      -BridgeClientId <jarvis-pc-bridge-client-guid>
    ```
 
-   The installer stops an existing bridge process, copies app files under
-   `%LOCALAPPDATA%\Programs\Jarvis.PcBridge`, writes nonsecret settings under
-   `%LOCALAPPDATA%\Jarvis\PcBridge`, and creates a Startup shortcut. Launch the
-   installed executable once to sign in by device code; MSAL stores its refresh
-   cache with Windows DPAPI. Re-running the installer updates the files without
-   deleting that token cache. The bridge connects outbound and creates no
+   The installer stops existing tray and native-host processes, then retries file
+   copies briefly if Chrome restarts a native host during the update. It copies app
+   files under `%LOCALAPPDATA%\Programs\Jarvis.PcBridge`, updates only the
+   connection fields in `%LOCALAPPDATA%\Jarvis\PcBridge\settings.json`, and
+   creates a Startup shortcut. Existing browser automation and other user settings
+   are retained; the installer prints whether Chrome automation is on. If extension
+   files changed, reload the unpacked extension from `chrome://extensions`.
+   Launch the installed executable once to sign in by device code; MSAL stores its
+   refresh cache with Windows DPAPI. Re-running the installer updates the files
+   without deleting that token cache. The bridge connects outbound and creates no
    inbound firewall rule.
 4. Confirm the tray reports Online, then ask Jarvis to open an HTTP(S) URL or an
    allow-listed app. Check the authenticated Now feed for online/offline status.
@@ -784,6 +788,7 @@ From the repository root, the offline checks are:
 ```text
 dotnet test pc-bridge/Jarvis.PcBridge.Core.Tests/Jarvis.PcBridge.Core.Tests.csproj --configuration Release
 dotnet build pc-bridge/Jarvis.PcBridge/Jarvis.PcBridge.csproj --configuration Release
+pwsh -NoProfile -File pc-bridge/tests/BridgeInstaller.Helpers.Tests.ps1
 npm test --workspace @jarvis/backend -- --run src/pc-bridge/bridge.test.ts
 ```
 
