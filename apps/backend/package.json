@@ -14,18 +14,19 @@
     "test:database": "vitest run --config src/database/vitest.config.mts"
   },
   "dependencies": {
-    "@jarvis/contracts": "*",
     "@azure/identity": "4.13.3",
     "@azure/keyvault-secrets": "4.11.2",
     "@azure/storage-blob": "12.31.0",
     "@fastify/cors": "11.3.0",
     "@fastify/websocket": "11.3.3",
+    "@jarvis/contracts": "*",
     "@microsoft/teams.apps": "2.1.0",
     "@microsoft/teams.cards": "2.1.0",
     "applicationinsights": "3.16.0",
     "fastify": "5.12.5",
     "fflate": "0.8.3",
     "jose": "6.2.12",
+    "microsoft-cognitiveservices-speech-sdk": "1.52.0",
     "mssql": "12.7.2",
     "pino": "10.4.0",
     "ws": "8.22.0"

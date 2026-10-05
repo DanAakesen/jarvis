@@ -191,6 +191,8 @@ The "Now" panel reads the persisted away/present mode, current running tasks and
 
 The voice orb follows typed, transient runtime activity delivered over the authenticated event stream and includes a text alternative. Listening is shown only after the voice relay is ready and microphone audio is observed. Thinking, tool-call start and outcome, speaking, interruption, reconnect, and failure are shown only when reported by the runtime. Unknown states are unavailable, and motion is disabled when reduced motion is preferred.
 
+English and Danish voice keep Voice Live as the final-transcript source. While the microphone is active and unmuted, a parallel Azure Speech stream can provide interim clauses to the existing safe reflex path; mute, voice end, or disconnect stops that recognizer. If Speech is unavailable, voice continues with final-transcript reflexes.
+
 The shared top bar reports actual chat and voice runtime activity, including tool calls; it does not infer work from a local submit. Activity events contain no transcript, tool arguments or results, or secrets, and are not persisted. The orb's audio response uses decoded playback samples, not microphone input or an estimated level. Jarvis-updated workspace windows receive a brief tool-call shimmer; unrelated windows and thinking states do not.
 
 Temporary client windows support title dragging, edge resizing and icon lifecycle
