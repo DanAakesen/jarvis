@@ -852,12 +852,24 @@ continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
 
-P8-25 keeps chat draft and turn state in `ConversationHistory`: acceptance clears
-only the unchanged submitted draft, and later edits survive completion/errors.
+P8-26 keeps chat draft, turn state and a removable FIFO queue in
+`ConversationHistory`. Each submission captures text and language and clears
+the draft locally. A synchronous in-flight guard permits only one active
+`sendChatTurn`; its promise settles (including stream cleanup) before the next
+queued submission starts. Later drafts survive completion/errors, and failed
+turn feedback remains visible while the queue advances. Stop reply passes an
+AbortSignal through session creation, token acquisition and the existing fetch/stream cancellation
+path; cancellable setup waits also prevent slow visual inspection from blocking
+the queue or sending the stopped message when inspection later finishes. Component
+unmount also aborts the active turn. Pending messages are in memory only and
+are not retained across navigation/reload.
 History pages and saved turn messages merge by ID in SQL's numeric-ID order;
 persisted entries replace optimistic metadata without removing absent entries.
 Older pagination retains its cursor across latest-page refreshes. These changes
 do not alter storage, SSE contracts, or the backend's first-byte latency.
+The backend retains its existing per-turn disconnect cancellation and does not
+reject overlapping turns; sequencing is owned by this client queue, not a new
+server-side queue or concurrency guard. Stop does not undo completed task actions.
 
 When `JARVIS_CHAT_AGENT_NAME` is configured, the backend uses its managed
 identity to call
@@ -1404,6 +1416,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID. The hosted Jarvis agent is assigned the application role `Jarvis.Tools` and may call only the tool routes.
 - Google Calendar and Gmail tools are registered only in the backend and use the official Google APIs over HTTPS. The backend reads `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` only from Key Vault, exchanges the refresh token for a short-lived access token, and caches only that access token in memory. The single OAuth grant is for `danaakesen@gmail.com` and uses `gmail.readonly`, `gmail.compose`, `gmail.send`, and `calendar.events`; no Google credential or token is a deployment variable or client-bundle value. An `invalid_grant` records a deduplicated `credential_expiry` activity alert; tool calls return a visible reconnect message.
+- Calendar range reads interpret date-only `start`/`end` in `JARVIS_GOOGLE_TIME_ZONE` (inclusive dates and an exclusive next-midnight API boundary); timezone-aware date-times are queried as instants. `calendar_list_events` pages up to 100 events across no more than 62 days and maps optional `query` to Google's `q`; `calendar_next_event` searches up to 60 days and skips events where Dan's attendee response is declined. All-day start/end values remain date-only, including multi-day events, while timed events remain instants. Calendar agenda, range, and next-event reads are reflex-safe and sensitive results remain redacted from the durable tool-call audit.
 - Calendar changes, reply drafts, and sending are staged in process memory for ten minutes. The backend executes only after a different, later persisted Dan message exactly matches the returned `confirm <8-digit-code>` phrase. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.

@@ -294,7 +294,7 @@ export const conversationModule: BackendModule = {
             publishActivity('interrupted');
           } else {
             request.log.warn(
-              { reason: error instanceof Error ? error.message.slice(0, 200) : 'unknown' },
+              { failure: error instanceof Error ? error.message.slice(0, 120) : 'unknown' },
               'conversation.reply_failed',
             );
             publishActivity('failed');
