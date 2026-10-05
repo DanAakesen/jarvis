@@ -166,7 +166,7 @@ export function ActivityPanel({ feed, onDismiss, onResolveConfirmation, onRetry,
   }
 
   return (
-    <section className="panel" aria-labelledby="now-heading">
+    <section className="panel now-panel" aria-labelledby="now-heading">
       <h2 id="now-heading" ref={heading} tabIndex={-1}>Now</h2>
       {feed.status === 'loading' ? <p>Loading current activity…</p> : feed.status === 'unavailable' ? (
         <>

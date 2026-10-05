@@ -74,7 +74,7 @@ Dan's brief (4 October 2026): the UI should be stunning, with rich styling and m
 - **Light appearance (C):** warm neutral surfaces and editorial typography with an ink-particle orb, so light mode keeps the same states and motion vocabulary.
 - **Constraints kept:** every orb state is also labelled in text; no gradient text, no emoji icons, no lone coloured borders; sample data appears in the concepts only.
 
-Canonical colour, type, spacing, radius, surface, elevation and motion values belong in `apps/web/src/styles.css`. P8-20 (#282) applies Concept B/C across the current shell and pages: the dark aurora is CSS-only, and the orb follows reported voice state plus decoded playback PCM. Chat/voice activity is explicit in the top bar; tool-call state and workspace windows remain unavailable until their runtime contracts exist. Hidden tabs pause animation; reduced motion uses fades and keeps the state label readable.
+Canonical colour, type, spacing, radius, surface, elevation and motion values belong in `apps/web/src/styles.css`. P8-20 (#282) applies Concept B/C across the current shell and pages: the dark aurora is CSS-only, and the orb follows reported voice state plus decoded playback PCM. P8-21 refines the conversation and client workspace on those same tokens. Chat/voice activity is explicit in the top bar; running tool feedback requires a published tool-call state, and generated windows still await their runtime contracts. Hidden tabs pause animation; reduced motion keeps all content and state labels readable.
 
 ## Voice end (P8-12, decided 4 October 2026)
 
@@ -288,14 +288,14 @@ sessions show their total voice minutes once beside the session's first message.
 
 ## Chat (P4-06)
 
-The conversation panel keeps one message list, a Danish/English selector, and a
-labelled text composer. Sending saves Dan's message first, then streams Jarvis's
+The conversation keeps one message list, an inline DA/EN button group, and an
+accessibly labelled text composer. Sending saves Dan's message first, then streams Jarvis's
 reply in place. Pending state keeps the Send control disabled; failures remain
 beside the composer, preserve partial text as interrupted, and warn that a task
 action may have completed. A delivered reply is saved and history refreshes so
 tool outcomes and valid task IDs appear as labelled chips and links. The list and
-composer stay in the existing single-column conversation panel at mobile widths;
-the selected visual direction remains open. P4-09 routes chat through Foundry
+composer stay in the single-column conversation at mobile widths;
+P8-21 applies the selected Concept B/C direction. P4-09 routes chat through Foundry
 Invocations; live Azure streaming and tool-call linkage remain a post-merge check.
 
 ## Browser voice (P5-04)
@@ -317,8 +317,8 @@ history.
 
 ## Conversation opening and input (P8-05)
 
-The conversation fills the shared shell's main space using its existing neutral
-tokens; P8-20 still owns the selected aurora/daylight visual system. A bounded,
+The conversation fills the shared shell's main space using the P8-20
+aurora/daylight visual system. A bounded,
 independently scrolling transcript sits above the bottom-centred composer. New
 replies stay visible without moving the composer; loading older history does not
 jump to the latest reply. Activity and backend controls remain available under
@@ -328,6 +328,36 @@ composer without discarding the draft or language; stop, natural end and failure
 restore typing focus. The ready state says the microphone is off and offers a
 separate Enable microphone action. The shell/fullscreen transition, window
 carry-over and final end-control behavior remain P8-10–P8-12.
+
+### Concept polish (P8-21)
+
+The opening is a calm greeting, not an empty card. A floating, translucent
+composer sits at the bottom centre: small voice-start orb on the left,
+auto-growing frameless input, compact DA/EN buttons and an icon-only Send
+action. The input retains its accessible label and Enter/Shift+Enter behavior.
+Screen sharing, Now and backend controls sit under the activity disclosure;
+frame-inspection actions appear when a camera or screen is shared.
+
+Dan's messages sit on a quiet surface on the right; Jarvis's replies stay open
+on the left. There are no message dividers. Channel, language and relative time
+appear on hover or keyboard focus, and remain visible on touch devices and
+under reduced motion. The exact timestamp remains available on the time element.
+Messages enter with a short opacity/translation transition; streaming keeps a
+live caret beside readable text. Only a published tool-call state gets the
+running-tool shimmer; thinking is not treated as a tool call. Running Now tasks
+use a restrained sheen, while completed outcomes stay static.
+
+Window titles are drag handles; right/bottom edges and the corner resize.
+Arrange keeps movement, sizing and order controls out of the resting title bar.
+Open Arrange, focus **Move** or **Resize**, then use arrow keys; Shift makes
+larger steps in a layered desktop layout. In tiles, Move changes order and
+Resize changes the tile span. On narrow screens width stays full-screen.
+Escape closes Arrange and returns focus to its trigger. Window entry,
+focus, minimise and restore reuse the shared motion tokens without waiting
+for animation to update state; reduced motion removes displacement and shimmer.
+
+Local screenshot fixtures are in `docs/ui/screenshots/p8-21-*`; they are not
+production conversations or proof of live agent-directed windows.
 
 ## Next-generation shared shell (structure agreed; P8-04 implemented)
 
@@ -360,10 +390,9 @@ setting defaults off; when enabled, voice begins with only the orb and windows
 remain docked on return to typing. Otherwise the earlier shell layout returns.
 Generated views are temporary; theme values persist. P8-14 reuses the existing
 Now list treatment for its first signed-in fixture. Values render as React text
-and allowlisted links; view-provided markup is not interpreted. This does not
-select new window styling or implement the generated-view workspace. Small-orb
-input controls start voice explicitly. Glass/transparency and futuristic styling
-are exploratory; white wireframe windows are not a selected final treatment.
+and allowlisted links; view-provided markup is not interpreted. Small-orb input
+controls start voice explicitly. Concept B/C's translucent surfaces are the
+selected treatment; the earlier white wireframes remain structural references only.
 
 ## Temporary workspace composition (P8-06)
 

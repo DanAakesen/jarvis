@@ -24,12 +24,12 @@ export function JarvisPage({
   return (
     <div className="jarvis-page">
       <h1 className="visually-hidden">Welcome, {name}</h1>
-      <h2 id="conversation-heading" className="conversation-title">Conversation</h2>
+      <h2 id="conversation-heading" className="visually-hidden">Conversation</h2>
       <ConversationHistory client={client} config={config} screenShare={screenShare} camera={camera}>
-        <ScreenShareControls screenShare={screenShare} />
         <details className="conversation-overview">
-          <summary>Activity and backend</summary>
+          <summary>Activity, sharing and backend</summary>
           <div className="jarvis-side">
+            <ScreenShareControls screenShare={screenShare} />
             <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} />
             <section className="panel" aria-labelledby="backend-heading">
               <h2 id="backend-heading">Backend</h2>

@@ -286,6 +286,22 @@ permission denial, natural voice end, draft/focus restoration and reduced
 motion were exercised. Screenshots in `docs/ui/screenshots/p8-05-*` contain
 labelled local fixtures, not production conversations. A real phone keyboard,
 physical microphone/speakers and live Azure round-trip remain unverified.
+P8-21 used the same scratch-only auth/API fixture workflow with Chromium at
+1440×900 and touch-emulated 390×844 in dark/light appearances. Empty, history,
+streaming, Now and workspace states are captured under `docs/ui/screenshots/p8-21-*`.
+Comparison images place the selected concept beside empty/history/streaming;
+phone concepts depict voice, so they are appearance references, not equivalent
+typing-state captures. Browser checks covered 44px composer targets, visible
+focus, relative metadata, 320/280px overflow, draft reflow, pending controls,
+title dragging, edge resizing, Arrange keyboard/Escape focus, phone popup bounds,
+minimise/restore, maximised-window precedence over another open Arrange menu,
+and static readable reduced-motion states. Settled surface
+contrast checks exceed AA. `npm test --workspace @jarvis/web` passed 190 tests;
+`npm run lint --workspace @jarvis/web` and `npm run build --workspace @jarvis/web`
+passed (existing chunk-size warning). Real phone keyboards, hardware audio,
+live Entra/Azure, tool-call event delivery and generated/agent-directed windows
+remain unverified; local workspace screenshots mount the real component with
+explicitly labelled fixtures, not a new runtime integration.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

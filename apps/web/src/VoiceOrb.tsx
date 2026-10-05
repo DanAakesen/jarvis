@@ -41,9 +41,9 @@ export function VoiceOrb({ status, message, audioLevel = 0 }: { status: string; 
         >
           {statusMessage}
         </p>
-        <p className="voice-orb-limitation">
+        {status === 'tool_call' ? <span className="tool-call tool-call-running">Tool running</span> : <p className="voice-orb-limitation">
           Tool-call activity is unavailable because the voice runtime does not publish that state yet.
-        </p>
+        </p>}
       </div>
     </div>
   );
