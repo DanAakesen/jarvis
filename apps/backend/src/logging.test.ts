@@ -79,6 +79,7 @@ describe('structured log export', () => {
     logger.info({
       language: 'en',
       partialTranscriptionDeltas: 2,
+      speechRecognitionHypotheses: 3,
       stablePartialClauses: 1,
       firstActionLatencyMs: 12.34,
       speechToFirstWordMs: null,
@@ -89,6 +90,7 @@ describe('structured log export', () => {
     const metric = {
       language: 'en',
       partialTranscriptionDeltas: 2,
+      speechRecognitionHypotheses: 3,
       stablePartialClauses: 1,
       firstActionLatencyMs: 12.34,
       speechToFirstWordMs: null,
@@ -102,6 +104,7 @@ describe('structured log export', () => {
         service: 'jarvis-backend',
         language: 'en',
         partialTranscriptionDeltas: 2,
+        speechRecognitionHypotheses: 3,
         stablePartialClauses: 1,
         firstActionLatencyMs: 12.34,
         speechToFirstWordMs: null,

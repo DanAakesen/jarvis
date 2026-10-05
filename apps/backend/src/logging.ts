@@ -24,7 +24,7 @@ const events = new Set([
   'server.listening', 'server.stopping', 'server.stopped', 'server.failed',
   'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
-  'sandbox_heartbeat.decision', 'voice.reflex_metrics',
+  'sandbox_heartbeat.decision', 'voice.reflex_metrics', 'voice.partials_unavailable',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -64,7 +64,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   }
   if (input.msg === 'voice.reflex_metrics') {
     if (input.language === 'da' || input.language === 'en') fields.language = input.language;
-    for (const key of ['partialTranscriptionDeltas', 'stablePartialClauses']) {
+    for (const key of ['partialTranscriptionDeltas', 'speechRecognitionHypotheses', 'stablePartialClauses']) {
       const value = input[key];
       if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 1_000) {
         fields[key] = value;

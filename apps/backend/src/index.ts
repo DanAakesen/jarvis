@@ -81,6 +81,7 @@ import { createEphemeralAudioStore } from './teams/audio-store.js';
 import { createAzureSpeechSynthesizer } from './teams/speech.js';
 import { createTeamsBotModule, createTeamsConnector } from './teams/bot.js';
 import { createTeamsNotificationService } from './teams/service.js';
+import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
 import { startGraphPresenceMonitor } from './graph/presence-monitor.js';
 
@@ -454,6 +455,18 @@ try {
       ...(config.voiceLiveEndpoint ? { connect: createVoiceLiveConnector(config.voiceLiveEndpoint) } : {}),
       ...(config.foundryProjectEndpoint
         ? { connectDanish: createDanishVoiceConnector(config.foundryProjectEndpoint) }
+        : {}),
+      ...(config.foundryEndpoints
+        ? {
+          createPartialRecognizer: createAzureSpeechPartialRecognizerFactory(
+            config.foundryEndpoints.runtime,
+            async (scope, signal) => {
+              const token = await credential.getToken(scope, { abortSignal: signal });
+              if (!token) throw new Error('Speech identity unavailable');
+              return token.token;
+            },
+          ),
+        }
         : {}),
     }));
   }

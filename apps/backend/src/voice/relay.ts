@@ -20,6 +20,11 @@ import {
   type ReflexTarget,
 } from '../core/reflex.js';
 import { createVoiceStatusAnnouncer } from './status-updates.js';
+import {
+  VOICE_PHRASE_HINTS,
+  type PartialSpeechRecognizer,
+  type PartialSpeechRecognizerFactory,
+} from './speech-recognizer.js';
 
 export const VOICE_LIVE_SCOPE = 'https://ai.azure.com/.default';
 export const VOICE_SUBPROTOCOL = 'jarvis.voice.v1';
@@ -31,6 +36,7 @@ const MAX_REFLEX_ACTIONS_PER_TURN = 8;
 const MAX_REFLEX_CLASSIFICATIONS_PER_TURN = 8;
 const TOKEN_TIMEOUT_MS = 10_000;
 const CONNECTION_TIMEOUT_MS = 10_000;
+const MAX_QUEUED_PARTIAL_AUDIO_BYTES = 256_000;
 
 export type VoiceConnectionFactory = (token: string, signal: AbortSignal) => WebSocket;
 
@@ -118,6 +124,7 @@ export interface VoiceRelayOptions {
   readonly getToken: (scope: string, signal: AbortSignal) => Promise<string>;
   readonly connect?: VoiceConnectionFactory;
   readonly connectDanish?: VoiceConnectionFactory;
+  readonly createPartialRecognizer?: PartialSpeechRecognizerFactory;
 }
 
 function credential(getToken: VoiceRelayOptions['getToken'], signal: AbortSignal): Promise<string> {
@@ -234,6 +241,7 @@ function registerVoiceRoute(
   english: boolean,
   language: 'da' | 'en',
   getToken: VoiceRelayOptions['getToken'],
+  createPartialRecognizer?: PartialSpeechRecognizerFactory,
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
     if (request.principal === null) {
@@ -260,6 +268,18 @@ function registerVoiceRoute(
     let userSpeaking = false;
     let assistantResponding = false;
     let microphoneActive = false;
+    let microphoneMuted = true;
+    let partialRecognizer: PartialSpeechRecognizer | undefined;
+    let partialRecognizerStart: Promise<void> | undefined;
+    let partialRecognitionController: AbortController | undefined;
+    let partialRecognitionEnabled = false;
+    let partialRecognitionUnavailable = false;
+    let partialRecognitionGeneration = 0;
+    let queuedPartialAudio: Buffer[] = [];
+    let queuedPartialAudioBytes = 0;
+    let activePartialItemId: string | undefined;
+    let partialSpeechStopped = false;
+    const pendingPartialItemIds: string[] = [];
     let activityState: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | null = null;
     let activityFinished = false;
     const activityId = randomUUID();
@@ -293,6 +313,7 @@ function registerVoiceRoute(
     let finalReflexPending = false;
     let pendingPartialReflex = 0;
     let partialTranscriptionDeltas = 0;
+    let speechRecognitionHypotheses = 0;
     let stablePartialClauses = 0;
     let firstActionLatencyMs: number | undefined;
     let speechStoppedAt: number | undefined;
@@ -306,6 +327,26 @@ function registerVoiceRoute(
       if (parseVoiceEvent(data, binary)?.type !== 'input_audio_buffer.append' || microphoneActive) return;
       microphoneActive = true;
       publishActivity('listening');
+    };
+
+    const partialsUnavailable = () => {
+      if (partialRecognitionUnavailable) return;
+      partialRecognitionUnavailable = true;
+      request.log.warn('voice.partials_unavailable');
+    };
+
+    const stopPartialRecognition = () => {
+      partialRecognitionEnabled = false;
+      partialRecognitionGeneration += 1;
+      queuedPartialAudio = [];
+      queuedPartialAudioBytes = 0;
+      const recognizer = partialRecognizer;
+      partialRecognizer = undefined;
+      partialRecognizerStart = undefined;
+      const recognitionController = partialRecognitionController;
+      partialRecognitionController = undefined;
+      recognitionController?.abort();
+      if (recognizer) void recognizer.stop().catch(() => {});
     };
 
     const savePartialMessage = async (itemId: string, text: string): Promise<ConversationMessage> => {
@@ -393,20 +434,28 @@ function registerVoiceRoute(
       });
     };
 
-    const receiveTranscriptionDelta = (event: Record<string, unknown>) => {
-      const itemId = event.item_id;
-      const delta = event.delta;
-      if (typeof itemId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/u.test(itemId) ||
-          typeof delta !== 'string' || !delta || reflexedItems.has(itemId) ||
-          disabledPartialItems.has(itemId)) return;
+    const processStableHypothesis = (
+      itemId: string,
+      text: string,
+      receivedAt: number,
+      replace: boolean,
+    ) => {
+      if (!/^[A-Za-z0-9_-]{1,128}$/u.test(itemId) || reflexedItems.has(itemId) ||
+          disabledPartialItems.has(itemId) || !text) return;
       const state = partialTranscripts.get(itemId) ?? { text: '', stableLength: 0, reflexRequests: 0 };
       if (!partialTranscripts.has(itemId) && partialTranscripts.size >= MAX_TRANSCRIPTS_PER_SESSION) return;
-      if (state.text.length + delta.length > MAX_TRANSCRIPT_CHARACTERS) {
+      if (replace) {
+        const stablePrefix = state.text.slice(0, state.stableLength);
+        if (state.stableLength > 0 && !text.startsWith(stablePrefix)) return;
+        state.text = text;
+      } else {
+        state.text += text;
+      }
+      if (state.text.length > MAX_TRANSCRIPT_CHARACTERS) {
         partialTranscripts.delete(itemId);
         disabledPartialItems.add(itemId);
         return;
       }
-      state.text += delta;
       partialTranscripts.set(itemId, state);
       const boundary = /[,;.!?]/gu;
       boundary.lastIndex = state.stableLength;
@@ -416,10 +465,115 @@ function registerVoiceRoute(
         const clause = state.text.slice(state.stableLength, match.index).trim();
         state.stableLength = stableLength;
         if (!clause || /^jarvis$/iu.test(clause)) continue;
-        const stableText = state.text.slice(0, stableLength);
-        const receivedAt = performance.now();
-        queueStablePartial(itemId, stableText, receivedAt);
+        queueStablePartial(itemId, state.text.slice(0, stableLength), receivedAt);
       }
+    };
+
+    const receiveTranscriptionDelta = (event: Record<string, unknown>) => {
+      const itemId = event.item_id;
+      const delta = event.delta;
+      if (typeof itemId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/u.test(itemId) ||
+          typeof delta !== 'string') return;
+      processStableHypothesis(itemId, delta, performance.now(), false);
+    };
+
+    const receiveSpeechHypothesis = (text: string) => {
+      if (!partialRecognitionEnabled || microphoneMuted || controller.signal.aborted) return;
+      activePartialItemId ??= `partial_${randomUUID().replaceAll('-', '')}`;
+      speechRecognitionHypotheses += 1;
+      processStableHypothesis(activePartialItemId, text, performance.now(), true);
+    };
+
+    const hasPartialState = (itemId: string) => partialTranscripts.has(itemId) ||
+      reflexLedger.has(itemId) || savedUserMessages.has(itemId);
+    const resolveFinalItemId = (itemId: string): string => {
+      const matchingIndex = pendingPartialItemIds.indexOf(itemId);
+      if (matchingIndex >= 0) pendingPartialItemIds.splice(matchingIndex, 1);
+      if (hasPartialState(itemId)) return itemId;
+      if (activePartialItemId && hasPartialState(activePartialItemId)) {
+        const activeIndex = pendingPartialItemIds.indexOf(activePartialItemId);
+        if (activeIndex >= 0) pendingPartialItemIds.splice(activeIndex, 1);
+        return activePartialItemId;
+      }
+      const sourceIndex = pendingPartialItemIds.findIndex(hasPartialState);
+      if (sourceIndex < 0) return itemId;
+      return pendingPartialItemIds.splice(sourceIndex, 1)[0]!;
+    };
+
+    const startPartialRecognition = () => {
+      if (partialRecognizer || partialRecognizerStart || !partialRecognitionEnabled ||
+          partialRecognitionUnavailable || microphoneMuted || controller.signal.aborted) return;
+      if (!createPartialRecognizer) {
+        partialsUnavailable();
+        return;
+      }
+      const generation = ++partialRecognitionGeneration;
+      const recognitionController = new AbortController();
+      partialRecognitionController = recognitionController;
+      const signal = AbortSignal.any([controller.signal, recognitionController.signal]);
+      partialRecognizerStart = (async () => {
+        try {
+          let projectNames: string[] = [];
+          try {
+            const snapshot = await request.server.taskStore?.getRunningContext();
+            projectNames = snapshot?.runningTasks.slice(0, 20)
+              .map(({ projectName }) => projectName.trim())
+              .filter((name) => name.length > 0 && name.length <= 64) ?? [];
+          } catch { /* Static phrase hints still permit recognition. */ }
+          const recognizer = await createPartialRecognizer({
+            language,
+            phraseHints: [...VOICE_PHRASE_HINTS, ...projectNames],
+            onRecognizing: receiveSpeechHypothesis,
+            onFailure: () => {
+              if (generation !== partialRecognitionGeneration || !partialRecognitionEnabled) return;
+              partialsUnavailable();
+              stopPartialRecognition();
+            },
+          }, signal);
+          if (generation !== partialRecognitionGeneration || !partialRecognitionEnabled ||
+              microphoneMuted || controller.signal.aborted) {
+            await recognizer.stop();
+            return;
+          }
+          partialRecognizer = recognizer;
+          for (const chunk of queuedPartialAudio) recognizer.write(chunk);
+          queuedPartialAudio = [];
+          queuedPartialAudioBytes = 0;
+        } catch {
+          if (generation === partialRecognitionGeneration && partialRecognitionEnabled &&
+              !controller.signal.aborted) partialsUnavailable();
+          queuedPartialAudio = [];
+          queuedPartialAudioBytes = 0;
+        } finally {
+          if (generation === partialRecognitionGeneration) partialRecognizerStart = undefined;
+        }
+      })();
+    };
+
+    const forwardAudioToPartialRecognizer = (event: Record<string, unknown>) => {
+      if (!partialRecognitionEnabled || microphoneMuted || typeof event.audio !== 'string' ||
+          event.audio.length > 512_000 ||
+          !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(event.audio)) return;
+      const audio = Buffer.from(event.audio, 'base64');
+      if (audio.byteLength === 0 || audio.byteLength % 2 !== 0) return;
+      if (partialRecognizer) {
+        try {
+          partialRecognizer.write(audio);
+        } catch {
+          partialsUnavailable();
+          stopPartialRecognition();
+        }
+        return;
+      }
+      if (!partialRecognizerStart) startPartialRecognition();
+      if (!partialRecognizerStart || audio.byteLength > MAX_QUEUED_PARTIAL_AUDIO_BYTES) return;
+      while (queuedPartialAudioBytes + audio.byteLength > MAX_QUEUED_PARTIAL_AUDIO_BYTES) {
+        const dropped = queuedPartialAudio.shift();
+        if (!dropped) break;
+        queuedPartialAudioBytes -= dropped.byteLength;
+      }
+      queuedPartialAudio.push(audio);
+      queuedPartialAudioBytes += audio.byteLength;
     };
 
     const logReflexMetrics = () => {
@@ -428,6 +582,7 @@ function registerVoiceRoute(
       request.log.info({
         language,
         partialTranscriptionDeltas,
+        speechRecognitionHypotheses,
         stablePartialClauses,
         firstActionLatencyMs: firstActionLatencyMs === undefined ? null : Number(firstActionLatencyMs.toFixed(2)),
         speechToFirstWordMs: speechToFirstWordMs === undefined ? null : Number(speechToFirstWordMs.toFixed(2)),
@@ -537,7 +692,7 @@ function registerVoiceRoute(
       }
     };
 
-    const persistTranscript = (event: Record<string, unknown>) => {
+    const persistTranscript = (event: Record<string, unknown>, sourceItemOverride?: string) => {
       const type = event.type;
       let role: ConversationRole | undefined;
       let text: string | undefined;
@@ -581,8 +736,11 @@ function registerVoiceRoute(
         return;
       }
       if (!savedTranscripts.has(key)) savedTranscripts.add(key);
-      const sourceItemId = role === 'dan' && typeof itemId === 'string' &&
-        /^[A-Za-z0-9_-]{1,128}$/u.test(itemId) ? itemId : undefined;
+      const sourceItemId = role === 'dan' && typeof sourceItemOverride === 'string' &&
+        /^[A-Za-z0-9_-]{1,128}$/u.test(sourceItemOverride)
+        ? sourceItemOverride
+        : role === 'dan' && typeof itemId === 'string' &&
+          /^[A-Za-z0-9_-]{1,128}$/u.test(itemId) ? itemId : undefined;
       transcriptQueue = transcriptQueue.then(async () => {
         const existing = sourceItemId ? savedUserMessages.get(sourceItemId) : undefined;
         const message = existing && store.updateMessage
@@ -630,6 +788,7 @@ function registerVoiceRoute(
       if (!activityFinished) {
         publishActivity(code === 1000 || activityState === 'reconnecting' ? 'ended' : 'failed');
       }
+      stopPartialRecognition();
       controller.abort();
       statusAnnouncer?.close();
       if (upstream) closeSocket(upstream, code, reason);
@@ -771,6 +930,7 @@ function registerVoiceRoute(
       if (event?.type === 'jarvis.session.end') {
         if (endRequested) return;
         endRequested = true;
+        stopPartialRecognition();
         void finalizeSession().then(() => {
           if (browser.readyState !== WebSocket.OPEN) return;
           browser.send(JSON.stringify({ type: 'jarvis.session.ended' }), (error) => {
@@ -784,6 +944,21 @@ function registerVoiceRoute(
         return;
       }
       if (endRequested) return;
+      if (event?.type === 'jarvis.microphone.active') {
+        if (!configured || !microphoneMuted) return;
+        microphoneMuted = false;
+        partialRecognitionUnavailable = false;
+        activePartialItemId = `partial_${randomUUID().replaceAll('-', '')}`;
+        partialSpeechStopped = false;
+        partialRecognitionEnabled = true;
+        startPartialRecognition();
+        return;
+      }
+      if (event?.type === 'jarvis.microphone.muted') {
+        microphoneMuted = true;
+        stopPartialRecognition();
+        return;
+      }
       if (event?.type === 'jarvis.screen.context') {
         const now = Date.now();
         const description = event.description;
@@ -809,6 +984,7 @@ function registerVoiceRoute(
       if (configured && upstream?.readyState === WebSocket.OPEN) {
         if (event?.type === 'input_audio_buffer.append') {
           noteMicrophoneAudio(data, binary);
+          if (!binary) forwardAudioToPartialRecognizer(event);
         }
         upstream.send(data, { binary }, (error) => {
           if (error) close(1011, 'Voice connection failed');
@@ -827,6 +1003,7 @@ function registerVoiceRoute(
       if (!activityFinished) {
         publishActivity(code === 1000 || activityState === 'reconnecting' ? 'ended' : 'failed');
       }
+      stopPartialRecognition();
       controller.abort();
       statusAnnouncer?.close();
       logReflexMetrics();
@@ -836,6 +1013,7 @@ function registerVoiceRoute(
     browser.once('error', () => {
       finishActiveToolActivities();
       publishActivity('failed');
+      stopPartialRecognition();
       controller.abort();
       statusAnnouncer?.close();
       logReflexMetrics();
@@ -879,10 +1057,22 @@ function registerVoiceRoute(
             if (assistantResponding) publishActivity('interrupted');
             userSpeaking = true;
             if (speechToFirstWordMs === undefined) speechStoppedAt = undefined;
+            const itemId = typeof event.item_id === 'string' &&
+              /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id)
+              ? event.item_id
+              : `partial_${randomUUID().replaceAll('-', '')}`;
+            if (partialSpeechStopped || !activePartialItemId ||
+                !hasPartialState(activePartialItemId)) activePartialItemId = itemId;
+            partialSpeechStopped = false;
           }
           if (event?.type === 'input_audio_buffer.speech_stopped') {
             userSpeaking = false;
             speechStoppedAt = performance.now();
+            partialSpeechStopped = true;
+            if (activePartialItemId && !pendingPartialItemIds.includes(activePartialItemId)) {
+              pendingPartialItemIds.push(activePartialItemId);
+              if (pendingPartialItemIds.length > 32) pendingPartialItemIds.shift();
+            }
             statusAnnouncer?.flush();
           }
           if ((event?.type === 'response.audio_transcript.delta' ||
@@ -916,12 +1106,18 @@ function registerVoiceRoute(
             statusAnnouncer?.flush();
             if (microphoneActive && pendingToolCalls === 0) publishActivity('listening');
           }
-          if (event) persistTranscript(event);
+          const finalTurnItemId =
+            (english && event?.type === 'conversation.item.input_audio_transcription.completed' ||
+             !english && event?.type === 'user.message' && Array.isArray(event.content)) &&
+            typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id)
+              ? resolveFinalItemId(event.item_id)
+              : undefined;
+          if (event) persistTranscript(event, finalTurnItemId);
           if (english && event?.type === 'conversation.item.input_audio_transcription.completed' &&
               typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
               typeof event.transcript === 'string' && event.transcript.trim() &&
               event.transcript.length <= MAX_TRANSCRIPT_CHARACTERS) {
-            void handleVoiceEndOfTurn(event.item_id, event.transcript.trim());
+            void handleVoiceEndOfTurn(finalTurnItemId ?? event.item_id, event.transcript.trim());
           } else if (!english && event?.type === 'user.message' &&
               typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
               Array.isArray(event.content)) {
@@ -932,7 +1128,7 @@ function registerVoiceRoute(
                 ? [(part as Record<string, unknown>).text as string]
                 : []).join('').trim();
             if (text && text.length <= MAX_TRANSCRIPT_CHARACTERS) {
-              void handleVoiceEndOfTurn(event.item_id, text);
+              void handleVoiceEndOfTurn(finalTurnItemId ?? event.item_id, text);
             }
           } else if (english && event?.type === 'conversation.item.input_audio_transcription.failed') {
             sendUpstream({ type: 'response.create' });
@@ -974,9 +1170,27 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           handleProtocols: (protocols) => protocols.has(VOICE_SUBPROTOCOL) ? VOICE_SUBPROTOCOL : false,
         },
       });
-      if (options.connect) registerVoiceRoute(app, '/voice', options.connect, true, 'en', options.getToken);
+      if (options.connect) {
+        registerVoiceRoute(
+          app,
+          '/voice',
+          options.connect,
+          true,
+          'en',
+          options.getToken,
+          options.createPartialRecognizer,
+        );
+      }
       if (options.connectDanish) {
-        registerVoiceRoute(app, '/voice/da', options.connectDanish, false, 'da', options.getToken);
+        registerVoiceRoute(
+          app,
+          '/voice/da',
+          options.connectDanish,
+          false,
+          'da',
+          options.getToken,
+          options.createPartialRecognizer,
+        );
       }
     },
   };
