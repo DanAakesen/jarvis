@@ -340,13 +340,14 @@ async function runBrowserAction(
   }
   const command: PcCommand = {
     name: 'browser_act',
-    arguments: { ...action, confirmed: false },
+    arguments: { ...action, ...(action.action === 'click' ? { confirmed: false } : {}) },
   };
   const result = await bridge.execute(command, signal);
   if (!isConfirmationRequired(result)) {
     if (!validBrowserActionFor(result, action.action)) throw new Error('Invalid browser action response');
     return result;
   }
+  if (action.action !== 'click') throw new Error('Invalid browser confirmation response');
   if (!runConfirmed) {
     throw new ToolRefusal('Dan’s confirmation service is unavailable; the browser action was not performed.');
   }

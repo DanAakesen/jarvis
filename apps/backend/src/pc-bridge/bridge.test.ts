@@ -150,9 +150,11 @@ describe('authenticated PC bridge protocol', () => {
               url: 'https://example.test/',
               elements: [{ index: 0, role: 'button', name: 'Send message', value: '' }],
             }
-            : (command.arguments as Record<string, unknown>).confirmed === true
-              ? { acted: true, action: 'click' }
-              : { confirmationRequired: true, actionKind: 'computer_use', summary: 'Click "Send message" in Chrome.' };
+              : (command.arguments as Record<string, unknown>).action !== 'click'
+                ? { acted: true, action: (command.arguments as Record<string, unknown>).action }
+                : (command.arguments as Record<string, unknown>).confirmed === true
+                  ? { acted: true, action: 'click' }
+                  : { confirmationRequired: true, actionKind: 'computer_use', summary: 'Click "Send message" in Chrome.' };
         bridge.send(JSON.stringify({ id: command.id, type: 'result', result }));
       });
 
@@ -166,6 +168,14 @@ describe('authenticated PC bridge protocol', () => {
         outcome: 'ok',
         result: { elements: [{ index: 0, role: 'button', name: 'Send message' }] },
       });
+      const typed = await callTool(app, 'pc_browser_act', {
+        tabId: 'tab_1',
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        elementIndex: 0,
+        action: 'type',
+        text: 'sample text',
+      });
+      expect(typed.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'type' } });
       const action = await callTool(app, 'pc_browser_act', {
         tabId: 'tab_1',
         snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
@@ -178,14 +188,18 @@ describe('authenticated PC bridge protocol', () => {
         expect.any(Function),
         expect.any(AbortSignal),
       );
-      expect(commands.map(command => command.command)).toEqual(['browser_tabs', 'browser_snapshot', 'browser_act', 'browser_act']);
-      expect((commands[2]!.arguments as Record<string, unknown>).confirmed).toBe(false);
-      expect((commands[3]!.arguments as Record<string, unknown>).confirmed).toBe(true);
+      expect(commands.map(command => command.command)).toEqual([
+        'browser_tabs', 'browser_snapshot', 'browser_act', 'browser_act', 'browser_act',
+      ]);
+      expect(commands[2]!.arguments).toMatchObject({ action: 'type', text: 'sample text' });
+      expect((commands[2]!.arguments as Record<string, unknown>).confirmed).toBeUndefined();
+      expect((commands[3]!.arguments as Record<string, unknown>).confirmed).toBe(false);
+      expect((commands[4]!.arguments as Record<string, unknown>).confirmed).toBe(true);
       expect(record.mock.calls.map(([call]) => call.arguments)).toEqual([
-        { redacted: true }, { redacted: true }, { redacted: true },
+        { redacted: true }, { redacted: true }, { redacted: true }, { redacted: true },
       ]);
       expect(record.mock.calls.map(([call]) => call.result)).toEqual([
-        { redacted: true }, { redacted: true }, { redacted: true },
+        { redacted: true }, { redacted: true }, { redacted: true }, { redacted: true },
       ]);
     });
 

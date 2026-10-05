@@ -112,6 +112,14 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
                 "Runtime.callFunctionOn" => CallFunction(root.GetProperty("params")),
                 _ => (object)new { },
             };
+            if (method == "Runtime.evaluate")
+            {
+                await socket.SendAsync(
+                    """{"method":"Page.loadEventFired","params":{}}"""u8.ToArray(),
+                    WebSocketMessageType.Text,
+                    true,
+                    _stopping.Token);
+            }
             var response = JsonSerializer.SerializeToUtf8Bytes(new { id, result });
             await socket.SendAsync(response, WebSocketMessageType.Text, true, _stopping.Token);
         }
@@ -130,7 +138,16 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
             };
         }
 
-        var fingerprint = JsonSerializer.Serialize(new object?[] { Role, Name, Type == "password" ? "INPUT" : "BUTTON", Type, "", "" });
+        var fingerprint = JsonSerializer.Serialize(new object?[]
+        {
+            Role,
+            Name,
+            Type == "password" || Role == "textbox" ? "INPUT" : "BUTTON",
+            Type,
+            "",
+            "",
+            "",
+        });
         return new
         {
             result = new object[]

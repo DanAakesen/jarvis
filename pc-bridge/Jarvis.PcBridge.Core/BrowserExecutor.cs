@@ -45,7 +45,14 @@ public sealed class BrowserExecutor : IDisposable
     {
         _isEnabled = isEnabled;
         _focusedWindowTitle = focusedWindowTitle;
-        _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        _httpClient = httpClient ?? new HttpClient(new HttpClientHandler
+        {
+            UseProxy = false,
+            AllowAutoRedirect = false,
+        })
+        {
+            Timeout = TimeSpan.FromSeconds(5),
+        };
         _ownsHttpClient = httpClient is null;
         _targetsUri = targetsUri ?? TargetsUri;
         if (_targetsUri.Scheme != Uri.UriSchemeHttp || !_targetsUri.IsLoopback ||
@@ -205,6 +212,7 @@ public sealed class BrowserExecutor : IDisposable
             var waitMs = arguments.GetProperty("waitMs").GetInt32();
             await Task.Delay(waitMs, cancellationToken).ConfigureAwait(false);
         }
+        if (!_isEnabled()) throw new BrowserActionRefusedException("browser_off");
 
         using var response = await session.SendAsync("Runtime.callFunctionOn", new
         {
@@ -282,6 +290,7 @@ public sealed class BrowserExecutor : IDisposable
             return JsonSerializer.Deserialize<CdpTarget[]>(body.ToArray(), JsonOptions) ?? [];
         }
         catch (BrowserActionRefusedException) { throw; }
+        catch (OperationCanceledException) { throw; }
         catch { throw new BrowserActionRefusedException("not_found"); }
     }
 
@@ -292,6 +301,7 @@ public sealed class BrowserExecutor : IDisposable
             throw new BrowserActionRefusedException("not_found");
 
         var client = new ClientWebSocket();
+        client.Options.Proxy = null;
         client.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(5));
@@ -301,6 +311,11 @@ public sealed class BrowserExecutor : IDisposable
             var session = new TargetSession(client);
             _sessions[target.Id] = session;
             return session;
+        }
+        catch (OperationCanceledException)
+        {
+            client.Dispose();
+            throw;
         }
         catch
         {
@@ -353,7 +368,7 @@ public sealed class BrowserExecutor : IDisposable
         value.ValueKind == JsonValueKind.Object &&
         value.TryGetProperty("value", out var primitive) &&
         primitive.ValueKind == JsonValueKind.String
-            ? Limit(primitive.GetString(), 512)
+            ? Limit(primitive.GetString(), 1024)
             : string.Empty;
 
     private static bool ReadBoolean(JsonElement value) =>
@@ -387,7 +402,7 @@ public sealed class BrowserExecutor : IDisposable
 
     private const string SnapshotExpression = """
         (() => {
-          const roleFor = e => e.getAttribute('role') ||
+          const roleFor = e => e.getAttribute('role') || (e.isContentEditable ? 'textbox' : '') ||
             ({BUTTON:'button',A:'link',INPUT:['button','submit','reset'].includes(e.type) ? 'button' :
               ['checkbox','radio'].includes(e.type) ? e.type : 'textbox',
               SELECT:'combobox',TEXTAREA:'textbox'}[e.tagName] || '');
@@ -402,6 +417,11 @@ public sealed class BrowserExecutor : IDisposable
           const sensitive = e => /password|one-time-code|cc-|card|cvc|cvv|security.?code|verification.?code|otp/i
             .test([e.type, e.autocomplete, e.name, e.id, e.getAttribute('aria-label'), e.getAttribute('placeholder'),
               e.labels && Array.from(e.labels).map(label => label.textContent).join(' ')].join(' '));
+          const fingerprintFor = (e, role, name, isSensitive) => JSON.stringify([
+            role, name, e.tagName, String(e.type || '').slice(0, 32),
+            String(e.name || '').slice(0, 128), String(e.getAttribute('aria-label') || '').slice(0, 128),
+            !isSensitive && e.matches('input,textarea,select') ? String(e.value || '').slice(0, 128) : ''
+          ]);
           const visible = e => {
             const style = getComputedStyle(e), rect = e.getBoundingClientRect();
             if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0 ||
@@ -410,22 +430,22 @@ public sealed class BrowserExecutor : IDisposable
             const top = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
             return !!top && (top === e || e.contains(top));
           };
-          return Array.from(document.querySelectorAll('button,a[href],input,textarea,select,[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="textbox"],[role="combobox"]'))
+          return Array.from(document.querySelectorAll('button,a[href],input:not([type="file"]):not([type="image"]),textarea,select,[contenteditable="true"],[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="textbox"],[role="combobox"]'))
             .filter(e => !e.disabled && e.getAttribute('aria-disabled') !== 'true' && visible(e))
             .slice(0, 100)
             .map(e => {
               const role = roleFor(e), name = nameFor(e);
               const isSensitive = sensitive(e);
-            const value = !isSensitive && e.matches('input,textarea,select') ? String(e.value || '').slice(0, 128) : '';
+              const value = !isSensitive && e.matches('input,textarea,select') ? String(e.value || '').slice(0, 128) : '';
               return Object.freeze({node:e, role, name, value, sensitive:isSensitive,
-                fingerprint: JSON.stringify([role, name, e.tagName, e.type || '', e.name || '', e.getAttribute('aria-label') || ''])});
+                fingerprint: fingerprintFor(e, role, name, isSensitive)});
             });
         })()
         """;
 
     private const string ActionFunction = """
         function(expected, role, name, action, value, confirmed) {
-          const roleFor = e => e.getAttribute('role') ||
+          const roleFor = e => e.getAttribute('role') || (e.isContentEditable ? 'textbox' : '') ||
             ({BUTTON:'button',A:'link',INPUT:['button','submit','reset'].includes(e.type) ? 'button' :
               ['checkbox','radio'].includes(e.type) ? e.type : 'textbox',
               SELECT:'combobox',TEXTAREA:'textbox'}[e.tagName] || '');
@@ -437,8 +457,17 @@ public sealed class BrowserExecutor : IDisposable
               e.getAttribute('alt') || e.getAttribute('value') ||
               (e.matches('input,textarea,select') ? e.getAttribute('placeholder') : e.innerText) || '').trim().slice(0, 256);
           };
-          if (!this.isConnected || roleFor(this) !== role || nameFor(this) !== name ||
-              JSON.stringify([role, name, this.tagName, this.type || '', this.name || '', this.getAttribute('aria-label') || '']) !== expected ||
+          const sensitive = e => /password|one-time-code|cc-|card|cvc|cvv|security.?code|verification.?code|otp/i
+            .test([e.type, e.autocomplete, e.name, e.id, e.getAttribute('aria-label'), e.getAttribute('placeholder'),
+              e.labels && Array.from(e.labels).map(label => label.textContent).join(' ')].join(' '));
+          const fingerprintFor = (e, currentRole, currentName, isSensitive) => JSON.stringify([
+            currentRole, currentName, e.tagName, String(e.type || '').slice(0, 32),
+            String(e.name || '').slice(0, 128), String(e.getAttribute('aria-label') || '').slice(0, 128),
+            !isSensitive && e.matches('input,textarea,select') ? String(e.value || '').slice(0, 128) : ''
+          ]);
+          const currentRole = roleFor(this), currentName = nameFor(this), isSensitive = sensitive(this);
+          if (!this.isConnected || currentRole !== role || currentName !== name ||
+              fingerprintFor(this, currentRole, currentName, isSensitive) !== expected ||
               this.disabled || this.getAttribute('aria-disabled') === 'true') return {status:'stale'};
           const style = getComputedStyle(this), rect = this.getBoundingClientRect();
           if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0 ||
@@ -448,15 +477,16 @@ public sealed class BrowserExecutor : IDisposable
           const top = document.elementFromPoint(x, y);
           if (!top || (top !== this && !this.contains(top))) return {status:'covered'};
           if (action === 'click') {
+            const context = this.closest('form,[role="dialog"],[aria-modal="true"]')?.innerText || '';
             const risky = this.type === 'submit' ||
-              /\b(submit|send|delete|remove|purchase|buy|pay|checkout|place order|transfer|sign in|log in|publish|subscribe)\b/i.test(name);
+              /\b(submit|send|delete|remove|purchase|buy|pay|payment|checkout|place order|transfer|sign[\s-]?in|log[\s-]?in|publish|subscribe|donat(e|ion))\b/i.test(`${name} ${context}`);
             if (risky && !confirmed) return {status:'confirmation_required',summary:`Click "${name || role}" in Chrome.`};
             this.click();
           } else if (action === 'type') {
             const sensitive = /password|one-time-code|cc-|card|cvc|cvv|security.?code|verification.?code|otp/i
               .test([this.type, this.autocomplete, this.name, this.id, name, this.getAttribute('placeholder')].join(' '));
             if (sensitive || this.type === 'password') return {status:'blocked'};
-            if (!this.matches('input:not([type="submit"]):not([type="button"]):not([type="hidden"]),textarea,[contenteditable="true"]'))
+            if (!this.matches('input:not([type="submit"]):not([type="button"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not([type="checkbox"]):not([type="radio"]):not([type="reset"]),textarea,[contenteditable="true"]'))
               return {status:'stale'};
             if (/^\d{4,8}$/.test(value) || (value.replace(/\D/g, '').length >= 13 &&
                 value.replace(/\D/g, '').length <= 19 && luhn(value.replace(/\D/g, '')))) return {status:'blocked'};
@@ -559,6 +589,7 @@ public sealed class BrowserExecutor : IDisposable
                 }
             }
             catch (BrowserActionRefusedException) { throw; }
+            catch (OperationCanceledException) { throw; }
             catch { throw new BrowserActionRefusedException("failed"); }
             finally { _commandGate.Release(); }
         }

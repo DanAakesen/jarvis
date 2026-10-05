@@ -14,6 +14,7 @@ public sealed class CommandPolicyTests
     [InlineData("active_window", "{}")]
     [InlineData("focus_window", """{"title":"Jarvis - Visual Studio Code"}""")]
     [InlineData("browser_tabs", "{}")]
+    [InlineData("browser_tabs", """{"offset":20}""")]
     [InlineData("browser_snapshot", """{"tabId":"tab_1"}""")]
     [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"click","confirmed":false}""")]
     [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"hello"}""")]
@@ -45,6 +46,7 @@ public sealed class CommandPolicyTests
     [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"click","x":10,"y":12,"confirmed":false}""")]
     [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":501,"action":"click","confirmed":false}""")]
     [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"execute_script","text":"alert(1)"}""")]
+    [InlineData("browser_tabs", """{"offset":5001}""")]
     public void Rejects_commands_outside_the_policy(string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);
@@ -65,5 +67,13 @@ public sealed class CommandPolicyTests
         Assert.False(BridgeProtocol.TryReadCommand(Encoding.UTF8.GetBytes(
             """{"id":"1730aa51-f380-4df9-a345-1feb862cb1c4","type":"result","command":"active_window","arguments":{}}"""), out _));
         Assert.False(BridgeProtocol.TryReadCommand(new byte[BridgeProtocol.MaxMessageBytes + 1], out _));
+    }
+
+    [Fact]
+    public void Refuses_oversized_bridge_responses()
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            BridgeProtocol.Success("1730aa51-f380-4df9-a345-1feb862cb1c4",
+                new { text = new string('x', BridgeProtocol.MaxMessageBytes) }));
     }
 }

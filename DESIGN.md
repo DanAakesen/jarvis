@@ -153,6 +153,10 @@ sign-in; the header wraps on narrow screens.
   and task/release/project link where one exists. Budget alerts have no invented
   page or cost estimate. The group uses the shell's existing neutral list and
   responsive layout; no new palette or alert-only visual language is needed.
+- **PC bridge browser toggle (P7-18):** Keep Chrome automation in the existing
+  tray context menu as an explicit, persistent on/off check item. Its label
+  states the current setting; the disabled default must be unmistakable. This is
+  a native companion control, not a new web page or a browser-injected overlay.
 - **Area pages:** the Software Factory has its own Tasks and Projects
   navigation. Unbuilt task and release pages explain what is unavailable.
   Project management is implemented below; record pages link back to their list.

@@ -92,8 +92,7 @@ public sealed class BridgeApplicationContext : ApplicationContext
         catch
         {
             _browserToggle.Checked = _settings.BrowserEnabled;
-            _browserToggle.Text = BrowserToggleText(_settings.BrowserEnabled);
-            SetStatus("Browser setting could not be saved");
+            _browserToggle.Text = $"{BrowserToggleText(_settings.BrowserEnabled)} — save failed";
         }
     }
 
