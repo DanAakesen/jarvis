@@ -3,18 +3,18 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { backendFetch } from '../backend-request';
 import type { AreaProps } from '../areas';
 
-type ReleaseStatus = 'building' | 'deploying' | 'released' | 'failed';
-type RunStatus = 'queued' | 'in_progress' | 'completed';
-type DeploymentStatus = 'queued' | 'in_progress' | 'success' | 'failure';
+export type ReleaseStatus = 'building' | 'deploying' | 'released' | 'failed';
+export type RunStatus = 'queued' | 'in_progress' | 'completed';
+export type DeploymentStatus = 'queued' | 'in_progress' | 'success' | 'failure';
 
-interface Project {
+export interface Project {
   id: string;
   name: string;
   repo: string;
   defaultBranch: string;
 }
 
-interface Release {
+export interface Release {
   id: string;
   version: string;
   sha: string;
@@ -23,7 +23,7 @@ interface Release {
   releasedAt: string | null;
 }
 
-interface PullRequest {
+export interface PullRequest {
   id: string;
   number: number;
   branch: string;
@@ -33,7 +33,7 @@ interface PullRequest {
   taskId: string | null;
 }
 
-interface WorkflowRun {
+export interface WorkflowRun {
   id: string;
   workflow: string;
   trigger: string;
@@ -47,7 +47,7 @@ interface WorkflowRun {
   taskId: string | null;
 }
 
-interface Deployment {
+export interface Deployment {
   id: string;
   releaseId: string;
   environment: string;
@@ -55,7 +55,7 @@ interface Deployment {
   at: string;
 }
 
-interface GitGraphCommit {
+export interface GitGraphCommit {
   sha: string;
   message: string;
   author: string;
@@ -63,14 +63,14 @@ interface GitGraphCommit {
   parents: string[];
 }
 
-interface GitGraph {
+export interface GitGraph {
   fetchedAt: string;
   truncated: boolean;
   branches: { name: string; commits: string[] }[];
   commits: GitGraphCommit[];
 }
 
-interface ReleaseView {
+export interface ReleaseView {
   project: Project;
   releases: Release[];
   pullRequests: PullRequest[];
@@ -79,7 +79,7 @@ interface ReleaseView {
   graph: GitGraph | null;
 }
 
-async function fetchReleaseView(
+export async function fetchReleaseView(
   backendUrl: string,
   projectId: string,
   getAccessToken: () => Promise<string>,

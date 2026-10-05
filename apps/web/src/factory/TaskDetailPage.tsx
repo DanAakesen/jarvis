@@ -292,10 +292,11 @@ function eventState(value: unknown): TaskState | null {
   return taskStates.find((state) => state === value) ?? null;
 }
 
-export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
+export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = false }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   taskId: string;
+  compact?: boolean;
 }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; value: LoadState }>({
@@ -324,6 +325,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
   const reason = task ? attentionReason(task.events) : null;
   const eventTypes = [...new Set(task?.events.map((event) => event.type) ?? [])].sort();
   const visibleEvents = (task?.events ?? []).filter((event) => eventType === 'all' || event.type === eventType);
+  const previewEvents = task?.events.slice(-5).reverse() ?? [];
   const projectRequestKey = `${backendUrl ?? ''}:${task?.projectId ?? ''}`;
   const linkedProject = projectKey === projectRequestKey ? project : null;
   const currentStreamStatus = stream.key === requestKey ? stream.status : 'connecting';
@@ -456,9 +458,13 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
   }
 
   return (
-    <section className="task-detail" data-task-state={task?.state} aria-labelledby="task-heading">
-      <Link className="home-link" to="/factory/tasks">Back to tasks</Link>
-      <h1 id="task-heading">{task?.title ?? `Task ${taskId}`}</h1>
+    <section
+      className={`task-detail${compact ? ' task-detail-panel' : ''}`}
+      data-task-state={task?.state}
+      {...(compact ? { 'aria-label': `Details for task ${taskId}` } : { 'aria-labelledby': 'task-heading' })}
+    >
+      {!compact && <Link className="home-link" to="/factory/tasks">Back to tasks</Link>}
+      {!compact && <h1 id="task-heading">{task?.title ?? `Task ${taskId}`}</h1>}
       {result.status === 'loading' && <p role="status">Loading task details…</p>}
       {result.status === 'error' && (
         <div className="task-detail-error" role="alert">
@@ -472,6 +478,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
           <p className="task-request">{task.request}</p>
           <dl className="task-meta">
             <div><dt>State</dt><dd>{task.state === 'NeedsAttention' ? 'Needs attention' : task.state === 'PauseRequested' ? 'Pause requested' : task.state}</dd></div>
+            {compact && <div><dt>Activity</dt><dd>{task.events.at(-1)?.summary ?? 'Not reported'}</dd></div>}
             {reason && <div><dt>Reason</dt><dd>{reason}</dd></div>}
             <div><dt>Project</dt><dd><Link to={`/factory/projects/${task.projectId}`}>{linkedProject?.name ?? `Project ${task.projectId}`}</Link></dd></div>
             <div><dt>Agent</dt><dd>{task.agent === 'codex' ? 'Codex' : 'Copilot'}</dd></div>
@@ -529,7 +536,18 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
               </button>
             </div>
           </section>
-          <section className="task-detail-section" aria-labelledby="disk-heading">
+          {compact && (
+            <dl className="task-meta task-sandbox-summary">
+              <div><dt>Sandbox session</dt><dd>
+                {task.usage.some((record) => record.sandboxSessionId)
+                  ? [...new Set(task.usage.flatMap((record) => record.sandboxSessionId ? [record.sandboxSessionId] : []))].join(', ')
+                  : 'Not reported'}
+              </dd></div>
+              <div><dt>Heartbeat</dt><dd>Not reported</dd></div>
+              <div><dt>Writable disk</dt><dd>{measurements.length ? formatDate(measurements.at(-1)!.event.at) : 'Not reported'}</dd></div>
+            </dl>
+          )}
+          {!compact && <section className="task-detail-section" aria-labelledby="disk-heading">
             <h2 id="disk-heading">Sandbox disk</h2>
             {measurements.length === 0
               ? <p>No disk measurements have been recorded for this task.</p>
@@ -548,7 +566,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
                   ))}
                 </ol>
               )}
-          </section>
+          </section>}
           <section className="task-detail-section task-usage" aria-labelledby="usage-heading">
             <h2 id="usage-heading">Usage</h2>
             <p className="task-usage-note">
@@ -585,7 +603,20 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
               )}
           </section>
           <section className="task-detail-section" aria-labelledby="timeline-heading">
-            <h2 id="timeline-heading">Task timeline</h2>
+            <h2 id="timeline-heading">{compact ? 'Recent activity' : 'Task timeline'}</h2>
+            {compact ? (
+              previewEvents.length === 0
+                ? <p>No task events have been recorded.</p>
+                : <ol className="task-timeline-preview">
+                  {previewEvents.map((event) => (
+                    <li key={event.id}>
+                      <p>{event.summary ?? event.type}</p>
+                      <time dateTime={event.at}>{formatDate(event.at)}</time>
+                    </li>
+                  ))}
+                </ol>
+            ) : (
+            <>
             <div className="timeline-toolbar">
               <label htmlFor="event-type-filter">Event type</label>
               <select id="event-type-filter" value={eventType} onChange={(event) => setEventType(event.target.value)}>
@@ -636,7 +667,10 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
               </button>
               <p id="artifacts-unavailable">Artifact and CI log links are not available yet.</p>
             </div>
+            </>
+            )}
           </section>
+          {compact && <Link className="task-open-full" to={`/factory/tasks/${taskId}`}>Open full task</Link>}
         </>
       )}
     </section>

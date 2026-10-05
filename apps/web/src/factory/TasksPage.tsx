@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { backendFetch } from '../backend-request';
-import { Link } from 'react-router-dom';
 import { streamTaskEvents } from '../task-events';
+import { useContextPanel } from '../context-panel-state';
+import { TaskDetailPage } from './TaskDetailPage';
+import { TaskReleaseBar } from './TaskReleaseBar';
 import { TaskControls } from './TaskControls';
 
 interface Project {
@@ -215,6 +217,9 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [createProjectId, setCreateProjectId] = useState('');
   const [createAgent, setCreateAgent] = useState<Agent>('copilot');
   const [now, setNow] = useState(0);
+  const [selectedTaskId, setSelectedTaskId] = useState('');
+  const selectedTaskIdRef = useRef('');
+  const contextPanel = useContextPanel();
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const lastEventIds = useRef(new Map<string, string>());
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -228,6 +233,10 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const visibleTaskState: PageState = !backendUrl ? 'error' :
     settledTaskKey === taskRequestKey ? taskState : 'loading';
   const visibleTaskError = backendUrl ? error : 'Tasks are unavailable until the backend is deployed.';
+
+  useEffect(() => () => {
+    if (selectedTaskIdRef.current) contextPanel.close();
+  }, [contextPanel.close]);
 
   useEffect(() => {
     let active = true;
@@ -466,6 +475,12 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
         <button className="secondary-button" type="submit">Apply filters</button>
       </form>
 
+      <TaskReleaseBar
+        backendUrl={backendUrl}
+        getAccessToken={getAccessToken}
+        projectId={appliedFilters.projectId}
+      />
+
       {visibleTaskState === 'loading' && <p className="tasks-feedback" role="status">Loading tasks…</p>}
       {visibleTaskState === 'error' && (
         <div className="tasks-feedback" role="alert">
@@ -499,8 +514,34 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                     : <ul className="task-card-list">
                       {items.map((task) => (
                         <li key={task.id}>
-                          <article className="task-card" data-state={task.state} aria-labelledby={`task-title-${task.id}`}>
-                            <h3 id={`task-title-${task.id}`}><Link to={`/factory/tasks/${task.id}`}>{task.title}</Link></h3>
+                          <article className="task-card" data-state={task.state} data-selected={selectedTaskId === task.id || undefined}
+                            aria-labelledby={`task-title-${task.id}`}>
+                            <h3 id={`task-title-${task.id}`}>
+                              <button
+                                className="task-card-title"
+                                type="button"
+                                aria-pressed={selectedTaskId === task.id}
+                                aria-controls="context-panel"
+                                onClick={(event) => {
+                                  const trigger = event.currentTarget;
+                                  selectedTaskIdRef.current = task.id;
+                                  setSelectedTaskId(task.id);
+                                  contextPanel.show({
+                                    title: task.title,
+                                    status: 'custom',
+                                    content: <TaskDetailPage
+                                      key={task.id}
+                                      backendUrl={backendUrl}
+                                      getAccessToken={getAccessToken}
+                                      taskId={task.id}
+                                      compact
+                                    />,
+                                  }, trigger);
+                                }}
+                              >
+                                {task.title}
+                              </button>
+                            </h3>
                             <dl className="task-card-details">
                               <div><dt>Project</dt><dd>{projectName(projects, task.projectId)}</dd></div>
                               <div><dt>Agent</dt><dd>{agentLabel(task.agent)}</dd></div>
