@@ -12,6 +12,30 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it.each(['chat', 'voice-partial', 'voice-final'])('exports bounded %s reflex decisions without transcripts or arguments', (source) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const decision = {
+      source, addressed: true, intent: 'action', tool: 'workspace_command', confidence: '>0.8',
+      completeCommand: true, executed: true, reason: 'executed', latencyMs: 42,
+    };
+    logger.info({ ...decision, transcript: 'transcript-secret', arguments: { title: 'title-secret' } }, 'reflex.decision');
+    expect(JSON.parse(records[0]!)).toMatchObject({ ...decision, msg: 'reflex.decision' });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'reflex.decision', properties: { service: 'jarvis-backend', ...decision },
+    }));
+    logger.info({
+      source: 'source-secret', intent: 'intent-secret', tool: 'tool-secret', confidence: 'confidence-secret',
+      addressed: 'addressed-secret', completeCommand: 1, executed: 'executed-secret',
+      reason: 'reason-secret', latencyMs: 600_001,
+    }, 'reflex.decision');
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('latencyMs');
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+  });
+
   it('stays offline without configuration', async () => {
     expect(await createTelemetry()).toBeUndefined();
     expect(construct).not.toHaveBeenCalled();

@@ -193,6 +193,7 @@ test('defines and validates bounded workspace commands for the approved operatio
     { ...base, operation: 'resize', viewId: 'research', width: 0.6, height: 0.5, x: 0.1, y: 0.2 },
     { ...base, operation: 'layout', arrangement: 'layered' },
     { ...base, operation: 'context-panel', action: 'open', view: listView() },
+    { ...base, operation: 'context-panel', action: 'open' },
     ...['close', 'toggle'].map((action) => ({ ...base, operation: 'context-panel', action })),
   ];
 

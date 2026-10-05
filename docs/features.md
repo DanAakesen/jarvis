@@ -29,7 +29,7 @@ Status as of 5 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Sign-in | Sign in with his Microsoft account; everyone else is refused | Screen | All pages | Live | P0-08, P0-09 |
-| Chat | Open at the latest messages with typing focus; the auto-growing composer clears on acceptance and stays editable during replies, with Send and DA/EN disabled until completion (no queue); thinking feedback precedes open-surface Markdown streaming; next drafts and saved messages survive interruption and ID-deduped history refresh | Screen | Main page | Built | P4-03, P4-06, P4-09, P8-05, P8-21, P8-24, P8-25 |
+| Chat | Open at the latest messages with typing focus; Send/Enter queues messages immediately while replies stream; removable Dan bubbles show Queued and their captured language, with an accessible count; turns send sequentially after success, error or Stop reply; failed-turn feedback and next drafts survive queue progress; thinking precedes open-surface Markdown streaming; history refresh dedupes saved messages by ID. The queue is local to the mounted conversation, not persisted across navigation/reload; voice is unchanged | Screen | Main page | Built | P4-03, P4-06, P4-09, P8-05, P8-21, P8-24, P8-25, P8-26 |
 | English voice | Talk to Jarvis in English (gpt-realtime, Ryan HD, British butler persona) | Voice/chat | Main page | Built | P5-03, P5-04 |
 | Danish voice | Talk to Jarvis in Danish (MAI Transcribe, Harper) | Voice/chat | Main page | Built | P5-02, P5-04 |
 | Interrupt and reconnect | Interrupt Jarvis by speaking; voice reconnects automatically | Voice/chat | Main page | Built | P5-04 |
@@ -117,7 +117,7 @@ Status as of 5 October 2026.
 | Act on the shared tab | Resolve the page Dan shares from its transient title and vision description, ask if ambiguous, and run the bounded browser agent with spoken progress and “stop” | Voice/chat | Backend `browser_do_shared`; P8-15 workspace; PC bridge | Built offline; live form, voice and approval check pending | P7-19 |
 | Computer use | Jarvis clicks and types on Dan's PC while he talks | Voice/chat | PC companion | Planned (needs decision) | P7-07 |
 | Camera | Turn on the webcam from the shared shell and ask Jarvis by chat or voice to inspect a single frame; camera state times out and stops with the session | Both | Shared top bar, main conversation | Built offline; live camera/model check pending | P7-08 |
-| Calendar and mail | Google Calendar agenda, free slots, create/move meetings, Gmail search and summaries, reply drafts and sending after exact confirmation | Voice/chat | Backend tools; no new page | Built offline; Google OAuth setup and live acceptance pending | P7-09, P7-22 |
+| Calendar and mail | Google Calendar agenda, date-range search and next appointment, free slots, create/move meetings, Gmail search and summaries, reply drafts and sending after exact confirmation | Voice/chat | Backend tools; no new page | Built offline; Google OAuth setup and live range/next-event acceptance pending | P7-09, P7-22, P7-28 |
 | Second brain | Search Dan's configured OneDrive notes folder and quote snippets with links | Voice/chat | — | Implemented offline; Graph setup and live search pending | P7-10 |
 
 ## Jarvis UI enabling logic (P8-03)

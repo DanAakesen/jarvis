@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { useJarvisActivity } from './activity-context';
 import type { PublicConfig } from '../config/public-config';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import { ActivityPanel } from './ActivityPanel';
+import { WorkspaceCommandContext } from './workspace-command-state';
 import type { NowFeed, NowFeedStreamStatus } from './activity';
 import {
   dismissNowActivity,
@@ -11,6 +12,7 @@ import {
   loadNowFeed,
   resolveNowConfirmation,
   streamNowFeed,
+  publishWorkspaceSnapshot,
 } from './now-feed';
 
 export function NowFeedPanel({
@@ -32,6 +34,21 @@ export function NowFeedPanel({
   const [retry, setRetry] = useState(0);
   const refreshRef = useRef<(() => Promise<void>) | null>(null);
   const applyWorkspaceCommandRef = useRef(applyWorkspaceCommand);
+  const workspace = useContext(WorkspaceCommandContext);
+  const [workspaceSession, setWorkspaceSession] = useState<string | null>(null);
+  const snapshotQueue = useRef(Promise.resolve());
+
+  useEffect(() => {
+    if (!config.backendUrl || !workspaceSession || !workspace?.snapshot) return;
+    const controller = new AbortController();
+    snapshotQueue.current = snapshotQueue.current.catch(() => {}).then(async () => {
+      if (controller.signal.aborted) return;
+      await publishWorkspaceSnapshot(config.backendUrl!, workspaceSession, workspace.snapshot!, getAccessToken, controller.signal);
+    }).catch(() => {
+      if (!controller.signal.aborted) setStreamStatus('unavailable');
+    });
+    return () => controller.abort();
+  }, [config.backendUrl, getAccessToken, workspace?.snapshot, workspaceSession]);
 
   useEffect(() => {
     applyWorkspaceCommandRef.current = applyWorkspaceCommand;
@@ -70,11 +87,15 @@ export function NowFeedPanel({
         onUpdate: () => { void refresh(); },
         onStatus: (status) => {
           setStreamStatus(status);
-          if (status === 'reconnecting') clearRuntimeActivities();
+          if (status === 'reconnecting') {
+            clearRuntimeActivities();
+            setWorkspaceSession(null);
+          }
         },
         onActivity: applyRuntimeActivity,
         onWorkspaceReady: (sessionId, blobHost) => {
           workspaceSessionId = sessionId;
+          setWorkspaceSession(sessionId);
           trustedBlobHost = blobHost;
         },
         onWorkspaceCommand: (command, expiresAt, commandBlobHost) => {

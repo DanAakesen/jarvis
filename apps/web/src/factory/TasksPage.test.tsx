@@ -156,6 +156,7 @@ describe('Factory task board', () => {
     boardTask = { ...task, activity: null };
     renderFactory();
     const card = await screen.findByRole('article', { name: 'Fix the bug' });
+    await waitFor(() => expect(streamHarness.callbacks.has('42')).toBe(true));
     const onEvent = streamHarness.callbacks.get('42');
     expect(onEvent).toBeDefined();
 

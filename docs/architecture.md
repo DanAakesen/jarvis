@@ -117,6 +117,35 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   The renderers use fixed React elements; generated HTML, JavaScript and CSS
   never execute. Offline route/controller tests cover the flow; live
   Entra/Foundry delivery remains unverified.
+- P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
+  and IDs, including minimised windows, plus context-panel visibility) through
+  owner-authenticated `POST /now/workspace/state`. The broker accepts only its
+  active `/now/events` session and drops the snapshot on disconnect/reconnect;
+  no view content or workspace state is persisted. Jev selects fixed
+  `workspace_command` targets for show/focus/minimise/restore/close, a large
+  resize, tiled/layered layout and context-panel visibility. A context-panel
+  `open` command without a view opens existing content idempotently; an `open`
+  command with a generated view retains the original agent-only behavior.
+  Creation/update and new generated panel content remain agent-only.
+  Workspace operations are safe for stable voice partials as well as chat and
+  finals, using the existing owner authentication, validation, audit and
+  acknowledgement path. Resize also updates tiled spans so enlargement is
+  visible in either arrangement. With a workspace snapshot available, running
+  task discovery is capped at 150 ms so SQL cannot consume the chat reflex's
+  entire 800 ms classification budget. Chat replay and the voice ledger compare
+  semantic arguments without the workspace delivery ID; the agent receives the
+  recorded outcome/note rather than repeating the command.
+  Agent-closed generated windows retain up to eight view/geometry entries in
+  client memory for `restore`; a contradicted partial close uses that contract
+  to undo without generating content. Manual closes still discard the view,
+  and reusing a view ID invalidates its retained entry. Older evicted entries
+  cannot be restored and produce an honest refused result.
+  Every attempted chat/voice classification emits an allowlisted
+  `reflex.decision`: source, addressed, intent, tool (or `none`), confidence
+  bucket, completeCommand, executed, bounded reason and latencyMs (0–600,000).
+  Transcripts, titles, view IDs, arguments and results are excluded. Offline
+  tests cover early voice execution and duplicate final decisions; live Jev
+  network latency and the under-1.5-second chat acceptance remain unverified.
 - P8-07's lifecycle remains in memory: closing a generated view removes only
   its temporary client entry, while closing an existing view changes only its
   workspace visibility. Neither action modifies conversation or source records.
@@ -852,12 +881,24 @@ continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
 
-P8-25 keeps chat draft and turn state in `ConversationHistory`: acceptance clears
-only the unchanged submitted draft, and later edits survive completion/errors.
+P8-26 keeps chat draft, turn state and a removable FIFO queue in
+`ConversationHistory`. Each submission captures text and language and clears
+the draft locally. A synchronous in-flight guard permits only one active
+`sendChatTurn`; its promise settles (including stream cleanup) before the next
+queued submission starts. Later drafts survive completion/errors, and failed
+turn feedback remains visible while the queue advances. Stop reply passes an
+AbortSignal through session creation, token acquisition and the existing fetch/stream cancellation
+path; cancellable setup waits also prevent slow visual inspection from blocking
+the queue or sending the stopped message when inspection later finishes. Component
+unmount also aborts the active turn. Pending messages are in memory only and
+are not retained across navigation/reload.
 History pages and saved turn messages merge by ID in SQL's numeric-ID order;
 persisted entries replace optimistic metadata without removing absent entries.
 Older pagination retains its cursor across latest-page refreshes. These changes
 do not alter storage, SSE contracts, or the backend's first-byte latency.
+The backend retains its existing per-turn disconnect cancellation and does not
+reject overlapping turns; sequencing is owned by this client queue, not a new
+server-side queue or concurrency guard. Stop does not undo completed task actions.
 
 When `JARVIS_CHAT_AGENT_NAME` is configured, the backend uses its managed
 identity to call
@@ -866,13 +907,20 @@ with the `https://ai.azure.com/.default` scope. The application payload contains
 the caller's delegated authorization and the stored source-message ID; it is not
 forwarded as the Foundry HTTP `Authorization` header. The hosted agent registers
 the chat handler with the Invocations protocol and returns the application-defined
-text SSE stream. The agent verifies the caller through the backend's `/me` route,
-confirms the exact source message in stored history, and uses at most 20 earlier
-messages / 32,000 characters as context. Its existing Responses tool loop records
-calls against Dan's message ID using the agent identity. The backend persists
-only a completed assistant response; an interrupted turn leaves Dan's message
-visible and the UI warns that an action may have completed. The browser never
-receives agent credentials.
+text SSE stream. The agent verifies the caller through the backend's `/me` route
+and confirms the exact source message in stored history. The backend history page
+contains the newest 100 messages across sessions in ascending ID order; the agent
+uses at most 20 earlier messages / 32,000 characters, including prior messages
+across a language/session switch. Prior Jarvis messages carry a bounded summary
+of audited tool names and outcomes only, never arguments or results. Per-turn
+context telemetry records message count, oldest/newest included IDs, whether the
+latest prior Jarvis message was included, and total context characters, without
+message text. The current task/status reference JSON precedes conversation
+history in the model input so the latest exchange remains next to the new user
+message. The existing Responses tool loop records calls against Dan's message ID
+using the agent identity. The backend persists only a completed assistant
+response; an interrupted turn leaves Dan's message visible and the UI warns that
+an action may have completed. The browser never receives agent credentials.
 
 P7-23 starts consuming the hosted-agent stream before scheduling the chat reflex.
 Reflex target discovery and Jev classification run concurrently with the reply;
@@ -1397,6 +1445,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID. The hosted Jarvis agent is assigned the application role `Jarvis.Tools` and may call only the tool routes.
 - Google Calendar and Gmail tools are registered only in the backend and use the official Google APIs over HTTPS. The backend reads `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` only from Key Vault, exchanges the refresh token for a short-lived access token, and caches only that access token in memory. The single OAuth grant is for `danaakesen@gmail.com` and uses `gmail.readonly`, `gmail.compose`, `gmail.send`, and `calendar.events`; no Google credential or token is a deployment variable or client-bundle value. An `invalid_grant` records a deduplicated `credential_expiry` activity alert; tool calls return a visible reconnect message.
+- Calendar range reads interpret date-only `start`/`end` in `JARVIS_GOOGLE_TIME_ZONE` (inclusive dates and an exclusive next-midnight API boundary); timezone-aware date-times are queried as instants. `calendar_list_events` pages up to 100 events across no more than 62 days and maps optional `query` to Google's `q`; `calendar_next_event` searches up to 60 days and skips events where Dan's attendee response is declined. All-day start/end values remain date-only, including multi-day events, while timed events remain instants. Calendar agenda, range, and next-event reads are reflex-safe and sensitive results remain redacted from the durable tool-call audit.
 - Calendar changes, reply drafts, and sending are staged in process memory for ten minutes. The backend executes only after a different, later persisted Dan message exactly matches the returned `confirm <8-digit-code>` phrase. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.

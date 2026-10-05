@@ -16,6 +16,7 @@ import type { SettingsStore } from '../core/settings.js';
 import type { ToolCallStore } from '../core/tool-calls.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { ReflexClassifier } from '../core/reflex.js';
+import type { WorkspaceCommand } from '@jarvis/contracts';
 import type { PartialSpeechRecognizerFactory } from './speech-recognizer.js';
 import type { TaskController, TaskRecord, TaskStore } from '../factory/task-store.js';
 import { factoryModule } from '../factory/index.js';
@@ -225,6 +226,58 @@ function sendTimedPartialTranscript(socket: WebSocket, itemId: string) {
 }
 
 describe('backend-relayed Voice Live WebSocket', () => {
+  it('tiles workspace windows mid-sentence, logs both decisions and gives the final agent a no-repeat note', async () => {
+    const partialSpeech = partialSpeechHarness();
+    const records: string[] = [];
+    const classifier: ReflexClassifier = {
+      classify: vi.fn(async (_text, _language, targets) => ({
+        addressed: true, intent: 'action', confidence: 0.99, needsConfirmation: false,
+        completeCommand: true, contradictedAction: null,
+        target: targets.find(({ arguments: args }) => args.operation === 'layout' && args.arrangement === 'tiled') ?? null,
+      })),
+    };
+    const { app, browser, upstream, received, services } = await connectedPartialVoice(partialSpeech, classifier, records);
+    const commands: WorkspaceCommand[] = [];
+    const connection = app.workspaceCommands.connect(config.auth.ownerObjectId, (event, data) => {
+      if (event === 'workspace-command') {
+        const command = (data as { command: WorkspaceCommand }).command;
+        commands.push(command);
+        app.workspaceCommands.acknowledge(config.auth.ownerObjectId, connection.sessionId, command.commandId, true);
+      }
+      return true;
+    });
+    app.workspaceCommands.updateSnapshot(config.auth.ownerObjectId, connection.sessionId, {
+      windows: [{ viewId: 'board', title: 'Board' }, { viewId: 'tasks', title: 'Tasks' }],
+      contextPanelOpen: false,
+    });
+    browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+    await vi.waitFor(() => expect(partialSpeech.createPartialRecognizer).toHaveBeenCalledOnce());
+    upstream.send(JSON.stringify({ type: 'input_audio_buffer.speech_started', item_id: 'workspace_speech' }));
+    partialSpeech.recognize('Jarvis, put the board and the tasks side by side.');
+    await vi.waitFor(() => expect(commands).toHaveLength(1));
+    expect(commands[0]).toMatchObject({ operation: 'layout', arrangement: 'tiled' });
+    expect(received.some((event) => event.type === 'response.create')).toBe(false);
+    upstream.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped', item_id: 'workspace_speech' }));
+    upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed', item_id: 'workspace_speech',
+      transcript: 'Jarvis, put the board and the tasks side by side.',
+    }));
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create' &&
+      String((event.response as Record<string, unknown>)?.instructions).includes('Do not repeat'))).toBe(true));
+    expect(commands).toHaveLength(1);
+    expect(services.toolCallStore.record).toHaveBeenCalledOnce();
+    const decisions = records.map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter(({ msg }) => msg === 'reflex.decision');
+    expect(decisions).toHaveLength(2);
+    expect(decisions[0]).toMatchObject({
+      source: 'voice-partial', addressed: true, intent: 'action', tool: 'workspace_command',
+      confidence: '>0.8', completeCommand: true, executed: true, reason: 'executed', latencyMs: expect.any(Number),
+    });
+    expect(decisions[1]).toMatchObject({ source: 'voice-final', executed: false, reason: 'already_executed' });
+    expect(JSON.stringify(decisions)).not.toContain('board and the tasks');
+    connection.close();
+  });
+
   it('snapshots saved personality preferences for each new English voice session', async () => {
     const serverSessions: Record<string, unknown>[][] = [];
     const pendingUpdates: ((session: Record<string, unknown>) => void)[] = [];
@@ -1243,7 +1296,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const projectEndpoint = 'https://resource.services.ai.azure.com/api/projects/jarvis';
     expect(normalizeFoundryProjectEndpoint(projectEndpoint)).toBe(projectEndpoint);
     expect(createDanishVoiceAgentEndpoint(projectEndpoint, 'session_1')).toBe(
-      `wss://resource.services.ai.azure.com/api/projects/jarvis/agents/${DANISH_VOICE_AGENT_NAME}/endpoint/protocols/invocations_ws?api-version=v1&agent_session_id=session_1`,
+      `wss://resource.services.ai.azure.com/api/projects/jarvis/agents/${DANISH_VOICE_AGENT_NAME}/endpoint/protocols/voice?api-version=v1&agent_session_id=session_1`,
     );
     expect(() => createDanishVoiceAgentEndpoint(projectEndpoint, 'bad session')).toThrow(TypeError);
   });

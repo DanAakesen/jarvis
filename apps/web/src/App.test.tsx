@@ -91,6 +91,36 @@ afterEach(() => {
 });
 
 describe('Jarvis routes', () => {
+  it('opens existing context content idempotently when overlapping reflex opens arrive', async () => {
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    fetchMock.mockImplementation(async (input) => {
+      if (new URL(String(input)).pathname === '/now/events') {
+        return new Response(new ReadableStream<Uint8Array>({
+          start(controller) { activityStream = controller; },
+          cancel() { activityStream = null; },
+        }), { headers: { 'Content-Type': 'text/event-stream' } });
+      }
+      return new Response(null, { status: 204 });
+    });
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    const publish = (event: string, data: unknown) => activityStream!.enqueue(
+      new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+    );
+    act(() => {
+      publish('workspace-ready', { sessionId: '12345678-1234-4234-8234-123456789abc' });
+      for (const commandId of ['open-first', 'open-second']) {
+        publish('workspace-command', {
+          command: { commandId, operation: 'context-panel', action: 'open' }, expiresAt: Date.now() + 5_000,
+        });
+      }
+    });
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/commands/') &&
+      String(url).endsWith('/ack'))).toHaveLength(2));
+    expect(screen.getByRole('heading', { name: 'Context' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Toggle contextual panel' }).getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('disables sign-in until a backend is deployed', () => {
     render(<MemoryRouter><App config={{ ...__JARVIS_CONFIG__, backendUrl: null }} /></MemoryRouter>);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Jarvis is taking shape');
@@ -410,14 +440,14 @@ describe('App shell', () => {
 
     const collapse = screen.getByRole('button', { name: 'Close area navigation' });
     collapse.focus();
-    await user.keyboard('{Enter}');
-    const expand = screen.getByRole('button', { name: 'Expand area navigation' });
+    await user.keyboard(' ');
+    const expand = await screen.findByRole('button', { name: 'Expand area navigation' });
     expect(expand.getAttribute('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(expand);
     expect(screen.queryByRole('navigation', { name: 'Jarvis' })).toBeNull();
 
     await user.keyboard('{Enter}');
-    expect(screen.getByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
+    expect(await screen.findByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
   });
 
   it('turns the camera on and off from the shared shell', async () => {
