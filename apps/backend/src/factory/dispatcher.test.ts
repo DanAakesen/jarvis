@@ -78,9 +78,6 @@ function harness(
   const transition = vi.fn(async (
     _id: string,
     state: TaskRecord['state'],
-    _completionVerified?: boolean,
-    _eventReason?: string,
-    _eventSummary?: string,
   ) => ({
     kind: 'ok' as const, task: { ...taskRecord, state },
   }));
@@ -90,15 +87,9 @@ function harness(
     transition: vi.fn(async (
       id: string,
       state: TaskRecord['state'],
-      completionVerified?: boolean,
-      eventReason?: string,
-      eventSummary?: string,
     ) => {
       currentState = state;
-      if (completionVerified === undefined && eventReason === undefined && eventSummary === undefined) {
-        return transition(id, state);
-      }
-      return transition(id, state, completionVerified, eventReason, eventSummary);
+      return transition(id, state);
     }),
     recordEvent: vi.fn(),
   } as unknown as TaskStore;

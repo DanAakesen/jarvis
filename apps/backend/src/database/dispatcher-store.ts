@@ -246,8 +246,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
         .query<StaleRunningTask>(`SELECT TOP (@limit) CAST(task.id AS varchar(19)) AS taskId,
           CAST(session.id AS varchar(19)) AS sandboxSessionId,
           session.foundry_session_id AS foundrySessionId, session.agent_name AS agentName,
-          turn.invocation_id AS invocationId, session.status AS sessionStatus,
-          CAST(CASE WHEN turn.status = N'completed' THEN 1 ELSE 0 END AS bit) AS invocationCompleted
+          turn.invocation_id AS invocationId, session.status AS sessionStatus
           FROM dbo.tasks AS task
           CROSS APPLY (
             SELECT TOP (1) candidate.*
