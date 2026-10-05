@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import type { JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot } from '@jarvis/contracts';
@@ -131,6 +131,9 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const activityText = activityLabel(latestActivity);
   const navigationToggle = useRef<HTMLButtonElement>(null);
   const workspaceController = useRef<WorkspaceController>(null);
+  const workspaceShellArea = useRef<HTMLDivElement>(null);
+  const workspaceMotionStart = useRef<DOMRect | null>(null);
+  const workspaceMotion = useRef<Animation | null>(null);
   const contextPanel = useContextPanel();
   const [openWindows, setOpenWindows] = useState<WorkspaceSnapshot['windows']>([]);
   const onOpenWindowsChange = useCallback((windows: WorkspaceSnapshot['windows']) => {
@@ -168,11 +171,42 @@ function ShellLayout({ signedIn, config, session, camera }: {
     return applied;
   }, [workspaceCommands]);
   const onVoiceActiveChange = useCallback((active: boolean) => {
+    workspaceMotionStart.current = workspaceShellArea.current?.getBoundingClientRect() ?? null;
+    workspaceMotion.current?.cancel();
+    workspaceMotion.current = null;
     if (active && readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart) {
       workspaceController.current?.minimiseAll();
     }
     setVoiceActive(active);
   }, []);
+  useLayoutEffect(() => {
+    const previous = workspaceMotionStart.current;
+    workspaceMotionStart.current = null;
+    const element = workspaceShellArea.current;
+    if (!previous || !element || element.hidden ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const next = element.getBoundingClientRect();
+    if (!previous.width || !previous.height || !next.width || !next.height) return;
+    const styles = getComputedStyle(document.documentElement);
+    const motion = styles.getPropertyValue('--motion-panel').trim();
+    const duration = Number.parseFloat(motion) * (motion.endsWith('ms') ? 1 : 1000);
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    const easing = styles.getPropertyValue('--ease-enter').trim() || 'ease';
+    const animation = element.animate([
+      {
+        transformOrigin: 'top left',
+        transform: `translate(${previous.left - next.left}px, ${previous.top - next.top}px) scale(${previous.width / next.width}, ${previous.height / next.height})`,
+      },
+      { transformOrigin: 'top left', transform: 'none' },
+    ], { duration, easing });
+    workspaceMotion.current = animation;
+    void animation.finished.then(() => {
+      if (workspaceMotion.current !== animation) return;
+      workspaceMotion.current = null;
+      animation.cancel();
+    }).catch(() => {});
+  }, [voiceActive]);
+  useEffect(() => () => workspaceMotion.current?.cancel(), []);
   const [navigationOpen, setNavigationOpen] = useState(() => (
     typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches
   ));
@@ -358,7 +392,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
           <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange }}>
             <Outlet />
             {signedIn && (
-              <div className="workspace-shell-area" hidden={pathname !== '/'}>
+              <div ref={workspaceShellArea} className="workspace-shell-area" hidden={pathname !== '/'}>
                 <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} />
               </div>
             )}

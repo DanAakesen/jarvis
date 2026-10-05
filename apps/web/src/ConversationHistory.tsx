@@ -155,16 +155,8 @@ export function ConversationHistory({
   useEffect(() => () => { turnController.current?.abort(); }, []);
   const lastMessageId = messages.at(-1)?.id;
   const updateVoiceActive = useCallback((active: boolean) => {
-    const update = () => {
-      setVoiceActive(active);
-      onVoiceActiveChange(active);
-    };
-    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (document.startViewTransition && !reduceMotion) {
-      document.startViewTransition(update);
-    } else {
-      update();
-    }
+    setVoiceActive(active);
+    onVoiceActiveChange(active);
   }, [onVoiceActiveChange]);
 
   useLayoutEffect(() => {

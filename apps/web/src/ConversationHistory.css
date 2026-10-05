@@ -121,8 +121,6 @@
 .app-shell[data-voice-active="true"] .voice-error { position: fixed; z-index: 5; top: max(20px, env(safe-area-inset-top)); right: 24px; bottom: auto; }
 .app-shell[data-voice-active="true"] .workspace-shell-area[hidden],
 .app-shell[data-voice-active="true"][data-voice-has-windows="false"] .workspace-shell-area { display: none; }
-.workspace-shell-area:not([hidden]) { view-transition-name: voice-workspace; }
-::view-transition-group(voice-workspace) { animation-duration: var(--motion-panel); animation-timing-function: var(--ease-enter); }
 .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; z-index: 2; top: 11vh; right: 3vw; display: block; width: min(48vw, 920px); height: 78vh; overflow: auto; }
 .app-shell[data-voice-active="true"] .workspace { height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 .app-shell[data-voice-active="true"] .workspace-heading,
@@ -212,7 +210,6 @@
   .voice-icon-button, .app-shell[data-voice-active="true"] .voice-orb-presentation { transition: none; }
   .conversation-message, .streaming-message, .streaming-caret, .thinking-dot, .tool-call-running { animation: none; }
   .message-metadata { opacity: 1; }
-  ::view-transition-group(voice-workspace) { animation-duration: 0s; }
 }
 
 @media (max-width: 360px) {
@@ -234,14 +231,5 @@
 @keyframes tool-shimmer {
   from { background-position: 100% 0; }
   to { background-position: -100% 0; }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .input-orb span { view-transition-name: jarvis-orb; }
-  .voice-orb { view-transition-name: jarvis-orb; }
-  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
-  ::view-transition-group(jarvis-orb) {
-    animation-duration: var(--motion-panel);
-    animation-timing-function: var(--ease-enter);
-  }
 }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }

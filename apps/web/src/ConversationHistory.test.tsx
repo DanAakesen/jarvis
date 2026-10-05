@@ -99,6 +99,41 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
+  it('applies voice layout changes immediately without a document view transition', () => {
+    const onVoiceActiveChange = vi.fn();
+    const startViewTransition = vi.fn();
+    const documentWithTransition = document as Document & {
+      startViewTransition?: (callback: () => void) => unknown;
+    };
+    const hadOwnTransition = Object.hasOwn(document, 'startViewTransition');
+    const originalTransition = documentWithTransition.startViewTransition;
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      writable: true,
+      value: startViewTransition,
+    });
+
+    try {
+      const { container } = renderConversation(0, undefined, onVoiceActiveChange);
+      fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+
+      expect(startViewTransition).not.toHaveBeenCalled();
+      expect(onVoiceActiveChange).toHaveBeenLastCalledWith(true);
+      expect((container.querySelector('#conversation-composer') as HTMLFormElement).hidden).toBe(true);
+      expect((container.querySelector('.conversation-transcript') as HTMLDivElement).hidden).toBe(true);
+    } finally {
+      if (hadOwnTransition) {
+        Object.defineProperty(document, 'startViewTransition', {
+          configurable: true,
+          writable: true,
+          value: originalTransition,
+        });
+      } else {
+        Reflect.deleteProperty(document, 'startViewTransition');
+      }
+    }
+  });
+
   it('shows persisted tool outcomes and task links', async () => {
     loadConversationHistory.mockResolvedValue({
       messages: [message, { ...message, id: '43', role: 'dan', text: 'Sure.', toolCalls: [] }],
