@@ -104,6 +104,29 @@ async function handleRequest(request) {
       return;
     }
 
+    if (request.type === "open_url") {
+      if (!hasOnlyKeys(request, ["id", "type", "url"]) ||
+          typeof request.url !== "string" || request.url.length > 2048 ||
+          /[\u0000-\u001f\u007f]/.test(request.url)) {
+        throw new Error("not_allowed");
+      }
+      let url;
+      try {
+        url = new URL(request.url);
+      } catch {
+        throw new Error("not_allowed");
+      }
+      if ((url.protocol !== "http:" && url.protocol !== "https:") ||
+          !url.hostname || url.username || url.password) {
+        throw new Error("not_allowed");
+      }
+      const tab = await chrome.tabs.create({ url: url.href, active: true });
+      if (!Number.isSafeInteger(tab.windowId)) throw new Error("failed");
+      await chrome.windows.update(tab.windowId, { focused: true, drawAttention: true });
+      post({ id: request.id, type: "result", result: { opened: true, focused: true } });
+      return;
+    }
+
     const tabId = extensionTabId(request.tabId);
     if (tabId === null) throw new Error("not_found");
 

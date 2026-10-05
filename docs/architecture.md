@@ -607,10 +607,18 @@ registry. Protocol messages are bounded to 64 KiB, correlate UUID command IDs,
 cap in-flight work, and time out after 15 seconds. Both backend validation and
 the companion's portable core enforce the fixed allow-list: HTTP(S) URLs, VS
 Code, Edge, File Explorer, Windows Terminal, folders below `C:\Repo` opened in
-VS Code, active-window title reads, and exact-title window focus. There is no
-arbitrary command or shell execution. Offline requests receive a clear refusal;
-other failures are sanitized. The companion never logs tokens, device codes,
-command arguments, URLs, paths, window titles, or message content.
+VS Code, active-window title reads, and exact-title window focus. URL commands
+are routed through the browser executor: if the extension is connected and
+Chrome automation is enabled, it opens the URL in Dan's normal Chrome; if the
+extension is disconnected, Windows shell opens the default browser and the tool
+result explicitly says so. A connected extension with automation disabled is
+refused rather than silently bypassing the setting. Launched apps and VS Code
+folder opens use Windows `AllowSetForegroundWindow` to grant the new process
+foreground eligibility; no synthetic input or focus-stealing workaround is used.
+The bridge does not expose arbitrary command execution; its only shell use is
+the explicit default-browser URL fallback. Offline requests receive a clear
+refusal; other failures are sanitized. The companion never logs tokens, device
+codes, command arguments, URLs, paths, window titles, or message content.
 
 Online/offline changes update one existing Now-feed activity row keyed by
 `pc_bridge_status`; status writes are serialized and the feed refresh happens
@@ -620,23 +628,28 @@ Linux Windows-target build run in backend CI. Real device-code sign-in, Windows
 process/window behavior, SQL production writes and the live PC opening flow
 remain unverified.
 
-### Chrome browser executor (P7-18, P7-25)
+### Chrome browser executor (P7-18, P7-25, P7-26)
 
 The existing authenticated PC bridge protocol adds `browser_tabs`,
 `browser_snapshot`, and `browser_act` commands and the matching backend tools.
 The tray companion keeps browser automation off by default; Dan enables it with
 the persisted Chrome toggle in the tray menu. When the Jarvis MV3 extension in
 Dan's normal Chrome profile is connected, the executor uses `chrome.tabs` for
-discovery and sends its fixed CDP operations through `chrome.debugger`. The
-extension's native-messaging host is registered by the installer under HKCU;
-the host relays length-prefixed messages to the running companion over a
-current-user-only named pipe. This adds no network listener, and the extension
-does not expose external messaging. Chrome's debugger notification is visible
-while attached; the executor detaches after each completed action and the
-extension has a 30-second idle-detach fallback. If the extension is not
-connected, the executor retains the existing loopback CDP transport at
-`http://127.0.0.1:9222/json/list`. Chrome 136 ignores that port on the default
-user-data directory, so Dan's normal profile uses the extension.
+discovery and sends its fixed CDP operations through `chrome.debugger`. URL opens
+also use the extension: `chrome.tabs.create({ url, active: true })` creates the
+new tab, then `chrome.windows.update(windowId, { focused: true, drawAttention: true })`
+brings Chrome forward and requests attention. A successful result is returned
+only after both extension operations complete. The browser toggle must be on
+for this route; a disconnected extension uses the explicit default-browser shell
+fallback described above. The extension's native-messaging host is registered
+by the installer under HKCU; it relays length-prefixed messages to the running
+companion over a current-user-only named pipe. This adds no network listener,
+and the extension does not expose external messaging. Chrome's debugger
+notification is visible while attached; the executor detaches after each
+completed action, and the extension has a 30-second idle-detach fallback. If
+the extension is not connected, the executor retains the existing loopback CDP
+transport at `http://127.0.0.1:9222/json/list`. Chrome 136 ignores that port on
+the default user-data directory, so Dan's normal profile uses the extension.
 
 Each snapshot is one fixed Jarvis-owned page evaluation. It returns at most 100
 visible, unobstructed actionable controls with role, accessible name, bounded
@@ -658,11 +671,14 @@ arguments and results (including typed text, tab URLs and page content) are
 redacted from the generic tool-call store. No browser data is persisted.
 
 The portable core exercises the same indexed-action contract through fake CDP
-and fake extension ports. Backend protocol tests cover command validation and
-audit redaction. A Windows build and offline tests do not prove native-host
-registration, Chrome profile behavior, or debugger attachment; the one-time
-unpacked-extension load and live acceptance in Dan's normal profile still
-require his Windows PC.
+and fake extension ports. Tests also cover extension URL opens, the disabled
+toggle, the disconnected shell fallback and its honest result, browser-agent
+navigation, and P7-20 reflex URL target selection. Backend protocol tests cover
+command validation and audit redaction. A Windows build and offline tests do not
+prove native-host registration, foreground activation, Chrome profile behavior,
+or debugger attachment; the one-time unpacked-extension load and live
+“open google.com” acceptance in Dan's normal profile still require his Windows
+PC.
 
 ### Ultrafast browser agent (P7-17)
 

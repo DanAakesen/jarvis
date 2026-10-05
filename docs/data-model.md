@@ -128,6 +128,8 @@ flowchart LR
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
+`tool_calls.outcome` is `ok`, `refused` or `error`. Migration 0018 added `refused` so a tool's explicit refusal is stored as such instead of failing the audit write (L96).
+
 P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. P7-20 may persist a source-linked voice message when a safe partial action runs, then updates that same `messages` row with the final transcript; its execution ledger stays in relay memory and the existing `tool_calls` audit. No schema change or migration is needed. P7-05 adds `screen_frames` to the Jarvis-model usage metrics in migration `0015_screen_frame_usage.sql`; P7-08 camera requests reuse the same frame reservations, token rows and rate/day cap, with no new migration or usage metric. The matching down migration removes those rows before restoring the prior constraint. Realtime voice tool calls are not stored in `tool_calls`.
 
 P8-16 activity is a separate typed, in-memory contract published on the existing
