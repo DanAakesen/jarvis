@@ -159,6 +159,36 @@ describe('Jarvis routes', () => {
 
     expect(await screen.findByText('Please start the task.')).not.toBeNull();
   });
+
+  it('marks browser presence from active use, not background feed requests', async () => {
+    const visibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/now') {
+        return new Response(JSON.stringify({
+          awayMode: true, confirmations: [], updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [],
+        }));
+      }
+      return new Response('{}');
+    });
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+    await screen.findByRole('navigation', { name: 'Areas' });
+
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname === '/now/present')).toBe(false);
+
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    hasFocus.mockReturnValue(true);
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) =>
+      new URL(String(url)).pathname === '/now/present' && init?.method === 'POST')).toBe(true));
+
+    hasFocus.mockRestore();
+    if (visibility) Object.defineProperty(document, 'visibilityState', visibility);
+    else Reflect.deleteProperty(document, 'visibilityState');
+  });
 });
 
 describe('App shell', () => {
@@ -179,7 +209,9 @@ describe('App shell', () => {
     });
     await renderSignedIn();
     expect((await screen.findByText('Waking Jarvis…')).getAttribute('role')).toBe('status');
-    resolveFeed(new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] })));
+    resolveFeed(new Response(JSON.stringify({
+      awayMode: false, confirmations: [], updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [],
+    })));
     await screen.findByText('No tasks are running.');
     expect(screen.queryByText('Waking Jarvis…')).toBeNull();
   });
@@ -238,7 +270,9 @@ describe('App shell', () => {
         return new Response(JSON.stringify({ settings: { appearance: { theme: 'dark' } } }));
       }
       if (path === '/now') {
-        return new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }));
+        return new Response(JSON.stringify({
+          awayMode: false, confirmations: [], updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [],
+        }));
       }
       if (path === '/database/status') return new Response(JSON.stringify({ waking: false }));
       return new Response('{}');
@@ -335,7 +369,9 @@ describe('App shell', () => {
       expect(screen.getByRole('heading', { level: 2, name })).not.toBeNull();
     }
     expect(screen.getByText(/Loading current activity/)).not.toBeNull();
-    resolveFeed(new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }), {
+    resolveFeed(new Response(JSON.stringify({
+      awayMode: false, confirmations: [], updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [],
+    }), {
       status: 200, headers: { 'Content-Type': 'application/json' },
     }));
     expect(await screen.findByText('No tasks are running.')).not.toBeNull();

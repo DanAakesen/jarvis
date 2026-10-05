@@ -103,6 +103,10 @@ def personalize_instructions(
         return instructions
     return (
         f"{instructions}\n\n"
+        f"Current away mode: {'on' if settings.away_mode else 'off'}. "
+        "When away, task updates and confirmations go to Teams; spoken replies use one short "
+        "sentence when possible, with concise written replies. "
+        "Use set_away_mode when Dan says he is leaving or back.\n\n"
         "Response preferences (style only):\n"
         f"- Tone: {PERSONALITY_TONES[settings.tone]}.\n"
         f"- Response style: {PERSONALITY_RESPONSE_STYLES[settings.response_style]}.\n"

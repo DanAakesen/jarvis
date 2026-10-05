@@ -11,6 +11,8 @@ import type { EphemeralAudioStore } from './audio-store.js';
 import type { SpeechSynthesizer } from './speech.js';
 
 export const confirmationLifetimeSeconds = 5 * 60;
+const maxPendingBrowserConfirmations = 10;
+const browserConversationId = 'browser';
 
 export const confirmationActionKinds = [
   'merge',
@@ -31,6 +33,13 @@ export interface NotificationAction {
   readonly url: string;
 }
 
+export interface BrowserConfirmation {
+  readonly id: string;
+  readonly actionKind: ConfirmationActionKind;
+  readonly summary: string;
+  readonly expiresAt: string;
+}
+
 export interface TeamsConnector {
   send(reference: ConversationReference, activity: ActivityLike): Promise<void>;
 }
@@ -38,6 +47,8 @@ export interface TeamsConnector {
 export interface TeamsNotificationService {
   notify(kind: NotificationKind, text: string, actions?: readonly NotificationAction[]): Promise<void>;
   expirePendingConfirmations(): Promise<void>;
+  pendingBrowserConfirmations(): readonly BrowserConfirmation[];
+  resolveBrowserConfirmation(id: string, decision: ConfirmationDecision): Promise<boolean>;
   requestConfirmation(
     actionKind: ConfirmationActionKind,
     summary: string,
@@ -145,6 +156,8 @@ export interface TeamsNotificationOptions {
   readonly store: TeamsNotificationStore;
   readonly connector: TeamsConnector;
   readonly audioStore: EphemeralAudioStore;
+  readonly isAway?: () => Promise<boolean>;
+  readonly onConfirmationsChanged?: () => void;
   readonly speech?: SpeechSynthesizer;
 }
 
@@ -155,9 +168,12 @@ export function createTeamsNotificationService({
   store,
   connector,
   audioStore,
+  isAway = async () => true,
+  onConfirmationsChanged = () => {},
   speech,
 }: TeamsNotificationOptions): TeamsNotificationService {
   const waiters = new Map<string, (result: WaitResult) => void>();
+  const browserConfirmations = new Map<string, BrowserConfirmation>();
 
   async function send(reference: ConversationReference, activity: ActivityLike): Promise<void> {
     try {
@@ -232,6 +248,7 @@ export function createTeamsNotificationService({
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       waiters.delete(id);
+      if (browserConfirmations.delete(id)) onConfirmationsChanged();
     }
   }
 
@@ -244,9 +261,15 @@ export function createTeamsNotificationService({
       throw new ToolRefusal('A valid confirmation request is required.');
     }
     signal?.throwIfAborted();
-    const reference = await getConversation();
+    let away: boolean;
+    try { away = await isAway(); }
+    catch { throw new ToolRefusal('Confirmation routing is unavailable.'); }
+    if (!away && browserConfirmations.size >= maxPendingBrowserConfirmations) {
+      throw new ToolRefusal('There are too many pending browser confirmations.');
+    }
+    const reference = away ? await getConversation() : null;
     const id = randomBytes(32).toString('base64url');
-    const conversationId = reference.conversation.id;
+    const conversationId = reference?.conversation.id ?? browserConversationId;
     try {
       await store.createConfirmation(
         id,
@@ -256,20 +279,33 @@ export function createTeamsNotificationService({
         confirmationLifetimeSeconds,
       );
     } catch {
-      throw new ToolRefusal('Teams confirmation is unavailable.');
+      throw new ToolRefusal(reference
+        ? 'Teams confirmation is unavailable.'
+        : 'Browser confirmation is unavailable.');
     }
     const waiterController = new AbortController();
     const waitSignal = signal
       ? AbortSignal.any([signal, waiterController.signal])
       : waiterController.signal;
     const decision = waitForDecision(id, waitSignal);
+    if (!reference) {
+      browserConfirmations.set(id, {
+        id,
+        actionKind,
+        summary,
+        expiresAt: new Date(Date.now() + confirmationLifetimeSeconds * 1000).toISOString(),
+      });
+      onConfirmationsChanged();
+    }
     try {
       signal?.throwIfAborted();
-      await send(reference, {
-        type: 'message',
-        attachments: [adaptiveAttachment(confirmationCard(id, actionKind, summary))],
-      });
-      void sendVoiceNote(reference, summary).catch(() => undefined);
+      if (reference) {
+        await send(reference, {
+          type: 'message',
+          attachments: [adaptiveAttachment(confirmationCard(id, actionKind, summary))],
+        });
+        void sendVoiceNote(reference, summary).catch(() => undefined);
+      }
       const resolved = await decision;
       if (resolved !== 'approve') {
         throw new ToolRefusal(resolved === 'reject'
@@ -286,13 +322,29 @@ export function createTeamsNotificationService({
       await store.cancelConfirmation(id, ownerObjectId).catch(() => undefined);
       if (signal?.aborted) signal.throwIfAborted();
       if (error instanceof ToolRefusal) throw error;
-      throw new ToolRefusal('Teams confirmation could not be delivered.');
+      throw new ToolRefusal(reference
+        ? 'Teams confirmation could not be delivered.'
+        : 'Browser confirmation could not be delivered.');
     }
   }
 
   return {
     async expirePendingConfirmations() {
       await store.expirePendingConfirmations();
+    },
+    pendingBrowserConfirmations() {
+      return [...browserConfirmations.values()].slice(0, maxPendingBrowserConfirmations);
+    },
+    async resolveBrowserConfirmation(id, decision) {
+      if (!confirmationIdPattern.test(id) || (decision !== 'approve' && decision !== 'reject') ||
+        !browserConfirmations.has(id) || !waiters.has(id)) return false;
+      const status = await store.resolveConfirmation(id, ownerObjectId, browserConversationId, decision);
+      if (status === 'approved' || status === 'rejected') {
+        waiters.get(id)?.(status === 'approved' ? 'approve' : 'reject');
+        return true;
+      }
+      if (status === 'expired') waiters.get(id)?.('expired');
+      return false;
     },
     async notify(kind, text, actions) {
       if (!notificationKinds.has(kind) || !validText(text)) throw new TypeError('Invalid notification');
@@ -349,7 +401,7 @@ export function createTeamsNotificationService({
 export function createAskDanToConfirmTool(service: TeamsNotificationService): JarvisTool {
   return {
     name: 'ask_dan_to_confirm',
-    description: 'Send Dan a Teams approval card and wait for his one-time response.',
+    description: 'Request Dan’s one-time approval through his current channel and wait for his response.',
     inputSchema: {
       type: 'object',
       properties: {

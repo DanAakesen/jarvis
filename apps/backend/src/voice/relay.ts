@@ -398,6 +398,7 @@ function registerVoiceRoute(
         const token = await credential(getToken, controller.signal);
         if (controller.signal.aborted || browser.readyState !== WebSocket.OPEN) return;
         let personality = defaultSettings.personality;
+        let awayMode = false;
         if (english && app.settingsStore) {
           try {
             personality = (await readSettings(app.settingsStore)).personality;
@@ -405,9 +406,16 @@ function registerVoiceRoute(
             request.log.warn('voice.personality_settings_unavailable');
           }
         }
+        if (english && app.awayModeStore) {
+          try {
+            awayMode = (await app.awayModeStore.read()).away;
+          } catch {
+            request.log.warn('voice.away_mode_settings_unavailable');
+          }
+        }
         upstream = connect(token, controller.signal);
         upstream.once('open', () => {
-          if (english) sendUpstream(createEnglishSessionUpdate(app.jarvisTools, personality), flushQueued);
+          if (english) sendUpstream(createEnglishSessionUpdate(app.jarvisTools, personality, awayMode), flushQueued);
           else flushQueued();
         });
         upstream.on('message', (data, binary) => {

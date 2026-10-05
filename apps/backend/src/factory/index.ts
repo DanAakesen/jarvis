@@ -280,6 +280,7 @@ export const factoryModule: BackendModule = {
       let closed = false;
       let replaying = true;
       let pending: TaskEventMessage[] = [];
+      let eventDelivery = Promise.resolve();
       const replayedIds = new Set<string>();
       const cleanup = () => {
         if (closed) return;
@@ -308,9 +309,17 @@ export const factoryModule: BackendModule = {
             return;
           }
           pending.push(event);
-        } else {
-          writeEvent(event);
+          return;
         }
+        eventDelivery = eventDelivery.then(async () => {
+          try {
+            if ((await app.awayModeStore?.read())?.away) return;
+            if (closed) return;
+            writeEvent(event);
+          } catch {
+            end();
+          }
+        });
       });
       reply.hijack();
       const heartbeat = setInterval(() => {
@@ -339,13 +348,18 @@ export const factoryModule: BackendModule = {
           if (events.length < eventReplayPageSize) break;
         }
         if (closed) return;
-        replaying = false;
-        const buffered = pending.sort((left, right) =>
-          BigInt(left.id) < BigInt(right.id) ? -1 : BigInt(left.id) > BigInt(right.id) ? 1 : 0);
-        pending = [];
-        for (const event of buffered) {
-          if (!writeEvent(event)) return;
+        while (pending.length) {
+          const away = (await app.awayModeStore?.read())?.away ?? false;
+          const buffered = pending.sort((left, right) =>
+            BigInt(left.id) < BigInt(right.id) ? -1 : BigInt(left.id) > BigInt(right.id) ? 1 : 0);
+          pending = [];
+          if (!away) {
+            for (const event of buffered) {
+              if (!writeEvent(event)) return;
+            }
+          }
         }
+        replaying = false;
         if (!response.write('event: ready\ndata: {}\n\n')) end();
       };
       void replay().catch(end);

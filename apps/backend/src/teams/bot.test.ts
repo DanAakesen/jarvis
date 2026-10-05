@@ -15,6 +15,8 @@ it('serves only short-lived opaque audio URLs without Jarvis bearer authenticati
   const service = {
     notify: async () => {},
     expirePendingConfirmations: async () => {},
+    pendingBrowserConfirmations: () => [],
+    resolveBrowserConfirmation: async () => false,
     requestConfirmation: async () => {},
     runConfirmed: async (_kind, _summary, action) => action(),
     rememberMessage: async () => {},

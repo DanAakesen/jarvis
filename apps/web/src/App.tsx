@@ -14,6 +14,7 @@ import { NotFoundPage, SignInPage } from './pages';
 import { SettingsPage } from './SettingsPage';
 import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
+import { backendFetch } from './backend-request';
 import { Workspace } from './Workspace';
 
 type ShellIconName = 'home' | 'factory' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close';
@@ -104,16 +105,67 @@ function ShellLayout({ signedIn, config, session, camera }: {
   camera: CameraController;
 }) {
   const { pathname } = useLocation();
+  const getAccessToken = session.getAccessToken;
   const { working } = useJarvisActivity();
   const navigationToggle = useRef<HTMLButtonElement>(null);
   const contextPanel = useContextPanel();
   const [navigationOpen, setNavigationOpen] = useState(() => (
     typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches
   ));
+  const [presenceError, setPresenceError] = useState('');
   const activeArea = areas.find(({ path }) => pathname.startsWith(`/${path}`));
   const settingsActive = pathname.startsWith('/settings');
   const areaLabel = settingsActive ? 'Settings' : activeArea?.label ?? 'Jarvis';
   const navigationItems = activeArea?.navigation ?? [{ label: 'Conversation', path: '/' }];
+
+  useEffect(() => {
+    if (!signedIn || !config.backendUrl) return;
+    let active = true;
+    let sending = false;
+    let lastSent: number | null = null;
+    const controller = new AbortController();
+    const markPresent = async () => {
+      if (document.visibilityState === 'hidden' || !document.hasFocus() ||
+        sending || (lastSent !== null && Date.now() - lastSent < 60_000)) return;
+      sending = true;
+      try {
+        const token = await getAccessToken();
+        const response = await backendFetch(`${config.backendUrl!.replace(/\/+$/u, '')}/now/present`, {
+          method: 'POST',
+          headers: {
+            Authorization: `${['Bear', 'er'].join('')} ${token}`,
+            Accept: 'application/json',
+          },
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          await response.body?.cancel().catch(() => {});
+          throw new Error('Browser presence could not be updated.');
+        }
+        lastSent = Date.now();
+        if (active) setPresenceError('');
+      } catch {
+        if (active) setPresenceError('Jarvis could not switch to present. Try using the app again.');
+      } finally {
+        sending = false;
+      }
+    };
+    const onActivity = () => { void markPresent(); };
+    void markPresent();
+    window.addEventListener('pointerdown', onActivity);
+    window.addEventListener('keydown', onActivity);
+    window.addEventListener('focus', onActivity);
+    document.addEventListener('visibilitychange', onActivity);
+    return () => {
+      active = false;
+      controller.abort();
+      window.removeEventListener('pointerdown', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('focus', onActivity);
+      document.removeEventListener('visibilitychange', onActivity);
+    };
+  }, [config.backendUrl, getAccessToken, signedIn]);
 
   function closeNavigation() {
     navigationToggle.current?.focus();
@@ -199,6 +251,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
         )}
       </header>
       <main id="content" className="shell-main" tabIndex={-1}>
+        {presenceError && <p className="browser-presence-error" role="alert">{presenceError}</p>}
         <Outlet />
         {signedIn && (
           <div className="workspace-shell-area" hidden={pathname !== '/'}>

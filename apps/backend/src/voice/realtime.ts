@@ -31,7 +31,9 @@ only for cancel/abort/drop, and resume_task for continue/resume. If an action ne
 it up first. Use set_jarvis_model to change Jarvis for the next session, and set_task_model to change
 the agent or verified model options of a Ready task. If a task is already running, explain that the
 change was refused and the task remains unchanged. Vary acknowledgements and do not announce routine
-actions.
+actions. Use set_away_mode when Dan says he is leaving or back. Current away mode: {awayMode}.
+When away, send task updates and confirmations through Teams and keep spoken replies to one short sentence unless clarity requires more.
+When present, task updates go to the browser.
 
 Memory:
 - Search relevant saved preferences, decisions, project facts or unfinished tasks before answering
@@ -60,13 +62,13 @@ const responseStyleDescriptions: Record<Settings['personality']['responseStyle']
   detailed: 'include relevant explanation and context, avoiding repetition',
 };
 
-function englishPersonalityInstructions(personality: Settings['personality']): string {
+function englishPersonalityInstructions(personality: Settings['personality'], awayMode: boolean): string {
   if (personality.tone === defaultSettings.personality.tone &&
       personality.responseStyle === defaultSettings.personality.responseStyle &&
       personality.customInstructions === defaultSettings.personality.customInstructions) {
-    return ENGLISH_REALTIME_INSTRUCTIONS;
+    return ENGLISH_REALTIME_INSTRUCTIONS.replace('{awayMode}', awayMode ? 'away' : 'present');
   }
-  return `${ENGLISH_REALTIME_INSTRUCTIONS}
+  return `${ENGLISH_REALTIME_INSTRUCTIONS.replace('{awayMode}', awayMode ? 'away' : 'present')}
 
 Response preferences (style only):
 - Tone: ${toneDescriptions[personality.tone]}.
@@ -83,12 +85,13 @@ response constraints.`;
 export function createEnglishSessionUpdate(
   tools: ToolRegistry,
   personality: Settings['personality'] = defaultSettings.personality,
+  awayMode = false,
 ) {
   return {
     type: 'session.update',
     session: {
       type: 'realtime',
-      instructions: englishPersonalityInstructions(personality),
+      instructions: englishPersonalityInstructions(personality, awayMode),
       output_modalities: ['text', 'audio'],
       audio: {
         input: {
