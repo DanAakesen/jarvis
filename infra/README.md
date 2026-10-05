@@ -46,3 +46,15 @@ authorized to assign Graph application roles. The script is safe to rerun. The
 backend fixes searches to Dan's OneDrive and filters both the Graph query and
 returned links to the configured folder. No Azure or OneDrive live check was
 performed by the coding agent.
+
+## Google Calendar and Gmail setup
+
+After the approved core deployment, Dan creates an OAuth **Desktop app** client
+in Google Cloud Console, enables the Gmail and Calendar APIs, and publishes the
+consent screen **In production**. From Windows PowerShell 5.1 at the repository
+root, run `& .\infra\setup-google.ps1`. The PKCE loopback flow stores the OAuth
+client ID, client secret, and refresh token only in the deployed Key Vault, then
+removes the temporary Key Vault Secrets Officer assignment. It sets
+`JARVIS_GOOGLE_TIME_ZONE` as a nonsecret GitHub Actions variable; deploy `main`
+afterwards to enable the tools. Exact console steps and Google consent scopes
+are in [agent context](../docs/agent-context.md#azure).

@@ -115,7 +115,7 @@ Status as of 5 October 2026.
 | Chrome browser executor | With Dan's explicit bridge toggle on, list tabs, snapshot visible controls, and run fresh, unobstructed indexed actions in his signed-in Chrome; sensitive typing is blocked and risky clicks need confirmation | Voice/chat | PC companion; authenticated backend tools | Built offline; real Chrome check pending | P7-18 |
 | Computer use | Jarvis clicks and types on Dan's PC while he talks | Voice/chat | PC companion | Planned (needs decision) | P7-07 |
 | Camera | Turn on the webcam from the shared shell and ask Jarvis by chat or voice to inspect a single frame; camera state times out and stops with the session | Both | Shared top bar, main conversation | Built offline; live camera/model check pending | P7-08 |
-| Calendar and mail | Agenda, free slots, create/move meetings, search and summarise mail, draft replies and send after exact confirmation | Voice/chat | Backend tools; no new page | Built offline; Graph/RBAC setup and live acceptance pending | P7-09 |
+| Calendar and mail | Google Calendar agenda, free slots, create/move meetings, Gmail search and summaries, reply drafts and sending after exact confirmation | Voice/chat | Backend tools; no new page | Built offline; Google OAuth setup and live acceptance pending | P7-09, P7-22 |
 | Second brain | Search Dan's configured OneDrive notes folder and quote snippets with links | Voice/chat | — | Implemented offline; Graph setup and live search pending | P7-10 |
 
 ## Jarvis UI enabling logic (P8-03)
