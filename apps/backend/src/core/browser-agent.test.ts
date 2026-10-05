@@ -391,18 +391,53 @@ describe('Jev browser agent', () => {
 
   it('rejects Dan-named tabs that conflict with the current shared-screen context', async () => {
     const tabs: BrowserTab[] = [
-      { id: 'tab_1', title: 'Other page', url: 'https://other.example.test/', focused: true },
+      { id: 'tab_1', title: 'Contact list', url: 'https://other.example.test/', focused: true },
       { id: 'tab_2', title: 'Contact form', url: 'https://forms.example.test/', focused: false },
     ];
     const env = fixture(fixedPlanner({ operation: 'done' }), undefined, tabs);
     setSharedContext(env.request, 'A contact form with a name field.', 'Chrome');
-    env.request.jarvisConversationMessage = { role: 'dan', text: 'Use Other page.' } as never;
+    env.request.jarvisConversationMessage = { role: 'dan', text: 'Use Contact list.' } as never;
 
     await expect(env.agent.runSharedTask({
       goal: 'Fill this in',
-      tabTitle: 'Other page',
+      tabTitle: 'Contact list',
     }, env.request, new AbortController().signal)).rejects.toThrow(/does not match the current shared screen/u);
     expect(env.getSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('asks Dan when one word is not enough to identify a shared tab', async () => {
+    const tabs: BrowserTab[] = [
+      { id: 'tab_1', title: 'Contact list', url: 'https://other.example.test/', focused: false },
+    ];
+    const env = fixture(fixedPlanner({ operation: 'done' }), undefined, tabs);
+    setSharedContext(env.request, 'A contact form with a name field.', 'Chrome');
+
+    await expect(sharedTool(env).execute({
+      goal: 'Fill this in',
+    }, env.request, new AbortController().signal)).rejects.toThrow(/can’t confidently match/u);
+    expect(env.getSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('rejects a title match when vision evidence overlaps by only one word', async () => {
+    const tabs: BrowserTab[] = [
+      { id: 'tab_1', title: 'Contact list', url: 'https://contacts.example.test/', focused: false },
+    ];
+    const env = fixture(fixedPlanner({ operation: 'done' }), undefined, tabs);
+    setSharedContext(env.request, 'A contact form with a name field.', 'Contact list - Chrome');
+    env.request.jarvisConversationMessage = { role: 'dan', text: 'Use Contact list.' } as never;
+
+    await expect(sharedTool(env).execute({
+      goal: 'Fill this in',
+      tabTitle: 'Contact list',
+    }, env.request, new AbortController().signal)).rejects.toThrow(/does not match the current shared screen/u);
+    expect(env.getSnapshot).not.toHaveBeenCalled();
+
+    const automatic = fixture(fixedPlanner({ operation: 'done' }), undefined, tabs);
+    setSharedContext(automatic.request, 'A contact form with a name field.', 'Contact list - Chrome');
+    await expect(sharedTool(automatic).execute({
+      goal: 'Fill this in',
+    }, automatic.request, new AbortController().signal)).rejects.toThrow(/can’t confidently match/u);
+    expect(automatic.getSnapshot).not.toHaveBeenCalled();
   });
 
   it('offers a steps fallback when the local bridge is offline', async () => {
@@ -433,8 +468,10 @@ describe('Jev browser agent', () => {
         .mockResolvedValueOnce({ operation: 'click', confidence: 0.99, targetIndex: 1 })
         .mockResolvedValueOnce({ operation: 'done', confidence: 0.99 }),
     };
-    const env = fixture(planner);
-    setSharedContext(env.request, 'A form with a Send message button.', 'Search');
+    const env = fixture(planner, undefined, [
+      { id: 'tab_1', title: 'Search form', url: 'https://example.test/', focused: true },
+    ]);
+    setSharedContext(env.request, 'A search form with a Send message button.', 'Search');
     let approve!: () => void;
     let markRequested!: (summary: string) => void;
     const approval = new Promise<void>((resolve) => { approve = resolve; });
@@ -479,12 +516,14 @@ describe('Jev browser agent', () => {
         signal.addEventListener('abort', () => resolve(null), { once: true });
       }),
     };
-    const env = fixture(waitingPlanner);
+    const env = fixture(waitingPlanner, undefined, [
+      { id: 'tab_1', title: 'Search results', url: 'https://example.test/', focused: true },
+    ]);
     const controller = new AbortController();
     const running = env.agent.runSharedTask({
       goal: 'Fill in the form',
-      sharedWindowTitle: 'Search',
-      screenDescription: 'A search page.',
+      sharedWindowTitle: 'Search results',
+      screenDescription: 'Search results are displayed.',
     }, env.request, controller.signal);
     await plannerStarted;
     controller.abort();

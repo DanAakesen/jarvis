@@ -727,13 +727,25 @@ function sharedTabScore(tab: BrowserTab, input: SharedBrowserTaskInput): number 
   return score;
 }
 
+function stronglyMatchesSharedContext(tab: BrowserTab, input: SharedBrowserTaskInput): boolean {
+  const tabWords = matchingWords(tab.title);
+  const titleWords = matchingWords(input.sharedWindowTitle ?? '');
+  const descriptionWords = matchingWords(input.screenDescription);
+  const titleMatches = [...tabWords].filter((word) => titleWords.has(word)).length;
+  const descriptionMatches = [...tabWords].filter((word) => descriptionWords.has(word)).length;
+  const titleThreshold = Math.min(2, titleWords.size);
+  if (titleWords.size > 0 && titleMatches < titleThreshold) return false;
+  if (descriptionWords.size > 0 && descriptionMatches < 2) return false;
+  return (titleThreshold > 0 && titleMatches >= titleThreshold) || descriptionMatches >= 2;
+}
+
 function resolveSharedTab(
   tabs: readonly BrowserTab[],
   input: SharedBrowserTaskInput,
 ): BrowserTab {
   if (input.tabTitle !== undefined) {
     const selected = tabs.filter(({ title }) => normalizedTitle(title) === normalizedTitle(input.tabTitle!));
-    if (selected.length === 1 && sharedTabScore(selected[0]!, input) > 0) return selected[0]!;
+    if (selected.length === 1 && stronglyMatchesSharedContext(selected[0]!, input)) return selected[0]!;
     if (selected.length === 1) {
       throw new ToolRefusal('That Chrome tab does not match the current shared screen. Please share the intended tab and try again.');
     }
@@ -746,7 +758,10 @@ function resolveSharedTab(
   const scores = tabs.map((tab) => sharedTabScore(tab, input));
   const highest = Math.max(0, ...scores);
   const matches = tabs.filter((_tab, index) => scores[index] === highest && highest > 0);
-  if (matches.length === 1) return matches[0]!;
+  if (matches.length === 1 && stronglyMatchesSharedContext(matches[0]!, input)) return matches[0]!;
+  if (matches.length === 1) {
+    throw new ToolRefusal(`I can’t confidently match the shared screen to a Chrome tab. Which one should I use: ${sharedTabOptions(tabs)}?`);
+  }
 
   if (matches.length > 1) {
     throw new ToolRefusal(`I can’t tell which shared Chrome tab you mean. Which one should I use: ${sharedTabOptions(matches)}?`);

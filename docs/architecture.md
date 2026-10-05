@@ -683,11 +683,14 @@ The description and label are transient request context, not transcript, task
 event, or persisted browser data.
 
 The sensitive `browser_do_shared` tool matches the label and vision description
-against the paginated live `pc_browser_tabs` result. A unique match supplies only
-that observed tab ID to the existing P7-17 `runTask`; tied or missing matches
-return a question listing bounded tab titles (and hosts) for Dan to clarify. A
-tab-title override is honored only when Dan named that exact title in the current
-message. Chrome-offline refusal offers to send the steps instead. Voice tool
+against the paginated live `pc_browser_tabs` result. A unique strong match
+supplies only that observed tab ID to the existing P7-17 `runTask`; tied, weak,
+or missing matches return a question listing bounded tab titles (and hosts) for
+Dan to clarify. A tab-title override is honored only when Dan named that exact
+title in the current message, the visual description has at least two matching
+words, and any informative display label has at least two matches. Weak or
+contradictory evidence produces a clarification instead of a tab selection.
+Chrome-offline refusal offers to send the steps instead. Voice tool
 calls bind the captured context to the authenticated session request; even if the
 model chooses generic `browser_do`, that request routes through shared-tab
 resolution instead of the focused tab. Saying “stop” cancels either shared
