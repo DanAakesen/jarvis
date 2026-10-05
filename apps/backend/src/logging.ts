@@ -26,6 +26,7 @@ const events = new Set([
   'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
   'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
   'voice.partials_unavailable', 'chat.latency', 'memory.embedding',
+  'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -105,6 +106,22 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.decision === 'string' && reconciliationDecisions.has(input.decision)) {
       fields.decision = input.decision;
     }
+  }
+  if (input.msg === 'conversation.reply_failed' || input.msg === 'voice.upstream_error' ||
+      input.msg === 'voice.upstream_closed' || input.msg === 'voice.connection_failed') {
+    // Short, fixed-vocabulary diagnostics only: our own error messages and upstream close reasons.
+    if (typeof input.failure === 'string' && /^[A-Za-z0-9 .:,'()_-]{1,120}$/.test(input.failure)) {
+      fields.failure = input.failure;
+    }
+    if (typeof input.closeCode === 'number' && Number.isInteger(input.closeCode) &&
+        input.closeCode >= 1000 && input.closeCode <= 4999) {
+      fields.closeCode = input.closeCode;
+    }
+    if (typeof input.httpStatus === 'number' && Number.isInteger(input.httpStatus) &&
+        input.httpStatus >= 100 && input.httpStatus <= 599) {
+      fields.httpStatus = input.httpStatus;
+    }
+    if (input.language === 'da' || input.language === 'en') fields.language = input.language;
   }
   if (input.msg === 'voice.reflex_metrics') {
     if (input.language === 'da' || input.language === 'en') fields.language = input.language;
