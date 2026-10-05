@@ -10,6 +10,7 @@ import {
   createChatSession,
   loadConversationHistory,
   sendChatTurn,
+  waitForChatSetup,
   type ChatMessage,
   type ChatSession,
   type ConversationHistoryMessage,
@@ -19,20 +20,6 @@ const maxTaskId = 9_223_372_036_854_775_807n;
 
 type QueuedMessage = { id: number; text: string; language: 'da' | 'en' };
 type FailedTurn = QueuedMessage & { messageId?: string; error: string; partialReply: string };
-
-async function turnSetup<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
-  signal.throwIfAborted();
-  let abort!: () => void;
-  const cancelled = new Promise<never>((_resolve, reject) => {
-    abort = () => reject(signal.reason);
-    signal.addEventListener('abort', abort, { once: true });
-  });
-  try {
-    return await Promise.race([operation(), cancelled]);
-  } finally {
-    signal.removeEventListener('abort', abort);
-  }
-}
 
 function relativeTime(at: string, now: number): string {
   const seconds = Math.round((Date.parse(at) - now) / 1000);
@@ -264,7 +251,7 @@ export function ConversationHistory({
       }
       const activeSession = session?.language === language
         ? session
-        : await turnSetup(() => createChatSession(client, config, language, controller.signal), controller.signal);
+        : await waitForChatSetup(() => createChatSession(client, config, language, controller.signal), controller.signal);
       controller.signal.throwIfAborted();
       setSession(activeSession);
       const currentVisionContext = visionContext?.sessionId === activeSession.id ? visionContext : null;
@@ -283,10 +270,10 @@ export function ConversationHistory({
       }
       setVisionContext(null);
       if (isCameraRequest(text) && camera?.sharing && currentVisionContext?.source !== 'camera') {
-        contextForTurn = (await turnSetup(() => camera.inspect(activeSession.id), controller.signal)).description;
+        contextForTurn = (await waitForChatSetup(() => camera.inspect(activeSession.id), controller.signal)).description;
       } else if ((isScreenRequest(text) || isSharedBrowserRequest(text)) && screenShare?.sharing &&
           (isSharedBrowserRequest(text) || currentVisionContext?.source !== 'screen')) {
-        const context = await turnSetup(() => screenShare.inspect(activeSession.id), controller.signal);
+        const context = await waitForChatSetup(() => screenShare.inspect(activeSession.id), controller.signal);
         contextForTurn = sharedScreenContext(context.description, context.sharedWindowTitle);
         if (isSharedBrowserRequest(text)) {
           sharedContextForTurn = {

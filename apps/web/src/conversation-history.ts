@@ -64,6 +64,20 @@ function isHistoryPage(value: unknown): value is ConversationHistoryPage {
   });
 }
 
+export async function waitForChatSetup<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  let abort!: () => void;
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    abort = () => reject(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
+  });
+  try {
+    return await Promise.race([operation(), cancelled]);
+  } finally {
+    signal.removeEventListener('abort', abort);
+  }
+}
+
 async function accessToken(client: PublicClientApplication, config: PublicConfig): Promise<string> {
   const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
   if (!account) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
@@ -87,7 +101,10 @@ async function chatResponse(
   signal?: AbortSignal,
 ): Promise<Response> {
   if (!config.backendUrl) throw new Error('Chat is unavailable until the backend is deployed.');
-  const token = await accessToken(client, config);
+  const token = signal
+    ? await waitForChatSetup(() => accessToken(client, config), signal)
+    : await accessToken(client, config);
+  signal?.throwIfAborted();
   let response: Response;
   try {
     const bearerScheme = ['Bear', 'er'].join('');

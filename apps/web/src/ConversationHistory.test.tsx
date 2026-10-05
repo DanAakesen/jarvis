@@ -15,7 +15,10 @@ const { loadConversationHistory, createChatSession, sendChatTurn, voiceSessions 
   sendChatTurn: vi.fn(),
   voiceSessions: [] as VoiceClientOptions[],
 }));
-vi.mock('./conversation-history', () => ({ loadConversationHistory, createChatSession, sendChatTurn }));
+vi.mock('./conversation-history', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./conversation-history')>(),
+  loadConversationHistory, createChatSession, sendChatTurn,
+}));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
     constructor(private readonly options: VoiceClientOptions) { voiceSessions.push(options); }

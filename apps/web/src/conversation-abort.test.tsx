@@ -10,6 +10,27 @@ const client = {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('chat turn cancellation', () => {
+  it('stops during token acquisition without sending a request when the token arrives later', async () => {
+    const controller = new AbortController();
+    let finishToken!: () => void;
+    const slowClient = {
+      getActiveAccount: () => ({ homeAccountId: 'fixture' }),
+      acquireTokenSilent: () => new Promise<{ accessToken: string }>((resolve) => {
+        finishToken = () => resolve({ accessToken: 'fixture' });
+      }),
+    } as never;
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const turn = sendChatTurn(slowClient, config, { id: '41', language: 'da' }, 'Hello',
+      vi.fn(), vi.fn(), undefined, undefined, undefined, controller.signal);
+    const rejection = expect(turn).rejects.toThrow();
+    controller.abort();
+    await rejection;
+    finishToken();
+    await Promise.resolve();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('passes cancellation to the request and does not retry uncertain delivery', async () => {
     const controller = new AbortController();
     const fetch = vi.fn((_url, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
