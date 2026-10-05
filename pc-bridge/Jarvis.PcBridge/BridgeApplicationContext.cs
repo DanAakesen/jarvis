@@ -1,4 +1,5 @@
 using System.Drawing;
+using Jarvis.PcBridge.Core;
 
 namespace Jarvis.PcBridge;
 
@@ -8,6 +9,9 @@ public sealed class BridgeApplicationContext : ApplicationContext
     private readonly Control _dispatcher = new();
     private readonly NotifyIcon _icon;
     private readonly ToolStripMenuItem _status;
+    private readonly ToolStripMenuItem _browserToggle;
+    private BridgeSettings? _settings;
+    private BrowserExecutor? _browserExecutor;
     private BridgeTokenProvider? _tokenProvider;
 
     public BridgeApplicationContext()
@@ -17,6 +21,12 @@ public sealed class BridgeApplicationContext : ApplicationContext
         _status = new ToolStripMenuItem("Starting…") { Enabled = false };
         var menu = new ContextMenuStrip();
         menu.Items.Add(_status);
+        _browserToggle = new ToolStripMenuItem("Chrome browser automation (off)", null, ToggleBrowser)
+        {
+            CheckOnClick = false,
+            Enabled = false,
+        };
+        menu.Items.Add(_browserToggle);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
         _icon = new NotifyIcon
@@ -44,8 +54,14 @@ public sealed class BridgeApplicationContext : ApplicationContext
         try
         {
             var settings = BridgeSettings.Load();
+            _settings = settings;
+            _browserToggle.Checked = settings.BrowserEnabled;
+            _browserToggle.Text = BrowserToggleText(settings.BrowserEnabled);
+            _browserToggle.Enabled = true;
+            _browserExecutor = new BrowserExecutor(() => _settings?.BrowserEnabled == true,
+                WindowsCommandExecutor.ReadActiveWindowTitle);
             _tokenProvider = await BridgeTokenProvider.CreateAsync(settings, _stopping.Token);
-            var client = new BridgeClient(settings, _tokenProvider, new WindowsCommandExecutor());
+            var client = new BridgeClient(settings, _tokenProvider, new WindowsCommandExecutor(), _browserExecutor);
             await client.RunAsync(SetStatus, _stopping.Token);
         }
         catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
@@ -55,7 +71,33 @@ public sealed class BridgeApplicationContext : ApplicationContext
         {
             SetStatus("Offline — configuration or sign-in required");
         }
+        finally
+        {
+            _browserExecutor?.Dispose();
+        }
     }
+
+    private void ToggleBrowser(object? sender, EventArgs e)
+    {
+        if (_settings is null) return;
+        var enabled = !_settings.BrowserEnabled;
+        try
+        {
+            var updated = _settings with { BrowserEnabled = enabled };
+            updated.Save();
+            _settings = updated;
+            _browserToggle.Checked = enabled;
+            _browserToggle.Text = BrowserToggleText(enabled);
+        }
+        catch
+        {
+            _browserToggle.Checked = _settings.BrowserEnabled;
+            _browserToggle.Text = $"{BrowserToggleText(_settings.BrowserEnabled)} — save failed";
+        }
+    }
+
+    private static string BrowserToggleText(bool enabled) =>
+        $"Chrome browser automation ({(enabled ? "on" : "off")})";
 
     private void SetStatus(string status)
     {

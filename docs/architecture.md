@@ -604,6 +604,40 @@ Linux Windows-target build run in backend CI. Real device-code sign-in, Windows
 process/window behavior, SQL production writes and the live PC opening flow
 remain unverified.
 
+### Chrome browser executor (P7-18)
+
+The existing authenticated PC bridge protocol adds `browser_tabs`,
+`browser_snapshot`, and `browser_act` commands and the matching backend tools.
+The tray companion keeps browser automation off by default; Dan enables it with
+the persisted Chrome toggle in the tray menu. Only then does the companion query
+`http://127.0.0.1:9222/json/list` and attach to a page target whose DevTools
+WebSocket resolves to loopback on that port. Chrome is not launched by the
+backend and no inbound bridge listener is added.
+
+Each snapshot is one fixed Jarvis-owned page evaluation. It returns at most 100
+visible, unobstructed actionable controls with role, accessible name, bounded
+value and an index. The local companion retains the corresponding CDP DOM node
+object IDs under an opaque snapshot ID; the index is never converted to a
+selector or coordinate. An action expires after 30 seconds or when replaced by a
+new snapshot. Immediately before acting, the companion checks that the same node
+is connected and unchanged, remains visible and enabled, and is still the
+topmost element at its center. Click, type, select, scroll and wait are fixed
+operations; the bridge never accepts or evaluates a model-provided script.
+
+Password, payment-card and one-time-code fields are omitted from values and
+refuse typing; code-like numeric and Luhn-valid card-number text is also
+refused. Submit/send/delete/sign-in/payment-style clicks return a confirmation
+request without acting. The backend uses the existing P7-03 `computer_use`
+approval path and retries the same indexed action only after approval; without
+confirmation service it refuses. Browser tools are marked sensitive so their
+arguments and results (including typed text, tab URLs and page content) are
+redacted from the generic tool-call store. No browser data is persisted.
+
+The portable core and backend protocol tests use a fake CDP target and exercise
+freshness, occlusion, secret blocking, confirmation and audit redaction. A live
+Chrome launch with Dan's signed-in profile and local-page desktop evidence still
+requires verification on his Windows PC.
+
 P4-10 registers the Software Factory's `list_projects`, `list_tasks`, `get_task`,
 `create_task`, `steer_task`, `pause_task`, `resume_task`, and `cancel_task` tools.
 They call the injected project/task stores and task controller, so the same

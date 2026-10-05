@@ -81,10 +81,11 @@ public sealed class WindowsCommandExecutor
 
     private static object ReadActiveWindow()
     {
-        var handle = GetForegroundWindow();
-        var title = ReadTitle(handle);
+        var title = ReadActiveWindowTitle();
         return new { title };
     }
+
+    public static string ReadActiveWindowTitle() => ReadTitle(GetForegroundWindow());
 
     private static object FocusWindow(string title)
     {

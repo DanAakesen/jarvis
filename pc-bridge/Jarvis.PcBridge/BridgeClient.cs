@@ -8,7 +8,8 @@ namespace Jarvis.PcBridge;
 public sealed class BridgeClient(
     BridgeSettings settings,
     BridgeTokenProvider tokens,
-    WindowsCommandExecutor executor)
+    WindowsCommandExecutor executor,
+    BrowserExecutor browserExecutor)
 {
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
 
@@ -98,10 +99,16 @@ public sealed class BridgeClient(
                 byte[] response;
                 try
                 {
-                    var value = await executor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
+                    var value = command.Command.StartsWith("browser_", StringComparison.Ordinal)
+                        ? await browserExecutor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false)
+                        : await executor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
                     response = BridgeProtocol.Success(command.Id, value);
                 }
                 catch (CommandRefusedException exception)
+                {
+                    response = BridgeProtocol.Failure(command.Id, exception.Code);
+                }
+                catch (BrowserActionRefusedException exception)
                 {
                     response = BridgeProtocol.Failure(command.Id, exception.Code);
                 }

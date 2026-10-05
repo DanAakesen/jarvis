@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis browser executor test</title>
+  <style>
+    body { font: 1rem/1.5 system-ui, sans-serif; margin: 3rem auto; max-width: 44rem; padding: 0 1rem; }
+    label, input, select, button { display: block; margin: .5rem 0; }
+    input, select, button { font: inherit; padding: .5rem; }
+    .target { position: relative; width: max-content; }
+    #overlay { background: #eee; inset: 0; position: absolute; }
+    [hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Jarvis browser executor test</h1>
+  <p>This page is local test content. It has no network actions.</p>
+
+  <label for="ordinary">Ordinary text</label>
+  <input id="ordinary" autocomplete="off">
+
+  <label for="choice">Choice</label>
+  <select id="choice">
+    <option value="one">One</option>
+    <option value="two">Two</option>
+  </select>
+
+  <div class="target">
+    <button id="safe-target" type="button" onclick="document.querySelector('#status').textContent = 'Click worked.'">
+      Safe click target
+    </button>
+    <div id="overlay" hidden>Occlusion overlay</div>
+  </div>
+  <button type="button" onclick="document.querySelector('#overlay').hidden = !document.querySelector('#overlay').hidden">
+    Toggle target cover
+  </button>
+  <button type="button" onclick="document.querySelector('#status').textContent = 'No message was sent.'">
+    Send test message
+  </button>
+
+  <label for="password">Password (typing must be blocked)</label>
+  <input id="password" type="password" autocomplete="current-password">
+
+  <label for="code">One-time code (typing must be blocked)</label>
+  <input id="code" autocomplete="one-time-code">
+
+  <p id="status" aria-live="polite">Ready.</p>
+</body>
+</html>
