@@ -31,7 +31,7 @@ function CameraHarness() {
       <button type="button" onClick={() => void camera.start()} disabled={camera.starting}>
         {camera.sharing ? 'Turn camera off' : 'Turn camera on'}
       </button>
-      <button type="button" onClick={() => void camera.inspect('42').then(setDescription, () => {})}
+      <button type="button" onClick={() => void camera.inspect('42').then(({ description }) => setDescription(description), () => {})}
         disabled={!camera.sharing || camera.inspecting}>
         Request camera frame
       </button>

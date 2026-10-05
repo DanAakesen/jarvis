@@ -6,6 +6,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 
 - Phase 1 is the Jarvis core and Software Factory; active P7 tasks may add their named headless capabilities. P7-22 provides Google Calendar and Gmail tools only; P8 owns any UI. See [PRODUCT.md](../PRODUCT.md) and [PLAN.md](../PLAN.md).
 - Do not add tables, pages, or code for Banking, Health and fitness, or other areas until their phase starts.
+- P7-19 browser actions use only current screen-share context plus the existing P7-17/P7-18 browser path; do not add a separate bridge, persist page data, or access the live Jev key.
 - Single user (Dan). Keep the design as small as the requirements allow.
 
 ## Sources
@@ -214,6 +215,7 @@ backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
 Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3), and P2-01 (#27) adds sandbox and operations groups 4 and 6.
 P0-04 adds the Bicep template; its first Azure deployment is P0-16. Bicep sets backend `KEY_VAULT_URI`; the backend uses its managed identity to read `github-app-webhook-secret`. Locally, the URI can be omitted; webhook requests then fail with 503. The secret is cached in memory after a successful lookup and requires a backend restart to rotate.
 P7-04 reads the Jev API key `jev-api-key` from the same Key Vault with the backend identity. Dan provisions it after merge with the coordinator's `set-jev-key.ps1` outside this repository; agents must not run that script or access the live key. The reflex uses the configured `jev-latest` model. Live Jev latency and Voice Live behavior are not covered by offline tests.
+P7-19 reuses that existing key and P7-18's default-off Chrome toggle; it adds no secret, environment variable, or setup command. Dan's live shared-form, Jev/Foundry, Voice Live, and confirmation checks remain post-merge work.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
 and Python 3.12.14 (`.python-version`, for future Python work). Install from the

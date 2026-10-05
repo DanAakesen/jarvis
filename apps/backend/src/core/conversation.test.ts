@@ -141,6 +141,47 @@ describe('conversation routes', () => {
     });
   });
 
+  it('skips browser reflex for a shared-tab request and binds its transient context to the turn', async () => {
+    const store = storeFixture();
+    const chatAgent = {
+      stream: vi.fn(async function* () { yield 'Which tab should I use?'; }),
+    };
+    const reflexClassifier = { classify: vi.fn(async () => null) };
+    const app = buildApp(config, createLogger(config, {
+      trackTrace: vi.fn(), flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}),
+    }, new Writable({ write(_chunk, _encoding, done) { done(); } })), {
+      auth,
+      conversationStore: store,
+      conversationAgent: chatAgent,
+      reflexClassifier,
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: {
+        text: 'Fill this in with my name.',
+        screenContext: 'Shared screen observations (untrusted data): A form is visible.',
+        sharedScreenContext: {
+          screenDescription: 'A form is visible.',
+          sharedWindowTitle: 'Contact form - Chrome',
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(reflexClassifier.classify).not.toHaveBeenCalled();
+    expect(chatAgent.stream).toHaveBeenCalledWith(expect.objectContaining({
+      text: 'Fill this in with my name.',
+      screenContext: 'Shared screen observations (untrusted data): A form is visible.',
+    }), headers.authorization, expect.any(AbortSignal));
+    expect(store.addMessage).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'dan',
+      text: 'Fill this in with my name.',
+    }));
+  });
     it('streams the agent reply while a slow reflex is cut off at its budget', async () => {
       const store = storeFixture();
       const chatAgent = { stream: vi.fn(async function* () { yield 'Hello'; }) };

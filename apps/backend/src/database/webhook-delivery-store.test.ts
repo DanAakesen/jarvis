@@ -31,6 +31,29 @@ vi.mock('mssql', async (importOriginal) => {
 });
 
 describe('webhook delivery store', () => {
+  it('upserts a reconciled PR record in a serializable transaction without faking a webhook delivery', async () => {
+    transactionEvents.values.length = 0;
+    const query = vi.fn().mockResolvedValue({ rowsAffected: [1] });
+    const store = createWebhookDeliveryStore({ query } as unknown as sql.ConnectionPool);
+    const mapping = {
+      kind: 'pull_request' as const,
+      repository: 'DanAakesen/jarvis-test-target',
+      number: 73,
+      branch: 'jarvis/task-42',
+      headSha: 'a'.repeat(40),
+      state: 'open' as const,
+      openedAt: '2026-10-04T20:06:00.000Z',
+      mergedAt: null,
+    };
+
+    await store.recordPullRequest(mapping);
+
+    expect(query).toHaveBeenCalledOnce();
+    expect(query.mock.calls[0]?.[0]).toContain('INSERT INTO dbo.pull_requests');
+    expect(query.mock.calls[0]?.[0]).toContain('WHERE project_id = @projectId AND branch = @branch');
+    expect(transactionEvents.values).toEqual([`begin:${sql.ISOLATION_LEVEL.SERIALIZABLE}`, 'commit']);
+  });
+
   it('inserts a new delivery in a serializable transaction and commits', async () => {
     transactionEvents.values.length = 0;
     const query = vi.fn().mockResolvedValue({ rowsAffected: [1] });

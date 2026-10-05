@@ -670,6 +670,41 @@ offline median fake step was 0.07 ms excluding page loads. Live Jev/Foundry,
 Dan's signed-in Chrome, Teams approval delivery and end-to-end voice/browser
 behavior remain unverified.
 
+### Act on the shared Chrome tab (P7-19)
+
+While Dan is sharing, chat captures a fresh frame for a deictic browser request;
+the authenticated chat turn binds its bounded description and selected display
+label as transient request context and skips focused-tab reflex routing. English
+Voice Live recognizes phrases such as “fill this in” or “do it here,” skips
+focused-tab reflex routing, and waits for the browser to return that frame's
+bounded description and selected display label. If capture is unavailable or
+times out, the model is told not to use a browser tab and to ask Dan to share one.
+The description and label are transient request context, not transcript, task
+event, or persisted browser data.
+
+The sensitive `browser_do_shared` tool matches the label and vision description
+against the paginated live `pc_browser_tabs` result. A unique strong match
+supplies only that observed tab ID to the existing P7-17 `runTask`; tied, weak,
+or missing matches return a question listing bounded tab titles (and hosts) for
+Dan to clarify. A tab-title override is honored only when Dan named that exact
+title in the current message, the visual description has at least two matching
+words, and any informative display label has at least two matches. Weak or
+contradictory evidence produces a clarification instead of a tab selection.
+Chrome-offline refusal offers to send the steps instead. Voice tool
+calls bind the captured context to the authenticated session request; even if the
+model chooses generic `browser_do`, that request routes through shared-tab
+resolution instead of the focused tab. Saying “stop” cancels either shared
+browser tool route. Each action still uses a new P7-18 node-indexed
+snapshot and its freshness/visibility/occlusion checks. P7-03 confirmation,
+sensitive-field blocking, the 20-step/30-second bound, and the transient P8-15
+workspace progress remain unchanged. Voice speaks one fixed progress phrase after
+a tab is resolved; the exact “stop” transcript aborts the active browser tool.
+Fake tests cover current-context handoff, shared-tab resolution/pagination,
+ambiguity, offline fallback, execution, spoken progress, stop and confirmation.
+No new bridge, dependency, setting, or persistence is introduced. Dan's live
+Chrome form, Jev/Foundry, Voice Live and physical confirmation delivery remain
+unverified.
+
 P4-10 registers the Software Factory's `list_projects`, `list_tasks`, `get_task`,
 `create_task`, `steer_task`, `pause_task`, `resume_task`, and `cancel_task` tools.
 They call the injected project/task stores and task controller, so the same
@@ -948,12 +983,13 @@ These boxes are responsibilities; they do not each need a separate service.
 | Retries | `attempt_count` and `next_attempt_at` on the task row. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; ambiguous Foundry starts and exhausted attempts move to Needs attention. Expired startup leases move to Needs attention rather than being replayed, avoiding duplicate remote sessions. |
 | Sandbox heartbeat | At startup, the backend loads active sessions with their current invocation status once; the dispatcher registers new turns. Each registered invocation is checked immediately and about once a minute, and `last_heartbeat_at` is updated after a valid response. The poller holds active sessions in memory and makes no recurring SQL reads while idle. A runner `needs_attention` status ends monitoring and transactionally moves the task to NeedsAttention with the bounded question. A `session_question` event marks the turn completed and moves the task to NeedsAttention but keeps its session monitored so later expiry can be classified. |
 | Crash detection | Two consecutive HTTP 424/404/5xx responses, with a confirming poll after 30 s, mark an active invocation's sandbox Crashed and move its task to NeedsAttention. If the correlated turn already completed, the sandbox instead ends as `Ended`/`idle_expired`, and task state is unchanged. Both outcomes persist in one transaction and publish the committed task event through the in-process hub. Event gaps alone never trigger a crash (L22). |
+| Stale task reconciliation | At dispatcher startup and every five minutes, scan at most five Running tasks whose latest sandbox heartbeat is at least five minutes old. Query the recorded Foundry invocation with a 15-second timeout. A live invocation refreshes its heartbeat; a completed invocation uses the normal GitHub delivery and project-policy path, persisting a discovered PR through the P3-04 mapping first. Failed, unavailable, mismatched, or otherwise unverifiable states move to NeedsAttention with a user-visible reason; Done requires the existing verified completion path. Each outcome logs an allowlisted `task_reconciliation.decision` with task/session/invocation IDs and bounded status/decision fields only. This bounded scan is the recovery path for lost completion/webhook events, not a substitute for webhook delivery. |
 | Recovery and completion | Recover atomically claims a NeedsAttention task after an actual crash; Continue after `idle_expired` uses the same branch-recovery path. Both start a fresh Foundry session from the existing task branch with the original request, bounded steering history, and event summary. A completed invocation is correlated to its active task session; the backend accepts Done only after a repository-scoped GitHub App check confirms both the branch and a pull request. Missing evidence returns the task to NeedsAttention; API failures do not produce false success. Migration `0010_idle_expired_sessions.sql` extends the session end-reason vocabulary. Offline fake tests cover both heartbeat outcomes and continuation; SQL Server CI, live runner, Foundry, and GitHub behavior remain unverified. |
 | Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. The dispatcher sends `task_id` in every start and resume invocation; a runner deployed with `JARVIS_BACKEND_URL` rejects task invocations without one (L59). Browser streaming is P1-06. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. |
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. The fetch client reconnects with its last delivered ID and ignores repeats. |
 | Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. Live state is visible; PR/check/usage values stay unavailable until their owning data integrations exist. |
-| Idle | The dispatcher subscribes to committed task events and schedules only the next retry deadline. After its startup scan, it makes no recurring SQL queries while idle; there is no polling timer. |
+| Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It also runs the bounded five-minute stale-task scan; there is no unbounded queue poll while idle. |
 | Always on | The backend normally runs with a minimum of 1 replica, so the heartbeat never stops. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. The backend does not query SQL while idle, so the database can still pause. |
 
 P2-14 also guards the dispatcher's generic NeedsAttention cleanup: a completed
@@ -1250,7 +1286,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Runtime activity (P8-16) | The backend publishes transient, typed activity over owner-authenticated `/now/events`; the voice orb, top bar and workspace consume events from the same stream. Listening follows relay readiness and observed microphone audio; tool calls expose only name and normalized outcome. Speaking follows observed output audio, including P7-12 announcements, with no duplicate announcement. | Contract, mocked chat/voice protocol, authenticated SSE and web tests cover event validation, observed transitions, cancellation/disconnect and payload privacy. The local browser acceptance check covers the voice workspace; live Entra/Foundry and physical audio remain unverified. |
 | English status updates (P7-12) | The relay subscribes to committed task transitions and typed status kinds emitted after verified GitHub webhook processing for ready-for-review pull requests and failed deployments. It merges duplicate kinds over 500 ms, then speaks fixed wording only when Dan and Jarvis are idle and no tool call is active; a queued update is retried when Dan stops speaking. `get_status_summary` exposes bounded Now-feed counts, applies Away-mode visibility, and never returns activity text or logs. | Fake event-hub, webhook receiver, tool-route and relay tests cover filtering, duplicate deliveries, redaction and deferral. Live voice audio and production webhook delivery remain unverified. |
 | Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |
-| Visual inspection (P7-05/P7-08) | The browser captures a JPEG from the explicitly selected `getDisplayMedia` stream or, after Dan turns the camera on and grants permission, `getUserMedia`. A frame is captured only for an explicit chat/voice request. Authenticated `POST /screen/frames` checks Dan's identity, active `jarvis_sessions` row, JPEG/1 MiB limit, 3-second interval and shared `global.screen_share_daily_frame_cap` (default 300, range 1–300). It reserves the frame in `dbo.usage`, calls the configured vision deployment using the backend managed identity, then sends only the bounded description to chat context or Voice Live response instructions. No image is persisted or logged; chat messages, voice transcripts and task events do not contain the synthetic context. | Backend/web/agent contract tests exercise a fake camera stream/model and transient context. Screen and camera share `screen_frames` reservations and token/cost recording; estimated DKK uses the documented short-context Global Standard rates. Live deployment SKU, model image acceptance and billed cost remain to verify. Voice/session end and page teardown stop media; camera also stops after five minutes. |
+| Visual inspection (P7-05/P7-08) | The browser captures a JPEG from the explicitly selected `getDisplayMedia` stream or, after Dan turns the camera on and grants permission, `getUserMedia`. A frame is captured only for an explicit chat/voice request. Authenticated `POST /screen/frames` checks Dan's identity, active `jarvis_sessions` row, JPEG/1 MiB limit, 3-second interval and shared `global.screen_share_daily_frame_cap` (default 300, range 1–300). It reserves the frame in `dbo.usage`, calls the configured vision deployment using the backend managed identity, then sends only the bounded description to chat context or Voice Live response instructions. P7-19 also carries the selected display label alongside the description for shared-tab resolution; both remain transient and untrusted. No image is persisted or logged; chat messages, voice transcripts and task events do not contain the synthetic context. | Backend/web/agent contract tests exercise a fake camera stream/model and transient context. Screen and camera share `screen_frames` reservations and token/cost recording; estimated DKK uses the documented short-context Global Standard rates. Live deployment SKU, model image acceptance and billed cost remain to verify. Voice/session end and page teardown stop media; camera also stops after five minutes. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
 | Jarvis model | `gpt-5.6-luna`, reasoning `none`, strict action rules (L16) | ≈0.003 DKK per command |
 | Voices | English: `en-GB-Ryan:DragonHDLatestNeural`. Danish: `en-US-Harper:MAI-Voice-2` locked to `da-DK` with `voice_locale`. Language toggle in the UI. | Chosen by Dan from samples |

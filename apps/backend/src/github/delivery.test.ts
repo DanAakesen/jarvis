@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
 import { createGitHubDeliveryHandler, type TaskCompletionGate } from './delivery.js';
+import type { GithubWebhookMapping } from './webhook-mapping.js';
 
 const workspace = {
   repository: 'DanAakesen/jarvis-test-target',
@@ -11,7 +12,8 @@ const task = { id: '42', title: 'Fix the bug' };
 const pullRequest = {
   number: 73,
   state: 'open',
-  head: { ref: workspace.branch, repo: { full_name: workspace.repository } },
+  created_at: '2026-10-04T20:06:00.000Z',
+  head: { ref: workspace.branch, sha: 'a'.repeat(40), repo: { full_name: workspace.repository } },
   base: { ref: workspace.defaultBranch },
 };
 
@@ -31,7 +33,11 @@ function github(options: {
 } = {}) {
   const matchingPullRequest = {
     ...pullRequest,
-    head: { ref: workspace.branch, repo: { full_name: options.pullRepository ?? workspace.repository } },
+    head: {
+      ref: workspace.branch,
+      sha: 'a'.repeat(40),
+      repo: { full_name: options.pullRepository ?? workspace.repository },
+    },
   };
   const calls: { url: string; method: string; body?: string }[] = [];
   let created = options.existing ?? false;
@@ -68,15 +74,26 @@ function github(options: {
   return { fetch, calls, get creates() { return createdPullRequests; } };
 }
 
-function fixture(fetch: typeof globalThis.fetch) {
+type PullRequestMapping = Extract<GithubWebhookMapping, { kind: 'pull_request' }>;
+
+function fixture(
+  fetch: typeof globalThis.fetch,
+  callbacks: {
+    onPullRequest?: (mapping: PullRequestMapping) => Promise<void>;
+    afterPullRequest?: (mapping: PullRequestMapping) => Promise<void>;
+  } = {},
+) {
   const recordEvent = vi.fn(async () => ({ id: '1' } as never));
+  const recordPullRequest = callbacks.onPullRequest ?? vi.fn(async () => {});
   const handler = createGitHubDeliveryHandler(
     tokenIssuer(),
     { recordEvent } as never,
     'https://jarvis.example',
     fetch,
+    recordPullRequest,
+    callbacks.afterPullRequest,
   );
-  return { handler, recordEvent };
+  return { handler, recordEvent, recordPullRequest };
 }
 
 describe('GitHub task delivery', () => {
@@ -122,6 +139,27 @@ describe('GitHub task delivery', () => {
     }));
   });
 
+  it.each([false, true])('evaluates project policy after releasing the completion gate (existing PR: %s)', async (existing) => {
+    const api = github({ existing });
+    let gateHeld = false;
+    const persisted = vi.fn(async () => { expect(gateHeld).toBe(true); });
+    const evaluated = vi.fn(async () => { expect(gateHeld).toBe(false); });
+    const test = fixture(api.fetch, { onPullRequest: persisted, afterPullRequest: evaluated });
+    const gate: TaskCompletionGate = async (operation) => {
+      gateHeld = true;
+      try {
+        return { kind: 'ran' as const, value: await operation() };
+      } finally {
+        gateHeld = false;
+      }
+    };
+
+    await expect(test.handler(workspace, task, gate)).resolves.toEqual({ kind: 'awaiting_policy' });
+
+    expect(persisted).toHaveBeenCalledOnce();
+    expect(evaluated).toHaveBeenCalledOnce();
+  });
+
   it('reconciles a timed-out create that GitHub accepted before recording the PR', async () => {
     const api = github();
     const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
@@ -153,6 +191,16 @@ describe('GitHub task delivery', () => {
       type: 'pull_request_opened',
       payload: expect.objectContaining({ pullRequest: 73, reused: true }),
     }));
+    expect(test.recordPullRequest).toHaveBeenCalledWith({
+      kind: 'pull_request',
+      repository: workspace.repository,
+      number: 73,
+      branch: workspace.branch,
+      headSha: 'a'.repeat(40),
+      state: 'open',
+      openedAt: '2026-10-04T20:06:00.000Z',
+      mergedAt: null,
+    });
   });
 
   it('accepts GitHub canonical repository casing in a PR response', async () => {
