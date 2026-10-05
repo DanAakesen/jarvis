@@ -369,7 +369,16 @@ failed requests were observed. Screenshots are labelled fixture evidence, not
 live authentication, physical audio/camera, generated-window delivery or
 P8-16 tool-event acceptance. A representative desktop speaking capture was
 visually inspected; the other captures were checked for state/layout by the
-browser harness.
+browser harness. A ready-state fixture at 390, 372, 360, 320, 300 and 280px
+verified the explicit microphone action has no inherited top margin, End voice
+stays inside the dock, and the workspace clears the expanded dock. The status
+heading and detail share one atomic live region, so permission feedback can be
+announced even when the status remains Ready. Focused checks: `npm test
+--workspace @jarvis/web -- --run src/Workspace.test.tsx
+src/ConversationHistory.test.tsx src/VoiceControls.test.tsx
+src/VoiceOrb.test.tsx src/App.test.tsx` (89 passed), `npm run lint
+--workspace @jarvis/web`, and `npm run build --workspace @jarvis/web` passed;
+the build retains its existing chunk-size advisory.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

@@ -344,11 +344,12 @@ agent-created view collection; commands retain P8-15's required `commandId`.
 During voice, the foreground window ends above the safe-area-aware orb dock;
 P8-23 keeps the microphone and inspection actions in the orb's control group
 with End voice. Long runtime status text stays within the dock without covering
-those controls. With no non-minimised content, the orb returns to the centre
-with its controls below it. Typing never shows the large orb. Camera and sharing
-move behind a labelled phone disclosure; Settings stays at the right of the
-one-line top bar. Escape closes the disclosure and returns focus before ending
-voice.
+those controls. The dock expands only while the microphone is ready and at
+narrow widths where those controls wrap, keeping End voice above the workspace.
+With no non-minimised content, the orb returns to the centre with its controls
+below it. Typing never shows the large orb. Camera and sharing move behind a
+labelled phone disclosure; Settings stays at the right of the one-line top bar.
+Escape closes the disclosure and returns focus before ending voice.
 
 Labelled local before/after screenshots are in `docs/ui/screenshots/p8-11-*`.
 Touch-emulated Chromium verifies interactions, not physical-phone keyboards,

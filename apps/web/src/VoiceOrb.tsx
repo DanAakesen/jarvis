@@ -47,12 +47,12 @@ export function VoiceOrb({
     <div className={`voice-orb-presentation voice-orb-${state.className}`} data-state={state.className}
       style={{ '--voice-level': level * 0.08 } as CSSProperties}>
       <div className="voice-orb" aria-hidden="true"><span /></div>
-      <div className="voice-orb-copy">
+      <div className="voice-orb-copy" role={unavailable ? undefined : 'status'} aria-atomic={unavailable ? undefined : 'true'}>
         <h1
           id="voice-status"
           className={state.className === 'unavailable' ? 'voice-orb-status error-text' : 'voice-orb-status'}
-          aria-live={unavailable ? 'assertive' : 'polite'}
-          aria-atomic="true"
+          aria-live={unavailable ? 'assertive' : undefined}
+          aria-atomic={unavailable ? 'true' : undefined}
         >
           {state.heading}
         </h1>

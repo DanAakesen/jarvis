@@ -36,6 +36,17 @@ describe('VoiceOrb', () => {
     expect(screen.getByText('Jarvis is speaking.')).not.toBeNull();
   });
 
+  it('announces detail changes while the voice state stays ready', () => {
+    const { rerender } = render(<VoiceOrb status="ready" message="Microphone is off." />);
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Ready' })).not.toBeNull();
+    expect(screen.getByRole('status').getAttribute('aria-atomic')).toBe('true');
+
+    rerender(<VoiceOrb status="ready" message="Microphone access was denied." />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Ready' })).not.toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('Microphone access was denied.');
+  });
+
   it('reflects interruption and reconnect transitions', () => {
     const { container, rerender } = render(<VoiceOrb status="speaking" message="Jarvis is speaking." />);
 
