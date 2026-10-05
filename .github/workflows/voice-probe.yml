@@ -1,0 +1,40 @@
+name: Voice probe
+
+# Manual diagnostic: connects to the deployed Danish voice wrapper with the deploy identity and
+# prints event types, errors and the close reason. No audio or transcript content is logged.
+on:
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds to keep the session open
+        default: "20"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Load the Foundry project endpoint
+        env:
+          SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          endpoint=$(az deployment group show --name jarvis-infra --resource-group rg-jarvis --subscription "$SUBSCRIPTION_ID" --query properties.outputs.foundryAdminEndpoint.value --output tsv --only-show-errors)
+          echo "FOUNDRY_PROJECT_ENDPOINT=$endpoint" >>"$GITHUB_ENV"
+      - run: python -m pip install --quiet "websockets==15.0.1"
+      - name: Probe the voice wrapper
+        env:
+          PROBE_SECONDS: ${{ inputs.seconds }}
+        run: python agents/jarvis/scripts/voice_probe.py
