@@ -1552,3 +1552,11 @@ flowchart LR
 - Agent protocol: [Copilot CLI ACP](https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server), [codex-acp](https://github.com/agentclientprotocol/codex-acp), [ACP Python SDK](https://github.com/agentclientprotocol/python-sdk).
 - GitHub Actions: [workflow triggers](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows), [OpenID Connect to Azure](https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-azure), [webhook events](https://docs.github.com/en/webhooks/webhook-events-and-payloads).
 - Background: [open-source research](open-source.md) (selective reuse; no foundation chosen); prototype code and reports in [reference/](reference/).
+
+## Planned Jarvis 3D presentation boundary (P8-28–P8-33)
+
+The accepted [stage reference](reference/ui-stage-prototype/README.md) uses Three.js, shaders, a planar floor reflector and HTML controls. Production currently uses the existing React/CSS visual system; this handoff does not change runtime packages or deployment. P8-28 ports the selected scene into the web app using the production toolchain, with managed allocation/disposal and off-route/hidden-tab lifecycle. The scene is mounted only on Jarvis. Its geometry/viewpoint persist across typing/voice and dark/light; light appearance re-lights the same room.
+
+Browser state owns scene placement, window geometry, theme application and animation. Reuse P8-14 typed declarative views, P8-15 authenticated workspace commands/acknowledgements, P8-16 transient observed runtime activity and decoded playback audio, and P8-17 validated preference persistence. Dormant/awake presentation does not start microphone capture or change backend sleep. No new backend view store, provider calls, generated-code execution or credential surface is needed. Phone quality adaptation, reduced motion and WebGL unavailable/lost recovery belong to P8-33; the HTML controls and actual chat/voice remain usable when 3D fails.
+
+The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. The production runtime integration, light appearance, hardware performance and transition-flicker correction remain planned.

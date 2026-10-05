@@ -1,0 +1,923 @@
+{
+  "result": "passed",
+  "checks": [
+    "real WebGL rendering",
+    "persistent centred dormant orb",
+    "transparent particle and filament core with no opaque surface or backing",
+    "core stays visible in dormant mode",
+    "smooth in-place wake-up",
+    "brighter shell, core and room in voice",
+    "orb returns to dormancy after voice",
+    "centred voice state",
+    "orb moves and resizes without overlapping the content window",
+    "camera, platform and rear ring remain fixed",
+    "rear ring faces viewer",
+    "moving emitter matches orb",
+    "768px planar floor reflection",
+    "interactive illustrative source balance",
+    "adjustable rendered orb lighting",
+    "minimise and restore",
+    "close and recenter",
+    "Escape and focus restoration",
+    "rapid mode reversal",
+    "configurable minimise on entry",
+    "dialog Escape isolation",
+    "reduced motion",
+    "390px phone layout"
+  ],
+  "wake": [
+    {
+      "progress": 0.028717641936166792,
+      "height": 2.1031533877579367,
+      "growth": 1.0022524198270977,
+      "shellBrightness": 0.3729741135489334,
+      "coreBrightness": 0.18182540787148677,
+      "x": 720,
+      "y": 470.8245424607955
+    },
+    {
+      "progress": 0.09354198742840357,
+      "height": 2.1101380742274753,
+      "growth": 1.0072414815910538,
+      "shellBrightness": 0.42483358994272286,
+      "coreBrightness": 0.23109191044558672,
+      "x": 720,
+      "y": 470.3472885881079
+    },
+    {
+      "progress": 0.17695318107585145,
+      "height": 2.118470220305729,
+      "growth": 1.0131930145040922,
+      "shellBrightness": 0.4915625448606812,
+      "coreBrightness": 0.2944844176176471,
+      "x": 720,
+      "y": 469.7779285804273
+    },
+    {
+      "progress": 0.2674842261559451,
+      "height": 2.126070134770398,
+      "growth": 1.0186215248359984,
+      "shellBrightness": 0.5639873809247561,
+      "coreBrightness": 0.3632880118785183,
+      "x": 720,
+      "y": 469.2585698541229
+    },
+    {
+      "progress": 0.35787665394422113,
+      "height": 2.131568834538559,
+      "growth": 1.022549167527542,
+      "shellBrightness": 0.6363013231553769,
+      "coreBrightness": 0.43198625699760806,
+      "x": 720,
+      "y": 468.882782390501
+    },
+    {
+      "progress": 0.44376321269541547,
+      "height": 2.1344551852523628,
+      "growth": 1.0246108466088304,
+      "shellBrightness": 0.7050105701563324,
+      "coreBrightness": 0.4972600416485158,
+      "x": 720,
+      "y": 468.6855190164863
+    },
+    {
+      "progress": 0.5227325922910807,
+      "height": 2.134910782279012,
+      "growth": 1.024936273056437,
+      "shellBrightness": 0.7681860738328645,
+      "coreBrightness": 0.5572767701412213,
+      "x": 720,
+      "y": 468.654381480163
+    },
+    {
+      "progress": 0.5936701249788959,
+      "height": 2.133495460184357,
+      "growth": 1.0239253287031123,
+      "shellBrightness": 0.8249360999831168,
+      "coreBrightness": 0.6111892949839609,
+      "x": 720,
+      "y": 468.75111053115234
+    },
+    {
+      "progress": 0.6562970477465605,
+      "height": 2.130864805299613,
+      "growth": 1.0220462894997235,
+      "shellBrightness": 0.8750376381972484,
+      "coreBrightness": 0.658785756287386,
+      "x": 720,
+      "y": 468.93089751317007
+    },
+    {
+      "progress": 0.7108519611431925,
+      "height": 2.1275979105242584,
+      "growth": 1.0197127932316132,
+      "shellBrightness": 0.918681568914554,
+      "coreBrightness": 0.7002474904688263,
+      "x": 720,
+      "y": 469.15416161924446
+    },
+    {
+      "progress": 0.7578735614802025,
+      "height": 2.124129055983105,
+      "growth": 1.0172350399879322,
+      "shellBrightness": 0.956298849184162,
+      "coreBrightness": 0.735983906724954,
+      "x": 720,
+      "y": 469.3912213240123
+    },
+    {
+      "progress": 0.798055031045142,
+      "height": 2.1207451154940933,
+      "growth": 1.0148179396386379,
+      "shellBrightness": 0.9884440248361136,
+      "coreBrightness": 0.766521823594308,
+      "x": 720,
+      "y": 469.62247148596447
+    },
+    {
+      "progress": 0.8609058896925847,
+      "height": 2.1148120871684277,
+      "growth": 1.0105800622631627,
+      "shellBrightness": 1.0387247117540679,
+      "coreBrightness": 0.8142884761663645,
+      "x": 720,
+      "y": 470.0279043962252
+    },
+    {
+      "progress": 0.905208183392478,
+      "height": 2.1102695301643424,
+      "growth": 1.007335378688816,
+      "shellBrightness": 1.0741665467139825,
+      "coreBrightness": 0.8479582193782833,
+      "x": 720,
+      "y": 470.33830612290103
+    },
+    {
+      "progress": 0.9474651413034968,
+      "height": 2.1057503204938253,
+      "growth": 1.0041073717813038,
+      "shellBrightness": 1.1079721130427975,
+      "coreBrightness": 0.8800735073906576,
+      "x": 720,
+      "y": 470.6471008965934
+    }
+  ],
+  "dormant": {
+    "orbVisual": {
+      "visible": true,
+      "coreVisible": true,
+      "coreTransparent": true,
+      "corePoints": 220,
+      "coreConnections": 74,
+      "opaqueCoreSurfaces": 0,
+      "centralOrbitArcs": 0,
+      "backgroundMasked": false,
+      "awake": 0,
+      "shellBrightness": 0.35,
+      "coreBrightness": 0.16
+    },
+    "environment": {
+      "geometryLayers": 3,
+      "wallPanels": 12,
+      "particles": 520,
+      "depthRange": [
+        -22,
+        4
+      ],
+      "chamberRadius": 15,
+      "phase": 1.8333000000000035,
+      "ringAngles": [
+        0.15583050000000032,
+        0.46282187764616256,
+        1.1933055552923257
+      ],
+      "wallLight": 85.8,
+      "wallLightPosition": [
+        0,
+        3.6009805535309996,
+        0
+      ]
+    },
+    "renderer": "three.js",
+    "frames": 18,
+    "orb": {
+      "x": 720,
+      "y": 471.0400000000001
+    },
+    "platform": {
+      "x": 720,
+      "y": 713.4626789587142
+    },
+    "alignmentError": 0,
+    "wakeSamples": [],
+    "voice": 0,
+    "split": 0,
+    "orbHeight": 2.1,
+    "orbGrowth": 1,
+    "rearCircle": {
+      "x": 720,
+      "y": 471.0400000000001
+    },
+    "cameraPosition": [
+      0,
+      4.5,
+      19
+    ],
+    "cameraQuaternion": [
+      -0.03938179367760872,
+      0,
+      0,
+      0.999224236258676
+    ],
+    "orbRadius": 184.32,
+    "orbWorld": [
+      0,
+      3.6009805535309996,
+      0
+    ],
+    "lightPosition": [
+      0,
+      3.6009805535309996,
+      0
+    ],
+    "lightIntensity": 41.6,
+    "reflection": {
+      "kind": "planar scene reflection",
+      "width": 768,
+      "blurred": true
+    },
+    "rigDepth": 0,
+    "rearAspect": 0.9999999999999998
+  },
+  "restored": {
+    "orbVisual": {
+      "visible": true,
+      "coreVisible": true,
+      "coreTransparent": true,
+      "corePoints": 220,
+      "coreConnections": 74,
+      "opaqueCoreSurfaces": 0,
+      "centralOrbitArcs": 0,
+      "backgroundMasked": false,
+      "awake": 0.004472044288395901,
+      "shellBrightness": 0.3535776354307167,
+      "coreBrightness": 0.16339875365918088
+    },
+    "environment": {
+      "geometryLayers": 3,
+      "wallPanels": 12,
+      "particles": 520,
+      "depthRange": [
+        -22,
+        4
+      ],
+      "chamberRadius": 15,
+      "phase": 15.783499999999954,
+      "ringAngles": [
+        1.3415974999999962,
+        -0.31838932235383466,
+        1.667612355292324
+      ],
+      "wallLight": 86.89207321522628,
+      "wallLightPosition": [
+        -1.7656755803143435e-09,
+        3.6014722643065573,
+        0
+      ]
+    },
+    "renderer": "three.js",
+    "frames": 136,
+    "orb": {
+      "x": 719.9999998792852,
+      "y": 471.00640386958173
+    },
+    "platform": {
+      "x": 720,
+      "y": 713.4626789587142
+    },
+    "alignmentError": 1.207148443427286e-07,
+    "wakeSamples": [
+      {
+        "progress": 0.028717641936166792,
+        "height": 2.1031533877579367,
+        "growth": 1.0022524198270977,
+        "shellBrightness": 0.3729741135489334,
+        "coreBrightness": 0.18182540787148677,
+        "x": 720,
+        "y": 470.8245424607955
+      },
+      {
+        "progress": 0.09354198742840357,
+        "height": 2.1101380742274753,
+        "growth": 1.0072414815910538,
+        "shellBrightness": 0.42483358994272286,
+        "coreBrightness": 0.23109191044558672,
+        "x": 720,
+        "y": 470.3472885881079
+      },
+      {
+        "progress": 0.17695318107585145,
+        "height": 2.118470220305729,
+        "growth": 1.0131930145040922,
+        "shellBrightness": 0.4915625448606812,
+        "coreBrightness": 0.2944844176176471,
+        "x": 720,
+        "y": 469.7779285804273
+      },
+      {
+        "progress": 0.2674842261559451,
+        "height": 2.126070134770398,
+        "growth": 1.0186215248359984,
+        "shellBrightness": 0.5639873809247561,
+        "coreBrightness": 0.3632880118785183,
+        "x": 720,
+        "y": 469.2585698541229
+      },
+      {
+        "progress": 0.35787665394422113,
+        "height": 2.131568834538559,
+        "growth": 1.022549167527542,
+        "shellBrightness": 0.6363013231553769,
+        "coreBrightness": 0.43198625699760806,
+        "x": 720,
+        "y": 468.882782390501
+      },
+      {
+        "progress": 0.44376321269541547,
+        "height": 2.1344551852523628,
+        "growth": 1.0246108466088304,
+        "shellBrightness": 0.7050105701563324,
+        "coreBrightness": 0.4972600416485158,
+        "x": 720,
+        "y": 468.6855190164863
+      },
+      {
+        "progress": 0.5227325922910807,
+        "height": 2.134910782279012,
+        "growth": 1.024936273056437,
+        "shellBrightness": 0.7681860738328645,
+        "coreBrightness": 0.5572767701412213,
+        "x": 720,
+        "y": 468.654381480163
+      },
+      {
+        "progress": 0.5936701249788959,
+        "height": 2.133495460184357,
+        "growth": 1.0239253287031123,
+        "shellBrightness": 0.8249360999831168,
+        "coreBrightness": 0.6111892949839609,
+        "x": 720,
+        "y": 468.75111053115234
+      },
+      {
+        "progress": 0.6562970477465605,
+        "height": 2.130864805299613,
+        "growth": 1.0220462894997235,
+        "shellBrightness": 0.8750376381972484,
+        "coreBrightness": 0.658785756287386,
+        "x": 720,
+        "y": 468.93089751317007
+      },
+      {
+        "progress": 0.7108519611431925,
+        "height": 2.1275979105242584,
+        "growth": 1.0197127932316132,
+        "shellBrightness": 0.918681568914554,
+        "coreBrightness": 0.7002474904688263,
+        "x": 720,
+        "y": 469.15416161924446
+      },
+      {
+        "progress": 0.7578735614802025,
+        "height": 2.124129055983105,
+        "growth": 1.0172350399879322,
+        "shellBrightness": 0.956298849184162,
+        "coreBrightness": 0.735983906724954,
+        "x": 720,
+        "y": 469.3912213240123
+      },
+      {
+        "progress": 0.798055031045142,
+        "height": 2.1207451154940933,
+        "growth": 1.0148179396386379,
+        "shellBrightness": 0.9884440248361136,
+        "coreBrightness": 0.766521823594308,
+        "x": 720,
+        "y": 469.62247148596447
+      },
+      {
+        "progress": 0.8609058896925847,
+        "height": 2.1148120871684277,
+        "growth": 1.0105800622631627,
+        "shellBrightness": 1.0387247117540679,
+        "coreBrightness": 0.8142884761663645,
+        "x": 720,
+        "y": 470.0279043962252
+      },
+      {
+        "progress": 0.905208183392478,
+        "height": 2.1102695301643424,
+        "growth": 1.007335378688816,
+        "shellBrightness": 1.0741665467139825,
+        "coreBrightness": 0.8479582193782833,
+        "x": 720,
+        "y": 470.33830612290103
+      },
+      {
+        "progress": 0.9474651413034968,
+        "height": 2.1057503204938253,
+        "growth": 1.0041073717813038,
+        "shellBrightness": 1.1079721130427975,
+        "coreBrightness": 0.8800735073906576,
+        "x": 720,
+        "y": 470.6471008965934
+      }
+    ],
+    "voice": 0.004472044288395901,
+    "split": 2.8240199044386447e-06,
+    "orbHeight": 2.100491710775558,
+    "orbGrowth": 1.0003512219825412,
+    "rearCircle": {
+      "x": 720,
+      "y": 471.0400000000001
+    },
+    "cameraPosition": [
+      0,
+      4.5,
+      19
+    ],
+    "cameraQuaternion": [
+      -0.03938179367760872,
+      0,
+      0,
+      0.999224236258676
+    ],
+    "orbRadius": 184.384737226417,
+    "orbWorld": [
+      -1.7656755803143435e-09,
+      3.6014722643065573,
+      0
+    ],
+    "lightPosition": [
+      -1.7656755803143435e-09,
+      3.6014722643065573,
+      0
+    ],
+    "lightIntensity": 42.129490043746074,
+    "reflection": {
+      "kind": "planar scene reflection",
+      "width": 768,
+      "blurred": true
+    },
+    "rigDepth": 0,
+    "rearAspect": 0.9999999999999998
+  },
+  "centred": {
+    "orbVisual": {
+      "visible": true,
+      "coreVisible": true,
+      "coreTransparent": true,
+      "corePoints": 220,
+      "coreConnections": 74,
+      "opaqueCoreSurfaces": 0,
+      "centralOrbitArcs": 0,
+      "backgroundMasked": false,
+      "awake": 0.9944871916502277,
+      "shellBrightness": 1.1455897533201822,
+      "coreBrightness": 0.9158102656541731
+    },
+    "environment": {
+      "geometryLayers": 3,
+      "wallPanels": 12,
+      "particles": 520,
+      "depthRange": [
+        -22,
+        4
+      ],
+      "chamberRadius": 15,
+      "phase": 5.6733000000000064,
+      "ringAngles": [
+        0.48223050000000056,
+        0.24778187764616244,
+        1.3238655552923257
+      ],
+      "wallLight": 328.6537722009856,
+      "wallLightPosition": [
+        0,
+        3.6015866881659213,
+        0
+      ]
+    },
+    "renderer": "three.js",
+    "frames": 50,
+    "orb": {
+      "x": 720,
+      "y": 470.9985858417102
+    },
+    "platform": {
+      "x": 720,
+      "y": 713.4626789587142
+    },
+    "alignmentError": 0,
+    "wakeSamples": [
+      {
+        "progress": 0.028717641936166792,
+        "height": 2.1031533877579367,
+        "growth": 1.0022524198270977,
+        "shellBrightness": 0.3729741135489334,
+        "coreBrightness": 0.18182540787148677,
+        "x": 720,
+        "y": 470.8245424607955
+      },
+      {
+        "progress": 0.09354198742840357,
+        "height": 2.1101380742274753,
+        "growth": 1.0072414815910538,
+        "shellBrightness": 0.42483358994272286,
+        "coreBrightness": 0.23109191044558672,
+        "x": 720,
+        "y": 470.3472885881079
+      },
+      {
+        "progress": 0.17695318107585145,
+        "height": 2.118470220305729,
+        "growth": 1.0131930145040922,
+        "shellBrightness": 0.4915625448606812,
+        "coreBrightness": 0.2944844176176471,
+        "x": 720,
+        "y": 469.7779285804273
+      },
+      {
+        "progress": 0.2674842261559451,
+        "height": 2.126070134770398,
+        "growth": 1.0186215248359984,
+        "shellBrightness": 0.5639873809247561,
+        "coreBrightness": 0.3632880118785183,
+        "x": 720,
+        "y": 469.2585698541229
+      },
+      {
+        "progress": 0.35787665394422113,
+        "height": 2.131568834538559,
+        "growth": 1.022549167527542,
+        "shellBrightness": 0.6363013231553769,
+        "coreBrightness": 0.43198625699760806,
+        "x": 720,
+        "y": 468.882782390501
+      },
+      {
+        "progress": 0.44376321269541547,
+        "height": 2.1344551852523628,
+        "growth": 1.0246108466088304,
+        "shellBrightness": 0.7050105701563324,
+        "coreBrightness": 0.4972600416485158,
+        "x": 720,
+        "y": 468.6855190164863
+      },
+      {
+        "progress": 0.5227325922910807,
+        "height": 2.134910782279012,
+        "growth": 1.024936273056437,
+        "shellBrightness": 0.7681860738328645,
+        "coreBrightness": 0.5572767701412213,
+        "x": 720,
+        "y": 468.654381480163
+      },
+      {
+        "progress": 0.5936701249788959,
+        "height": 2.133495460184357,
+        "growth": 1.0239253287031123,
+        "shellBrightness": 0.8249360999831168,
+        "coreBrightness": 0.6111892949839609,
+        "x": 720,
+        "y": 468.75111053115234
+      },
+      {
+        "progress": 0.6562970477465605,
+        "height": 2.130864805299613,
+        "growth": 1.0220462894997235,
+        "shellBrightness": 0.8750376381972484,
+        "coreBrightness": 0.658785756287386,
+        "x": 720,
+        "y": 468.93089751317007
+      },
+      {
+        "progress": 0.7108519611431925,
+        "height": 2.1275979105242584,
+        "growth": 1.0197127932316132,
+        "shellBrightness": 0.918681568914554,
+        "coreBrightness": 0.7002474904688263,
+        "x": 720,
+        "y": 469.15416161924446
+      },
+      {
+        "progress": 0.7578735614802025,
+        "height": 2.124129055983105,
+        "growth": 1.0172350399879322,
+        "shellBrightness": 0.956298849184162,
+        "coreBrightness": 0.735983906724954,
+        "x": 720,
+        "y": 469.3912213240123
+      },
+      {
+        "progress": 0.798055031045142,
+        "height": 2.1207451154940933,
+        "growth": 1.0148179396386379,
+        "shellBrightness": 0.9884440248361136,
+        "coreBrightness": 0.766521823594308,
+        "x": 720,
+        "y": 469.62247148596447
+      },
+      {
+        "progress": 0.8609058896925847,
+        "height": 2.1148120871684277,
+        "growth": 1.0105800622631627,
+        "shellBrightness": 1.0387247117540679,
+        "coreBrightness": 0.8142884761663645,
+        "x": 720,
+        "y": 470.0279043962252
+      },
+      {
+        "progress": 0.905208183392478,
+        "height": 2.1102695301643424,
+        "growth": 1.007335378688816,
+        "shellBrightness": 1.0741665467139825,
+        "coreBrightness": 0.8479582193782833,
+        "x": 720,
+        "y": 470.33830612290103
+      },
+      {
+        "progress": 0.9474651413034968,
+        "height": 2.1057503204938253,
+        "growth": 1.0041073717813038,
+        "shellBrightness": 1.1079721130427975,
+        "coreBrightness": 0.8800735073906576,
+        "x": 720,
+        "y": 470.6471008965934
+      }
+    ],
+    "voice": 0.9944871916502277,
+    "split": 0,
+    "orbHeight": 2.100606134634922,
+    "orbGrowth": 1.0004329533106584,
+    "rearCircle": {
+      "x": 720,
+      "y": 471.0400000000001
+    },
+    "cameraPosition": [
+      0,
+      4.5,
+      19
+    ],
+    "cameraQuaternion": [
+      -0.03938179367760872,
+      0,
+      0,
+      0.999224236258676
+    ],
+    "orbRadius": 184.39980195422055,
+    "orbWorld": [
+      0,
+      3.6015866881659213,
+      0
+    ],
+    "lightPosition": [
+      0,
+      3.6015866881659213,
+      0
+    ],
+    "lightIntensity": 159.34728349138697,
+    "reflection": {
+      "kind": "planar scene reflection",
+      "width": 768,
+      "blurred": true
+    },
+    "rigDepth": 0,
+    "rearAspect": 0.9999999999999998
+  },
+  "split": {
+    "orbVisual": {
+      "visible": true,
+      "coreVisible": true,
+      "coreTransparent": true,
+      "corePoints": 220,
+      "coreConnections": 74,
+      "opaqueCoreSurfaces": 0,
+      "centralOrbitArcs": 0,
+      "backgroundMasked": false,
+      "awake": 0.999949842829301,
+      "shellBrightness": 1.1499598742634407,
+      "coreBrightness": 0.9199618805502688
+    },
+    "environment": {
+      "geometryLayers": 3,
+      "wallPanels": 12,
+      "particles": 520,
+      "depthRange": [
+        -22,
+        4
+      ],
+      "chamberRadius": 15,
+      "phase": 8.330099999999995,
+      "ringAngles": [
+        0.7080584999999996,
+        0.09900107764616306,
+        1.4141967552923254
+      ],
+      "wallLight": 329.9877516189153,
+      "wallLightPosition": [
+        -4.420940358910959,
+        3.6009860685999415,
+        0
+      ]
+    },
+    "renderer": "three.js",
+    "frames": 73,
+    "orb": {
+      "x": 417.7520213518356,
+      "y": 471.03962318376637
+    },
+    "platform": {
+      "x": 720,
+      "y": 713.4626789587142
+    },
+    "alignmentError": 302.2479786481644,
+    "wakeSamples": [
+      {
+        "progress": 0.028717641936166792,
+        "height": 2.1031533877579367,
+        "growth": 1.0022524198270977,
+        "shellBrightness": 0.3729741135489334,
+        "coreBrightness": 0.18182540787148677,
+        "x": 720,
+        "y": 470.8245424607955
+      },
+      {
+        "progress": 0.09354198742840357,
+        "height": 2.1101380742274753,
+        "growth": 1.0072414815910538,
+        "shellBrightness": 0.42483358994272286,
+        "coreBrightness": 0.23109191044558672,
+        "x": 720,
+        "y": 470.3472885881079
+      },
+      {
+        "progress": 0.17695318107585145,
+        "height": 2.118470220305729,
+        "growth": 1.0131930145040922,
+        "shellBrightness": 0.4915625448606812,
+        "coreBrightness": 0.2944844176176471,
+        "x": 720,
+        "y": 469.7779285804273
+      },
+      {
+        "progress": 0.2674842261559451,
+        "height": 2.126070134770398,
+        "growth": 1.0186215248359984,
+        "shellBrightness": 0.5639873809247561,
+        "coreBrightness": 0.3632880118785183,
+        "x": 720,
+        "y": 469.2585698541229
+      },
+      {
+        "progress": 0.35787665394422113,
+        "height": 2.131568834538559,
+        "growth": 1.022549167527542,
+        "shellBrightness": 0.6363013231553769,
+        "coreBrightness": 0.43198625699760806,
+        "x": 720,
+        "y": 468.882782390501
+      },
+      {
+        "progress": 0.44376321269541547,
+        "height": 2.1344551852523628,
+        "growth": 1.0246108466088304,
+        "shellBrightness": 0.7050105701563324,
+        "coreBrightness": 0.4972600416485158,
+        "x": 720,
+        "y": 468.6855190164863
+      },
+      {
+        "progress": 0.5227325922910807,
+        "height": 2.134910782279012,
+        "growth": 1.024936273056437,
+        "shellBrightness": 0.7681860738328645,
+        "coreBrightness": 0.5572767701412213,
+        "x": 720,
+        "y": 468.654381480163
+      },
+      {
+        "progress": 0.5936701249788959,
+        "height": 2.133495460184357,
+        "growth": 1.0239253287031123,
+        "shellBrightness": 0.8249360999831168,
+        "coreBrightness": 0.6111892949839609,
+        "x": 720,
+        "y": 468.75111053115234
+      },
+      {
+        "progress": 0.6562970477465605,
+        "height": 2.130864805299613,
+        "growth": 1.0220462894997235,
+        "shellBrightness": 0.8750376381972484,
+        "coreBrightness": 0.658785756287386,
+        "x": 720,
+        "y": 468.93089751317007
+      },
+      {
+        "progress": 0.7108519611431925,
+        "height": 2.1275979105242584,
+        "growth": 1.0197127932316132,
+        "shellBrightness": 0.918681568914554,
+        "coreBrightness": 0.7002474904688263,
+        "x": 720,
+        "y": 469.15416161924446
+      },
+      {
+        "progress": 0.7578735614802025,
+        "height": 2.124129055983105,
+        "growth": 1.0172350399879322,
+        "shellBrightness": 0.956298849184162,
+        "coreBrightness": 0.735983906724954,
+        "x": 720,
+        "y": 469.3912213240123
+      },
+      {
+        "progress": 0.798055031045142,
+        "height": 2.1207451154940933,
+        "growth": 1.0148179396386379,
+        "shellBrightness": 0.9884440248361136,
+        "coreBrightness": 0.766521823594308,
+        "x": 720,
+        "y": 469.62247148596447
+      },
+      {
+        "progress": 0.8609058896925847,
+        "height": 2.1148120871684277,
+        "growth": 1.0105800622631627,
+        "shellBrightness": 1.0387247117540679,
+        "coreBrightness": 0.8142884761663645,
+        "x": 720,
+        "y": 470.0279043962252
+      },
+      {
+        "progress": 0.905208183392478,
+        "height": 2.1102695301643424,
+        "growth": 1.007335378688816,
+        "shellBrightness": 1.0741665467139825,
+        "coreBrightness": 0.8479582193782833,
+        "x": 720,
+        "y": 470.33830612290103
+      },
+      {
+        "progress": 0.9474651413034968,
+        "height": 2.1057503204938253,
+        "growth": 1.0041073717813038,
+        "shellBrightness": 1.1079721130427975,
+        "coreBrightness": 0.8800735073906576,
+        "x": 720,
+        "y": 470.6471008965934
+      }
+    ],
+    "voice": 0.999949842829301,
+    "split": 0.9994972610703976,
+    "orbHeight": 2.100005515068942,
+    "orbGrowth": 1.0000039393349585,
+    "rearCircle": {
+      "x": 720,
+      "y": 471.0400000000001
+    },
+    "cameraPosition": [
+      0,
+      4.5,
+      19
+    ],
+    "cameraQuaternion": [
+      -0.03938179367760872,
+      0,
+      0,
+      0.999224236258676
+    ],
+    "orbRadius": 160.78047387291633,
+    "orbWorld": [
+      -4.420940358910959,
+      3.6009860685999415,
+      0
+    ],
+    "lightPosition": [
+      -4.420940358910959,
+      3.6009860685999415,
+      0
+    ],
+    "lightIntensity": 159.99406139098923,
+    "reflection": {
+      "kind": "planar scene reflection",
+      "width": 768,
+      "blurred": true
+    },
+    "rigDepth": 0,
+    "rearAspect": 0.9999999999999998
+  },
+  "browser_errors": [],
+  "note": "Chromium uses software WebGL here; performance on physical GPUs/phones is unverified."
+}

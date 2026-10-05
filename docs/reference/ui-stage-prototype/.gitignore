@@ -1,0 +1,6 @@
+node_modules/
+dist/
+__pycache__/
+captures/*.png
+captures/*.log
+jarvis-motion-study.html
