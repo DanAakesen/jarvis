@@ -1,4 +1,15 @@
 export interface Settings {
+  appearance: {
+    theme: 'light' | 'dark' | 'system';
+    accent?: string;
+    'accent-secondary'?: string;
+    'surface-tint'?: string;
+    background?: 'living-aurora' | 'daylight-studio';
+    glow?: number;
+    motion?: 'full' | 'calm' | 'reduced';
+    radius?: number;
+    density?: 'compact' | 'comfortable';
+  };
   jarvis: {
     model: string;
     reasoning: string;
@@ -14,6 +25,7 @@ export interface Settings {
     englishVoice: string;
     danishVoice: string;
     defaultLanguage: 'da' | 'en';
+    minimizeWindowsOnVoiceStart: boolean;
   };
   codex: {
     model: string;
@@ -25,6 +37,7 @@ export interface Settings {
   global: {
     maxParallelTasks: number;
     maxCheckAttempts: number;
+    screenShareDailyFrameCap: number;
   };
   newProjects: {
     owner: string;
@@ -47,6 +60,7 @@ export interface SettingsStore {
 }
 
 export const defaultSettings: Settings = {
+  appearance: { theme: 'light' },
   jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
   personality: {
     tone: 'british_butler',
@@ -59,10 +73,11 @@ export const defaultSettings: Settings = {
     englishVoice: 'en-GB-Ryan:DragonHDLatestNeural',
     danishVoice: 'da-DK-Harper:MAI-Voice-2',
     defaultLanguage: 'da',
+    minimizeWindowsOnVoiceStart: false,
   },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
-  global: { maxParallelTasks: 1, maxCheckAttempts: 3 },
+  global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300 },
   newProjects: {
     owner: 'DanAakesen',
     visibility: 'private',
@@ -75,6 +90,10 @@ export const defaultSettings: Settings = {
 };
 
 export const settingsOptions = {
+  themes: ['light', 'dark', 'system'],
+  backgrounds: ['living-aurora', 'daylight-studio'],
+  themeMotions: ['full', 'calm', 'reduced'],
+  themeDensities: ['compact', 'comfortable'],
   jarvisModels: ['gpt-5.6-luna'],
   reasoningEfforts: ['none', 'low', 'medium', 'high'],
   personalityTones: ['british_butler', 'warm', 'direct', 'playful'],
@@ -93,6 +112,17 @@ export const settingsOptions = {
 } as const;
 
 const settingKeys = {
+  appearance: {
+    theme: 'appearance.theme',
+    accent: 'appearance.accent',
+    'accent-secondary': 'appearance.accent-secondary',
+    'surface-tint': 'appearance.surface-tint',
+    background: 'appearance.background',
+    glow: 'appearance.glow',
+    motion: 'appearance.motion',
+    radius: 'appearance.radius',
+    density: 'appearance.density',
+  },
   jarvis: { model: 'jarvis.model', reasoning: 'jarvis.reasoning_effort' },
   personality: {
     tone: 'personality.tone',
@@ -105,12 +135,14 @@ const settingKeys = {
     englishVoice: 'voice.en.voice',
     danishVoice: 'voice.da.voice',
     defaultLanguage: 'voice.default_language',
+    minimizeWindowsOnVoiceStart: 'voice.minimize_windows_on_voice_start',
   },
   codex: { model: 'codex.model', reasoning: 'codex.reasoning_effort' },
   copilot: { model: 'copilot.model' },
   global: {
     maxParallelTasks: 'global.max_parallel_tasks',
     maxCheckAttempts: 'global.max_check_attempts',
+    screenShareDailyFrameCap: 'global.screen_share_daily_frame_cap',
   },
   newProjects: {
     owner: 'new_projects.owner',
@@ -123,11 +155,30 @@ const settingKeys = {
   },
 } as const;
 
+export const settingsStoreKeys = Object.freeze(
+  Object.values(settingKeys).flatMap((area) => Object.values(area)),
+);
+
 function isOption(value: unknown, options: readonly string[]): value is string {
   return typeof value === 'string' && options.includes(value);
 }
 
 function validSetting(area: keyof Settings, key: string, value: unknown): boolean {
+  if (area === 'appearance') {
+    if (key === 'theme') return isOption(value, settingsOptions.themes);
+    if (key === 'accent' || key === 'accent-secondary' || key === 'surface-tint') {
+      return typeof value === 'string' && /^#[\da-f]{6}$/i.test(value);
+    }
+    if (key === 'background') return isOption(value, settingsOptions.backgrounds);
+    if (key === 'glow') {
+      return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+    }
+    if (key === 'motion') return isOption(value, settingsOptions.themeMotions);
+    if (key === 'radius') {
+      return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 24;
+    }
+    if (key === 'density') return isOption(value, settingsOptions.themeDensities);
+  }
   if (area === 'jarvis') {
     if (key === 'model') return isOption(value, settingsOptions.jarvisModels);
     if (key === 'reasoning') return isOption(value, settingsOptions.reasoningEfforts);
@@ -149,6 +200,7 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
     if (key === 'englishVoice') return isOption(value, settingsOptions.englishVoices);
     if (key === 'danishVoice') return isOption(value, settingsOptions.danishVoices);
     if (key === 'defaultLanguage') return isOption(value, settingsOptions.languages);
+    if (key === 'minimizeWindowsOnVoiceStart') return typeof value === 'boolean';
   }
   if (area === 'codex') {
     if (key === 'model') return isOption(value, settingsOptions.codexModels);
@@ -160,6 +212,9 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
   }
   if (area === 'global' && key === 'maxCheckAttempts') {
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 10;
+  }
+  if (area === 'global' && key === 'screenShareDailyFrameCap') {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 300;
   }
   if (area === 'newProjects') {
     if (key === 'owner') {
@@ -198,6 +253,20 @@ const settingsPatchSchema = {
       minProperties: 1,
       additionalProperties: true,
       properties: {
+        appearance: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: {
+            theme: selectSchema(settingsOptions.themes),
+            accent: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
+            'accent-secondary': { type: 'string', pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
+            'surface-tint': { type: 'string', pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
+            background: selectSchema(settingsOptions.backgrounds),
+            glow: { type: 'number', minimum: 0, maximum: 1 },
+            motion: selectSchema(settingsOptions.themeMotions),
+            radius: { type: 'number', minimum: 0, maximum: 24 },
+            density: selectSchema(settingsOptions.themeDensities),
+          },
+        },
         jarvis: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
@@ -221,6 +290,7 @@ const settingsPatchSchema = {
             englishVoice: selectSchema(settingsOptions.englishVoices),
             danishVoice: selectSchema(settingsOptions.danishVoices),
             defaultLanguage: selectSchema(settingsOptions.languages),
+            minimizeWindowsOnVoiceStart: { type: 'boolean' },
           },
         },
         codex: {
@@ -239,6 +309,7 @@ const settingsPatchSchema = {
           properties: {
             maxParallelTasks: { type: 'integer', minimum: 1, maximum: 100 },
             maxCheckAttempts: { type: 'integer', minimum: 0, maximum: 10 },
+            screenShareDailyFrameCap: { type: 'integer', minimum: 1, maximum: 300 },
           },
         },
         newProjects: {
@@ -352,8 +423,9 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               required: ['tone', 'responseStyle', 'customInstructions'],
               additionalProperties: false,
             },
+            awayMode: { type: 'boolean' },
           },
-          required: ['model', 'reasoningEffort', 'personality'],
+          required: ['model', 'reasoningEffort', 'personality', 'awayMode'],
           additionalProperties: false,
         },
         403: {
@@ -374,10 +446,12 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const settings = await readSettings(app.settingsStore);
+    const awayMode = await app.awayModeStore?.read();
     return {
       model: settings.jarvis.model,
       reasoningEffort: settings.jarvis.reasoning,
       personality: settings.personality,
+      awayMode: awayMode?.away ?? false,
     };
   });
 

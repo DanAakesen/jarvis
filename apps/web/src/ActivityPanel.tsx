@@ -7,11 +7,99 @@ import {
   agentNames,
   formatDuration,
   formatTime,
+  type BrowserConfirmation,
+  type ConfirmationActionKind,
   type ActivityItem,
   type NowFeed,
   type NowFeedStreamStatus,
 } from './activity';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
+
+function confirmationLabel(kind: ConfirmationActionKind): string {
+  const words = kind.replaceAll('_', ' ');
+  return `${words[0]!.toUpperCase()}${words.slice(1)}`;
+}
+
+function BrowserConfirmationList({
+  confirmations,
+  message,
+  onResolve,
+  onMessage,
+}: {
+  confirmations: readonly BrowserConfirmation[];
+  message: string;
+  onResolve?: (id: string, decision: 'approve' | 'reject') => Promise<void>;
+  onMessage: (message: string) => void;
+}) {
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+  const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
+
+  async function resolve(confirmation: BrowserConfirmation, decision: 'approve' | 'reject') {
+    if (!onResolve || pending.has(confirmation.id)) return;
+    setPending((current) => new Set(current).add(confirmation.id));
+    setFailed((current) => without(current, confirmation.id));
+    onMessage('');
+    try {
+      await onResolve(confirmation.id, decision);
+      onMessage(decision === 'approve' ? 'Approval recorded.' : 'Request rejected.');
+    } catch {
+      setFailed((current) => new Set(current).add(confirmation.id));
+    } finally {
+      setPending((current) => without(current, confirmation.id));
+    }
+  }
+
+  if (confirmations.length === 0) return message ? <p role="status">{message}</p> : null;
+  return (
+    <section aria-labelledby="now-confirmations-heading">
+      <h3 id="now-confirmations-heading">Pending confirmations</h3>
+      <p>Review each request before it expires.</p>
+      {message && <p role="status">{message}</p>}
+      {!onResolve && <p id="confirmation-unavailable">Browser approvals are unavailable.</p>}
+      <ul className="activity-list">
+        {confirmations.map((confirmation) => {
+          const busy = pending.has(confirmation.id);
+          return (
+            <li key={confirmation.id} className="activity-item">
+              <div>
+                <h4>{confirmationLabel(confirmation.actionKind)}</h4>
+                <p className="confirmation-summary">{confirmation.summary}</p>
+                <p className="activity-time">
+                  Expires <time dateTime={confirmation.expiresAt}>{formatTime(confirmation.expiresAt)}</time>
+                </p>
+                {failed.has(confirmation.id) && (
+                  <p className="error-text" role="alert">Jarvis could not record your response. Try again.</p>
+                )}
+              </div>
+              <div className="action-row">
+                <button
+                  className="primary-button"
+                  type="button"
+                  aria-label={`Approve ${confirmationLabel(confirmation.actionKind)}`}
+                  aria-describedby={onResolve ? undefined : 'confirmation-unavailable'}
+                  disabled={!onResolve || busy}
+                  onClick={() => { void resolve(confirmation, 'approve'); }}
+                >
+                  {busy ? 'Sending…' : 'Approve'}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  aria-label={`Reject ${confirmationLabel(confirmation.actionKind)}`}
+                  aria-describedby={onResolve ? undefined : 'confirmation-unavailable'}
+                  disabled={!onResolve || busy}
+                  onClick={() => { void resolve(confirmation, 'reject'); }}
+                >
+                  Reject
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
 
 function useNow(enabled: boolean): number {
   const [now, setNow] = useState(() => Date.now());
@@ -29,9 +117,10 @@ function without<T>(values: ReadonlySet<T>, value: T): ReadonlySet<T> {
   return next;
 }
 
-export function ActivityPanel({ feed, onDismiss, onRetry, streamStatus }: {
+export function ActivityPanel({ feed, onDismiss, onResolveConfirmation, onRetry, streamStatus }: {
   feed: NowFeed;
   onDismiss?: (id: string) => Promise<void>;
+  onResolveConfirmation?: (id: string, decision: 'approve' | 'reject') => Promise<void>;
   onRetry?: () => void;
   streamStatus?: NowFeedStreamStatus;
 }) {
@@ -59,6 +148,7 @@ export function ActivityPanel({ feed, onDismiss, onRetry, streamStatus }: {
       })),
     },
   } : null;
+  const [confirmationMessage, setConfirmationMessage] = useState('');
 
   async function dismiss(item: ActivityItem) {
     if (!onDismiss || pending.has(item.id)) return;
@@ -86,6 +176,11 @@ export function ActivityPanel({ feed, onDismiss, onRetry, streamStatus }: {
       ) : (
         <>
           <p className="freshness">Updated <time dateTime={feed.updatedAt}>{formatTime(feed.updatedAt)}</time></p>
+          <p className="freshness" role="status">
+            {feed.awayMode
+              ? 'Away mode is on. Task updates and confirmations go to Teams; spoken replies are brief.'
+              : 'Away mode is off. Task updates appear in the browser.'}
+          </p>
           {streamStatus === 'connected' && <p className="freshness" role="status">Live updates connected.</p>}
           {streamStatus === 'reconnecting' && (
             <p className="freshness" role="status">Live updates are reconnecting; showing the last feed snapshot.</p>
@@ -97,6 +192,13 @@ export function ActivityPanel({ feed, onDismiss, onRetry, streamStatus }: {
             </>
           )}
           {!onDismiss && <p id="dismiss-status" className="freshness">Dismissing isn&apos;t available yet.</p>}
+
+          <BrowserConfirmationList
+            confirmations={feed.confirmations}
+            message={confirmationMessage}
+            onMessage={setConfirmationMessage}
+            {...(onResolveConfirmation ? { onResolve: onResolveConfirmation } : {})}
+          />
 
           <section aria-labelledby="now-running-heading">
             <h3 id="now-running-heading">Running tasks</h3>
