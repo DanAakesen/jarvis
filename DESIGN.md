@@ -348,17 +348,27 @@ live caret beside readable text. Only a published tool-call state gets the
 running-tool shimmer; thinking is not treated as a tool call. Running Now tasks
 use a restrained sheen, while completed outcomes stay static.
 
-Window titles are drag handles; right/bottom edges and the corner resize.
-Arrange keeps movement, sizing and order controls out of the resting title bar.
-Open Arrange, focus **Move** or **Resize**, then use arrow keys; Shift makes
-larger steps in a layered desktop layout. In tiles, Move changes order and
-Resize changes the tile span. On narrow screens width stays full-screen.
-Escape closes Arrange and returns focus to its trigger. Window entry,
-focus, minimise and restore reuse the shared motion tokens without waiting
-for animation to update state; reduced motion removes displacement and shimmer.
+Window titles are drag handles; right/bottom edges and the corner resize. Each
+window keeps minimise, maximise and close in its title actions, with a 44px
+ellipsis disclosure for keyboard Arrange. The workspace header retains the
+shared tile/layer control. Open a window's overflow, focus **Move** or **Resize**,
+then use arrow keys; Shift makes larger steps in a layered desktop layout. In
+tiles, Move changes order and Resize changes the tile span. On narrow screens
+width stays full-screen. Escape closes Arrange and returns focus to its trigger.
+Window entry, focus, minimise and restore reuse the shared motion tokens without
+waiting for animation to update state; reduced motion removes displacement and
+shimmer.
 
-Local screenshot fixtures are in `docs/ui/screenshots/p8-21-*`; they are not
-production conversations or proof of live agent-directed windows.
+The top bar shows **Jarvis** once on the home route. Deeper routes show the area
+and the most specific matching page, such as **Jarvis / Software Factory /
+Tasks**. Phone layouts continue to hide the secondary breadcrumb to protect the
+single-line bar. The local-fixture footer is added only by screenshot capture;
+it is not part of the production shell or bundle.
+
+Local screenshot fixtures are in `docs/ui/screenshots/p8-21-*` and
+`docs/ui/screenshots/p8-22-*`; they are not production conversations or proof
+of live agent-directed windows. P8-22 phone captures show the typing shell and
+workspace, not the phone voice layout owned by P8-11.
 
 ## Next-generation shared shell (structure agreed; P8-04 implemented)
 

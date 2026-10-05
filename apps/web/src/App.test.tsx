@@ -308,6 +308,20 @@ describe('App shell', () => {
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
   });
 
+  it('shows a single home breadcrumb and adds area and page only on deeper routes', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const breadcrumb = document.querySelector('.topbar-context')!;
+
+    expect(breadcrumb.textContent).toBe('Jarvis');
+    expect(screen.queryByText('Local UI fixture · not production')).toBeNull();
+    await user.click(screen.getByRole('link', { name: 'Software Factory' }));
+    await screen.findByRole('heading', { name: 'Tasks' });
+
+    expect(breadcrumb.textContent).toBe('Jarvis/Software Factory/Tasks');
+    expect(breadcrumb.querySelector('[aria-current="page"]')?.textContent).toBe('Tasks');
+  });
+
   it('restores the accepted appearance across signed-in app routes', async () => {
     const user = userEvent.setup();
     fetchMock.mockImplementation(async (input) => {
