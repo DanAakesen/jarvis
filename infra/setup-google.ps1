@@ -27,8 +27,18 @@ $clientId = $null
 $clientSecret = $null
 $refreshToken = $null
 
+# Windows PowerShell 5.1 turns redirected native stderr into a terminating error under
+# $ErrorActionPreference = 'Stop', which skipped the Key Vault retries (L95).
+function Invoke-Native([scriptblock]$Command) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & $Command 2>$null }
+    finally { $ErrorActionPreference = $previous }
+}
+
 function Invoke-Az {
-    $output = & az @args 2>$null
+    $azArgs = $args
+    $output = Invoke-Native { & az @azArgs }
     if ($LASTEXITCODE -ne 0) {
         throw "Azure CLI command failed: az $($args -join ' ')"
     }
@@ -58,7 +68,7 @@ function Write-SecretFile([string]$Name, [string]$Value) {
 function Send-LoopbackResponse([Net.Sockets.TcpClient]$Client, [int]$Status, [string]$Message) {
     $stream = $Client.GetStream()
     $body = [Text.Encoding]::UTF8.GetBytes($Message)
-    $statusText = if ($Status -eq 200) { 'OK' } else { 'Bad Request' }
+    $statusText = switch ($Status) { 200 { 'OK' } 404 { 'Not Found' } default { 'Bad Request' } }
     $header = "HTTP/1.1 $Status $statusText`r`nContent-Type: text/plain; charset=utf-8`r`nContent-Length: $($body.Length)`r`nConnection: close`r`n`r`n"
     $headerBytes = [Text.Encoding]::ASCII.GetBytes($header)
     $stream.Write($headerBytes, 0, $headerBytes.Length)
@@ -128,9 +138,12 @@ $redirectUri = "http://127.0.0.1:$port/"
 
 try {
     $operatorObjectId = [string](Invoke-Az ad signed-in-user show --query id --output tsv)
-    $roleAssignments = @(Invoke-Az role assignment list --scope $vaultId --assignee-object-id $operatorObjectId `
+    # Windows PowerShell 5.1 emits a parsed JSON array as one object, so an empty list counted as one
+    # existing assignment and the temporary role was never created (L95). Enumerate the array explicitly.
+    $roleAssignmentJson = Invoke-Az role assignment list --scope $vaultId --assignee-object-id $operatorObjectId `
         --query "[?roleDefinitionName=='Key Vault Secrets Officer' && scope=='$vaultId'].id" --output json |
-        ConvertFrom-Json)
+        Out-String
+    $roleAssignments = @(($roleAssignmentJson | ConvertFrom-Json) | Where-Object { $_ })
     if ($roleAssignments.Count -eq 0) {
         $assignment = Invoke-Az role assignment create --assignee-object-id $operatorObjectId `
             --assignee-principal-type User --role 'Key Vault Secrets Officer' --scope $vaultId --output json |
@@ -167,24 +180,46 @@ try {
     Write-Host 'Opening Google consent in your browser. Sign in as danaakesen@gmail.com.'
     Start-Process $authorize.Uri.AbsoluteUri
     Write-Host 'Waiting up to five minutes for the Google loopback response.'
-    $pendingConnection = $listener.BeginAcceptTcpClient($null, $null)
-    if (-not $pendingConnection.AsyncWaitHandle.WaitOne(300000)) {
-        throw 'Google consent timed out; run the setup script again.'
-    }
-    $loopbackClient = $listener.EndAcceptTcpClient($pendingConnection)
-    $stream = $loopbackClient.GetStream()
-    $stream.ReadTimeout = 15000
-    $buffer = New-Object byte[] 4096
-    $requestBytes = New-Object System.IO.MemoryStream
+    # Browsers open speculative empty connections and may request /favicon.ico; keep accepting
+    # until the OAuth callback arrives or the five-minute deadline passes.
+    $deadline = (Get-Date).AddMinutes(5)
     $requestText = ''
-    while (-not $requestText.Contains("`r`n`r`n")) {
-        $read = $stream.Read($buffer, 0, $buffer.Length)
-        if ($read -le 0) { throw 'Google returned an empty loopback response.' }
-        if (($requestBytes.Length + $read) -gt 16384) {
-            throw 'Google returned an oversized loopback response.'
+    while (-not $requestText) {
+        $remaining = [int][Math]::Max(0, ($deadline - (Get-Date)).TotalMilliseconds)
+        if ($remaining -le 0) { throw 'Google consent timed out; run the setup script again.' }
+        $pendingConnection = $listener.BeginAcceptTcpClient($null, $null)
+        if (-not $pendingConnection.AsyncWaitHandle.WaitOne($remaining)) {
+            throw 'Google consent timed out; run the setup script again.'
         }
-        $requestBytes.Write($buffer, 0, $read)
-        $requestText = [Text.Encoding]::ASCII.GetString($requestBytes.ToArray())
+        $loopbackClient = $listener.EndAcceptTcpClient($pendingConnection)
+        $pendingConnection.AsyncWaitHandle.Close()
+        $pendingConnection = $null
+        $stream = $loopbackClient.GetStream()
+        $stream.ReadTimeout = 5000
+        $buffer = New-Object byte[] 4096
+        if ($requestBytes) { $requestBytes.Dispose() }
+        $requestBytes = New-Object System.IO.MemoryStream
+        $candidate = ''
+        try {
+            while (-not $candidate.Contains("`r`n`r`n")) {
+                $read = $stream.Read($buffer, 0, $buffer.Length)
+                if ($read -le 0) { break }
+                if (($requestBytes.Length + $read) -gt 16384) {
+                    throw 'Google returned an oversized loopback response.'
+                }
+                $requestBytes.Write($buffer, 0, $read)
+                $candidate = [Text.Encoding]::ASCII.GetString($requestBytes.ToArray())
+            }
+        }
+        catch [System.IO.IOException] { $candidate = '' }
+        if ($candidate.Contains("`r`n`r`n") -and ($candidate -split "`r`n", 2)[0] -match '^GET /\?') {
+            $requestText = $candidate
+        }
+        else {
+            if ($candidate) { Send-LoopbackResponse $loopbackClient 404 'Not found.' }
+            $loopbackClient.Close()
+            $loopbackClient = $null
+        }
     }
     $requestLine = ($requestText -split "`r`n", 2)[0]
     $requestParts = $requestLine.Split(' ')
@@ -251,11 +286,16 @@ try {
     foreach ($secret in $secrets) {
         $file = Write-SecretFile $secret.Name $secret.Value
         $stored = $false
-        for ($attempt = 1; $attempt -le 12; $attempt++) {
-            & az keyvault secret set --vault-name $keyVaultName --name $secret.Name `
-                --file $file --content-type text/plain --output none --only-show-errors 2>$null
+        # Key Vault RBAC can take several minutes to apply to a new assignment (L95).
+        for ($attempt = 1; $attempt -le 24; $attempt++) {
+            Invoke-Native {
+                & az keyvault secret set --vault-name $keyVaultName --name $secret.Name `
+                    --file $file --encoding utf-8 --content-type text/plain --subscription $SubscriptionId `
+                    --output none --only-show-errors
+            }
             if ($LASTEXITCODE -eq 0) { $stored = $true; break }
-            Start-Sleep -Seconds 5
+            if ($attempt -eq 1) { Write-Host 'Waiting for temporary Key Vault access to take effect (up to six minutes)...' }
+            Start-Sleep -Seconds 15
         }
         if (-not $stored) { throw "Could not store Key Vault secret '$($secret.Name)'." }
     }
@@ -270,8 +310,10 @@ finally {
     if ($listener) { $listener.Stop() }
     if ($requestBytes) { $requestBytes.Dispose() }
     if ($roleAssignmentId) {
-        & az role assignment delete --ids $roleAssignmentId --subscription $SubscriptionId `
-            --output none --only-show-errors 2>$null
+        Invoke-Native {
+            & az role assignment delete --ids $roleAssignmentId --subscription $SubscriptionId `
+                --output none --only-show-errors
+        }
         if ($LASTEXITCODE -ne 0) {
             Write-Warning 'Temporary Key Vault access could not be removed. Delete the role assignment manually.'
         }
