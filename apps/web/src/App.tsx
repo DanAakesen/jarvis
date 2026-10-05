@@ -112,10 +112,25 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const workspaceController = useRef<WorkspaceController>(null);
   const contextPanel = useContextPanel();
   const workspaceCommands = useMemo(() => ({
-    dispatch: (command: Parameters<WorkspaceController['dispatch']>[0]) => (
-      workspaceController.current?.dispatch(command) ?? false
-    ),
-  }), []);
+    dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
+      if (command.operation === 'context-panel') {
+        if (command.action === 'open') {
+          contextPanel.show({
+            title: command.view.title,
+            status: 'view',
+            view: command.view,
+            ...(trustedBlobHost ? { trustedBlobHost } : {}),
+          });
+        } else if (command.action === 'close') {
+          contextPanel.close();
+        } else {
+          contextPanel.toggle();
+        }
+        return true;
+      }
+      return workspaceController.current?.dispatch(command, trustedBlobHost) ?? false;
+    },
+  }), [contextPanel]);
   const [navigationOpen, setNavigationOpen] = useState(() => (
     typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches
   ));

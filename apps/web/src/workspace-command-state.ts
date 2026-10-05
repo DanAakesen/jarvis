@@ -1,7 +1,12 @@
 import { createContext, useContext } from 'react';
+import type { WorkspaceCommand } from '@jarvis/contracts';
 import type { WorkspaceController } from './Workspace';
 
-export const WorkspaceCommandContext = createContext<WorkspaceController | null>(null);
+export interface WorkspaceCommandController extends WorkspaceController {
+  dispatch: (command: WorkspaceCommand, trustedBlobHost?: string) => boolean;
+}
+
+export const WorkspaceCommandContext = createContext<WorkspaceCommandController | null>(null);
 
 export function useWorkspaceCommands() {
   const commands = useContext(WorkspaceCommandContext);

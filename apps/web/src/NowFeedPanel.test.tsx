@@ -5,14 +5,32 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NowFeed } from './activity';
 import { NowFeedPanel } from './NowFeedPanel';
 
-const { loadNowFeed, dismissNowActivity, resolveNowConfirmation, streamNowFeed, streamCallbacks } = vi.hoisted(() => ({
+const {
+  loadNowFeed,
+  dismissNowActivity,
+  resolveNowConfirmation,
+  acknowledgeWorkspaceCommand,
+  streamNowFeed,
+  streamCallbacks,
+} = vi.hoisted(() => ({
   loadNowFeed: vi.fn(),
   dismissNowActivity: vi.fn(),
   resolveNowConfirmation: vi.fn(),
+  acknowledgeWorkspaceCommand: vi.fn(),
   streamNowFeed: vi.fn(),
-  streamCallbacks: { onUpdate: null as (() => void) | null },
+  streamCallbacks: {
+    onUpdate: null as (() => void) | null,
+    onWorkspaceReady: null as ((sessionId: string, trustedBlobHost?: string) => void) | null,
+    onWorkspaceCommand: null as ((command: import('@jarvis/contracts').WorkspaceCommand, expiresAt: number) => void) | null,
+  },
 }));
-vi.mock('./now-feed', () => ({ loadNowFeed, dismissNowActivity, resolveNowConfirmation, streamNowFeed }));
+vi.mock('./now-feed', () => ({
+  loadNowFeed,
+  dismissNowActivity,
+  resolveNowConfirmation,
+  acknowledgeWorkspaceCommand,
+  streamNowFeed,
+}));
 
 const feed: Extract<NowFeed, { status: 'ready' }> = {
   status: 'ready',
@@ -33,6 +51,8 @@ const getAccessToken = vi.fn(async () => 'test-access-token');
 afterEach(() => {
   vi.clearAllMocks();
   streamCallbacks.onUpdate = null;
+  streamCallbacks.onWorkspaceReady = null;
+  streamCallbacks.onWorkspaceCommand = null;
 });
 
 describe('live Now panel', () => {
@@ -44,7 +64,7 @@ describe('live Now panel', () => {
       await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
     });
     const view = render(
-      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} /></MemoryRouter>,
+      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>,
     );
 
     expect(await screen.findByRole('link', { name: 'Ship the feed' })).not.toBeNull();
@@ -56,6 +76,54 @@ describe('live Now panel', () => {
     view.unmount();
   });
 
+  it('applies an authenticated workspace command before acknowledging it', async () => {
+    loadNowFeed.mockResolvedValue(feed);
+    acknowledgeWorkspaceCommand.mockResolvedValue(undefined);
+    streamNowFeed.mockImplementation(async ({ onWorkspaceReady, onWorkspaceCommand, signal }) => {
+      streamCallbacks.onWorkspaceReady = onWorkspaceReady;
+      streamCallbacks.onWorkspaceCommand = onWorkspaceCommand;
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    const command = {
+      commandId: 'create-view',
+      operation: 'create' as const,
+      viewId: 'research',
+      view: {
+        version: 1 as const,
+        title: 'Research summary',
+        renderer: 'list' as const,
+        source: { id: 'factory.tasks' as const, status: 'complete' as const },
+        data: { items: [{ title: 'Source-linked finding' }] },
+      },
+    };
+    const applyWorkspaceCommand = vi.fn(() => true);
+    const view = render(
+      <MemoryRouter>
+        <NowFeedPanel
+          client={client}
+          config={config}
+          getAccessToken={getAccessToken}
+          applyWorkspaceCommand={applyWorkspaceCommand}
+        />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(streamCallbacks.onWorkspaceReady).not.toBeNull());
+    streamCallbacks.onWorkspaceReady?.('12345678-1234-4234-8234-123456789abc');
+    streamCallbacks.onWorkspaceCommand?.(command, Date.now() + 5_000);
+    await waitFor(() => expect(acknowledgeWorkspaceCommand).toHaveBeenCalledWith(
+      'https://api.example.com',
+      'create-view',
+      '12345678-1234-4234-8234-123456789abc',
+      true,
+      getAccessToken,
+      undefined,
+      undefined,
+    ));
+    expect(applyWorkspaceCommand).toHaveBeenCalledWith(command, undefined);
+    view.unmount();
+  });
+
   it('persists dismissal before hiding the activity item and refreshes the snapshot', async () => {
     const user = userEvent.setup();
     loadNowFeed.mockResolvedValue(feed);
@@ -64,7 +132,7 @@ describe('live Now panel', () => {
       new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true })),
     );
     render(
-      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} /></MemoryRouter>,
+      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>,
     );
 
     await user.click(await screen.findByRole('button', { name: 'Dismiss Sandbox crashed' }));
@@ -89,7 +157,7 @@ describe('live Now panel', () => {
       new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true })),
     );
     render(
-      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} /></MemoryRouter>,
+      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>,
     );
 
     await user.click(await screen.findByRole('button', { name: 'Approve Merge' }));
@@ -116,7 +184,7 @@ describe('live Now panel', () => {
       new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true })),
     );
     render(
-      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} /></MemoryRouter>,
+      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>,
     );
 
     const rejectButton = await screen.findByRole('button', { name: 'Reject Delete' });

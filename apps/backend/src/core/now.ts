@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { EventHub } from './event-hub.js';
 import { defaultAwayModeState } from './away-mode.js';
 import type { BrowserConfirmation } from '../teams/service.js';
+import { generatedViewValidationOptions } from './generated-view-validation.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
@@ -195,7 +196,12 @@ export function registerNowRoutes(app: FastifyInstance) {
       return response.write(frame);
     });
     closeWorkspace = workspaceConnection.close;
-    if (!response.write(`event: workspace-ready\ndata: ${JSON.stringify({ sessionId: workspaceConnection.sessionId })}\n\n`)) {
+    const trustedBlobHost = generatedViewValidationOptions(app).trustedBlobHost;
+    const ready = {
+      sessionId: workspaceConnection.sessionId,
+      ...(trustedBlobHost ? { trustedBlobHost } : {}),
+    };
+    if (!response.write(`event: workspace-ready\ndata: ${JSON.stringify(ready)}\n\n`)) {
       end();
     }
     return reply;
