@@ -152,11 +152,11 @@ export function TaskReleaseBar({
       <div className="task-release-project">
         <Link to={`/factory/projects/${projectId}`}>{currentView.project.name}</Link>
         <a href={repositoryUrl} target="_blank" rel="noreferrer">{currentView.project.repo}</a>
-        <span>Default branch <code>{currentView.project.defaultBranch}</code></span>
+        <span>Default: <code>{currentView.project.defaultBranch}</code></span>
       </div>
       <dl className="task-release-statuses">
         <div>
-          <dt>Latest build</dt>
+          <dt>Build</dt>
           <dd>{latestBuild
             ? <a href={`${repositoryUrl}/actions/runs/${encodeURIComponent(latestBuild.id)}`} target="_blank" rel="noreferrer">
               <span className={`release-status state-${latestBuild.conclusion ?? latestBuild.status}`}>
@@ -168,7 +168,7 @@ export function TaskReleaseBar({
           </dd>
         </div>
         <div>
-          <dt>Latest deployment</dt>
+          <dt>Deployment</dt>
           <dd>{latestDeployment
             ? <span className={`release-status state-${latestDeployment.status}`}>
               {statusLabel(latestDeployment.status)}
@@ -178,9 +178,9 @@ export function TaskReleaseBar({
         </div>
         {latestRelease && (
           <div>
-            <dt>Latest release</dt>
+            <dt>Release</dt>
             <dd>
-              <Link to={releaseUrl}>Build {latestRelease.version}</Link>{' '}
+              <Link to={releaseUrl}>v{latestRelease.version}</Link>{' '}
               <span className={`release-status state-${latestRelease.status}`}>{latestRelease.status}</span>
             </dd>
           </div>
