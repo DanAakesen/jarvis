@@ -109,6 +109,58 @@ describe('ConversationHistory', () => {
     expect(screen.getByRole('link', { name: 'Task #77' }).getAttribute('href')).toBe('/factory/tasks/77');
   });
 
+  it('renders safe Markdown only for Jarvis history', async () => {
+    const markdown = [
+      '**Bold** and *italic* with `inline code`.',
+      '',
+      '- First item',
+      '- Second item',
+      '',
+      '```ts',
+      'const ready = true;',
+      '```',
+      '',
+      '[Web](https://example.com) [Email](mailto:dan@example.com) [Bad](javascript:alert(1)) [FTP](ftp://example.com)',
+      '',
+      '![Remote image](https://example.com/image.png)',
+      '',
+      '<script>alert(1)</script>',
+    ].join('\n');
+    loadConversationHistory.mockResolvedValue({
+      messages: [
+        { ...message, channel: 'chat', role: 'jarvis', text: markdown, toolCalls: [] },
+        { ...message, id: '44', role: 'dan', text: '**literal** <script>alert(1)</script>', toolCalls: [] },
+        { ...message, id: '45', text: '**voice transcript**', toolCalls: [] },
+      ],
+      nextCursor: null,
+    });
+    renderConversation();
+
+    const jarvis = (await screen.findByText('Bold')).closest('[data-speaker="jarvis"]');
+    expect(jarvis?.querySelector('.markdown-content strong')?.textContent).toBe('Bold');
+    expect(jarvis?.querySelector('.markdown-content em')?.textContent).toBe('italic');
+    expect(jarvis?.querySelector('p code')?.textContent).toBe('inline code');
+    expect(jarvis?.querySelectorAll('ul > li')).toHaveLength(2);
+    expect(jarvis?.querySelector('pre code')?.textContent?.trim()).toBe('const ready = true;');
+    expect(jarvis?.querySelector('script')).toBeNull();
+    expect(jarvis?.querySelector('img')).toBeNull();
+    expect(jarvis?.textContent).toContain('Remote image');
+
+    const links = [...(jarvis?.querySelectorAll('a') ?? [])];
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      'https://example.com',
+      'mailto:dan@example.com',
+    ]);
+    for (const link of links) {
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    }
+
+    const dan = screen.getByText('**literal** <script>alert(1)</script>').closest('[data-speaker="dan"]');
+    expect(dan?.querySelector(':scope > p strong, :scope > p script')).toBeNull();
+    expect(screen.getByText('**voice transcript**').closest('[data-speaker="jarvis"]')?.querySelector('.markdown-content')).toBeNull();
+  });
+
   it('shows loading and empty states', async () => {
     let resolve: ((value: { messages: []; nextCursor: null }) => void) | undefined;
     loadConversationHistory.mockReturnValue(new Promise((done) => { resolve = done; }));
@@ -175,7 +227,7 @@ describe('ConversationHistory', () => {
       .mockResolvedValueOnce({ messages: savedHistory, nextCursor: null });
     sendChatTurn.mockImplementation(async (_client, _config, _session, _text, onUser, onDelta) => {
       onUser(userMessage);
-      onDelta('I am');
+      onDelta('**I am');
       return new Promise((resolve) => { finish = resolve; });
     });
     renderConversation();
@@ -183,7 +235,9 @@ describe('ConversationHistory', () => {
     fireEvent.change(input, { target: { value: 'Hello Jarvis' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(await screen.findByLabelText('Jarvis reply in progress')).toHaveProperty('textContent', 'I am');
+    const streamedReply = await screen.findByLabelText('Jarvis reply in progress');
+    expect(streamedReply.textContent).toBe('I am');
+    expect(streamedReply.querySelector('strong')?.textContent).toBe('I am');
     expect(screen.getByRole('status').textContent).toBe('Jarvis is replying…');
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
     expect(screen.getByRole('button', { name: 'English' })).toHaveProperty('disabled', true);
@@ -311,7 +365,8 @@ describe('ConversationHistory', () => {
       'textContent',
       'A task action may still have completed; check its status before trying again.',
     );
-    expect(await screen.findByText('Partial reply, interrupted: Partial')).not.toBeNull();
+    const interrupted = await screen.findByText('Partial reply, interrupted:');
+    expect(interrupted.closest('.interrupted-reply')?.querySelector('.markdown-content p')?.textContent).toBe('Partial');
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('value', '');
   });
 
