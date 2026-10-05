@@ -28,6 +28,7 @@ import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
 import type { TeamsNotificationService } from './teams/service.js';
 import type { AwayModeStore } from './core/away-mode.js';
+import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
@@ -54,6 +55,7 @@ export interface BuildAppOptions {
   readonly containerAppScaler?: ContainerAppScaler | null;
   readonly teamsNotifications?: TeamsNotificationService | null;
   readonly awayModeStore?: AwayModeStore | null;
+  readonly workspaceCommands?: WorkspaceCommandBroker;
 }
 
 declare module 'fastify' {
@@ -80,6 +82,7 @@ declare module 'fastify' {
     conversationAgent: ConversationAgent | null;
     teamsNotifications: TeamsNotificationService | null;
     awayModeStore: AwayModeStore | null;
+    workspaceCommands: WorkspaceCommandBroker;
   }
 }
 
@@ -142,6 +145,9 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
+  const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
+  app.decorate('workspaceCommands', workspaceCommands);
+  app.addHook('onClose', async () => { workspaceCommands.dispose(); });
   const unsubscribeTaskEvents = app.eventHub.subscribe((event) => {
     void (async () => {
       let state: Awaited<ReturnType<AwayModeStore['read']>> | undefined;

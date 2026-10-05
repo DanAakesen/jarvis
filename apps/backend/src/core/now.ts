@@ -141,15 +141,21 @@ export function registerNowRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  app.get('/now/events', async (_request, reply) => {
+  app.get('/now/events', async (request, reply) => {
+    const principal = request.principal;
+    if (!principal || principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
     const response = reply.raw;
     let closed = false;
     let unsubscribe: () => void = () => {};
+    let closeWorkspace = () => {};
     const cleanup = () => {
       if (closed) return;
       closed = true;
       clearInterval(heartbeat);
       unsubscribe();
+      closeWorkspace();
     };
     const end = () => {
       cleanup();
@@ -178,11 +184,20 @@ export function registerNowRoutes(app: FastifyInstance) {
     response.once('error', end);
     response.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
+      'Cache-Control': 'no-cache, no-store, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     });
     response.flushHeaders();
+    const workspaceConnection = app.workspaceCommands.connect(principal.objectId, (event, data) => {
+      const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+      if (response.writableLength + Buffer.byteLength(frame) > 1024 * 1024) return false;
+      return response.write(frame);
+    });
+    closeWorkspace = workspaceConnection.close;
+    if (!response.write(`event: workspace-ready\ndata: ${JSON.stringify({ sessionId: workspaceConnection.sessionId })}\n\n`)) {
+      end();
+    }
     return reply;
   });
 }

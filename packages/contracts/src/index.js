@@ -146,54 +146,46 @@ const workspaceViewId = {
   ...string(64, 1),
   pattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
 };
-const workspaceCommandBase = { commandId: workspaceCommandId };
-const workspaceViewCommand = {
+const workspaceOperation = (operation, required = []) => ({
+  properties: { operation: { const: operation } },
+  required: ['operation', ...required],
+});
+const workspaceCommandVariants = [
+  ...['create', 'update'].map((operation) => workspaceOperation(operation, ['viewId', 'view'])),
+  ...['show', 'close', 'minimise', 'restore', 'focus'].map((operation) =>
+    workspaceOperation(operation, ['viewId'])),
+  workspaceOperation('move', ['viewId', 'x', 'y']),
+  workspaceOperation('resize', ['viewId', 'width', 'height']),
+  workspaceOperation('layout', ['arrangement']),
+  {
+    properties: { operation: { const: 'context-panel' }, action: { const: 'open' } },
+    required: ['operation', 'action', 'view'],
+  },
+  ...['close', 'toggle'].map((action) => ({
+    properties: { operation: { const: 'context-panel' }, action: { const: action } },
+    required: ['operation', 'action'],
+  })),
+];
+export const workspaceCommandSchema = Object.freeze({
+  type: 'object',
+  properties: {
+    commandId: workspaceCommandId,
+    operation: { enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel'] },
+    viewId: workspaceViewId,
+    view: generatedViewSchema,
+    x: { type: 'number', minimum: 0, maximum: 1 },
+    y: { type: 'number', minimum: 0, maximum: 1 },
+    width: { type: 'number', minimum: 0.32, maximum: 0.92 },
+    height: { type: 'number', minimum: 0.34, maximum: 0.92 },
+    arrangement: { enum: ['tiled', 'layered'] },
+    action: { enum: ['open', 'close', 'toggle'] },
+  },
+  required: ['commandId', 'operation'],
+  additionalProperties: false,
   oneOf: [
-    ...['create', 'update'].map((operation) => object({
-      ...workspaceCommandBase,
-      operation: { const: operation },
-      viewId: workspaceViewId,
-      view: generatedViewSchema,
-    })),
-    ...['show', 'close', 'minimise', 'restore', 'focus'].map((operation) => object({
-      ...workspaceCommandBase,
-      operation: { const: operation },
-      viewId: workspaceViewId,
-    })),
-    object({
-      ...workspaceCommandBase,
-      operation: { const: 'move' },
-      viewId: workspaceViewId,
-      x: { type: 'number', minimum: 0, maximum: 1 },
-      y: { type: 'number', minimum: 0, maximum: 1 },
-    }),
-    object({
-      ...workspaceCommandBase,
-      operation: { const: 'resize' },
-      viewId: workspaceViewId,
-      width: { type: 'number', minimum: 0.32, maximum: 0.92 },
-      height: { type: 'number', minimum: 0.34, maximum: 0.92 },
-      x: { type: 'number', minimum: 0, maximum: 1 },
-      y: { type: 'number', minimum: 0, maximum: 1 },
-    }, ['commandId', 'operation', 'viewId', 'width', 'height']),
-    object({
-      ...workspaceCommandBase,
-      operation: { const: 'layout' },
-      arrangement: { enum: ['tiled', 'layered'] },
-    }),
-    object({
-      ...workspaceCommandBase,
-      operation: { const: 'context-panel' },
-      action: { const: 'open' },
-      view: generatedViewSchema,
-    }),
-    ...['close', 'toggle'].map((action) => object({
-      ...workspaceCommandBase,
-      operation: { const: 'context-panel' },
-      action: { const: action },
-    })),
+    ...workspaceCommandVariants,
   ],
-};
+});
 
 const routePattern = /^\/(?:$|factory\/tasks\/[1-9]\d{0,18}|factory\/(?:projects|releases)\/[1-9]\d{0,15}|usage|settings)(?:\?[^#]*)?$/;
 const taskRoutePattern = /^\/factory\/tasks\/([1-9]\d{0,18})(?:\?[^#]*)?$/;
@@ -412,5 +404,3 @@ export function isWorkspaceCommand(value, options = {}) {
       return false;
   }
 }
-
-export const workspaceCommandSchema = Object.freeze(workspaceViewCommand);

@@ -9,6 +9,8 @@ import { registerUsageRoutes } from './usage.js';
 import { setJarvisModelTool } from './model-tools.js';
 import { setAwayModeTool } from './away-mode.js';
 import { getStatusSummaryTool } from './status.js';
+import { generatedViewValidationOptions } from './generated-view-validation.js';
+import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspace-commands.js';
 
 const memoryReadOnlyTools = new Set(['memory_search', 'memory_list', 'memory_history']);
 
@@ -32,18 +34,14 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function trustedBlobHost(): string | undefined {
-  const account = process.env.TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT;
-  return account && /^[a-z0-9]{3,24}$/.test(account) ? `${account}.blob.core.windows.net` : undefined;
-}
-
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setThemeTool, setJarvisModelTool, setAwayModeTool, getStatusSummaryTool],
+  tools: [setThemeTool, setJarvisModelTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);
     await registerUsageRoutes(app);
+    registerWorkspaceCommandRoutes(app);
     app.get('/database/status', {
       schema: { response: { 200: { type: 'object', properties: { waking: { type: 'boolean' } }, required: ['waking'], additionalProperties: false } } },
     }, async (_request, reply) => {
@@ -111,10 +109,8 @@ export const coreModule: BackendModule = {
           result = await tool.execute(request.body, request, controller.signal);
           if (isObject(result) && result.type === 'generated-view') {
             const validateView = request.compileValidationSchema(generatedViewSchema, 'body');
-            const blobHost = trustedBlobHost();
             if (!validateView(result.view) || !isGeneratedView(result.view, {
-              ...(blobHost ? { trustedBlobHost: blobHost } : {}),
-              registeredTools: app.jarvisTools.list().map(({ name }) => name),
+              ...generatedViewValidationOptions(app),
             })) throw new Error('Tool returned an invalid generated view');
           }
           const serialized = JSON.stringify(result);
