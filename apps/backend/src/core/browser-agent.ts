@@ -682,6 +682,23 @@ function normalizedTitle(value: string): string {
     .join(' ');
 }
 
+function userMentionedTabTitle(request: FastifyRequest, title: string): boolean {
+  const voiceMessage = (request as FastifyRequest & {
+    jarvisConversationMessage?: { role?: unknown; text?: unknown };
+  }).jarvisConversationMessage;
+  const body = request.body;
+  const chatText = isRecord(body) && typeof body.text === 'string' ? body.text : undefined;
+  const text = voiceMessage?.role === 'dan' && typeof voiceMessage.text === 'string'
+    ? voiceMessage.text
+    : chatText;
+  if (!text) return false;
+
+  const titleWords = normalizedTitle(title).split(' ').filter(Boolean);
+  const messageWords = normalizedTitle(text).split(' ').filter(Boolean);
+  return titleWords.length > 0 && messageWords.some((_word, index) =>
+    titleWords.every((word, offset) => messageWords[index + offset] === word));
+}
+
 function sharedTabOptions(tabs: readonly BrowserTab[]): string {
   return tabs.slice(0, 5).map((tab) => {
     let host = '';
@@ -691,38 +708,42 @@ function sharedTabOptions(tabs: readonly BrowserTab[]): string {
   }).join(', ');
 }
 
+function sharedTabScore(tab: BrowserTab, input: SharedBrowserTaskInput): number {
+  const title = input.sharedWindowTitle?.trim() ?? '';
+  const titleExact = title ? normalizedTitle(title) : '';
+  const tabTitle = normalizedTitle(tab.title);
+  if (titleExact && tabTitle === titleExact) return 10_000;
+
+  let host = '';
+  try { host = new URL(tab.url).hostname; } catch { /* Ignore invalid bridge URLs. */ }
+  const descriptionText = matchingWords(input.screenDescription);
+  const titleWords = matchingWords(title);
+  const candidateWords = matchingWords(`${tab.title} ${host}`);
+  let score = 0;
+  for (const word of candidateWords) {
+    if (titleWords.has(word)) score += 3;
+    else if (descriptionText.has(word)) score += 1;
+  }
+  return score;
+}
+
 function resolveSharedTab(
   tabs: readonly BrowserTab[],
   input: SharedBrowserTaskInput,
 ): BrowserTab {
   if (input.tabTitle !== undefined) {
     const selected = tabs.filter(({ title }) => normalizedTitle(title) === normalizedTitle(input.tabTitle!));
-    if (selected.length === 1) return selected[0]!;
+    if (selected.length === 1 && sharedTabScore(selected[0]!, input) > 0) return selected[0]!;
+    if (selected.length === 1) {
+      throw new ToolRefusal('That Chrome tab does not match the current shared screen. Please share the intended tab and try again.');
+    }
     if (selected.length > 1) {
       throw new ToolRefusal(`More than one Chrome tab is named "${cleanDisplay(input.tabTitle)}". Please choose a different tab.`);
     }
     throw new ToolRefusal('That selected Chrome tab is no longer available. Please share the page again or choose another tab.');
   }
 
-  const title = input.sharedWindowTitle?.trim() ?? '';
-  const description = input.screenDescription;
-  const titleExact = title ? normalizedTitle(title) : '';
-  const descriptionText = matchingWords(description);
-  const titleWords = matchingWords(title);
-  const scores = tabs.map((tab) => {
-    const tabTitle = normalizedTitle(tab.title);
-    if (titleExact && tabTitle === titleExact) return 10_000;
-
-    let host = '';
-    try { host = new URL(tab.url).hostname; } catch { /* Ignore invalid bridge URLs. */ }
-    const candidateWords = matchingWords(`${tab.title} ${host}`);
-    let score = 0;
-    for (const word of candidateWords) {
-      if (titleWords.has(word)) score += 3;
-      else if (descriptionText.has(word)) score += 1;
-    }
-    return score;
-  });
+  const scores = tabs.map((tab) => sharedTabScore(tab, input));
   const highest = Math.max(0, ...scores);
   const matches = tabs.filter((_tab, index) => scores[index] === highest && highest > 0);
   if (matches.length === 1) return matches[0]!;
@@ -1022,9 +1043,18 @@ export function createBrowserAgent(
     }
     validateSharedTask(task);
     if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for browser actions.');
+    const userTitle = task.tabTitle && userMentionedTabTitle(request, task.tabTitle)
+      ? task.tabTitle
+      : undefined;
+    const resolutionInput: SharedBrowserTaskInput = {
+      goal: task.goal,
+      screenDescription: task.screenDescription,
+      ...(task.sharedWindowTitle === undefined ? {} : { sharedWindowTitle: task.sharedWindowTitle }),
+      ...(userTitle === undefined ? {} : { tabTitle: userTitle }),
+    };
     let tab: BrowserTab;
     try {
-      tab = resolveSharedTab(await browserExecutor(request).listTabs(signal), task);
+      tab = resolveSharedTab(await browserExecutor(request).listTabs(signal), resolutionInput);
     } catch (error) {
       if (error instanceof ToolRefusal && error.message === 'The local PC bridge is offline.') {
         throw new ToolRefusal('Chrome is offline. I can send the steps instead.');
@@ -1090,30 +1120,28 @@ export function createBrowserAgentModule(agent: BrowserAgent): BackendModule {
       },
       {
         name: 'browser_do_shared',
-        description: 'When Dan asks you to act on the page he is sharing, use this tool with the current shared-screen description and selected window title. It matches only listed Chrome tabs, asks Dan to choose if ambiguous, and runs the bounded Jev browser agent on the match. Never use stale or camera context. Risky actions still require Dan’s confirmation.',
+        description: 'When Dan asks you to act on the page he is sharing, use the current shared-screen context already supplied for this turn. Provide only the goal and, if Dan explicitly named a tab in this message, its exact title. It matches listed Chrome tabs, asks Dan to choose if ambiguous, and runs the bounded Jev browser agent on the match. Risky actions still require Dan’s confirmation.',
         inputSchema: {
           type: 'object',
           properties: {
             goal: { type: 'string', minLength: 1, maxLength: maxGoalLength },
-            screenDescription: { type: 'string', minLength: 1, maxLength: 5_000 },
-            sharedWindowTitle: { type: 'string', minLength: 1, maxLength: 300 },
             tabTitle: { type: 'string', minLength: 1, maxLength: 300 },
           },
-          required: ['goal', 'screenDescription'],
+          required: ['goal'],
           additionalProperties: false,
         },
         sensitive: true,
         execute: (input, request, signal) => {
           if (!isRecord(input) || typeof input.goal !== 'string' ||
-              typeof input.screenDescription !== 'string' ||
-              (input.sharedWindowTitle !== undefined && typeof input.sharedWindowTitle !== 'string') ||
               (input.tabTitle !== undefined && typeof input.tabTitle !== 'string')) {
-            throw new ToolRefusal('Provide the browser goal and current shared-screen context.');
+            throw new ToolRefusal('Provide a browser goal and, only if Dan named it, the exact Chrome tab title.');
+          }
+          if (!request.requireSharedScreenContext || !request.sharedScreenContext) {
+            throw new ToolRefusal('I need a current shared-screen frame before acting here. Please share a Chrome tab and try again.');
           }
           return agent.runSharedTask({
             goal: input.goal,
-            screenDescription: input.screenDescription,
-            ...(input.sharedWindowTitle === undefined ? {} : { sharedWindowTitle: input.sharedWindowTitle }),
+            ...request.sharedScreenContext,
             ...(input.tabTitle === undefined ? {} : { tabTitle: input.tabTitle }),
           }, request, signal);
         },

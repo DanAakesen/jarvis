@@ -343,7 +343,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(forwarded.filter((event) => event.type === 'conversation.item.create')).toEqual([]);
   });
 
-  it('speaks shared-tab progress and aborts its browser task when Dan says stop', async () => {
+  it.each(['browser_do_shared', 'browser_do'] as const)(
+    'speaks shared-tab progress and aborts %s when Dan says stop',
+    async (toolName) => {
     let markToolStarted!: () => void;
     let markToolStopped!: (aborted: boolean) => void;
     let markProgressSpoken!: () => void;
@@ -363,7 +365,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const toolModule: BackendModule = {
       id: 'shared-browser-test',
       tools: [{
-        name: 'browser_do_shared',
+        name: toolName,
         description: 'Act on the shared tab.',
         inputSchema: {
           type: 'object',
@@ -415,7 +417,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
               event_id: 'shared-tool-call',
               response_id: 'response-shared',
               call_id: 'shared-call',
-              name: 'browser_do_shared',
+              name: toolName,
               arguments: JSON.stringify({ goal: 'Fill in my name' }),
             }));
             socket.send(JSON.stringify({ type: 'response.done', event_id: 'shared-response-done', response: {} }));
@@ -469,7 +471,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
 
     expect(output).toMatchObject({ type: 'function_call_output', call_id: 'shared-call' });
     expect(JSON.parse(output.output as string)).toMatchObject({
-      tool: 'browser_do_shared',
+      tool: toolName,
       outcome: 'refused',
       result: { refused: 'Browser task stopped before completion.' },
     });
@@ -478,8 +480,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
       screenDescription: 'A contact form with a name field.',
     });
     expect(sharedContextRequired).toBe(true);
-    expect(JSON.stringify(browserEvents)).not.toContain('Contact form');
-  });
+      expect(JSON.stringify(browserEvents)).not.toContain('Contact form');
+    },
+  );
 
   it('stores completed voice transcripts, records a voice session, and waits for its final usage row', async () => {
     const forwarded: string[] = [];

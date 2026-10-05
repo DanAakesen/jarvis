@@ -86,7 +86,11 @@ export const conversationModule: BackendModule = {
   registerRoutes: async (app) => {
     app.post<{
       Params: { sessionId: string };
-      Body: { text: string; screenContext?: string };
+      Body: {
+        text: string;
+        screenContext?: string;
+        sharedScreenContext?: { screenDescription: string; sharedWindowTitle?: string };
+      };
     }>('/conversation/sessions/:sessionId/turns', {
       schema: {
         params: { type: 'object', properties: { sessionId: idSchema }, required: ['sessionId'], additionalProperties: false },
@@ -95,6 +99,15 @@ export const conversationModule: BackendModule = {
           properties: {
             text: { type: 'string', minLength: 1, maxLength: 20_000 },
             screenContext: { type: 'string', minLength: 1, maxLength: 5_000 },
+            sharedScreenContext: {
+              type: 'object',
+              properties: {
+                screenDescription: { type: 'string', minLength: 1, maxLength: 5_000 },
+                sharedWindowTitle: { type: 'string', minLength: 1, maxLength: 300 },
+              },
+              required: ['screenDescription'],
+              additionalProperties: false,
+            },
           },
           required: ['text'],
           additionalProperties: false,
@@ -119,6 +132,10 @@ export const conversationModule: BackendModule = {
       if (session.channel !== 'chat') return reply.code(400).send({ error: 'Session is not a chat session' });
       const authorization = request.headers.authorization;
       if (!authorization) return reply.code(401).send({ error: 'Unauthorized' });
+      if (request.body.sharedScreenContext !== undefined) {
+        request.requireSharedScreenContext = true;
+        request.sharedScreenContext = request.body.sharedScreenContext;
+      }
 
       const userMessage = await store.addMessage({ sessionId, role: 'dan', text, model: null });
       if (!userMessage) return reply.code(404).send({ error: 'Active chat session not found' });
@@ -145,7 +162,7 @@ export const conversationModule: BackendModule = {
         publishActivity('thinking');
         try {
           let reflexNote: string | undefined;
-          if (app.reflexClassifier) {
+          if (app.reflexClassifier && !request.requireSharedScreenContext) {
             try {
               const classification = await app.reflexClassifier.classify(
                 text,

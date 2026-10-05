@@ -484,7 +484,9 @@ function registerVoiceRoute(
       pendingToolCalls += 1;
       toolCallsInResponse = true;
       const toolActivityId = randomUUID();
-      const browserStopController = call.name === 'browser_do_shared' ? new AbortController() : undefined;
+      const sharedBrowserCall = call.name === 'browser_do_shared' ||
+        (call.name === 'browser_do' && request.requireSharedScreenContext === true);
+      const browserStopController = sharedBrowserCall ? new AbortController() : undefined;
       const announceBrowserProgress = browserStopController
         ? () => {
           if (browserStopController.signal.aborted) return;

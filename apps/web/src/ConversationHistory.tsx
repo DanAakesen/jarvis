@@ -192,6 +192,7 @@ export function ConversationHistory({
     let userMessageSaved = false;
     let partialReply = '';
     let contextForTurn: string | undefined;
+    let sharedContextForTurn: { screenDescription: string; sharedWindowTitle?: string } | undefined;
     try {
       const activeSession = session?.language === language
         ? session
@@ -203,6 +204,14 @@ export function ConversationHistory({
           ? sharedScreenContext(currentVisionContext.description, currentVisionContext.sharedWindowTitle)
           : currentVisionContext.description
         : undefined;
+      if (isSharedBrowserRequest(text) && currentVisionContext?.source === 'screen') {
+        sharedContextForTurn = {
+          screenDescription: currentVisionContext.description,
+          ...(currentVisionContext.sharedWindowTitle === undefined
+            ? {}
+            : { sharedWindowTitle: currentVisionContext.sharedWindowTitle }),
+        };
+      }
       setVisionContext(null);
       if (isCameraRequest(text) && camera?.sharing && currentVisionContext?.source !== 'camera') {
         contextForTurn = (await camera.inspect(activeSession.id)).description;
@@ -210,6 +219,12 @@ export function ConversationHistory({
           (isSharedBrowserRequest(text) || currentVisionContext?.source !== 'screen')) {
         const context = await screenShare.inspect(activeSession.id);
         contextForTurn = sharedScreenContext(context.description, context.sharedWindowTitle);
+        if (isSharedBrowserRequest(text)) {
+          sharedContextForTurn = {
+            screenDescription: context.description,
+            ...(context.sharedWindowTitle === undefined ? {} : { sharedWindowTitle: context.sharedWindowTitle }),
+          };
+        }
       }
       const assistant = await sendChatTurn(
         client,
@@ -226,6 +241,7 @@ export function ConversationHistory({
         },
         () => { userMessageSaved = true; },
         contextForTurn,
+        sharedContextForTurn,
       );
       setMessages((current) => [...current, asHistoryMessage(assistant, activeSession.language)]);
       setDraft('');

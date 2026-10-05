@@ -201,6 +201,7 @@ describe('ConversationHistory', () => {
       expect.any(Function),
       expect.any(Function),
       undefined,
+      undefined,
     );
   });
 
@@ -233,6 +234,7 @@ describe('ConversationHistory', () => {
       expect.any(Function),
       expect.any(Function),
       'A red mug in Dan’s hand.',
+      undefined,
     );
     expect(screen.queryByText('A red mug in Dan’s hand.')).toBeNull();
   });
@@ -271,6 +273,10 @@ describe('ConversationHistory', () => {
     expect(JSON.parse(context.slice(context.indexOf('{')))).toEqual({
       sharedWindowTitle: 'Contact form - Chrome',
       screenDescription: 'A contact form with a name field.',
+    });
+    expect(sendChatTurn.mock.calls[0]?.[8]).toEqual({
+      screenDescription: 'A contact form with a name field.',
+      sharedWindowTitle: 'Contact form - Chrome',
     });
   });
 
