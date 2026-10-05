@@ -46,6 +46,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   operations for title dragging, edge resizing and Arrange keyboard controls.
   Now surfaces reflect existing feed data; tool shimmer requires an explicit
   tool-call state. No route, package, database or agent-delivery contract changes.
+- P8-23 presents the existing P5-04 voice status and decoded playback level in
+  the full-screen orb, moves voice actions beneath it, and keeps only P8-22
+  window chrome visible. `VoiceControls`, `VoiceOrb` and `Workspace` retain their
+  existing state ownership; P8-16 still owns tool-activity events. Motion reuses
+  the P8-20 tokens and hidden-tab/reduced-motion rules. No event plumbing,
+  persistence or service contract changes.
 - React mounts into `apps/web/index.html`. BrowserRouter renders the home page
   and a catch-all page with a return link. Production static hosting must fall
   back to `index.html` for client routes (P0-11).

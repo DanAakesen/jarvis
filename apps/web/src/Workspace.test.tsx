@@ -337,6 +337,8 @@ describe('Workspace', () => {
     expect(summary.getAttribute('aria-label')).toBe('Arrange Research summary');
     summary.focus();
     await user.keyboard('{Enter}');
+    const arrangeDetails = summary.closest('details')!;
+    arrangeDetails.open = true;
     const move = within(research).getByRole('button', { name: /^Move Research summary\./ });
     const resize = within(research).getByRole('button', { name: /^Resize Research/ });
     expect(document.getElementById(move.getAttribute('aria-describedby')!)?.textContent).toContain('Focus Move or Resize, then use arrow keys.');
@@ -353,12 +355,16 @@ describe('Workspace', () => {
       if (event.key === 'Escape') documentEscape();
     };
     document.addEventListener('keydown', listenForEscape);
-    await user.keyboard('{Escape}');
-    document.removeEventListener('keydown', listenForEscape);
+    fireEvent.keyDown(resize, { key: 'Escape' });
     expect(documentEscape).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(summary);
-    expect(summary.closest('details')?.open).toBe(false);
+    expect(arrangeDetails.open).toBe(false);
     expect(resize.closest('details')?.open).toBe(false);
+    const closedEscape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    fireEvent(summary, closedEscape);
+    document.removeEventListener('keydown', listenForEscape);
+    expect(closedEscape.defaultPrevented).toBe(false);
+    expect(documentEscape).toHaveBeenCalledOnce();
   });
 
   it('moves and resizes layered views with arrows and larger Shift steps without jumping on focus', async () => {

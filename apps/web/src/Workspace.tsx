@@ -516,7 +516,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   }
 
   function arrangeKeyDown(event: KeyboardEvent<HTMLDetailsElement>) {
-    if (event.key !== 'Escape') return;
+    if (event.key !== 'Escape' || !event.currentTarget.open) return;
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.open = false;

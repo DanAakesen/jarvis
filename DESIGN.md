@@ -78,7 +78,7 @@ Canonical colour, type, spacing, radius, surface, elevation and motion values be
 
 ## Voice end (P8-12, decided 4 October 2026; implemented in P8-10)
 
-Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop and inside the bottom dock, right of the orb, on phone with foreground content. With no phone content, it sits below the central orb. Ending voice collapses the orb back into the composer's small orb. A natural spoken ending also ends voice; the small composer orb only starts voice.
+Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop. On phone with foreground content, it sits inside the bottom dock below the compact orb/state row with the mute and inspection actions; with no phone content, it sits below the central orb. P8-23 keeps these controls grouped beneath the orb in both layouts. Ending voice collapses the orb back into the composer's small orb. A natural spoken ending also ends voice; the small composer orb only starts voice.
 
 ## Foundation shell (P0-02)
 
@@ -342,17 +342,52 @@ Selection, announcements and lifecycle fallback use the combined page and
 agent-created view collection; commands retain P8-15's required `commandId`.
 
 During voice, the foreground window ends above the safe-area-aware orb dock;
-End voice sits inside the dock to the right. Microphone and inspection controls
-have their own top row, horizontally scrollable at very narrow widths. Long
-runtime status text scrolls within the dock without covering End voice. With no
-non-minimised content, the orb returns to the centre with End voice below it.
-Typing never shows the large orb. Camera and sharing move behind a labelled
-phone disclosure; Settings stays at the right of the one-line top bar. Escape
-closes the disclosure and returns focus before ending voice.
+P8-23 keeps the microphone and inspection actions in the orb's control group
+with End voice. Long runtime status text stays within the dock without covering
+those controls. The dock expands only while the microphone is ready and at
+narrow widths where those controls wrap, keeping End voice above the workspace.
+With no non-minimised content, the orb returns to the centre with its controls
+below it. Typing never shows the large orb. Camera and sharing move behind a
+labelled phone disclosure; Settings stays at the right of the one-line top bar.
+Escape closes the disclosure and returns focus before ending voice.
 
 Labelled local before/after screenshots are in `docs/ui/screenshots/p8-11-*`.
 Touch-emulated Chromium verifies interactions, not physical-phone keyboards,
 hardware audio or authenticated agent delivery.
+
+### Voice workspace polish (P8-23)
+
+Desktop voice shows only the carried workspace windows over the P8-20 aurora;
+the Workspace heading, explanatory copy and header Arrange control are hidden.
+Each window retains P8-22 chrome and its own Arrange menu. The large state
+heading and one quieter detail line accompany the orb. State colour and motion
+use the actual P5-04 status, and pulse scale uses decoded playback audio level;
+tool-call styling is ready but no tool-call state is inferred before P8-16.
+Mute, Look at screen and Look at camera are named icon buttons with tooltips,
+grouped below the orb with End voice, not in the top-right corner.
+
+Voice entry grows the composer's small orb while carried windows glide right;
+exit reverses the named workspace transition. The transition remains
+interruptible. The existing aurora pauses with a hidden document and is static
+under reduced motion; labels and controls remain usable without animation. The
+same Concept C daylight treatment applies in light appearance. P8-11 continues
+to own phone view selection and dock geometry, with the voice actions grouped
+below its orb.
+
+Desktop listening, thinking and speaking captures in dark and light, plus
+speaking captures on phone in both appearances, are in
+`docs/ui/screenshots/p8-23-*`. Compare with [Concept B desktop](docs/ui/concepts/screenshots/concept-b-voice-speaking-desktop.png),
+[Concept C desktop](docs/ui/concepts/screenshots/concept-c-voice-speaking-desktop.png),
+[Concept B phone](docs/ui/concepts/screenshots/concept-b-voice-speaking-phone.png)
+and [Concept C phone](docs/ui/concepts/screenshots/concept-c-voice-speaking-phone.png).
+The [dark desktop](docs/ui/screenshots/p8-23-dark-desktop-comparison.png),
+[light desktop](docs/ui/screenshots/p8-23-light-desktop-comparison.png),
+[dark phone](docs/ui/screenshots/p8-23-dark-phone-comparison.png) and
+[light phone](docs/ui/screenshots/p8-23-light-phone-comparison.png) comparison
+images place each reference beside its speaking capture.
+The captures use a labelled local fixture with simulated state and sample
+windows; they are not evidence of live authentication, hardware audio/camera,
+generated-window delivery, or P8-16 tool activity.
 
 ### Concept polish (P8-21)
 

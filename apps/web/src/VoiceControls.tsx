@@ -174,53 +174,65 @@ export function VoiceControls({
 
   return (
     <div className="voice-controls" data-active={active}>
-      {active && <VoiceOrb status={status} message={message} audioLevel={audioLevel} />}
       {status === 'error' && <p className="voice-error" role="alert">{message}</p>}
       {!active && <p id="voice-start-guidance" className="visually-hidden">{initialMessage}</p>}
-      {active && (
-        <button ref={stopButton} className="secondary-button voice-end-control" type="button"
-          onClick={stop} disabled={status === 'stopping'} aria-describedby="voice-status">
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-          End voice
-        </button>
+      {active ? (
+        <VoiceOrb status={status} message={message} audioLevel={audioLevel}>
+          <div className="voice-action-group">
+            <div className="voice-icon-controls" role="group" aria-label="Voice controls">
+              {status === 'ready' ? (
+                <button className="primary-button" type="button" onClick={() => void enableMicrophone()}
+                  disabled={enabling} aria-describedby="voice-status-detail">
+                  {enabling ? 'Enabling microphone…' : 'Enable microphone'}
+                </button>
+              ) : (
+              <button className="voice-icon-button" type="button" onClick={toggleMute}
+                disabled={pending} aria-label={muted ? 'Unmute' : 'Mute'} title={muted ? 'Unmute microphone' : 'Mute microphone'}
+                aria-describedby="voice-status-detail" aria-pressed={muted}>
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  {muted
+                    ? <><path d="M12 3a3 3 0 0 0-3 3v4m6 0V6a3 3 0 0 0-4.8-2.4M5 10v2a7 7 0 0 0 12 4.9M19 10v2a7 7 0 0 1-.5 2.6M12 19v3m-4 0h8M3 3l18 18" /></>
+                    : <><rect x="9" y="2" width="6" height="13" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8" /></>}
+                </svg>
+              </button>
+              )}
+              <button className="voice-icon-button" type="button" aria-label="Look at screen"
+                title={screenShare?.sharing ? 'Look at screen' : 'Start screen sharing before asking Jarvis to look at the screen.'}
+                onClick={() => void inspectAndSendVision('screen')}
+                disabled={!screenShare?.sharing || !screenSessionId || pending || Boolean(screenShare.inspecting)}
+                aria-describedby={!screenShare?.sharing ? 'voice-screen-guidance' : 'voice-status-detail'}>
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" />
+                </svg>
+              </button>
+              <button className="voice-icon-button" type="button" aria-label="Look at camera"
+                title={camera?.sharing ? 'Look at camera' : 'Turn on the camera before asking Jarvis to look at it.'}
+                onClick={() => void inspectAndSendVision('camera')}
+                disabled={!camera?.sharing || !screenSessionId || pending || Boolean(camera?.inspecting)}
+                aria-describedby={!camera?.sharing ? 'voice-camera-guidance' : 'voice-status-detail'}>
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="6" width="13" height="12" rx="2" /><path d="m16 10 5-3v10l-5-3" />
+                </svg>
+              </button>
+            </div>
+            <button ref={stopButton} className="secondary-button voice-end-control" type="button"
+              onClick={stop} disabled={status === 'stopping'} aria-describedby="voice-status-detail">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+              End voice
+            </button>
+          </div>
+        </VoiceOrb>
+      ) : (
+        <div className="action-row">
+          <button className="input-orb" type="button" onClick={start} disabled={disabled} aria-label="Start voice" aria-describedby="voice-start-guidance" title="Start voice"><span aria-hidden="true" /></button>
+          <span className="voice-start-label" aria-hidden="true">Start voice</span>
+        </div>
       )}
-      <div className="action-row">
-        {active
-          ? null
-          : <>
-              <button className="input-orb" type="button" onClick={start} disabled={disabled} aria-label="Start voice" aria-describedby="voice-start-guidance" title="Start voice"><span aria-hidden="true" /></button>
-              <span className="voice-start-label" aria-hidden="true">Start voice</span>
-            </>}
-        {active && (status === 'ready' ? (
-          <button className="primary-button" type="button" onClick={() => void enableMicrophone()} disabled={enabling} aria-describedby="voice-status">
-            {enabling ? 'Enabling microphone…' : 'Enable microphone'}
-          </button>
-        ) : <button
-          className="secondary-button"
-          type="button"
-          onClick={toggleMute}
-          disabled={pending}
-          aria-describedby="voice-status"
-          aria-pressed={muted}
-        >
-          {muted ? 'Unmute' : 'Mute'}
-        </button>)}
-        {active && (
-          <>
-            <button className="secondary-button" type="button" onClick={() => void inspectAndSendVision('screen')}
-              disabled={!screenShare?.sharing || !screenSessionId || pending || Boolean(screenShare.inspecting)}>
-              Look at screen
-            </button>
-            <button className="secondary-button" type="button" onClick={() => void inspectAndSendVision('camera')}
-              disabled={!camera?.sharing || !screenSessionId || pending || Boolean(camera?.inspecting)}
-              aria-describedby="voice-camera-guidance">
-              Look at camera
-            </button>
-          </>
-        )}
-      </div>
       <span id="voice-camera-guidance" className="visually-hidden">
         Turn on the camera from the top bar before asking Jarvis to inspect a frame.
+      </span>
+      <span id="voice-screen-guidance" className="visually-hidden">
+        Start screen sharing from Activity, sharing and backend before asking Jarvis to inspect a frame.
       </span>
       {screenError && <p role="alert">{screenError}</p>}
     </div>
