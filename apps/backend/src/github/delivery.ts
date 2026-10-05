@@ -152,6 +152,7 @@ export function createGitHubDeliveryHandler(
   staticWebAppOrigin?: string,
   fetchImpl: typeof fetch = fetch,
   onPullRequest?: (mapping: Extract<GithubWebhookMapping, { kind: 'pull_request' }>) => Promise<void>,
+  afterPullRequest?: (mapping: Extract<GithubWebhookMapping, { kind: 'pull_request' }>) => Promise<void>,
 ): (workspace: TaskWorkspace, task: DeliveryTask, gate?: TaskCompletionGate) => Promise<GitHubDeliveryResult> {
   return async ({ repository, defaultBranch, branch }, task, gate) => {
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository) ||
@@ -212,8 +213,8 @@ export function createGitHubDeliveryHandler(
             }, 6_000);
             const opened = pullRequest(created, repository, branch, defaultBranch);
             if (!opened) throw new Error('GitHub pull request response is invalid');
-            await recordOpenedPull(tasks, task.id, opened, branch, defaultBranch, repository, onPullRequest);
-            return { kind: 'opened' as const };
+            const mapping = await recordOpenedPull(tasks, task.id, opened, branch, defaultBranch, repository, onPullRequest);
+            return { kind: 'opened' as const, mapping };
           } catch (error) {
             if (error instanceof GitHubDeliveryRequestError && error.status === 422) {
               return { kind: 'duplicate' as const };
@@ -222,8 +223,10 @@ export function createGitHubDeliveryHandler(
               fetchImpl, repositoryPath, repository, branch, defaultBranch, owner!, token, 3_000,
             );
             if (reconciled) {
-              await recordOpenedPull(tasks, task.id, reconciled, branch, defaultBranch, repository, onPullRequest);
-              return { kind: 'opened' as const };
+              const mapping = await recordOpenedPull(
+                tasks, task.id, reconciled, branch, defaultBranch, repository, onPullRequest,
+              );
+              return { kind: 'opened' as const, mapping };
             }
             throw error;
           }
@@ -233,6 +236,14 @@ export function createGitHubDeliveryHandler(
           : { kind: 'ran' as const, value: await create() };
         if (guardedCreate.kind === 'not_running') return { kind: 'not_running' };
         if (guardedCreate.value.kind === 'opened') {
+          try {
+            await afterPullRequest?.(guardedCreate.value.mapping);
+          } catch {
+            return {
+              kind: 'refused',
+              reason: 'The pull request was recorded, but project policy could not be verified. Review the task before retrying.',
+            };
+          }
           return { kind: 'awaiting_policy' };
         }
         if (guardedCreate.value.kind === 'duplicate') {
@@ -259,7 +270,16 @@ export function createGitHubDeliveryHandler(
         kind: 'ran' as const,
         value: await recordOpenedPull(tasks, task.id, pull, branch, defaultBranch, repository, onPullRequest),
       };
-    return recorded.kind === 'not_running' ? { kind: 'not_running' } : { kind: 'awaiting_policy' };
+    if (recorded.kind === 'not_running') return { kind: 'not_running' };
+    try {
+      await afterPullRequest?.(recorded.value);
+      return { kind: 'awaiting_policy' };
+    } catch {
+      return {
+        kind: 'refused',
+        reason: 'The pull request was recorded, but project policy could not be verified. Review the task before retrying.',
+      };
+    }
   };
 }
 
@@ -271,7 +291,7 @@ async function recordOpenedPull(
   defaultBranch: string,
   repository: string,
   onPullRequest?: (mapping: Extract<GithubWebhookMapping, { kind: 'pull_request' }>) => Promise<void>,
-): Promise<void> {
+): Promise<Extract<GithubWebhookMapping, { kind: 'pull_request' }>> {
   await tasks.recordEvent({
       taskId,
       type: 'pull_request_opened',
@@ -285,7 +305,7 @@ async function recordOpenedPull(
       },
       source: 'backend',
     });
-  await onPullRequest?.({
+  const mapping: Extract<GithubWebhookMapping, { kind: 'pull_request' }> = {
     kind: 'pull_request',
     repository,
     number: pull.number,
@@ -294,5 +314,7 @@ async function recordOpenedPull(
     state: 'open',
     openedAt: pull.openedAt,
     mergedAt: null,
-  });
+  };
+  await onPullRequest?.(mapping);
+  return mapping;
 }

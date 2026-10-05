@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
 import { createGitHubDeliveryHandler, type TaskCompletionGate } from './delivery.js';
+import type { GithubWebhookMapping } from './webhook-mapping.js';
 
 const workspace = {
   repository: 'DanAakesen/jarvis-test-target',
@@ -73,15 +74,24 @@ function github(options: {
   return { fetch, calls, get creates() { return createdPullRequests; } };
 }
 
-function fixture(fetch: typeof globalThis.fetch) {
+type PullRequestMapping = Extract<GithubWebhookMapping, { kind: 'pull_request' }>;
+
+function fixture(
+  fetch: typeof globalThis.fetch,
+  callbacks: {
+    onPullRequest?: (mapping: PullRequestMapping) => Promise<void>;
+    afterPullRequest?: (mapping: PullRequestMapping) => Promise<void>;
+  } = {},
+) {
   const recordEvent = vi.fn(async () => ({ id: '1' } as never));
-  const recordPullRequest = vi.fn(async () => {});
+  const recordPullRequest = callbacks.onPullRequest ?? vi.fn(async () => {});
   const handler = createGitHubDeliveryHandler(
     tokenIssuer(),
     { recordEvent } as never,
     'https://jarvis.example',
     fetch,
     recordPullRequest,
+    callbacks.afterPullRequest,
   );
   return { handler, recordEvent, recordPullRequest };
 }
@@ -127,6 +137,27 @@ describe('GitHub task delivery', () => {
       type: 'pull_request_opened',
       payload: expect.objectContaining({ pullRequest: 73, reused: true }),
     }));
+  });
+
+  it.each([false, true])('evaluates project policy after releasing the completion gate (existing PR: %s)', async (existing) => {
+    const api = github({ existing });
+    let gateHeld = false;
+    const persisted = vi.fn(async () => { expect(gateHeld).toBe(true); });
+    const evaluated = vi.fn(async () => { expect(gateHeld).toBe(false); });
+    const test = fixture(api.fetch, { onPullRequest: persisted, afterPullRequest: evaluated });
+    const gate: TaskCompletionGate = async (operation) => {
+      gateHeld = true;
+      try {
+        return { kind: 'ran' as const, value: await operation() };
+      } finally {
+        gateHeld = false;
+      }
+    };
+
+    await expect(test.handler(workspace, task, gate)).resolves.toEqual({ kind: 'awaiting_policy' });
+
+    expect(persisted).toHaveBeenCalledOnce();
+    expect(evaluated).toHaveBeenCalledOnce();
   });
 
   it('reconciles a timed-out create that GitHub accepted before recording the PR', async () => {

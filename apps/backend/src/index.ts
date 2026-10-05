@@ -382,10 +382,8 @@ try {
               taskStore,
               config.staticWebAppOrigin,
               undefined,
-              async (mapping) => {
-                await webhookDeliveryStore?.recordPullRequest(mapping);
-                await projectPolicyEvaluator?.handle(mapping);
-              },
+              async (mapping) => { await webhookDeliveryStore?.recordPullRequest(mapping); },
+              async (mapping) => { await projectPolicyEvaluator?.handle(mapping); },
             ),
           }
           : {}),
