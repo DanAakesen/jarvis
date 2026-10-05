@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import type { WorkspaceCommand } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
@@ -11,6 +13,7 @@ import { useContextPanel } from './context-panel-state';
 import { DatabaseWakeStatus } from './DatabaseWakeStatus';
 import { JarvisPage } from './JarvisPage';
 import { NotFoundPage, SignInPage } from './pages';
+import { NowFeedPanel } from './NowFeedPanel';
 import { SettingsPage } from './SettingsPage';
 import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
@@ -116,12 +119,32 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const workspaceCommands = useMemo(() => ({
-    dispatch: (command: Parameters<WorkspaceController['dispatch']>[0]) => (
-      workspaceController.current?.dispatch(command) ?? false
-    ),
+    dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
+      if (command.operation === 'context-panel') {
+        if (command.action === 'open') {
+          contextPanel.show({
+            title: command.view.title,
+            status: 'view',
+            view: command.view,
+            ...(trustedBlobHost ? { trustedBlobHost } : {}),
+          });
+        } else if (command.action === 'close') {
+          contextPanel.close();
+        } else {
+          contextPanel.toggle();
+        }
+        return true;
+      }
+      return workspaceController.current?.dispatch(command, trustedBlobHost) ?? false;
+    },
     minimiseAll: () => workspaceController.current?.minimiseAll(),
     hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
-  }), []);
+  }), [contextPanel]);
+  const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
+    let applied = false;
+    flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
+    return applied;
+  }, [workspaceCommands]);
   const onVoiceActiveChange = useCallback((active: boolean) => {
     if (active && readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart) {
       workspaceController.current?.minimiseAll();
@@ -293,6 +316,16 @@ function ShellLayout({ signedIn, config, session, camera }: {
             {signedIn && (
               <div className="workspace-shell-area" hidden={pathname !== '/'}>
                 <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows} />
+              </div>
+            )}
+            {signedIn && pathname !== '/' && (
+              <div hidden>
+                <NowFeedPanel
+                  client={session.client}
+                  config={config}
+                  getAccessToken={getAccessToken}
+                  applyWorkspaceCommand={applyWorkspaceCommand}
+                />
               </div>
             )}
           </VoiceWorkspaceContext.Provider>

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
+import type { WorkspaceCommand } from '@jarvis/contracts';
 import { ActivityPanel } from './ActivityPanel';
 import type { NowFeed, NowFeedStreamStatus } from './activity';
 import {
   dismissNowActivity,
+  acknowledgeWorkspaceCommand,
   loadNowFeed,
   resolveNowConfirmation,
   streamNowFeed,
@@ -14,10 +16,12 @@ export function NowFeedPanel({
   client,
   config,
   getAccessToken,
+  applyWorkspaceCommand,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
   getAccessToken: () => Promise<string>;
+  applyWorkspaceCommand: (command: WorkspaceCommand, trustedBlobHost?: string) => boolean;
 }) {
   const [feed, setFeed] = useState<NowFeed>({ status: 'loading' });
   const [streamStatus, setStreamStatus] = useState<NowFeedStreamStatus>(
@@ -25,11 +29,20 @@ export function NowFeedPanel({
   );
   const [retry, setRetry] = useState(0);
   const refreshRef = useRef<(() => Promise<void>) | null>(null);
+  const applyWorkspaceCommandRef = useRef(applyWorkspaceCommand);
+
+  useEffect(() => {
+    applyWorkspaceCommandRef.current = applyWorkspaceCommand;
+  }, [applyWorkspaceCommand]);
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
     let requestNumber = 0;
+    let workspaceSessionId: string | null = null;
+    let trustedBlobHost: string | undefined;
+    let commandQueue = Promise.resolve();
+    const cancelledCommands = new Set<string>();
     const refresh = async () => {
       const currentRequest = ++requestNumber;
       try {
@@ -54,6 +67,51 @@ export function NowFeedPanel({
         getAccessToken,
         onUpdate: () => { void refresh(); },
         onStatus: setStreamStatus,
+        onWorkspaceReady: (sessionId, blobHost) => {
+          workspaceSessionId = sessionId;
+          trustedBlobHost = blobHost;
+        },
+        onWorkspaceCommand: (command, expiresAt, commandBlobHost) => {
+          commandQueue = commandQueue.then(async () => {
+            if (!active || !config.backendUrl || !workspaceSessionId) return;
+            let applied = false;
+            let outcome: 'refused' | 'error' = 'refused';
+            let reason: string | undefined;
+            if (cancelledCommands.delete(command.commandId)) {
+              reason = 'The workspace command was cancelled before application.';
+            } else if (expiresAt <= Date.now()) {
+              reason = 'The workspace command expired before application.';
+            } else {
+              try {
+                applied = applyWorkspaceCommandRef.current(command, commandBlobHost ?? trustedBlobHost);
+                if (!applied) reason = 'The requested view or workspace operation is no longer available.';
+              } catch {
+                outcome = 'error';
+                reason = 'The workspace failed while applying the command.';
+              }
+            }
+            try {
+              await acknowledgeWorkspaceCommand(
+                config.backendUrl,
+                command.commandId,
+                workspaceSessionId,
+                applied,
+                getAccessToken,
+                applied ? undefined : outcome,
+                reason,
+              );
+            } catch {
+              if (!active) return;
+            }
+          }).catch(() => {});
+        },
+        onWorkspaceCancel: (commandId) => {
+          cancelledCommands.add(commandId);
+          if (cancelledCommands.size > 8) {
+            const oldest = cancelledCommands.values().next().value as string | undefined;
+            if (oldest) cancelledCommands.delete(oldest);
+          }
+        },
         signal: controller.signal,
       }).catch(() => {
         if (active) setStreamStatus('unavailable');

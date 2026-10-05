@@ -19,10 +19,10 @@ function JarvisRequestButtons() {
   const workspace = useWorkspaceCommands();
   return (
     <div>
-      <button type="button" onClick={() => workspace.dispatch({ operation: 'minimise', viewId: 'research' })}>
+      <button type="button" onClick={() => workspace.dispatch({ commandId: 'jarvis-minimise', operation: 'minimise', viewId: 'research' })}>
         Jarvis minimises Research summary
       </button>
-      <button type="button" onClick={() => workspace.dispatch({ operation: 'restore', viewId: 'research' })}>
+      <button type="button" onClick={() => workspace.dispatch({ commandId: 'jarvis-restore', operation: 'restore', viewId: 'research' })}>
         Jarvis restores Research summary
       </button>
     </div>
@@ -309,7 +309,7 @@ describe('Workspace', () => {
     expect(controller.current?.hasVisibleViews()).toBe(false);
     expect(onVisibleViewsChange).toHaveBeenLastCalledWith(false);
     expect(screen.getAllByRole('button', { name: /^Restore /u })).toHaveLength(2);
-    act(() => controller.current?.dispatch({ operation: 'restore', viewId: 'research' }));
+    act(() => controller.current?.dispatch({ commandId: 'voice-restore', operation: 'restore', viewId: 'research' }));
     expect(controller.current?.hasVisibleViews()).toBe(true);
   });
 
@@ -366,17 +366,17 @@ describe('Workspace', () => {
     const componentController = workspace!;
     let accepted = false;
     act(() => {
-      accepted = componentController!.dispatch({ operation: 'minimise', viewId: 'research' });
-      componentController!.dispatch({ operation: 'restore', viewId: 'research' });
-      componentController!.dispatch({ operation: 'minimise', viewId: 'research' });
-      componentController!.dispatch({ operation: 'restore', viewId: 'research' });
+      accepted = componentController!.dispatch({ commandId: 'minimise-1', operation: 'minimise', viewId: 'research' });
+      componentController!.dispatch({ commandId: 'restore-1', operation: 'restore', viewId: 'research' });
+      componentController!.dispatch({ commandId: 'minimise-2', operation: 'minimise', viewId: 'research' });
+      componentController!.dispatch({ commandId: 'restore-2', operation: 'restore', viewId: 'research' });
     });
     expect(accepted).toBe(true);
     expect(within(canvas).getByRole('article', { name: 'Research summary' }).hasAttribute('inert')).toBe(false);
-    expect(componentController?.dispatch({ operation: 'restore', viewId: 'missing' })).toBe(false);
-    act(() => { componentController.dispatch({ operation: 'focus', viewId: 'sources' }); });
+    expect(componentController?.dispatch({ commandId: 'restore-missing', operation: 'restore', viewId: 'missing' })).toBe(false);
+    act(() => { componentController.dispatch({ commandId: 'focus-sources-1', operation: 'focus', viewId: 'sources' }); });
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
-    act(() => { componentController.dispatch({ operation: 'focus', viewId: 'sources' }); });
+    act(() => { componentController.dispatch({ commandId: 'focus-sources-2', operation: 'focus', viewId: 'sources' }); });
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
 
     expect(screen.getByRole('button', { name: 'Maximise Research summary' })).not.toBeNull();
@@ -387,5 +387,87 @@ describe('Workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Close Research summary' }));
     expect(within(canvas).queryByRole('article', { name: 'Research summary' })).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
+  });
+
+  it('creates, updates, arranges, moves, resizes, shows, and closes declarative views in memory', () => {
+    let workspace: WorkspaceController | null = null;
+    render(<Workspace ref={(controller) => { workspace = controller; }} views={[]} />);
+    const dispatch: WorkspaceController['dispatch'] = (command) => workspace!.dispatch(command);
+    const initialView = {
+      version: 1 as const,
+      title: 'Research summary',
+      renderer: 'list' as const,
+      source: { id: 'factory.tasks' as const, status: 'complete' as const },
+      data: { items: [{ title: '<script>not executable</script>' }] },
+    };
+
+    act(() => {
+      expect(dispatch({
+        commandId: 'create-research',
+        operation: 'create',
+        viewId: 'research',
+        view: initialView,
+      })).toBe(true);
+    });
+    let article = screen.getByRole('article', { name: 'Research summary' });
+    expect(article.textContent).toContain('<script>not executable</script>');
+    expect(document.querySelector('script')).toBeNull();
+
+    act(() => {
+      expect(dispatch({
+        commandId: 'tile-views',
+        operation: 'layout',
+        arrangement: 'layered',
+      })).toBe(true);
+      expect(dispatch({
+        commandId: 'move-view',
+        operation: 'move',
+        viewId: 'research',
+        x: 0.1,
+        y: 0.12,
+      })).toBe(true);
+      expect(dispatch({
+        commandId: 'resize-view',
+        operation: 'resize',
+        viewId: 'research',
+        x: 0.2,
+        y: 0.25,
+        width: 0.6,
+        height: 0.5,
+      })).toBe(true);
+    });
+    expect(screen.getByRole('region', { name: 'Temporary workspace views' }).getAttribute('data-arrangement')).toBe('layered');
+    article = screen.getByRole('article', { name: 'Research summary' });
+    expect(article.getAttribute('style')).toContain('--workspace-x: 20%');
+    expect(article.getAttribute('style')).toContain('--workspace-width: 60%');
+
+    act(() => {
+      expect(dispatch({
+        commandId: 'update-research',
+        operation: 'update',
+        viewId: 'research',
+        view: { ...initialView, title: 'Updated research' },
+      })).toBe(true);
+    });
+    expect(screen.getByRole('article', { name: 'Updated research' })).not.toBeNull();
+    act(() => { dispatch({ commandId: 'minimise-view', operation: 'minimise', viewId: 'research' }); });
+    expect(screen.getByRole('button', { name: 'Restore Updated research' })).not.toBeNull();
+    act(() => { expect(dispatch({ commandId: 'show-view', operation: 'show', viewId: 'research' })).toBe(true); });
+    expect(screen.getByRole('article', { name: 'Updated research' }).hasAttribute('inert')).toBe(false);
+
+    expect(dispatch({
+      commandId: 'invalid-move',
+      operation: 'move',
+      viewId: 'research',
+      x: 0.5,
+      y: 0.5,
+    })).toBe(false);
+    expect(dispatch({
+      commandId: 'invalid-id',
+      operation: 'close',
+      viewId: '../settings',
+    } as never)).toBe(false);
+    act(() => { expect(dispatch({ commandId: 'close-view', operation: 'close', viewId: 'research' })).toBe(true); });
+    expect(screen.queryByRole('article', { name: 'Updated research' })).toBeNull();
   });
 });

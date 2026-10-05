@@ -1,9 +1,12 @@
 import type { ActivityItem, NowFeed, ConfirmationActionKind } from './activity';
 import { backendFetch } from './backend-request';
+import { isWorkspaceCommand, type WorkspaceCommand } from '@jarvis/contracts';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
-const maxSseFrameLength = 64 * 1024;
+const maxSseFrameLength = 320 * 1024;
 const confirmationIdPattern = /^[A-Za-z0-9_-]{43}$/;
+const workspaceCommandIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
+const workspaceSessionIdPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 const confirmationKinds = new Set<ConfirmationActionKind>([
   'merge', 'delete', 'send_mail', 'calendar_change', 'create_repository', 'computer_use', 'spend_money', 'other',
 ]);
@@ -13,6 +16,9 @@ export interface NowFeedStreamOptions {
   getAccessToken: () => Promise<string>;
   onUpdate: () => void;
   onStatus: (status: 'connected' | 'reconnecting') => void;
+  onWorkspaceReady?: (sessionId: string, trustedBlobHost?: string) => void;
+  onWorkspaceCommand?: (command: WorkspaceCommand, expiresAt: number, trustedBlobHost?: string) => void;
+  onWorkspaceCancel?: (commandId: string) => void;
   signal: AbortSignal;
 }
 
@@ -156,6 +162,49 @@ export async function resolveNowConfirmation(
   }
 }
 
+export async function acknowledgeWorkspaceCommand(
+  backendUrl: string,
+  commandId: string,
+  sessionId: string,
+  applied: boolean,
+  getAccessToken: () => Promise<string>,
+  outcome?: 'refused' | 'error',
+  reason?: string,
+): Promise<void> {
+  if (!workspaceCommandIdPattern.test(commandId) || !workspaceSessionIdPattern.test(sessionId) ||
+      (outcome !== undefined && outcome !== 'refused' && outcome !== 'error') ||
+      (reason !== undefined && (!reason.trim() || reason.length > 300 ||
+        Array.from(reason).some((character) => {
+          const code = character.charCodeAt(0);
+          return code < 32 || code === 127;
+        })))) {
+    throw new TypeError('Invalid workspace command acknowledgement.');
+  }
+  const response = await authorizedRequest(
+    backendUrl,
+    `/now/workspace/commands/${encodeURIComponent(commandId)}/ack`,
+    getAccessToken,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        applied,
+        ...(outcome ? { outcome } : {}),
+        ...(reason ? { reason } : {}),
+      }),
+    },
+  );
+  if (response.status === 404 || response.status === 409) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error('This workspace command is no longer active.');
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    throw responseError(response.status);
+  }
+}
+
 function waitForReconnect(delay: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     const finish = () => {
@@ -169,18 +218,63 @@ function waitForReconnect(delay: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-async function readNowEvents(body: ReadableStream<Uint8Array>, signal: AbortSignal, onUpdate: () => void): Promise<void> {
+async function readNowEvents(body: ReadableStream<Uint8Array>, signal: AbortSignal, options: NowFeedStreamOptions): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let frameLength = 0;
   let event = '';
+  let data: string[] = [];
+  let trustedBlobHost: string | undefined;
 
   const processLine = (line: string) => {
     if (line.endsWith('\r')) line = line.slice(0, -1);
     if (!line) {
-      if (event === 'now' || event === 'mode') onUpdate();
+      if (event === 'now' || event === 'mode') {
+        options.onUpdate();
+      } else if (event === 'workspace-ready') {
+        let value: unknown;
+        try {
+          value = JSON.parse(data.join('\n'));
+        } catch {
+          throw new Error('Workspace connection returned an invalid session.');
+        }
+        if (!isRecord(value) || typeof value.sessionId !== 'string' ||
+            !workspaceSessionIdPattern.test(value.sessionId) ||
+            (value.trustedBlobHost !== undefined &&
+              (typeof value.trustedBlobHost !== 'string' ||
+                !/^[a-z0-9]{3,24}\.blob\.core\.windows\.net$/u.test(value.trustedBlobHost)))) {
+          throw new Error('Workspace connection returned an invalid session.');
+        }
+        trustedBlobHost = value.trustedBlobHost as string | undefined;
+        options.onWorkspaceReady?.(value.sessionId, trustedBlobHost);
+      } else if (event === 'workspace-command') {
+        let value: unknown;
+        try {
+          value = JSON.parse(data.join('\n'));
+        } catch {
+          throw new Error('Workspace command event is invalid.');
+        }
+        if (!isRecord(value) || !Number.isFinite(value.expiresAt) ||
+            !isWorkspaceCommand(value.command, trustedBlobHost ? { trustedBlobHost } : undefined)) {
+          throw new Error('Workspace command event is invalid.');
+        }
+        options.onWorkspaceCommand?.(value.command, value.expiresAt as number, trustedBlobHost);
+      } else if (event === 'workspace-cancel') {
+        let value: unknown;
+        try {
+          value = JSON.parse(data.join('\n'));
+        } catch {
+          throw new Error('Workspace cancellation event is invalid.');
+        }
+        if (!isRecord(value) || typeof value.commandId !== 'string' ||
+            !workspaceCommandIdPattern.test(value.commandId)) {
+          throw new Error('Workspace cancellation event is invalid.');
+        }
+        options.onWorkspaceCancel?.(value.commandId);
+      }
       event = '';
+      data = [];
       frameLength = 0;
       return;
     }
@@ -192,6 +286,7 @@ async function readNowEvents(body: ReadableStream<Uint8Array>, signal: AbortSign
     let value = separator === -1 ? '' : line.slice(separator + 1);
     if (value.startsWith(' ')) value = value.slice(1);
     if (field === 'event') event = value;
+    if (field === 'data') data.push(value);
   };
 
   try {
@@ -212,13 +307,8 @@ async function readNowEvents(body: ReadableStream<Uint8Array>, signal: AbortSign
   }
 }
 
-export async function streamNowFeed({
-  backendUrl,
-  getAccessToken,
-  onUpdate,
-  onStatus,
-  signal,
-}: NowFeedStreamOptions): Promise<void> {
+export async function streamNowFeed(options: NowFeedStreamOptions): Promise<void> {
+  const { backendUrl, getAccessToken, onUpdate, onStatus, signal } = options;
   let reconnectDelay = 1000;
   while (!signal.aborted) {
     try {
@@ -235,7 +325,7 @@ export async function streamNowFeed({
         reconnectDelay = 1000;
         onStatus('connected');
         onUpdate();
-        await readNowEvents(response.body, signal, onUpdate);
+        await readNowEvents(response.body, signal, options);
         if (signal.aborted) return;
       }
     } catch (error) {
