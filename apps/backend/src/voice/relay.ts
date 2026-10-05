@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import websocket from '@fastify/websocket';
+import type { FastifyInstance } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
 import {
   createEnglishSessionUpdate,
@@ -49,7 +50,11 @@ function sharedBrowserIntent(text: string): boolean {
     .test(text);
 }
 
-export type VoiceConnectionFactory = (token: string, signal: AbortSignal) => WebSocket;
+export type VoiceConnectionFactory = (
+  token: string,
+  signal: AbortSignal,
+  agentSessionId?: string,
+) => WebSocket;
 
 interface VoiceReflexLedgerEntry {
   readonly id: string;
@@ -111,6 +116,7 @@ export interface VoiceRelayOptions {
   readonly connect?: VoiceConnectionFactory;
   readonly connectDanish?: VoiceConnectionFactory;
   readonly createPartialRecognizer?: PartialSpeechRecognizerFactory;
+  readonly registerPhoneMediaRoute?: (app: FastifyInstance) => void;
 }
 
 type SharedScreenContext = {
@@ -220,10 +226,10 @@ export function createDanishVoiceAgentEndpoint(projectEndpoint: string, sessionI
 }
 
 export function createDanishVoiceConnector(projectEndpoint: string): VoiceConnectionFactory {
-  return (token, signal) => {
+  return (token, signal, agentSessionId = randomUUID().replaceAll('-', '')) => {
     return new WebSocket(createDanishVoiceAgentEndpoint(
       projectEndpoint,
-      randomUUID().replaceAll('-', ''),
+      agentSessionId,
     ), {
       headers: {
         Authorization: ['Bearer', token].join(' '),
@@ -1348,6 +1354,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           handleProtocols: (protocols) => protocols.has(VOICE_SUBPROTOCOL) ? VOICE_SUBPROTOCOL : false,
         },
       });
+      options.registerPhoneMediaRoute?.(app);
       if (options.connect) {
         registerVoiceRoute(
           app,

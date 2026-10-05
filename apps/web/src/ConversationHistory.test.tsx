@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ConversationHistory } from './ConversationHistory';
+import { ConversationIntentProvider } from './ConversationIntentProvider';
+import { useConversationIntents } from './conversation-intents';
 import type { CameraController, ScreenShareController } from './screen-sharing';
 import { JarvisActivityProvider } from './activity-provider';
 import { useJarvisActivity } from './activity-context';
@@ -87,6 +89,18 @@ function ActivityProbe() {
   );
 }
 
+function FactoryConversationActions() {
+  const intents = useConversationIntents();
+  return (
+    <>
+      <button type="button" onClick={() => intents.sendMessage('Send from the Factory board')}>
+        Send from Factory
+      </button>
+      <button type="button" onClick={intents.focusVoiceStart}>Open Factory voice control</button>
+    </>
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   loadImageArtifactUrl.mockReset();
@@ -102,6 +116,67 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
+  it('sends Factory messages through the existing queue and only focuses explicit voice start', async () => {
+    const user = userEvent.setup();
+    sendChatTurn.mockResolvedValue(assistantMessage);
+    render(
+      <ConversationIntentProvider>
+        <JarvisActivityProvider>
+          <MemoryRouter>
+            <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange: vi.fn() }}>
+              <ConversationHistory client={client} config={config} />
+              <FactoryConversationActions />
+            </VoiceWorkspaceContext.Provider>
+          </MemoryRouter>
+        </JarvisActivityProvider>
+      </ConversationIntentProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Send from Factory' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
+    expect(sendChatTurn.mock.calls[0]?.[3]).toBe('Send from the Factory board');
+
+    await user.click(screen.getByRole('button', { name: 'Open Factory voice control' }));
+    const startVoice = screen.getByRole('button', { name: 'Start voice' });
+    await waitFor(() => expect(document.activeElement).toBe(startVoice));
+    expect(voiceSessions).toHaveLength(0);
+  });
+
+  it('applies voice layout changes immediately without a document view transition', () => {
+    const onVoiceActiveChange = vi.fn();
+    const startViewTransition = vi.fn();
+    const documentWithTransition = document as Document & {
+      startViewTransition?: (callback: () => void) => unknown;
+    };
+    const hadOwnTransition = Object.hasOwn(document, 'startViewTransition');
+    const originalTransition = documentWithTransition.startViewTransition;
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      writable: true,
+      value: startViewTransition,
+    });
+
+    try {
+      const { container } = renderConversation(0, undefined, onVoiceActiveChange);
+      fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+
+      expect(startViewTransition).not.toHaveBeenCalled();
+      expect(onVoiceActiveChange).toHaveBeenLastCalledWith(true);
+      expect((container.querySelector('#conversation-composer') as HTMLFormElement).hidden).toBe(true);
+      expect((container.querySelector('.conversation-transcript') as HTMLDivElement).hidden).toBe(true);
+    } finally {
+      if (hadOwnTransition) {
+        Object.defineProperty(document, 'startViewTransition', {
+          configurable: true,
+          writable: true,
+          value: originalTransition,
+        });
+      } else {
+        Reflect.deleteProperty(document, 'startViewTransition');
+      }
+    }
+  });
+
   it('shows persisted tool outcomes and task links', async () => {
     loadConversationHistory.mockResolvedValue({
       messages: [message, { ...message, id: '43', role: 'dan', text: 'Sure.', toolCalls: [] }],

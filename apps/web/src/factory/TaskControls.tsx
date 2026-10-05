@@ -41,7 +41,9 @@ export function TaskControls({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
-  const continueExpiredSession = latestSessionEndReason === 'idle_expired';
+  const continueExpiredSession = (state === 'Running' || state === 'NeedsAttention') &&
+    latestSessionEndReason === 'idle_expired';
+  const recoverCrashedTask = state === 'NeedsAttention' && latestSessionEndReason === 'crashed';
 
   async function run(action: Action, steeringMessage?: string) {
     if (!backendUrl) {
@@ -117,22 +119,7 @@ export function TaskControls({
   if (state === 'PauseRequested') {
     return <p className="task-control-feedback" role="status">Pausing… The current turn is stopping.</p>;
   }
-  if (state === 'Running' && continueExpiredSession) {
-    return (
-      <div className="task-controls">
-        <div className="action-row">
-          <button className="secondary-button" type="button" disabled={busy !== null}
-            onClick={() => void run('recover')}>
-            {busy === 'recover' ? 'Continuing…' : 'Continue'}
-          </button>
-        </div>
-        <p className="task-control-guidance">Starts a new sandbox from the existing task branch and its recorded history.</p>
-        {error && <p className="task-control-error" role="alert">{error}</p>}
-        {feedback && <p className="task-control-feedback" role="status" aria-live="polite">{feedback}</p>}
-      </div>
-    );
-  }
-  if (state === 'NeedsAttention') {
+  if (state === 'NeedsAttention' && (continueExpiredSession || recoverCrashedTask)) {
     return (
       <div className="task-controls">
         <div className="action-row">
@@ -149,6 +136,9 @@ export function TaskControls({
       </div>
     );
   }
+  if (state === 'NeedsAttention') {
+    return <p className="task-control-guidance">Review the task history before taking further action.</p>;
+  }
   if (state === 'Done' || state === 'Cancelled') {
     return <p className="task-control-guidance">This task is finished; no further controls are available.</p>;
   }
@@ -158,6 +148,12 @@ export function TaskControls({
       <div className="action-row">
         {state === 'Running' && (
           <>
+            {continueExpiredSession && (
+              <button className="secondary-button" type="button" disabled={busy !== null}
+                onClick={() => void run('recover')}>
+                {busy === 'recover' ? 'Continuing…' : 'Continue'}
+              </button>
+            )}
             <button className="secondary-button" type="button" disabled={busy !== null}
               onClick={() => { setSteering((open) => !open); setError(''); setFeedback(''); }}>
               Steer

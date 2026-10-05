@@ -2,6 +2,7 @@ name: Voice probe
 
 # Manual diagnostic: connects to the deployed Danish voice wrapper with the deploy identity and
 # prints event types, errors and the close reason. No audio or transcript content is logged.
+# It also checks that the hosted agent's chat route still reaches the container (expects its 401).
 on:
   workflow_dispatch:
     inputs:
@@ -38,3 +39,13 @@ jobs:
         env:
           PROBE_SECONDS: ${{ inputs.seconds }}
         run: python agents/jarvis/scripts/voice_probe.py
+      - name: Probe the hosted agent chat route
+        run: |
+          token=$(az account get-access-token --resource https://ai.azure.com --query accessToken --output tsv)
+          status=$(curl --silent --show-error --max-time 60 --output "$RUNNER_TEMP/chat.json" --write-out '%{http_code}' \
+            --request POST "$FOUNDRY_PROJECT_ENDPOINT/agents/jarvis/endpoint/protocols/invocations?api-version=v1" \
+            --header "Authorization: Bearer $token" --header 'Content-Type: application/json' --data '{}')
+          body=$(head -c 300 "$RUNNER_TEMP/chat.json")
+          echo "chat route HTTP $status: $body"
+          # Without delegated authorization the Jarvis container itself answers 401 {"error":"Unauthorized"}.
+          [[ "$status" == 401 && "$body" == *Unauthorized* ]] || { echo "::error::The chat route did not reach the Jarvis container."; exit 1; }

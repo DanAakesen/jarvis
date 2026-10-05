@@ -145,6 +145,7 @@ const task = {
 
 let taskEvents: typeof task.events;
 let taskState: 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
+let latestSessionEndReason: 'crashed' | 'idle_expired' | null;
 
 function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -167,12 +168,13 @@ beforeEach(() => {
   streamHarness.lastEventIds.clear();
   taskEvents = [...task.events];
   taskState = 'NeedsAttention';
+  latestSessionEndReason = null;
   fetchMock.mockReset().mockImplementation(async (input, init) => {
     const url = new URL(String(input));
     if (url.pathname === '/factory/tasks/42/controls') {
       const body = JSON.parse(String((init as RequestInit | undefined)?.body)) as { action?: string };
       taskState = body.action === 'recover' ? 'Running' : 'PauseRequested';
-      return response({ ...task, state: taskState });
+      return response({ ...task, state: taskState, latestSessionEndReason: null });
     }
     if (url.pathname === '/factory/projects') return response([project]);
     if (url.pathname === '/conversation/history') {
@@ -190,7 +192,9 @@ beforeEach(() => {
     if (url.pathname === '/factory/tasks/42') {
       const offset = Number(url.searchParams.get('eventOffset') ?? 0);
       const limit = Number(url.searchParams.get('eventLimit') ?? 100);
-      return response({ ...task, state: taskState, events: taskEvents.slice(offset, offset + limit) });
+      return response({
+        ...task, state: taskState, latestSessionEndReason, events: taskEvents.slice(offset, offset + limit),
+      });
     }
     return response({ error: 'Unexpected request' }, 500);
   });
@@ -233,8 +237,8 @@ describe('task detail page', () => {
     expect(screen.getByText('Chat')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Recover' }).hasAttribute('disabled')).toBe(false);
-    expect(screen.getByText('Starts a new sandbox from the existing task branch and its recorded history.')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Recover' })).toBeNull();
+    expect(screen.getByText('Review the task history before taking further action.')).not.toBeNull();
     expect(screen.getByText('Live updates connected')).not.toBeNull();
     expect(streamHarness.lastEventIds.get('42')).toBe('24');
     expect(fetchMock).toHaveBeenCalledWith(
@@ -245,6 +249,7 @@ describe('task detail page', () => {
 
   it('removes Recover after recovery starts a Running session', async () => {
     const user = userEvent.setup();
+    latestSessionEndReason = 'crashed';
     renderTaskPage();
     await screen.findByRole('heading', { name: 'Keep disk headroom' });
 

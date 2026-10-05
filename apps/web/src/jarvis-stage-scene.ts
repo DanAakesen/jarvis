@@ -470,7 +470,7 @@ function createJarvisStageSceneWithRenderer(
     orbRig.position.copy(orbWorld);
     const pixelRadius = mobile
       ? Math.min(width * 0.28, height * 0.16)
-      : Math.min(width * 0.18, height * 0.18);
+      : Math.min(width * 0.18, height * 0.18) * (1 - 0.2 * layout);
     const cameraDepth = orbWorld.clone().applyMatrix4(camera.matrixWorldInverse).z;
     const scale = pixelRadius * (-cameraDepth) * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) /
       height / 1.12;

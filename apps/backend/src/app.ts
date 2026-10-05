@@ -32,6 +32,7 @@ import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
 import type { TeamsNotificationService } from './teams/service.js';
 import type { AwayModeStore } from './core/away-mode.js';
+import type { PhoneSessionStore } from './database/phone-session-store.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 
 export interface BuildAppOptions {
@@ -62,6 +63,7 @@ export interface BuildAppOptions {
   readonly containerAppScaler?: ContainerAppScaler | null;
   readonly teamsNotifications?: TeamsNotificationService | null;
   readonly awayModeStore?: AwayModeStore | null;
+  readonly phoneSessionStore?: PhoneSessionStore | null;
   readonly workspaceCommands?: WorkspaceCommandBroker;
 }
 
@@ -92,6 +94,7 @@ declare module 'fastify' {
     browserAgent: BrowserAgent | null;
     teamsNotifications: TeamsNotificationService | null;
     awayModeStore: AwayModeStore | null;
+    phoneSessionStore: PhoneSessionStore | null;
     workspaceCommands: WorkspaceCommandBroker;
   }
 }
@@ -202,6 +205,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('reflexClassifier', options.reflexClassifier ?? null);
   app.decorate('browserAgent', options.browserAgent ?? null);
   app.decorate('teamsNotifications', options.teamsNotifications ?? null);
+  app.decorate('phoneSessionStore', options.phoneSessionStore ?? null);
   registerModules(app, options.modules ?? [
     coreModule,
     conversationModule,

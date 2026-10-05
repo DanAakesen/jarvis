@@ -227,6 +227,7 @@ class ResponseOperation:
 class SessionState:
     history: ConversationHistory = field(default_factory=ConversationHistory)
     model_settings: ModelSettings | None = None
+    phone_session_id: str | None = None
     responses: dict[str, ResponseOperation] = field(default_factory=dict)
     input_responses: dict[str, str] = field(default_factory=dict)
     proactive_requests: dict[str, ProactiveRequest] = field(default_factory=dict)

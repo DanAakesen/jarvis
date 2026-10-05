@@ -54,7 +54,6 @@ export function JarvisPage({
           config={config}
           screenShare={screenShare}
           camera={camera}
-          motionReduced={themePreference.appearance.motion === 'reduced'}
         >
           <details className="conversation-overview">
             <summary>Activity, sharing and backend</summary>

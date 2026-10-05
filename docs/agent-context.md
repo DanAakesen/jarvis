@@ -209,6 +209,8 @@ The read-only [centred stage prototype](reference/ui-stage-prototype/README.md) 
 
 The 3D stage/large orb are Jarvis-only, light mode re-lights the same room, and dormant visuals do not enable microphone capture. Reduced motion, hidden-tab pause, WebGL fallback/context-loss cleanup and route teardown are implemented. Labelled software-Chromium empty/typing/voice/window captures and three motion frames are in `ui/screenshots/p8-28-*`; three repeated route cycles reported no off-route canvas and lost each prior context. This run used scratch auth/API/voice fixtures; Factory's unconfigured API endpoints deliberately return 503. P8-31's separate draft PR #376 records shared-glass captures/contrast checks for current pages; review the combined PRs for text readability over the reflected stage. SwiftShader consumed several CPU cores, so hardware-GPU, physical-device, live-voice and reported transition-flicker acceptance remain unverified. Original reference snapshots stay read-only.
 
+P8-30's baseline Chromium trace found the voice update wrapped in a document-wide View Transition that included the live stage/mirror (`ready` about 348 ms; `finished` about 1.2 s). PR #386 removes that snapshot and the pending workspace FLIP overlay. Local fixture checks recorded 73 desktop CDP frames and 32 phone frames at 390×844 across voice/window lifecycles; the same canvas and scene camera/platform remained, draft/focus returned, phone overflow stayed false, and command acknowledgements were truthful. The integrated SwiftShader page rendered at only about two animation frames per 500 ms, so this does not prove normal-rate flicker-free motion; the exact mirror flash, hardware GPU, live voice/audio and physical-device criteria remain unverified.
+
 ## Setup and commands
 
 The repository uses npm workspaces for `apps/web`, `apps/backend`, and
@@ -241,6 +243,7 @@ Verified in Codex cloud for P0-02:
 | Shared generated-view contract | `npm test --workspace @jarvis/contracts`; `npm run lint --workspace @jarvis/contracts` |
 | Focused P8-16 activity tests | `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- --run src/core/activity.test.ts src/core/conversation-activity.test.ts src/core/now.test.ts src/voice/relay.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx src/activity-context.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/VoiceOrb.test.tsx src/Workspace.test.tsx src/NowFeedPanel.test.tsx src/now-feed.test.ts` |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
+| Focused P8-30 voice/window checks | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/App.test.tsx src/Workspace.test.tsx src/VoiceControls.test.tsx src/voice-client.test.tsx src/JarvisStage.test.tsx` |
 | Focused P8-28 scene and route lifecycle checks | `npm test --workspace @jarvis/web -- --run src/JarvisStage.test.tsx src/App.test.tsx` |
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
@@ -552,6 +555,29 @@ Continue showed a disabled pending state and success feedback; an active-crash
 fixture still showed Recover. The button measured 44 px, neither viewport
 overflowed, and there were no page errors. Live backend/Foundry expiry remains
 unverified.
+P8-34 was checked with existing web tests, lint and build, plus a scratch
+Chromium/Vite harness (`node /tmp/p8-34-browser/verify.mjs`) using a temporary
+`./useSignIn` alias and fixture task, project, release, usage, Now-feed, presence,
+and SSE responses. At 1440×1000 and 390×844, dark and light runs showed all six
+state columns (including pending pause), the selected-task pane and Running
+controls; keyboard close returned focus to the selected card, task selection
+retained board scroll, and switching projects hid the previous project's
+commits. The page had no horizontal overflow or browser errors, the close target
+was 44×44 px, and reduced-motion mode used an opacity-only transition. Three
+additional frames record the Running-card transition with motion enabled.
+Captures are
+`docs/ui/screenshots/p8-34-fixture-{dark,light}-{desktop,phone}.png` and
+`docs/ui/screenshots/p8-34-motion-running-{before,transition,settled}.png`.
+`npm run build --workspace @jarvis/web` and
+`npm run lint --workspace @jarvis/web` passed; the build retains the existing
+large-chunk advisory. `npm test --workspace @jarvis/web -- --run
+src/App.test.tsx src/ContextPanel.test.tsx src/ConversationHistory.test.tsx
+src/factory/TaskControls.test.tsx src/factory/TaskDetailPage.test.tsx
+src/factory/TaskReleaseBar.test.tsx src/factory/TasksPage.test.tsx` passed
+(7 files, 99 tests).
+All account and API responses in this run were fixtures; this does not verify
+live Entra, backend/release data, deployed SSE, provider usage, voice, physical
+phone, or hardware-GPU behavior.
 P6-01 was inspected at 390 and 1280 px using the scratch `./auth` stub, a
 placeholder backend origin, and a mocked `/usage` response. Project/agent/source
 grouping, period selection, task links, 503 recovery, and the empty state worked;
