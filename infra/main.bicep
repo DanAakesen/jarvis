@@ -377,7 +377,7 @@ resource gpt56LunaDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   ]
   sku: {
     name: 'GlobalStandard'
-    // Global Standard bills per token; capacity is only the rate limit (1 = 1K TPM, too low for one chat turn with tools, L90).
+    // Global Standard bills per token; capacity is only the rate limit (1 = 1K TPM, too low for one chat turn with tools, L91).
     capacity: 100
   }
   properties: {
@@ -397,7 +397,7 @@ resource gptRealtime21Deployment 'Microsoft.CognitiveServices/accounts/deploymen
   ]
   sku: {
     name: 'GlobalStandard'
-    // Regional quota maximum for gpt-realtime-2.1 Global Standard (L90).
+    // Regional quota maximum for gpt-realtime-2.1 Global Standard (L91).
     capacity: 10
   }
   properties: {
@@ -417,7 +417,7 @@ resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deploym
   ]
   sku: {
     name: 'GlobalStandard'
-    // Memory capture and search embed in bursts (L90).
+    // Memory capture and search embed in bursts (L91).
     capacity: 20
   }
   properties: {
