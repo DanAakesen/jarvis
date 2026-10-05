@@ -107,6 +107,62 @@ describe('dispatcher SQL coordination', () => {
     }
   });
 
+  it('lists only stale Running tasks with an active or completed session', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, events);
+    const store = createDispatcherStore(pool, events);
+    const addRunningInvocation = async (
+      title: string,
+      sessionStatus: 'Active' | 'Ended',
+      endReason: string | null,
+      stale: boolean,
+      turnStatus: 'running' | 'completed',
+    ) => {
+      const task = await createTask(events, title);
+      expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+      const foundrySessionId = `reconcile-${randomUUID()}`;
+      const invocationId = `reconcile-invocation-${randomUUID()}`;
+      const session = await pool.request()
+        .input('taskId', sql.BigInt, BigInt(task.id))
+        .input('foundrySessionId', sql.NVarChar(255), foundrySessionId)
+        .input('status', sql.NVarChar(8), sessionStatus)
+        .input('endReason', sql.NVarChar(32), endReason)
+        .input('startedAt', sql.DateTime2(7), new Date(Date.now() - (stale ? 10 : 0) * 60_000))
+        .input('heartbeatAt', sql.DateTime2(7), stale ? new Date(Date.now() - 10 * 60_000) : null)
+        .query<{ sandboxSessionId: string }>(`INSERT dbo.sandbox_sessions
+          (task_id, foundry_session_id, agent_version, agent_name, size, image, status,
+            started_at, last_heartbeat_at, ended_at, end_reason)
+          OUTPUT CAST(inserted.id AS varchar(19)) AS sandboxSessionId
+          VALUES (@taskId, @foundrySessionId, N'active', N'jarvis-runner-base-1x2', N'1x2',
+            N'jarvis-runner-base-1x2', @status, @startedAt, @heartbeatAt,
+            CASE WHEN @status = N'Ended' THEN SYSUTCDATETIME() ELSE NULL END, @endReason);`);
+      const sandboxSessionId = session.recordset[0]?.sandboxSessionId;
+      if (!sandboxSessionId) throw new Error('Stale-task session fixture was not created');
+      await pool.request()
+        .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+        .input('foundrySessionId', sql.NVarChar(255), foundrySessionId)
+        .input('invocationId', sql.NVarChar(255), invocationId)
+        .input('status', sql.NVarChar(16), turnStatus)
+        .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status,
+            ended_at)
+          VALUES (@sandboxSessionId, @invocationId, N'task', @foundrySessionId, @status,
+            CASE WHEN @status = N'completed' THEN SYSUTCDATETIME() ELSE NULL END);`);
+      return { task, sandboxSessionId };
+    };
+
+    const staleActive = await addRunningInvocation('Stale active invocation', 'Active', null, true, 'running');
+    const staleCompleted = await addRunningInvocation('Stale completed invocation', 'Ended', 'done', true, 'completed');
+    await addRunningInvocation('Fresh active invocation', 'Active', null, false, 'running');
+
+    const stale = await store.listStaleRunning(new Date(Date.now() - 5 * 60_000), 5);
+    expect(stale.map(({ taskId }) => taskId)).toEqual(expect.arrayContaining([
+      staleActive.task.id, staleCompleted.task.id,
+    ]));
+    expect(stale).toHaveLength(2);
+    expect(stale.find(({ taskId }) => taskId === staleActive.task.id)?.sessionStatus).toBe('Active');
+    expect(stale.find(({ taskId }) => taskId === staleCompleted.task.id)?.sessionStatus).toBe('Ended');
+  });
+
   it('persists the workspace branch with the lease and retains it across deferred and rejected starts', async () => {
     const events = createEventHub<TaskEventMessage>();
     const taskStore = createTaskStore(pool, events);
