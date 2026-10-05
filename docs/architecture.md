@@ -620,15 +620,23 @@ Linux Windows-target build run in backend CI. Real device-code sign-in, Windows
 process/window behavior, SQL production writes and the live PC opening flow
 remain unverified.
 
-### Chrome browser executor (P7-18)
+### Chrome browser executor (P7-18, P7-25)
 
 The existing authenticated PC bridge protocol adds `browser_tabs`,
 `browser_snapshot`, and `browser_act` commands and the matching backend tools.
 The tray companion keeps browser automation off by default; Dan enables it with
-the persisted Chrome toggle in the tray menu. Only then does the companion query
-`http://127.0.0.1:9222/json/list` and attach to a page target whose DevTools
-WebSocket resolves to loopback on that port. Chrome is not launched by the
-backend and no inbound bridge listener is added.
+the persisted Chrome toggle in the tray menu. When the Jarvis MV3 extension in
+Dan's normal Chrome profile is connected, the executor uses `chrome.tabs` for
+discovery and sends its fixed CDP operations through `chrome.debugger`. The
+extension's native-messaging host is registered by the installer under HKCU;
+the host relays length-prefixed messages to the running companion over a
+current-user-only named pipe. This adds no network listener, and the extension
+does not expose external messaging. Chrome's debugger notification is visible
+while attached; the executor detaches after each completed action and the
+extension has a 30-second idle-detach fallback. If the extension is not
+connected, the executor retains the existing loopback CDP transport at
+`http://127.0.0.1:9222/json/list`. Chrome 136 ignores that port on the default
+user-data directory, so Dan's normal profile uses the extension.
 
 Each snapshot is one fixed Jarvis-owned page evaluation. It returns at most 100
 visible, unobstructed actionable controls with role, accessible name, bounded
@@ -649,10 +657,12 @@ confirmation service it refuses. Browser tools are marked sensitive so their
 arguments and results (including typed text, tab URLs and page content) are
 redacted from the generic tool-call store. No browser data is persisted.
 
-The portable core and backend protocol tests use a fake CDP target and exercise
-freshness, occlusion, secret blocking, confirmation and audit redaction. A live
-Chrome launch with Dan's signed-in profile and local-page desktop evidence still
-requires verification on his Windows PC.
+The portable core exercises the same indexed-action contract through fake CDP
+and fake extension ports. Backend protocol tests cover command validation and
+audit redaction. A Windows build and offline tests do not prove native-host
+registration, Chrome profile behavior, or debugger attachment; the one-time
+unpacked-extension load and live acceptance in Dan's normal profile still
+require his Windows PC.
 
 ### Ultrafast browser agent (P7-17)
 

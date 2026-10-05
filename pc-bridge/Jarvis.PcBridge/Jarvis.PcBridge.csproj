@@ -17,4 +17,12 @@
     <ProjectReference Include="..\Jarvis.PcBridge.Core\Jarvis.PcBridge.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\chrome-extension\**\*">
+      <Link>chrome-extension\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

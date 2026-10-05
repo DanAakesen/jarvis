@@ -117,12 +117,124 @@ public sealed class BrowserExecutorTests
         Assert.Empty(target.Methods);
     }
 
+    [Fact]
+    public async Task Browser_contract_is_shared_by_cdp_and_extension_transports()
+    {
+        await using (var cdpTarget = await FakeCdpTarget.StartAsync())
+        using (var cdpExecutor = new BrowserExecutor(
+            () => true,
+            () => "Search - Google Chrome",
+            targetsUri: cdpTarget.TargetsUri))
+        {
+            await AssertBrowserContract(cdpExecutor);
+        }
+
+        await using var extensionTarget = await FakeCdpTarget.StartAsync();
+        await using var extensionPort = new FakeExtensionBrowserPort(extensionTarget);
+        using var extensionExecutor = new BrowserExecutor(
+            () => true,
+            () => "Search - Google Chrome",
+            targetsUri: new Uri("http://127.0.0.1:9222/json/list"),
+            extensionPort: extensionPort);
+
+        await AssertBrowserContract(extensionExecutor);
+
+        Assert.Contains("Runtime.evaluate", extensionPort.Methods);
+        Assert.Contains("Runtime.callFunctionOn", extensionPort.Methods);
+        Assert.Equal(1, extensionPort.DetachCount);
+    }
+
+    [Fact]
+    public async Task Browser_executor_falls_back_to_cdp_when_extension_is_disconnected()
+    {
+        await using var target = await FakeCdpTarget.StartAsync();
+        await using var extensionPort = new FakeExtensionBrowserPort(target) { IsConnected = false };
+        using var executor = new BrowserExecutor(
+            () => true,
+            () => null,
+            targetsUri: target.TargetsUri,
+            extensionPort: extensionPort);
+
+        var tabs = await Execute(executor, "browser_tabs", "{}");
+
+        Assert.Equal("tab_1", Assert.Single((BrowserTab[])tabs.GetType().GetProperty("tabs")!.GetValue(tabs)!).Id);
+        Assert.Empty(extensionPort.Methods);
+    }
+
+    [Fact]
+    public async Task Extension_transport_keeps_confirmation_snapshot_until_approval_then_detaches()
+    {
+        await using var target = await FakeCdpTarget.StartAsync(name: "Send message");
+        await using var extensionPort = new FakeExtensionBrowserPort(target);
+        using var executor = new BrowserExecutor(
+            () => true,
+            () => null,
+            targetsUri: new Uri("http://127.0.0.1:9222/json/list"),
+            extensionPort: extensionPort);
+
+        var snapshot = await Execute(executor, "browser_snapshot", """{"tabId":"tab_1"}""");
+        var snapshotId = (string)snapshot.GetType().GetProperty("SnapshotId")!.GetValue(snapshot)!;
+        var action = $$"""{"tabId":"tab_1","snapshotId":"{{snapshotId}}","elementIndex":0,"action":"click","confirmed":false}""";
+        var confirmation = await Execute(executor, "browser_act", action);
+
+        Assert.Equal(true, confirmation.GetType().GetProperty("confirmationRequired")!.GetValue(confirmation));
+        Assert.Equal(0, extensionPort.DetachCount);
+
+        var approved = await Execute(executor, "browser_act",
+            action.Replace("\"confirmed\":false", "\"confirmed\":true", StringComparison.Ordinal));
+
+        Assert.Equal(true, approved.GetType().GetProperty("acted")!.GetValue(approved));
+        Assert.Equal(1, extensionPort.DetachCount);
+    }
+
+    [Fact]
+    public async Task Extension_tab_removal_releases_its_snapshot_session()
+    {
+        await using var target = await FakeCdpTarget.StartAsync();
+        await using var extensionPort = new FakeExtensionBrowserPort(target);
+        using var executor = new BrowserExecutor(
+            () => true,
+            () => null,
+            targetsUri: new Uri("http://127.0.0.1:9222/json/list"),
+            extensionPort: extensionPort);
+
+        var snapshot = await Execute(executor, "browser_snapshot", """{"tabId":"tab_1"}""");
+        var snapshotId = (string)snapshot.GetType().GetProperty("SnapshotId")!.GetValue(snapshot)!;
+        Assert.Equal(1, extensionPort.SessionCount);
+
+        extensionPort.RemoveTab("tab_1");
+
+        Assert.Equal(0, extensionPort.SessionCount);
+        await AssertRefused(
+            executor,
+            $$"""{"tabId":"tab_1","snapshotId":"{{snapshotId}}","elementIndex":0,"action":"click","confirmed":false}""",
+            "not_found");
+    }
+
     private static async Task<object> Execute(BrowserExecutor executor, string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);
         return await executor.ExecuteAsync(
             new BridgeCommand("1730aa51-f380-4df9-a345-1feb862cb1c4", "command", name, document.RootElement),
             CancellationToken.None);
+    }
+
+    private static async Task AssertBrowserContract(BrowserExecutor executor)
+    {
+        var tabs = await Execute(executor, "browser_tabs", "{}");
+        var tab = Assert.Single((BrowserTab[])tabs.GetType().GetProperty("tabs")!.GetValue(tabs)!);
+        Assert.Equal("tab_1", tab.Id);
+        Assert.True(tab.Focused);
+
+        var snapshot = await Execute(executor, "browser_snapshot", """{"tabId":"tab_1"}""");
+        var snapshotId = (string)snapshot.GetType().GetProperty("SnapshotId")!.GetValue(snapshot)!;
+        var element = Assert.Single((IReadOnlyList<BrowserElement>)snapshot.GetType()
+            .GetProperty("Elements")!.GetValue(snapshot)!);
+        Assert.Equal("Continue", element.Name);
+
+        var action = await Execute(executor, "browser_act",
+            $$"""{"tabId":"tab_1","snapshotId":"{{snapshotId}}","elementIndex":0,"action":"click","confirmed":false}""");
+        Assert.Equal(true, action.GetType().GetProperty("acted")!.GetValue(action));
     }
 
     private static async Task AssertRefused(
