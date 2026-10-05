@@ -1,6 +1,6 @@
 # Design
 
-The shared shell and voice-workspace structure were agreed with Dan on 4 October 2026; final styling remains open. See [the complete UI discussion and wireframes](ui.md). Dan designs each page by giving an image generator the page's data points and actions from [PRODUCT.md](PRODUCT.md#page-requirements), then picks a direction. Record the chosen direction, references, and findings here. Requirements stay in PRODUCT.md; token values go in code.
+The shared shell and voice-workspace structure were agreed with Dan on 4 October 2026. On 5 October Dan accepted the centred live 3D Jarvis stage; its production implementation is planned under P8-28–P8-33. The latest direction below supersedes the earlier aurora/voice-only-orb presentation on the Jarvis page. See [the complete UI discussion and wireframes](ui.md). Dan designs each page by giving an image generator the page's data points and actions from [PRODUCT.md](PRODUCT.md#page-requirements), then picks a direction. Record the chosen direction, references, and findings here. Requirements stay in PRODUCT.md; token values go in code.
 
 ## Design goals
 
@@ -74,7 +74,19 @@ workspace consumers; those consumer windows remain owned by P8.
 - **Sleep switch:** the main page shows configured awake/asleep state (minimum replicas 1/0), pending and failure feedback, and explains a refusal while any task is Ready or Running. Settings links to the main-page control.
 - **Live updates:** cards and timeline entries change state without layout jumps; a visible marker for a disconnected or stale event stream. Only committed task updates are presented as current.
 
-## Visual direction
+## Accepted centred Jarvis stage (5 October 2026; planned)
+
+Dan approved the corrected [centred prototype](docs/reference/ui-stage-prototype/README.md) and selected [orb/stage image 3](docs/ui/centred-stage/selected-orb-and-stage.png) plus [glass-window image 2](docs/ui/centred-stage/selected-glass-window.png). [Corrected desktop and phone captures](docs/ui/centred-stage/README.md) define centring and continuity; generated stills guide materials, not pixel-identical rendering or product data.
+
+- **Only Jarvis:** mount the live room and large persistent orb only on the main typing/voice page. Other pages use the shared glass surfaces without 3D scenery. Keep the agreed shell geometry and real controls.
+- **One room across modes/themes:** stable lower camera, symmetric broad architecture, three depth layers, opposing concentric mechanism motion, restrained atmosphere, real floor mirror and light cast from the orb onto room surfaces. Dark/light share this geometry; light mode re-lights the room. The prototype does not implement light mode yet.
+- **Persistent identity:** subdued transparent cyan orb and open amber core in typing, brighter awake during voice, dimmed in place on exit. This supersedes the large voice orb growing from/collapsing into the composer and the older phone rule excluding a large dormant orb. The small composer control still explicitly starts voice; visible scenery never starts listening.
+- **Content-aware placement:** centre the orb/rear mechanisms/platform with no views. Only the orb glides/resizes left when wide-screen content appears, or docks below phone content. Camera, room and platform stay fixed; current tabs/window lifecycle, draft/focus restoration and default-off minimise preference remain.
+- **Glass and readability:** selected image 2 defines restrained smoky translucent window chrome, generous spacing, sans typography and icons. Adapt it to each real view. Keep text legible over the moving/reflected room, accessible labels, focus and touch controls; avoid a solid brain, opaque orb backing and coarse crossing arcs.
+
+P8-28–P8-33 port this direction into the current app and reuse runtime/workspace/settings contracts. Dan reports transition flicker in the prototype; it remains unresolved and requires frame/video inspection of entry/exit, interrupted reversals and window cycles. Existing software-WebGL checks are not hardware, live-voice or flicker verification. Detailed requirements and superseded experiments are in [ui.md](ui.md#accepted-centred-3d-stage--5-october-2026). Canonical token values remain in code, not this document.
+
+## Current implemented visual system (superseded on Jarvis by the planned stage)
 
 Dan's brief (4 October 2026): the UI should be stunning, with rich styling and motion, and feel alive when Jarvis is doing something, especially in voice mode. Three original animated concepts are in [docs/ui/concepts](docs/ui/concepts/README.md) with screenshots. Selected on autopilot for Dan's review: **Concept B, living aurora**, as the default dark appearance, and **Concept C, daylight studio**, as the light appearance. Concept A's precise ring and tick detail is not used.
 
@@ -87,7 +99,7 @@ Canonical colour, type, spacing, radius, surface, elevation and motion values be
 
 ## Voice end (P8-12, decided 4 October 2026; implemented in P8-10)
 
-Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop. On phone with foreground content, it sits inside the bottom dock below the compact orb/state row with the mute and inspection actions; with no phone content, it sits below the central orb. P8-23 keeps these controls grouped beneath the orb in both layouts. Ending voice collapses the orb back into the composer's small orb. A natural spoken ending also ends voice; the small composer orb only starts voice.
+Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop. On phone with foreground content, it sits inside the bottom dock below the compact orb/state row with the mute and inspection actions; with no phone content, it sits below the central orb. P8-23 keeps these controls grouped beneath the orb in both layouts. The current implementation collapses the voice orb back into the composer; P8-29/P8-30 replace that visual with the accepted persistent dormant orb while preserving these end controls. A natural spoken ending also ends voice; the small composer orb only starts voice.
 
 ## Foundation shell (P0-02)
 
@@ -584,3 +596,7 @@ Memory can be queried, corrected and forgotten through registered tools; a
 dedicated memory-management screen has not been selected. Reuse the agreed shell
 and view contracts rather than adding permanent rail/top-bar controls for each
 new capability.
+
+## Approved Software Factory composition — 5 October 2026
+
+Dan approved [the combined Task Lens mockup](docs/ui/software-factory/task-lens-release-bar.png): a dark smoky-glass six-state board, compact project release/commit bar beneath filters, and a closable selected-task details panel on the right. Use the selected shared-glass direction in #364, canonical tokens, readable body typography, restrained full-outline selection, and thin existing shell; retain navigation and workspace tabs even though the selected frame omits their expanded state. Match the composition rather than copying illustrative data. Adapt the existing light appearance and narrow-screen layout without clipping controls. The room and large orb stay on Jarvis. [Requirements and validation](docs/ui/software-factory/README.md) belong to P8-34 (#369); the new screen is not implemented.

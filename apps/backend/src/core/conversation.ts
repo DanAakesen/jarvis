@@ -92,7 +92,7 @@ function streamEvent(event: string, data: unknown): string {
 
 function logChatLatency(
   request: FastifyRequest,
-  phase: 'reflex_targets' | 'jev' | 'agent_first_byte',
+  phase: 'reflex_targets' | 'jev' | 'agent_first_byte' | 'turn_first_token' | 'turn_complete',
   startedAt: number,
 ): void {
   request.log.info({
@@ -202,6 +202,7 @@ export const conversationModule: BackendModule = {
         response: { 400: errorResponse, 404: errorResponse, 503: errorResponse },
       },
     }, async (request, reply) => {
+      const turnStartedAt = performance.now();
       const store = app.conversationStore;
       const agent = app.conversationAgent;
       if (!store) return reply.code(503).send({ error: 'Conversation storage unavailable' });
@@ -277,6 +278,7 @@ export const conversationModule: BackendModule = {
               if (!firstByteLogged) {
                 firstByteLogged = true;
                 logChatLatency(request, 'agent_first_byte', agentStartedAt);
+                logChatLatency(request, 'turn_first_token', turnStartedAt);
               }
               answer += delta;
               if (Buffer.byteLength(answer) > 512 * 1024) throw new Error('Chat response exceeded the size limit');
@@ -295,6 +297,7 @@ export const conversationModule: BackendModule = {
           });
           if (!assistantMessage) throw new Error('Chat session ended');
           publishActivity('ended');
+          logChatLatency(request, 'turn_complete', turnStartedAt);
           yield streamEvent('done', assistantMessage);
         } catch (error) {
           if (controller.signal.aborted) {

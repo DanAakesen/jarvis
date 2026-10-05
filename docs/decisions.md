@@ -24,6 +24,7 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 | 2026-10-05 | P7-15 image generation uses Dan's existing ChatGPT/Codex subscription through a new `codex-tool` mode on the Foundry hosted runner. Use the built-in `image_generation` feature; default to configurable `gpt-5.5`. Do not check out a repository, pass prompts as shell text, retain temp workspaces, use a paid image API, or fall back when Codex refuses. Validate a bounded PNG/JPEG, upload it to the existing private `artifacts` Blob container, persist only owner-scoped metadata and a safe artifact ID, and open it in the workspace and conversation. Keep the invocation bounded/cancellable, expose usage-limit errors, and show daily UTC tool-call counts. Video is deferred indefinitely to a separate issue; artifact retention remains unresolved. | Dan verified locally with codex-cli 0.157.1 on his ChatGPT login on 5 October; `gpt-6.1-sol` is not accepted with that login. Offline runner/backend/store/contracts/UI tests cover the implementation, but live Codex generation, subscription limits, Azure Blob upload, and deployed artifact rendering remain unverified. This reuses subscription entitlement without adding a pay-per-call service or monthly cap. | Implemented offline; live acceptance pending |
 | 2026-10-05 | P7-27 keeps window control on the existing WorkspaceCommand broker. Publish only a bounded, owner/session-bound snapshot of open titles/IDs and context visibility; Jev chooses fixed reversible UI operations, including voice partials, without confirmation. Keep generated-view creation/update agent-only. Ignore delivery command IDs for semantic duplicate detection, cap task discovery at 150 ms when workspace targets are available, and allowlist one transcript-free `reflex.decision` event per attempted classification. | Window/layout control should not wait for the main model or SQL task discovery. Reusing the current controller, schema, acknowledgements and audit avoids another executor or persistence layer. Tests cover snapshot bounds/stale sessions, fixed targets, chat replay with a new delivery ID, partial-before-final workspace control, final duplicate suppression and log privacy. Context `open` without a view is idempotent and preserves existing content; agent-closed windows retain at most eight client-only entries for contradiction undo through `restore`. Manual close still discards generated content. Enlargement updates tiled spans as well as layered geometry. | Implemented offline; coordinator under-1.5-second chat acceptance pending |
 | 2026-10-05 | P7-30 keeps cross-session history in numeric message order, adds only each prior Jarvis turn's bounded audited tool-name/outcome summary to its context, and puts reference JSON before conversation history. Record per-turn context count, included ID range, previous Jarvis inclusion, and character count without text. | The backend already returns the newest 100 messages across sessions in ascending ID order with tool-call outcomes; the agent had ignored these outcomes and inserted reference JSON between the latest exchange and the follow-up. Regression tests cover the Danish `pc_open` refusal followed by English “try again” in a new session, telemetry without content, and retry tool selection. The exact live sequence remains for coordinator acceptance with Dan. | Implemented offline; coordinator live acceptance pending |
+| 2026-10-05 | Dan accepted the corrected centred 3D stage: live room and persistent transparent cyan orb/open amber core only on Jarvis; light appearance re-lights the same room. Shared glass styling extends to current pages without 3D. Preserve mirror, stable viewpoint, explicit voice/microphone rules and existing workspace logic. | Selected image 3 for orb/stage and image 2 for glass windows; corrected live prototype accepted in this chat. Dan reports transition flicker, still unresolved. Source, immutable standalone and labelled captures are in `docs/reference/ui-stage-prototype` and `docs/ui/centred-stage`. | Design confirmed; production port, light appearance, flicker fix and device/live acceptance planned under P8-28–P8-33 |
 | 2026-10-05 | P7-01 uses ACS Call Automation with Teams Phone extensibility (preview), not the Foundry-managed telephony binding. Authenticate the Event Grid callback, validate Dan's Teams Entra object ID before answering, then create a backend-owned phone session; reject unknown callers without creating one. Relay ACS media to Voice Live and the hosted Jarvis agent, correlate tools through stored session state, and route phone-session personal-data/action approvals to P7-03 Teams cards. Do not accept caller phone number alone as Dan's identity. | Dan approved the alternative ACS design in PR #326. Microsoft documents the preview and service-number requirement ([Foundry telephony channels](https://learn.microsoft.com/azure/foundry/agents/how-to/voice-agent-telephony-channels), [Teams Phone extensibility](https://learn.microsoft.com/azure/communication-services/concepts/interop/tpe/teams-phone-extensibility-overview)). The approved caller check is now limited to exact allow-listed Teams Entra object IDs. The installed ACS SDK exposes bidirectional PCM/WebSocket envelopes, but the existing Voice Live relay uses a different protocol; an integrated media bridge, authenticated callback, tool-session policy and Bicep wiring are not implemented. Dan reports estimated Danish service-number costs of 15–20 DKK/month and ACS usage at 0.01–0.03 DKK/minute; these are estimates, not official quotes. No number was purchased and no live Azure/Teams test was possible. | Design accepted; implementation and live acceptance pending |
 | 2026-10-05 | P7-24 keeps `mai-transcribe` as the Voice Live final-transcript model for English and Danish, and runs Azure Speech continuous recognition in parallel on microphone PCM from the same Foundry AIServices resource. Use `da-DK`/`en-GB`, fixed product phrases plus bounded running-project names, and the existing P7-20 safe stable-clause/ledger/undo rules; stop on mute, end or disconnect. No raw audio or interim text is persisted. The backend uses its Entra managed identity and an account-level `Cognitive Services User` role. | The 5 October live comparison below showed that Voice Live returned no partials with MAI and too-late partials with `gpt-4o-mini-transcribe`, while Azure Speech emitted usable Danish and English hypotheses during speech. Fake recognizer tests prove action-before-final, contradiction undo, failure fallback and mute stop. Local backend/web checks pass; live RBAC, speech delivery and Dan's PC timing remain unverified. Azure retail price API reference: $1.00 per audio hour for Speech-to-text S1; billed usage is not yet verified. | Implemented offline; coordinator live acceptance pending |
 | 2026-10-05 | P8-25 keeps typing available during a chat turn but disables Send, language changes and voice entry; do not queue a next message. Clear only the submitted draft on acceptance, preserve later edits, and merge refreshed history by saved numeric ID. | A next draft must not be sent accidentally or removed by completion/interruption. A labelled, reduced-motion-safe thinking indicator covers the first-delta wait without implying a tool call or reducing backend latency. | Implemented offline; Chromium turn sequences verified in dark/light at desktop/phone widths; live Foundry unverified |
@@ -204,6 +205,69 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 | 2026-10-05 | P8-26 queues chat submissions locally in FIFO order, capturing language at Send/Enter; retain failed-turn feedback and offer Stop reply without changing voice. | One in-flight client turn avoids overlapping requests without backend changes. The next submission starts only after the previous promise and stream cleanup settle; Stop does not undo completed tool actions. The queue is not persisted across navigation/reload. Focused tests and scratch-auth/API Chromium checks cover desktop/phone, dark/light, removal, language, double Enter, Stop/next, error/next and reduced motion. | Implemented offline; live Entra/Foundry acceptance unverified |
 
+### P7-23 latency evidence
+
+5 October 2026 follow-up to reopened [#327](https://github.com/DanAakesen/jarvis/issues/327):
+keep reflex safety/auditing and its 800 ms parallel classification budget unchanged.
+Overlap chat settings with catalogue/live-context reads, retain the existing
+60-second container catalogue cache, and leave memory retrieval/embedding on demand.
+Do not cache live settings/task data or repeat #344's caller-chosen session routing,
+which #356 reverted after Foundry rejected chat invocations.
+
+| Evidence | First text / total duration | Source and limitation |
+| --- | --- | --- |
+| Original deployed baseline, 09:03–09:06 UTC | Backend turns 11.0, 11.7, 11.9, 16.8 s; hosted invocation 3.1, 4.8, 5.4 s; model 0.35, 0.79, 1.36 s | Application Insights/backend measurements supplied in #327; not independently queried here |
+| After #329, 10:41–10:43 UTC | `agent_first_byte` 8.8, 10.2, 11.5, 9.2 s; whole turn ends ~0.5 s later; Jev ~0.2 s | Coordinator's live issue comment; acceptance still missed |
+| 10:42:49 turn breakdown | Backend agent call 10:42:49.5 → `invoke_agent` 10:42:54 (~4.5 s); model starts ~10:42:57 (~3 s prep), takes 0.44 s | Coordinator's Application Insights evidence; gateway/container attribution remains a hypothesis |
+| Latest reported live baseline | First word 9–19 s | Coordinator's reopening/status comment |
+| This change, local HTTP smoke | First mock delta 0.005 s; done 0.757 s; delta-to-done gap 0.752 s | Actual Hypercorn + HTTP client with fake backend/model and a deliberate 0.75 s pause; proves local incremental delivery, not deployed performance |
+| This change, deployed after | **Not measured** | No authenticated Azure CLI account in this environment; no deployment or paid invocation performed |
+
+New agent `chat.latency` logs and spans/events identify verification, settings,
+catalogue/cache, live context, memory retrieval, prompt build, Responses creation,
+model first delta and first SSE delta out. Logs contain phase/duration/outcome
+only, and stage spans disable automatic exception-content recording. Embedding
+is backend-owned and already emits content-free `memory.embedding` timings.
+Backend `turn_first_token`/`turn_complete` include pre-agent SQL setup and completed
+assistant persistence; `agent_first_byte` still counts text only, not the initial
+SSE comment. The first-delta-out duration starts at agent handler entry, allowing
+comparison with backend latency to isolate work outside the container.
+
+Configuration inspection: `infra/main.bicep` sets **backend** minimum/maximum
+replicas to one. `.github/workflows/deploy.yml` sets the **hosted Jarvis agent**
+session idle timeout to 120 seconds and routes 100% of traffic to the active
+version; it does not declare an always-warm agent replica. Installed official
+`azure-ai-agentserver-invocations` SDK `_dispatch_invoke` and
+`_wrap_streaming_response` pass the response/body chunks through, and the model
+adapter requests `stream=True`. Gated ASGI tests prove a Responses text delta
+reaches SSE before `response.completed`, including disconnect cleanup. No
+buffering was reproduced locally. Public Microsoft Learn retrieval was blocked
+in this environment; no undocumented replica/session option was added.
+
+Post-deploy verification: send repeated short “hi” turns, including a first
+invocation and another after >120 seconds idle, and record the deployed agent
+version/time window. Compare `turn_first_token`, `turn_complete`,
+`agent_first_byte`, agent `first_delta_out`, preparation spans and `invoke_agent`
+start timestamps. Do not treat headers or keepalive comments as tokens.
+This Application Insights query returns only backend timing dimensions:
+
+```kusto
+traces
+| where timestamp > ago(1h)
+| where message == "chat.latency"
+| extend phase = tostring(customDimensions.phase),
+         durationMs = todouble(customDimensions.durationMs)
+| where phase in ("agent_first_byte", "turn_first_token", "turn_complete")
+| project timestamp, operation_Id, phase, durationMs
+| order by timestamp asc
+```
+
+Correlate those operations with agent stage spans/events and the hosted
+`invoke_agent` dependency before attributing a gap to cold start or routing.
+Acceptance remains **pending** until Application Insights shows ≤2.5 s first
+text and ≤4 s complete short reply. Offline checks: 148 hosted-agent tests,
+92 focused backend tests, agent Ruff/compileall and backend lint/build pass.
+
 ### P7-24 live transcription evidence
 
 Coordinator test on 5 October 2026, using synthesized Danish and English streamed in real time against the same Foundry resource:
@@ -332,3 +396,7 @@ Mistakes made so far and the rule that prevents each one.
 | **L95** | PowerShell 5.1 native stderr is terminating | In Windows PowerShell 5.1 with `$ErrorActionPreference = 'Stop'`, `& az ... 2>$null` turns stderr into a terminating `NativeCommandError`, so retry loops never retry. `setup-google.ps1` failed on the first Key Vault write while the temporary role was still propagating (5 October). | Wrap native calls that may fail transiently in a helper that sets `$ErrorActionPreference = 'Continue'` locally, then check `$LASTEXITCODE`. Also, 5.1 `ConvertFrom-Json` returns a JSON array as one object (`@('[]' | ConvertFrom-Json).Count` is 1), which made the script skip creating its temporary Key Vault role; enumerate with `Where-Object` before counting. |
 | **L96** | Code and schema enums must match | The tools route records `outcome: 'refused'`, but `CK_tool_calls_outcome` allowed only `ok`/`error`. Every tool refusal (bridge offline, no workspace connected) then failed the audit insert and returned HTTP 500 instead of a readable refusal (`pc_open` and `workspace_command`, 5 October). | When a TypeScript union is persisted, add a schema integration test that inserts every value. Migration 0018 adds `refused`. |
 | **L97** | Voice agents have their own WebSocket route | The backend connected to the Danish `kind: voice` wrapper at `/agents/<name>/endpoint/protocols/invocations_ws` (the hosted text agent's Bridge Protocol route). Foundry rejected every handshake with HTTP 400, so live voice never worked (seen once failure logging was exported, 5 October). The SDK (`azure-ai-projects` `_to_ws_url`) uses `/endpoint/protocols/voice` with header `Foundry-Features: VoiceAgents=V1Preview`. | Connect browsers' voice sessions to the voice wrapper's `protocols/voice` route with the preview header; `invocations_ws` is only the wrapper-to-hosted-target transport. Verify new Foundry routes against the official SDK source, not the protocol name. |
+
+## 5 October 2026 — Software Factory layout selected
+
+**Confirmed by Dan:** use image 2 (Task Lens) as the base, include image 3's compact release bar and keep the details pane on the right. Dan approved [the combined mockup](ui/software-factory/task-lens-release-bar.png) and requested one implementation issue. P8-34 (#369) covers that composition and integration with the existing task, release, workspace and conversation contracts. #364 supplies the shared glass styling. The reference uses illustrative data; implementation and live acceptance remain pending. This decision does not authorize starting or assigning a worker.

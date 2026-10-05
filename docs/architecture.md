@@ -933,14 +933,42 @@ bounded tool result, confirmation and an argument fingerprint, but is never
 logged or persisted. Disconnect cancellation reaches both streams. Voice relay
 partial handling is unchanged.
 
-The hosted agent loads the 60-second cached tool catalogue and live task context
-concurrently, and verifies the delegated profile and stored conversation history
-in parallel. OpenTelemetry spans measure catalogue/cache, context, memory search,
-prompt construction and model-call stages; the backend exports allowlisted
-durations for reflex targets, Jev and the first agent byte, plus memory embedding
-duration/outcome. These signals contain no message, prompt, memory, tool argument
-or result content. The issue's live acceptance target is at most 2.5 seconds to
-the first token and 4 seconds for a short greeting.
+The hosted agent verifies the delegated profile and stored conversation history
+in parallel before accessing agent-only resources. Chat then loads current model
+settings, the 60-second container-cached tool catalogue and live task context
+concurrently; none of these reads use stale settings or task data. Voice keeps
+its existing session settings snapshot. Memory retrieval/embedding is on demand
+through memory tools, never unconditional greeting preparation.
+
+`chat.latency` logs and OpenTelemetry spans/events measure history verification,
+context, settings, catalogue/cache, memory retrieval, prompt construction,
+Responses creation, model-call duration/first delta and the first SSE delta out
+(measured from handler entry). Embedding runs in the backend, which already logs
+`memory.embedding` duration/outcome. The backend exports reflex targets, Jev,
+`agent_first_byte` (first text delta, not headers/keepalive),
+`turn_first_token` (from turn-handler entry, including SQL setup) and
+`turn_complete` (through assistant persistence). These signals contain no
+message, prompt, memory, tool argument/result or exception content.
+
+Responses `output_text.delta` events flow immediately to SSE, before model
+completion. An initial SSE comment flushes the authorized stream before model
+preparation; it does not count as a token. Closing/cancelling the chat explicitly
+closes nested generators and the Responses transport; setup failure/cancellation
+cancels and joins sibling reads. Gated ASGI and backend-reader tests verify
+incremental delivery, while a real local Hypercorn/mock-model check observed a
+0.005 s first delta and 0.757 s completion with a deliberate 0.75 s model pause.
+These are not deployed timings. The live acceptance target remains at most
+2.5 seconds to the first token and 4 seconds for a short greeting.
+
+The deployed backend configuration has `minReplicas: 1` / `maxReplicas: 1`;
+this is not a Foundry hosted-agent replica setting. The Jarvis version definition
+in `.github/workflows/deploy.yml` sets a 120-second session idle timeout and
+routes all traffic to the active version. It does not establish an always-warm
+hosted container. The reported ~4.5 s gap before `invoke_agent` remains a gateway/
+container-routing hypothesis, not a confirmed cold-start diagnosis. Chat sends
+no caller-chosen `agent_session_id`: #344's reuse approach was reverted in #356
+after Foundry rejected it. Verify any future routing/replica change against the
+provider contract and live evidence before adopting it.
 
 The conversation store shares the process-owned SQL pool and uses the existing
 group-one schema; no migration or new service is required. Tool calls continue to
@@ -1592,3 +1620,11 @@ flowchart LR
 - Agent protocol: [Copilot CLI ACP](https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server), [codex-acp](https://github.com/agentclientprotocol/codex-acp), [ACP Python SDK](https://github.com/agentclientprotocol/python-sdk).
 - GitHub Actions: [workflow triggers](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows), [OpenID Connect to Azure](https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-azure), [webhook events](https://docs.github.com/en/webhooks/webhook-events-and-payloads).
 - Background: [open-source research](open-source.md) (selective reuse; no foundation chosen); prototype code and reports in [reference/](reference/).
+
+## Planned Jarvis 3D presentation boundary (P8-28–P8-33)
+
+The accepted [stage reference](reference/ui-stage-prototype/README.md) uses Three.js, shaders, a planar floor reflector and HTML controls. Production currently uses the existing React/CSS visual system; this handoff does not change runtime packages or deployment. P8-28 ports the selected scene into the web app using the production toolchain, with managed allocation/disposal and off-route/hidden-tab lifecycle. The scene is mounted only on Jarvis. Its geometry/viewpoint persist across typing/voice and dark/light; light appearance re-lights the same room.
+
+Browser state owns scene placement, window geometry, theme application and animation. Reuse P8-14 typed declarative views, P8-15 authenticated workspace commands/acknowledgements, P8-16 transient observed runtime activity and decoded playback audio, and P8-17 validated preference persistence. Dormant/awake presentation does not start microphone capture or change backend sleep. No new backend view store, provider calls, generated-code execution or credential surface is needed. Phone quality adaptation, reduced motion and WebGL unavailable/lost recovery belong to P8-33; the HTML controls and actual chat/voice remain usable when 3D fails.
+
+The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. The production runtime integration, light appearance, hardware performance and transition-flicker correction remain planned.
