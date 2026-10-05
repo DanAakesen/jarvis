@@ -554,6 +554,12 @@ No generated code ever runs: views are declarative JSON validated against these 
 
 The number of theme presets follows the visual-system work.
 
+## Approved Software Factory layout — 5 October 2026
+
+Dan selected the dark Task Lens board (image 2), added the project release bar from image 3 and retained the closable right task-details panel. He approved the combined image. [Approved mockup and requirements](docs/ui/software-factory/README.md) record the handoff for [issue #369](https://github.com/DanAakesen/jarvis/issues/369), P8-34. This is planned implementation, not evidence of a working screen.
+
+Reuse the thin shared rail, expandable navigation, bars, workspace tabs, Settings top-right and the existing conversation input. Preserve all six task states and real controls. The release bar is scoped to a selected project and uses existing release data; the panel reuses task detail, event, sandbox and usage data. Shared smoky glass follows #364. The 3D room and large orb remain exclusive to Jarvis. Missing data stays Not reported; subscription usage is not assigned an invented DKK price.
+
 ## Accepted centred 3D stage — 5 October 2026
 
 Dan accepted the corrected live browser prototype as the implementation direction. He reported flickering during transitions; that defect remains unresolved. After reviewing the existing issues, he confirmed the two remaining scope choices: **the 3D stage is only on Jarvis**, and **light mode re-lights the same room**. No further product choice blocks the implementation breakdown. Exact light-mode values and state-specific animation details are implementation/review work, not permission to change the selected composition.

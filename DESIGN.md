@@ -582,3 +582,7 @@ Memory can be queried, corrected and forgotten through registered tools; a
 dedicated memory-management screen has not been selected. Reuse the agreed shell
 and view contracts rather than adding permanent rail/top-bar controls for each
 new capability.
+
+## Approved Software Factory composition — 5 October 2026
+
+Dan approved [the combined Task Lens mockup](docs/ui/software-factory/task-lens-release-bar.png): a dark smoky-glass six-state board, compact project release/commit bar beneath filters, and a closable selected-task details panel on the right. Use the selected shared-glass direction in #364, canonical tokens, readable body typography, restrained full-outline selection, and thin existing shell; retain navigation and workspace tabs even though the selected frame omits their expanded state. Match the composition rather than copying illustrative data. Adapt the existing light appearance and narrow-screen layout without clipping controls. The room and large orb stay on Jarvis. [Requirements and validation](docs/ui/software-factory/README.md) belong to P8-34 (#369); the new screen is not implemented.
