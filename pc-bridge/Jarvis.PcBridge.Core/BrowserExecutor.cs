@@ -35,16 +35,19 @@ public sealed class BrowserExecutor : IDisposable
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
     private readonly Uri _targetsUri;
+    private readonly IExtensionBrowserPort? _extensionPort;
     private readonly Dictionary<string, TargetSession> _sessions = new(StringComparer.Ordinal);
 
     public BrowserExecutor(
         Func<bool> isEnabled,
         Func<string?> focusedWindowTitle,
         HttpClient? httpClient = null,
-        Uri? targetsUri = null)
+        Uri? targetsUri = null,
+        IExtensionBrowserPort? extensionPort = null)
     {
         _isEnabled = isEnabled;
         _focusedWindowTitle = focusedWindowTitle;
+        _extensionPort = extensionPort;
         _httpClient = httpClient ?? new HttpClient(new HttpClientHandler
         {
             UseProxy = false,
@@ -82,6 +85,24 @@ public sealed class BrowserExecutor : IDisposable
 
     private async Task<object> ListTabsAsync(int offset, CancellationToken cancellationToken)
     {
+        if (_extensionPort?.IsConnected == true)
+        {
+            try
+            {
+                var extensionPage = await _extensionPort.ListTabsAsync(offset, TabsPerPage, cancellationToken).ConfigureAwait(false);
+                var extensionForegroundTitle = _focusedWindowTitle();
+                return new
+                {
+                    tabs = extensionPage.Tabs.Select(tab =>
+                        tab with { Focused = IsFocused(tab.Title, extensionForegroundTitle) }).ToArray(),
+                    nextOffset = extensionPage.NextOffset,
+                };
+            }
+            catch (BrowserActionRefusedException) { throw; }
+            catch (OperationCanceledException) { throw; }
+            catch { throw new BrowserActionRefusedException("not_found"); }
+        }
+
         var targets = await GetTargetsAsync(cancellationToken).ConfigureAwait(false);
         var pageTargets = targets.Where(target => target.Type == "page").Take(5000).ToArray();
         RemoveClosedSessions(pageTargets);
@@ -193,65 +214,83 @@ public sealed class BrowserExecutor : IDisposable
         var action = arguments.GetProperty("action").GetString()!;
         var target = await FindTargetAsync(tabId, cancellationToken).ConfigureAwait(false);
         var session = await GetSessionAsync(target, cancellationToken).ConfigureAwait(false);
-        var snapshot = session.Snapshot;
-        if (snapshot is null || snapshot.Id != snapshotId ||
-            DateTimeOffset.UtcNow - snapshot.CreatedAt > SnapshotLifetime ||
-            index >= snapshot.Elements.Count)
+        var keepAttached = false;
+        try
         {
-            throw new BrowserActionRefusedException("stale");
-        }
-
-        var observed = snapshot.Elements[index];
-        if (action == "type" &&
-            (observed.Sensitive || LooksLikeSecret(arguments.GetProperty("text").GetString()!)))
-        {
-            throw new BrowserActionRefusedException("blocked");
-        }
-        if (action == "wait")
-        {
-            var waitMs = arguments.GetProperty("waitMs").GetInt32();
-            await Task.Delay(waitMs, cancellationToken).ConfigureAwait(false);
-        }
-        if (!_isEnabled()) throw new BrowserActionRefusedException("browser_off");
-
-        using var response = await session.SendAsync("Runtime.callFunctionOn", new
-        {
-            objectId = observed.ObjectId,
-            functionDeclaration = ActionFunction,
-            arguments = new object[]
+            var snapshot = session.Snapshot;
+            if (snapshot is null || snapshot.Id != snapshotId ||
+                DateTimeOffset.UtcNow - snapshot.CreatedAt > SnapshotLifetime ||
+                index >= snapshot.Elements.Count)
             {
-                new { value = observed.Fingerprint },
-                new { value = observed.Role },
-                new { value = observed.Name },
-                new { value = action },
-                new { value = GetActionValue(arguments, action) },
-                new { value = action == "click" && arguments.GetProperty("confirmed").GetBoolean() },
-            },
-            returnByValue = true,
-            awaitPromise = false,
-            userGesture = true,
-        }, cancellationToken).ConfigureAwait(false);
+                throw new BrowserActionRefusedException("stale");
+            }
 
-        var result = response.RootElement.GetProperty("result").GetProperty("result");
-        if (response.RootElement.GetProperty("result").TryGetProperty("exceptionDetails", out _))
-            throw new BrowserActionRefusedException("stale");
-        if (!result.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.Object)
-            throw new BrowserActionRefusedException("failed");
-        var status = value.GetProperty("status").GetString();
-        if (status == "stale") throw new BrowserActionRefusedException("stale");
-        if (status == "covered") throw new BrowserActionRefusedException("covered");
-        if (status == "blocked") throw new BrowserActionRefusedException("blocked");
-        if (status == "confirmation_required")
-        {
-            return new
+            var observed = snapshot.Elements[index];
+            if (action == "type" &&
+                (observed.Sensitive || LooksLikeSecret(arguments.GetProperty("text").GetString()!)))
             {
-                confirmationRequired = true,
-                actionKind = "computer_use",
-                summary = Limit(value.GetProperty("summary").GetString() ?? "Use a sensitive browser control.", 300),
-            };
+                throw new BrowserActionRefusedException("blocked");
+            }
+            if (action == "wait")
+            {
+                var waitMs = arguments.GetProperty("waitMs").GetInt32();
+                await Task.Delay(waitMs, cancellationToken).ConfigureAwait(false);
+            }
+            if (!_isEnabled()) throw new BrowserActionRefusedException("browser_off");
+
+            using var response = await session.SendAsync("Runtime.callFunctionOn", new
+            {
+                objectId = observed.ObjectId,
+                functionDeclaration = ActionFunction,
+                arguments = new object[]
+                {
+                    new { value = observed.Fingerprint },
+                    new { value = observed.Role },
+                    new { value = observed.Name },
+                    new { value = action },
+                    new { value = GetActionValue(arguments, action) },
+                    new { value = action == "click" && arguments.GetProperty("confirmed").GetBoolean() },
+                },
+                returnByValue = true,
+                awaitPromise = false,
+                userGesture = true,
+            }, cancellationToken).ConfigureAwait(false);
+
+            var result = response.RootElement.GetProperty("result").GetProperty("result");
+            if (response.RootElement.GetProperty("result").TryGetProperty("exceptionDetails", out _))
+                throw new BrowserActionRefusedException("stale");
+            if (!result.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.Object)
+                throw new BrowserActionRefusedException("failed");
+            var status = value.GetProperty("status").GetString();
+            if (status == "stale") throw new BrowserActionRefusedException("stale");
+            if (status == "covered") throw new BrowserActionRefusedException("covered");
+            if (status == "blocked") throw new BrowserActionRefusedException("blocked");
+            if (status == "confirmation_required")
+            {
+                keepAttached = true;
+                return new
+                {
+                    confirmationRequired = true,
+                    actionKind = "computer_use",
+                    summary = Limit(value.GetProperty("summary").GetString() ?? "Use a sensitive browser control.", 300),
+                };
+            }
+            if (status != "acted") throw new BrowserActionRefusedException("failed");
+            return new { acted = true, action };
         }
-        if (status != "acted") throw new BrowserActionRefusedException("failed");
-        return new { acted = true, action };
+        finally
+        {
+            if (session.UsesExtension && !keepAttached)
+            {
+                try { await session.DetachAsync(CancellationToken.None).ConfigureAwait(false); }
+                catch { }
+                finally
+                {
+                    _sessions.Remove(tabId);
+                    session.Dispose();
+                }
+            }
+        }
     }
 
     private static object? GetActionValue(JsonElement arguments, string action) => action switch
@@ -264,6 +303,20 @@ public sealed class BrowserExecutor : IDisposable
 
     private async Task<CdpTarget> FindTargetAsync(string id, CancellationToken cancellationToken)
     {
+        if (_extensionPort?.IsConnected == true)
+        {
+            for (var offset = 0; offset < 5000; offset += TabsPerPage)
+            {
+                var page = await _extensionPort.ListTabsAsync(offset, TabsPerPage, cancellationToken)
+                    .ConfigureAwait(false);
+                var tab = page.Tabs.FirstOrDefault(candidate => candidate.Id == id);
+                if (tab is not null)
+                    return new CdpTarget(tab.Id, "page", tab.Title, tab.Url, null, true);
+                if (page.NextOffset is null) break;
+            }
+            throw new BrowserActionRefusedException("not_found");
+        }
+
         var targets = await GetTargetsAsync(cancellationToken).ConfigureAwait(false);
         var target = targets.FirstOrDefault(candidate => candidate.Id == id && candidate.Type == "page");
         if (target is null) throw new BrowserActionRefusedException("not_found");
@@ -296,7 +349,18 @@ public sealed class BrowserExecutor : IDisposable
 
     private async Task<TargetSession> GetSessionAsync(CdpTarget target, CancellationToken cancellationToken)
     {
-        if (_sessions.TryGetValue(target.Id, out var existing) && existing.IsOpen) return existing;
+        if (_sessions.TryGetValue(target.Id, out var existing))
+        {
+            if (existing.IsOpen) return existing;
+            existing.Dispose();
+            _sessions.Remove(target.Id);
+        }
+        if (target.IsExtension && _extensionPort?.IsConnected == true)
+        {
+            var extensionSession = new TargetSession(_extensionPort, target.Id);
+            _sessions[target.Id] = extensionSession;
+            return extensionSession;
+        }
         if (!TryValidateWebSocketUrl(target.WebSocketDebuggerUrl, out var endpoint))
             throw new BrowserActionRefusedException("not_found");
 
@@ -527,7 +591,8 @@ public sealed class BrowserExecutor : IDisposable
         string Type,
         string Title,
         string Url,
-        [property: JsonPropertyName("webSocketDebuggerUrl")] string? WebSocketDebuggerUrl);
+        [property: JsonPropertyName("webSocketDebuggerUrl")] string? WebSocketDebuggerUrl,
+        bool IsExtension = false);
 
     private sealed record SnapshotReference(
         string ObjectId,
@@ -543,25 +608,55 @@ public sealed class BrowserExecutor : IDisposable
         DateTimeOffset CreatedAt,
         IReadOnlyList<SnapshotReference> Elements);
 
-    private sealed class TargetSession(ClientWebSocket socket) : IDisposable
+    private sealed class TargetSession : IDisposable
     {
+        private readonly ClientWebSocket? _socket;
+        private readonly IExtensionBrowserPort? _extensionPort;
+        private readonly string? _tabId;
         private readonly SemaphoreSlim _commandGate = new(1, 1);
         private int _nextId;
 
+        public TargetSession(ClientWebSocket socket) => _socket = socket;
+
+        public TargetSession(IExtensionBrowserPort extensionPort, string tabId)
+        {
+            _extensionPort = extensionPort;
+            _tabId = tabId;
+        }
+
         public SnapshotState? Snapshot { get; set; }
-        public bool IsOpen => socket.State == WebSocketState.Open;
+        public bool UsesExtension => _extensionPort is not null;
+        public bool IsOpen => _extensionPort?.IsConnected ?? _socket?.State == WebSocketState.Open;
 
         public async Task<JsonDocument> SendAsync(string method, object parameters, CancellationToken cancellationToken)
         {
+            if (_extensionPort is not null)
+            {
+                await _commandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    if (!_extensionPort.IsConnected) throw new BrowserActionRefusedException("not_found");
+                    return await _extensionPort.SendCommandAsync(
+                        _tabId!,
+                        method,
+                        JsonSerializer.SerializeToElement(parameters, JsonOptions),
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (BrowserActionRefusedException) { throw; }
+                catch (OperationCanceledException) { throw; }
+                catch { throw new BrowserActionRefusedException("failed"); }
+                finally { _commandGate.Release(); }
+            }
+
             await _commandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                if (socket.State != WebSocketState.Open) throw new BrowserActionRefusedException("not_found");
+                if (_socket?.State != WebSocketState.Open) throw new BrowserActionRefusedException("not_found");
                 var id = Interlocked.Increment(ref _nextId);
                 var payload = JsonSerializer.SerializeToUtf8Bytes(new { id, method, @params = parameters }, JsonOptions);
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(5));
-                await socket.SendAsync(payload, WebSocketMessageType.Text, true, timeout.Token).ConfigureAwait(false);
+                await _socket.SendAsync(payload, WebSocketMessageType.Text, true, timeout.Token).ConfigureAwait(false);
                 var buffer = new byte[8192];
                 using var message = new MemoryStream();
                 while (true)
@@ -569,7 +664,7 @@ public sealed class BrowserExecutor : IDisposable
                     message.SetLength(0);
                     while (true)
                     {
-                        var result = await socket.ReceiveAsync(buffer, timeout.Token).ConfigureAwait(false);
+                        var result = await _socket.ReceiveAsync(buffer, timeout.Token).ConfigureAwait(false);
                         if (result.MessageType == WebSocketMessageType.Close)
                             throw new BrowserActionRefusedException("not_found");
                         if (result.MessageType != WebSocketMessageType.Text || message.Length + result.Count > MaxTargetsBytes)
@@ -594,6 +689,11 @@ public sealed class BrowserExecutor : IDisposable
             finally { _commandGate.Release(); }
         }
 
+        public Task DetachAsync(CancellationToken cancellationToken) =>
+            _extensionPort is null
+                ? Task.CompletedTask
+                : _extensionPort.DetachAsync(_tabId!, cancellationToken);
+
         public async Task ReleaseSnapshotAsync(SnapshotState snapshot, CancellationToken cancellationToken)
         {
             try
@@ -608,11 +708,11 @@ public sealed class BrowserExecutor : IDisposable
 
         public void Dispose()
         {
-            if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            if (_socket?.State is WebSocketState.Open or WebSocketState.CloseReceived)
             {
-                try { socket.Abort(); } catch { }
+                try { _socket.Abort(); } catch { }
             }
-            socket.Dispose();
+            _socket?.Dispose();
             _commandGate.Dispose();
         }
     }

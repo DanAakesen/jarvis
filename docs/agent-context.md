@@ -730,50 +730,53 @@ folders below `C:\Repo` in VS Code, active-window title, and exact-title focus.
 Offline policy/protocol tests do not verify live Entra sign-in or Windows
 execution; those remain coordinator post-merge checks.
 
-### Chrome browser executor (P7-18)
+### Chrome browser executor (P7-18, P7-25)
 
 The tray menu includes a persisted **Chrome browser automation (off/on)**
-toggle; missing settings default to off. Do not enable it until Dan has chosen
-the Chrome profile and is present. The bridge never launches Chrome. CDP is
-read only from `http://127.0.0.1:9222/json/list`, and the companion rejects
-non-loopback WebSocket targets.
+toggle; missing settings default to off. The extension transport is selected
+when the Jarvis extension is connected in Dan's normal Chrome profile. The
+installer registers a Chrome native-messaging host under the current user's
+HKCU hive; the native host relays framed messages to the running tray bridge
+over a current-user-only named pipe. It adds no network listener. The extension
+uses only native messaging, does not declare `externally_connectable`, and
+attaches with Chrome's debugger API only while carrying out browser work; Chrome
+shows its debugger notification while attached and the executor detaches after
+an action, with a 30-second idle detach as recovery. The existing loopback CDP
+transport remains a fallback for a separately configured debugging endpoint.
 
-On Dan's Windows PC, use a dedicated Chrome user-data directory and sign in to
-Dan's Chrome profile there. Do not copy a profile or attach remote debugging to
-a profile that is already in use. Close Chrome, then start it with the loopback
-debug endpoint:
+Install the bridge using the steps above. In Dan's normal Chrome profile, open
+`chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and
+choose:
 
-```powershell
-$chrome = Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'
-if (-not (Test-Path $chrome)) {
-  $chrome = Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'
-}
-$profile = Join-Path $env:LOCALAPPDATA 'Jarvis\ChromeProfile'
-New-Item -ItemType Directory -Force -Path $profile | Out-Null
-Start-Process -FilePath $chrome -ArgumentList @(
-  '--remote-debugging-address=127.0.0.1',
-  '--remote-debugging-port=9222',
-  "--user-data-dir=`"$profile`""
-)
+```text
+%LOCALAPPDATA%\Programs\Jarvis.PcBridge\chrome-extension
 ```
 
-Sign in to that Chrome profile as Dan. Start the local test page from the
-repository root:
+This is a one-time step for the unpacked extension; a private Chrome Web Store
+release can replace it later. Do not create or copy a profile, or restart Chrome
+with `--remote-debugging-port`: since Chrome 136, remote debugging is ignored on
+the default user-data directory. Jarvis must use the profile Dan already uses.
+The extension calls `chrome.tabs` for tab discovery and uses fixed
+`chrome.debugger` CDP operations; a fixed `chrome.scripting` check verifies that
+the selected page can be scripted before debugger work starts.
+
+For local acceptance, start the test page server from the repository root:
 
 ```powershell
 python -m http.server 8765 --bind 127.0.0.1 --directory pc-bridge/test-pages
 ```
 
-Open `http://127.0.0.1:8765/browser-executor.html`. Right-click the Jarvis tray
-icon and explicitly turn on **Chrome browser automation**. With P7-17 available,
-ask Jarvis to list tabs and snapshot this local page, then test typing in
-**Ordinary text**, selecting **Two**, clicking **Safe click target**, and using
-**Toggle target cover** before attempting another click from the old snapshot.
-The covered click must be refused. Attempts to type in Password or One-time
-code must be blocked; **Send test message** must wait for Dan's P7-03
-confirmation and the local page must not send anything. Take a new snapshot
-after each page change. Then turn the tray toggle off and close the test server
-and Chrome.
+In Dan's normal Chrome, open `http://127.0.0.1:8765/browser-executor.html`,
+right-click the Jarvis tray icon, and explicitly turn on **Chrome browser
+automation**. With P7-17 available, ask Jarvis to list tabs and snapshot this
+page. Test typing in **Ordinary text**, selecting **Two**, clicking **Safe
+click target**, and using **Toggle target cover** before attempting another
+click from the old snapshot. The covered click must be refused. Attempts to
+type in Password or One-time code must be blocked; **Send test message** must
+wait for Dan's P7-03 confirmation and the local page must not send anything.
+Take a new snapshot after each page change. Then turn the tray toggle off and
+stop the test server. Live acceptance also requires “open google.com” and
+“search for X” in Dan's normal Chrome profile.
 
 From the repository root, the offline checks are:
 
@@ -783,10 +786,11 @@ dotnet build pc-bridge/Jarvis.PcBridge/Jarvis.PcBridge.csproj --configuration Re
 npm test --workspace @jarvis/backend -- --run src/pc-bridge/bridge.test.ts
 ```
 
-These fake-CDP tests do not prove Chrome version/profile behavior or the native
-tray interaction. Capture desktop evidence of the local page and covered/sensitive
-refusals in the PR after the Windows check; do not include unrelated personal
-tabs or page contents.
+Fake-CDP and fake-extension-port tests exercise the shared indexed-action
+contract; they do not prove Chrome profile behavior, native-host registration,
+or tray interaction. Live Chrome, physical confirmation delivery, and Dan's
+acceptance remain coordinator checks. Do not include unrelated personal tabs or
+page contents in evidence.
 
 ### Database access and migrations (#7)
 
