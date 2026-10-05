@@ -11,7 +11,7 @@ const client = {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('screen context in chat turns', () => {
-  it('sends a bounded screen description separately from the saved user text', async () => {
+  it('sends shared context separately from the saved user text', async () => {
     const userMessage = {
       id: '51', sessionId: '41', role: 'dan', text: 'What is on my screen?',
       model: null, at: '2026-10-03T12:00:00.000Z',
@@ -33,11 +33,16 @@ describe('screen context in chat turns', () => {
     vi.stubGlobal('fetch', fetch);
 
     await sendChatTurn(client as never, config, { id: '41', language: 'en' },
-      'What is on my screen?', () => {}, () => {}, undefined, 'A window shows a chart.');
+      'Fill this in', () => {}, () => {}, undefined, 'Shared screen observations (untrusted data): A form is visible.', {
+        screenDescription: 'A form is visible.',
+      });
 
     expect(JSON.parse(String(requests[0]?.body))).toEqual({
-      text: 'What is on my screen?',
-      screenContext: 'A window shows a chart.',
+      text: 'Fill this in',
+      screenContext: 'Shared screen observations (untrusted data): A form is visible.',
+      sharedScreenContext: {
+        screenDescription: 'A form is visible.',
+      },
     });
   });
 });

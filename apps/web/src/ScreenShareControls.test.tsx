@@ -9,7 +9,7 @@ describe('ScreenShareControls', () => {
     const start = vi.fn(async () => {});
     const stop = vi.fn();
     const controller: ScreenShareController = {
-      sharing: false, starting: false, inspecting: false, error: '', start, stop, inspect: async () => 'description',
+      sharing: false, starting: false, inspecting: false, error: '', start, stop, inspect: async () => ({ description: 'description' }),
     };
     const user = userEvent.setup();
     const view = render(<ScreenShareControls screenShare={controller} />);

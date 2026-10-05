@@ -58,6 +58,9 @@ function requestedVisionSource(transcript: string): 'camera' | 'screen' | undefi
   if (/\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen|kig på (?:min )?skærm(?:en)?|hvad (?:er der|kan du se) på (?:min )?skærm(?:en)?)\b/iu.test(transcript)) {
     return 'screen';
   }
+  if (/\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b.{0,80}\b(?:here|this|that|it|these|those)\b|\b(?:here|this|that|it|these|those)\b.{0,80}\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b/iu.test(transcript)) {
+    return 'screen';
+  }
   return undefined;
 }
 
@@ -412,12 +415,27 @@ export class BrowserVoiceClient {
     this.audio.setMuted(muted);
   }
 
-  sendScreenContext(description: string): void {
+  sendScreenContext(description: string, sharedWindowTitle?: string): void {
     if (!this.running || !this.screenSessionReady || description.trim().length === 0 ||
-        description.length > 5_000 || this.socket?.readyState !== WebSocket.OPEN) {
+        description.length > 5_000 || (sharedWindowTitle !== undefined &&
+          (!sharedWindowTitle.trim() || sharedWindowTitle.length > 300 ||
+            Array.from(sharedWindowTitle).some((character) =>
+              character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127))) ||
+        this.socket?.readyState !== WebSocket.OPEN) {
       throw new Error('The active voice session is not ready for screen context.');
     }
-    this.socket.send(JSON.stringify({ type: 'jarvis.screen.context', description }));
+    this.socket.send(JSON.stringify({
+      type: 'jarvis.screen.context',
+      description,
+      ...(sharedWindowTitle ? { sharedWindowTitle } : {}),
+    }));
+  }
+
+  sendScreenContextUnavailable(): void {
+    if (!this.running || !this.screenSessionReady || this.socket?.readyState !== WebSocket.OPEN) {
+      throw new Error('The active voice session is not ready for screen context.');
+    }
+    this.socket.send(JSON.stringify({ type: 'jarvis.screen.context.unavailable' }));
   }
 
   async enableMicrophone(): Promise<void> {

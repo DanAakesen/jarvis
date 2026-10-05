@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEve
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { Link } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
-import type { CameraController, ScreenShareController } from './screen-sharing';
+import { sharedScreenContext, type CameraController, type ScreenShareController } from './screen-sharing';
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
 import { MarkdownContent } from './MarkdownContent';
@@ -72,6 +72,7 @@ export function ConversationHistory({
   const [visionContext, setVisionContext] = useState<{
     sessionId: string;
     description: string;
+    sharedWindowTitle?: string;
     source: 'camera' | 'screen';
   } | null>(null);
   const [voiceActive, setVoiceActive] = useState(false);
@@ -174,6 +175,10 @@ export function ConversationHistory({
     event.preventDefault();
     const text = draft.trim();
     if (!text || sending || voiceActive) return;
+    if (isSharedBrowserRequest(text) && !screenShare?.sharing) {
+      setTurnError('Share the Chrome tab you want Jarvis to use, then ask again.');
+      return;
+    }
     const currentCameraContext = session !== null && visionContext?.source === 'camera' &&
       visionContext.sessionId === session.id && session.language === language;
     if (isCameraRequest(text) && !camera?.sharing && !currentCameraContext) {
@@ -188,18 +193,39 @@ export function ConversationHistory({
     let userMessageSaved = false;
     let partialReply = '';
     let contextForTurn: string | undefined;
+    let sharedContextForTurn: { screenDescription: string; sharedWindowTitle?: string } | undefined;
     try {
       const activeSession = session?.language === language
         ? session
         : await createChatSession(client, config, language);
       setSession(activeSession);
       const currentVisionContext = visionContext?.sessionId === activeSession.id ? visionContext : null;
-      contextForTurn = currentVisionContext?.description;
+      contextForTurn = currentVisionContext
+        ? currentVisionContext.source === 'screen'
+          ? sharedScreenContext(currentVisionContext.description, currentVisionContext.sharedWindowTitle)
+          : currentVisionContext.description
+        : undefined;
+      if (isSharedBrowserRequest(text) && currentVisionContext?.source === 'screen') {
+        sharedContextForTurn = {
+          screenDescription: currentVisionContext.description,
+          ...(currentVisionContext.sharedWindowTitle === undefined
+            ? {}
+            : { sharedWindowTitle: currentVisionContext.sharedWindowTitle }),
+        };
+      }
       setVisionContext(null);
       if (isCameraRequest(text) && camera?.sharing && currentVisionContext?.source !== 'camera') {
-        contextForTurn = await camera.inspect(activeSession.id);
-      } else if (isScreenRequest(text) && screenShare?.sharing && currentVisionContext?.source !== 'screen') {
-        contextForTurn = await screenShare.inspect(activeSession.id);
+        contextForTurn = (await camera.inspect(activeSession.id)).description;
+      } else if ((isScreenRequest(text) || isSharedBrowserRequest(text)) && screenShare?.sharing &&
+          (isSharedBrowserRequest(text) || currentVisionContext?.source !== 'screen')) {
+        const context = await screenShare.inspect(activeSession.id);
+        contextForTurn = sharedScreenContext(context.description, context.sharedWindowTitle);
+        if (isSharedBrowserRequest(text)) {
+          sharedContextForTurn = {
+            screenDescription: context.description,
+            ...(context.sharedWindowTitle === undefined ? {} : { sharedWindowTitle: context.sharedWindowTitle }),
+          };
+        }
       }
       const assistant = await sendChatTurn(
         client,
@@ -216,6 +242,7 @@ export function ConversationHistory({
         },
         () => { userMessageSaved = true; },
         contextForTurn,
+        sharedContextForTurn,
       );
       setMessages((current) => [...current, asHistoryMessage(assistant, activeSession.language)]);
       setDraft('');
@@ -245,8 +272,13 @@ export function ConversationHistory({
         ? session
         : await createChatSession(client, config, language);
       setSession(activeSession);
-      const description = await capture.inspect(activeSession.id);
-      setVisionContext({ sessionId: activeSession.id, description, source });
+      const context = await capture.inspect(activeSession.id);
+      setVisionContext({
+        sessionId: activeSession.id,
+        description: context.description,
+        ...(context.sharedWindowTitle ? { sharedWindowTitle: context.sharedWindowTitle } : {}),
+        source,
+      });
     } catch (reason) {
       setTurnError(reason instanceof Error ? reason.message : 'Jarvis could not inspect the visual frame.');
     }
@@ -258,6 +290,10 @@ export function ConversationHistory({
 
   function isScreenRequest(text: string) {
     return /\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen)\b/iu.test(text);
+  }
+
+  function isSharedBrowserRequest(text: string) {
+    return /\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b.{0,80}\b(?:here|this|that|it|these|those)\b|\b(?:here|this|that|it|these|those)\b.{0,80}\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b/iu.test(text);
   }
 
   const displayedVoiceUsage = new Set<string>();
