@@ -244,6 +244,7 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     await screen.findByRole('heading', { name: 'Appearance', level: 2 });
+    expect(screen.getByText(/light, dark, or system appearance/)).not.toBeNull();
     expect(screen.getByRole('radio', { name: 'Light' })).toHaveProperty('checked', true);
     expect(screen.getByRole('radio', { name: 'Dark' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('radio', { name: 'System' })).toHaveProperty('disabled', false);

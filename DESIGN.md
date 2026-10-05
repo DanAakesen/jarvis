@@ -428,6 +428,9 @@ auto-growing frameless input, compact DA/EN buttons and an icon-only Send
 action. The input retains its accessible label and Enter/Shift+Enter behavior.
 Screen sharing, Now and backend controls sit under the activity disclosure;
 frame-inspection actions appear when a camera or screen is shared.
+P8-32 renders the greeting as one sans heading with ordinary supporting copy
+(not a subtitle) on smoky-light glass, placed clear of the orb rings; the
+activity disclosure has its own readable glass surface.
 
 Dan's messages sit on a quiet surface on the right; Jarvis's replies stay open
 on the left. There are no message dividers. Channel, language and relative time

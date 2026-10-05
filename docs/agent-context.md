@@ -245,6 +245,7 @@ Verified in Codex cloud for P0-02:
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
 | Focused P8-17 settings/theme checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
+| Focused P8-32 appearance checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/theme-preference.test.tsx src/SettingsPage.test.tsx src/JarvisStage.test.tsx src/styles.test.tsx src/ConversationHistory.test.tsx`; `npm run lint --workspace @jarvis/web`; `npm run build --workspace @jarvis/web` |
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Focused P8-26 queue and cancellation tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-abort.test.tsx` |
@@ -474,6 +475,17 @@ scene/glass text was also visually checked. No live backend/provider, real audio
 device, hardware GPU, physical phone, Safari or transition-flicker acceptance is
 claimed. The fixtures and generated audio are local test data, not production
 simulated state controls.
+P8-32 used a scratch-only auth/API fixture and Chromium with SwiftShader at
+1440×900 and 390×844, with reduced motion enabled. The browser rendered the real
+same-room WebGL stage under the light semantic palette; one canvas remained
+mounted while the saved `system` mode followed OS dark↔light changes, an open
+activity disclosure stayed open, and composer focus was retained. No microphone
+request, horizontal overflow, or browser error occurred. Review captures are
+[`p8-32-empty-light-desktop-1440.png`](ui/screenshots/p8-32-empty-light-desktop-1440.png)
+and [`p8-32-empty-light-phone-390.png`](ui/screenshots/p8-32-empty-light-phone-390.png).
+These use local API fixtures, do not verify live settings/provider behavior, and
+do not constitute approval of a light-mode mockup. Hardware GPU, physical
+devices, Safari, live voice, and P8-30 transition flicker remain unverified.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

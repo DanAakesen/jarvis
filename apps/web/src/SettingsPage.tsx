@@ -394,7 +394,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
         <form onSubmit={(event) => { void save(event); }}>
           <section className="settings-section" aria-labelledby="appearance-settings-heading">
             <h2 id="appearance-settings-heading">Appearance</h2>
-            <p className="settings-explanation">Choose a light or dark appearance for every page. The accepted theme is saved separately from other settings.</p>
+            <p className="settings-explanation">Choose a light, dark, or system appearance for every page. System follows your OS appearance. The accepted theme is saved separately from other settings.</p>
             <fieldset className="choice-group theme-choice-group"
               disabled={themePreference.state !== 'ready' || themePreference.saving}>
               <legend>Theme</legend>

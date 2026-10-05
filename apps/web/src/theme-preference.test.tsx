@@ -157,6 +157,26 @@ describe('ThemePreferenceProvider', () => {
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
   });
 
+  it('keeps the current theme while a save is pending and applies it only after acceptance', async () => {
+    const user = userEvent.setup();
+    let resolveSave!: (value: Response) => void;
+    fetchMock.mockResolvedValueOnce(response('light'))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { resolveSave = resolve; }));
+    renderPreference();
+
+    const light = await screen.findByRole('radio', { name: 'Light' });
+    await user.click(screen.getByRole('radio', { name: 'Dark' }));
+
+    expect(screen.getByText('Saving theme…')).not.toBeNull();
+    expect(screen.getByRole('radio', { name: 'Dark' }).closest('fieldset')).toHaveProperty('disabled', true);
+    expect(light).toHaveProperty('checked', true);
+    expect(document.documentElement.dataset.theme).toBe('light');
+
+    resolveSave(response('dark'));
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
+    expect(await screen.findByText('Theme saved.')).not.toBeNull();
+  });
+
   it('keeps the prior mode active after a rejected update and recovers on retry', async () => {
     const user = userEvent.setup();
     let storedTheme = 'light';
