@@ -14,12 +14,13 @@
     "test:database": "vitest run --config src/database/vitest.config.mts"
   },
   "dependencies": {
-    "@jarvis/contracts": "*",
+    "@azure/communication-call-automation": "1.6.0",
     "@azure/identity": "4.13.3",
     "@azure/keyvault-secrets": "4.11.2",
     "@azure/storage-blob": "12.31.0",
     "@fastify/cors": "11.3.0",
     "@fastify/websocket": "11.3.3",
+    "@jarvis/contracts": "*",
     "@microsoft/teams.apps": "2.1.0",
     "@microsoft/teams.cards": "2.1.0",
     "applicationinsights": "3.16.0",
