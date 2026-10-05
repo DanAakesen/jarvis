@@ -60,6 +60,10 @@ export class WorkspaceCommandBroker {
   private readonly connections = new Map<string, WorkspaceConnection>();
   private readonly records = new Map<string, Map<string, CommandRecord>>();
 
+  isConnected(ownerId: string): boolean {
+    return this.connections.has(ownerId);
+  }
+
   updateSnapshot(ownerId: string, sessionId: string, snapshot: WorkspaceSnapshot): boolean {
     const connection = this.connections.get(ownerId);
     if (connection?.sessionId !== sessionId) return false;

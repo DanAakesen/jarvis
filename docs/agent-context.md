@@ -250,6 +250,7 @@ Verified in Codex cloud for P0-02:
 | Focused P7-13 memory-tool, embedding, and migration tests | `npm test --workspace @jarvis/backend -- --run src/core/memory.test.ts src/core/memory-embeddings.test.ts src/database/migrations.test.ts` |
 | Focused P7-14 research tests | `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- --run src/core/web-research.test.ts src/core/usage.test.ts src/foundry/client.test.mts src/config.test.ts src/database/tool-call-store.test.ts`; `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_tool` |
 | Focused P7-04 reflex, chat and voice tests | `npm test --workspace @jarvis/backend -- --run src/core/reflex.test.ts src/core/conversation.test.ts src/voice/relay.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py` |
+| Focused P7-15 image generation and artifact tests | `npm test --workspace @jarvis/backend -- --run src/core/image-generation.test.ts src/core/image-generation-routes.test.ts src/database/workspace-artifact-store.test.ts src/database/conversation-store.test.ts src/database/usage-store.test.ts src/core/usage.test.ts src/database/migrations.test.ts`; `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts src/usage/UsagePage.test.tsx`; `npm test --workspace @jarvis/contracts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k 'codex_tool or image'` |
 | Focused P7-27 workspace reflex checks | `npm test --workspace @jarvis/backend -- --run src/core/reflex.test.ts src/core/workspace-commands.test.ts src/core/conversation.test.ts src/voice/relay.test.ts src/logging.test.ts`; `npm test --workspace @jarvis/web -- --run src/Workspace.test.tsx src/NowFeedPanel.test.tsx src/now-feed.test.ts src/App.test.tsx` |
 | Focused P7-23 chat latency checks | `npm test --workspace @jarvis/backend -- --run src/core/conversation.test.ts src/core/chat-agent.test.ts src/core/reflex.test.ts src/voice/relay.test.ts src/core/memory.test.ts src/core/memory-embeddings.test.ts src/logging.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_telemetry.py agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py agents/jarvis/tests/test_jarvis_tools.py` |
 | Focused P7-30 cross-session follow-up checks | `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py`; `cd agents/jarvis && .venv/bin/python -m ruff check chat_runtime.py model_client.py tests/test_chat_runtime.py tests/test_model_client.py` |
@@ -280,6 +281,14 @@ Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
 returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
 P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised.
+
+P7-15's conversation image preview was inspected in Chromium at 1280×900 and
+390×844 using scratch-only signed-in and API fixtures. The existing history
+rendered the image artifact with its accessible name and caption; the image fit
+both viewports without horizontal overflow. The browser used a local illustration
+for layout inspection after the fixture returned a mock Blob URL. This verifies
+presentation only, not Codex generation, Blob authorization, or deployed
+workspace acceptance.
 
 P7-27 passed `npm test` (1,135 tests), `npm run lint`, and `npm run build`.
 Scratch-only auth/API fixtures in Chromium at 1440×1000 and 390×844 verified
@@ -624,7 +633,10 @@ configured, the backend uses its shared `DefaultAzureCredential`, selected with
 and Foundry runner configuration, and uses the SQL credential lease; the task
 dispatcher must start Codex work through `TaskStore.transition` so both
 operations serialize. Bicep retains one `Foundry User` assignment for the
-backend identity at project scope.
+backend identity at project scope. P7-15 image generation uses the same runner
+and adds `JARVIS_CODEX_TOOL_MODEL` (default `gpt-5.5`); it is a model name, not a
+credential. The hosted runner uses its existing Key Vault Codex login. No API
+key or paid image API is configured.
 
 Backend authentication defaults to the nonsecret identities in
 `infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and
@@ -871,6 +883,16 @@ page contents in evidence.
   backend restart, list/history, correction and forgetting. Confirm forgetting
   prevents recall while original conversation records remain. Never use sensitive
   real data for the smoke test.
+- P7-15 image generation needs no new service or secret. The backend uses its
+  existing Foundry runner agent and Blob managed identity; migration `0017`
+  creates owner-scoped image metadata, and `0018` allows refused tool outcomes
+  to be recorded for the daily per-tool Usage count. `JARVIS_CODEX_TOOL_MODEL`
+  defaults to `gpt-5.5`; Dan locally verified Codex CLI 0.157.1 with his ChatGPT
+  login, but deployed Codex behavior is unverified. After merge, the coordinator
+  should ask for one approved image, verify its private Blob artifact in both
+  chat and the workspace, and confirm usage-limit errors remain visible. This
+  consumes the shared ChatGPT/Codex allowance; it is not a cost counter or a
+  per-image API charge. Video is deferred; retention has no automatic cleanup.
 
 Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 

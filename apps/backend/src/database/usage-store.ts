@@ -1,6 +1,6 @@
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
-import type { UsageEntry, UsageStore } from '../core/usage.js';
+import type { DailyToolCount, UsageEntry, UsageStore } from '../core/usage.js';
 
 interface UsageRow extends Omit<UsageEntry, 'at'> {
   at: Date | string;
@@ -50,6 +50,15 @@ export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
           quantity, costDkk, at, estimated, totalEntries
         FROM grouped
         ORDER BY at DESC, projectName, taskTitle, source, metric;`);
+      const utcDayStart = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
+      const toolCalls = await databaseReadRequest(pool)
+        .input('from', sql.DateTime2, utcDayStart)
+        .input('to', sql.DateTime2, to)
+        .query<DailyToolCount>(`SELECT tool, CONVERT(varchar(19), COUNT_BIG(*)) AS count
+        FROM dbo.tool_calls
+        WHERE at >= @from AND at < @to
+        GROUP BY tool
+        ORDER BY tool;`);
       const entries = recordset.map((row) => ({
         taskId: row.taskId,
         taskTitle: row.taskTitle,
@@ -63,7 +72,11 @@ export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
         at: row.at instanceof Date ? row.at.toISOString() : new Date(row.at).toISOString(),
         estimated: row.estimated,
       }));
-      return { entries, totalEntries: recordset[0]?.totalEntries ?? '0' };
+      return {
+        entries,
+        totalEntries: recordset[0]?.totalEntries ?? '0',
+        dailyToolCounts: toolCalls.recordset,
+      };
     },
   };
 }

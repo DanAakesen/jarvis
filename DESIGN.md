@@ -551,6 +551,18 @@ not part of P8-06. These structural choices reuse the shared Concept B/C surface
 and motion tokens in P8-20. Desktop voice-layout transitions are implemented in
 P8-10; phone view switching is implemented in P8-11.
 
+## Generated image delivery (P7-15)
+
+Jarvis opens a successfully generated image as the existing typed image view in
+the active workspace; the corresponding successful tool record also shows an
+owner-authorized preview in conversation history. The view and window
+arrangement are temporary, while the source image is saved as a private
+workspace artifact. Loading, failure, cancellation, and Codex usage-limit
+feedback stay truthful; a saved artifact is not described as visible unless the
+workspace command succeeds. The Usage page's UTC daily tool counts show recorded
+invocations, not remaining ChatGPT quota or an image cost. Video is deferred
+and is not shown as an enabled action. Artifact retention has not been decided.
+
 ## Window lifecycle and tabs (P8-07)
 
 Each temporary window has a title bar with labelled minimise, maximise, and
@@ -576,8 +588,10 @@ new sessions and active sessions keep their current settings; visual themes,
 model choice, and voice identity remain separate. P7-16 owns validated
 persistence and session application.
 
-Research and generated image/video results use the existing dynamic workspace,
-with source links or artifact references and honest progress/error states.
+Research results use source links in the existing dynamic workspace. Generated
+images use the fixed image renderer there and an inline chat-history preview;
+both show honest loading, failure, and interrupted states. Video generation is
+deferred and is not presented as an available action.
 Memory can be queried, corrected and forgotten through registered tools; a
 dedicated memory-management screen has not been selected. Reuse the agreed shell
 and view contracts rather than adding permanent rail/top-bar controls for each

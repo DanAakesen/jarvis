@@ -8,6 +8,7 @@ import { useVoiceWorkspace } from './voice-workspace-state';
 import { MarkdownContent } from './MarkdownContent';
 import {
   createChatSession,
+  loadImageArtifactUrl,
   loadConversationHistory,
   sendChatTurn,
   waitForChatSetup,
@@ -50,6 +51,44 @@ function validTaskId(value: string | null): value is string {
   return value !== null && /^[1-9]\d{0,18}$/.test(value) && BigInt(value) <= maxTaskId;
 }
 
+function ConversationImageArtifact({
+  client,
+  config,
+  artifactId,
+}: {
+  client: PublicClientApplication;
+  config: PublicConfig;
+  artifactId: string;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    void loadImageArtifactUrl(client, config, artifactId, controller.signal)
+      .then((imageUrl) => {
+        if (active) setUrl(imageUrl);
+      })
+      .catch(() => {
+        if (active && !controller.signal.aborted) setUnavailable(true);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [artifactId, client, config]);
+
+  if (unavailable) return <span role="status">Generated image is unavailable.</span>;
+  if (!url) return <span role="status">Loading generated image…</span>;
+  return (
+    <figure className="message-artifact">
+      <img src={url} alt="Generated image" loading="lazy" />
+      <figcaption>Generated image</figcaption>
+    </figure>
+  );
+}
+
 function isCameraRequest(text: string) {
   return /\b(?:what am i holding|what(?:'s| is) in my hand|look at (?:my|the) camera|what can you see)\b/iu.test(text);
 }
@@ -60,6 +99,7 @@ function isScreenRequest(text: string) {
 
 function isSharedBrowserRequest(text: string) {
   return /\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b.{0,80}\b(?:here|this|that|it|these|those)\b|\b(?:here|this|that|it|these|those)\b.{0,80}\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b/iu.test(text);
+
 }
 
 export function ConversationHistory({
@@ -432,6 +472,9 @@ export function ConversationHistory({
                             <Link className="task-reference" to={`/factory/tasks/${call.taskId}`}>
                               Task #{call.taskId}
                             </Link>
+                          )}
+                          {call.tool === 'image_generation' && call.outcome === 'ok' && call.artifactId && (
+                            <ConversationImageArtifact client={client} config={config} artifactId={call.artifactId} />
                           )}
                         </li>
                       ))}

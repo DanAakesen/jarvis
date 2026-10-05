@@ -1167,6 +1167,45 @@ together with reason `disk_low`; the deployment setting defaults to 1 GiB. The
 runner event, SQL Server integration, and task-detail display are locally covered;
 live Foundry disk measurement remains post-merge.
 
+### P7-15 image generation through the existing Codex login
+
+The authenticated Jarvis tool starts one `codex-tool` invocation on the existing
+Foundry runner. The runner checks out no repository, creates an empty temporary
+workspace and Codex home, sends the untrusted prompt as input data to
+`codex exec --skip-git-repo-check -s workspace-write`, and requests the built-in
+`image_generation` feature to write a fixed output file. Its 240-second subprocess
+timeout, bounded output, cancellation, temp cleanup and Codex login are runner
+owned. The model defaults to configurable `JARVIS_CODEX_TOOL_MODEL=gpt-5.5`.
+There is no paid image API or fallback; `Codex usage limit reached` is returned
+visibly, and this allowance is shared with coding tasks.
+
+The runner accepts only decoded PNG/JPEG images up to 5 MiB, 4096 pixels per
+side and 16 megapixels, then uploads through a runner-role-only backend route
+using a random five-minute one-use key. The backend persists owner, media type
+and size in `dbo.workspace_artifacts` and stores bytes under a UUID path in the
+existing private `artifacts` container. Blob upload is removed if metadata
+insertion fails. The temporary output workspace is deleted after the invocation.
+No generated image prompt or signed URL is written to the durable tool audit;
+only a validated artifact ID is retained to render the image in conversation
+history.
+
+Status reads are polled to terminal state with a 270-second job bound; only
+transient status reads get at most two retries. Generation itself is never
+retried. Failure, timeout and cancellation remain non-success outcomes. To view
+an artifact, the authenticated owner reads its metadata and receives an
+HTTPS-only, read-only, one-hour user-delegation SAS. The SAS is not persisted;
+the typed `image` workspace view and conversation preview use it only for
+display. Usage shows UTC daily per-tool invocation counts from `tool_calls`,
+including recorded `ok`, `refused` and `error` outcomes; this is not a measure
+of ChatGPT quota consumption or a per-image charge.
+
+Codex CLI 0.157.1 and ChatGPT login/model compatibility were verified locally by
+Dan on 5 October 2026; offline tests cover the runner, backend, Blob/SQL fakes,
+workspace contract and browser preview. Live hosted Codex generation, Azure
+role assignment, Blob upload and deployed rendering remain unverified. Video
+generation is deferred separately. Artifact retention is unresolved and no
+automatic deletion is implemented.
+
 P2-13 compares task-branch commits before and after each agent turn. An
 `end_turn` without a new task-branch commit emits `session_question` with the
 last agent message. The backend records the question and moves a Running or
@@ -1498,14 +1537,14 @@ call linkage remain the post-merge P4-09 acceptance check.
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (SSE, dispatcher, Teams audio, and Google pending confirmations use process-local state; more copies require shared state/Web PubSub); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `JARVIS_NOTES_FOLDER_PATH`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `JARVIS_CODEX_TOOL_MODEL`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, `SPEECH_REGION`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID`, `JARVIS_GOOGLE_TIME_ZONE`, `ENTRA_PC_BRIDGE_CLIENT_ID` |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (SSE, dispatcher, Teams audio, Google pending confirmations and P7-15 one-use upload keys use process-local state; more copies require shared state/Web PubSub); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `JARVIS_NOTES_FOLDER_PATH`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `JARVIS_CODEX_TOOL_MODEL`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, `SPEECH_REGION`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID`, `JARVIS_GOOGLE_TIME_ZONE`, `ENTRA_PC_BRIDGE_CLIENT_ID` |
 | Azure Bot Service | `bot-jarvis-{suffix}` | Global; F0; user-assigned managed identity; `MsTeamsChannel` enabled; endpoint `/api/messages` |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Azure Monitor action group | `jarvis-alerts` | Email receivers from required `budgetContactEmails`; no SMS/voice receivers |
 | Log alert rules | Deployment failure, sandbox crash, credential expiry | Stateful scheduled-query rules on `AppTraces`; group by hashed alert condition and send through `jarvis-alerts` |
 | Monthly budget | `jarvis-monthly` | Resource-group scoped; 300 in the subscription billing currency, monthly from 1 October 2026 (fixed start date; Azure rejects changing it), actual-cost alerts above 80 % and 100 % to `jarvis-alerts` |
 
-The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling and the Danish voice agent), **Cognitive Services User** on the Foundry account (P7-24 Speech recognition), **Cognitive Services Speech User** on the separate Speech F0 resource (Teams synthesis), **Cost Management Reader** at the resource group for budget reads, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. The Azure Bot uses the same identity as its single-tenant user-assigned MSI app. The separate P7-10 setup script can assign Graph `Files.Read.All`; this tenant-wide permission requires coordinator approval. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live role assignment and ARM behavior remain unverified until the change is deployed.
+The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** and **Storage Blob Delegator** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling, the Danish voice agent, and `codex-tool` invocations), **Cognitive Services User** on the Foundry account (P7-24 Speech recognition), **Cognitive Services Speech User** on the separate Speech F0 resource (Teams synthesis), **Cost Management Reader** at the resource group for budget reads, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. The Azure Bot uses the same identity as its single-tenant user-assigned MSI app. The separate P7-10 setup script can assign Graph `Files.Read.All`; this tenant-wide permission requires coordinator approval. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live role assignment and ARM behavior remain unverified until the change is deployed.
 
 Required deployment parameters are `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `foundryNameTimestamp`, and `budgetContactEmails`; the comma-separated email list comes from protected GitHub secret `JARVIS_BUDGET_CONTACT_EMAILS`. `backendImage` and `jarvisAgentObjectId` are optional. `JARVIS_GOOGLE_TIME_ZONE` is an optional GitHub variable set by [`infra/setup-google.ps1`](../infra/setup-google.ps1); when set, Bicep enables the Google tools. The OAuth client ID, client secret and refresh token are never deployment variables and stay in Key Vault. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed. `pcBridgeClientId` is optional: Main Deploy passes it from the nonsecret Actions variable `JARVIS_PC_BRIDGE_CLIENT_ID`, and Bicep omits `ENTRA_PC_BRIDGE_CLIENT_ID` until it is provisioned.
 
@@ -1529,6 +1568,7 @@ retrieval. Normal Bicep deployment is idempotent and does not require a portal s
 | Voice (Danish bridge) | ≈4 per 30-minute day | Estimated; billed meters to confirm |
 | Speech to speech | ≈11 per 30-minute day (`gpt-realtime-2.1`) or ≈3.4 (`-mini`) | List price |
 | Google Gmail and Calendar APIs | No additional charge expected | API quotas and Google's OAuth consent/verification policies apply; live account acceptance remains unverified |
+| Image generation | No per-image API charge | Uses Dan's existing ChatGPT/Codex subscription; allowance is shared with coding tasks, and actual quota/availability remain live-unverified |
 | Azure Bot Service Teams channel, Azure Speech F0 | 0 | F0 tiers only; voice falls back to text when free Speech capacity is unavailable; no paid tier |
 | Static Web Apps, SQL free offer | 0 | Free tiers; the database pauses when idle |
 
