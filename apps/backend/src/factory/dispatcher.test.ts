@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEventHub } from '../core/event-hub.js';
 import type { SettingsStore } from '../core/settings.js';
-import { FoundryClientError } from '../foundry/client.js';
+import { FoundryClientError, type InvocationSnapshot } from '../foundry/client.js';
 import { SandboxHeartbeat } from './heartbeat.js';
-import { TaskDispatcher, type DispatchClaim, type DispatcherOptions, type DispatcherStore, type TaskControlTarget } from './dispatcher.js';
+import {
+  TaskDispatcher, type DispatchClaim, type DispatcherOptions, type DispatcherStore, type StaleRunningTask,
+  type TaskControlTarget,
+} from './dispatcher.js';
 import type { TaskRecoveryStore } from './recovery-store.js';
 import type { TaskEventHub, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
 
@@ -72,12 +75,31 @@ function harness(
   options: DispatcherOptions = {},
 ) {
   const events: TaskEventHub = createEventHub<TaskEventMessage>();
-  const transition = vi.fn(async (_id: string, state: TaskRecord['state']) => ({
+  const transition = vi.fn(async (
+    _id: string,
+    state: TaskRecord['state'],
+    _completionVerified?: boolean,
+    _eventReason?: string,
+    _eventSummary?: string,
+  ) => ({
     kind: 'ok' as const, task: { ...taskRecord, state },
   }));
+  let currentState = taskRecord.state;
   const tasks = {
-    get: vi.fn(async () => ({ ...taskRecord, events: [], usage: [] })),
-    transition,
+    get: vi.fn(async () => ({ ...taskRecord, state: currentState, events: [], usage: [] })),
+    transition: vi.fn(async (
+      id: string,
+      state: TaskRecord['state'],
+      completionVerified?: boolean,
+      eventReason?: string,
+      eventSummary?: string,
+    ) => {
+      currentState = state;
+      if (completionVerified === undefined && eventReason === undefined && eventSummary === undefined) {
+        return transition(id, state);
+      }
+      return transition(id, state, completionVerified, eventReason, eventSummary);
+    }),
     recordEvent: vi.fn(),
   } as unknown as TaskStore;
   const settings: SettingsStore = { read: vi.fn(async () => ({
@@ -98,14 +120,30 @@ function harness(
   }));
   const cancel = vi.fn(async (invocationId: string) => ({ invocationId, status: 'cancelled' as const }));
   const deleteSession = vi.fn(async () => {});
-  const clientFor = vi.fn(() => ({ startTask, steer, pause, resume, cancel, deleteSession }));
+  const status = vi.fn(async (invocationId: string): Promise<InvocationSnapshot> => ({
+    invocationId,
+    sessionId: 'session-1',
+    status: 'running',
+    agent: 'codex',
+    startedAt: 1,
+    finishedAt: null,
+    events: [],
+    result: null,
+    error: null,
+  }));
+  const clientFor = vi.fn(() => ({ startTask, steer, pause, resume, cancel, deleteSession, status }));
   const dispatcher = new TaskDispatcher(store, tasks, settings, clientFor, heartbeat, events, options);
-  return { dispatcher, events, settings, tasks, startTask, transition, track, untrack, clientFor, steer, pause, resume, cancel, deleteSession };
+  return {
+    dispatcher, events, settings, tasks, startTask, transition, track, untrack, clientFor, steer, pause, resume,
+    cancel, deleteSession, status,
+  };
 }
 
 function idleStore(nextAttemptAt: string | null = null): DispatcherStore {
   return {
     claimNext: vi.fn(async () => ({ kind: 'idle' as const, nextAttemptAt })),
+    listStaleRunning: vi.fn(async () => []),
+    recordHeartbeat: vi.fn(async () => {}),
     deferClaim: vi.fn(async () => {}),
     failStart: vi.fn(async () => {}),
     recordStarted: vi.fn(async () => '53'),
@@ -125,6 +163,50 @@ function idleStore(nextAttemptAt: string | null = null): DispatcherStore {
 
 async function flush(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+function invocationSnapshot(status: InvocationSnapshot['status']): InvocationSnapshot {
+  return {
+    invocationId: controlTarget.invocationId,
+    sessionId: controlTarget.foundrySessionId,
+    status,
+    agent: 'codex',
+    startedAt: 1,
+    finishedAt: status === 'running' || status === 'queued' ? null : 2,
+    events: [],
+    result: null,
+    error: null,
+  };
+}
+
+function reconciliationHarness(
+  status: InvocationSnapshot['status'],
+  verifyDelivery = vi.fn(async () => ({ kind: 'awaiting_policy' as const })),
+  onReconciliation: DispatcherOptions['onReconciliation'] = () => {},
+) {
+  const staleTask: StaleRunningTask = { ...controlTarget, taskId: '42', sessionStatus: 'Active' };
+  const store: DispatcherStore = {
+    ...idleStore(),
+    listStaleRunning: vi.fn(async () => [staleTask]),
+  };
+  const recoveryStore = {
+    getRunningTaskForSession: vi.fn(async () => '42'),
+    claimRecovery: vi.fn(async () => ({ kind: 'invalid-transition' as const })),
+  } as unknown as TaskRecoveryStore;
+  const test = harness(store, undefined, controlTask, {
+    reconciliationIntervalMs: 60_000,
+    staleHeartbeatMs: 100,
+    recoveryStore,
+    onReconciliation,
+    workspaceFor: vi.fn(async () => ({
+      repository: 'DanAakesen/jarvis-test-target',
+      defaultBranch: 'main',
+      branch: controlTarget.branch,
+    })),
+    verifyDelivery,
+  });
+  test.status.mockResolvedValue(invocationSnapshot(status));
+  return { ...test, store, staleTask, verifyDelivery };
 }
 
 afterEach(() => { vi.useRealTimers(); });
@@ -672,7 +754,10 @@ describe('task crash recovery', () => {
     };
     const dispatcher = new TaskDispatcher(
       store, activeTasks, settings,
-      () => ({ startTask, steer: vi.fn(), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn(), deleteSession: vi.fn() }),
+      () => ({
+        startTask, steer: vi.fn(), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn(), deleteSession: vi.fn(),
+        status: vi.fn(async () => invocationSnapshot('running')),
+      }),
       heartbeat, events, options,
     );
 
@@ -721,5 +806,88 @@ describe('task crash recovery', () => {
     );
 
     await Promise.all([dispatcher.stop(), heartbeat.stop()]);
+  });
+
+  it('reconciles a lost completion event against the existing PR and exposes unresolved policy as NeedsAttention', async () => {
+    vi.useFakeTimers();
+    const decisions: unknown[] = [];
+    const test = reconciliationHarness('completed', undefined, (decision) => decisions.push(decision));
+    const { dispatcher } = test;
+
+    dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(test.status).toHaveBeenCalledWith('invocation-1', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(test.store.recordHeartbeat).toHaveBeenCalledWith('53', 'invocation-1', true);
+    expect(test.verifyDelivery).toHaveBeenCalledWith(
+      { repository: 'DanAakesen/jarvis-test-target', defaultBranch: 'main', branch: 'jarvis/task-42' },
+      expect.objectContaining({ id: '42', title: 'Fix the bug' }),
+      expect.any(Function),
+    );
+    expect(test.tasks.transition).toHaveBeenCalledWith(
+      '42',
+      'NeedsAttention',
+      false,
+      'completed_without_verified_delivery',
+      'Foundry confirms the runner completed, but GitHub and task policy did not confirm a reviewable completion. Review the pull request and task.',
+    );
+    await expect(test.tasks.get('42', 1, 0)).resolves.toMatchObject({ state: 'NeedsAttention' });
+    expect(decisions).toContainEqual(expect.objectContaining({
+      taskId: '42', status: 'completed', decision: 'needs_attention',
+    }));
+    await dispatcher.stop();
+  });
+
+  it('leaves an active runner Running and refreshes its heartbeat on startup and schedule', async () => {
+    vi.useFakeTimers();
+    const test = reconciliationHarness('running');
+
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.store.listStaleRunning).toHaveBeenCalledOnce();
+    expect(test.store.recordHeartbeat).toHaveBeenCalledWith('53', 'invocation-1', false);
+    expect(test.verifyDelivery).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(test.store.listStaleRunning).toHaveBeenCalledTimes(2);
+    expect(test.status).toHaveBeenCalledTimes(2);
+    await expect(test.tasks.get('42', 1, 0)).resolves.toMatchObject({ state: 'Running' });
+    await test.dispatcher.stop();
+  });
+
+  it('moves a stale task with a failed runner to NeedsAttention with a visible reason', async () => {
+    vi.useFakeTimers();
+    const test = reconciliationHarness('failed');
+
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(test.verifyDelivery).not.toHaveBeenCalled();
+    expect(test.tasks.transition).toHaveBeenCalledWith(
+      '42',
+      'NeedsAttention',
+      false,
+      'foundry_failed',
+      'Foundry reports that the task runner failed. Review its task history, then recover the task.',
+    );
+    await expect(test.tasks.get('42', 1, 0)).resolves.toMatchObject({ state: 'NeedsAttention' });
+    await test.dispatcher.stop();
+  });
+
+  it('moves a completed task to NeedsAttention when GitHub cannot verify its PR', async () => {
+    vi.useFakeTimers();
+    const refusal = 'GitHub could not verify or open the task pull request. Check repository access and retry the task.';
+    const test = reconciliationHarness('completed', vi.fn(async () => ({ kind: 'refused' as const, reason: refusal })));
+
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(test.tasks.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'pull_request_open_refused',
+      summary: refusal,
+      payload: { reason: refusal },
+    }));
+    expect(test.tasks.transition).toHaveBeenCalledWith('42', 'NeedsAttention', false, 'pull_request_open_refused');
+    await expect(test.tasks.get('42', 1, 0)).resolves.toMatchObject({ state: 'NeedsAttention' });
+    await test.dispatcher.stop();
   });
 });

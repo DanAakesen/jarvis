@@ -11,7 +11,8 @@ const task = { id: '42', title: 'Fix the bug' };
 const pullRequest = {
   number: 73,
   state: 'open',
-  head: { ref: workspace.branch, repo: { full_name: workspace.repository } },
+  created_at: '2026-10-04T20:06:00.000Z',
+  head: { ref: workspace.branch, sha: 'a'.repeat(40), repo: { full_name: workspace.repository } },
   base: { ref: workspace.defaultBranch },
 };
 
@@ -31,7 +32,11 @@ function github(options: {
 } = {}) {
   const matchingPullRequest = {
     ...pullRequest,
-    head: { ref: workspace.branch, repo: { full_name: options.pullRepository ?? workspace.repository } },
+    head: {
+      ref: workspace.branch,
+      sha: 'a'.repeat(40),
+      repo: { full_name: options.pullRepository ?? workspace.repository },
+    },
   };
   const calls: { url: string; method: string; body?: string }[] = [];
   let created = options.existing ?? false;
@@ -70,13 +75,15 @@ function github(options: {
 
 function fixture(fetch: typeof globalThis.fetch) {
   const recordEvent = vi.fn(async () => ({ id: '1' } as never));
+  const recordPullRequest = vi.fn(async () => {});
   const handler = createGitHubDeliveryHandler(
     tokenIssuer(),
     { recordEvent } as never,
     'https://jarvis.example',
     fetch,
+    recordPullRequest,
   );
-  return { handler, recordEvent };
+  return { handler, recordEvent, recordPullRequest };
 }
 
 describe('GitHub task delivery', () => {
@@ -153,6 +160,16 @@ describe('GitHub task delivery', () => {
       type: 'pull_request_opened',
       payload: expect.objectContaining({ pullRequest: 73, reused: true }),
     }));
+    expect(test.recordPullRequest).toHaveBeenCalledWith({
+      kind: 'pull_request',
+      repository: workspace.repository,
+      number: 73,
+      branch: workspace.branch,
+      headSha: 'a'.repeat(40),
+      state: 'open',
+      openedAt: '2026-10-04T20:06:00.000Z',
+      mergedAt: null,
+    });
   });
 
   it('accepts GitHub canonical repository casing in a PR response', async () => {

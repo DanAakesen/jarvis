@@ -366,6 +366,7 @@ try {
       eventHub,
       {
         onError: () => logger.warn('dispatcher.operation_failed'),
+        onReconciliation: (decision) => logger.info(decision, 'task_reconciliation.decision'),
         recoveryStore: createTaskRecoveryStore(database.pool, eventHub),
         workspaceFor: async (task) => {
           if (!task.branch) return null;
@@ -375,7 +376,18 @@ try {
             : null;
         },
         ...(githubAppTokenIssuer
-          ? { verifyDelivery: createGitHubDeliveryHandler(githubAppTokenIssuer, taskStore, config.staticWebAppOrigin) }
+          ? {
+            verifyDelivery: createGitHubDeliveryHandler(
+              githubAppTokenIssuer,
+              taskStore,
+              config.staticWebAppOrigin,
+              undefined,
+              async (mapping) => {
+                await webhookDeliveryStore?.recordPullRequest(mapping);
+                await projectPolicyEvaluator?.handle(mapping);
+              },
+            ),
+          }
           : {}),
       },
     )

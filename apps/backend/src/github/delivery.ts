@@ -1,6 +1,7 @@
 import type { TaskWorkspace } from '../foundry/client.js';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
 import type { TaskStore } from '../factory/task-store.js';
+import type { GithubWebhookMapping } from './webhook-mapping.js';
 
 const apiUrl = 'https://api.github.com';
 const maxResponseBytes = 1024 * 1024;
@@ -13,6 +14,8 @@ interface DeliveryTask {
 interface PullRequest {
   number: number;
   reused: boolean;
+  headSha: string;
+  openedAt: string;
 }
 
 export type GitHubDeliveryResult =
@@ -92,14 +95,30 @@ async function request(
 }
 
 function pullRequest(value: unknown, repository: string, branch: string, baseBranch: string): PullRequest | null {
-  if (!object(value) || !object(value.head) || !object(value.head.repo) || !object(value.base) ||
-    value.state !== 'open' || value.merged === true ||
-    !Number.isSafeInteger(value.number) || (value.number as number) < 1 ||
-    value.head.ref !== branch || typeof value.head.repo.full_name !== 'string' ||
-    value.head.repo.full_name.toLowerCase() !== repository.toLowerCase() || value.base.ref !== baseBranch) {
+  if (!object(value)) return null;
+  const response = value;
+  if (!object(response.head) || !object(response.base)) return null;
+  const head = response.head;
+  const base = response.base;
+  if (!object(head.repo)) return null;
+  const headRepository = head.repo;
+  const headSha = head.sha;
+  const openedAt = response.created_at;
+  if (
+    response.state !== 'open' || response.merged === true ||
+    !Number.isSafeInteger(response.number) || (response.number as number) < 1 ||
+    head.ref !== branch || typeof headRepository.full_name !== 'string' ||
+    headRepository.full_name.toLowerCase() !== repository.toLowerCase() || base.ref !== baseBranch ||
+    typeof headSha !== 'string' || !/^[\da-f]{40}$/iu.test(headSha) ||
+    typeof openedAt !== 'string' || !Number.isFinite(Date.parse(openedAt))) {
     return null;
   }
-  return { number: value.number as number, reused: false };
+  return {
+    number: response.number as number,
+    reused: false,
+    headSha: headSha.toLowerCase(),
+    openedAt: new Date(openedAt).toISOString(),
+  };
 }
 
 async function findOpenPullRequest(
@@ -132,6 +151,7 @@ export function createGitHubDeliveryHandler(
   tasks: Pick<TaskStore, 'recordEvent'>,
   staticWebAppOrigin?: string,
   fetchImpl: typeof fetch = fetch,
+  onPullRequest?: (mapping: Extract<GithubWebhookMapping, { kind: 'pull_request' }>) => Promise<void>,
 ): (workspace: TaskWorkspace, task: DeliveryTask, gate?: TaskCompletionGate) => Promise<GitHubDeliveryResult> {
   return async ({ repository, defaultBranch, branch }, task, gate) => {
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository) ||
@@ -192,7 +212,7 @@ export function createGitHubDeliveryHandler(
             }, 6_000);
             const opened = pullRequest(created, repository, branch, defaultBranch);
             if (!opened) throw new Error('GitHub pull request response is invalid');
-            await recordOpenedPull(tasks, task.id, opened, branch, defaultBranch, repository);
+            await recordOpenedPull(tasks, task.id, opened, branch, defaultBranch, repository, onPullRequest);
             return { kind: 'opened' as const };
           } catch (error) {
             if (error instanceof GitHubDeliveryRequestError && error.status === 422) {
@@ -202,7 +222,7 @@ export function createGitHubDeliveryHandler(
               fetchImpl, repositoryPath, repository, branch, defaultBranch, owner!, token, 3_000,
             );
             if (reconciled) {
-              await recordOpenedPull(tasks, task.id, reconciled, branch, defaultBranch, repository);
+              await recordOpenedPull(tasks, task.id, reconciled, branch, defaultBranch, repository, onPullRequest);
               return { kind: 'opened' as const };
             }
             throw error;
@@ -234,8 +254,11 @@ export function createGitHubDeliveryHandler(
     }
 
     const recorded = gate
-      ? await gate(() => recordOpenedPull(tasks, task.id, pull, branch, defaultBranch, repository))
-      : { kind: 'ran' as const, value: await recordOpenedPull(tasks, task.id, pull, branch, defaultBranch, repository) };
+      ? await gate(() => recordOpenedPull(tasks, task.id, pull, branch, defaultBranch, repository, onPullRequest))
+      : {
+        kind: 'ran' as const,
+        value: await recordOpenedPull(tasks, task.id, pull, branch, defaultBranch, repository, onPullRequest),
+      };
     return recorded.kind === 'not_running' ? { kind: 'not_running' } : { kind: 'awaiting_policy' };
   };
 }
@@ -247,6 +270,7 @@ async function recordOpenedPull(
   branch: string,
   defaultBranch: string,
   repository: string,
+  onPullRequest?: (mapping: Extract<GithubWebhookMapping, { kind: 'pull_request' }>) => Promise<void>,
 ): Promise<void> {
   await tasks.recordEvent({
       taskId,
@@ -261,4 +285,14 @@ async function recordOpenedPull(
       },
       source: 'backend',
     });
+  await onPullRequest?.({
+    kind: 'pull_request',
+    repository,
+    number: pull.number,
+    branch,
+    headSha: pull.headSha,
+    state: 'open',
+    openedAt: pull.openedAt,
+    mergedAt: null,
+  });
 }
