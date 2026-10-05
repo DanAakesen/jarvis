@@ -355,6 +355,19 @@ phone voice layout belongs to P8-11. Focused checks:
 (44 passed), `npm run lint --workspace @jarvis/web`, and
 `npm run build --workspace @jarvis/web` (existing chunk-size advisory). Live
 Entra/API, physical phone hardware, and phone voice behavior remain unverified.
+P8-23 reused a scratch-only fixture with the real `VoiceControls`, `VoiceOrb`,
+`Workspace` and project CSS. Chromium captured desktop listening/thinking/
+speaking at 1440×900 in dark and light, and phone speaking at 390×844 in both
+appearances; the fixture used simulated voice state and labelled sample views.
+Checks covered the hidden Workspace heading/header Arrange, window menus, voice
+control names/tooltips, 320/280px overflow, hidden-document aurora pause,
+reduced-motion readability/static presentation, menu Escape with focus return,
+second Escape to end voice, End voice, and rapid entry/exit. No page errors or
+failed requests were observed. Screenshots are labelled fixture evidence, not
+live authentication, physical audio/camera, generated-window delivery or
+P8-16 tool-event acceptance. A representative desktop speaking capture was
+visually inspected; the other captures were checked for state/layout by the
+browser harness.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal
