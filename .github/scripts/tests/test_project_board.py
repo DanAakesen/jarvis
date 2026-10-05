@@ -34,6 +34,9 @@ class ProjectBoardTests(unittest.TestCase):
     def test_claimed_needs_decision_issue_is_in_progress(self):
         self.assertEqual(desired_status(issue(labels=["needs-decision", "Dan"]), []), "In progress")
 
+    def test_deferred_issue_stays_in_backlog(self):
+        self.assertEqual(desired_status(issue(labels=["deferred"]), []), "Backlog")
+
     def test_other_labels_are_ignored(self):
         self.assertEqual(desired_status(issue(labels=["P0"]), []), "Ready")
 
