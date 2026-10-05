@@ -75,6 +75,21 @@ async function appFor({
         getToken: async () => 'foundry-token',
         registerPhoneMediaRoute: phoneModule.registerMediaRoute,
       }),
+      {
+        id: 'phone-auth-test-routes',
+        tools: [],
+        registerRoutes: async (routes) => {
+          routes.post('/unrelated-event-grid', {
+            config: { jarvisPhoneEvents: true },
+          }, async () => ({ accepted: true }));
+          routes.post('/unrelated-phone-callback', {
+            config: { jarvisPhoneCallback: true },
+          }, async () => ({ accepted: true }));
+          routes.get('/unrelated-phone-media', {
+            config: { jarvisPhoneMedia: true },
+          }, async () => ({ accepted: true }));
+        },
+      },
     ],
     auth: async () => ({
       kind: 'jarvis-phone-event-grid',
@@ -174,5 +189,24 @@ describe('ACS phone call handling', () => {
     expect(response.statusCode).toBe(401);
     expect(answerCall).not.toHaveBeenCalled();
     expect(store.create).not.toHaveBeenCalled();
+  });
+
+  it('does not extend phone authentication to other routes', async () => {
+    const { app } = await appFor();
+    const eventGrid = { authorization: ['Bearer', 'event-grid.token.signature'].join(' ') };
+
+    expect((await app.inject({
+      method: 'POST',
+      url: '/unrelated-event-grid',
+      headers: eventGrid,
+    })).statusCode).toBe(403);
+    expect((await app.inject({
+      method: 'POST',
+      url: '/unrelated-phone-callback',
+    })).statusCode).toBe(401);
+    expect((await app.inject({
+      method: 'GET',
+      url: '/unrelated-phone-media',
+    })).statusCode).toBe(401);
   });
 });

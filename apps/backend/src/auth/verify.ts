@@ -45,7 +45,7 @@ export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey):
     let payload;
     try {
       ({ payload } = await jwtVerify(token, jwks, {
-        algorithms: ['RS256'], issuer, audience: [config.apiClientId, `api://${config.apiClientId}`],
+        algorithms: ['RS256'], issuer, audience: config.apiClientId,
         requiredClaims: ['exp', 'nbf', 'iat', 'tid', 'ver', 'oid'],
         clockTolerance: 5,
       }));

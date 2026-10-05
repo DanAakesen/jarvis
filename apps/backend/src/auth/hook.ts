@@ -59,7 +59,9 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
     if (request.routeOptions.url === '/health' && ['GET', 'HEAD'].includes(request.method)) return;
     if (request.routeOptions.config?.githubWebhook === true) return;
     if (request.routeOptions.config?.teamsBot === true || request.routeOptions.config?.teamsAudio === true) return;
-    if (request.routeOptions.config?.jarvisPhoneMedia === true ||
+    if (request.method === 'GET' && request.routeOptions.url === '/phone/media' &&
+        request.routeOptions.config?.jarvisPhoneMedia === true) return;
+    if (request.method === 'POST' && request.routeOptions.url === '/phone/callback' &&
         request.routeOptions.config?.jarvisPhoneCallback === true) return;
     // Only the CORS plugin's generated OPTIONS route may run without a token.
     // Explicit business OPTIONS endpoints still require authentication.
@@ -89,7 +91,10 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         if (request.routeOptions.config?.jarvisPcBridge !== true) throw new AuthenticationDenied(403);
         request.pcBridgePrincipal = principal;
       } else if (isPhoneEventGridPrincipal(principal)) {
-        if (request.routeOptions.config?.jarvisPhoneEvents !== true) throw new AuthenticationDenied(403);
+        if (request.method !== 'POST' || request.routeOptions.url !== '/phone/events' ||
+            request.routeOptions.config?.jarvisPhoneEvents !== true) {
+          throw new AuthenticationDenied(403);
+        }
         request.phoneEventGridPrincipal = principal;
       } else {
         if (request.routeOptions.config?.jarvisRunner === true ||

@@ -283,14 +283,25 @@ export function createTeamsNotificationService({
     const id = randomBytes(32).toString('base64url');
     const conversationId = reference?.conversation.id ?? browserConversationId;
     try {
-      await store.createConfirmation(
-        id,
-        ownerObjectId,
-        conversationId,
-        actionKind,
-        confirmationLifetimeSeconds,
-        phoneSessionContext.getStore() ?? null,
-      );
+      const phoneSessionId = phoneSessionContext.getStore();
+      if (phoneSessionId === undefined) {
+        await store.createConfirmation(
+          id,
+          ownerObjectId,
+          conversationId,
+          actionKind,
+          confirmationLifetimeSeconds,
+        );
+      } else {
+        await store.createConfirmation(
+          id,
+          ownerObjectId,
+          conversationId,
+          actionKind,
+          confirmationLifetimeSeconds,
+          phoneSessionId,
+        );
+      }
     } catch {
       throw new ToolRefusal(reference
         ? 'Teams confirmation is unavailable.'
