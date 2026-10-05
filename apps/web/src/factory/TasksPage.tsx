@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { backendFetch } from '../backend-request';
-import { Link } from 'react-router-dom';
+import { useConversationIntents } from '../conversation-intents';
 import { streamTaskEvents } from '../task-events';
+import { useContextPanel } from '../context-panel-state';
+import { TaskDetailPage } from './TaskDetailPage';
+import { TaskReleaseBar } from './TaskReleaseBar';
 import { TaskControls } from './TaskControls';
 
 interface Project {
@@ -215,6 +219,13 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [createProjectId, setCreateProjectId] = useState('');
   const [createAgent, setCreateAgent] = useState<Agent>('copilot');
   const [now, setNow] = useState(0);
+  const [selectedTaskId, setSelectedTaskId] = useState('');
+  const selectedTaskIdRef = useRef('');
+  const [conversationDraft, setConversationDraft] = useState('');
+  const conversationIntents = useConversationIntents();
+  const navigate = useNavigate();
+  const contextPanel = useContextPanel();
+  const closeContextPanel = contextPanel.close;
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const lastEventIds = useRef(new Map<string, string>());
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -228,6 +239,10 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const visibleTaskState: PageState = !backendUrl ? 'error' :
     settledTaskKey === taskRequestKey ? taskState : 'loading';
   const visibleTaskError = backendUrl ? error : 'Tasks are unavailable until the backend is deployed.';
+
+  useEffect(() => () => {
+    if (selectedTaskIdRef.current) closeContextPanel();
+  }, [closeContextPanel]);
 
   useEffect(() => {
     let active = true;
@@ -360,6 +375,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
       ...(modelOverride ? { modelOverride } : {}),
       ...(reasoningOverride ? { reasoningOverride } : {}),
     };
+
     try {
       const value = await request(backendUrl, getAccessToken, '/factory/tasks', 'POST', body);
       if (!isTask(value)) throw new Error('Jarvis returned invalid task data. Try again.');
@@ -373,6 +389,20 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     } finally {
       setCreating(false);
     }
+  };
+
+  const sendToJarvis = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const message = conversationDraft.trim();
+    if (!message || message.length > 20_000) return;
+    conversationIntents.sendMessage(message);
+    setConversationDraft('');
+    navigate('/');
+  };
+
+  const openVoiceStart = () => {
+    conversationIntents.focusVoiceStart();
+    navigate('/');
   };
 
   const streamValues = taskIds.split(',').filter(Boolean).map((id) => liveStatuses[id] ?? 'connecting');
@@ -466,6 +496,12 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
         <button className="secondary-button" type="submit">Apply filters</button>
       </form>
 
+      <TaskReleaseBar
+        backendUrl={backendUrl}
+        getAccessToken={getAccessToken}
+        projectId={appliedFilters.projectId}
+      />
+
       {visibleTaskState === 'loading' && <p className="tasks-feedback" role="status">Loading tasks…</p>}
       {visibleTaskState === 'error' && (
         <div className="tasks-feedback" role="alert">
@@ -499,8 +535,34 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                     : <ul className="task-card-list">
                       {items.map((task) => (
                         <li key={task.id}>
-                          <article className="task-card" data-state={task.state} aria-labelledby={`task-title-${task.id}`}>
-                            <h3 id={`task-title-${task.id}`}><Link to={`/factory/tasks/${task.id}`}>{task.title}</Link></h3>
+                          <article className="task-card" data-state={task.state} data-selected={selectedTaskId === task.id || undefined}
+                            aria-labelledby={`task-title-${task.id}`}>
+                            <h3 id={`task-title-${task.id}`}>
+                              <button
+                                className="task-card-title"
+                                type="button"
+                                aria-pressed={selectedTaskId === task.id}
+                                aria-controls="context-panel"
+                                onClick={(event) => {
+                                  const trigger = event.currentTarget;
+                                  selectedTaskIdRef.current = task.id;
+                                  setSelectedTaskId(task.id);
+                                  contextPanel.show({
+                                    title: task.title,
+                                    status: 'custom',
+                                    content: <TaskDetailPage
+                                      key={task.id}
+                                      backendUrl={backendUrl}
+                                      getAccessToken={getAccessToken}
+                                      taskId={task.id}
+                                      compact
+                                    />,
+                                  }, trigger);
+                                }}
+                              >
+                                {task.title}
+                              </button>
+                            </h3>
                             <dl className="task-card-details">
                               <div><dt>Project</dt><dd>{projectName(projects, task.projectId)}</dd></div>
                               <div><dt>Agent</dt><dd>{agentLabel(task.agent)}</dd></div>
@@ -533,6 +595,34 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
           <p className="task-data-note">Pull request, checks, and usage details will appear when those data sources are connected.</p>
         </>
       )}
+
+      <form className="factory-composer" onSubmit={sendToJarvis}>
+        <label className="visually-hidden" htmlFor="factory-ask-jarvis">Ask Jarvis</label>
+        <textarea
+          id="factory-ask-jarvis"
+          rows={1}
+          maxLength={20_000}
+          placeholder="Ask Jarvis"
+          value={conversationDraft}
+          onChange={(event) => setConversationDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+          aria-describedby="factory-composer-guidance"
+        />
+        <button className="primary-button" type="submit" disabled={!conversationDraft.trim()}>
+          Send
+        </button>
+        <button className="secondary-button" type="button" onClick={openVoiceStart}>
+          Start voice in Jarvis
+        </button>
+        <p id="factory-composer-guidance">
+          Sending opens the conversation and uses its normal message queue. Voice opens Jarvis with its explicit Start voice control focused; the microphone stays off until you activate it.
+        </p>
+      </form>
 
       {dialogOpen && (
         <div className="task-dialog-backdrop">

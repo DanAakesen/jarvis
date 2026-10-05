@@ -37,6 +37,13 @@ function AgentCommands() {
       })}>
         Jarvis reports a context error
       </button>
+      <button id="task-selection" type="button" onClick={(event) => panel.show({
+        title: 'Factory task',
+        status: 'custom',
+        content: <p>Task details stay in the shared panel.</p>,
+      }, event.currentTarget)}>
+        Select Factory task
+      </button>
       <button type="button" onClick={panel.close}>Jarvis closes the panel</button>
       <button type="button" onClick={() => panel.close()}>Close while focus is outside the panel</button>
       <button type="button" onClick={() => act(() => panel.close())}>Close by command</button>
@@ -107,5 +114,19 @@ describe('ContextPanel', () => {
 
     expect(screen.queryByRole('heading', { name: 'Research answer' })).toBeNull();
     expect(document.activeElement).toBe(closeCommand);
+  });
+
+  it('renders custom Factory details and returns focus to the selecting task', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    const selection = screen.getByRole('button', { name: 'Select Factory task' });
+    await user.click(selection);
+    expect(screen.getByText('Task details stay in the shared panel.')).not.toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Close context panel' }));
+
+    expect(screen.queryByText('Task details stay in the shared panel.')).toBeNull();
+    expect(document.activeElement).toBe(selection);
   });
 });

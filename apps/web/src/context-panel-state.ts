@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import type { ReactNode } from 'react';
 import type { GeneratedView } from '@jarvis/contracts';
 
 export type ContextPanelContent =
@@ -6,13 +7,14 @@ export type ContextPanelContent =
   | { title: string; status: 'loading'; message?: string }
   | { title: string; status: 'ready'; message: string }
   | { title: string; status: 'error'; message: string }
+  | { title: string; status: 'custom'; content: ReactNode }
   | { title: string; status: 'view'; view: GeneratedView; trustedBlobHost?: string };
 
 export interface ContextPanelController {
   content: ContextPanelContent;
   isOpen: boolean;
   close: () => void;
-  show: (content: ContextPanelContent) => void;
+  show: (content: ContextPanelContent, returnFocus?: HTMLElement | null) => void;
   toggle: () => void;
 }
 

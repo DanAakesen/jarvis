@@ -556,7 +556,7 @@ The number of theme presets follows the visual-system work.
 
 ## Approved Software Factory layout — 5 October 2026
 
-Dan selected the dark Task Lens board (image 2), added the project release bar from image 3 and retained the closable right task-details panel. He approved the combined image. [Approved mockup and requirements](docs/ui/software-factory/README.md) record the handoff for [issue #369](https://github.com/DanAakesen/jarvis/issues/369), P8-34. This is planned implementation, not evidence of a working screen.
+Dan selected the dark Task Lens board (image 2), added the project release bar from image 3 and retained the closable right task-details panel. He approved the combined image. [Approved mockup and requirements](docs/ui/software-factory/README.md) record the handoff for [issue #369](https://github.com/DanAakesen/jarvis/issues/369), P8-34. The implementation reuses current task/release data, preserves filters and board position when details open, and adapts to light appearance and phones. Dark/light desktop and phone Chromium fixture captures are in `docs/ui/screenshots/p8-34-fixture-*`; live integrations and physical-device behavior remain unverified.
 
 Reuse the thin shared rail, expandable navigation, bars, workspace tabs, Settings top-right and the existing conversation input. Preserve all six task states and real controls. The release bar is scoped to a selected project and uses existing release data; the panel reuses task detail, event, sandbox and usage data. Shared smoky glass follows #364. The 3D room and large orb remain exclusive to Jarvis. Missing data stays Not reported; subscription usage is not assigned an invented DKK price.
 

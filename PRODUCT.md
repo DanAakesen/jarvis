@@ -225,7 +225,7 @@ footer belongs only to screenshot fixtures and is absent from the production UI.
 
 The board shows up to 100 newest matching tasks. Pull request, checks, and usage are marked "Not reported" until their data sources are connected; the board does not infer values.
 
-P8-34 (#369) implements the approved board/release-bar/right-details composition. Selecting a task opens its existing task detail data in the contextual right pane while retaining filters and board position; Open full task keeps the complete timeline available. The release bar uses the existing authenticated project release source, never mixes data between projects, and shows honest loading/empty/unavailable/stale states. The approved mockup uses illustrative data and is not live product evidence.
+P8-34 (#369) implements the approved board/release-bar/right-details composition. Selecting a task opens its existing task detail data in the contextual right pane while retaining filters and board position; Open full task keeps the complete timeline available. The release bar uses the existing authenticated project release source, never mixes data between projects, and shows honest loading/empty/unavailable/stale states. The Factory Ask Jarvis composer hands messages to the existing conversation queue and focuses the explicit voice-start control without activating the microphone. These paths reuse existing contracts; fixture browser checks do not establish live Entra, backend, release, provider-usage, or voice behavior.
 
 #### Software Factory — task detail
 
