@@ -11,8 +11,8 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 import httpx
-from opentelemetry import trace
 from azure.ai.agentserver.invocations.voice import VoiceAgentServerHost
+from opentelemetry import trace
 from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 

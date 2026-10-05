@@ -6,7 +6,7 @@ import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
 import type { ConversationStore } from './conversation-store.js';
-import type { ReflexClassifier, ReflexTarget } from './reflex.js';
+import type { ReflexClassifier } from './reflex.js';
 import type { ToolCallStore } from './tool-calls.js';
 
 const config = loadConfig({});

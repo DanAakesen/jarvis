@@ -7,8 +7,12 @@ import type {
   ConversationLanguage,
   ConversationRole,
 } from './conversation-store.js';
-import { executeReflexAction, reflexTargets } from './reflex.js';
-import type { ReflexClassifier } from './reflex.js';
+import {
+  executeReflexAction,
+  reflexTargets,
+  type ReflexClassifier,
+  type ReflexTarget,
+} from './reflex.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const chatReflexBudgetMs = 800;
@@ -108,18 +112,26 @@ async function runChatReflex(
   const classificationSignal = AbortSignal.any([signal, budgetController.signal]);
   try {
     const targetsStartedAt = performance.now();
-    const targets = await reflexTargets(request, text);
-    logChatLatency(request, 'reflex_targets', targetsStartedAt);
+    let targets: ReflexTarget[];
+    try {
+      targets = await reflexTargets(request, text);
+    } finally {
+      logChatLatency(request, 'reflex_targets', targetsStartedAt);
+    }
     if (classificationSignal.aborted) return;
 
     const jevStartedAt = performance.now();
-    const classification = await classifier.classify(
-      text,
-      language,
-      targets,
-      classificationSignal,
-    );
-    logChatLatency(request, 'jev', jevStartedAt);
+    let classification: Awaited<ReturnType<ReflexClassifier['classify']>>;
+    try {
+      classification = await classifier.classify(
+        text,
+        language,
+        targets,
+        classificationSignal,
+      );
+    } finally {
+      logChatLatency(request, 'jev', jevStartedAt);
+    }
     if (classificationSignal.aborted) return;
     await executeReflexAction(classification, request, messageId, signal);
   } catch {

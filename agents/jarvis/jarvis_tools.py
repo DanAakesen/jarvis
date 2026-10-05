@@ -348,7 +348,9 @@ class BackendToolClient:
                     "GET", f"{self._base_url}/factory/context", headers=headers
                 ) as response:
                     if response.status_code != 200:
-                        raise RuntimeError(f"GET /factory/context returned HTTP {response.status_code}")
+                        raise RuntimeError(
+                            f"GET /factory/context returned HTTP {response.status_code}"
+                        )
                     body = json.loads(await _read_bounded(response))
                 if not isinstance(body, dict):
                     raise ValueError("invalid turn context")

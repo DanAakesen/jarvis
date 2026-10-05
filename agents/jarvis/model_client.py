@@ -286,10 +286,22 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             },
         ) as span:
             try:
-                catalogue, context = await asyncio.gather(
-                    self._tools.tools(),
-                    self._tools.context(),
-                )
+                catalogue_task = asyncio.create_task(self._tools.tools())
+                context_task = asyncio.create_task(self._tools.context())
+                try:
+                    catalogue, context = await asyncio.gather(
+                        catalogue_task,
+                        context_task,
+                    )
+                except BaseException:
+                    catalogue_task.cancel()
+                    context_task.cancel()
+                    await asyncio.gather(
+                        catalogue_task,
+                        context_task,
+                        return_exceptions=True,
+                    )
+                    raise
                 with _tracer.start_as_current_span("prompt_build") as prompt_span:
                     model_input: list[Any] = [
                         {"role": message.role, "content": message.content}
@@ -339,12 +351,16 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 if event.type == "response.output_text.delta" and event.delta:
                                     if first_text_ms is None:
                                         first_text_ms = int((time.monotonic() - started) * 1000)
-                                        model_span.set_attribute("first_text.duration_ms", first_text_ms)
+                                        model_span.set_attribute(
+                                            "first_text.duration_ms", first_text_ms
+                                        )
                                     yield event.delta
                                 elif event.type == "response.completed":
                                     final = event.response
                                     break
-                                elif event.type in {"error", "response.failed", "response.incomplete"}:
+                                elif event.type in {
+                                    "error", "response.failed", "response.incomplete"
+                                }:
                                     raise RuntimeError("Foundry model response did not complete")
                         model_span.set_attribute(
                             "duration_ms",
