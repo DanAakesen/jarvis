@@ -37,7 +37,7 @@ const tablesInSchema = [
   'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects', 'pull_requests', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks',
   'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage',
-  'webhook_deliveries', 'workflow_runs',
+  'webhook_deliveries', 'workflow_runs', 'workspace_artifacts',
 ];
 
 async function tables(): Promise<string[]> {
@@ -1261,6 +1261,27 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(call).toBeDefined();
     // Remove the row so the revert-all test below can run 0018's guarded down script.
     await pool.request().query(`DELETE dbo.tool_calls WHERE id = ${String(call)}`);
+  });
+
+  it('preserves steering metadata when reverting migration 0020', async () => {
+    const committed = await readMigrations();
+    const session = await scalar("INSERT dbo.jarvis_sessions (channel, language) VALUES (N'chat', N'en')");
+    const message = await scalar(`INSERT dbo.messages
+      (jarvis_session_id, role, text, language, interrupted)
+      VALUES (${String(session)}, N'jarvis', N'Partial reply', N'en', 1)`);
+    const down = await readDownMigration('0020_chat_message_steering.sql');
+
+    await expect(revertMigration(pool, committed, down))
+      .rejects.toThrow('Message language and interruption data must be retained');
+    expect((await pool.request().query(
+      `SELECT language, interrupted FROM dbo.messages WHERE id = ${String(message)}`,
+    )).recordset).toEqual([{ language: 'en', interrupted: true }]);
+
+    await pool.request().query(
+      `UPDATE dbo.messages SET language = NULL, interrupted = 0 WHERE id = ${String(message)}`,
+    );
+    expect(await revertMigration(pool, committed, down)).toBe(down.name);
+    expect(await applyMigrations(pool, committed)).toEqual([down.name]);
   });
 
   it('refuses to revert a migration that is not the latest applied one and keeps state on failure', async () => {

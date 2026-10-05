@@ -74,6 +74,37 @@ describe("Foundry runner wire contract", () => {
     expect(request(fetch).body).toEqual({ agent: "codex", mode: "renew-codex", min_days_left: 3 });
   });
 
+  it("starts a Codex tool invocation without repository workspace fields", async () => {
+    const { client, fetch } = setup({
+      ...(fixtures["task_start"] as object), agent: "codex", mode: "codex-tool",
+    });
+    const accepted = await client.startCodexTool({
+      task: "A quiet sea at sunrise",
+      artifactUploadKey: "a".repeat(43),
+      model: "gpt-5.5",
+    });
+    expect(accepted.agent).toBe("codex");
+    expect(request(fetch).body).toEqual({
+      agent: "codex",
+      mode: "codex-tool",
+      task: "A quiet sea at sunrise",
+      artifact_upload_key: "a".repeat(43),
+      model: "gpt-5.5",
+    });
+    expect(request(fetch).body).not.toHaveProperty("repository");
+  });
+
+  it("rejects oversized Codex tool prompts and malformed upload keys before network calls", async () => {
+    const { client, fetch } = setup();
+    await expect(client.startCodexTool({
+      task: "x".repeat(4097), artifactUploadKey: "a".repeat(43),
+    })).rejects.toBeInstanceOf(TypeError);
+    await expect(client.startCodexTool({
+      task: "Draw", artifactUploadKey: "not-a-key",
+    })).rejects.toBeInstanceOf(TypeError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("starts an isolated Codex web research tool invocation", async () => {
     const { client, fetch } = setup({ ...(fixtures["task_start"] as object), agent: "codex" });
     const query = "Research this safely; do not run $(commands)";

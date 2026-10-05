@@ -45,6 +45,11 @@ export interface TaskWorkspace {
 export type TaskRequest = TaskWorkspace & (
   | { agent: "copilot"; task: string; taskId?: string; model?: string }
   | { agent: "codex"; task: string; taskId?: string; model?: string; reasoning?: string });
+export interface CodexToolRequest {
+  task: string;
+  artifactUploadKey: string;
+  model?: string;
+}
 export interface InvocationAccepted {
   invocationId: string;
   sessionId: string;
@@ -236,15 +241,34 @@ export class FoundryClient {
     return this.accepted(body, "renew-codex", undefined, "codex");
   }
 
+  async startCodexTool(request: CodexToolRequest, options?: RequestOptions): Promise<InvocationAccepted>;
+  async startCodexTool(tool: CodexToolName, query: string, model: string, options?: RequestOptions): Promise<InvocationAccepted>;
   async startCodexTool(
-    tool: CodexToolName,
-    query: string,
-    model: string,
-    options: RequestOptions = {},
+    requestOrTool: CodexToolRequest | CodexToolName,
+    optionsOrQuery: RequestOptions | string = {},
+    model?: string,
+    researchOptions: RequestOptions = {},
   ): Promise<InvocationAccepted> {
-    const body = await this.runtimeRequest(
-      "codex-tool", "protocols/invocations", "POST", codexToolRequest(tool, query, model), undefined, options,
-    );
+    if (typeof requestOrTool === "string") {
+      if (typeof optionsOrQuery !== "string" || model === undefined) throw new TypeError("Invalid Codex tool request");
+      const body = await this.runtimeRequest(
+        "codex-tool", "protocols/invocations", "POST",
+        codexToolRequest(requestOrTool, optionsOrQuery, model), undefined, researchOptions,
+      );
+      return this.accepted(body, "codex-tool", undefined, "codex");
+    }
+    const task = text(requestOrTool.task, "task");
+    if (task.length > 4096 || !/^[A-Za-z0-9_-]{43}$/u.test(requestOrTool.artifactUploadKey)) {
+      throw new TypeError("Invalid Codex tool request");
+    }
+    const imageModel = option(requestOrTool.model, "model", 100);
+    const body = await this.runtimeRequest("codex-tool", "protocols/invocations", "POST", {
+      agent: "codex",
+      mode: "codex-tool",
+      task,
+      artifact_upload_key: requestOrTool.artifactUploadKey,
+      ...(imageModel === undefined ? {} : { model: imageModel }),
+    }, undefined, typeof optionsOrQuery === "string" ? {} : optionsOrQuery);
     return this.accepted(body, "codex-tool", undefined, "codex");
   }
 

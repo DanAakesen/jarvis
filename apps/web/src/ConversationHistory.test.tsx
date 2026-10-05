@@ -9,8 +9,9 @@ import { useJarvisActivity } from './activity-context';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
 import type { VoiceClientOptions } from './voice-client';
 
-const { loadConversationHistory, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
+const { loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
   loadConversationHistory: vi.fn(),
+  loadImageArtifactUrl: vi.fn(),
   createChatSession: vi.fn(),
   sendChatTurn: vi.fn(),
   steerChatTurn: vi.fn(),
@@ -18,7 +19,7 @@ const { loadConversationHistory, createChatSession, sendChatTurn, steerChatTurn,
 }));
 vi.mock('./conversation-history', async (importOriginal) => ({
   ...await importOriginal<typeof import('./conversation-history')>(),
-  loadConversationHistory, createChatSession, sendChatTurn, steerChatTurn,
+  loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn,
 }));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
@@ -88,6 +89,7 @@ function ActivityProbe() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  loadImageArtifactUrl.mockReset();
   voiceSessions.length = 0;
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
   createChatSession.mockResolvedValue(session);
@@ -113,6 +115,27 @@ describe('ConversationHistory', () => {
     expect(screen.getAllByText(/voice minutes/u)).toHaveLength(1);
     expect(screen.getByText('factory_create_task · ok')).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Task #77' }).getAttribute('href')).toBe('/factory/tasks/77');
+  });
+
+  it('shows a saved generated image inline in conversation history', async () => {
+    const artifactId = '7b96c6a9-9f80-4a8b-8a73-51517fe37512';
+    loadConversationHistory.mockResolvedValue({
+      messages: [{
+        ...message,
+        toolCalls: [{
+          id: '91', tool: 'image_generation', outcome: 'ok', taskId: null, artifactId,
+        }],
+      }],
+      nextCursor: null,
+    });
+    loadImageArtifactUrl.mockResolvedValue(
+      'https://jarvisstore.blob.core.windows.net/artifacts/workspace-images/image.png?sp=r&spr=https',
+    );
+    renderConversation();
+
+    const image = await screen.findByRole('img', { name: 'Generated image' });
+    expect(image.getAttribute('src')).toContain('blob.core.windows.net/artifacts/workspace-images/image.png');
+    expect(loadImageArtifactUrl).toHaveBeenCalledWith(client, config, artifactId, expect.any(AbortSignal));
   });
 
   it('renders safe Markdown only for Jarvis history', async () => {

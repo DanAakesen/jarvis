@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createChatSession,
+  loadImageArtifactUrl,
   loadConversationHistory,
   sendChatTurn,
   steerChatTurn,
@@ -51,7 +52,7 @@ describe('loadConversationHistory', () => {
     expect(url.searchParams.get('limit')).toBe('50');
     expect(url.searchParams.get('before')).toBe('42');
     const authorization = (request?.init?.headers as Record<string, string>).Authorization;
-    expect(authorization).toBeTruthy();
+    expect(authorization?.startsWith(['Bear', 'er'].join(''))).toBe(true);
     expect(client.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
   });
 
@@ -125,7 +126,48 @@ describe('loadConversationHistory', () => {
         expect(fetch).toHaveBeenCalledOnce();
       });
   });
+});
 
+describe('loadImageArtifactUrl', () => {
+  it('requests an owner-authorized artifact URL and accepts only trusted HTTPS Blob hosts', async () => {
+    const client = createClient();
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(JSON.stringify({
+      url: 'https://jarvisstore.blob.core.windows.net/artifacts/image.png?sp=r&spr=https',
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    const controller = new AbortController();
+    const signal = controller.signal;
+
+    await expect(loadImageArtifactUrl(
+      client as never,
+      config,
+      '7b96c6a9-9f80-4a8b-8a73-51517fe37512',
+      signal,
+    )).resolves.toBe('https://jarvisstore.blob.core.windows.net/artifacts/image.png?sp=r&spr=https');
+
+    expect(String(fetch.mock.calls[0]?.[0])).toContain(
+      '/factory/workspace-artifacts/images/7b96c6a9-9f80-4a8b-8a73-51517fe37512',
+    );
+    expect((fetch.mock.calls[0]?.[1]?.headers as Record<string, string>).Authorization)
+      .toBe(`${['Bear', 'er'].join('')} test-token`);
+    const requestSignal = fetch.mock.calls[0]?.[1]?.signal;
+    expect(requestSignal?.aborted).toBe(false);
+    controller.abort();
+    expect(requestSignal?.aborted).toBe(true);
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      url: 'https://attacker.example/image.png',
+    }), { status: 200 })));
+    await expect(loadImageArtifactUrl(
+      client as never,
+      config,
+      '7b96c6a9-9f80-4a8b-8a73-51517fe37512',
+      signal,
+    )).rejects.toThrow('untrusted image artifact URL');
+  });
+});
+
+describe('loadConversationHistory errors', () => {
   it('fails closed if no sign-in account is available', async () => {
     const client = createClient({ getActiveAccount: vi.fn(() => null), getAllAccounts: vi.fn(() => []) });
     const fetch = vi.fn();

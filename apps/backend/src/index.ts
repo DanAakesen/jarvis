@@ -85,6 +85,8 @@ import { createTeamsNotificationService } from './teams/service.js';
 import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
 import { startGraphPresenceMonitor } from './graph/presence-monitor.js';
+import { createImageGenerationModule } from './core/image-generation.js';
+import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
 
 try {
   const config = loadConfig();
@@ -282,6 +284,17 @@ try {
       ),
     )
     : undefined;
+  const workspaceArtifactServiceClient = database && archiveStorageAccount && credential
+    ? new BlobServiceClient(`https://${archiveStorageAccount}.blob.core.windows.net`, credential)
+    : undefined;
+  const workspaceArtifacts = database && archiveStorageAccount && workspaceArtifactServiceClient
+    ? new WorkspaceArtifactStore({
+      pool: database.pool,
+      serviceClient: workspaceArtifactServiceClient,
+      container: workspaceArtifactServiceClient.getContainerClient('artifacts'),
+      storageAccount: archiveStorageAccount,
+    })
+    : undefined;
   const taskEventArchiveJob = taskEventArchive
     ? createTaskEventArchiveJob(taskEventArchive, () => logger.warn('task_event_archive.failed'))
     : undefined;
@@ -451,6 +464,13 @@ try {
     }),
   ];
   if (browserAgent) modules.push(createBrowserAgentModule(browserAgent));
+  if (workspaceArtifacts && config.foundryEndpoints && config.foundryRunnerAgentName) {
+    modules.push(createImageGenerationModule({
+      runner: clientFor(config.foundryRunnerAgentName),
+      artifacts: workspaceArtifacts,
+      model: config.codexImageModel,
+    }));
+  }
   if (memoryStore) {
     modules.push(createMemoryModule({
       store: memoryStore,

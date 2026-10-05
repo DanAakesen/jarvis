@@ -19,8 +19,17 @@ export interface UsageEntry {
   estimated: boolean;
 }
 
+export interface DailyToolCount {
+  tool: string;
+  count: string;
+}
+
 export interface UsageStore {
-  list(from: Date | null, to: Date): Promise<{ entries: UsageEntry[]; totalEntries: string }>;
+  list(from: Date | null, to: Date): Promise<{
+    entries: UsageEntry[];
+    totalEntries: string;
+    dailyToolCounts?: DailyToolCount[];
+  }>;
 }
 
 const periodDays: Record<UsagePeriod, number | null> = {
@@ -63,12 +72,17 @@ export async function registerUsageRoutes(app: FastifyInstance) {
         request.log.warn('usage.codex_tool_counts_unavailable');
       }
     }
+    const { dailyToolCounts = [], ...usageReport } = report;
     const result = {
       period,
       from: from?.toISOString() ?? null,
       to: to.toISOString(),
+      ...usageReport,
+      dailyToolUsage: {
+        date: to.toISOString().slice(0, 10),
+        tools: dailyToolCounts,
+      },
       codexToolCallsToday,
-      ...report,
       truncated: BigInt(report.totalEntries) > BigInt(report.entries.length),
     };
     if (Buffer.byteLength(JSON.stringify(result)) > maxResponseBytes) {
