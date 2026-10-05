@@ -32,9 +32,9 @@
   --warning-text: #593a16;
   --success-wash: #dfeddf;
   --error-wash: #f6e0dc;
-  --primary-action: #276d6f;
-  --primary-action-hover: #1d585a;
-  --primary-action-text: #ffffff;
+  --primary-action: var(--theme-accent, #276d6f);
+  --primary-action-hover: var(--theme-accent, #1d585a);
+  --primary-action-text: var(--theme-accent-foreground, #ffffff);
   --primary-action-disabled: #5e675f;
   --primary-action-disabled-text: #ffffff;
   --success: #276136;
@@ -44,7 +44,7 @@
   --state-reconnecting: #526d24;
   --state-unavailable: #a4262c;
   --orb-shadow: rgb(13 26 32 / 16%);
-  --orb-highlight: rgb(255 255 255 / 22%);
+  --orb-highlight: var(--theme-accent-secondary, rgb(255 255 255 / 22%));
   --code-surface: #f0e9df;
   --feedback-sheen: rgb(39 109 111 / 10%);
   --ambient-field:
@@ -63,16 +63,31 @@
   --pending-surface: #e8f0fb;
   --error-surface: #fbe9e9;
   --overlay: rgb(32 37 44 / 52%);
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
-  --radius-control: 10px;
-  --radius-panel: 18px;
-  --radius-window: 24px;
+  --stage-background: #e7edef;
+  --stage-floor: #b9cbd0;
+  --stage-wall: color-mix(in srgb, var(--theme-surface-tint, #c8d4d6) 20%, #c8d4d6);
+  --stage-inset: #9db4bb;
+  --stage-amber: #a07845;
+  --stage-metal: #607c85;
+  --stage-seam: var(--theme-accent-secondary, #14768d);
+  --stage-hemisphere: #f5fbf7;
+  --stage-ground: #738c94;
+  --stage-key: #fff6e8;
+  --stage-rim: var(--theme-accent-secondary, #388da0);
+  --stage-orb: var(--theme-accent, #14768d);
+  --stage-reflector: #c1d3d7;
+  --stage-exposure: 1.18;
+  --stage-glow: var(--theme-glow, 1);
+  --space-1: calc(4px * var(--theme-density-scale, 1));
+  --space-2: calc(8px * var(--theme-density-scale, 1));
+  --space-3: calc(12px * var(--theme-density-scale, 1));
+  --space-4: calc(16px * var(--theme-density-scale, 1));
+  --space-5: calc(24px * var(--theme-density-scale, 1));
+  --space-6: calc(32px * var(--theme-density-scale, 1));
+  --space-7: calc(48px * var(--theme-density-scale, 1));
+  --radius-control: var(--theme-radius, 10px);
+  --radius-panel: var(--theme-radius, 18px);
+  --radius-window: var(--theme-radius, 24px);
   --radius-pill: 999px;
   --motion-press: 140ms;
   --motion-state: 260ms;
@@ -101,10 +116,10 @@
   --warning-text: #ffe1bd;
   --success-wash: #18372a;
   --error-wash: #47292c;
-  --primary-action: #79ffd7;
-  --primary-action-hover: #a1ffe3;
+  --primary-action: var(--theme-accent, #79ffd7);
+  --primary-action-hover: var(--theme-accent, #a1ffe3);
   --primary-action-disabled: #46514f;
-  --primary-action-text: #071b18;
+  --primary-action-text: var(--theme-accent-foreground, #071b18);
   --primary-action-disabled-text: #e3eeeb;
   --success: #a0e6b2;
   --state-listening: #79ffd7;
@@ -113,7 +128,7 @@
   --state-reconnecting: #c8e985;
   --state-unavailable: #ff8791;
   --orb-shadow: rgb(0 0 0 / 46%);
-  --orb-highlight: rgb(255 255 255 / 18%);
+  --orb-highlight: var(--theme-accent-secondary, rgb(255 255 255 / 18%));
   --code-surface: #101720;
   --feedback-sheen: rgb(255 230 206 / 9%);
   --ambient-field:
@@ -131,6 +146,46 @@
   --pending-surface: #24354c;
   --error-surface: #3b2023;
   --overlay: rgb(0 0 0 / 72%);
+  --stage-background: #030b13;
+  --stage-floor: #0b1d29;
+  --stage-wall: color-mix(in srgb, var(--theme-surface-tint, #101f2d) 20%, #101f2d);
+  --stage-inset: #1c3548;
+  --stage-amber: #b18b54;
+  --stage-metal: #738d9d;
+  --stage-seam: var(--theme-accent-secondary, #52c7dc);
+  --stage-hemisphere: #a2d6f2;
+  --stage-ground: #081522;
+  --stage-key: #c2e5ff;
+  --stage-rim: var(--theme-accent-secondary, #55bace);
+  --stage-orb: var(--theme-accent, #52dcfa);
+  --stage-reflector: #526b80;
+  --stage-exposure: 1;
+}
+
+:root[data-background="living-aurora"] { --ambient-opacity: .84; }
+:root[data-background="daylight-studio"] { --ambient-opacity: 1; }
+:root[data-motion="calm"] {
+  --motion-press: 210ms;
+  --motion-state: 390ms;
+  --motion-panel: 630ms;
+  --motion-fade: 240ms;
+  --motion-ambient: 51s;
+}
+:root[data-motion="reduced"] {
+  --motion-press: 0ms;
+  --motion-state: 0ms;
+  --motion-panel: 0ms;
+  --motion-fade: 0ms;
+  --motion-ambient: 0ms;
+}
+:root[data-motion="reduced"] .app-shell::before,
+:root[data-motion="reduced"] .topbar-working-mark,
+:root[data-motion="reduced"] .activity-running::before,
+:root[data-motion="reduced"] .workspace-window-jarvis-updating::after,
+:root[data-motion="reduced"] .voice-orb span,
+:root[data-motion="reduced"] .voice-orb span::before,
+:root[data-motion="reduced"] .voice-orb span::after {
+  animation: none !important;
 }
 
 * { box-sizing: border-box; }

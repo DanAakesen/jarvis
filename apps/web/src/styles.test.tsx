@@ -115,4 +115,30 @@ describe('shared glass tokens', () => {
 
     expect(tokenValue(source, ':root', '--font-heading')).toBe('var(--font-body)');
   });
+
+  it('gives the empty conversation readable glass placement clear of the orb', () => {
+    const styles = readFileSync('src/ConversationHistory.css', 'utf8');
+    const greeting = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'background');
+    const greetingPosition = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'right');
+    const headingFont = ruleDeclaration(styles, /\.conversation-greeting h2\s*\{([^}]*)\}/, 'font-family');
+    const summary = ruleDeclaration(styles, /\.conversation-overview > summary\s*\{([^}]*)\}/, 'background');
+
+    expect(greeting).toBe('var(--surface-translucent)');
+    expect(greetingPosition).toBe('12px');
+    expect(headingFont).toBe('var(--font-heading)');
+    expect(summary).toBe('var(--surface-translucent)');
+    expect(styles).toContain('top: clamp(16px, 12vh, 100px)');
+    expect(styles).toContain('@media (max-width: 600px)');
+  });
+
+  it('keeps theme-aware stage materials in the shared semantic CSS source', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+
+    for (const token of ['--stage-background', '--stage-floor', '--stage-wall', '--stage-inset',
+      '--stage-metal', '--stage-seam', '--stage-amber', '--stage-hemisphere', '--stage-ground',
+      '--stage-key', '--stage-rim', '--stage-orb', '--stage-reflector', '--stage-exposure']) {
+      expect(tokenValue(source, ':root', token)).toBeTruthy();
+      expect(tokenValue(source, ':root\\[data-theme="dark"\\]', token)).toBeTruthy();
+    }
+  });
 });

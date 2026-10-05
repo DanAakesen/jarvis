@@ -109,6 +109,7 @@ export function ConversationHistory({
   children,
   screenShare,
   camera,
+  motionReduced = false,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
@@ -116,6 +117,7 @@ export function ConversationHistory({
   children?: ReactNode;
   screenShare?: ScreenShareController;
   camera?: CameraController;
+  motionReduced?: boolean;
 }) {
   const { onVoiceActiveChange } = useVoiceWorkspace();
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
@@ -159,13 +161,13 @@ export function ConversationHistory({
       setVoiceActive(active);
       onVoiceActiveChange(active);
     };
-    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const reduceMotion = motionReduced || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     if (document.startViewTransition && !reduceMotion) {
       document.startViewTransition(update);
     } else {
       update();
     }
-  }, [onVoiceActiveChange]);
+  }, [motionReduced, onVoiceActiveChange]);
 
   useLayoutEffect(() => {
     const textarea = input.current;

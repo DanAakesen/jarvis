@@ -24,6 +24,7 @@ type ThemePalette = {
   inset: string;
   metal: string;
   seam: string;
+  amber: string;
   hemisphere: string;
   ground: string;
   key: string;
@@ -31,40 +32,36 @@ type ThemePalette = {
   orb: string;
   reflector: number;
   exposure: number;
+  glow: number;
 };
 
-const palettes: Record<ThemeMode, ThemePalette> = {
-  dark: {
-    background: '#030b13',
-    floor: '#0b1d29',
-    wall: '#101f2d',
-    inset: '#1c3548',
-    metal: '#738d9d',
-    seam: '#52c7dc',
-    hemisphere: '#a2d6f2',
-    ground: '#081522',
-    key: '#c2e5ff',
-    rim: '#55bace',
-    orb: '#52dcfa',
-    reflector: 0x526b80,
-    exposure: 1,
-  },
-  light: {
-    background: '#e7edef',
-    floor: '#b9cbd0',
-    wall: '#c8d4d6',
-    inset: '#9db4bb',
-    metal: '#607c85',
-    seam: '#14768d',
-    hemisphere: '#f5fbf7',
-    ground: '#738c94',
-    key: '#fff6e8',
-    rim: '#388da0',
-    orb: '#14768d',
-    reflector: 0xc1d3d7,
-    exposure: 1.18,
-  },
-};
+type ThemeColor = Exclude<keyof ThemePalette, 'reflector' | 'exposure' | 'glow'>;
+
+function readStagePalette(): ThemePalette {
+  const style = window.getComputedStyle(document.documentElement);
+  const color = (role: ThemeColor | 'reflector') => style.getPropertyValue(`--stage-${role}`).trim();
+  const number = (role: 'exposure' | 'glow', fallback: number) => {
+    const value = Number.parseFloat(style.getPropertyValue(`--stage-${role}`));
+    return Number.isFinite(value) ? value : fallback;
+  };
+  return {
+    background: color('background'),
+    floor: color('floor'),
+    wall: color('wall'),
+    inset: color('inset'),
+    metal: color('metal'),
+    seam: color('seam'),
+    amber: color('amber'),
+    hemisphere: color('hemisphere'),
+    ground: color('ground'),
+    key: color('key'),
+    rim: color('rim'),
+    orb: color('orb'),
+    reflector: new THREE.Color(color('reflector')).getHex(),
+    exposure: number('exposure', 1),
+    glow: number('glow', 1),
+  };
+}
 
 export function createJarvisStageScene(
   host: HTMLElement,
@@ -130,49 +127,47 @@ function createJarvisStageSceneWithRenderer(
   let activityPosition = 0;
   let activityVelocity = 0;
 
-  const themeMaterials: { material: THREE.MeshStandardMaterial; dark: string; light: string }[] = [];
+  let palette = readStagePalette();
+  const themeMaterials: { material: THREE.MeshStandardMaterial; role: ThemeColor }[] = [];
   const standard = (
-    dark: string,
-    light: string,
+    role: ThemeColor,
     options: Partial<Pick<THREE.MeshStandardMaterialParameters, 'metalness' | 'roughness' | 'side' | 'emissive'>> = {},
   ) => {
-    const material = new THREE.MeshStandardMaterial({ color: dark, ...options });
-    themeMaterials.push({ material, dark, light });
+    const material = new THREE.MeshStandardMaterial({ color: palette[role], ...options });
+    themeMaterials.push({ material, role });
     return material;
   };
   const glow = new THREE.MeshBasicMaterial({ color: '#8bdce8', transparent: true, opacity: 0.52 });
   const cyan = new THREE.MeshBasicMaterial({ color: '#74e5ef', transparent: true, opacity: 0.88 });
   const warm = new THREE.MeshBasicMaterial({ color: '#e6ba79', transparent: true, opacity: 0.46 });
-  const metal = standard('#738d9d', '#607c85', { metalness: 0.88, roughness: 0.24 });
-  const darkMetal = standard('#101f2d', '#c8d4d6', {
+  const metal = standard('metal', { metalness: 0.88, roughness: 0.24 });
+  const darkMetal = standard('wall', {
     metalness: 0.62, roughness: 0.42, side: THREE.DoubleSide,
   });
-  const inset = standard('#1c3548', '#9db4bb', {
+  const inset = standard('inset', {
     metalness: 0.76, roughness: 0.3, side: THREE.DoubleSide,
   });
-  const seam = standard('#52c7dc', '#14768d', {
-    metalness: 0.78, roughness: 0.22, emissive: '#164651',
+  const seam = standard('seam', {
+    metalness: 0.78, roughness: 0.22, emissive: palette.seam,
   });
-  const gold = standard('#b18b54', '#a07845', {
-    metalness: 0.85, roughness: 0.28, emissive: '#bf7134',
-  });
+  const gold = standard('amber', { metalness: 0.85, roughness: 0.28, emissive: '#bf7134' });
 
-  const hemisphere = new THREE.HemisphereLight('#a2d6f2', '#081522', 0.56);
+  const hemisphere = new THREE.HemisphereLight(palette.hemisphere, palette.ground, 0.56);
   scene.add(hemisphere);
-  const key = new THREE.DirectionalLight('#c2e5ff', 1.1);
+  const key = new THREE.DirectionalLight(palette.key, 1.1);
   key.position.set(-4, 8, 4);
   scene.add(key);
-  const rim = new THREE.DirectionalLight('#55bace', 0.55);
+  const rim = new THREE.DirectionalLight(palette.rim, 0.55);
   rim.position.set(6, 2, -5);
   scene.add(rim);
 
-  const floorMaterial = standard('#0b1d29', '#b9cbd0', { metalness: 0.8, roughness: 0.31 });
+  const floorMaterial = standard('floor', { metalness: 0.8, roughness: 0.31 });
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), floorMaterial);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -0.3;
   scene.add(floor);
   const reflection = new Reflector(new THREE.PlaneGeometry(90, 90), {
-    color: palettes.dark.reflector,
+    color: palette.reflector,
     textureWidth: 768,
     textureHeight: 768,
     multisample: 0,
@@ -355,7 +350,7 @@ function createJarvisStageSceneWithRenderer(
   const particleUniforms = {
     uTime: { value: 0 },
     uOrb: { value: new THREE.Vector3() },
-    uColor: { value: new THREE.Color(palettes.dark.orb) },
+    uColor: { value: new THREE.Color(palette.orb) },
     uPower: { value: 0.3 },
   };
   const particles = new THREE.Points(particleGeometry, new THREE.ShaderMaterial({
@@ -382,29 +377,30 @@ function createJarvisStageSceneWithRenderer(
   const orbRig = new THREE.Group();
   orbRig.add(orbVisual.orb);
   scene.add(orbRig);
-  const orbLight = new THREE.PointLight(palettes.dark.orb, 100, 26, 2);
+  const orbLight = new THREE.PointLight(palette.orb, 100, 26, 2);
   scene.add(orbLight);
   const amberLight = new THREE.PointLight('#ff984c', 4, 10, 2);
   scene.add(amberLight);
-  const wallLight = new THREE.SpotLight(palettes.dark.orb, 100, 45, 0.83, 0.85, 2);
+  const wallLight = new THREE.SpotLight(palette.orb, 100, 45, 0.83, 0.85, 2);
   scene.add(wallLight, wallLight.target);
 
   const cameraRay = new THREE.Vector3();
   const orbWorld = new THREE.Vector3();
   const themeColors = { current: new THREE.Color(), orb: new THREE.Color() };
 
-  function setTheme(theme: ThemeMode) {
-    const palette = palettes[theme];
-    scene.fog = new THREE.FogExp2(palette.background, theme === 'dark' ? 0.015 : 0.012);
+  function setTheme() {
+    palette = readStagePalette();
+    scene.fog = new THREE.FogExp2(palette.background, current.theme === 'dark' ? 0.015 : 0.012);
     renderer.toneMappingExposure = palette.exposure;
     hemisphere.color.set(palette.hemisphere);
     hemisphere.groundColor.set(palette.ground);
     key.color.set(palette.key);
     rim.color.set(palette.rim);
-    for (const { material, dark, light } of themeMaterials) {
-      material.color.set(theme === 'dark' ? dark : light);
+    for (const { material, role } of themeMaterials) {
+      material.color.set(palette[role]);
     }
     reflectionMaterial.uniforms['color']?.value.set(palette.reflector);
+    seam.emissive.set(palette.seam);
     themeColors.orb.set(palette.orb);
   }
 
@@ -486,7 +482,7 @@ function createJarvisStageSceneWithRenderer(
 
     const audioLevel = THREE.MathUtils.clamp(current.audioLevel, 0, 1);
     const awake = THREE.MathUtils.clamp(Math.max(voicePosition, activityPosition), 0, 1);
-    const power = 0.26 + 0.74 * awake + audioLevel * 0.06;
+    const power = (0.26 + 0.74 * awake + audioLevel * 0.06) * palette.glow;
     themeColors.current.copy(themeColors.orb);
     orbVisual.uniforms.uColor.value.lerp(themeColors.current, current.reducedMotion ? 1 : 0.16);
     orbVisual.uniforms.uEnergy.value = audioLevel;
@@ -506,7 +502,6 @@ function createJarvisStageSceneWithRenderer(
       const angle = elapsed * (index % 2 === 0 ? 0.13 : -0.1) + index * Math.PI / 3;
       packet.position.set(Math.cos(angle) * 3.35, -0.12, Math.sin(angle) * 3.35);
     });
-    seam.emissive.set(palettes[current.theme].seam);
     seam.emissiveIntensity = 0.13 + power * 0.16;
     wallLight.target.updateMatrixWorld();
     renderer.render(scene, camera);
@@ -590,7 +585,7 @@ function createJarvisStageSceneWithRenderer(
   };
 
   host.appendChild(renderer.domElement);
-  setTheme(current.theme);
+  setTheme();
   resize();
   startAnimation();
 
@@ -598,7 +593,7 @@ function createJarvisStageSceneWithRenderer(
     update(options: JarvisStageOptions) {
       if (disposed) return;
       current = options;
-      setTheme(options.theme);
+      setTheme();
       if (options.reducedMotion) {
         stopAnimation();
         draw(0);

@@ -4,7 +4,7 @@ import { useThemePreference } from './theme-preference-context';
 import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
 
 interface Settings {
-  appearance: { theme: 'light' | 'dark' };
+  appearance: { theme: 'light' | 'dark' | 'system' };
   jarvis: { model: string; reasoning: string };
   personality: {
     tone: 'british_butler' | 'warm' | 'direct' | 'playful';
@@ -138,7 +138,8 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     (item.lastRenewedAt === null || (typeof item.lastRenewedAt === 'string' && Number.isFinite(Date.parse(item.lastRenewedAt)))));
   return validOptions && validCredentials &&
     isObject(settings.appearance) &&
-    (settings.appearance.theme === 'light' || settings.appearance.theme === 'dark') &&
+    (settings.appearance.theme === 'light' || settings.appearance.theme === 'dark' ||
+      settings.appearance.theme === 'system') &&
     isObject(settings.jarvis) && isObject(settings.personality) && isObject(settings.voice) && isObject(settings.codex) &&
     isObject(settings.copilot) && isObject(settings.global) && isObject(settings.newProjects) &&
     typeof settings.jarvis.model === 'string' && typeof settings.jarvis.reasoning === 'string' &&
@@ -409,6 +410,12 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
                   onChange={() => { void themePreference.saveTheme('dark'); }} />
                 Dark
               </label>
+              <label className="choice" htmlFor="theme-system">
+                <input id="theme-system" name="theme" type="radio" value="system"
+                  checked={themePreference.theme === 'system'}
+                  onChange={() => { void themePreference.saveTheme('system'); }} />
+                System
+              </label>
             </fieldset>
             {themePreference.state === 'loading' && <p className="settings-feedback" role="status">Loading saved theme…</p>}
             {themePreference.state === 'error' && (
@@ -426,7 +433,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
             <button className="secondary-button theme-variable-button" type="button" disabled
               aria-describedby="theme-variables-help">Edit theme variables</button>
             <p className="settings-explanation" id="theme-variables-help">
-              Custom and Jarvis-directed variable changes are unavailable until their validated settings and tool update path is implemented.
+              Jarvis can update approved appearance variables through its validated theme tool.
             </p>
           </section>
 
