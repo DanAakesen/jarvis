@@ -72,6 +72,56 @@ describe('structured log export', () => {
       message: 'sandbox_heartbeat.decision', properties: { service: 'jarvis-backend' },
     }));
   });
+  it('exports only bounded task-reconciliation decisions', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    const decision = {
+      taskId: '42', sandboxSessionId: '7', invocationId: 'invocation-1',
+      status: 'completed', decision: 'needs_attention',
+    };
+    logger.info({ ...decision, reason: 'provider-secret', prompt: 'prompt-secret' }, 'task_reconciliation.decision');
+    expect(JSON.parse(records[0]!)).toMatchObject({ ...decision, msg: 'task_reconciliation.decision' });
+    expect(sdk.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'task_reconciliation.decision',
+      properties: { service: 'jarvis-backend', ...decision },
+    }));
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it('rejects arbitrary task-reconciliation identifiers and decision text', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    logger.info({
+      taskId: 'task-secret', sandboxSessionId: 'session-secret', invocationId: 'invocation\nsecret',
+      status: 'status-secret', decision: 'decision-secret',
+    }, 'task_reconciliation.decision');
+    expect(records.join('')).not.toContain('secret');
+    expect(sdk.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'task_reconciliation.decision', properties: { service: 'jarvis-backend' },
+    }));
+  });
+  it('exports only allowlisted chat and memory timing fields', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    logger.info({
+      phase: 'jev', durationMs: 123.4, text: 'prompt-secret',
+    }, 'chat.latency');
+    logger.info({
+      outcome: 'ok', durationMs: 45.6, query: 'memory-secret',
+    }, 'memory.embedding');
+
+    expect(JSON.parse(records[0]!)).toMatchObject({
+      phase: 'jev', durationMs: 123.4, msg: 'chat.latency',
+    });
+    expect(JSON.parse(records[1]!)).toMatchObject({
+      outcome: 'ok', durationMs: 45.6, msg: 'memory.embedding',
+    });
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
   it('exports only bounded voice reflex metrics and never transcript content', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

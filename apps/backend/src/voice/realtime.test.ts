@@ -147,4 +147,24 @@ describe('English realtime session', () => {
       }),
     );
   });
+
+  it('keeps an explicit browser-stop refusal visible after cancellation', async () => {
+    const execute = vi.mocked(tool.execute);
+    execute.mockClear();
+    const controller = new AbortController();
+    execute.mockImplementation(async () => {
+      controller.abort();
+      throw new ToolRefusal('Browser task stopped before completion.');
+    });
+    const request = { validateInput: vi.fn(() => true) } as unknown as FastifyRequest;
+
+    await expect(executeRealtimeToolCall(call(), registry, request, controller.signal)).resolves.toBe(
+      JSON.stringify({
+        tool: 'echo',
+        outcome: 'refused',
+        result: { refused: 'Browser task stopped before completion.' },
+        confirmation: 'Not done: echo was refused. Browser task stopped before completion.',
+      }),
+    );
+  });
 });

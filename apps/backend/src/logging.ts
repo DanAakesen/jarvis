@@ -24,7 +24,8 @@ const events = new Set([
   'server.listening', 'server.stopping', 'server.stopped', 'server.failed',
   'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
-  'sandbox_heartbeat.decision', 'voice.reflex_metrics', 'voice.partials_unavailable',
+  'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
+  'voice.partials_unavailable', 'chat.latency', 'memory.embedding',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -37,6 +38,20 @@ const heartbeatDecisions = new Set([
   'paused', 'pause_unchanged', 'cancelled', 'cancelling', 'interrupted', 'unknown',
   'unchanged', 'confirm_failure', 'persistence_failed', 'poll_failed',
 ]);
+const reconciliationStatuses = new Set([
+  'queued', 'running', 'completed', 'failed', 'cancelled', 'needs_attention', 'cancelling', 'interrupted',
+  'paused', 'unknown', 'unavailable', 'Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention',
+  'Done', 'Cancelled', 'task_missing',
+]);
+const reconciliationDecisions = new Set([
+  'reconciliation_failed', 'runner_alive', 'needs_attention', 'unchanged', 'done', 'task_missing',
+  'runner_status_unavailable', 'runner_session_mismatch', 'ended_session_still_running',
+  'completed_without_verified_delivery', 'foundry_queued', 'foundry_running', 'foundry_completed',
+  'foundry_failed', 'foundry_cancelled', 'foundry_needs_attention', 'foundry_cancelling',
+  'foundry_interrupted', 'foundry_paused', 'foundry_unknown',
+  'Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention', 'Done', 'Cancelled',
+]);
+const chatLatencyPhases = new Set(['reflex_targets', 'jev', 'agent_first_byte']);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
@@ -46,6 +61,22 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (typeof input.reason === 'string' && authDenialReasons.has(input.reason)) fields.reason = input.reason;
   for (const key of ['statusCode', 'responseTime', 'port']) {
     if (typeof input[key] === 'number' && Number.isFinite(input[key])) fields[key] = input[key];
+  }
+  if (input.msg === 'chat.latency') {
+    if (typeof input.phase === 'string' && chatLatencyPhases.has(input.phase)) fields.phase = input.phase;
+    if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
+        input.durationMs >= 0 && input.durationMs <= 600_000) {
+      fields.durationMs = input.durationMs;
+    }
+  }
+  if (input.msg === 'memory.embedding') {
+    if (typeof input.outcome === 'string' && ['ok', 'fallback', 'cancelled'].includes(input.outcome)) {
+      fields.outcome = input.outcome;
+    }
+    if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
+        input.durationMs >= 0 && input.durationMs <= 600_000) {
+      fields.durationMs = input.durationMs;
+    }
   }
   if (input.msg === 'sandbox_heartbeat.decision') {
     if (typeof input.sandboxSessionId === 'string' && /^[1-9]\d{0,18}$/.test(input.sandboxSessionId)) {
@@ -59,6 +90,19 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       fields.httpStatus = input.httpStatus;
     }
     if (typeof input.decision === 'string' && heartbeatDecisions.has(input.decision)) {
+      fields.decision = input.decision;
+    }
+  }
+  if (input.msg === 'task_reconciliation.decision') {
+    for (const key of ['taskId', 'sandboxSessionId']) {
+      const value = input[key];
+      if (typeof value === 'string' && /^[1-9]\d{0,18}$/.test(value)) fields[key] = value;
+    }
+    if (typeof input.invocationId === 'string' && /^[\w.:-]{1,256}$/.test(input.invocationId)) {
+      fields.invocationId = input.invocationId;
+    }
+    if (typeof input.status === 'string' && reconciliationStatuses.has(input.status)) fields.status = input.status;
+    if (typeof input.decision === 'string' && reconciliationDecisions.has(input.decision)) {
       fields.decision = input.decision;
     }
   }

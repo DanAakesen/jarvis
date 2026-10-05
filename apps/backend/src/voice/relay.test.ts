@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
+import type { FastifyRequest } from 'fastify';
 import { AuthenticationDenied } from '../auth/verify.js';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
@@ -551,6 +552,30 @@ describe('backend-relayed Voice Live WebSocket', () => {
     });
   });
 
+  it('does not run Azure Speech reflexes for shared-tab intent before final screen context', async () => {
+    const partialSpeech = partialSpeechHarness();
+    const services = taskReflexServices();
+    const classifier: ReflexClassifier = {
+      classify: vi.fn(async (_text, _language, targets) => ({
+        addressed: true,
+        intent: 'action' as const,
+        confidence: 0.99,
+        needsConfirmation: false,
+        completeCommand: true,
+        target: targets.find(({ tool }) => tool.name === 'pause_task') ?? null,
+      })),
+    };
+    const { browser } = await connectedPartialVoice(partialSpeech, classifier, [], services);
+    browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+    await vi.waitFor(() => expect(partialSpeech.createPartialRecognizer).toHaveBeenCalledOnce());
+
+    partialSpeech.recognize('Jarvis, open it here.');
+
+    expect(classifier.classify).not.toHaveBeenCalled();
+    expect(services.taskController.control).not.toHaveBeenCalled();
+    browser.close();
+  });
+
   it('undoes a partial action when the Voice Live final contradicts it', async () => {
     const partialSpeech = partialSpeechHarness();
     const services = taskReflexServices();
@@ -924,6 +949,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const upstreamUrl = await echoServer((socket) => {
       socket.on('message', (data) => forwarded.push(JSON.parse(data.toString()) as Record<string, unknown>));
     });
+
     const { app, conversationStore } = appFor((token, signal) => new WebSocket(upstreamUrl, {
       headers: { Authorization: ['Bearer', token].join(' ') }, signal,
     }));
@@ -953,6 +979,147 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(conversationStore.addMessage).not.toHaveBeenCalled();
     expect(forwarded.filter((event) => event.type === 'conversation.item.create')).toEqual([]);
   });
+
+  it.each(['browser_do_shared', 'browser_do'] as const)(
+    'speaks shared-tab progress and aborts %s when Dan says stop',
+    async (toolName) => {
+    let markToolStarted!: () => void;
+    let markToolStopped!: (aborted: boolean) => void;
+    let markProgressSpoken!: () => void;
+    let markContextReceived!: (instructions: string) => void;
+    let markToolOutput!: (output: Record<string, unknown>) => void;
+    let resolveSession!: () => void;
+    let resolveScreenRequest!: () => void;
+    let upstreamSocket: WebSocket | undefined;
+    const toolStarted = new Promise<void>((resolve) => { markToolStarted = resolve; });
+    const toolStopped = new Promise<boolean>((resolve) => { markToolStopped = resolve; });
+    const progressSpoken = new Promise<void>((resolve) => { markProgressSpoken = resolve; });
+    const contextReceived = new Promise<string>((resolve) => { markContextReceived = resolve; });
+    const screenRequest = new Promise<void>((resolve) => { resolveScreenRequest = resolve; });
+    const toolOutput = new Promise<Record<string, unknown>>((resolve) => { markToolOutput = resolve; });
+    let selectedContext: unknown;
+    let sharedContextRequired = false;
+    const toolModule: BackendModule = {
+      id: 'shared-browser-test',
+      tools: [{
+        name: toolName,
+        description: 'Act on the shared tab.',
+        inputSchema: {
+          type: 'object',
+          properties: { goal: { type: 'string' } },
+          required: ['goal'],
+          additionalProperties: false,
+        },
+        sensitive: true,
+        execute: async (_input, request, signal) => {
+          const voiceRequest = request as FastifyRequest;
+          selectedContext = voiceRequest.sharedScreenContext;
+          sharedContextRequired = voiceRequest.requireSharedScreenContext === true;
+          voiceRequest.announceBrowserProgress?.();
+          markToolStarted();
+          await new Promise<void>((resolve) => {
+            if (signal.aborted) resolve();
+            else signal.addEventListener('abort', () => resolve(), { once: true });
+          });
+          markToolStopped(signal.aborted);
+          throw new ToolRefusal('Browser task stopped before completion.');
+        },
+      }],
+      registerRoutes: async () => {},
+    };
+    const sessionSent = new Promise<void>((resolve) => { resolveSession = resolve; });
+    const browserEvents: Record<string, unknown>[] = [];
+    const upstreamUrl = await echoServer((socket) => {
+      upstreamSocket = socket;
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        if (event.type === 'session.update') {
+          resolveSession();
+          return;
+        }
+        if (event.type === 'input_audio_buffer.append') {
+          socket.send(JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.completed',
+            item_id: 'task-item',
+            transcript: 'Fill this in with my name.',
+          }));
+          return;
+        }
+        if (event.type === 'response.create') {
+          const instructions = (event.response as { instructions?: string } | undefined)?.instructions;
+          if (instructions?.includes('A contact form with a name field.')) {
+            markContextReceived(instructions);
+            socket.send(JSON.stringify({
+              type: 'response.function_call_arguments.done',
+              event_id: 'shared-tool-call',
+              response_id: 'response-shared',
+              call_id: 'shared-call',
+              name: toolName,
+              arguments: JSON.stringify({ goal: 'Fill in my name' }),
+            }));
+            socket.send(JSON.stringify({ type: 'response.done', event_id: 'shared-response-done', response: {} }));
+          } else if (instructions?.includes('I’m working in the shared tab')) {
+            markProgressSpoken();
+            socket.send(JSON.stringify({ type: 'response.done', event_id: 'progress-done', response: {} }));
+          }
+          return;
+        }
+        if (event.type === 'conversation.item.create') {
+          markToolOutput(event.item as Record<string, unknown>);
+        }
+      });
+    });
+    const { app } = appFor(
+      (token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }),
+      vi.fn(async () => voiceToken),
+      [],
+      [toolModule],
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    browser.on('message', (data) => {
+      const event = JSON.parse(data.toString()) as Record<string, unknown>;
+      browserEvents.push(event);
+      if (event.type === 'conversation.item.input_audio_transcription.completed' &&
+          event.item_id === 'task-item') resolveScreenRequest();
+    });
+    await sessionSent;
+    browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
+    await screenRequest;
+    browser.send(JSON.stringify({
+      type: 'jarvis.screen.context',
+      sharedWindowTitle: 'Contact form - Chrome',
+      description: 'A contact form with a name field.',
+    }));
+    await expect(contextReceived).resolves.toContain('Contact form - Chrome');
+    await toolStarted;
+    await progressSpoken;
+
+    upstreamSocket!.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'stop-item',
+      transcript: 'stop',
+    }));
+    await expect(toolStopped).resolves.toBe(true);
+    const output = await toolOutput;
+
+    expect(output).toMatchObject({ type: 'function_call_output', call_id: 'shared-call' });
+    expect(JSON.parse(output.output as string)).toMatchObject({
+      tool: toolName,
+      outcome: 'refused',
+      result: { refused: 'Browser task stopped before completion.' },
+    });
+    expect(selectedContext).toEqual({
+      sharedWindowTitle: 'Contact form - Chrome',
+      screenDescription: 'A contact form with a name field.',
+    });
+    expect(sharedContextRequired).toBe(true);
+      expect(JSON.stringify(browserEvents)).not.toContain('Contact form');
+    },
+  );
 
   it('stores completed voice transcripts, records a voice session, and waits for its final usage row', async () => {
     const forwarded: string[] = [];

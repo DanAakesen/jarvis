@@ -28,8 +28,15 @@ export type DispatchClaimResult =
   | { kind: 'claimed'; task: DispatchClaim }
   | { kind: 'idle'; nextAttemptAt: string | null };
 
+export interface StaleRunningTask extends RunningSandbox {
+  taskId: string;
+  sessionStatus: 'Active' | 'Ended';
+}
+
 export interface DispatcherStore {
   claimNext(owner: string, leaseSeconds: number, maxAttempts: number): Promise<DispatchClaimResult>;
+  listStaleRunning(heartbeatBefore: Date, limit: number): Promise<StaleRunningTask[]>;
+  recordHeartbeat(sandboxSessionId: string, invocationId: string, invocationCompleted: boolean): Promise<void>;
   deferClaim(owner: string, task: DispatchClaim, delayMs: number): Promise<void>;
   failStart(owner: string, task: DispatchClaim, retryAt: string | null, reason: string): Promise<void>;
   recordStarted(owner: string, task: DispatchClaim, agentName: string, accepted: {
@@ -58,8 +65,11 @@ export interface TaskControlTarget extends RunningSandbox, TaskWorkspace {
 export interface DispatcherOptions {
   leaseSeconds?: number;
   maxAttempts?: number;
+  reconciliationIntervalMs?: number;
+  staleHeartbeatMs?: number;
   now?: () => number;
   onError?: (error: unknown) => void;
+  onReconciliation?: (decision: TaskReconciliationDecision) => void;
   recoveryStore?: TaskRecoveryStore;
   workspaceFor?: (task: TaskRecord) => Promise<TaskWorkspace | null>;
   verifyDelivery?: (
@@ -69,10 +79,22 @@ export interface DispatcherOptions {
   ) => Promise<GitHubDeliveryResult>;
 }
 
+export interface TaskReconciliationDecision {
+  taskId: string;
+  sandboxSessionId: string;
+  invocationId: string;
+  status: string;
+  decision: string;
+}
+
 const defaultLeaseSeconds = 120;
 const defaultMaxAttempts = 3;
 const firstRetryDelayMs = 15_000;
 const maxRetryDelayMs = 5 * 60_000;
+const reconciliationIntervalMs = 5 * 60_000;
+const staleHeartbeatMs = 5 * 60_000;
+const maxStaleTasksPerPass = 5;
+const reconciliationRequestTimeoutMs = 15_000;
 const maxSettingsModelLength = 100;
 const maxSettingsReasoningLength = 32;
 const recoveryEventLimit = 100;
@@ -147,8 +169,11 @@ export class TaskDispatcher implements TaskController {
   private readonly owner = randomUUID();
   private readonly leaseSeconds: number;
   private readonly maxAttempts: number;
+  private readonly reconciliationIntervalMs: number;
+  private readonly staleHeartbeatMs: number;
   private readonly now: () => number;
   private readonly onError: (error: unknown) => void;
+  private readonly onReconciliation: (decision: TaskReconciliationDecision) => void;
   private readonly recoveryStore: TaskRecoveryStore | undefined;
   private readonly workspaceFor: DispatcherOptions['workspaceFor'];
   private readonly verifyDelivery: DispatcherOptions['verifyDelivery'];
@@ -156,6 +181,8 @@ export class TaskDispatcher implements TaskController {
   private wakePending = false;
   private pumping: Promise<void> | undefined;
   private timer: NodeJS.Timeout | undefined;
+  private reconciliationTimer: NodeJS.Timeout | undefined;
+  private reconciling: Promise<void> | undefined;
   private unsubscribe: (() => void) | undefined;
 
   constructor(
@@ -163,15 +190,18 @@ export class TaskDispatcher implements TaskController {
     private readonly tasks: TaskStore,
     private readonly settings: SettingsStore,
     private readonly clientFor: (agentName: string) => Pick<FoundryClient,
-      'startTask' | 'steer' | 'pause' | 'resume' | 'cancel' | 'deleteSession'>,
+      'startTask' | 'steer' | 'pause' | 'resume' | 'cancel' | 'deleteSession' | 'status'>,
     private readonly heartbeat: SandboxHeartbeat,
     private readonly events: TaskEventHub,
     options: DispatcherOptions = {},
   ) {
     this.leaseSeconds = options.leaseSeconds ?? defaultLeaseSeconds;
     this.maxAttempts = options.maxAttempts ?? defaultMaxAttempts;
+    this.reconciliationIntervalMs = options.reconciliationIntervalMs ?? reconciliationIntervalMs;
+    this.staleHeartbeatMs = options.staleHeartbeatMs ?? staleHeartbeatMs;
     this.now = options.now ?? Date.now;
     this.onError = options.onError ?? (() => {});
+    this.onReconciliation = options.onReconciliation ?? (() => {});
     this.recoveryStore = options.recoveryStore;
     this.workspaceFor = options.workspaceFor;
     this.verifyDelivery = options.verifyDelivery;
@@ -182,6 +212,7 @@ export class TaskDispatcher implements TaskController {
     if (this.started) return;
     this.started = true;
     this.unsubscribe = this.events.subscribe((event) => this.onTaskEvent(event));
+    this.scheduleReconciliation(0);
     this.wake();
   }
 
@@ -191,8 +222,128 @@ export class TaskDispatcher implements TaskController {
     this.unsubscribe = undefined;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
+    if (this.reconciliationTimer) clearTimeout(this.reconciliationTimer);
+    this.reconciliationTimer = undefined;
     this.wakePending = false;
-    await this.pumping;
+    await Promise.all([this.pumping, this.reconciling]);
+  }
+
+  private scheduleReconciliation(delayMs: number): void {
+    if (!this.started) return;
+    this.reconciliationTimer = setTimeout(() => {
+      this.reconciliationTimer = undefined;
+      this.reconciling = this.reconcileStaleTasks().catch(this.onError).finally(() => {
+        this.reconciling = undefined;
+        this.scheduleReconciliation(this.reconciliationIntervalMs);
+      });
+    }, delayMs);
+    this.reconciliationTimer.unref();
+  }
+
+  private async reconcileStaleTasks(): Promise<void> {
+    const heartbeatBefore = new Date(this.now() - this.staleHeartbeatMs);
+    const stale = await this.store.listStaleRunning(heartbeatBefore, maxStaleTasksPerPass);
+    await Promise.all(stale.map(async (task) => {
+      try {
+        await this.reconcileTask(task);
+      } catch (error) {
+        this.onError(error);
+        this.onReconciliation({
+          taskId: task.taskId,
+          sandboxSessionId: task.sandboxSessionId,
+          invocationId: task.invocationId,
+          status: 'unavailable',
+          decision: 'reconciliation_failed',
+        });
+      }
+    }));
+  }
+
+  private async reconcileTask(task: StaleRunningTask): Promise<void> {
+    const log = (status: string, decision: string) => this.onReconciliation({
+      taskId: task.taskId,
+      sandboxSessionId: task.sandboxSessionId,
+      invocationId: task.invocationId,
+      status,
+      decision,
+    });
+    let snapshot;
+    try {
+      snapshot = await this.clientFor(task.agentName).status(task.invocationId, {
+        signal: AbortSignal.timeout(reconciliationRequestTimeoutMs),
+      });
+    } catch (error) {
+      this.onError(error);
+      const changed = await this.moveToNeedsAttention(
+        task.taskId,
+        'Jarvis could not verify the task runner after its heartbeat stopped. Review the task before retrying.',
+        'runner_status_unavailable',
+      );
+      log('unavailable', changed ? 'needs_attention' : 'unchanged');
+      return;
+    }
+
+    if (snapshot.invocationId !== task.invocationId || snapshot.sessionId !== task.foundrySessionId) {
+      const changed = await this.moveToNeedsAttention(
+        task.taskId,
+        'Foundry returned a different runner session than the one recorded for this task. Review the task before retrying.',
+        'runner_session_mismatch',
+      );
+      log(snapshot.status, changed ? 'needs_attention' : 'unchanged');
+      return;
+    }
+
+    if (snapshot.status === 'running' || snapshot.status === 'queued') {
+      if (task.sessionStatus === 'Active') {
+        await this.store.recordHeartbeat(task.sandboxSessionId, task.invocationId, false);
+        log(snapshot.status, 'runner_alive');
+      } else {
+        const changed = await this.moveToNeedsAttention(
+          task.taskId,
+          'Foundry reports that the task runner is still active, but its saved sandbox session has already ended. Review the task before retrying.',
+          'ended_session_still_running',
+        );
+        log(snapshot.status, changed ? 'needs_attention' : 'unchanged');
+      }
+      return;
+    }
+
+    if (snapshot.status === 'completed') {
+      await this.store.recordHeartbeat(task.sandboxSessionId, task.invocationId, true);
+      await this.acceptCompleted(task, task.taskId);
+      const current = await this.tasks.get(task.taskId, 1, 0);
+      if (current?.state === 'Running') {
+        const changed = await this.moveToNeedsAttention(
+          task.taskId,
+          'Foundry confirms the runner completed, but GitHub and task policy did not confirm a reviewable completion. Review the pull request and task.',
+          'completed_without_verified_delivery',
+        );
+        log(snapshot.status, changed ? 'needs_attention' : 'unchanged');
+      } else {
+        log(snapshot.status, current?.state === 'Done' ? 'done' : current?.state ?? 'task_missing');
+      }
+      return;
+    }
+
+    const reason = snapshot.status === 'failed'
+      ? 'Foundry reports that the task runner failed. Review its task history, then recover the task.'
+      : snapshot.status === 'needs_attention'
+        ? 'Foundry reports that the task runner needs input. Review the task history before continuing.'
+        : 'Jarvis could not determine the task runner status. Review the task before retrying.';
+    const changed = await this.moveToNeedsAttention(task.taskId, reason, `foundry_${snapshot.status}`);
+    log(snapshot.status, changed ? 'needs_attention' : 'unchanged');
+  }
+
+  private async moveToNeedsAttention(taskId: string, reason: string, reasonCode: string): Promise<boolean> {
+    return this.store.withTaskPolicyLock(taskId, async () => {
+      const current = await this.tasks.get(taskId, 1, 0);
+      if (!current || current.state !== 'Running') return false;
+      const result = await this.tasks.transition(taskId, 'NeedsAttention', false, reasonCode, reason);
+      if (result.kind !== 'ok') return false;
+      const ended = await this.store.endTaskSessions(taskId, 'NeedsAttention');
+      ended.forEach((sandboxSessionId) => this.heartbeat.untrack(sandboxSessionId));
+      return true;
+    });
   }
 
   async control(taskId: string, command: TaskControlCommand): Promise<TaskControlResult> {
@@ -371,8 +522,8 @@ export class TaskDispatcher implements TaskController {
     }
   }
 
-  private async acceptCompleted(sandbox: RunningSandbox): Promise<boolean> {
-    const taskId = await this.recoveryStore?.getRunningTaskForSession(sandbox);
+  private async acceptCompleted(sandbox: RunningSandbox, knownTaskId?: string): Promise<boolean> {
+    const taskId = knownTaskId ?? await this.recoveryStore?.getRunningTaskForSession(sandbox);
     if (!this.recoveryStore) return true;
     if (!taskId) return false;
     const detail = await this.tasks.get(taskId, recoveryEventLimit, 0);

@@ -6,6 +6,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 
 - Phase 1 is the Jarvis core and Software Factory; active P7 tasks may add their named headless capabilities. P7-09 adds calendar and mail tools only; P8 owns any UI. See [PRODUCT.md](../PRODUCT.md) and [PLAN.md](../PLAN.md).
 - Do not add tables, pages, or code for Banking, Health and fitness, or other areas until their phase starts.
+- P7-19 browser actions use only current screen-share context plus the existing P7-17/P7-18 browser path; do not add a separate bridge, persist page data, or access the live Jev key.
 - Single user (Dan). Keep the design as small as the requirements allow.
 
 ## Sources
@@ -215,6 +216,7 @@ backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
 Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3), and P2-01 (#27) adds sandbox and operations groups 4 and 6.
 P0-04 adds the Bicep template; its first Azure deployment is P0-16. Bicep sets backend `KEY_VAULT_URI`; the backend uses its managed identity to read `github-app-webhook-secret`. Locally, the URI can be omitted; webhook requests then fail with 503. The secret is cached in memory after a successful lookup and requires a backend restart to rotate.
 P7-04 reads the Jev API key `jev-api-key` from the same Key Vault with the backend identity. Dan provisions it after merge with the coordinator's `set-jev-key.ps1` outside this repository; agents must not run that script or access the live key. The reflex uses the configured `jev-latest` model. Live Jev latency and Voice Live behavior are not covered by offline tests.
+P7-19 reuses that existing key and P7-18's default-off Chrome toggle; it adds no secret, environment variable, or setup command. Dan's live shared-form, Jev/Foundry, Voice Live, and confirmation checks remain post-merge work.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
 and Python 3.12.14 (`.python-version`, for future Python work). Install from the
@@ -242,6 +244,7 @@ Verified in Codex cloud for P0-02:
 | Focused P7-13 memory-tool, embedding, and migration tests | `npm test --workspace @jarvis/backend -- --run src/core/memory.test.ts src/core/memory-embeddings.test.ts src/database/migrations.test.ts` |
 | Focused P7-14 research tests | `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- --run src/core/web-research.test.ts src/core/usage.test.ts src/foundry/client.test.mts src/config.test.ts src/database/tool-call-store.test.ts`; `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_tool` |
 | Focused P7-04 reflex, chat and voice tests | `npm test --workspace @jarvis/backend -- --run src/core/reflex.test.ts src/core/conversation.test.ts src/voice/relay.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py` |
+| Focused P7-23 chat latency checks | `npm test --workspace @jarvis/backend -- --run src/core/conversation.test.ts src/core/reflex.test.ts src/voice/relay.test.ts src/core/memory.test.ts src/core/memory-embeddings.test.ts src/logging.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py agents/jarvis/tests/test_jarvis_tools.py` |
 | Focused P7-20 streaming voice reflex checks | `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/core/reflex.test.ts src/database/conversation-store.test.ts src/voice/realtime.test.ts src/logging.test.ts`; `npm run lint --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_voice_provisioning.py` |
 | Focused P7-24 live partial-recognition checks | `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/voice/realtime.test.ts src/voice/speech-recognizer.test.ts src/logging.test.ts`; `npm test --workspace @jarvis/web -- --run src/voice-client.test.tsx`; `npm run lint --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
 | P7-13 isolated SQL migration/store contracts | `npm run test:database --workspace @jarvis/backend` |
