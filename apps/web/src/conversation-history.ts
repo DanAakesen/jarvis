@@ -64,6 +64,20 @@ function isHistoryPage(value: unknown): value is ConversationHistoryPage {
   });
 }
 
+export async function waitForChatSetup<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  let abort!: () => void;
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    abort = () => reject(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
+  });
+  try {
+    return await Promise.race([operation(), cancelled]);
+  } finally {
+    signal.removeEventListener('abort', abort);
+  }
+}
+
 async function accessToken(client: PublicClientApplication, config: PublicConfig): Promise<string> {
   const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
   if (!account) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
@@ -84,9 +98,13 @@ async function chatResponse(
   body?: unknown,
   accept = 'application/json',
   onDeliveryUncertain?: () => void,
+  signal?: AbortSignal,
 ): Promise<Response> {
   if (!config.backendUrl) throw new Error('Chat is unavailable until the backend is deployed.');
-  const token = await accessToken(client, config);
+  const token = signal
+    ? await waitForChatSetup(() => accessToken(client, config), signal)
+    : await accessToken(client, config);
+  signal?.throwIfAborted();
   let response: Response;
   try {
     const bearerScheme = ['Bear', 'er'].join('');
@@ -98,7 +116,7 @@ async function chatResponse(
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.any([AbortSignal.timeout(120_000), ...(signal ? [signal] : [])]),
     });
   } catch {
     onDeliveryUncertain?.();
@@ -121,11 +139,12 @@ export async function createChatSession(
   client: PublicClientApplication,
   config: PublicConfig,
   language: 'da' | 'en',
+  signal?: AbortSignal,
 ): Promise<ChatSession> {
   const response = await chatResponse(client, config, '/conversation/sessions', {
     channel: 'chat',
     language,
-  });
+  }, 'application/json', undefined, signal);
   let value: unknown;
   try { value = await response.json(); } catch {
     throw new Error('Jarvis returned an invalid chat session.');
@@ -164,6 +183,7 @@ export async function sendChatTurn(
   onDeliveryUncertain?: () => void,
   screenContext?: string,
   sharedScreenContext?: { screenDescription: string; sharedWindowTitle?: string },
+  signal?: AbortSignal,
 ): Promise<ChatMessage> {
   const response = await chatResponse(
     client,
@@ -176,6 +196,7 @@ export async function sendChatTurn(
     },
     'text/event-stream',
     onDeliveryUncertain,
+    signal,
   );
   if (!response.body) throw new Error('Jarvis returned an empty chat stream.');
 

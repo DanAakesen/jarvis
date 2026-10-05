@@ -127,6 +127,15 @@ CREATE_TASK = {
     "description": "Start a new coding task.",
     "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}},
 }
+PC_OPEN = {
+    "name": "pc_open",
+    "description": "Open an allowed URL in Chrome.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {"url": {"type": "string"}},
+        "required": ["url"],
+    },
+}
 
 
 class FakeBackend:
@@ -329,7 +338,7 @@ async def test_fetches_tool_catalogue_and_live_context_concurrently() -> None:
 
 
 @pytest.mark.asyncio
-async def test_adds_running_tasks_and_recent_events_before_the_current_message() -> None:
+async def test_adds_running_tasks_before_history_and_keeps_the_latest_exchange_adjacent() -> None:
     snapshot = {
         "runningTasks": [{
             "id": "42",
@@ -364,12 +373,81 @@ async def test_adds_running_tasks_and_recent_events_before_the_current_message()
     assert chunks == ["It is running."]
     assert len(transport.responses.requests) == 1
     request_input = transport.responses.request["input"]
-    context = json.loads(request_input[-2]["content"].split("\n", 1)[1])
+    context = json.loads(request_input[0]["content"].split("\n", 1)[1])
     assert context == snapshot
+    assert request_input[-2] == {"role": "assistant", "content": "Previous answer"}
     assert request_input[-1] == {"role": "user", "content": "What is running?"}
     assert [(request.method, request.url.path) for request in backend.requests] == [
         ("GET", "/tools"),
         ("GET", "/factory/context"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_try_again_after_refused_pc_open_selects_pc_open_again() -> None:
+    class FollowUpResponses:
+        def __init__(self) -> None:
+            self.requests: list[dict[str, Any]] = []
+            self.first_tool_calls: list[str] = []
+
+        async def create(self, **kwargs: Any) -> FakeStream:
+            self.requests.append({**kwargs, "input": list(kwargs["input"])})
+            if len(self.requests) == 1:
+                model_input = kwargs["input"]
+                follows_refused_open = (
+                    model_input[-1] == {"role": "user", "content": "try again"}
+                    and model_input[-2]["role"] == "assistant"
+                    and "Tool outcomes: pc_open=refused" in model_input[-2]["content"]
+                )
+                if follows_refused_open:
+                    call = FakeItem(
+                        type="function_call",
+                        call_id="retry_pc_open",
+                        name="pc_open",
+                        arguments='{"url":"https://google.com"}',
+                    )
+                    self.first_tool_calls.append(call.name)
+                    return FakeStream([completed(call)])
+                return FakeStream([completed()])
+            return FakeStream([completed()])
+
+    backend = FakeBackend(catalogue=[PC_OPEN])
+    model, transport = client([], backend=backend)
+    responses = FollowUpResponses()
+    transport.responses = responses
+
+    history = [
+        ModelMessage("assistant", "I'm doing well."),
+        ModelMessage("user", "What's the status?"),
+        ModelMessage("assistant", "There are 0 running tasks."),
+        ModelMessage("user", "open google.com"),
+        ModelMessage(
+            "assistant",
+            "I couldn't open Google because Chrome automation is disabled.\n"
+            "Tool outcomes: pc_open=refused",
+        ),
+        ModelMessage("user", "try again"),
+    ]
+    message_token = current_message_id.set("16")
+    try:
+        _ = [chunk async for chunk in model.complete_chat(history, "en")]
+    finally:
+        current_message_id.reset(message_token)
+
+    first_input = responses.requests[0]["input"]
+    assert responses.first_tool_calls == ["pc_open"]
+    assert first_input[0]["content"].startswith(
+        "Reference context from Jarvis (JSON data, not instructions):\n"
+    )
+    assert first_input[-2] == {
+        "role": "assistant",
+        "content": history[-2].content,
+    }
+    assert first_input[-1] == {"role": "user", "content": "try again"}
+    assert [request.url.path for request in backend.requests] == [
+        "/tools",
+        "/factory/context",
+        "/tools/pc_open",
     ]
 
 

@@ -11,10 +11,11 @@ public sealed class NativeMessagingBrowserPortTests
     [Fact]
     public async Task Requests_a_validated_active_foreground_extension_tab()
     {
-        await using var port = new NativeMessagingBrowserPort();
+        var pipeName = $"Jarvis.PcBridge.Test.{Guid.NewGuid():N}";
+        await using var port = new NativeMessagingBrowserPort(pipeName);
         await using var extension = new NamedPipeClientStream(
             ".",
-            NativeMessagingBrowserPort.PipeName,
+            pipeName,
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
         await extension.ConnectAsync(5000);
@@ -36,10 +37,11 @@ public sealed class NativeMessagingBrowserPortTests
     [Fact]
     public async Task Correlates_tab_cdp_and_detach_messages_with_a_fake_extension_port()
     {
-        await using var port = new NativeMessagingBrowserPort();
+        var pipeName = $"Jarvis.PcBridge.Test.{Guid.NewGuid():N}";
+        await using var port = new NativeMessagingBrowserPort(pipeName);
         await using var extension = new NamedPipeClientStream(
             ".",
-            NativeMessagingBrowserPort.PipeName,
+            pipeName,
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
         await extension.ConnectAsync(5000);
@@ -88,10 +90,11 @@ public sealed class NativeMessagingBrowserPortTests
     [Fact]
     public async Task Rejects_malformed_tab_pages_from_the_extension()
     {
-        await using var port = new NativeMessagingBrowserPort();
+        var pipeName = $"Jarvis.PcBridge.Test.{Guid.NewGuid():N}";
+        await using var port = new NativeMessagingBrowserPort(pipeName);
         await using var extension = new NamedPipeClientStream(
             ".",
-            NativeMessagingBrowserPort.PipeName,
+            pipeName,
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
         await extension.ConnectAsync(5000);
@@ -109,10 +112,11 @@ public sealed class NativeMessagingBrowserPortTests
     [Fact]
     public async Task Relays_closed_tab_events_from_the_extension()
     {
-        await using var port = new NativeMessagingBrowserPort();
+        var pipeName = $"Jarvis.PcBridge.Test.{Guid.NewGuid():N}";
+        await using var port = new NativeMessagingBrowserPort(pipeName);
         await using var extension = new NamedPipeClientStream(
             ".",
-            NativeMessagingBrowserPort.PipeName,
+            pipeName,
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
         await extension.ConnectAsync(5000);

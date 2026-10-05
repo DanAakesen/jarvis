@@ -98,13 +98,18 @@ export type GeneratedView =
   })
   | (GeneratedViewBase & { renderer: 'image'; data: { images: { url: string; alt: string }[] } });
 
+export interface WorkspaceSnapshot {
+  windows: readonly { viewId: string; title: string }[];
+  contextPanelOpen: boolean;
+}
+
 export type WorkspaceCommand =
   | { commandId: string; operation: 'create' | 'update'; viewId: string; view: GeneratedView }
   | { commandId: string; operation: 'show' | 'close' | 'minimise' | 'restore' | 'focus'; viewId: string }
   | { commandId: string; operation: 'move'; viewId: string; x: number; y: number }
   | { commandId: string; operation: 'resize'; viewId: string; width: number; height: number; x?: number; y?: number }
   | { commandId: string; operation: 'layout'; arrangement: 'tiled' | 'layered' }
-  | { commandId: string; operation: 'context-panel'; action: 'open'; view: GeneratedView }
+  | { commandId: string; operation: 'context-panel'; action: 'open'; view?: GeneratedView }
   | { commandId: string; operation: 'context-panel'; action: 'close' | 'toggle' };
 
 export interface WebResearchSource {
