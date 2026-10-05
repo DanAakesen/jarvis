@@ -452,9 +452,11 @@ uses the open transcript surface with a live caret.
 P8-35 Chromium evidence at 1440×900 and 390×844 in both themes:
 `docs/ui/screenshots/p8-35-progress-{dark,light}-{desktop,phone}.png`.
 The in-progress captures show a draft, enabled Send/language/voice controls,
-and no Stop button. Browser checks exercise steering, queue removal, language
-changes, and voice entry during streaming, with no overflow or page exceptions.
-Fixtures are labelled local auth/API mocks; they are not live Foundry evidence.
+and no Stop button. Chromium verified the streamed state, Ctrl+Enter queueing,
+language switching during streaming, enabled controls, no horizontal overflow
+and no page exceptions. Focused component/API tests cover steering and voice
+entry during streaming. Captures use scratch-only auth/API mocks, not live
+Foundry evidence.
 
 The P8-26 screenshots remain historical evidence for that queue implementation:
 `docs/ui/screenshots/p8-26-queued-{dark,light}-{desktop,phone}.png`.

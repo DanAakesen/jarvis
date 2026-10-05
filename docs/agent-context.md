@@ -309,6 +309,13 @@ permission denial, natural voice end, draft/focus restoration and reduced
 motion were exercised. Screenshots in `docs/ui/screenshots/p8-05-*` contain
 labelled local fixtures, not production conversations. A real phone keyboard,
 physical microphone/speakers and live Azure round-trip remain unverified.
+P8-35 Chromium screenshots at 1440×900 and 390×844 in dark/light capture a
+streaming reply with a queued message and editable next draft. The browser
+checks verified Ctrl+Enter queueing, language switching, enabled Send/language/
+voice controls, no Stop button, no horizontal overflow and no console/page
+errors. Steering and starting voice during streaming are covered by focused
+component/API tests. These screenshots use scratch-only auth/API fixtures, not
+live Entra or Foundry.
 P8-11 used scratch-only auth/API/voice fixtures and the real workspace at
 1440×900 and touch-emulated 390×844 in both appearances. Chromium CDP touch
 gestures verified foreground switching at 390, 320 and 280px, alongside named
