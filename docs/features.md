@@ -29,7 +29,7 @@ Status as of 4 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Sign-in | Sign in with his Microsoft account; everyone else is refused | Screen | All pages | Live | P0-08, P0-09 |
-| Chat | Type from the bottom-centred composer and read streamed replies; one continuous saved conversation with history and interruption recovery | Screen | Main page | Built | P4-03, P4-06, P4-09, P8-05 |
+| Chat | Type from the floating auto-growing composer, switch DA/EN, and read distinct messages with relative metadata and live streaming feedback; one continuous saved conversation with history and interruption recovery | Screen | Main page | Built | P4-03, P4-06, P4-09, P8-05, P8-21 |
 | English voice | Talk to Jarvis in English (gpt-realtime, Ryan HD, British butler persona) | Voice/chat | Main page | Built | P5-03, P5-04 |
 | Danish voice | Talk to Jarvis in Danish (MAI Transcribe, Harper) | Voice/chat | Main page | Built | P5-02, P5-04 |
 | Interrupt and reconnect | Interrupt Jarvis by speaking; voice reconnects automatically | Voice/chat | Main page | Built | P5-04 |
@@ -124,7 +124,7 @@ Status as of 4 October 2026.
 | Complete Jarvis front end | One designed UI for all features above | Screen | All pages | Planned | P8-01, P8-04–P8-13 |
 | Shared app shell and area navigation | Navigate areas from the rail/sidebar; open Settings from the top-right; toggle the camera with an accessible on/off state | Screen | All pages | Built | P8-04, P7-08 |
 | Conversation opening and voice entry | See the conversation on arrival, type from the bottom-centred composer, and explicitly start voice from the small orb; separately enable the microphone, and restore the draft and typing focus on exit | Both | Main page | Built (offline/browser fixtures) | P8-05 |
-| Workspace composition | Arrange open temporary views as tiles or layers; move, resize, and reorder with pointer or keyboard; reflow on narrow screens | Screen | Main workspace | Built | P8-06 |
+| Workspace composition | Arrange temporary tiles or layers; drag titles, resize edges, or use Move/Resize arrow keys behind Arrange; reflow on narrow screens with reduced-motion-safe lifecycle feedback | Screen | Main workspace | Built (client; generated/agent-delivered views remain separate) | P8-06, P8-07, P8-21 |
 | Dynamic workspace views | View accessible information in temporary, question-relevant windows and ask Jarvis to create or arrange them | Screen | Main workspace | In progress | P8-06, P8-14, P8-15 |
 | Window tabs and restore | Minimise a view without closing or saving it, then restore it from its tab or by asking Jarvis | Both | Main/voice workspace | Client built; authenticated Jarvis command delivery pending P8-15 | P8-07, P8-15 |
 | Contextual right panel | Open, close, or change relevant information without replacing the main content | Both | Main workspace | Client built; authenticated Jarvis command delivery pending P8-15 | P8-08, P8-15 |
@@ -134,6 +134,7 @@ Status as of 4 October 2026.
 | Manual voice-end affordance | Use the selected manual end control and Escape-key behavior without changing natural spoken ending | Both | Voice workspace | Decision recorded; UI implementation pending | P8-12 |
 | Theme controls and client persistence | Choose and persist light/dark appearance across visits; semantic theme variables update across the app. Custom and Jarvis-directed token changes remain unavailable pending P8-17, which uses P8-18's recorded allowlist. | Screen | Shared shell, Settings | Built (offline; live settings unverified) | P8-13 |
 | Shared visual and motion system | Use Concept B's living aurora in dark mode and Concept C's daylight surfaces in light mode; see readable, responsive feedback tied only to real chat/voice state and playback audio | Screen/voice | Current shell, conversation, tasks, projects, settings and usage | Built offline; live auth/settings/voice remain unverified | P8-20 |
+| Conversation and workspace concept polish | Start from a calm greeting and compact floating composer; read divider-free messages, live caret and quiet metadata; operate translucent windows and Now cards with purposeful, reduced-motion-safe feedback | Screen | Main page and client workspace | Built offline; local screenshot fixtures, not live agent delivery | P8-21 |
 | Agent-directed workspace views | Ask Jarvis to create, update, show, close, minimise, restore, focus, move and resize views, and change the layout or contextual panel | Both | Main page and voice workspace | Planned | P8-15 |
 | Generated data views | Inspect accessible information in temporary, typed views using registered renderers | Screen | Workspace | Planned | P8-14 |
 | Runtime activity | See Jarvis's actual listening, thinking, tool-call and speaking state | Both | Main page and voice workspace | Partial: client-reported chat/voice work is visible; tool-call activity awaits P8-16 | P8-16, P8-20 |

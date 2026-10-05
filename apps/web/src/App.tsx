@@ -238,7 +238,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
                 <span className="topbar-working-compact" aria-hidden="true">Working</span>
               </span>
             )}
-            <UnavailableControl id="screen-share-status" label="Share screen" explanation="Unavailable until screen sharing is built." icon="screen" />
+            <UnavailableControl id="screen-share-status" label="Share screen" explanation="Share screen from Activity, sharing and backend in the conversation." icon="screen" />
             <CameraControl camera={camera} />
             <button
               id="context-panel-toggle"

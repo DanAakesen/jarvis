@@ -175,7 +175,7 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 | Data points | Actions |
 | --- | --- |
-| Conversation opens automatically in typing mode: messages (Dan, Jarvis) across chat and voice sessions, time, language, streamed replies, tool-call chips (tool, outcome, link to task), and voice minutes per sitting; empty/loading/failure and interrupted-reply feedback | Type from the bottom-centred composer; Enter sends, Shift+Enter adds a line; start voice only from the small input orb; switch Danish/English |
+| Conversation opens automatically in typing mode: a calm greeting when empty; visually distinct Dan/Jarvis messages across chat and voice sessions; channel, language and relative time on hover/focus (always visible on touch or reduced motion); streaming text with a live caret; tool-call chips (tool, outcome, link to task), and voice minutes per sitting; loading/failure and interrupted-reply feedback | Type from the floating bottom-centred, auto-growing composer; Enter sends, Shift+Enter adds a line; start voice only from the small input orb on its left; switch Danish/English with DA/EN buttons inside it |
 | Voice state: connecting, ready with microphone off, listening, thinking, speaking, reconnecting; an accessible runtime-state orb and text alternative; what Jarvis heard; latency. History and composer hide during voice; exit restores the draft and typing focus | Explicitly enable the microphone after session readiness (also after reconnect); stop browser voice; interrupt by speaking; mute |
 | "Now": current away/present mode; running tasks (project, agent, activity, duration), tasks needing attention, latest releases and deployments, credential warnings, and alerts for failed deployments, sandbox crashes, credential expiry, and the 80% monthly budget threshold | Open a task, release, or project; dismiss an activity item |
 | Backend state: awake (minimum replicas 1) or asleep (minimum replicas 0) | Change state; refusing sleep while a task is Ready, Running, or PauseRequested |
@@ -185,6 +185,12 @@ The "Now" panel reads the persisted away/present mode, current running tasks and
 The voice orb follows status transitions reported by the browser voice client and includes a text alternative. Unknown states are reported as unavailable, and motion is disabled when reduced motion is preferred. Tool-call activity remains explicitly unavailable until the runtime publishes that state (P8-16); the UI does not infer it from thinking or speech.
 
 The shared top bar reports when an actual chat turn or voice response is running. The orb's audio response uses decoded playback samples, not microphone input or an estimated level. The shell and current pages share the light/dark visual system; unavailable tool-call and workspace-window events are never inferred.
+
+Temporary client windows support title dragging, edge resizing and icon lifecycle
+actions. Keyboard arrangement lives under Arrange: focus Move or Resize and use
+arrow keys (Shift for larger layered steps); Escape closes the menu and returns
+focus. All presentation motion preserves readable states under reduced motion.
+P8-21 changes no conversation, workspace-delivery or persistence contracts.
 
 #### Software Factory — task view
 

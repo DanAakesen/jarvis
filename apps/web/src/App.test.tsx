@@ -332,6 +332,7 @@ describe('App shell', () => {
     });
     await user.click(activeCamera);
     expect(track.stop).toHaveBeenCalledOnce();
+    await user.click(screen.getByText('Activity, sharing and backend'));
     expect(within(screen.getByRole('region', { name: 'Conversation' }))
       .getByRole('button', { name: 'Share screen' })).toHaveProperty('disabled', false);
   });
@@ -362,7 +363,7 @@ describe('App shell', () => {
       });
     });
     await renderSignedIn();
-    await userEvent.click(screen.getByText('Activity and backend'));
+    await userEvent.click(screen.getByText('Activity, sharing and backend'));
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Welcome, Dan Aakesen');
     for (const name of ['Conversation', 'Now', 'Backend']) {
@@ -378,8 +379,8 @@ describe('App shell', () => {
 
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
-    expect(screen.getByRole('radio', { name: 'Danish' })).toHaveProperty('checked', true);
-    expect(screen.getByRole('radio', { name: 'English' })).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'Danish' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'English' })).toHaveProperty('disabled', false);
 
     expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', false);
     expect(screen.queryByRole('button', { name: 'Mute' })).toBeNull();

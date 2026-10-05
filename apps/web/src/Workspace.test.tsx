@@ -1,9 +1,10 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { useMemo, useRef, useState } from 'react';
 import { Workspace, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { useWorkspaceCommands, WorkspaceCommandContext } from './workspace-command-state';
+import { readFileSync } from 'node:fs';
 
 const views: WorkspaceView[] = [
   { id: 'research', title: 'Research summary', content: { status: 'ready', content: <p>Source-linked findings</p> } },
@@ -66,7 +67,7 @@ describe('Workspace', () => {
     move.focus();
     await user.keyboard('{ArrowRight}');
     expect(screen.getByText('Research summary moved.').getAttribute('role')).toBe('status');
-    expect(within(canvas).getByRole('article', { name: 'Research summary' }).getAttribute('style')).toContain('--workspace-x: 18%');
+    expect(within(canvas).getByRole('article', { name: 'Research summary' }).getAttribute('style')).toContain('--workspace-x: 12%');
 
     await user.click(screen.getByRole('button', { name: 'Send backward Research summary' }));
     expect(within(canvas).getAllByRole('article')[0]?.getAttribute('aria-labelledby')).toContain('view-0');
@@ -100,6 +101,115 @@ describe('Workspace', () => {
     resize.focus();
     await user.keyboard('{ArrowRight}');
     expect(within(canvas).getByRole('article', { name: 'Research summary' }).getAttribute('style')).toContain('--workspace-columns: 2');
+  });
+
+  it('keeps keyboard controls in Arrange, describes shortcuts and closes with Escape', async () => {
+    const user = userEvent.setup();
+    render(<Workspace views={views} />);
+    const research = screen.getByRole('article', { name: 'Research summary' });
+    expect(within(research).getByRole('button', { name: /^Move Research summary\./ }).closest('details')?.open).toBe(false);
+    const summary = within(research).getByText('Arrange');
+    summary.focus();
+    await user.keyboard('{Enter}');
+    const move = within(research).getByRole('button', { name: /^Move Research summary\./ });
+    const resize = within(research).getByRole('button', { name: /^Resize Research/ });
+    expect(document.getElementById(move.getAttribute('aria-describedby')!)?.textContent).toContain('Focus Move or Resize, then use arrow keys.');
+    move.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getAllByRole('article').map((view) => view.getAttribute('aria-labelledby'))[1])
+      .toBe(research.getAttribute('aria-labelledby'));
+    expect(document.activeElement).toBe(move);
+    resize.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(research.style.getPropertyValue('--workspace-rows')).toBe('2');
+    await user.keyboard('{Escape}');
+    expect(document.activeElement).toBe(summary);
+    expect(summary.closest('details')?.open).toBe(false);
+    expect(resize.closest('details')?.open).toBe(false);
+  });
+
+  it('moves and resizes layered views with arrows and larger Shift steps without jumping on focus', async () => {
+    const user = userEvent.setup();
+    render(<Workspace views={views} />);
+    await user.click(within(screen.getByRole('heading', { name: 'Workspace' }).parentElement!).getByText('Arrange'));
+    await user.click(screen.getByRole('button', { name: 'Layer views' }));
+    const research = screen.getByRole('article', { name: 'Research summary' });
+    await user.click(within(research).getByText('Arrange'));
+    const move = within(research).getByRole('button', { name: /^Move Research summary\./ });
+    move.focus();
+    expect(research.style.getPropertyValue('--workspace-x')).toBe('8%');
+    await user.keyboard('{Shift>}{ArrowRight}{/Shift}');
+    expect(research.style.getPropertyValue('--workspace-x')).toBe('18%');
+    const resize = within(research).getByRole('button', { name: /^Resize Research/ });
+    resize.focus();
+    await user.keyboard('{ArrowLeft}{Shift>}{ArrowUp}{/Shift}');
+    expect(research.style.getPropertyValue('--workspace-width')).toBe('67%');
+    expect(research.style.getPropertyValue('--workspace-height')).toBe('62%');
+    expect(document.activeElement).toBe(resize);
+  });
+
+  it('drags titles, resizes individual edges and cancels pointer changes', async () => {
+    const user = userEvent.setup();
+    render(<Workspace views={views} />);
+    await user.click(within(screen.getByRole('heading', { name: 'Workspace' }).parentElement!).getByText('Arrange'));
+    await user.click(screen.getByRole('button', { name: 'Layer views' }));
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, top: 0, left: 0, right: 1000, bottom: 500, width: 1000, height: 500, toJSON: () => ({}),
+    });
+    const research = screen.getByRole('article', { name: 'Research summary' });
+    function gesture(target: Element, dx: number, dy: number, cancel = false) {
+      Object.defineProperties(target, {
+        setPointerCapture: { value: vi.fn(), configurable: true },
+        hasPointerCapture: { value: () => true, configurable: true },
+        releasePointerCapture: { value: vi.fn(), configurable: true },
+      });
+      fireEvent.pointerDown(target, { pointerId: 1, button: 0, clientX: 0, clientY: 0 });
+      expect(research.className).toContain('workspace-window-dragging');
+      fireEvent.pointerMove(target, { pointerId: 1, clientX: dx, clientY: dy });
+      if (cancel) fireEvent.pointerCancel(target, { pointerId: 1 });
+      else fireEvent.pointerUp(target, { pointerId: 1, clientX: dx, clientY: dy });
+      expect(research.className).not.toContain('workspace-window-dragging');
+    }
+    gesture(within(research).getByRole('heading'), 100, 50);
+    expect(research.style.getPropertyValue('--workspace-x')).toBe('18%');
+    expect(research.style.getPropertyValue('--workspace-y')).toBe('18%');
+    gesture(research.querySelector('.workspace-resize-edge-right')!, -100, 50);
+    expect(research.style.getPropertyValue('--workspace-width')).toBe('62%');
+    expect(research.style.getPropertyValue('--workspace-height')).toBe('72%');
+    gesture(research.querySelector('.workspace-resize-edge-bottom')!, 100, -50);
+    expect(research.style.getPropertyValue('--workspace-width')).toBe('62%');
+    expect(research.style.getPropertyValue('--workspace-height')).toBe('62%');
+    gesture(within(research).getByRole('heading'), 100, 50, true);
+    expect(research.style.getPropertyValue('--workspace-x')).toBe('18%');
+    expect(screen.getByText('Arrangement cancelled.')).not.toBeNull();
+  });
+
+  it('keeps content available without motion callbacks and disables movement without hiding reduced-motion states', () => {
+    render(<Workspace views={views} />);
+    expect(screen.getByRole('heading', { name: 'Research summary' })).not.toBeNull();
+    expect(screen.getByText('Source-linked findings')).not.toBeNull();
+    const workspaceStyles = readFileSync('src/styles.css', 'utf8');
+    expect(workspaceStyles).toContain('display var(--motion-state) allow-discrete');
+    expect(workspaceStyles).toContain('@starting-style');
+    const visibleWindow = workspaceStyles.match(/\.workspace-window \{([^}]+)\}/)?.[1];
+    expect(visibleWindow).toContain('display: flex');
+    expect(visibleWindow).not.toMatch(/opacity:\s*0|visibility:\s*hidden/);
+    const reducedMotion = workspaceStyles.slice(workspaceStyles.indexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(reducedMotion).toContain('.workspace-window { transition: none; transform: none; }');
+    expect(reducedMotion).toContain('.workspace-tab { animation: none; transition: none; }');
+    const reducedWindow = reducedMotion.match(/\.workspace-window \{([^}]+)\}/)?.[1];
+    expect(reducedWindow).not.toMatch(/opacity:\s*0|display:\s*none|visibility:\s*hidden/);
+  });
+
+  it('bounds Arrange to its window and keeps mobile lifecycle actions in one row with 44px targets', () => {
+    const workspaceStyles = readFileSync('src/styles.css', 'utf8');
+    expect(workspaceStyles).toMatch(/\.workspace-window-heading \{\s*position: relative;/);
+    expect(workspaceStyles).toContain('.workspace-arrange-menu { position: static; }');
+    expect(workspaceStyles).toContain('width: min(300px, 100%); min-width: 0; max-width: 100%;');
+    const mobile = workspaceStyles.slice(workspaceStyles.indexOf('@media (max-width: 900px)'));
+    expect(mobile).toContain('.workspace-window-heading h3 { flex-basis: 100%; }');
+    expect(mobile).toContain('grid-template-columns: minmax(0, 1fr) repeat(3, 44px); gap: 4px;');
   });
 
   it('shows empty, loading, error and interrupted states and recovers failed actions', async () => {
@@ -203,6 +313,10 @@ describe('Workspace', () => {
     expect(accepted).toBe(true);
     expect(within(canvas).getByRole('article', { name: 'Research summary' }).hasAttribute('inert')).toBe(false);
     expect(componentController?.dispatch({ operation: 'restore', viewId: 'missing' })).toBe(false);
+    act(() => { componentController.dispatch({ operation: 'focus', viewId: 'sources' }); });
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
+    act(() => { componentController.dispatch({ operation: 'focus', viewId: 'sources' }); });
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
 
     expect(screen.getByRole('button', { name: 'Maximise Research summary' })).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Close Research summary' })).not.toBeNull();

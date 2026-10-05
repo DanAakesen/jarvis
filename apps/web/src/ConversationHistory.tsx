@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { Link } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
@@ -15,6 +15,15 @@ import {
 } from './conversation-history';
 
 const maxTaskId = 9_223_372_036_854_775_807n;
+
+function relativeTime(at: string, now: number): string {
+  const seconds = Math.round((Date.parse(at) - now) / 1000);
+  const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+  if (Math.abs(seconds) < 60) return formatter.format(seconds, 'second');
+  if (Math.abs(seconds) < 3600) return formatter.format(Math.round(seconds / 60), 'minute');
+  if (Math.abs(seconds) < 86400) return formatter.format(Math.round(seconds / 3600), 'hour');
+  return formatter.format(Math.round(seconds / 86400), 'day');
+}
 
 function asHistoryMessage(message: ChatMessage, language: 'da' | 'en'): ConversationHistoryMessage {
   return {
@@ -66,10 +75,38 @@ export function ConversationHistory({
   } | null>(null);
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceRefresh, setVoiceRefresh] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const input = useRef<HTMLTextAreaElement>(null);
   const replyEnd = useRef<HTMLDivElement>(null);
   const wasBusy = useRef(false);
   const lastMessageId = messages.at(-1)?.id;
+
+  useLayoutEffect(() => {
+    const textarea = input.current;
+    if (!textarea || voiceActive) return;
+    const grow = () => {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+    };
+    grow();
+    if (typeof ResizeObserver !== 'function') return;
+    let width = textarea.getBoundingClientRect().width;
+    const observer = new ResizeObserver(() => {
+      const nextWidth = textarea.getBoundingClientRect().width;
+      if (nextWidth === width) return;
+      width = nextWidth;
+      grow();
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, [draft, voiceActive]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'hidden') setNow(Date.now());
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!voiceActive) replyEnd.current?.scrollIntoView?.({ block: 'end' });
@@ -227,7 +264,10 @@ export function ConversationHistory({
           </button>
         </div>
       ) : messages.length === 0 ? (
-        <p>No messages yet. Send a message to begin the conversation.</p>
+        <div className="conversation-greeting">
+          <h2>What’s on your mind?</h2>
+          <p>Make a plan, explore an idea, or pick up where you left off.</p>
+        </div>
       ) : (
         <>
           {nextCursor && (
@@ -244,16 +284,18 @@ export function ConversationHistory({
                 : '';
               if (voiceUsageText) displayedVoiceUsage.add(message.sessionId);
               return (
-                <li className="conversation-message" key={message.id}>
+                <li className="conversation-message" data-speaker={message.role} key={message.id} tabIndex={0}>
                   <div className="message-heading">
                     <strong>{message.role === 'dan' ? 'Dan' : 'Jarvis'}</strong>
-                    <time dateTime={message.at}>{new Date(message.at).toLocaleString()}</time>
                   </div>
-                  <p className="message-language">
-                    {message.channel === 'voice' ? 'Voice' : 'Chat'} · {message.language === 'da' ? 'Danish' : 'English'}
-                    {voiceUsageText}
-                  </p>
                   <p>{message.text}</p>
+                  <div className="message-metadata">
+                    <p className="message-language">
+                      {message.channel === 'voice' ? 'Voice' : 'Chat'} · {message.language === 'da' ? 'Danish' : 'English'}
+                      {voiceUsageText}
+                    </p>
+                    <time dateTime={message.at} title={new Date(message.at).toLocaleString()}>{relativeTime(message.at, now)}</time>
+                  </div>
                   {message.toolCalls.length > 0 && (
                     <ul className="message-tools" aria-label="Tool calls">
                       {message.toolCalls.map((call) => (
@@ -275,8 +317,11 @@ export function ConversationHistory({
         </>
       )}
 
-      {streamedText && (
-        <p className="streaming-reply" aria-label="Jarvis reply in progress">{streamedText}</p>
+      {sending && (
+        <div className="streaming-message">
+          <strong>Jarvis</strong>
+          <p className="streaming-reply" aria-label="Jarvis reply in progress">{streamedText}<span className="streaming-caret" aria-hidden="true" /></p>
+        </div>
       )}
       {interruptedText && (
         <p className="interrupted-reply">
@@ -295,66 +340,6 @@ export function ConversationHistory({
       </div>
 
       <div className="conversation-input" data-voice-active={voiceActive}>
-      <form id="conversation-composer" className="composer" hidden={voiceActive} onSubmit={(event) => void sendMessage(event)}>
-        <fieldset className="choice-group" disabled={sending}>
-          <legend>Reply language</legend>
-          <label className="choice">
-            <input
-              type="radio"
-              name="language"
-              value="da"
-              checked={language === 'da'}
-              onChange={() => setLanguage('da')}
-            /> Danish
-          </label>
-          <label className="choice">
-            <input
-              type="radio"
-              name="language"
-              value="en"
-              checked={language === 'en'}
-              onChange={() => setLanguage('en')}
-            /> English
-          </label>
-        </fieldset>
-        <label htmlFor="message">Message Jarvis</label>
-        <textarea
-          ref={input}
-          id="message"
-          name="message"
-          rows={2}
-          maxLength={20_000}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-          disabled={sending}
-          aria-describedby="chat-guidance"
-        />
-        <p id="chat-guidance" className="chat-guidance">
-          Enter to send; Shift+Enter for a new line.
-        </p>
-        <div className="action-row">
-          <button className="secondary-button" type="button" onClick={() => void inspectVision('screen')}
-            disabled={sending || !screenShare?.sharing || screenShare.inspecting}>
-            {screenShare?.inspecting ? 'Looking at screen…' : 'Look at screen'}
-          </button>
-          <button className="secondary-button" type="button" onClick={() => void inspectVision('camera')}
-            disabled={sending || !camera?.sharing || camera.inspecting}
-            aria-describedby="camera-inspection-guidance">
-            {camera?.inspecting ? 'Looking at camera…' : 'Look at camera'}
-          </button>
-        </div>
-        <span id="camera-inspection-guidance" className="visually-hidden">
-          Turn on the camera from the top bar before asking Jarvis to inspect a frame.
-        </span>
-        {visionContext && visionContext.sessionId === session?.id &&
-          <p role="status">{visionContext.source === 'camera' ? 'Camera' : 'Screen'} context is ready for the next message; it will not be saved in conversation history.</p>}
-      </form>
       <div className="conversation-actions">
       <VoiceControls
         client={client}
@@ -370,12 +355,56 @@ export function ConversationHistory({
           setVoiceRefresh((value) => value + 1);
         }}
       />
-      {!voiceActive && (
-        <button className="primary-button" type="submit" form="conversation-composer" disabled={sending || !draft.trim()}>
-          Send
-        </button>
-      )}
       </div>
+      <form id="conversation-composer" className="composer" hidden={voiceActive} onSubmit={(event) => void sendMessage(event)}>
+        <label className="visually-hidden" htmlFor="message">Message Jarvis</label>
+        <textarea
+          ref={input}
+          id="message"
+          name="message"
+          rows={1}
+          placeholder="Ask Jarvis"
+          maxLength={20_000}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+          disabled={sending}
+          aria-describedby="chat-guidance"
+        />
+        <div className="composer-language" role="group" aria-label="Reply language">
+          <button type="button" aria-label="Danish" aria-pressed={language === 'da'} disabled={sending} onClick={() => setLanguage('da')}>DA</button>
+          <button type="button" aria-label="English" aria-pressed={language === 'en'} disabled={sending} onClick={() => setLanguage('en')}>EN</button>
+        </div>
+        <button className="primary-button composer-send" type="submit" disabled={sending || !draft.trim()} aria-label="Send" title="Send message">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m5 12 7-7 7 7M12 5v15" />
+          </svg>
+        </button>
+        <p id="chat-guidance" className="visually-hidden">
+          Enter to send; Shift+Enter for a new line.
+        </p>
+        {(screenShare?.sharing || camera?.sharing) && <div className="action-row composer-vision">
+          <button className="secondary-button" type="button" onClick={() => void inspectVision('screen')}
+            disabled={sending || !screenShare?.sharing || screenShare.inspecting}>
+            {screenShare?.inspecting ? 'Looking at screen…' : 'Look at screen'}
+          </button>
+          <button className="secondary-button" type="button" onClick={() => void inspectVision('camera')}
+            disabled={sending || !camera?.sharing || camera.inspecting}
+            aria-describedby="camera-inspection-guidance">
+            {camera?.inspecting ? 'Looking at camera…' : 'Look at camera'}
+          </button>
+        </div>}
+        <span id="camera-inspection-guidance" className="visually-hidden">
+          Turn on the camera from the top bar before asking Jarvis to inspect a frame.
+        </span>
+        {visionContext && visionContext.sessionId === session?.id &&
+          <p role="status">{visionContext.source === 'camera' ? 'Camera' : 'Screen'} context is ready for the next message; it will not be saved in conversation history.</p>}
+      </form>
       </div>
     </section>
   );

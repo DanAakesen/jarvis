@@ -40,6 +40,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   restore input focus. Persisted voice completion refreshes history. The
   transcript scrolls independently; activity/backend controls are expandable
   within it. APIs and persisted conversation contracts are unchanged.
+- P8-21 keeps that ownership while polishing presentation: auto-growing input,
+  DA/EN pressed buttons, relative message metadata, streaming caret and
+  reduced-motion-safe transitions. `Workspace` reuses its existing geometry
+  operations for title dragging, edge resizing and Arrange keyboard controls.
+  Now surfaces reflect existing feed data; tool shimmer requires an explicit
+  tool-call state. No route, package, database or agent-delivery contract changes.
 - React mounts into `apps/web/index.html`. BrowserRouter renders the home page
   and a catch-all page with a return link. Production static hosting must fall
   back to `index.html` for client routes (P0-11).

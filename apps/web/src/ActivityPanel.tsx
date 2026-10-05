@@ -146,7 +146,7 @@ export function ActivityPanel({ feed, onDismiss, onResolveConfirmation, onRetry,
   }
 
   return (
-    <section className="panel" aria-labelledby="now-heading">
+    <section className="panel now-panel" aria-labelledby="now-heading">
       <h2 id="now-heading" ref={heading} tabIndex={-1}>Now</h2>
       {feed.status === 'loading' ? <p>Loading current activity…</p> : feed.status === 'unavailable' ? (
         <>
@@ -185,7 +185,7 @@ export function ActivityPanel({ feed, onDismiss, onResolveConfirmation, onRetry,
             {feed.running.length === 0 ? <p>No tasks are running.</p> : (
               <ul className="activity-list">
                 {feed.running.map((task) => (
-                  <li key={task.id}>
+                  <li key={task.id} className="activity-running">
                     <Link className="activity-title" to={`/factory/tasks/${task.id}`}>{task.title}</Link>
                     <dl className="activity-meta">
                       <dt>Project</dt><dd>{task.project}</dd>
