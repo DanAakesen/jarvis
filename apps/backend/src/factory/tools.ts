@@ -134,6 +134,7 @@ export const factoryTools: readonly JarvisTool[] = [
     name: 'list_projects',
     description: 'List active Software Factory projects and their IDs for selecting a project.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    reflexSafe: true,
     execute: async (_input, request) => {
       const store = requireStore(request.server.projectStore, 'Project service');
       return (await store.list()).map(projectSummary);
@@ -143,6 +144,7 @@ export const factoryTools: readonly JarvisTool[] = [
     name: 'list_tasks',
     description: 'List Software Factory tasks using the same bounded filters as the Tasks API.',
     inputSchema: { type: 'object', properties: taskFiltersSchema, additionalProperties: false },
+    reflexSafe: true,
     execute: async (input, request) => {
       const store = requireStore(request.server.taskStore, 'Task service');
       const filters = taskListFilters(input as TaskListInput);
@@ -162,6 +164,7 @@ export const factoryTools: readonly JarvisTool[] = [
       required: ['taskId'],
       additionalProperties: false,
     },
+    reflexSafe: true,
     execute: async (input, request) => {
       const { taskId, eventLimit, eventOffset } = input as {
         taskId: string; eventLimit?: number; eventOffset?: number;
@@ -305,5 +308,6 @@ export const factoryTools: readonly JarvisTool[] = [
       const { taskId } = input as { taskId: string };
       return controlTask(taskId, action, request);
     },
+    ...(action === 'pause' ? { reflexSafe: true } : {}),
   })),
 ];

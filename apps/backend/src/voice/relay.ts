@@ -12,6 +12,7 @@ import {
 import type { BackendModule } from '../modules.js';
 import type { ConversationMessage, ConversationRole } from '../core/conversation-store.js';
 import { defaultSettings, readSettings } from '../core/settings.js';
+import { executeReflexAction, reflexTargets } from '../core/reflex.js';
 import { createVoiceStatusAnnouncer } from './status-updates.js';
 
 export const VOICE_LIVE_SCOPE = 'https://ai.azure.com/.default';
@@ -195,6 +196,9 @@ function registerVoiceRoute(
     let finalization: Promise<void> | undefined;
     let endRequested = false;
     const savedTranscripts = new Set<string>();
+    const savedUserMessages = new Map<string, ConversationMessage>();
+    const reflexedItems = new Set<string>();
+    let reflexPending = false;
     const sessionReady = store.createSession({ channel: 'voice', language })
       .then((session) => { sessionId = session.id; });
 
@@ -202,6 +206,41 @@ function registerVoiceRoute(
       if (parseVoiceEvent(data, binary)?.type !== 'input_audio_buffer.append' || microphoneActive) return;
       microphoneActive = true;
       publishActivity('listening');
+    };
+
+    const handleEnglishEndOfTurn = async (itemId: string, text: string) => {
+      if (reflexedItems.has(itemId) || reflexedItems.size >= MAX_TRANSCRIPTS_PER_SESSION) return;
+      reflexedItems.add(itemId);
+      reflexPending = true;
+      try {
+        await transcriptQueue;
+        const message = savedUserMessages.get(itemId);
+        let reflexNote: string | undefined;
+        if (message && app.reflexClassifier) {
+          const classification = await app.reflexClassifier.classify(
+            text,
+            'en',
+            await reflexTargets(request),
+            controller.signal,
+          );
+          const action = await executeReflexAction(classification, request, message.id, controller.signal);
+          reflexNote = action?.note;
+        }
+        if (controller.signal.aborted || endRequested) return;
+        sendUpstream({
+          type: 'response.create',
+          ...(reflexNote ? {
+            response: {
+              instructions: `The backend reflex already acted. ${reflexNote} Acknowledge briefly and do not repeat the action.`,
+            },
+          } : {}),
+        });
+      } catch {
+        if (!controller.signal.aborted && !endRequested) sendUpstream({ type: 'response.create' });
+      } finally {
+        reflexPending = false;
+        statusAnnouncer?.flush();
+      }
     };
 
     const persistTranscript = (event: Record<string, unknown>) => {
@@ -260,7 +299,16 @@ function registerVoiceRoute(
         });
         if (!message) throw new Error('Voice transcript was not stored');
         if (role === 'dan') request.jarvisMemorySourceMessageId = message.id;
-        if (role === 'dan') latestDanMessage = message;
+        if (role === 'dan') {
+          latestDanMessage = message;
+          if (sourceItemId) {
+            if (savedUserMessages.size >= MAX_TRANSCRIPTS_PER_SESSION) {
+              const oldest = savedUserMessages.keys().next().value;
+              if (oldest) savedUserMessages.delete(oldest);
+            }
+            savedUserMessages.set(sourceItemId, message);
+          }
+        }
       }).catch(() => {
         transcriptPersistenceFailed = true;
         request.log.warn('voice.transcript_persistence_failed');
@@ -309,7 +357,7 @@ function registerVoiceRoute(
         taskEvents: app.eventHub,
         nowEvents: app.nowEventHub,
         canSpeak: () => !controller.signal.aborted && !endRequested && !userSpeaking &&
-          !assistantResponding && !toolCallsInResponse && pendingToolCalls === 0 &&
+          !reflexPending && !assistantResponding && !toolCallsInResponse && pendingToolCalls === 0 &&
           upstream?.readyState === WebSocket.OPEN,
         speak: (text) => {
           assistantResponding = true;
@@ -551,6 +599,14 @@ function registerVoiceRoute(
             if (microphoneActive && pendingToolCalls === 0) publishActivity('listening');
           }
           if (event) persistTranscript(event);
+          if (english && event?.type === 'conversation.item.input_audio_transcription.completed' &&
+              typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
+              typeof event.transcript === 'string' && event.transcript.trim() &&
+              event.transcript.length <= MAX_TRANSCRIPT_CHARACTERS) {
+            void handleEnglishEndOfTurn(event.item_id, event.transcript.trim());
+          } else if (english && event?.type === 'conversation.item.input_audio_transcription.failed') {
+            sendUpstream({ type: 'response.create' });
+          }
           if (browser.readyState === WebSocket.OPEN) {
             browser.send(data, { binary }, (error) => {
               if (error) close(1011, 'Voice connection failed');

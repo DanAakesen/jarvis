@@ -14,6 +14,7 @@ import type { ToolCallStore } from './core/tool-calls.js';
 import { conversationModule } from './core/conversation.js';
 import type { ConversationStore } from './core/conversation-store.js';
 import type { ConversationAgent } from './core/chat-agent.js';
+import type { ReflexClassifier } from './core/reflex.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskController, TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
 import type { GitHubAppTokenIssuer, GitHubRepositoryCatalog } from './github-app.js';
@@ -55,6 +56,7 @@ export interface BuildAppOptions {
   readonly conversationStore?: ConversationStore;
   readonly sandboxHeartbeat?: SandboxHeartbeat;
   readonly conversationAgent?: ConversationAgent;
+  readonly reflexClassifier?: ReflexClassifier;
   readonly containerAppScaler?: ContainerAppScaler | null;
   readonly teamsNotifications?: TeamsNotificationService | null;
   readonly awayModeStore?: AwayModeStore | null;
@@ -84,6 +86,7 @@ declare module 'fastify' {
     conversationStore: ConversationStore | null;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
+    reflexClassifier: ReflexClassifier | null;
     teamsNotifications: TeamsNotificationService | null;
     awayModeStore: AwayModeStore | null;
     workspaceCommands: WorkspaceCommandBroker;
@@ -193,6 +196,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     app.addHook('onClose', async () => { await options.sandboxHeartbeat!.stop(); });
   }
   app.decorate('conversationAgent', options.conversationAgent ?? null);
+  app.decorate('reflexClassifier', options.reflexClassifier ?? null);
   app.decorate('teamsNotifications', options.teamsNotifications ?? null);
   registerModules(app, options.modules ?? [
     coreModule,

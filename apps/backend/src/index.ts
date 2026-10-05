@@ -25,6 +25,7 @@ import { createEventHub } from './core/event-hub.js';
 import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
 import { coreModule } from './core/index.js';
 import { conversationModule } from './core/conversation.js';
+import { createJevReflexClassifier } from './core/reflex.js';
 import { factoryModule } from './factory/index.js';
 import type { BackendModule } from './modules.js';
 import {
@@ -177,6 +178,25 @@ try {
   const webhookSecretClient = config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
     : undefined;
+  const jevSecretClient = config.keyVaultUri && credential
+    ? new SecretClient(config.keyVaultUri, credential)
+    : undefined;
+  let jevApiKey: string | undefined;
+  let jevApiKeyRequest: Promise<string | undefined> | undefined;
+  const getJevApiKey = () => {
+    if (jevApiKey !== undefined) return Promise.resolve(jevApiKey);
+    if (!jevSecretClient) return Promise.resolve(undefined);
+    jevApiKeyRequest ??= jevSecretClient.getSecret('jev-api-key')
+      .then(({ value }) => {
+        if (!value || !value.trim() || value.length > 10_000 || /[\r\n]/u.test(value)) return undefined;
+        jevApiKey = value;
+        return value;
+      })
+      .catch(() => undefined)
+      .finally(() => { jevApiKeyRequest = undefined; });
+    return jevApiKeyRequest;
+  };
+  const reflexClassifier = createJevReflexClassifier(getJevApiKey);
   let webhookSecret: string | undefined;
   let webhookSecretRequest: Promise<string | undefined> | undefined;
   const getWebhookSecret = () => {
@@ -438,6 +458,7 @@ try {
     : undefined;
   const app = buildApp(config, logger, {
     modules,
+    ...(jevSecretClient ? { reflexClassifier } : {}),
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(releaseViewStore ? { releaseViewStore } : {}),
     ...(releaseGraphReader ? { releaseGraphReader } : {}),

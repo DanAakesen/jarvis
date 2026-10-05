@@ -248,12 +248,20 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         language: str,
         *,
         settings: ModelSettings | None = None,
+        reflex_note: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream a written chat reply in the selected language."""
         if language not in CHAT_INSTRUCTIONS:
             raise ValueError("Unsupported chat language")
+        instructions = CHAT_INSTRUCTIONS[language] + "\n" + MEMORY_CHAT_INSTRUCTIONS
+        if reflex_note is not None:
+            instructions += (
+                "\nTrusted backend reflex result for this turn: "
+                + reflex_note
+                + " Relay the result honestly and acknowledge briefly. Do not repeat the action."
+            )
         async for delta in self._complete(
-            messages, CHAT_INSTRUCTIONS[language] + "\n" + MEMORY_CHAT_INSTRUCTIONS, settings
+            messages, instructions, settings
         ):
             yield delta
 

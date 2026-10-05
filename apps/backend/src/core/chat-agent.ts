@@ -5,6 +5,7 @@ export interface ConversationAgentInput {
   readonly text: string;
   readonly language: 'da' | 'en';
   readonly screenContext?: string;
+  readonly reflexNote?: string;
 }
 
 export interface ConversationAgent {
