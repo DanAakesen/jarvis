@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import type { ActivityLike, ConversationReference } from '@microsoft/teams.api';
 import { AdaptiveCard, OpenUrlAction, SubmitAction, TextBlock } from '@microsoft/teams.cards';
@@ -13,6 +14,17 @@ import type { SpeechSynthesizer } from './speech.js';
 export const confirmationLifetimeSeconds = 5 * 60;
 const maxPendingBrowserConfirmations = 10;
 const browserConversationId = 'browser';
+const phoneSessionContext = new AsyncLocalStorage<string>();
+
+export function withPhoneConfirmationSession<T>(
+  sessionId: string,
+  action: () => Promise<T>,
+): Promise<T> {
+  if (!/^[1-9]\d{0,18}$/u.test(sessionId) || BigInt(sessionId) > 9_223_372_036_854_775_807n) {
+    throw new TypeError('Invalid phone session');
+  }
+  return phoneSessionContext.run(sessionId, action);
+}
 
 export const confirmationActionKinds = [
   'merge',
@@ -271,13 +283,25 @@ export function createTeamsNotificationService({
     const id = randomBytes(32).toString('base64url');
     const conversationId = reference?.conversation.id ?? browserConversationId;
     try {
-      await store.createConfirmation(
-        id,
-        ownerObjectId,
-        conversationId,
-        actionKind,
-        confirmationLifetimeSeconds,
-      );
+      const phoneSessionId = phoneSessionContext.getStore();
+      if (phoneSessionId === undefined) {
+        await store.createConfirmation(
+          id,
+          ownerObjectId,
+          conversationId,
+          actionKind,
+          confirmationLifetimeSeconds,
+        );
+      } else {
+        await store.createConfirmation(
+          id,
+          ownerObjectId,
+          conversationId,
+          actionKind,
+          confirmationLifetimeSeconds,
+          phoneSessionId,
+        );
+      }
     } catch {
       throw new ToolRefusal(reference
         ? 'Teams confirmation is unavailable.'
