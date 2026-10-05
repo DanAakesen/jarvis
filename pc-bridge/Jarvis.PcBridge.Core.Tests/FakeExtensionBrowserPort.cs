@@ -15,7 +15,16 @@ internal sealed class FakeExtensionBrowserPort(FakeCdpTarget target) : IExtensio
     public int DetachCount { get; private set; }
     public int SessionCount => _sessions.Count;
     public List<string> Methods { get; } = [];
+    public List<string> OpenedUrls { get; } = [];
     public event Action<string>? TabRemoved;
+
+    public Task OpenUrlAsync(string url, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!IsConnected) throw new BrowserActionRefusedException("not_found");
+        OpenedUrls.Add(url);
+        return Task.CompletedTask;
+    }
 
     public Task<BrowserTabPage> ListTabsAsync(int offset, int limit, CancellationToken cancellationToken)
     {

@@ -7,6 +7,8 @@ public interface IExtensionBrowserPort
     bool IsConnected { get; }
     event Action<string>? TabRemoved;
 
+    Task OpenUrlAsync(string url, CancellationToken cancellationToken);
+
     Task<BrowserTabPage> ListTabsAsync(int offset, int limit, CancellationToken cancellationToken);
 
     Task<JsonDocument> SendCommandAsync(
