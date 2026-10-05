@@ -654,15 +654,17 @@ Code, Edge, File Explorer, Windows Terminal, folders below `C:\Repo` opened in
 VS Code, active-window title reads, and exact-title window focus. URL commands
 are routed through the browser executor: if the extension is connected and
 Chrome automation is enabled, it opens the URL in Dan's normal Chrome; if the
-extension is disconnected, Windows shell opens the default browser and the tool
-result explicitly says so. A connected extension with automation disabled is
-refused rather than silently bypassing the setting. Launched apps and VS Code
-folder opens use Windows `AllowSetForegroundWindow` to grant the new process
-foreground eligibility; no synthetic input or focus-stealing workaround is used.
-The bridge does not expose arbitrary command execution; its only shell use is
-the explicit default-browser URL fallback. Offline requests receive a clear
-refusal; other failures are sanitized. The companion never logs tokens, device
-codes, command arguments, URLs, paths, window titles, or message content.
+extension is disconnected, the current companion launches the installed Chrome
+executable directly and identifies that fallback in the tool result. Websites
+are never handed to the Windows default browser. A connected extension with
+automation disabled is refused rather than silently bypassing the setting.
+Launched apps and VS Code folder opens use Windows `AllowSetForegroundWindow`
+to grant the new process foreground eligibility; no synthetic input or
+focus-stealing workaround is used. The bridge does not expose arbitrary command
+execution; its only direct executable launch for a URL is the Chrome fallback.
+Offline requests receive a clear refusal; other failures are sanitized. The
+companion never logs tokens, device codes, command arguments, URLs, paths, window
+titles, or message content.
 
 Online/offline changes update one existing Now-feed activity row keyed by
 `pc_bridge_status`; status writes are serialized and the feed refresh happens
@@ -671,6 +673,41 @@ portable policy tests, backend protocol tests with a fake WebSocket bridge, and
 Linux Windows-target build run in backend CI. Real device-code sign-in, Windows
 process/window behavior, SQL production writes and the live PC opening flow
 remain unverified.
+
+### Windows UI Automation app control (P7-07)
+
+The backend registers the sensitive `pc_act` tool only when the existing Jev
+client is configured. It reuses the authenticated PC bridge and its bounded
+`uia_snapshot`/`uia_act` commands; no new route, credential, persistence, or
+migration is added. Only the foreground VS Code (`code`) and File Explorer
+(`explorer`) windows are eligible. The Windows provider traverses at most 1,000
+controls and depth 12, checking a one-second traversal budget and cancellation
+between traversal batches. The portable policy returns at most
+100 enabled, visible, actionable controls with only role and accessible name.
+Password controls and names that look sensitive are omitted; field values are
+never observed.
+
+Each snapshot has one opaque ID and expires after 30 seconds. Before an action,
+the bridge re-observes the foreground app/window and verifies the selected
+element's runtime ID, role, name, visibility, enabled state, sensitivity, and
+supported control pattern. Only fixed click, type, and small-scroll operations
+are exposed. Jev makes one decision per fresh snapshot, for at most 20 steps or
+30 seconds, with a 1.2-second request timeout; cancellation reaches both the
+planner and bridge. Typed content must be an exact, non-sensitive value quoted
+in Dan's request. Risky intents and destructive control names use the existing
+P7-03 `computer_use` approval flow and retry the same observed element only
+after approval; missing approval refuses the action. Browser tasks remain on
+P7-17–P7-19's Chrome-only path, and this tool does not use Foundry
+computer-use.
+
+Generic tool auditing records only the outcome for this sensitive tool. The
+`pc_act.step` telemetry allow-list exports only step number, fixed action name,
+and outcome—never goals, control labels, typed text, screenshots, or UIA
+values. Fake-tree and backend tests cover the policy and protocol; the backend
+lint/build and Linux Windows-target build pass. A cancellation token cannot
+preempt an individual synchronous UI Automation COM call. Live Jev calls,
+Windows UIA responsiveness/cancellation, physical approval delivery, and Dan's
+end-to-end app task remain unverified.
 
 ### Chrome browser executor (P7-18, P7-25, P7-26)
 
@@ -684,7 +721,7 @@ also use the extension: `chrome.tabs.create({ url, active: true })` creates the
 new tab, then `chrome.windows.update(windowId, { focused: true, drawAttention: true })`
 brings Chrome forward and requests attention. A successful result is returned
 only after both extension operations complete. The browser toggle must be on
-for this route; a disconnected extension uses the explicit default-browser shell
+for this route; a disconnected extension uses the explicit Chrome executable
 fallback described above. The extension's native-messaging host is registered
 by the installer under HKCU; it relays length-prefixed messages to the running
 companion over a current-user-only named pipe. This adds no network listener,

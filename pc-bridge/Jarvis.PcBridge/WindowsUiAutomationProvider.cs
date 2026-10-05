@@ -14,6 +14,7 @@ public sealed class WindowsUiAutomationProvider : IUiAutomationProvider
 
     public UiAutomationView? Observe(CancellationToken cancellationToken)
     {
+        var started = Stopwatch.StartNew();
         cancellationToken.ThrowIfCancellationRequested();
         var handle = GetForegroundWindow();
         if (handle == IntPtr.Zero) return null;
@@ -30,7 +31,6 @@ public sealed class WindowsUiAutomationProvider : IUiAutomationProvider
         var controls = new List<UiAutomationControl>();
         var queue = new Queue<(AutomationElement Element, int Depth)>();
         queue.Enqueue((root, 0));
-        var started = Stopwatch.StartNew();
         var visited = 0;
 
         while (queue.Count > 0 && visited < MaxVisitedElements && started.Elapsed < ObservationLimit)
@@ -43,8 +43,10 @@ public sealed class WindowsUiAutomationProvider : IUiAutomationProvider
                 if (depth > 0) AddControl(element, controls);
                 if (depth >= MaxTreeDepth) continue;
                 var child = Walker.GetFirstChild(element);
-                while (child is not null && queue.Count < MaxVisitedElements)
+                while (child is not null && queue.Count < MaxVisitedElements &&
+                       started.Elapsed < ObservationLimit)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     queue.Enqueue((child, depth + 1));
                     child = Walker.GetNextSibling(child);
                 }
