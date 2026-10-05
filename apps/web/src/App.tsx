@@ -5,6 +5,8 @@ import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
 import { areas } from './areas';
 import { ContextPanel, ContextPanelProvider } from './ContextPanel';
+import type { CameraController } from './screen-sharing';
+import { useCamera } from './screen-sharing';
 import { useContextPanel } from './context-panel-state';
 import { DatabaseWakeStatus } from './DatabaseWakeStatus';
 import { JarvisPage } from './JarvisPage';
@@ -57,15 +59,51 @@ function UnavailableControl({ id, label, explanation, icon }: {
   );
 }
 
-function Shell({ signedIn, config, session }: { signedIn: boolean; config: PublicConfig; session: SignInSession }) {
+function CameraControl({ camera }: { camera: CameraController }) {
+  const label = camera.sharing ? 'Turn camera off' : 'Turn camera on';
+  const status = camera.sharing ? 'Camera on' : 'Camera off';
+  return (
+    <div className="topbar-feature camera-control">
+      <button
+        className="topbar-feature-button camera-control-button"
+        type="button"
+        aria-label={`${status}. ${label}.`}
+        aria-pressed={camera.sharing}
+        aria-describedby="camera-control-status"
+        title={`${status}. ${label}.`}
+        disabled={camera.starting}
+        onClick={() => camera.sharing ? camera.stop() : void camera.start()}
+      >
+        <ShellIcon name="camera" />
+        <span className="camera-control-label">{camera.starting ? 'Starting…' : camera.sharing ? 'On' : 'Off'}</span>
+      </button>
+      <span id="camera-control-status" className="visually-hidden">
+        Camera turns off when this session ends and automatically after five minutes.
+      </span>
+      {camera.error && <span className="camera-control-error" role="alert">{camera.error}</span>}
+    </div>
+  );
+}
+
+function Shell({ signedIn, config, session, camera }: {
+  signedIn: boolean;
+  config: PublicConfig;
+  session: SignInSession;
+  camera: CameraController;
+}) {
   return (
     <ContextPanelProvider>
-      <ShellLayout signedIn={signedIn} config={config} session={session} />
+      <ShellLayout signedIn={signedIn} config={config} session={session} camera={camera} />
     </ContextPanelProvider>
   );
 }
 
-function ShellLayout({ signedIn, config, session }: { signedIn: boolean; config: PublicConfig; session: SignInSession }) {
+function ShellLayout({ signedIn, config, session, camera }: {
+  signedIn: boolean;
+  config: PublicConfig;
+  session: SignInSession;
+  camera: CameraController;
+}) {
   const { pathname } = useLocation();
   const getAccessToken = session.getAccessToken;
   const { working } = useJarvisActivity();
@@ -194,7 +232,7 @@ function ShellLayout({ signedIn, config, session }: { signedIn: boolean; config:
               </span>
             )}
             <UnavailableControl id="screen-share-status" label="Share screen" explanation="Unavailable until screen sharing is built." icon="screen" />
-            <UnavailableControl id="camera-status" label="Camera" explanation="Unavailable until camera support is built." icon="camera" />
+            <CameraControl camera={camera} />
             <button
               id="context-panel-toggle"
               className="topbar-icon-button"
@@ -243,6 +281,12 @@ const defaultConfig: PublicConfig = __JARVIS_CONFIG__;
 export function App({ config = defaultConfig }: { config?: PublicConfig }) {
   const session = useSignIn(config);
   const signedIn = session.state === 'signed-in' && session.profile !== null;
+  const camera = useCamera(config, session.getAccessToken);
+  const stopCamera = camera.stop;
+
+  useEffect(() => {
+    if (!signedIn) stopCamera();
+  }, [signedIn, stopCamera]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -267,7 +311,7 @@ export function App({ config = defaultConfig }: { config?: PublicConfig }) {
       <ThemePreferenceProvider key={signedIn ? 'signed-in' : 'signed-out'}
         enabled={signedIn} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}>
         <Routes>
-          <Route element={<Shell signedIn={signedIn} config={config} session={session} />}>
+          <Route element={<Shell signedIn={signedIn} config={config} session={session} camera={camera} />}>
             <Route element={<RequireSignIn session={session} />}>
               <Route index element={
                 <JarvisPage
@@ -275,6 +319,7 @@ export function App({ config = defaultConfig }: { config?: PublicConfig }) {
                   client={session.client}
                   config={config}
                   getAccessToken={session.getAccessToken}
+                  camera={camera}
                 />
               } />
               {areas.map(({ id, path, Component }) => (

@@ -323,15 +323,15 @@ const FLOWS = [
     ],
   },
   {
-    name: "Screen sharing",
-    summary: "Dan explicitly shares a browser screen and requests an inspection; a backend-only vision call supplies transient context to the active chat or voice response.",
+    name: "Screen sharing and camera",
+    summary: "Dan explicitly shares a screen or enables the camera, then requests one frame; the existing backend vision bridge supplies transient context to chat or voice.",
     nodes: [
-      { id: "share", lane: "board", col: 1, s: "proven", t: "Share a window or screen", d: "Browser getDisplayMedia; status and Stop remain visible. Capture only after a user request." },
-      { id: "upload", lane: "backend", col: 2, s: "proven", t: "Authenticate and validate frame", d: "POST /screen/frames checks Dan's identity, active session, JPEG, 1 MiB size, and daily/three-second limits.", ev: "Focused route tests cover authentication, type/size bounds, refusal and the fake-model path." },
-      { id: "usage", lane: "data", col: 3, s: "proven", t: "Reserve frame usage", d: "Store screen_frames count; on inference success store token counts and estimated DKK. No frame data is persisted." },
+      { id: "share", lane: "board", col: 1, s: "proven", t: "Share screen or turn camera on", d: "Browser getDisplayMedia or permission-gated getUserMedia; show status and Stop. Capture one frame only after a request; camera stops with voice/session end or after five minutes.", ev: "Fake camera stream tests cover permission-on-demand, capture, explicit stop, timeout and unmount cleanup." },
+      { id: "upload", lane: "backend", col: 2, s: "proven", t: "Reuse authenticated vision upload", d: "POST /screen/frames checks Dan's identity, active session, JPEG, 1 MiB size, and shared daily/three-second limits.", ev: "Focused route tests cover authentication, type/size bounds, refusal and the fake-model path." },
+      { id: "usage", lane: "data", col: 3, s: "proven", t: "Reserve shared frame usage", d: "Store screen_frames count for either source; on inference success store token counts and estimated DKK. No frame data is persisted." },
       { id: "model", lane: "model", col: 4, s: "unknown", t: "Describe with Foundry vision", d: "Backend managed identity calls the configured vision-capable deployment with the in-memory JPEG.", ev: "Fake-model contract is tested; live image support, managed-identity exchange and billed SKU remain coordinator checks." },
       { id: "context", lane: "backend", col: 5, s: "proven", t: "Pass a transient description", d: "Send only a bounded, untrusted description to chat or voice response instructions; do not create transcript or task-event content." },
-      { id: "reply", lane: "board", col: 6, s: "proven", t: "Answer Dan", d: "Jarvis uses the description in the active reply; the share stream stops with voice or page teardown." },
+      { id: "reply", lane: "board", col: 6, s: "proven", t: "Answer Dan", d: "Jarvis uses only the bounded description in the active reply; streams stop on voice/session end and app teardown." },
     ],
     edges: [
       ["share", "upload", "proven", "explicit request + JPEG"],
