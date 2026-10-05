@@ -338,6 +338,8 @@ non-interactive content and Left/Right/Home/End on those buttons are alternative
 Selection focuses the view title and announces the change. Background views
 remain mounted, hidden and inert; desktop arrangements and geometry survive
 viewport changes. Phone windows keep only minimise and close title actions.
+Selection, announcements and lifecycle fallback use the combined page and
+agent-created view collection; commands retain P8-15's required `commandId`.
 
 During voice, the foreground window ends above the safe-area-aware orb dock;
 End voice sits inside the dock to the right. Microphone and inspection controls

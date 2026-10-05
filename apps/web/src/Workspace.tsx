@@ -265,9 +265,9 @@ export const Workspace = forwardRef<WorkspaceController, {
     if (!phone && index >= 0 && index !== orderedViews.length - 1) reorder(id, orderedViews.length - index - 1, 'brought forward');
     if (minimizedViewIds.has(id) || (phone && foreground?.id !== id)) pendingFocus.current = { target: 'window', viewId: id };
     else windowHeadings.current.get(id)?.focus();
-    if (phone) setAnnouncement(`${views.find((view) => view.id === id)?.title} foreground.`);
+    if (phone) setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} foreground.`);
     return true;
-  }, [foreground?.id, isViewOpen, minimizedViewIds, orderedViews, phone, reorder, restoreView, views]);
+  }, [foreground?.id, isViewOpen, minimizedViewIds, orderedViews, phone, reorder, restoreView, workspaceViews]);
 
   function switchView(offset: number) {
     const index = visibleViews.findIndex((view) => view.id === foreground?.id);

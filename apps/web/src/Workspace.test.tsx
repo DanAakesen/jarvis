@@ -82,14 +82,28 @@ describe('Workspace', () => {
     expect((screen.getByRole('textbox', { name: 'Research note' }) as HTMLInputElement).value).toBe('Original retained');
   });
 
-  it('foregrounds phone views through existing commands without changing desktop order and falls back after close/minimise', async () => {
+  it.each(['page', 'agent', 'mixed'] as const)('foregrounds phone %s views through existing commands without changing desktop order and falls back after close/minimise', async (source) => {
     phoneViewport();
     const user = userEvent.setup();
     const controller = createRef<WorkspaceController>();
     const onVisibleViewsChange = vi.fn();
-    render(<Workspace ref={controller} views={views} onVisibleViewsChange={onVisibleViewsChange} />);
-    act(() => { expect(controller.current?.dispatch({ operation: 'focus', viewId: 'sources' })).toBe(true); });
+    const pageViews = source === 'page' ? views : source === 'mixed' ? views.slice(0, 1) : [];
+    render(<Workspace ref={controller} views={pageViews} onVisibleViewsChange={onVisibleViewsChange} />);
+    for (const view of views.slice(pageViews.length)) {
+      act(() => {
+        expect(controller.current?.dispatch({
+          commandId: `create-${view.id}`, operation: 'create', viewId: view.id,
+          view: {
+            version: 1, title: view.title, renderer: 'list',
+            source: { id: 'factory.tasks', status: 'complete' },
+            data: { items: [{ title: `${view.title} content` }] },
+          },
+        })).toBe(true);
+      });
+    }
+    act(() => { expect(controller.current?.dispatch({ commandId: 'focus-sources', operation: 'focus', viewId: 'sources' })).toBe(true); });
     expect(screen.getByRole('article').getAttribute('aria-labelledby')).toContain('view-1');
+    expect(screen.getByText('Sources foreground.')).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Minimise Sources' }));
     expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Restore Sources' }));
@@ -100,9 +114,62 @@ describe('Workspace', () => {
     act(() => { controller.current?.minimiseAll(); });
     expect(controller.current?.hasVisibleViews()).toBe(false);
     expect(onVisibleViewsChange).toHaveBeenLastCalledWith(false);
-    act(() => { controller.current?.dispatch({ operation: 'restore', viewId: 'research' }); });
+    act(() => { expect(controller.current?.dispatch({ commandId: 'restore-research', operation: 'restore', viewId: 'research' })).toBe(true); });
     expect(onVisibleViewsChange).toHaveBeenLastCalledWith(true);
-    act(() => { expect(controller.current?.dispatch({ operation: 'focus', viewId: 'missing' })).toBe(false); });
+    expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Research summary' }));
+    act(() => { expect(controller.current?.dispatch({ commandId: 'focus-missing', operation: 'focus', viewId: 'missing' })).toBe(false); });
+    act(() => { expect(controller.current?.dispatch({ commandId: 'close-research', operation: 'close', viewId: 'research' })).toBe(true); });
+    expect(screen.queryByRole('article')).toBeNull();
+    expect(controller.current?.hasVisibleViews()).toBe(false);
+    expect(onVisibleViewsChange).toHaveBeenLastCalledWith(false);
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Workspace' }));
+  });
+
+  it('falls back from a closed page view to an updated agent view and announces its current title', () => {
+    phoneViewport();
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={[views[0]!]} />);
+    const generatedView = {
+      version: 1 as const, title: 'Agent sources', renderer: 'list' as const,
+      source: { id: 'factory.tasks' as const, status: 'complete' as const },
+      data: { items: [{ title: 'Agent findings' }] },
+    };
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'create-agent', operation: 'create', viewId: 'agent', view: generatedView,
+      })).toBe(true);
+    });
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'show-agent', operation: 'show', viewId: 'agent',
+      })).toBe(true);
+    });
+    expect(screen.getByText('Agent sources foreground.')).not.toBeNull();
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'update-agent', operation: 'update', viewId: 'agent',
+        view: { ...generatedView, title: 'Updated sources' },
+      })).toBe(true);
+    });
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'show-page', operation: 'show', viewId: 'research',
+      })).toBe(true);
+    });
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'close-page', operation: 'close', viewId: 'research',
+      })).toBe(true);
+    });
+    expect(screen.getByRole('article', { name: 'Updated sources' }).hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Updated sources' }));
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'focus-agent', operation: 'focus', viewId: 'agent',
+      })).toBe(true);
+    });
+    expect(screen.getByText('Updated sources foreground.')).not.toBeNull();
   });
 
   it('switches phone views on horizontal touch swipes but ignores scrolling, controls, small movements and cancellation', () => {
@@ -143,7 +210,7 @@ describe('Workspace', () => {
     vi.stubGlobal('matchMedia', vi.fn(() => media));
     const controller = createRef<WorkspaceController>();
     render(<Workspace ref={controller} views={views} />);
-    act(() => { controller.current?.dispatch({ operation: 'focus', viewId: 'sources' }); });
+    act(() => { expect(controller.current?.dispatch({ commandId: 'focus-sources', operation: 'focus', viewId: 'sources' })).toBe(true); });
     act(() => {
       media.matches = false;
       media.addEventListener.mock.calls.forEach(([, listener]) => listener());
