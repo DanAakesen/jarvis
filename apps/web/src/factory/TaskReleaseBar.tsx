@@ -151,7 +151,6 @@ export function TaskReleaseBar({
     <section className="task-release-bar" aria-label="Project release context">
       <div className="task-release-project">
         <Link to={`/factory/projects/${projectId}`}>{currentView.project.name}</Link>
-        <a href={repositoryUrl} target="_blank" rel="noreferrer">{currentView.project.repo}</a>
         <span>Default: <code>{currentView.project.defaultBranch}</code></span>
       </div>
       <dl className="task-release-statuses">
@@ -180,8 +179,10 @@ export function TaskReleaseBar({
           <div>
             <dt>Release</dt>
             <dd>
-              <Link to={releaseUrl}>v{latestRelease.version}</Link>{' '}
-              <span className={`release-status state-${latestRelease.status}`}>{latestRelease.status}</span>
+              <span className="task-release-version">
+                <Link to={releaseUrl}>v{latestRelease.version}</Link>
+                <span className={`release-status state-${latestRelease.status}`}>{latestRelease.status}</span>
+              </span>
             </dd>
           </div>
         )}

@@ -90,6 +90,9 @@ describe('TaskReleaseBar', () => {
     expect(screen.queryByText('Old project')).toBeNull();
     expect(screen.queryByText(/aaaaaaa/)).toBeNull();
     expect(await screen.findByRole('link', { name: 'New project' })).not.toBeNull();
+    expect(screen.queryByText('org/new project')).toBeNull();
+    expect(screen.getByRole('link', { name: /failureBuild and test/ })).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'v8' })).not.toBeNull();
     expect(screen.getByRole('link', { name: /bbbbbbb/ })).not.toBeNull();
     expect(screen.getAllByText('failure').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText(/Commit data may be stale/)).not.toBeNull();

@@ -804,6 +804,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .project-archive > .secondary-button { margin-top: 16px; }
 .project-archive-confirm { margin-top: 16px; padding: 16px; background: var(--disabled-surface); border-radius: 6px; }
 .project-archive-confirm .primary-button { margin-top: 0; }
+.tasks-page { container: task-board / inline-size; }
 .tasks-page > p { margin: 0 0 20px; font-size: 16px; }
 .tasks-toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0 8px; }
 .tasks-toolbar .primary-button { margin-top: 0; }
@@ -835,7 +836,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-limit-note { margin: 12px 0; }
 .task-release-bar {
   display: grid;
-  grid-template-columns: minmax(100px, .8fr) minmax(250px, 2fr) minmax(120px, 1fr) minmax(170px, 1.5fr);
+  grid-template-columns: minmax(180px, 1.2fr) minmax(330px, 2.4fr) minmax(180px, 1.3fr) max-content;
+  grid-template-areas: "project statuses commits actions";
   align-items: center;
   gap: 12px;
   margin: 0 0 20px;
@@ -846,12 +848,11 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   backdrop-filter: blur(var(--surface-blur));
 }
 .task-release-project, .task-release-statuses, .task-release-commits { min-width: 0; }
-.task-release-project { display: grid; gap: 2px; align-content: center; }
-.task-release-project > a:first-child { font-size: 14px; font-weight: 700; }
-.task-release-project > a, .task-release-commits a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.task-release-project > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.task-release-project { display: grid; grid-area: project; gap: 2px; align-content: center; }
+.task-release-project > a:first-child { font-size: 14px; font-weight: 700; white-space: normal; overflow-wrap: normal; }
+.task-release-project > span { white-space: nowrap; font-size: 12px; }
 .task-release-project code { font-size: 12px; }
-.task-release-statuses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.task-release-statuses { display: grid; grid-area: statuses; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; }
 .task-release-statuses > div { min-width: 0; }
 .task-release-statuses dt { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
 .task-release-statuses dd { display: flex; min-width: 0; flex-wrap: nowrap; align-items: center; gap: 4px; overflow: hidden; margin: 2px 0 0; font-size: 13px; }
@@ -859,17 +860,26 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-release-statuses dd > a > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-release-statuses .release-status { min-height: 22px; flex: 0 0 auto; padding-inline: 4px; font-size: 10px; }
 .task-release-statuses > div { flex: 1 1 0; }
-.task-release-commits h2 { margin: 0 0 3px; font-size: 13px; }
+.task-release-version { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.task-release-commits { grid-area: commits; }
+.task-release-commits h2 { margin: 0 0 3px; font-size: 13px; white-space: nowrap; }
 .task-release-commits ol { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.task-release-commits li { display: grid; gap: 1px; min-width: 0; font-size: 13px; }
+.task-release-commits li { display: block; min-width: 0; font-size: 13px; }
 .task-release-commits li:not(:first-child) { display: none; }
+.task-release-commits li a { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-release-commits time, .task-release-stale { color: var(--text-muted); font-size: 12px !important; }
 .task-release-commits p { margin: 0; font-size: 13px; }
-.task-release-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.task-release-actions { display: flex; grid-area: actions; align-items: center; justify-content: flex-end; gap: 6px; }
 .task-release-actions p { margin: 0; font-size: 13px; }
 .task-release-actions .secondary-button { min-height: 40px; margin: 0; padding-inline: 10px; white-space: nowrap; }
 @media (min-width: 901px) {
   .task-release-commits time { display: none; }
+}
+@container task-board (max-width: 1099px) {
+  .task-release-bar {
+    grid-template-columns: minmax(190px, .9fr) minmax(0, 1.6fr);
+    grid-template-areas: "project statuses" "commits actions";
+  }
 }
 .factory-composer {
   position: static;
@@ -1184,7 +1194,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 }
 
 @media (max-width: 900px) {
-  .task-release-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .task-release-statuses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .task-release-commits li:not(:first-child) { display: grid; }
   .task-release-actions { align-items: flex-start; justify-content: flex-start; flex-wrap: wrap; }
@@ -1294,7 +1303,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .usage-table { min-width: 42rem; }
   .task-filters { grid-template-columns: minmax(0, 1fr); padding: 16px; }
   .task-search-field { grid-column: auto; }
-  .task-release-bar { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; }
+  .task-release-bar { grid-template-columns: minmax(0, 1fr); grid-template-areas: "project" "statuses" "commits" "actions"; gap: 12px; padding: 14px; }
   .task-release-statuses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .task-release-actions { display: flex; flex-wrap: wrap; align-items: center; }
   .task-release-actions .secondary-button { flex: 1 1 120px; }
