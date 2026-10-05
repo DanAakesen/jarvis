@@ -6,6 +6,7 @@ import type {
   ConversationChannel,
   ConversationLanguage,
   ConversationRole,
+  ConversationSteeringMessage,
 } from './conversation-store.js';
 import {
   executeReflexAction,
@@ -26,6 +27,36 @@ const errorResponse = {
   required: ['error'],
   additionalProperties: false,
 };
+const steeringMessagesSchema = {
+  type: 'object',
+  properties: {
+    messages: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          text: { type: 'string' },
+          language: { type: 'string', enum: ['da', 'en'] },
+        },
+        required: ['id', 'text', 'language'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['messages'],
+  additionalProperties: false,
+};
+
+interface ActiveChatTurn {
+  readonly sessionId: string;
+  rootMessageId: string;
+  phase: 'model' | 'tools' | 'finishing';
+  consumedThrough: string;
+  roundController: AbortController | null;
+}
+
+const maxSteeringMessages = 100;
 
 function validId(value: string): boolean {
   return /^[1-9]\d{0,18}$/.test(value) && BigInt(value) <= maxSqlBigInt;
@@ -59,6 +90,7 @@ const historySchema = {
           role: { type: 'string', enum: ['dan', 'jarvis'] },
           text: { type: 'string' },
           model: { type: ['string', 'null'] },
+          interrupted: { type: 'boolean' },
           voiceMinutes: { type: ['number', 'null'], minimum: 0 },
           at: { type: 'string', format: 'date-time' },
           toolCalls: {
@@ -76,7 +108,7 @@ const historySchema = {
             },
           },
         },
-        required: ['id', 'sessionId', 'channel', 'language', 'role', 'text', 'model', 'voiceMinutes', 'at', 'toolCalls'],
+        required: ['id', 'sessionId', 'channel', 'language', 'role', 'text', 'model', 'interrupted', 'voiceMinutes', 'at', 'toolCalls'],
         additionalProperties: false,
       },
     },
@@ -171,6 +203,7 @@ export const conversationModule: BackendModule = {
   id: 'conversation',
   tools: [],
   registerRoutes: async (app) => {
+    const activeTurns = new Map<string, ActiveChatTurn>();
     app.post<{
       Params: { sessionId: string };
       Body: {
@@ -219,13 +252,39 @@ export const conversationModule: BackendModule = {
       if (session.channel !== 'chat') return reply.code(400).send({ error: 'Session is not a chat session' });
       const authorization = request.headers.authorization;
       if (!authorization) return reply.code(401).send({ error: 'Unauthorized' });
+      if (activeTurns.has(sessionId)) return reply.code(409).send({ error: 'A chat turn is already active' });
+      const activeTurn: ActiveChatTurn = {
+        sessionId,
+        rootMessageId: '',
+        phase: 'model',
+        consumedThrough: '',
+        roundController: null,
+      };
+      activeTurns.set(sessionId, activeTurn);
       if (request.body.sharedScreenContext !== undefined) {
         request.requireSharedScreenContext = true;
         request.sharedScreenContext = request.body.sharedScreenContext;
       }
 
-      const userMessage = await store.addMessage({ sessionId, role: 'dan', text, model: null });
-      if (!userMessage) return reply.code(404).send({ error: 'Active chat session not found' });
+      let userMessage;
+      try {
+        userMessage = await store.addMessage({
+          sessionId,
+          role: 'dan',
+          text,
+          model: null,
+          language: session.language,
+        });
+        if (!userMessage) {
+          activeTurns.delete(sessionId);
+          return reply.code(404).send({ error: 'Active chat session not found' });
+        }
+      } catch (error) {
+        activeTurns.delete(sessionId);
+        throw error;
+      }
+      activeTurn.rootMessageId = userMessage.id;
+      activeTurn.consumedThrough = userMessage.id;
 
       const controller = new AbortController();
       const activityId = randomUUID();
@@ -245,19 +304,10 @@ export const conversationModule: BackendModule = {
         .header('X-Accel-Buffering', 'no');
       const stream = Readable.from((async function* () {
         yield streamEvent('user', userMessage);
-        let answer = '';
         publishActivity('thinking');
         try {
-          const agentStartedAt = performance.now();
           const classifier = request.requireSharedScreenContext ? undefined : app.reflexClassifier;
           const finishReflex = classifier ? registerChatReflex(userMessage.id) : undefined;
-          const agentIterator = agent.stream({
-            messageId: userMessage.id,
-            text,
-            language: session.language,
-            ...(request.body.screenContext === undefined ? {} : { screenContext: request.body.screenContext }),
-          }, authorization, controller.signal)[Symbol.asyncIterator]();
-          let next = agentIterator.next();
           if (classifier && finishReflex) {
             void runChatReflex(
               request,
@@ -268,34 +318,100 @@ export const conversationModule: BackendModule = {
               controller.signal,
             ).then(finishReflex, () => finishReflex(null));
           }
-          let firstByteLogged = false;
-          try {
-            while (true) {
-              const chunk = await next;
-              if (chunk.done) break;
-              const delta = chunk.value;
-              if (!firstByteLogged) {
-                firstByteLogged = true;
-                logChatLatency(request, 'agent_first_byte', agentStartedAt);
+
+          let turnMessageId = userMessage.id;
+          let turnText = text;
+          let turnLanguage = session.language;
+          let isSteering = false;
+          while (!controller.signal.aborted) {
+            const answer = '';
+            let partial = answer;
+            const roundController = new AbortController();
+            activeTurn.roundController = roundController;
+            activeTurn.phase = 'model';
+            const signal = AbortSignal.any([controller.signal, roundController.signal]);
+            const agentStartedAt = performance.now();
+            let firstByteLogged = false;
+            let agentIterator: AsyncIterator<string> | undefined;
+            let interrupted = false;
+            try {
+              agentIterator = agent.stream({
+                messageId: turnMessageId,
+                text: turnText,
+                language: turnLanguage,
+                turnId: activeTurn.rootMessageId,
+                ...(isSteering ? { steering: true } : {}),
+                ...(!isSteering && request.body.screenContext !== undefined
+                  ? { screenContext: request.body.screenContext }
+                  : {}),
+              }, authorization, signal)[Symbol.asyncIterator]();
+              let next = agentIterator.next();
+              while (true) {
+                const chunk = await next;
+                if (chunk.done) break;
+                const delta = chunk.value;
+                if (!firstByteLogged) {
+                  firstByteLogged = true;
+                  logChatLatency(request, 'agent_first_byte', agentStartedAt);
+                }
+                partial += delta;
+                if (Buffer.byteLength(partial) > 512 * 1024) throw new Error('Chat response exceeded the size limit');
+                yield streamEvent('delta', { text: delta });
+                next = agentIterator.next();
               }
-              answer += delta;
-              if (Buffer.byteLength(answer) > 512 * 1024) throw new Error('Chat response exceeded the size limit');
-              yield streamEvent('delta', { text: delta });
-              next = agentIterator.next();
+            } catch (error) {
+              if (controller.signal.aborted) throw error;
+              if (!roundController.signal.aborted) throw error;
+              interrupted = true;
+            } finally {
+              await agentIterator?.return?.();
             }
-          } finally {
-            await agentIterator.return?.();
+
+            if (controller.signal.aborted) break;
+            activeTurn.phase = 'finishing';
+            const steeringMessages: readonly ConversationSteeringMessage[] = await store.getDanMessagesAfter({
+              sessionId,
+              after: activeTurn.consumedThrough,
+              limit: maxSteeringMessages,
+            });
+            if (steeringMessages.length > 0) {
+              const partialMessage = partial.trim()
+                ? await store.addMessage({
+                  sessionId,
+                  role: 'jarvis',
+                  text: partial,
+                  model: null,
+                  language: turnLanguage,
+                  interrupted: true,
+                })
+                : null;
+              if (partialMessage) yield streamEvent('interrupted', { ...partialMessage, interrupted: true });
+              const latest = steeringMessages.at(-1)!;
+              activeTurn.consumedThrough = latest.id;
+              turnMessageId = latest.id;
+              turnText = latest.text;
+              turnLanguage = latest.language;
+              isSteering = true;
+              activeTurn.roundController = null;
+              continue;
+            }
+
+            if (interrupted) {
+              throw new Error('Chat turn was interrupted without a steering message');
+            }
+            if (!partial.trim()) throw new Error('Chat response was empty');
+            const assistantMessage = await store.addMessage({
+              sessionId,
+              role: 'jarvis',
+              text: partial,
+              model: null,
+              language: turnLanguage,
+            });
+            if (!assistantMessage) throw new Error('Chat session ended');
+            publishActivity('ended');
+            yield streamEvent('done', assistantMessage);
+            break;
           }
-          if (!answer.trim()) throw new Error('Chat response was empty');
-          const assistantMessage = await store.addMessage({
-            sessionId,
-            role: 'jarvis',
-            text: answer,
-            model: null,
-          });
-          if (!assistantMessage) throw new Error('Chat session ended');
-          publishActivity('ended');
-          yield streamEvent('done', assistantMessage);
         } catch (error) {
           if (controller.signal.aborted) {
             publishActivity('interrupted');
@@ -310,12 +426,123 @@ export const conversationModule: BackendModule = {
             });
           }
         } finally {
+          activeTurn.roundController = null;
+          if (activeTurns.get(sessionId) === activeTurn) activeTurns.delete(sessionId);
           if (!activityFinished) publishActivity(controller.signal.aborted ? 'interrupted' : 'ended');
           request.raw.removeListener('aborted', abortOnClose);
           reply.raw.removeListener('close', abortOnClose);
         }
       })());
       return reply.send(stream);
+    });
+
+    app.post<{
+      Params: { sessionId: string };
+      Body: { text: string; language: ConversationLanguage };
+    }>('/conversation/sessions/:sessionId/steer', {
+      schema: {
+        params: { type: 'object', properties: { sessionId: idSchema }, required: ['sessionId'], additionalProperties: false },
+        body: {
+          type: 'object',
+          properties: {
+            text: { type: 'string', minLength: 1, maxLength: 20_000 },
+            language: { type: 'string', enum: ['da', 'en'] },
+          },
+          required: ['text', 'language'],
+          additionalProperties: false,
+        },
+        response: { 202: { type: 'object', additionalProperties: true }, 400: errorResponse, 404: errorResponse, 409: errorResponse, 503: errorResponse },
+      },
+    }, async (request, reply) => {
+      const store = app.conversationStore;
+      if (!store) return reply.code(503).send({ error: 'Conversation storage unavailable' });
+      const { sessionId } = request.params;
+      if (!validId(sessionId)) return reply.code(400).send({ error: 'Invalid conversation session ID' });
+      const text = request.body.text.trim();
+      if (!text) return reply.code(400).send({ error: 'Message text cannot be empty' });
+      const activeTurn = activeTurns.get(sessionId);
+      if (!activeTurn?.rootMessageId || activeTurn.phase === 'finishing') {
+        return reply.code(409).send({ error: 'No active chat turn to steer' });
+      }
+      const message = await store.addMessage({
+        sessionId,
+        role: 'dan',
+        text,
+        model: null,
+        language: request.body.language,
+      });
+      if (!message) return reply.code(404).send({ error: 'Active chat session not found' });
+      if (activeTurn.phase === 'model') activeTurn.roundController?.abort();
+      return reply.code(202).send({ ...message, language: request.body.language });
+    });
+
+    app.post<{
+      Params: { sessionId: string; messageId: string };
+      Body: { phase: 'model' | 'tools' };
+    }>('/conversation/sessions/:sessionId/turns/:messageId/phase', {
+      schema: {
+        params: {
+          type: 'object',
+          properties: { sessionId: idSchema, messageId: idSchema },
+          required: ['sessionId', 'messageId'],
+          additionalProperties: false,
+        },
+        body: {
+          type: 'object',
+          properties: { phase: { type: 'string', enum: ['model', 'tools'] } },
+          required: ['phase'],
+          additionalProperties: false,
+        },
+        response: { 204: { type: 'null' }, 400: errorResponse, 404: errorResponse },
+      },
+    }, async (request, reply) => {
+      const activeTurn = activeTurns.get(request.params.sessionId);
+      if (!activeTurn || activeTurn.rootMessageId !== request.params.messageId) {
+        return reply.code(404).send({ error: 'Active chat turn not found' });
+      }
+      activeTurn.phase = request.body.phase;
+      return reply.code(204).send();
+    });
+
+    app.get<{
+      Params: { sessionId: string; messageId: string };
+      Querystring: { after?: string };
+    }>('/conversation/sessions/:sessionId/turns/:messageId/steering', {
+      schema: {
+        params: {
+          type: 'object',
+          properties: { sessionId: idSchema, messageId: idSchema },
+          required: ['sessionId', 'messageId'],
+          additionalProperties: false,
+        },
+        querystring: {
+          type: 'object',
+          properties: { after: idSchema },
+          additionalProperties: false,
+        },
+        response: { 200: steeringMessagesSchema, 400: errorResponse, 404: errorResponse, 503: errorResponse },
+      },
+    }, async (request, reply) => {
+      const store = app.conversationStore;
+      if (!store) return reply.code(503).send({ error: 'Conversation storage unavailable' });
+      const activeTurn = activeTurns.get(request.params.sessionId);
+      if (!activeTurn || activeTurn.rootMessageId !== request.params.messageId) {
+        return reply.code(404).send({ error: 'Active chat turn not found' });
+      }
+      const after = request.query.after ?? request.params.messageId;
+      if (!validId(after) || BigInt(after) < BigInt(request.params.messageId)) {
+        return reply.code(400).send({ error: 'Invalid steering cursor' });
+      }
+      const cursor = BigInt(after) > BigInt(activeTurn.consumedThrough)
+        ? after
+        : activeTurn.consumedThrough;
+      const messages = await store.getDanMessagesAfter({
+        sessionId: activeTurn.sessionId,
+        after: cursor,
+        limit: 20,
+      });
+      if (messages.length > 0) activeTurn.consumedThrough = messages.at(-1)!.id;
+      return { messages };
     });
 
     app.post<{ Body: { channel: ConversationChannel; language: ConversationLanguage } }>('/conversation/sessions', {

@@ -117,6 +117,18 @@ current_turn: contextvars.ContextVar[str] = contextvars.ContextVar("jarvis_turn"
 current_message_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "jarvis_message_id", default=None
 )
+current_chat_session_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "jarvis_chat_session_id", default=None
+)
+current_chat_turn_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "jarvis_chat_turn_id", default=None
+)
+current_steering_fetcher: contextvars.ContextVar[
+    Callable[[], Awaitable[Sequence[tuple[str, str, str]]]] | None
+] = contextvars.ContextVar("jarvis_steering_fetcher", default=None)
+current_chat_phase_setter: contextvars.ContextVar[
+    Callable[[str], Awaitable[None]] | None
+] = contextvars.ContextVar("jarvis_chat_phase_setter", default=None)
 
 TokenProvider = Callable[[], Awaitable[str]]
 

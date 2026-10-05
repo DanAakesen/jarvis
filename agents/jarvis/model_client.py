@@ -22,7 +22,10 @@ from jarvis_tools import (
     INSTRUCTIONS,
     BackendToolClient,
     backend_settings_from_environment,
+    current_chat_phase_setter,
+    current_chat_turn_id,
     current_message_id,
+    current_steering_fetcher,
     model_tools,
 )
 from model_contract import StreamingModelClient
@@ -322,7 +325,31 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     tools = model_tools(catalogue)
                     prompt_span.set_attribute("message.count", len(model_input))
                     prompt_span.set_attribute("tool.count", len(tools))
+                steering_fetcher = current_steering_fetcher.get()
+                phase_setter = current_chat_phase_setter.get()
+                turn_id = current_chat_turn_id.get()
+
+                async def append_steering() -> bool:
+                    if steering_fetcher is None:
+                        return False
+                    steering_messages = await steering_fetcher()
+                    for message_id, text, language in steering_messages:
+                        response_language = "English" if language == "en" else "Danish"
+                        model_input.append({
+                            "role": "user",
+                            "content": (
+                                "Dan interrupted your previous reply with this message; continue "
+                                f"accordingly. Reply in {response_language}:\n{text}"
+                            ),
+                        })
+                        current_message_id.set(message_id)
+                    return bool(steering_messages)
+
                 for round_number in range(1, MAX_TOOL_ROUNDS + 1):
+                    await append_steering()
+                    if phase_setter is not None and turn_id is not None:
+                        await phase_setter("model")
+                    await append_steering()
                     started = time.monotonic()
                     first_text_ms: int | None = None
                     final = None
@@ -382,11 +409,15 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         len(calls),
                     )
                     if not calls:
+                        if await append_steering():
+                            continue
                         return
 
                     model_input.extend(
                         item.model_dump(exclude_none=True, mode="json") for item in final.output
                     )
+                    if phase_setter is not None and turn_id is not None:
+                        await phase_setter("tools")
                     for call in calls:
                         result = await self._tools.call(
                             call.name, call.arguments, current_message_id.get()
@@ -398,6 +429,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 "output": json.dumps(result, ensure_ascii=False),
                             }
                         )
+                    await append_steering()
                 raise RuntimeError("Jarvis tool loop exceeded its round limit")
             except asyncio.CancelledError:
                 raise
