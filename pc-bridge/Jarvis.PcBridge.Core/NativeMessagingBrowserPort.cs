@@ -26,7 +26,19 @@ public sealed class NativeMessagingBrowserPort : IExtensionBrowserPort, IAsyncDi
     private readonly Task _acceptLoop;
     private volatile NamedPipeServerStream? _connection;
 
-    public NativeMessagingBrowserPort() => _acceptLoop = AcceptLoopAsync();
+    private readonly string _pipeName;
+
+    public NativeMessagingBrowserPort() : this(PipeName)
+    {
+    }
+
+    // Tests pass a unique pipe name so they never collide with an installed bridge or each other.
+    public NativeMessagingBrowserPort(string pipeName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(pipeName);
+        _pipeName = pipeName;
+        _acceptLoop = AcceptLoopAsync();
+    }
 
     public bool IsConnected => _connection?.IsConnected == true;
     public event Action<string>? TabRemoved;
@@ -171,14 +183,26 @@ public sealed class NativeMessagingBrowserPort : IExtensionBrowserPort, IAsyncDi
     {
         while (!_stopping.IsCancellationRequested)
         {
-            await using var pipe = new NamedPipeServerStream(
-                PipeName,
-                PipeDirection.InOut,
-                1,
-                PipeTransmissionMode.Byte,
-                OperatingSystem.IsWindows()
-                    ? PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly
-                    : PipeOptions.Asynchronous);
+            NamedPipeServerStream pipe;
+            try
+            {
+                pipe = new NamedPipeServerStream(
+                    _pipeName,
+                    PipeDirection.InOut,
+                    1,
+                    PipeTransmissionMode.Byte,
+                    OperatingSystem.IsWindows()
+                        ? PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly
+                        : PipeOptions.Asynchronous);
+            }
+            catch (IOException)
+            {
+                // Another process owns the pipe (for example a second bridge). Back off instead of spinning.
+                try { await Task.Delay(TimeSpan.FromSeconds(2), _stopping.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException) { return; }
+                continue;
+            }
+            await using var ownedPipe = pipe;
             try
             {
                 await pipe.WaitForConnectionAsync(_stopping.Token).ConfigureAwait(false);
