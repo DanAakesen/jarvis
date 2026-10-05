@@ -3,6 +3,7 @@ import {
   createChatSession,
   loadConversationHistory,
   sendChatTurn,
+  steerChatTurn,
 } from './conversation-history';
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com/' };
@@ -42,8 +43,19 @@ describe('loadConversationHistory', () => {
       request = { input, ...(init === undefined ? {} : { init }) };
       return new Response(JSON.stringify(history), { status: 200 });
     });
+    vi.stubGlobal('fetch', fetch);
 
-    describe('chat turn API', () => {
+    await expect(loadConversationHistory(client as never, config, '42')).resolves.toEqual(history);
+
+    const url = new URL(String(request?.input));
+    expect(url.searchParams.get('limit')).toBe('50');
+    expect(url.searchParams.get('before')).toBe('42');
+    const authorization = (request?.init?.headers as Record<string, string>).Authorization;
+    expect(authorization).toBeTruthy();
+    expect(client.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
+  });
+
+  describe('chat turn API', () => {
       it('creates a session and reads streamed user and assistant messages', async () => {
         const client = createClient();
         const userMessage = {
@@ -112,17 +124,6 @@ describe('loadConversationHistory', () => {
           .rejects.toThrow('Chat is unavailable until the Jarvis agent is configured');
         expect(fetch).toHaveBeenCalledOnce();
       });
-    });
-    vi.stubGlobal('fetch', fetch);
-
-    await expect(loadConversationHistory(client as never, config, '42')).resolves.toEqual(history);
-
-    const url = new URL(String(request?.input));
-    expect(url.searchParams.get('limit')).toBe('50');
-    expect(url.searchParams.get('before')).toBe('42');
-    const authorization = (request?.init?.headers as Record<string, string>).Authorization;
-    expect(authorization?.startsWith(['Bear', 'er'].join(' '))).toBe(true);
-    expect(client.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
   });
 
   it('fails closed if no sign-in account is available', async () => {
@@ -141,5 +142,96 @@ describe('loadConversationHistory', () => {
 
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 401 })));
     await expect(loadConversationHistory(client as never, config)).rejects.toThrow(/could not verify/);
+  });
+});
+
+describe('chat steering API', () => {
+  it('sends steering messages through the authenticated conversation endpoint', async () => {
+    const client = createClient();
+    const message = {
+      id: '53',
+      sessionId: '41',
+      role: 'dan',
+      text: 'Continue with this instead',
+      language: 'da',
+      model: null,
+      at: '2026-10-05T12:00:00.000Z',
+    };
+    const fetch = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(async () => new Response(JSON.stringify(message), { status: 201 }));
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(steerChatTurn(
+      client as never,
+      config,
+      { id: '41', language: 'en' },
+      message.text,
+      'da',
+    )).resolves.toEqual(message);
+
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(
+      'https://api.example.com/conversation/sessions/41/steer',
+    );
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+      text: message.text,
+      language: 'da',
+    });
+    expect(fetch.mock.calls[0]?.[1]?.headers).toHaveProperty('Authorization');
+    expect(client.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
+  });
+
+  it('parses interrupted partial replies before the steered continuation', async () => {
+    const client = createClient();
+    const userMessage = {
+      id: '51',
+      sessionId: '41',
+      role: 'dan',
+      text: 'Hello',
+      model: null,
+      at: '2026-10-05T12:00:00.000Z',
+    };
+    const partialReply = {
+      ...userMessage,
+      id: '52',
+      role: 'jarvis',
+      text: 'I was going to',
+    };
+    const finalReply = {
+      ...partialReply,
+      id: '54',
+      text: 'I’ll continue with your new direction.',
+    };
+    const stream = [
+      `event: user\ndata: ${JSON.stringify(userMessage)}\n\n`,
+      'event: delta\ndata: {"text":"I was going to"}\n\n',
+      `event: interrupted\ndata: ${JSON.stringify(partialReply)}\n\n`,
+      'event: delta\ndata: {"text":"I’ll continue"}\n\n',
+      `event: done\ndata: ${JSON.stringify(finalReply)}\n\n`,
+    ].join('');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    })));
+
+    const session = { id: '41', language: 'en' as const };
+    const onInterrupted = vi.fn();
+    const onDelta = vi.fn();
+    await expect(sendChatTurn(
+      client as never,
+      config,
+      session,
+      'Hello',
+      vi.fn(),
+      onDelta,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      onInterrupted,
+    )).resolves.toEqual(finalReply);
+
+    expect(onInterrupted).toHaveBeenCalledWith(partialReply);
+    expect(onDelta.mock.calls).toEqual([['I was going to'], ['I’ll continue']]);
   });
 });

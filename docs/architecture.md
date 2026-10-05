@@ -881,24 +881,35 @@ continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
 
-P8-26 keeps chat draft, turn state and a removable FIFO queue in
+P8-26/P8-35 keep chat draft, turn state and a removable FIFO queue in
 `ConversationHistory`. Each submission captures text and language and clears
-the draft locally. A synchronous in-flight guard permits only one active
-`sendChatTurn`; its promise settles (including stream cleanup) before the next
-queued submission starts. Later drafts survive completion/errors, and failed
-turn feedback remains visible while the queue advances. Stop reply passes an
-AbortSignal through session creation, token acquisition and the existing fetch/stream cancellation
-path; cancellable setup waits also prevent slow visual inspection from blocking
-the queue or sending the stopped message when inspection later finishes. Component
-unmount also aborts the active turn. Pending messages are in memory only and
-are not retained across navigation/reload.
-History pages and saved turn messages merge by ID in SQL's numeric-ID order;
-persisted entries replace optimistic metadata without removing absent entries.
-Older pagination retains its cursor across latest-page refreshes. These changes
-do not alter storage, SSE contracts, or the backend's first-byte latency.
-The backend retains its existing per-turn disconnect cancellation and does not
-reject overlapping turns; sequencing is owned by this client queue, not a new
-server-side queue or concurrency guard. Stop does not undo completed task actions.
+the draft locally; Ctrl+Enter stages a message in the queue, and its promise
+settles (including stream cleanup) before the next queued submission starts.
+Enter/Send steers the active turn. A backend registry keyed by chat session
+rejects parallel turn creation and allows the steer request to join the active
+turn. During model generation it aborts only that model round, persists the
+partial Jarvis message with `interrupted=true`, and streams an `interrupted`
+event before continuing with the steering message. The new message's captured
+language is used for the continuation.
+
+The authenticated `POST /conversation/sessions/{id}/steer` route shares the
+conversation authorization boundary. `POST
+/conversation/sessions/{id}/turns/{messageId}/phase` records whether the hosted
+agent is in a model or tool phase; `GET
+/conversation/sessions/{id}/turns/{messageId}/steering?after={id}` returns
+bounded Dan messages newer than the cursor to the agent. While a tool runs,
+steering does not cancel it; the agent picks up messages at the next model
+boundary and retains existing confirmation checks. The registry is in-process
+memory, not cross-replica coordination; steering must reach the process holding
+the active stream. Disconnect cancellation still applies to the owning turn.
+
+Send, language and voice entry remain usable during a reply. A voice session
+can start while the chat SSE stream continues and persists into history.
+Pending queue messages remain local to the mounted conversation and are not
+retained across navigation/reload. History pages and saved turn messages merge
+by ID in SQL's numeric-ID order; persisted entries replace optimistic metadata
+without removing absent entries. Older pagination retains its cursor across
+latest-page refreshes.
 
 When `JARVIS_CHAT_AGENT_NAME` is configured, the backend uses its managed
 identity to call
