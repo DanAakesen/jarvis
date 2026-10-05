@@ -1,0 +1,19 @@
+{
+  "artifact_sha256": "896dfe11aafc7be2312a7acb77033afd66f355e67fe0a790e91aee0202750d25",
+  "result": "passed",
+  "artifact": "jarvis-centred-stage.html",
+  "external_asset_requests": 0,
+  "primary_interactions": "passed",
+  "opposing_ambient_ring_motion": true,
+  "reduced_motion_freezes_environment": true,
+  "background_region": [
+    300,
+    70,
+    500,
+    220
+  ],
+  "bright_luminance": 13.785546653333332,
+  "dim_luminance": 10.292902593333332,
+  "mean_rgb_change": 3.540144444444444,
+  "errors": []
+}

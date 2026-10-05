@@ -203,6 +203,12 @@ Dan's manual setup checklist:
 
 Status, 4 October 2026: Dan registered the App, installed it on all repositories of his account, trimmed its permissions, and stored `github-app-private-key` in Key Vault (P3-10). P3-02 code is merged but its live token issuance and sandbox push are not yet verified. The webhook receiver (P3-03) is implemented; webhook secret provisioning, App URL configuration, and live delivery remain Dan's post-merge steps. P3-05 uses a separate repository-scoped token with only Actions read permission in the backend, stores failed-job logs in the existing private `logs` container, and never passes that token to the sandbox. The backend setting `global.max_check_attempts` defaults to 3 and accepts 0–10; 0 disables automatic repairs. The receiver caches the webhook secret after its first successful lookup, so restart the backend when rotating it.
 
+## Accepted visual reference handoff
+
+The read-only [centred stage prototype](reference/ui-stage-prototype/README.md) and [selected images/captures](ui/centred-stage/README.md) support P8-28–P8-33. Its isolated lockfile is not part of the root workspaces; follow its README to run it. The accepted standalone is copied unchanged. Prototype commands/check reports are historical evidence, not validation of the production app or its Node 22 toolchain. Port selected scene code into the current app; do not deploy demo replies, simulated states or comparison fixtures.
+
+The 3D stage/large orb are Jarvis-only, light mode re-lights the same room, and dormant visuals do not enable microphone capture. Dan reported transition flicker after the earlier browser checks; it is unresolved. Keep live-provider/device limitations distinct from local checks. Original reference snapshots stay read-only.
+
 ## Setup and commands
 
 The repository uses npm workspaces for `apps/web`, `apps/backend`, and
