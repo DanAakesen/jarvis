@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { FastifyRequest } from 'fastify';
 import { createToolRegistry } from './tool-registry.js';
 import {
   createBrowserUrlTargets,
@@ -6,7 +7,13 @@ import {
   createReflexTargets,
   findChatReflexReplay,
   registerChatReflex,
+  reflexActionSignature,
+  workspaceReflexSafe,
+  logReflexDecision,
+  reflexTargets,
 } from './reflex.js';
+import { workspaceCommandTool } from './workspace-commands.js';
+import { isWorkspaceCommand } from '@jarvis/contracts';
 
 function tool(reflexSafe: boolean) {
   return {
@@ -78,6 +85,90 @@ function response(
 }
 
 describe('Jev reflex classifier', () => {
+  it('does not let slow task discovery consume the workspace classification budget', async () => {
+    vi.useFakeTimers();
+    try {
+      const registry = createToolRegistry([{ id: 'test', tools: [tool(true), workspaceCommandTool] }]);
+      const request = {
+        principal: { objectId: 'owner' },
+        server: {
+          jarvisTools: registry,
+          workspaceCommands: { snapshot: () => ({ windows: [], contextPanelOpen: false }) },
+          taskStore: { list: () => new Promise(() => {}) },
+        },
+      } as unknown as FastifyRequest;
+      const pending = reflexTargets(request, 'tile my windows');
+      await vi.advanceTimersByTimeAsync(150);
+      const targets = await pending;
+      expect(targets).toContainEqual(expect.objectContaining({
+        arguments: expect.objectContaining({ operation: 'layout', arrangement: 'tiled' }),
+      }));
+      expect(targets.some(({ tool }) => tool.name === 'pause_task')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    [0.4, '<0.5'], [0.5, '0.5–0.8'], [0.8, '0.5–0.8'], [0.9, '>0.8'],
+  ])('logs confidence %s as %s and explains skipped decisions', (confidence, bucket) => {
+    const info = vi.fn();
+    const request = {
+      log: { info }, principal: {}, server: { toolCallStore: {} },
+      compileValidationSchema: () => () => true,
+    } as unknown as FastifyRequest;
+    const target = createReflexTargets([workspaceCommandTool], [], undefined, {
+      windows: [], contextPanelOpen: false,
+    })[0]!;
+    const classification = { addressed: true, intent: 'action' as const, confidence, needsConfirmation: false, target };
+    const signal = new AbortController().signal;
+    logReflexDecision(request, classification, 'chat', performance.now(), signal, null);
+    expect(info).toHaveBeenLastCalledWith(expect.objectContaining({
+      source: 'chat', addressed: true, intent: 'action', confidence: bucket, completeCommand: true,
+      tool: 'workspace_command', executed: false,
+      reason: confidence < 0.9 ? 'low_confidence' : 'execution_failed', latencyMs: expect.any(Number),
+    }), 'reflex.decision');
+    logReflexDecision(request, { ...classification, addressed: false }, 'voice-final', performance.now(), signal, null);
+    expect(info).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'not_addressed' }), 'reflex.decision');
+    logReflexDecision(request, { ...classification, completeCommand: false }, 'voice-partial', performance.now(), signal, null);
+    expect(info).toHaveBeenLastCalledWith(expect.objectContaining({
+      completeCommand: false, reason: 'incomplete_command',
+    }), 'reflex.decision');
+    logReflexDecision(request, null, 'chat', performance.now(), signal, null);
+    expect(info).toHaveBeenLastCalledWith(expect.objectContaining({ tool: 'none', reason: 'unavailable' }), 'reflex.decision');
+  });
+
+  it('builds fixed window and global targets from the open workspace snapshot only', async () => {
+    const snapshot = {
+      windows: [{ viewId: 'tasks', title: 'Tasks' }, { viewId: 'board', title: 'Project board' }],
+      contextPanelOpen: false,
+    };
+    const targets = createReflexTargets([workspaceCommandTool], [], undefined, snapshot);
+    expect(createReflexTargets([workspaceCommandTool])).toEqual([]);
+    expect(targets).toHaveLength(16);
+    expect(targets.every((target) => isWorkspaceCommand(target.arguments) && workspaceReflexSafe(target))).toBe(true);
+    expect(targets.filter(({ arguments: args }) => args.viewId === 'tasks').map(({ arguments: args }) => args.operation))
+      .toEqual(['show', 'focus', 'minimise', 'restore', 'close', 'resize']);
+    expect(targets.some(({ arguments: args }) => ['create', 'update'].includes(String(args.operation)))).toBe(false);
+    expect(targets).toContainEqual(expect.objectContaining({ arguments: expect.objectContaining({
+      operation: 'layout', arrangement: 'tiled',
+    }) }));
+    expect(targets.at(-2)?.arguments).toMatchObject({ operation: 'context-panel', action: 'open' });
+    expect(createReflexTargets([workspaceCommandTool], [], undefined, { ...snapshot, contextPanelOpen: true })
+      .at(-1)?.arguments).toMatchObject({ operation: 'context-panel', action: 'close' });
+    const fetcher = vi.fn<typeof fetch>(async () => response(targets[0]!.choice));
+    await createJevReflexClassifier(async () => 'fake-key', fetcher)
+      .classify('open the tasks window', 'en', targets, new AbortController().signal);
+    expect(String(fetcher.mock.calls[0]?.[1]?.body)).toContain('Tasks');
+    expect(String(fetcher.mock.calls[0]?.[1]?.body)).toContain('Project board');
+    const again = createReflexTargets([workspaceCommandTool], [], undefined, snapshot);
+    expect(again[0]?.arguments.commandId).not.toBe(targets[0]?.arguments.commandId);
+    expect(reflexActionSignature(again[0]!)).toBe(reflexActionSignature(targets[0]!));
+    expect(workspaceReflexSafe({
+      choice: 'unsafe', tool: workspaceCommandTool, arguments: { operation: 'create' },
+    })).toBe(false);
+  });
+
   it('replays a completed chat action only for the same registered tool arguments', async () => {
     const finish = registerChatReflex('7000001');
     const sameAction = findChatReflexReplay('7000001', 'pause_task', { taskId: '12' });

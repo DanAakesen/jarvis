@@ -1,15 +1,17 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NowFeed } from './activity';
 import { NowFeedPanel } from './NowFeedPanel';
+import { WorkspaceCommandContext } from './workspace-command-state';
 
 const {
   loadNowFeed,
   dismissNowActivity,
   resolveNowConfirmation,
   acknowledgeWorkspaceCommand,
+  publishWorkspaceSnapshot,
   streamNowFeed,
   streamCallbacks,
 } = vi.hoisted(() => ({
@@ -17,6 +19,7 @@ const {
   dismissNowActivity: vi.fn(),
   resolveNowConfirmation: vi.fn(),
   acknowledgeWorkspaceCommand: vi.fn(),
+  publishWorkspaceSnapshot: vi.fn(),
   streamNowFeed: vi.fn(),
   streamCallbacks: {
     onUpdate: null as (() => void) | null,
@@ -29,6 +32,7 @@ vi.mock('./now-feed', () => ({
   dismissNowActivity,
   resolveNowConfirmation,
   acknowledgeWorkspaceCommand,
+  publishWorkspaceSnapshot,
   streamNowFeed,
 }));
 
@@ -56,6 +60,33 @@ afterEach(() => {
 });
 
 describe('live Now panel', () => {
+  it('publishes window snapshots on readiness and changes without restarting the command stream', async () => {
+    loadNowFeed.mockResolvedValue(feed);
+    publishWorkspaceSnapshot.mockResolvedValue(undefined);
+    streamNowFeed.mockImplementation(async ({ onWorkspaceReady, signal }) => {
+      streamCallbacks.onWorkspaceReady = onWorkspaceReady;
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    const commands = {
+      dispatch: () => true, minimiseAll: () => {}, hasVisibleViews: () => false,
+      snapshot: { windows: [{ viewId: 'tasks', title: 'Tasks' }], contextPanelOpen: false },
+    };
+    const panel = (value: typeof commands) => (
+      <MemoryRouter><WorkspaceCommandContext.Provider value={value}>
+        <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => true} />
+      </WorkspaceCommandContext.Provider></MemoryRouter>
+    );
+    const view = render(panel(commands));
+    await waitFor(() => expect(streamCallbacks.onWorkspaceReady).not.toBeNull());
+    act(() => streamCallbacks.onWorkspaceReady?.('12345678-1234-4234-8234-123456789abc'));
+    await waitFor(() => expect(publishWorkspaceSnapshot).toHaveBeenCalledWith(
+      'https://api.example.com', '12345678-1234-4234-8234-123456789abc', commands.snapshot, getAccessToken, expect.any(AbortSignal),
+    ));
+    view.rerender(panel({ ...commands, snapshot: { windows: [], contextPanelOpen: true } }));
+    await waitFor(() => expect(publishWorkspaceSnapshot).toHaveBeenCalledTimes(2));
+    expect(streamNowFeed).toHaveBeenCalledOnce();
+  });
+
   it('loads the feed and refreshes it when an SSE update arrives', async () => {
     loadNowFeed.mockResolvedValue(feed);
     streamNowFeed.mockImplementation(async ({ onStatus, onUpdate, signal }) => {
