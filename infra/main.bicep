@@ -28,6 +28,9 @@ param pcBridgeClientId string = ''
 @description('The non-secret Outlook app registration ID. Empty disables Outlook tools.')
 param jarvisGraphAppId string = ''
 
+@description('A ChatGPT-supported model for Codex hosted-runner tools.')
+param codexToolModel string = 'gpt-5.5'
+
 @description('Dan’s IANA time zone used for calendar-day boundaries.')
 param jarvisGraphTimeZone string = ''
 
@@ -683,6 +686,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'FOUNDRY_RUNNER_AGENT_NAME'
               value: 'jarvis-runner-node-1x2'
+            }
+            {
+              name: 'JARVIS_CODEX_TOOL_MODEL'
+              value: codexToolModel
             }
             {
               name: 'TEAMS_BOT_APP_ID'

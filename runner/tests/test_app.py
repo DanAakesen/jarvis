@@ -539,6 +539,242 @@ def test_invoke_accepts_effective_provider_options(tmp_path, monkeypatch):
     assert app.tasks["inv"].task_id == "42"
 
 
+def test_codex_tool_mode_validates_request_and_uses_codex_without_a_workspace(monkeypatch):
+    async def run_tool(state, tool, query):
+        state.status = "completed"
+        calls.append((state, tool, query))
+
+    calls = []
+    monkeypatch.setattr(app, "tasks", {})
+    monkeypatch.setattr(app, "_run_codex_tool", run_tool)
+    payload = {
+        "agent": "codex", "mode": "codex-tool", "tool": "web_research",
+        "query": "latest public transport changes", "model": "gpt-5.5",
+    }
+    request = Request({"type": "http", "method": "POST", "headers": [], "path": "/invocations",
+                       "state": {"invocation_id": "research", "session_id": "fresh-session"}})
+    async def body():
+        return payload
+    request.json = body  # type: ignore[method-assign]
+
+    async def invoke():
+        response = await app.invoke(request)
+        await app.tasks["research"].worker
+        return response
+
+    response = asyncio.run(invoke())
+    assert response.status_code == 200
+    assert calls[0][0].mode == "codex-tool"
+    assert calls[0][0].tool == "web_research"
+    assert calls[0][0].model == "gpt-5.5"
+    assert calls[0][1:] == ("web_research", payload["query"])
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"agent": "copilot", "tool": "web_research", "query": "research"},
+        {"agent": "codex", "tool": "shell", "query": "research"},
+        {"agent": "codex", "tool": "web_research", "query": "x" * 2001},
+        {"agent": "codex", "tool": "web_research", "query": "research", "model": "gpt-6.1-sol"},
+    ],
+)
+def test_codex_tool_mode_rejects_unsupported_inputs(payload, monkeypatch):
+    monkeypatch.setattr(app, "tasks", {})
+    request = Request({"type": "http", "method": "POST", "headers": [], "path": "/invocations",
+                       "state": {"invocation_id": "invalid", "session_id": "session"}})
+    async def body():
+        return {"mode": "codex-tool", **payload}
+    request.json = body  # type: ignore[method-assign]
+
+    response = asyncio.run(app.invoke(request))
+
+    assert response.status_code == 400
+    assert app.tasks == {}
+
+
+def test_codex_tool_runs_in_a_deleted_empty_workspace_and_preserves_partial_sources(tmp_path, monkeypatch):
+    state_root = tmp_path / "state"
+    scratch_root = tmp_path / "scratch"
+    scratch_root.mkdir()
+    monkeypatch.setattr(app, "WORK_ROOT", state_root)
+    monkeypatch.setattr(app.tempfile, "tempdir", str(scratch_root))
+    result = {
+        "answer": "The latest notice is from the agency. A second page was inaccessible.",
+        "sources": [{"title": "Agency notice", "url": "https://agency.example/notice"}],
+    }
+    captured = {}
+
+    class Process:
+        returncode = 0
+
+        def __init__(self):
+            self.stdout = asyncio.StreamReader()
+            self.stderr = asyncio.StreamReader()
+            self.stdout.feed_eof()
+            self.stderr.feed_eof()
+
+        async def wait(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+            self.stdout.feed_eof()
+            self.stderr.feed_eof()
+
+    async def credentials(agent, *, include_github_token=True):
+        assert agent == "codex"
+        assert include_github_token is False
+        return {"codex_login": "test-login-only"}
+
+    async def create_process(*args, **kwargs):
+        captured["args"] = args
+        captured["cwd"] = Path(kwargs["cwd"])
+        captured["env"] = kwargs["env"]
+        assert not (captured["cwd"] / ".git").exists()
+        output_path = Path(args[args.index("--output-last-message") + 1])
+        output_path.write_text(json.dumps(result), encoding="utf-8")
+        return Process()
+
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    monkeypatch.setattr(app, "_store_codex_login_if_newer", lambda _text: asyncio.sleep(0, result=False))
+    monkeypatch.setattr(app.asyncio, "create_subprocess_exec", create_process)
+    state = app.TaskState(
+        "research", "foundry-session", "codex", "latest public transport changes",
+        mode="codex-tool", tool="web_research", model="gpt-5.5",
+    )
+
+    asyncio.run(app._run_codex_tool(state, "web_research", state.task))
+
+    assert state.status == "completed"
+    assert state.result == result
+    args = captured["args"]
+    assert args[:10] == (
+        "codex", "--disable", "shell_tool", "exec", "--skip-git-repo-check",
+        "-s", "read-only", "-c", "web_search=live", "-m",
+    )
+    assert args[10] == "gpt-5.5"
+    assert args[-1].endswith(json.dumps(state.task, ensure_ascii=True))
+    assert captured["env"]["CODEX_HOME"] == str(captured["cwd"] / ".codex")
+    assert not captured["cwd"].exists()
+    assert list(scratch_root.iterdir()) == []
+    metadata = next(state_root.rglob("*.json")).read_text(encoding="utf-8")
+    assert state.task not in metadata
+    assert "Agency notice" not in metadata
+    assert "test-login-only" not in metadata
+
+
+def test_codex_tool_reports_usage_limits_and_timeout_and_cancels_process(tmp_path, monkeypatch):
+    state_root = tmp_path / "state"
+    scratch_root = tmp_path / "scratch"
+    scratch_root.mkdir()
+    monkeypatch.setattr(app, "WORK_ROOT", state_root)
+    monkeypatch.setattr(app.tempfile, "tempdir", str(scratch_root))
+    monkeypatch.setattr(app, "_credentials_for", lambda *_args, **_kwargs: asyncio.sleep(
+        0, result={"codex_login": "test-login-only"},
+    ))
+    monkeypatch.setattr(app, "_store_codex_login_if_newer", lambda _text: asyncio.sleep(0, result=False))
+    monkeypatch.setattr(app, "_codex_tool_timeout", lambda: 0.01)
+
+    class Process:
+        def __init__(self, stderr=b"", hang=False):
+            self.stdout = asyncio.StreamReader()
+            self.stderr = asyncio.StreamReader()
+            self.returncode = None if hang else 1
+            self.killed = False
+            self.finished = asyncio.Event()
+            if not hang:
+                self.stdout.feed_eof()
+                self.stderr.feed_data(stderr)
+                self.stderr.feed_eof()
+                self.finished.set()
+
+        async def wait(self):
+            await self.finished.wait()
+            return self.returncode
+
+        def kill(self):
+            self.killed = True
+            self.returncode = -9
+            self.stdout.feed_eof()
+            self.stderr.feed_eof()
+            self.finished.set()
+            self.finished.set()
+
+    processes = []
+    async def create_process(*_args, **_kwargs):
+        process = Process(stderr=b"Codex usage limit reached" if not processes else b"", hang=bool(processes))
+        processes.append(process)
+        return process
+    monkeypatch.setattr(app.asyncio, "create_subprocess_exec", create_process)
+
+    usage_limited = app.TaskState("limit", "session-1", "codex", "query", mode="codex-tool", tool="web_research")
+    asyncio.run(app._run_codex_tool(usage_limited, "web_research", "query"))
+    timed_out = app.TaskState("timeout", "session-2", "codex", "query", mode="codex-tool", tool="web_research")
+    asyncio.run(app._run_codex_tool(timed_out, "web_research", "query"))
+
+    assert usage_limited.status == "failed"
+    assert usage_limited.error == "Codex usage limit reached"
+    assert timed_out.status == "failed"
+    assert timed_out.error == "Codex web research timed out"
+    assert processes[1].killed
+    assert list(scratch_root.iterdir()) == []
+
+
+def test_codex_tool_cancellation_kills_child_and_removes_auth_file(tmp_path, monkeypatch):
+    state_root = tmp_path / "state"
+    scratch_root = tmp_path / "scratch"
+    scratch_root.mkdir()
+    monkeypatch.setattr(app, "WORK_ROOT", state_root)
+    monkeypatch.setattr(app.tempfile, "tempdir", str(scratch_root))
+    monkeypatch.setattr(app, "_credentials_for", lambda *_args, **_kwargs: asyncio.sleep(
+        0, result={"codex_login": "test-login-only"},
+    ))
+    started = asyncio.Event()
+
+    class Process:
+        returncode = None
+
+        def __init__(self):
+            self.stdout = asyncio.StreamReader()
+            self.stderr = asyncio.StreamReader()
+            self.killed = False
+            self.finished = asyncio.Event()
+
+        async def wait(self):
+            await self.finished.wait()
+            return self.returncode
+
+        def kill(self):
+            self.killed = True
+            self.returncode = -9
+            self.stdout.feed_eof()
+            self.stderr.feed_eof()
+            self.finished.set()
+
+    processes = []
+    async def create_process(*_args, **_kwargs):
+        process = Process()
+        processes.append(process)
+        started.set()
+        return process
+    monkeypatch.setattr(app.asyncio, "create_subprocess_exec", create_process)
+    state = app.TaskState("cancel", "session", "codex", "query", mode="codex-tool", tool="web_research")
+
+    async def cancel():
+        worker = asyncio.create_task(app._run_codex_tool(state, "web_research", "query"))
+        await started.wait()
+        worker.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await worker
+
+    asyncio.run(cancel())
+
+    assert state.status == "cancelled"
+    assert processes[0].killed
+    assert list(scratch_root.iterdir()) == []
+
+
 @pytest.mark.parametrize("task_id", [None, 0, "0", "9223372036854775808", "42 "])
 def test_configured_live_events_require_valid_task_ids(tmp_path, monkeypatch, task_id):
     monkeypatch.setenv("JARVIS_BACKEND_URL", "https://backend.example")
