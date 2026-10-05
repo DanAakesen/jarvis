@@ -171,6 +171,17 @@ describe('ConversationHistory', () => {
     expect(await screen.findByRole('heading', { name: 'What’s on your mind?' })).not.toBeNull();
   });
 
+  it.each([{ messages: [] }, { messages: [message] }])('focuses the composer and scrolls to the latest message on load', async ({ messages }) => {
+    let resolve!: (page: { messages: typeof messages; nextCursor: null }) => void;
+    loadConversationHistory.mockReturnValue(new Promise((done) => { resolve = done; }));
+    renderConversation();
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Message Jarvis' }));
+    const transcript = screen.getByLabelText('Conversation history');
+    Object.defineProperty(transcript, 'scrollHeight', { value: 1200 });
+    await act(async () => resolve({ messages, nextCursor: null }));
+    expect(transcript.scrollTop).toBe(1200);
+  });
+
   it('offers a retry after a history failure', async () => {
     loadConversationHistory.mockRejectedValueOnce(new Error('History unavailable'));
     renderConversation();
@@ -241,6 +252,8 @@ describe('ConversationHistory', () => {
     expect(screen.getByRole('status').textContent).toBe('Jarvis is replying…');
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
     expect(screen.getByRole('button', { name: 'English' })).toHaveProperty('disabled', true);
+    expect(input).toHaveProperty('disabled', false);
+    expect(input).toHaveProperty('value', '');
     expect(screen.getByLabelText('Jarvis reply in progress').querySelector('.streaming-caret')?.getAttribute('aria-hidden')).toBe('true');
     finish?.(assistantMessage);
 
@@ -257,6 +270,147 @@ describe('ConversationHistory', () => {
       undefined,
       undefined,
     );
+  });
+
+  it('shows thinking until the first delta and preserves the next draft through a stale history reload', async () => {
+    let accept!: () => void;
+    let delta!: (text: string) => void;
+    let finish!: (value: typeof assistantMessage) => void;
+    loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });
+    sendChatTurn.mockImplementation((_client, _config, _session, _text, onUser, onDelta) => {
+      accept = () => onUser(userMessage);
+      delta = onDelta;
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    renderConversation();
+    await screen.findByText(message.text);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(screen.getByRole('status').textContent).toBe('Jarvis is thinking…');
+    expect(screen.queryByLabelText('Jarvis reply in progress')).toBeNull();
+    expect(document.querySelector('.streaming-caret')).toBeNull();
+    expect(input).toHaveProperty('value', userMessage.text);
+    act(() => accept());
+    expect(input).toHaveProperty('value', '');
+    fireEvent.change(input, { target: { value: 'My next message' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(sendChatTurn).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Danish' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', true);
+    act(() => delta('I am'));
+    expect(screen.queryByText('Jarvis is thinking…')).toBeNull();
+    expect(screen.getByLabelText('Jarvis reply in progress').textContent).toBe('I am');
+    await act(async () => finish(assistantMessage));
+    await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
+    const list = screen.getByRole('list', { name: 'Messages between Dan and Jarvis' });
+    expect([...list.querySelectorAll(':scope > li')].map((item) => item.querySelector(':scope > p, .markdown-content')?.textContent))
+      .toEqual([message.text, userMessage.text, assistantMessage.text]);
+    expect(input).toHaveProperty('value', 'My next message');
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', false);
+  });
+
+  it('preserves edits made before acceptance and when an accepted reply fails', async () => {
+    let accept!: () => void;
+    let fail!: (error: Error) => void;
+    sendChatTurn.mockImplementation((_client, _config, _session, _text, onUser) => {
+      accept = () => onUser(userMessage);
+      return new Promise((_resolve, reject) => { fail = reject; });
+    });
+    renderConversation();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    fireEvent.change(input, { target: { value: 'Next draft before acceptance' } });
+    act(() => accept());
+    expect(input).toHaveProperty('value', 'Next draft before acceptance');
+    await act(async () => fail(new Error('Reply interrupted')));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Reply interrupted');
+    expect(input).toHaveProperty('value', 'Next draft before acceptance');
+    expect(screen.getByText(userMessage.text)).not.toBeNull();
+  });
+
+  it('does not resurrect a submitted draft when delivery is uncertain', async () => {
+    sendChatTurn.mockImplementation(async (_client, _config, _session, _text, _onUser, _onDelta, onUncertain) => {
+      onUncertain();
+      throw new Error('Delivery uncertain');
+    });
+    renderConversation();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Delivery uncertain');
+    expect(input).toHaveProperty('value', '');
+  });
+
+  it('preserves an identical next draft when a stream error reports uncertain delivery after acceptance', async () => {
+    let fail!: () => void;
+    sendChatTurn.mockImplementation((_client, _config, _session, _text, onUser, _onDelta, onUncertain) => {
+      onUser(userMessage);
+      return new Promise((_resolve, reject) => {
+        fail = () => {
+          onUncertain();
+          reject(new Error('Stream interrupted'));
+        };
+      });
+    });
+    renderConversation();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(input).toHaveProperty('value', ''));
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    await act(async () => fail());
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Stream interrupted');
+    expect(input).toHaveProperty('value', userMessage.text);
+  });
+
+  it('dedupes refreshed history and updates persisted metadata without reordering optimistic messages', async () => {
+    const savedUser = { ...userMessage, channel: 'chat', language: 'da', toolCalls: message.toolCalls };
+    const savedAssistant = { ...assistantMessage, channel: 'chat', language: 'da', toolCalls: [] };
+    loadConversationHistory.mockResolvedValueOnce({ messages: [message], nextCursor: null })
+      .mockResolvedValueOnce({ messages: [savedUser, savedAssistant], nextCursor: null });
+    sendChatTurn.mockImplementation(async (_client, _config, _session, _text, onUser) => {
+      onUser(userMessage);
+      return assistantMessage;
+    });
+    renderConversation();
+    await screen.findByText(message.text);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Jarvis' }), { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getAllByRole('link', { name: 'Task #77' })).toHaveLength(2));
+    expect(screen.getByRole('list', { name: 'Messages between Dan and Jarvis' }).querySelectorAll(':scope > li')).toHaveLength(3);
+    expect(screen.getAllByText(userMessage.text)).toHaveLength(1);
+    expect(screen.getAllByText(assistantMessage.text)).toHaveLength(1);
+  });
+
+  it('dedupes overlapping older pages, orders large IDs exactly, and retains the older cursor on refresh', async () => {
+    const older = { ...message, id: '9007199254740992', text: 'Older' };
+    const newer = { ...message, id: '9007199254740993', text: 'Newer' };
+    loadConversationHistory.mockResolvedValueOnce({ messages: [newer], nextCursor: older.id })
+      .mockResolvedValueOnce({ messages: [older, newer], nextCursor: '40' })
+      .mockResolvedValueOnce({ messages: [newer], nextCursor: older.id })
+      .mockResolvedValueOnce({ messages: [message], nextCursor: null });
+    const content = (historyRefresh: number) => (
+      <JarvisActivityProvider><MemoryRouter>
+        <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
+      </MemoryRouter></JarvisActivityProvider>
+    );
+    const view = render(content(0));
+    await screen.findByText('Newer');
+    fireEvent.click(screen.getByRole('button', { name: 'Load older history' }));
+    await screen.findByText('Older');
+    view.rerender(content(1));
+    await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(3));
+    expect([...screen.getByRole('list', { name: 'Messages between Dan and Jarvis' }).querySelectorAll(':scope > li')]
+      .map((item) => item.querySelector(':scope > p')?.textContent)).toEqual(['Older', 'Newer']);
+    fireEvent.click(screen.getByRole('button', { name: 'Load older history' }));
+    await screen.findByText(message.text);
+    expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config, '40');
   });
 
   it('inspects the camera for a spoken-equivalent chat request and keeps the description transient', async () => {

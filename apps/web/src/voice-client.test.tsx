@@ -100,11 +100,16 @@ describe('BrowserVoiceClient', () => {
       'session.start',
       'conversation.item.create',
       'response.create',
+      'jarvis.microphone.active',
     ]);
     expect(socket?.sent[1]).toMatchObject({
       item: { content: [{ text: '/diag' }] },
     });
     expect(audio.open).toHaveBeenCalledOnce();
+    client.setMuted(true);
+    expect(socket?.sent.at(-1)?.type).toBe('jarvis.microphone.muted');
+    client.setMuted(false);
+    expect(socket?.sent.at(-1)?.type).toBe('jarvis.microphone.active');
     client.stop();
   });
 
