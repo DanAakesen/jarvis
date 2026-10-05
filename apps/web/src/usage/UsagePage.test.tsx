@@ -10,6 +10,7 @@ const report = {
   period: '30d',
   from: '2026-09-04T03:00:00.000Z',
   to: '2026-10-04T03:00:00.000Z',
+  codexToolCallsToday: [{ tool: 'web_research', count: '3' }],
   totalEntries: '4',
   truncated: false,
   entries: [
@@ -66,6 +67,8 @@ describe('Usage page', () => {
     expect(within(table).getAllByText('—')).toHaveLength(2);
     expect(screen.getAllByText(/Includes estimated DKK for this group/)).toHaveLength(2);
     expect(screen.getByText(/sandbox and voice costs are estimates/)).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Codex tool calls today (UTC)' })).not.toBeNull();
+    expect(screen.getByText('3 calls')).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/usage?period=30d', {
       headers: { Authorization: `${['Bear', 'er'].join('')} fixture-token` },
       signal: expect.any(AbortSignal),
@@ -107,5 +110,24 @@ describe('Usage page', () => {
     }));
     await user.selectOptions(screen.getByRole('combobox', { name: 'Time period' }), '90d');
     expect(await screen.findByText('No usage was recorded in this period.')).not.toBeNull();
+  });
+
+  it('distinguishes empty and unavailable Codex tool counts', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      ...report, codexToolCallsToday: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    const { unmount } = render(
+      <MemoryRouter>
+        <UsagePage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('No Codex tool calls were recorded today (UTC).')).not.toBeNull();
+    unmount();
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      ...report, codexToolCallsToday: null,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    renderPage();
+    expect(await screen.findByText('Codex tool counts are unavailable.')).not.toBeNull();
   });
 });

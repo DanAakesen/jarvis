@@ -107,6 +107,17 @@ export type WorkspaceCommand =
   | { commandId: string; operation: 'context-panel'; action: 'open'; view: GeneratedView }
   | { commandId: string; operation: 'context-panel'; action: 'close' | 'toggle' };
 
+export interface WebResearchSource {
+  title: string;
+  url: string;
+  retrievedAt: string;
+}
+
+export interface WebResearchResult {
+  answer: string;
+  sources: WebResearchSource[];
+}
+
 export type JarvisActivitySource = 'chat' | 'voice';
 export type JarvisActivityOutcome = 'ok' | 'refused' | 'error';
 export type JarvisActivityEvent =
@@ -137,6 +148,8 @@ export function isGeneratedView(
   options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
 ): value is GeneratedView;
 export const workspaceCommandSchema: Readonly<Record<string, unknown>>;
+export const webResearchResultSchema: Readonly<Record<string, unknown>>;
+export function isWebResearchResult(value: unknown): value is WebResearchResult;
 export function isWorkspaceCommand(
   value: unknown,
   options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },

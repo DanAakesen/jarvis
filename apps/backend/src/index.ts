@@ -69,6 +69,7 @@ import { createOutlookModule } from './outlook/tools.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
+import { createWebResearchModule } from './core/web-research.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
 import { createEphemeralAudioStore } from './teams/audio-store.js';
 import { createAzureSpeechSynthesizer } from './teams/speech.js';
@@ -266,6 +267,9 @@ try {
     }
     return client;
   };
+  const webResearchModule = database && credential && config.foundryEndpoints && config.foundryRunnerAgentName
+    ? createWebResearchModule(() => clientFor(config.foundryRunnerAgentName!), config.codexToolModel)
+    : undefined;
   const sandboxHeartbeat = database && config.foundryEndpoints
     ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub, alertNotifier), clientFor, {
       onDecision: (decision) => logger.info(decision, 'sandbox_heartbeat.decision'),
@@ -379,6 +383,7 @@ try {
     : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
+    ...(webResearchModule ? [webResearchModule] : []),
     ...(outlookModule ? [outlookModule] : []),
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,

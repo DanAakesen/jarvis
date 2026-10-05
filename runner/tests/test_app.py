@@ -649,8 +649,11 @@ def test_codex_tool_runs_in_a_deleted_empty_workspace_and_preserves_partial_sour
     assert state.status == "completed"
     assert state.result == result
     args = captured["args"]
-    assert args[:8] == ("codex", "exec", "--skip-git-repo-check", "-s", "read-only", "-c", "web_search=live", "-m")
-    assert args[8] == "gpt-5.5"
+    assert args[:10] == (
+        "codex", "--disable", "shell_tool", "exec", "--skip-git-repo-check",
+        "-s", "read-only", "-c", "web_search=live", "-m",
+    )
+    assert args[10] == "gpt-5.5"
     assert args[-1].endswith(json.dumps(state.task, ensure_ascii=True))
     assert captured["env"]["CODEX_HOME"] == str(captured["cwd"] / ".codex")
     assert not captured["cwd"].exists()

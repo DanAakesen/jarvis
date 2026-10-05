@@ -727,7 +727,7 @@ def _codex_research_prompt(query: str) -> str:
 
 def _codex_tool_command(model: str, output_path: Path, prompt: str) -> list[str]:
     return [
-        "codex", "exec", "--skip-git-repo-check", "-s", "read-only",
+        "codex", "--disable", "shell_tool", "exec", "--skip-git-repo-check", "-s", "read-only",
         "-c", "web_search=live", "-m", model,
         "--output-last-message", str(output_path), prompt,
     ]

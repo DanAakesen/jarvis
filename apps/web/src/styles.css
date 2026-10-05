@@ -1032,6 +1032,12 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .usage-group { min-width: 0; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--rule); }
 .usage-group h2 { overflow-wrap: anywhere; }
 .usage-group-summary { margin: -4px 0 14px !important; font-size: 14px !important; }
+.usage-tool-counts { min-width: 0; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--rule); }
+.usage-tool-counts h2 { overflow-wrap: anywhere; }
+.usage-tool-counts > p { margin: 0 0 12px; font-size: 14px; }
+.usage-tool-counts dl { margin: 0; }
+.usage-tool-counts dl > div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--rule); }
+.usage-tool-counts dd { margin: 0; font-variant-numeric: tabular-nums; }
 .usage-table-wrap { max-width: 100%; overflow-x: auto; }
 .usage-table { width: 100%; min-width: 44rem; border-collapse: collapse; text-align: left; }
 .usage-table caption { padding: 0 0 8px; color: var(--text-muted); font-size: 14px; text-align: left; }
