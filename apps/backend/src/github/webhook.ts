@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
+import type { NowFeedStatusKind } from '../core/now.js';
+import { mapGithubWebhook, type GithubWebhookMapping } from './webhook-mapping.js';
 import type { WebhookDeliveryStore } from './webhook-delivery.js';
 
 const acceptedEvents = new Set([
@@ -13,6 +15,7 @@ const acceptedEvents = new Set([
 interface WebhookOptions {
   readonly deliveryStore: WebhookDeliveryStore | null;
   readonly getSecret: () => Promise<string | undefined>;
+  readonly onMapping?: (mapping: GithubWebhookMapping) => Promise<void>;
 }
 
 function uniqueHeader(request: { raw: { rawHeaders: string[] }; headers: Record<string, unknown> }, name: string): string | undefined {
@@ -28,6 +31,14 @@ function validSignature(signature: string, body: Buffer, secret: string): boolea
   const supplied = Buffer.from(signature.slice('sha256='.length), 'hex');
   const expected = createHmac('sha256', secret).update(body).digest();
   return timingSafeEqual(supplied, expected);
+}
+
+function voiceStatusKind(event: string, payload: unknown, mapping: GithubWebhookMapping | undefined): NowFeedStatusKind | undefined {
+  if (mapping?.kind === 'deployment_status' && mapping.status === 'failure') return 'deployment_failed';
+  if (event === 'pull_request' && mapping?.kind === 'pull_request' &&
+      payload !== null && typeof payload === 'object' && !Array.isArray(payload) &&
+      (payload as Record<string, unknown>).action === 'ready_for_review') return 'pull_request_ready';
+  return undefined;
 }
 
 export function createGithubWebhookModule(options: WebhookOptions): BackendModule {
@@ -65,17 +76,35 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
           return reply.code(401).send({ error: 'Invalid webhook signature' });
         }
 
+        let payload: unknown;
         try {
-          const inserted = await options.deliveryStore.record({
+          payload = JSON.parse(request.body.toString('utf8'));
+        } catch {
+          return reply.code(400).send({ error: 'Invalid webhook payload' });
+        }
+        const mapping = acceptedEvents.has(event) ? mapGithubWebhook(event, payload) : undefined;
+        const statusKind = voiceStatusKind(event, payload, mapping);
+        let inserted: boolean;
+        try {
+          inserted = await options.deliveryStore.record({
             deliveryId,
             event,
-            outcome: acceptedEvents.has(event) ? 'ok' : 'ignored',
+            outcome: mapping ? 'ok' : 'ignored',
+            ...(mapping ? { mapping } : {}),
           });
-          return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
+          if (inserted) app.nowEventHub.publish({ type: 'refresh' });
         } catch {
           request.log.error('github.webhook_delivery_store_failed');
           return reply.code(503).send({ error: 'Webhook storage unavailable' });
         }
+        try {
+          if (mapping) await options.onMapping?.(mapping);
+        } catch {
+          request.log.error('github.webhook_mapping_failed');
+          return reply.code(503).send({ error: 'Webhook processing unavailable' });
+        }
+        if (inserted && statusKind) app.nowEventHub.publish({ type: 'status', kind: statusKind });
+        return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
       });
     },
   };

@@ -1,10 +1,10 @@
-import { useState } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import { BackendSleepControl } from './BackendSleepControl';
 import { ConversationHistory } from './ConversationHistory';
 import { NowFeedPanel } from './NowFeedPanel';
-import { VoiceControls } from './VoiceControls';
+import { ScreenShareControls } from './ScreenShareControls';
+import { useScreenShare } from './screen-sharing';
 import './ConversationHistory.css';
 
 export function JarvisPage({
@@ -18,38 +18,24 @@ export function JarvisPage({
   config: PublicConfig;
   getAccessToken: () => Promise<string>;
 }) {
-  const [historyRefresh, setHistoryRefresh] = useState(0);
+  const screenShare = useScreenShare(config, getAccessToken);
   return (
     <div className="jarvis-page">
-      <h1>Welcome, {name}</h1>
-      <div className="jarvis-layout">
-        <section className="panel" aria-labelledby="conversation-heading">
-          <h2 id="conversation-heading">Conversation</h2>
-          <p id="conversation-status">
-            Chat messages are saved across sessions. Jarvis streams each reply; if a reply is interrupted, check task
-            status before sending another request.
-          </p>
-          <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
-
-          <section aria-labelledby="voice-heading">
-            <h3 id="voice-heading">Voice</h3>
-            <p>Speak to Jarvis through a live voice session. You can interrupt Jarvis by speaking.</p>
-            <VoiceControls
-              client={client}
-              config={config}
-              onSessionEnded={() => setHistoryRefresh((value) => value + 1)}
-            />
-          </section>
-        </section>
-
-        <div className="jarvis-side">
-          <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} />
-          <section className="panel" aria-labelledby="backend-heading">
-            <h2 id="backend-heading">Backend</h2>
-            <BackendSleepControl client={client} config={config} />
-          </section>
-        </div>
-      </div>
+      <h1 className="visually-hidden">Welcome, {name}</h1>
+      <h2 id="conversation-heading" className="conversation-title">Conversation</h2>
+      <ConversationHistory client={client} config={config} screenShare={screenShare}>
+        <ScreenShareControls screenShare={screenShare} />
+        <details className="conversation-overview">
+          <summary>Activity and backend</summary>
+          <div className="jarvis-side">
+            <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} />
+            <section className="panel" aria-labelledby="backend-heading">
+              <h2 id="backend-heading">Backend</h2>
+              <BackendSleepControl client={client} config={config} />
+            </section>
+          </div>
+        </details>
+      </ConversationHistory>
     </div>
   );
 }

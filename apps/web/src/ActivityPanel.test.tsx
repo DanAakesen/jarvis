@@ -7,6 +7,8 @@ import { activityHref, formatDuration, type NowFeed } from './activity';
 
 const feed: NowFeed = {
   status: 'ready',
+  awayMode: false,
+  confirmations: [],
   updatedAt: '2026-10-03T12:00:00Z',
   running: [
     { id: '42', title: 'Add the release view', project: 'Jarvis', agent: 'codex', activity: 'Running tests', startedAt: '2026-10-03T10:55:00Z' },
@@ -16,6 +18,7 @@ const feed: NowFeed = {
     { id: '2', category: 'release', title: 'Release 7 deployed', link: 'release:7', at: '2026-10-03T11:40:00Z' },
     { id: '3', category: 'credential', title: 'Codex login expires in 3 days', link: null, at: '2026-10-03T09:00:00Z' },
     { id: '4', category: 'release', title: 'Unexpected link', link: 'javascript:alert(1)', at: '2026-10-03T09:00:00Z' },
+    { id: '5', category: 'alert', title: 'Monthly budget reached 80%', link: null, at: '2026-10-03T08:00:00Z' },
   ],
 };
 
@@ -64,14 +67,27 @@ describe('activity panel', () => {
     expect(within(releases).queryByRole('link', { name: 'Unexpected link' })).toBeNull();
     expect(within(releases).getByText('Unexpected link')).not.toBeNull();
     expect(within(section('Credential warnings')).queryByRole('link')).toBeNull();
+    expect(within(section('Alerts')).getByText('Monthly budget reached 80%')).not.toBeNull();
   });
 
   it('shows empty states for each group', () => {
-    renderPanel({ feed: { status: 'ready', updatedAt: feed.updatedAt, running: [], items: [] }, onDismiss: vi.fn() });
+    renderPanel({
+      feed: {
+        status: 'ready', awayMode: false, confirmations: [], updatedAt: feed.updatedAt, running: [], items: [],
+      },
+      onDismiss: vi.fn(),
+    });
 
-    for (const text of ['No tasks are running.', 'No tasks need attention.', 'No recent releases or deployments.', 'No credential warnings.']) {
+    for (const text of ['No tasks are running.', 'No tasks need attention.', 'No recent releases or deployments.', 'No credential warnings.', 'No active alerts.']) {
       expect(screen.getByText(text)).not.toBeNull();
     }
+    expect(screen.getByRole('status').textContent).toContain('Away mode is off.');
+  });
+
+  it('shows the phone-first mode while away', () => {
+    renderPanel({ feed: { ...feed, awayMode: true }, onDismiss: vi.fn() });
+
+    expect(screen.getByRole('status').textContent).toContain('Task updates and confirmations go to Teams');
   });
 
   it('dismisses an item once the backend confirms it', async () => {

@@ -1,5 +1,6 @@
 import sql from 'mssql';
-import type { NowFeed, NowFeedStore, NowRunningTask, NowActivityItem } from '../core/now.js';
+import { databaseReadRequest } from './wake-retry.js';
+import type { NowFeedSnapshot, NowFeedStore, NowRunningTask, NowActivityItem } from '../core/now.js';
 
 interface RunningTaskRow extends Omit<NowRunningTask, 'startedAt'> {
   startedAt: Date | string;
@@ -15,8 +16,8 @@ function iso(value: Date | string): string {
 
 export function createNowFeedStore(pool: sql.ConnectionPool): NowFeedStore {
   return {
-    async read(): Promise<NowFeed> {
-      const running = await pool.request().query<RunningTaskRow>(`SELECT TOP (100)
+    async read(): Promise<NowFeedSnapshot> {
+      const running = await databaseReadRequest(pool).query<RunningTaskRow>(`SELECT TOP (100)
         CAST(t.id AS varchar(19)) AS id, t.title, p.name AS project, t.agent,
         COALESCE(NULLIF(t.activity, N''), N'Running') AS activity,
         COALESCE(t.started_at, t.created_at) AS startedAt
@@ -24,24 +25,33 @@ export function createNowFeedStore(pool: sql.ConnectionPool): NowFeedStore {
         INNER JOIN dbo.projects AS p ON p.id = t.project_id
         WHERE t.state = N'Running'
         ORDER BY COALESCE(t.started_at, t.created_at) DESC, t.id DESC;`);
-      const items = await pool.request().query<ActivityRow>(`WITH attention AS (
+      const items = await databaseReadRequest(pool).query<ActivityRow>(`WITH attention AS (
           SELECT a.id, a.title, a.link, a.at, a.dismissed_at,
             ROW_NUMBER() OVER (PARTITION BY t.id ORDER BY a.at DESC, a.id DESC) AS item_order
           FROM dbo.activity AS a
           INNER JOIN dbo.tasks AS t
             ON a.link = CONCAT(N'task:', CONVERT(varchar(19), t.id))
-          WHERE a.area = N'factory' AND t.state = N'NeedsAttention'
+          WHERE a.area = N'factory' AND a.alert_key IS NULL AND t.state = N'NeedsAttention'
         ), visible AS (
           SELECT id, N'attention' AS category, title, link, at
           FROM attention WHERE item_order = 1 AND dismissed_at IS NULL
           UNION ALL
           SELECT id, N'release' AS category, title, link, at
           FROM dbo.activity
-          WHERE dismissed_at IS NULL AND (kind LIKE N'release%' OR kind LIKE N'deployment%')
+          WHERE dismissed_at IS NULL AND alert_key IS NULL
+            AND (kind LIKE N'release%' OR kind LIKE N'deployment%')
           UNION ALL
           SELECT id, N'credential' AS category, title, link, at
           FROM dbo.activity
-          WHERE dismissed_at IS NULL AND kind LIKE N'credential%'
+          WHERE dismissed_at IS NULL AND alert_key IS NULL AND kind LIKE N'credential%'
+          UNION ALL
+          SELECT id, N'alert' AS category, title, link, at
+          FROM dbo.activity
+          WHERE dismissed_at IS NULL AND alert_key IS NOT NULL
+          UNION ALL
+          SELECT id, N'mode' AS category, title, link, at
+          FROM dbo.activity
+          WHERE dismissed_at IS NULL AND area = N'core' AND kind = N'away_mode'
         )
         SELECT TOP (100) CAST(id AS varchar(19)) AS id, category, title, link, at
         FROM visible ORDER BY at DESC, id DESC;`);

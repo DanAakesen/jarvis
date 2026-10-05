@@ -1,5 +1,6 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
+import { backendFetch } from './backend-request';
 
 export interface ConversationHistoryToolCall {
   id: string;
@@ -89,7 +90,7 @@ async function chatResponse(
   let response: Response;
   try {
     const bearerScheme = ['Bear', 'er'].join('');
-    response = await fetch(`${config.backendUrl.replace(/\/+$/, '')}${path}`, {
+    response = await backendFetch(`${config.backendUrl.replace(/\/+$/, '')}${path}`, {
       method: 'POST',
       headers: {
         Authorization: `${bearerScheme} ${token}`,
@@ -161,12 +162,13 @@ export async function sendChatTurn(
   onUserMessage: (message: ChatMessage) => void,
   onDelta: (text: string) => void,
   onDeliveryUncertain?: () => void,
+  screenContext?: string,
 ): Promise<ChatMessage> {
   const response = await chatResponse(
     client,
     config,
     `/conversation/sessions/${session.id}/turns`,
-    { text },
+    { text, ...(screenContext === undefined ? {} : { screenContext }) },
     'text/event-stream',
     onDeliveryUncertain,
   );
@@ -247,9 +249,8 @@ export async function loadConversationHistory(
   let response: Response;
   try {
     const bearerScheme = ['Bear', 'er'].join('');
-    response = await fetch(url, {
+    response = await backendFetch(url, {
       headers: { Authorization: `${bearerScheme} ${token}` },
-      signal: AbortSignal.timeout(10_000),
     });
   } catch {
     throw new Error('Jarvis could not load conversation history. Try again.');

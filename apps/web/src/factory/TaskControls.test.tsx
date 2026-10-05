@@ -13,7 +13,10 @@ function response(body: unknown, status = 200) {
   });
 }
 
-function renderControls(state: 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled') {
+function renderControls(
+  state: 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled',
+  latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null,
+) {
   const onComplete = vi.fn();
   render(
     <TaskControls
@@ -21,6 +24,7 @@ function renderControls(state: 'Ready' | 'Running' | 'PauseRequested' | 'Paused'
       getAccessToken={getAccessToken}
       taskId="42"
       state={state}
+      latestSessionEndReason={latestSessionEndReason}
       onComplete={onComplete}
     />,
   );
@@ -57,6 +61,45 @@ describe('task controls', () => {
     expect(onComplete).toHaveBeenCalledWith('Running');
   });
 
+  it('recovers a task needing attention and refreshes it as Running', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(response({ id: '42', state: 'Running' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onComplete = renderControls('NeedsAttention');
+
+    await user.click(screen.getByRole('button', { name: 'Recover' }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.com/factory/tasks/42/controls',
+      expect.objectContaining({ body: JSON.stringify({ action: 'recover' }) }),
+    );
+    expect((await screen.findByRole('status')).textContent).toContain('Recovery started');
+    expect(onComplete).toHaveBeenCalledWith('Running');
+  });
+
+  it('continues an idle-expired task from its branch instead of offering crash recovery', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(response({ id: '42', state: 'Running' }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderControls('NeedsAttention', 'idle_expired');
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.queryByRole('button', { name: 'Recover' })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.com/factory/tasks/42/controls',
+      expect.objectContaining({ body: JSON.stringify({ action: 'recover' }) }),
+    );
+    expect((await screen.findByRole('status')).textContent).toContain('Continuation started');
+  });
+
+  it('offers Continue rather than steer when a Running task has an idle-expired session', () => {
+    renderControls('Running', 'idle_expired');
+
+    expect(screen.getByRole('button', { name: 'Continue' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull();
+  });
+
   it('offers only state-valid actions and requires confirmation before cancelling', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(response({ id: '42', state: 'Cancelled' }));
@@ -65,6 +108,7 @@ describe('task controls', () => {
 
     expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Recover' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Cancel task' }));
     expect(screen.getByText('This ends the task and cannot be undone.')).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Confirm cancel task' }));

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { backendFetch } from '../backend-request';
 import { Link } from 'react-router-dom';
 import { streamTaskEvents } from '../task-events';
 import { TaskControls } from './TaskControls';
@@ -19,6 +20,7 @@ interface Task {
   request: string;
   agent: Agent;
   state: TaskState;
+  latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
   activity: string | null;
   attemptCount: number;
   branch: string | null;
@@ -81,6 +83,8 @@ function isTask(value: unknown): value is Task {
     typeof value.title === 'string' && typeof value.request === 'string' &&
     (value.agent === 'codex' || value.agent === 'copilot') &&
     taskStates.includes(value.state as TaskState) &&
+    (value.latestSessionEndReason === undefined || value.latestSessionEndReason === null ||
+      ['done', 'cancelled', 'crashed', 'idle', 'idle_expired'].includes(String(value.latestSessionEndReason))) &&
     (typeof value.activity === 'string' || value.activity === null) &&
     typeof value.attemptCount === 'number' && Number.isSafeInteger(value.attemptCount) &&
     value.attemptCount >= 0 && (typeof value.branch === 'string' || value.branch === null) &&
@@ -114,14 +118,13 @@ async function request(
 
   let response: Response;
   try {
-    response = await fetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
+    response = await backendFetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
       method,
       headers: {
         Authorization: `${['Bear', 'er'].join('')} ${token}`,
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(10_000),
     });
   } catch (cause) {
     throw new Error('Jarvis could not reach the task service. Try again.', { cause });
@@ -496,7 +499,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                     : <ul className="task-card-list">
                       {items.map((task) => (
                         <li key={task.id}>
-                          <article className="task-card" aria-labelledby={`task-title-${task.id}`}>
+                          <article className="task-card" data-state={task.state} aria-labelledby={`task-title-${task.id}`}>
                             <h3 id={`task-title-${task.id}`}><Link to={`/factory/tasks/${task.id}`}>{task.title}</Link></h3>
                             <dl className="task-card-details">
                               <div><dt>Project</dt><dd>{projectName(projects, task.projectId)}</dd></div>
@@ -516,6 +519,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                               getAccessToken={getAccessToken}
                               taskId={task.id}
                               state={task.state}
+                              latestSessionEndReason={task.latestSessionEndReason}
                               onComplete={() => setReloadKey((value) => value + 1)}
                             />
                           </article>

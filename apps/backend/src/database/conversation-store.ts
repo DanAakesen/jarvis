@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import type {
   ConversationChannel,
   ConversationHistoryMessage,
@@ -83,7 +84,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
     },
 
     async getSession(sessionId) {
-      const result = await pool.request()
+      const result = await databaseReadRequest(pool)
         .input('sessionId', sql.BigInt, BigInt(sessionId))
         .query<SessionIdRow>(`SELECT CONVERT(varchar(20), id) AS id, channel, language,
           started_at, ended_at
@@ -135,19 +136,30 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
         .input('role', sql.NVarChar(16), input.role)
         .input('text', sql.NVarChar(sql.MAX), input.text)
         .input('model', sql.NVarChar(100), input.model)
-        .query<MessageRow>(`INSERT INTO dbo.messages (jarvis_session_id, role, text, model)
+        .input('sourceItemId', sql.NVarChar(128), input.sourceItemId ?? null)
+        .query<MessageRow>(`INSERT INTO dbo.messages (jarvis_session_id, role, text, model, source_item_id)
           OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
             CONVERT(varchar(20), INSERTED.jarvis_session_id) AS session_id,
             INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at
-          SELECT id, @role, @text, @model
+          SELECT id, @role, @text, @model, @sourceItemId
           FROM dbo.jarvis_sessions
           WHERE id = @sessionId AND ended_at IS NULL;`);
       const row = result.recordset[0];
       return row ? messageFromRow(row) : null;
     },
 
+    async getDanMessageIdBySourceItemId(sourceItemId) {
+      const result = await databaseReadRequest(pool)
+        .input('sourceItemId', sql.NVarChar(128), sourceItemId)
+        .query<{ id: string }>(`SELECT TOP (1) CONVERT(varchar(20), id) AS id
+          FROM dbo.messages
+          WHERE source_item_id = @sourceItemId AND role = N'dan'
+          ORDER BY id DESC;`);
+      return result.recordset[0]?.id ?? null;
+    },
+
     async getHistory({ limit, before }) {
-      const result = await pool.request()
+      const result = await databaseReadRequest(pool)
         .input('take', sql.Int, limit + 1)
         .input('beforeId', sql.BigInt, before === undefined ? null : BigInt(before))
         .query<HistoryRow>(`DECLARE @history TABLE (

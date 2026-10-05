@@ -1,9 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { dismissNowActivity, loadNowFeed, NowFeedStreamError, streamNowFeed } from './now-feed';
+import {
+  dismissNowActivity,
+  loadNowFeed,
+  NowFeedStreamError,
+  resolveNowConfirmation,
+  streamNowFeed,
+} from './now-feed';
 
 const fetchMock = vi.fn<typeof fetch>();
 const getAccessToken = vi.fn(async () => 'test-access-token');
 const payload = {
+  awayMode: false,
+  confirmations: [],
   running: [{
     id: '42',
     title: 'Ship the feed',
@@ -18,6 +26,12 @@ const payload = {
     title: 'Release complete',
     link: 'release:7',
     at: '2026-10-03T23:30:00.000Z',
+  }, {
+    id: '43',
+    category: 'alert',
+    title: 'Sandbox crashed',
+    link: 'task:42',
+    at: '2026-10-03T23:45:00.000Z',
   }],
   updatedAt: '2026-10-04T00:00:00.000Z',
 };
@@ -48,7 +62,7 @@ describe('Now feed client', () => {
 
     await expect(loadNowFeed('https://api.example.com/', getAccessToken)).resolves.toMatchObject({
       status: 'ready',
-      items: [{ id: '9223372036854775807' }],
+      items: [{ id: '9223372036854775807' }, { id: '43', category: 'alert' }],
     });
     expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/now', expect.objectContaining({
       headers: { Authorization: `${['Bear', 'er'].join('')} test-access-token`, Accept: 'application/json' },
@@ -80,6 +94,21 @@ describe('Now feed client', () => {
       .rejects.toThrow('no longer available');
   });
 
+  it('posts an authenticated browser confirmation and validates its opaque ID', async () => {
+    const id = 'A'.repeat(43);
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await expect(resolveNowConfirmation('https://api.example.com', id, 'approve', getAccessToken))
+      .resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(`https://api.example.com/now/confirmations/${id}`, expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ decision: 'approve' }),
+    }));
+
+    await expect(resolveNowConfirmation('https://api.example.com', `${id}/other`, 'approve', getAccessToken))
+      .rejects.toThrow('Invalid confirmation ID');
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it('uses authenticated SSE, refreshes on events, and exits on cancellation', async () => {
     fetchMock.mockResolvedValueOnce(eventStream(': heartbeat\n\nevent: now\ndata: {}\n\n'));
     const controller = new AbortController();
@@ -101,6 +130,24 @@ describe('Now feed client', () => {
     expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/now/events', expect.objectContaining({
       headers: { Authorization: `${['Bear', 'er'].join('')} test-access-token`, Accept: 'text/event-stream' },
     }));
+  });
+
+  it('refreshes the feed when away-mode status changes', async () => {
+    fetchMock.mockResolvedValueOnce(eventStream('event: mode\ndata: {}\n\n'));
+    const controller = new AbortController();
+    const updates = vi.fn(() => {
+      if (updates.mock.calls.length === 2) controller.abort();
+    });
+
+    await streamNowFeed({
+      backendUrl: 'https://api.example.com',
+      getAccessToken,
+      onUpdate: updates,
+      onStatus: () => {},
+      signal: controller.signal,
+    });
+
+    expect(updates).toHaveBeenCalledTimes(2);
   });
 
   it('does not retry a denied SSE request', async () => {

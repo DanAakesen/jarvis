@@ -18,7 +18,18 @@ export interface BackendConfig {
   foundryRunnerAgentName?: string;
   foundryChatAgentName?: string;
   foundryProjectEndpoint?: string;
+  foundryMemoryEmbeddingDeploymentName?: string;
   githubAppId?: string;
+  graphAppId?: string;
+  graphTimeZone?: string;
+  monthlyBudgetResourceId?: string;
+  notesFolderPath: string;
+  teams?: {
+    botAppId: string;
+    tenantId: string;
+    audioOrigin: string;
+    speechRegion: string;
+  };
   auth: AuthConfig;
 }
 
@@ -112,6 +123,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (foundryChatAgentName !== undefined && foundryProjectEndpoint === undefined) {
     throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when JARVIS_CHAT_AGENT_NAME is configured');
   }
+  const foundryMemoryEmbeddingDeploymentName = env.JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME;
+  if (foundryMemoryEmbeddingDeploymentName !== undefined &&
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(foundryMemoryEmbeddingDeploymentName)) {
+    throw new ConfigurationError('JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME must be a valid deployment name');
+  }
+  if (foundryMemoryEmbeddingDeploymentName !== undefined && foundryProjectEndpoint === undefined) {
+    throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when memory embeddings are configured');
+  }
   const foundryRunnerAgentName = env.FOUNDRY_RUNNER_AGENT_NAME;
   if (foundryRunnerAgentName !== undefined && !/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName)) {
     throw new ConfigurationError('FOUNDRY_RUNNER_AGENT_NAME must be a valid agent name');
@@ -123,9 +142,78 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (githubAppId !== undefined && keyVaultUri === undefined) {
     throw new ConfigurationError('KEY_VAULT_URI is required when GITHUB_APP_ID is configured');
   }
+  const graphAppId = env.JARVIS_GRAPH_APP_ID;
+  if (graphAppId !== undefined && !/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(graphAppId)) {
+    throw new ConfigurationError('JARVIS_GRAPH_APP_ID must be a UUID');
+  }
+  const graphTimeZone = env.JARVIS_GRAPH_TIME_ZONE;
+  if (graphAppId !== undefined && keyVaultUri === undefined) {
+    throw new ConfigurationError('KEY_VAULT_URI is required when JARVIS_GRAPH_APP_ID is configured');
+  }
+  if ((graphAppId === undefined) !== (graphTimeZone === undefined)) {
+    throw new ConfigurationError('JARVIS_GRAPH_APP_ID and JARVIS_GRAPH_TIME_ZONE must be configured together');
+  }
+  if (graphTimeZone !== undefined) {
+    try { new Intl.DateTimeFormat('en-GB', { timeZone: graphTimeZone }); }
+    catch { throw new ConfigurationError('JARVIS_GRAPH_TIME_ZONE must be a supported time zone'); }
+  }
+  const monthlyBudgetResourceId = env.JARVIS_MONTHLY_BUDGET_RESOURCE_ID;
+  if (monthlyBudgetResourceId !== undefined &&
+    !/^\/subscriptions\/[\da-f-]+\/resourceGroups\/[a-z\d._()-]+\/providers\/Microsoft\.Consumption\/budgets\/[a-z\d._()-]+$/iu.test(monthlyBudgetResourceId)) {
+    throw new ConfigurationError('JARVIS_MONTHLY_BUDGET_RESOURCE_ID must be an Azure budget resource ID');
+  }
+  const notesFolderPath = env.JARVIS_NOTES_FOLDER_PATH ?? '/Jarvis/Notes';
+  const notesFolderSegments = notesFolderPath.replace(/\/+$/u, '').split('/').slice(1);
+  const containsControlCharacter = [...notesFolderPath].some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 0x20 || code === 0x7f;
+  });
+  if (notesFolderPath.length > 1024 || !notesFolderPath.startsWith('/') ||
+    containsControlCharacter || /[\\?#]/u.test(notesFolderPath) || notesFolderSegments.length === 0 ||
+    notesFolderSegments.some((segment) => !segment || segment === '.' || segment === '..')) {
+    throw new ConfigurationError('JARVIS_NOTES_FOLDER_PATH must be an absolute OneDrive folder path');
+  }
+
+  const botAppId = env.TEAMS_BOT_APP_ID;
+  const botTenantId = env.TEAMS_BOT_TENANT_ID;
+  const teamsAudioOrigin = env.TEAMS_AUDIO_ORIGIN;
+  const speechRegion = env.SPEECH_REGION;
+  const teamsSettings = [botAppId, botTenantId, teamsAudioOrigin, speechRegion];
+  const hasTeamsSettings = teamsSettings.some((value) => value !== undefined);
+  if (hasTeamsSettings && teamsSettings.some((value) => value === undefined)) {
+    throw new ConfigurationError('Teams bot, audio origin, and Speech region settings must be configured together');
+  }
+  const auth = loadAuthConfig(env);
+  let teams: BackendConfig['teams'];
+  if (hasTeamsSettings) {
+    const uuid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu;
+    if (!uuid.test(botAppId!) || !uuid.test(botTenantId!)) {
+      throw new ConfigurationError('TEAMS_BOT_APP_ID and TEAMS_BOT_TENANT_ID must be UUIDs');
+    }
+    if (botTenantId!.toLowerCase() !== auth.tenantId) {
+      throw new ConfigurationError('TEAMS_BOT_TENANT_ID must match ENTRA_TENANT_ID');
+    }
+    let validOrigin = false;
+    try {
+      const url = new URL(teamsAudioOrigin!);
+      validOrigin = url.protocol === 'https:' && url.origin === teamsAudioOrigin;
+    } catch { /* Report only the setting name, never its value. */ }
+    if (!validOrigin) {
+      throw new ConfigurationError('TEAMS_AUDIO_ORIGIN must be an HTTPS origin without a path');
+    }
+    if (!/^[a-z0-9-]{2,64}$/iu.test(speechRegion!)) {
+      throw new ConfigurationError('SPEECH_REGION must be a valid Azure region name');
+    }
+    teams = {
+      botAppId: botAppId!,
+      tenantId: botTenantId!.toLowerCase(),
+      audioOrigin: teamsAudioOrigin!,
+      speechRegion: speechRegion!.toLowerCase(),
+    };
+  }
 
   return {
-    auth: loadAuthConfig(env),
+    auth,
     port: Number(port),
     logLevel: logLevel as Level,
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),
@@ -138,7 +226,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryRunnerAgentName === undefined ? {} : { foundryRunnerAgentName }),
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
+    ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
     ...(githubAppId === undefined ? {} : { githubAppId }),
+    ...(graphAppId === undefined ? {} : { graphAppId: graphAppId.toLowerCase() }),
+    ...(graphTimeZone === undefined ? {} : { graphTimeZone }),
+    ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
+    ...(teams ? { teams } : {}),
+    notesFolderPath: notesFolderPath.replace(/\/+$/u, ''),
   };
 }
 

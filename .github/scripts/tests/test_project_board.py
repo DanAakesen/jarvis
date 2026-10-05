@@ -27,6 +27,13 @@ class ProjectBoardTests(unittest.TestCase):
         for label in ("Codex", "Copilot", "Dan", "Jarvis"):
             self.assertEqual(desired_status(issue(labels=[label], blocked_by=1), []), "In progress")
 
+    def test_needs_decision_issue_waits_for_dan_even_when_blocked(self):
+        self.assertEqual(desired_status(issue(labels=["needs-decision"]), []), "Needs Dan")
+        self.assertEqual(desired_status(issue(labels=["needs-decision"], blocked_by=1), []), "Needs Dan")
+
+    def test_claimed_needs_decision_issue_is_in_progress(self):
+        self.assertEqual(desired_status(issue(labels=["needs-decision", "Dan"]), []), "In progress")
+
     def test_other_labels_are_ignored(self):
         self.assertEqual(desired_status(issue(labels=["P0"]), []), "Ready")
 

@@ -3,7 +3,8 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify
 import { localWebOrigin, type BackendConfig } from '../config.js';
 import {
   AuthenticationDenied, createTokenVerifier, isAgentPrincipal, isRunnerPrincipal,
-  type AgentPrincipal, type RunnerPrincipal, type TokenVerifier, type UserPrincipal,
+  isPcBridgePrincipal,
+  type AgentPrincipal, type PcBridgePrincipal, type RunnerPrincipal, type TokenVerifier, type UserPrincipal,
 } from './verify.js';
 
 declare module 'fastify' {
@@ -11,9 +12,17 @@ declare module 'fastify' {
     principal: UserPrincipal | null;
     agentPrincipal: AgentPrincipal | null;
     runnerPrincipal: RunnerPrincipal | null;
+    pcBridgePrincipal: PcBridgePrincipal | null;
   }
-  // Routes the hosted Jarvis agent identity may call. Everything else is Dan-only.
-  interface FastifyContextConfig { jarvisAgent?: boolean; jarvisRunner?: boolean; githubWebhook?: boolean }
+  // Service identities may call only the routes that explicitly opt in.
+  interface FastifyContextConfig {
+    jarvisAgent?: boolean;
+    jarvisRunner?: boolean;
+    jarvisPcBridge?: boolean;
+    githubWebhook?: boolean;
+    teamsBot?: boolean;
+    teamsAudio?: boolean;
+  }
 }
 
 const VOICE_PROTOCOL = 'jarvis.voice.v1';
@@ -39,9 +48,11 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
   app.decorateRequest('principal', null);
   app.decorateRequest('agentPrincipal', null);
   app.decorateRequest('runnerPrincipal', null);
+  app.decorateRequest('pcBridgePrincipal', null);
   app.addHook('onRequest', async (request, reply) => {
     if (request.routeOptions.url === '/health' && ['GET', 'HEAD'].includes(request.method)) return;
     if (request.routeOptions.config?.githubWebhook === true) return;
+    if (request.routeOptions.config?.teamsBot === true || request.routeOptions.config?.teamsAudio === true) return;
     // Only the CORS plugin's generated OPTIONS route may run without a token.
     // Explicit business OPTIONS endpoints still require authentication.
     const origin = request.headers.origin;
@@ -66,8 +77,12 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       } else if (isRunnerPrincipal(principal)) {
         if (request.routeOptions.config?.jarvisRunner !== true) throw new AuthenticationDenied(403);
         request.runnerPrincipal = principal;
+      } else if (isPcBridgePrincipal(principal)) {
+        if (request.routeOptions.config?.jarvisPcBridge !== true) throw new AuthenticationDenied(403);
+        request.pcBridgePrincipal = principal;
       } else {
-        if (request.routeOptions.config?.jarvisRunner === true) throw new AuthenticationDenied(403);
+        if (request.routeOptions.config?.jarvisRunner === true ||
+            request.routeOptions.config?.jarvisPcBridge === true) throw new AuthenticationDenied(403);
         request.principal = principal;
       }
     } catch (error) {

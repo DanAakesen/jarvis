@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
+import { backendFetch } from '../backend-request';
 import { Link } from 'react-router-dom';
 import type { AreaProps } from '../areas';
 
 type UsagePeriod = '7d' | '30d' | '90d' | 'all';
 type UsageGroupBy = 'project' | 'agent' | 'source';
 type UsageSource = 'sandbox' | 'jarvis_model' | 'voice' | 'codex' | 'copilot';
-type UsageMetric = 'minutes' | 'input_tokens' | 'output_tokens' | 'turns' | 'premium_requests';
+type UsageMetric = 'minutes' | 'input_tokens' | 'output_tokens' | 'turns' | 'premium_requests' | 'screen_frames';
 type UsageAgent = 'codex' | 'copilot' | 'jarvis';
 
 interface UsageEntry {
@@ -43,7 +44,7 @@ const periods: { value: UsagePeriod; label: string }[] = [
   { value: 'all', label: 'All time' },
 ];
 const usageSources: UsageSource[] = ['sandbox', 'jarvis_model', 'voice', 'codex', 'copilot'];
-const usageMetrics: UsageMetric[] = ['minutes', 'input_tokens', 'output_tokens', 'turns', 'premium_requests'];
+const usageMetrics: UsageMetric[] = ['minutes', 'input_tokens', 'output_tokens', 'turns', 'premium_requests', 'screen_frames'];
 const usageAgents: UsageAgent[] = ['codex', 'copilot', 'jarvis'];
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const dkk = new Intl.NumberFormat('da-DK', { style: 'currency', currency: 'DKK', maximumFractionDigits: 4 });
@@ -101,6 +102,7 @@ function metricLabel(metric: UsageMetric): string {
     output_tokens: 'Output tokens',
     turns: 'Agent turns',
     premium_requests: 'Premium requests',
+    screen_frames: 'Screen frames',
   }[metric];
 }
 
@@ -112,6 +114,7 @@ function formatQuantity(entry: UsageEntry): string {
     case 'output_tokens': return `${amount} tokens`;
     case 'turns': return `${amount} ${entry.quantity === 1 ? 'turn' : 'turns'}`;
     case 'premium_requests': return `${amount} ${entry.quantity === 1 ? 'request' : 'requests'}`;
+    case 'screen_frames': return `${amount} ${entry.quantity === 1 ? 'frame' : 'frames'}`;
   }
 }
 
@@ -146,7 +149,7 @@ async function fetchUsageReport(
   if (!backendUrl) throw new Error('Usage data is unavailable until the backend is deployed.');
   const token = await getAccessToken();
   const authorization = `${['Bear', 'er'].join('')} ${token}`;
-  const response = await fetch(`${backendUrl}/usage?period=${period}`, {
+  const response = await backendFetch(`${backendUrl}/usage?period=${period}`, {
     headers: { Authorization: authorization },
     signal,
   });

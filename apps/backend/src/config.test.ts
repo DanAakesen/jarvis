@@ -4,7 +4,31 @@ import { loadAuthConfig } from './auth/config.js';
 
 describe('backend configuration', () => {
   it('defaults to the infrastructure port and offline logs', () => {
-    expect(loadConfig({})).toEqual({ port: 3000, logLevel: 'info', auth: loadAuthConfig({}) });
+    expect(loadConfig({})).toEqual({
+      port: 3000, logLevel: 'info', notesFolderPath: '/Jarvis/Notes', auth: loadAuthConfig({}),
+    });
+  });
+  it('accepts a configured OneDrive notes folder and rejects unsafe paths', () => {
+    expect(loadConfig({ JARVIS_NOTES_FOLDER_PATH: '/Work Notes/Research/' }).notesFolderPath)
+      .toBe('/Work Notes/Research');
+    for (const JARVIS_NOTES_FOLDER_PATH of [
+      '', '/', 'Jarvis/Notes', '/Jarvis//Notes', '/Jarvis/../Private', '/Jarvis\\Notes',
+      '/Jarvis/Notes?token=secret', '/Jarvis/Notes#fragment', '/Jarvis/Notes\u0000',
+    ]) {
+      expect(() => loadConfig({ JARVIS_NOTES_FOLDER_PATH })).toThrow(
+        /^JARVIS_NOTES_FOLDER_PATH must be an absolute OneDrive folder path$/,
+      );
+    }
+  });
+  it('accepts only a secure Key Vault origin', () => {
+    expect(loadConfig({ KEY_VAULT_URI: 'https://kv-jarvis.vault.azure.net/' }).keyVaultUri)
+      .toBe('https://kv-jarvis.vault.azure.net/');
+    for (const KEY_VAULT_URI of [
+      '', 'http://kv-jarvis.vault.azure.net/', 'https://vault.example/', 'https://kv-jarvis.vault.azure.net/secrets',
+      'https://kv-jarvis.vault.azure.net/?token=secret',
+    ]) {
+      expect(() => loadConfig({ KEY_VAULT_URI })).toThrow(/^KEY_VAULT_URI must be a secure Azure Key Vault URL$/);
+    }
   });
   it('accepts a configured HTTPS origin and backend-only telemetry string', () => {
     const connectionString = 'InstrumentationKey=00000000-0000-0000-0000-000000000001;IngestionEndpoint=https://swedencentral-0.in.applicationinsights.azure.com/';
@@ -17,6 +41,7 @@ describe('backend configuration', () => {
       FOUNDRY_RUNNER_AGENT_NAME: 'jarvis-runner-node-1x2',
     })).toEqual({
       auth: loadAuthConfig({}), port: 4000, logLevel: 'debug', staticWebAppOrigin: 'https://fixture.azurestaticapps.net', applicationInsightsConnectionString: connectionString,
+      notesFolderPath: '/Jarvis/Notes',
       foundryEndpoints: {
         admin: foundryAdminEndpoint,
         runtime: foundryRuntimeEndpoint,
@@ -47,6 +72,54 @@ describe('backend configuration', () => {
         .toThrow('JARVIS_CHAT_AGENT_NAME');
     }
   });
+  it('validates the optional Foundry memory-embedding deployment name', () => {
+    const FOUNDRY_PROJECT_ENDPOINT = 'https://resource.services.ai.azure.com/api/projects/jarvis';
+    expect(loadConfig({
+      FOUNDRY_PROJECT_ENDPOINT,
+      JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME: 'text-embedding-3-small',
+    }).foundryMemoryEmbeddingDeploymentName).toBe('text-embedding-3-small');
+    expect(() => loadConfig({
+      JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME: 'text-embedding-3-small',
+    })).toThrow('FOUNDRY_PROJECT_ENDPOINT is required');
+    for (const JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME of ['', '../other', 'bad name']) {
+      expect(() => loadConfig({ FOUNDRY_PROJECT_ENDPOINT, JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME }))
+        .toThrow('JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME');
+    }
+  });
+  it('accepts a complete bot, audio-origin, and Speech F0 configuration', () => {
+    expect(loadConfig({
+      TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      TEAMS_BOT_TENANT_ID: '802efa29-17f2-4a79-8f5f-38f087aed96a',
+      TEAMS_AUDIO_ORIGIN: 'https://jarvis.example',
+      SPEECH_REGION: 'westeurope',
+    }).teams).toEqual({
+      botAppId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      tenantId: '802efa29-17f2-4a79-8f5f-38f087aed96a',
+      audioOrigin: 'https://jarvis.example',
+      speechRegion: 'westeurope',
+    });
+  });
+  it('rejects partial, cross-tenant, or unsafe Teams and Speech settings', () => {
+    expect(() => loadConfig({ TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }))
+      .toThrow('must be configured together');
+    const complete = {
+      TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      TEAMS_BOT_TENANT_ID: '802efa29-17f2-4a79-8f5f-38f087aed96a',
+      TEAMS_AUDIO_ORIGIN: 'https://jarvis.example',
+      SPEECH_REGION: 'westeurope',
+    };
+    expect(() => loadConfig({ ...complete, TEAMS_BOT_TENANT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }))
+      .toThrow('must match ENTRA_TENANT_ID');
+    for (const TEAMS_AUDIO_ORIGIN of [
+      'http://jarvis.example',
+      'https://jarvis.example/',
+      'https://jarvis.example/path',
+      'https://user@jarvis.example',
+    ]) {
+      expect(() => loadConfig({ ...complete, TEAMS_AUDIO_ORIGIN })).toThrow('TEAMS_AUDIO_ORIGIN');
+    }
+    expect(() => loadConfig({ ...complete, SPEECH_REGION: 'https://example.com' })).toThrow('SPEECH_REGION');
+  });
   it('accepts a GitHub App ID only with a secure Key Vault origin', () => {
     expect(loadConfig({
       GITHUB_APP_ID: '123456',
@@ -65,6 +138,50 @@ describe('backend configuration', () => {
       'https://jarvis.vault.azure.net/?secret=value',
     ]) {
       expect(() => loadConfig({ GITHUB_APP_ID: '123456', KEY_VAULT_URI })).toThrow('KEY_VAULT_URI');
+    }
+  });
+  it('requires a valid Graph app ID, Key Vault, and time zone together', () => {
+    const appId = '12345678-1234-1234-1234-123456789abc';
+    const keyVault = 'https://jarvis.vault.azure.net/';
+    expect(loadConfig({
+      JARVIS_GRAPH_APP_ID: appId,
+      JARVIS_GRAPH_TIME_ZONE: 'Europe/Copenhagen',
+      KEY_VAULT_URI: keyVault,
+    })).toMatchObject({
+      graphAppId: appId,
+      graphTimeZone: 'Europe/Copenhagen',
+      keyVaultUri: keyVault,
+    });
+    expect(() => loadConfig({ JARVIS_GRAPH_APP_ID: appId })).toThrow('KEY_VAULT_URI');
+    expect(() => loadConfig({ JARVIS_GRAPH_APP_ID: appId, KEY_VAULT_URI: keyVault }))
+      .toThrow('JARVIS_GRAPH_APP_ID and JARVIS_GRAPH_TIME_ZONE');
+    expect(() => loadConfig({
+      JARVIS_GRAPH_TIME_ZONE: 'Europe/Copenhagen',
+    })).toThrow('JARVIS_GRAPH_APP_ID and JARVIS_GRAPH_TIME_ZONE');
+    expect(() => loadConfig({
+      JARVIS_GRAPH_APP_ID: 'not-a-uuid',
+      JARVIS_GRAPH_TIME_ZONE: 'Europe/Copenhagen',
+      KEY_VAULT_URI: keyVault,
+    })).toThrow('JARVIS_GRAPH_APP_ID');
+    expect(() => loadConfig({
+      JARVIS_GRAPH_APP_ID: appId,
+      JARVIS_GRAPH_TIME_ZONE: 'not/a-zone',
+      KEY_VAULT_URI: keyVault,
+    })).toThrow('JARVIS_GRAPH_TIME_ZONE');
+  });
+  it('validates the Azure budget resource ID used for budget polling', () => {
+    const JARVIS_MONTHLY_BUDGET_RESOURCE_ID =
+      '/subscriptions/12345678-1234-1234-1234-123456789abc/resourceGroups/rg-jarvis/providers/Microsoft.Consumption/budgets/jarvis-monthly';
+    expect(loadConfig({ JARVIS_MONTHLY_BUDGET_RESOURCE_ID }).monthlyBudgetResourceId)
+      .toBe(JARVIS_MONTHLY_BUDGET_RESOURCE_ID);
+    for (const value of [
+      '',
+      'https://management.azure.com/subscriptions/123/resourceGroups/rg/providers/Microsoft.Consumption/budgets/x',
+      `${JARVIS_MONTHLY_BUDGET_RESOURCE_ID}?api-version=2019-10-01`,
+      '/subscriptions/not-a-sub/resourceGroups/rg/providers/Microsoft.Consumption/budgets/x',
+    ]) {
+      expect(() => loadConfig({ JARVIS_MONTHLY_BUDGET_RESOURCE_ID: value }))
+        .toThrow('JARVIS_MONTHLY_BUDGET_RESOURCE_ID');
     }
   });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import sql from 'mssql';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readDownMigration, readMigrations, revertMigration, type Migration } from './migrations.js';
 import { createTaskStore } from './task-store.js';
@@ -10,7 +10,12 @@ import { createSettingsStore } from './settings-store.js';
 import { createWebhookDeliveryStore } from './webhook-delivery-store.js';
 import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
+import { createAlertActivityStore } from './alert-store.js';
+import { createAwayModeStore } from './away-mode-store.js';
+import { presenceAwayThresholdMs } from '../core/away-mode.js';
 import { createDispatcherStore } from './dispatcher-store.js';
+import { createConversationStore } from './conversation-store.js';
+import { createMemoryStore } from './memory-store.js';
 import {
   createTaskEventArchive,
   type TaskEventArchiveBlobStore,
@@ -28,8 +33,11 @@ const administrator = new sql.ConnectionPool({ ...configuration, database: 'mast
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
-  'activity', 'artifacts', 'credential_status', 'jarvis_sessions', 'messages', 'projects', 'sandbox_sessions',
-  'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks', 'tool_calls', 'usage', 'webhook_deliveries',
+  'activity', 'artifacts', 'credential_status', 'deployments', 'jarvis_sessions', 'memories',
+  'memory_deletions', 'memory_history', 'messages', 'projects', 'pull_requests', 'releases',
+  'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks',
+  'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage',
+  'webhook_deliveries', 'workflow_runs',
 ];
 
 async function tables(): Promise<string[]> {
@@ -81,7 +89,7 @@ afterAll(async () => {
   await administrator.close();
 });
 
-describe('committed domain schema (groups 1-4, 6 and 7)', () => {
+describe('committed domain schema (groups 1-8)', () => {
   it('boots the committed migration manifest twice without duplicate ledger rows', async () => {
     const committed = await readMigrations();
     expect(await applyMigrations(pool, committed)).toEqual(committed.map((migration) => migration.name));
@@ -98,11 +106,141 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
       `SELECT name FROM sys.indexes WHERE name IN (
         N'IX_tasks_state_next_attempt_at', N'IX_task_events_task_id_at', N'IX_sandbox_sessions_task_id_status',
         N'IX_sandbox_turns_sandbox_session_id_started_at', N'IX_artifacts_task_id_at',
-        N'IX_task_event_archives_task_first_at') ORDER BY name`);
+        N'IX_task_event_archives_task_first_at', N'IX_pull_requests_project_head_sha',
+        N'IX_workflow_runs_project_head_sha', N'IX_releases_project_created_at',
+        N'IX_deployments_release_id_at', N'UX_activity_alert_key') ORDER BY name`);
     expect(recordset.map((row) => row.name)).toEqual([
-      'IX_artifacts_task_id_at', 'IX_sandbox_sessions_task_id_status', 'IX_sandbox_turns_sandbox_session_id_started_at',
-      'IX_task_event_archives_task_first_at', 'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at',
+      'IX_artifacts_task_id_at', 'IX_deployments_release_id_at', 'IX_pull_requests_project_head_sha',
+      'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
+      'IX_sandbox_turns_sandbox_session_id_started_at', 'IX_task_event_archives_task_first_at',
+      'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
+      'UX_activity_alert_key',
     ]);
+  });
+  it('persists away mode and an in-progress Teams presence timer across store recreation', async () => {
+    const startedAt = new Date('2026-10-04T12:00:00.000Z');
+    const firstStore = createAwayModeStore(pool);
+    await firstStore.observePresence(true, startedAt);
+
+    const onModeChanged = vi.fn();
+    const restartedStore = createAwayModeStore(pool, onModeChanged);
+    expect(await restartedStore.read()).toEqual({
+      away: false,
+      source: null,
+      changedAt: null,
+      presenceAwaySince: startedAt.toISOString(),
+    });
+
+    expect(await restartedStore.observePresence(
+      true,
+      new Date(startedAt.getTime() + presenceAwayThresholdMs),
+    )).toMatchObject({
+      away: true,
+      source: 'teams_presence',
+      presenceAwaySince: startedAt.toISOString(),
+    });
+    await restartedStore.set(false, new Date(startedAt.getTime() + presenceAwayThresholdMs + 1));
+    expect(await createAwayModeStore(pool).read()).toMatchObject({ away: false, source: 'manual' });
+    expect((await pool.request().query<{ kind: string; title: string }>(
+      `SELECT kind, title FROM dbo.activity WHERE area = N'core' ORDER BY id;`,
+    )).recordset).toEqual([
+      { kind: 'away_mode', title: 'Away mode is on' },
+      { kind: 'away_mode', title: 'Away mode is off' },
+    ]);
+    expect(onModeChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains source-linked memory across sessions and store restarts, then forgets without deleting sources', async () => {
+    const conversations = createConversationStore(pool);
+    const firstSession = await conversations.createSession({ channel: 'chat', language: 'en' });
+    const firstSource = await conversations.addMessage({
+      sessionId: firstSession.id, role: 'dan', text: 'I prefer English for Jarvis.', model: null,
+    });
+    const secondSession = await conversations.createSession({ channel: 'voice', language: 'da' });
+    const secondSource = await conversations.addMessage({
+      sessionId: secondSession.id, role: 'dan', text: 'I prefer Danish for voice.', model: null,
+    });
+
+    const firstStore = createMemoryStore(pool);
+    await firstStore.initialize();
+    const searchSetup = await pool.request().query<{
+      fulltext_installed: boolean;
+      fulltext_indexed: boolean;
+    }>(`DECLARE @fullTextInstalled bit = 0;
+      BEGIN TRY
+        SET @fullTextInstalled = CASE
+          WHEN FULLTEXTSERVICEPROPERTY(N'IsFullTextInstalled') = 1 THEN 1 ELSE 0 END;
+      END TRY
+      BEGIN CATCH
+        SET @fullTextInstalled = 0;
+      END CATCH;
+      SELECT @fullTextInstalled AS fulltext_installed,
+        CONVERT(bit, CASE WHEN EXISTS (
+          SELECT 1 FROM sys.fulltext_indexes WHERE object_id = OBJECT_ID(N'dbo.memories')
+        ) AND @fullTextInstalled = 1 THEN 1 ELSE 0 END) AS fulltext_indexed;`);
+    if (searchSetup.recordset[0]?.fulltext_installed) {
+      expect(searchSetup.recordset[0]?.fulltext_indexed).toBe(true);
+    }
+    const initial = await firstStore.save({
+      category: 'preference',
+      key: 'language',
+      content: 'Dan prefers English for Jarvis.',
+      sourceMessageId: firstSource.id,
+      embedding: null,
+    }, new AbortController().signal);
+    const repeated = await firstStore.save({
+      category: 'preference',
+      key: 'language',
+      content: 'Dan prefers English for Jarvis.',
+      sourceMessageId: firstSource.id,
+      embedding: null,
+    }, new AbortController().signal);
+    const changed = await firstStore.save({
+      category: 'preference',
+      key: 'language',
+      content: 'Dan prefers Danish for Jarvis voice.',
+      sourceMessageId: secondSource.id,
+      embedding: null,
+    }, new AbortController().signal);
+
+    expect(initial).toMatchObject({ created: true, changed: true, memory: { revision: 1 } });
+    expect(repeated).toMatchObject({ created: false, changed: false, memory: { revision: 1 } });
+    expect(changed).toMatchObject({
+      created: false,
+      changed: true,
+      memory: { id: initial.memory.id, revision: 2, sourceMessageId: secondSource.id },
+    });
+
+    const afterRestart = createMemoryStore(pool);
+    await afterRestart.initialize();
+    const recalled = await afterRestart.list(5, new AbortController().signal);
+    expect(recalled.memories).toHaveLength(1);
+    expect(recalled.memories[0]).toMatchObject({
+      id: initial.memory.id,
+      content: 'Dan prefers Danish for Jarvis voice.',
+      sourceMessageId: secondSource.id,
+      revision: 2,
+    });
+    const versions = await afterRestart.history(initial.memory.id, 10, new AbortController().signal);
+    expect(versions.map(({ revision, sourceMessageId }) => ({ revision, sourceMessageId }))).toEqual([
+      { revision: 2, sourceMessageId: secondSource.id },
+      { revision: 1, sourceMessageId: firstSource.id },
+    ]);
+
+    const forgotten = await afterRestart.forget(
+      initial.memory.id, secondSource.id, new AbortController().signal,
+    );
+    expect(forgotten).toEqual({ category: 'preference', key: 'language' });
+    const afterForget = createMemoryStore(pool);
+    await afterForget.initialize();
+    expect((await afterForget.list(5, new AbortController().signal)).memories).toEqual([]);
+    const retainedSources = await pool.request().input('firstId', sql.BigInt, BigInt(firstSource.id))
+      .input('secondId', sql.BigInt, BigInt(secondSource.id))
+      .query('SELECT COUNT(*) AS count FROM dbo.messages WHERE id IN (@firstId, @secondId) AND role = N\'dan\';');
+    expect(retainedSources.recordset[0]?.count).toBe(2);
+    const deletionLog = await pool.request().input('memoryId', sql.BigInt, BigInt(initial.memory.id))
+      .query('SELECT COUNT(*) AS count FROM dbo.memory_deletions WHERE memory_id = @memoryId;');
+    expect(deletionLog.recordset[0]?.count).toBe(1);
   });
 
   it('ignores a concurrently repeated webhook delivery ID', async () => {
@@ -116,6 +254,139 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
       .query(`SELECT delivery_id AS deliveryId, event, outcome FROM dbo.webhook_deliveries
         WHERE delivery_id = @deliveryId;`);
     expect(recordset).toEqual([{ deliveryId, event: 'push', outcome: 'ok' }]);
+  });
+
+  it('maps signed event fields into linked project records and ignores duplicate payload changes', async () => {
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Webhook fixture', N'DanAakesen/webhook-${randomUUID().slice(0, 8)}', N'main',
+        N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const { record } = createWebhookDeliveryStore(pool);
+    const repo = (await pool.request()
+      .input('projectId', sql.Int, projectId)
+      .query<{ repo: string }>('SELECT repo FROM dbo.projects WHERE id = @projectId')).recordset[0]!.repo;
+    const now = new Date('2026-10-04T12:00:00Z');
+    const headSha = 'a'.repeat(40);
+    const releaseSha = 'b'.repeat(40);
+
+    await record({
+      deliveryId: randomUUID(), event: 'pull_request', outcome: 'ok',
+      mapping: {
+        kind: 'pull_request', repository: repo, number: 23, branch: 'feature/webhook',
+        headSha, state: 'merged', openedAt: now.toISOString(), mergedAt: now.toISOString(),
+      },
+    });
+    await record({
+      deliveryId: randomUUID(), event: 'check_run', outcome: 'ok',
+      mapping: {
+        kind: 'check_run', repository: repo, headSha, pullRequestNumbers: [23],
+        status: 'completed', conclusion: 'success',
+      },
+    });
+    const pushDeliveryId = randomUUID();
+    await record({
+      deliveryId: pushDeliveryId, event: 'push', outcome: 'ok',
+      mapping: { kind: 'push', repository: repo, ref: 'refs/heads/main', sha: releaseSha, at: now.toISOString() },
+    });
+    await record({
+      deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok',
+      mapping: {
+        kind: 'workflow_run', repository: repo, id: 1_900_000_000_001, name: 'Release', event: 'push',
+        branch: 'main', headSha: releaseSha, runNumber: 7, pullRequestNumbers: [23],
+        status: 'completed', conclusion: 'success',
+        startedAt: now.toISOString(), completedAt: now.toISOString(),
+      },
+    });
+    await record({
+      deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok',
+      mapping: {
+        kind: 'deployment_status', repository: repo, id: 1_900_000_000_002, sha: releaseSha,
+        environment: 'production', status: 'success', at: now.toISOString(),
+      },
+    });
+    await expect(record({
+      deliveryId: pushDeliveryId, event: 'push', outcome: 'ok',
+      mapping: { kind: 'push', repository: repo, ref: 'refs/heads/main', sha: headSha, at: now.toISOString() },
+    })).resolves.toBe(false);
+
+    const prs = await pool.request().input('projectId', sql.Int, projectId)
+      .query(`SELECT number, branch, head_sha AS headSha, state, checks, opened_at AS openedAt, merged_at AS mergedAt
+        FROM dbo.pull_requests WHERE project_id = @projectId;`);
+    expect(prs.recordset).toEqual([{
+      number: 23, branch: 'feature/webhook', headSha, state: 'merged', checks: 'passed', openedAt: now, mergedAt: now,
+    }]);
+    const runs = await pool.request().input('projectId', sql.Int, projectId)
+      .query(`SELECT github_run_id AS runId, workflow, [trigger], status, conclusion, pull_request_id AS pullRequestId,
+        release_id AS releaseId FROM dbo.workflow_runs WHERE project_id = @projectId;`);
+    expect(runs.recordset).toEqual([{
+      runId: '1900000000001', workflow: 'Release', trigger: 'push', status: 'completed', conclusion: 'success',
+      pullRequestId: '1', releaseId: '1',
+    }]);
+    const releases = await pool.request().input('projectId', sql.Int, projectId)
+      .query(`SELECT version, sha, status FROM dbo.releases WHERE project_id = @projectId;`);
+    expect(releases.recordset).toEqual([{ version: '7', sha: releaseSha, status: 'released' }]);
+    const deployments = await pool.request()
+      .input('releaseId', sql.Int, releases.recordset.length ? runs.recordset[0]!.releaseId : null)
+      .query(`SELECT github_deployment_id AS deploymentId, environment, status FROM dbo.deployments
+        WHERE release_id = @releaseId;`);
+    expect(deployments.recordset).toEqual([
+      { deploymentId: '1900000000002', environment: 'production', status: 'success' },
+    ]);
+  });
+
+  it('links a release workflow and deployment delivered before the main push', async () => {
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Out-of-order release fixture', N'DanAakesen/release-${randomUUID().slice(0, 8)}', N'main',
+        N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const { record } = createWebhookDeliveryStore(pool);
+    const repo = (await pool.request()
+      .input('projectId', sql.Int, projectId)
+      .query<{ repo: string }>('SELECT repo FROM dbo.projects WHERE id = @projectId')).recordset[0]!.repo;
+    const sha = 'c'.repeat(40);
+    const at = '2026-10-04T12:00:00.000Z';
+
+    await record({
+      deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok',
+      mapping: {
+        kind: 'workflow_run', repository: repo, id: 1_900_000_000_003, name: 'Release', event: 'push',
+        branch: 'main', headSha: sha, runNumber: 8, pullRequestNumbers: [],
+        status: 'completed', conclusion: 'success', startedAt: at, completedAt: at,
+      },
+    });
+    await record({
+      deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok',
+      mapping: {
+        kind: 'deployment_status', repository: repo, id: 1_900_000_000_004, sha,
+        environment: 'production', status: 'success', at,
+      },
+    });
+    await record({
+      deliveryId: randomUUID(), event: 'push', outcome: 'ok',
+      mapping: { kind: 'push', repository: repo, ref: 'refs/heads/main', sha, at },
+    });
+
+    const { recordset: releases } = await pool.request()
+      .input('projectId', sql.Int, projectId)
+      .input('sha', sql.Char(40), sha)
+      .query<{ count: number }>(`SELECT COUNT(*) AS count FROM dbo.releases
+        WHERE project_id = @projectId AND sha = @sha;`);
+    expect(releases).toEqual([{ count: 1 }]);
+
+    const { recordset } = await pool.request()
+      .input('projectId', sql.Int, projectId)
+      .input('sha', sql.Char(40), sha)
+      .query(`SELECT r.version, r.status, CAST(r.id AS varchar(19)) AS releaseId,
+          CAST(w.release_id AS varchar(19)) AS runReleaseId,
+          CAST(d.release_id AS varchar(19)) AS deploymentReleaseId
+        FROM dbo.releases AS r
+        LEFT JOIN dbo.workflow_runs AS w ON w.project_id = r.project_id AND w.head_sha = r.sha
+        LEFT JOIN dbo.deployments AS d ON d.release_id = r.id
+        WHERE r.project_id = @projectId AND r.sha = @sha;`);
+    expect(recordset).toHaveLength(1);
+    expect(recordset[0]).toMatchObject({ version: '8', status: 'released' });
+    expect(recordset[0]?.runReleaseId).toBe(recordset[0]?.releaseId);
+    expect(recordset[0]?.deploymentReleaseId).toBe(recordset[0]?.releaseId);
   });
 
   it('reads running tasks and categorized activity and persists dismissals', async () => {
@@ -181,6 +452,79 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
     expect(await store.dismiss(String(releaseId))).toBe(true);
     expect((await store.read()).items.some((item) => item.id === String(releaseId))).toBe(false);
     expect(await store.dismiss('9223372036854775807')).toBe(false);
+  });
+
+  it('records each alert condition once and returns it in the Now feed', async () => {
+    const alertNotifier = vi.fn();
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Alert fixture', N'DanAakesen/alert-${randomUUID().slice(0, 8)}', N'main',
+        N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const repo = (await pool.request()
+      .input('projectId', sql.Int, projectId)
+      .query<{ repo: string }>('SELECT repo FROM dbo.projects WHERE id = @projectId')).recordset[0]!.repo;
+    const sha = 'd'.repeat(40);
+    const releaseId = await scalar(`INSERT dbo.releases (project_id, version, sha, status, created_at)
+      VALUES (${projectId}, N'1', N'${sha}', N'deploying', SYSUTCDATETIME())`);
+    const deploymentStore = createWebhookDeliveryStore(pool, alertNotifier);
+    const failedDeployment = {
+      kind: 'deployment_status' as const, repository: repo, id: 1_900_000_000_099, sha,
+      environment: 'production', status: 'failure' as const, at: new Date().toISOString(),
+    };
+    await deploymentStore.record({
+      deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok', mapping: failedDeployment,
+    });
+    await deploymentStore.record({
+      deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok', mapping: failedDeployment,
+    });
+    expect(alertNotifier).toHaveBeenCalledExactlyOnceWith({
+      type: 'deployment_failure',
+      dedupeKey: `deployment:${failedDeployment.id}`,
+      title: 'Deployment failed: production',
+      link: `release:${releaseId}`,
+    });
+
+    const tasks = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    const task = await tasks.create({ projectId: String(projectId), title: 'Crash fixture', request: 'Run' });
+    if (!task) throw new Error('Alert fixture task was not created');
+    expect((await tasks.transition(task.id, 'Running')).kind).toBe('ok');
+    const sandboxId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, size, image, status, agent_name)
+      VALUES (${task.id}, N'alert-${randomUUID()}', N'1', N'1x2', N'node', N'Active', N'jarvis-runner-node-1x2')`);
+    const heartbeatStore = createSandboxHeartbeatStore(
+      pool,
+      createEventHub<TaskEventMessage>(),
+      alertNotifier,
+    );
+    await expect(heartbeatStore.markNeedsAttention(String(sandboxId))).resolves.toBe('crashed');
+    await expect(heartbeatStore.markNeedsAttention(String(sandboxId))).resolves.toBe(false);
+    expect(alertNotifier).toHaveBeenCalledTimes(2);
+
+    const credentialStore = createCredentialStatusStore(pool, { alertNotifier });
+    const expiry = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+    await credentialStore.updateCopilotStatus('renew_soon', expiry, new Date().toISOString());
+    await credentialStore.updateCopilotStatus('renew_soon', expiry, new Date().toISOString());
+    expect(alertNotifier).toHaveBeenCalledTimes(3);
+
+    const refreshed = vi.fn();
+    const budgetAlerts = createAlertActivityStore(pool, refreshed);
+    const budgetAlert = {
+      type: 'budget_threshold' as const,
+      dedupeKey: `budget-80:${new Date().toISOString().slice(0, 7)}`,
+      title: 'Monthly Azure budget reached 80%',
+      link: null,
+    };
+    await expect(budgetAlerts.record(budgetAlert)).resolves.toBe(true);
+    await expect(budgetAlerts.record(budgetAlert)).resolves.toBe(false);
+    expect(refreshed).toHaveBeenCalledOnce();
+
+    const feed = await createNowFeedStore(pool).read();
+    expect(feed.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: 'alert', title: 'Deployment failed: production', link: `release:${releaseId}` }),
+      expect.objectContaining({ category: 'alert', title: 'Sandbox crashed', link: `task:${task.id}` }),
+      expect.objectContaining({ category: 'alert', title: `copilot-token expires ${expiry.slice(0, 10)}`, link: null }),
+      expect.objectContaining({ category: 'alert', title: 'Monthly Azure budget reached 80%', link: null }),
+    ]));
   });
 
   it('stores valid records across the committed schema', async () => {
@@ -358,6 +702,22 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
     const created = await store.create({ projectId, title: 'Task API contract', request: 'Exercise SQL task operations' });
     expect(created).toMatchObject({ projectId, agent: 'copilot', source: 'board', state: 'Ready' });
     if (!created) throw new Error('Task API fixture task was not created');
+    const chatSessionId = await scalar("INSERT dbo.jarvis_sessions (channel, language) VALUES (N'chat', N'en')");
+    const messageId = await scalar(`INSERT dbo.messages (jarvis_session_id, role, text, model)
+      VALUES (${chatSessionId}, N'dan', N'Create a project', NULL)`);
+    const chatTask = await store.create({
+      projectId,
+      title: 'Chat-created project scaffold',
+      request: 'Scaffold from chat',
+      source: 'chat',
+      originMessageId: String(messageId),
+    });
+    expect(chatTask).toMatchObject({ source: 'chat', originMessageId: String(messageId) });
+    if (!chatTask) throw new Error('Chat-created task fixture was not created');
+    expect(await store.get(chatTask.id, 10, 0)).toMatchObject({
+      events: [{ type: 'created', summary: 'Task created from chat' }],
+    });
+    expect((await store.transition(chatTask.id, 'Cancelled')).kind).toBe('ok');
     let idleOperationRan = false;
     expect(await store.withNoActiveTasks(async () => { idleOperationRan = true; }))
       .toEqual({ kind: 'active' });
@@ -672,13 +1032,14 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
     expect(running).toEqual([{
       sandboxSessionId: String(sandboxSessionId), foundrySessionId: 'heartbeat-session',
       agentName: 'jarvis-runner-base-1x2', invocationId: 'heartbeat-invocation',
+      invocationCompleted: false,
     }]);
     await store.recordHeartbeat(String(sandboxSessionId));
     const heartbeat = await pool.request().query<{ at: Date | null }>(
       `SELECT last_heartbeat_at AS at FROM dbo.sandbox_sessions WHERE id = ${sandboxSessionId}`);
     expect(heartbeat.recordset[0]?.at).toBeInstanceOf(Date);
 
-    expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe(true);
+    expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe('crashed');
     expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe(false);
     const result = await pool.request().query<{ taskState: string; sessionStatus: string; endReason: string; leaseOwner: string | null }>(
       `SELECT t.state AS taskState, s.status AS sessionStatus, s.end_reason AS endReason, t.lease_owner AS leaseOwner
@@ -699,6 +1060,138 @@ describe('committed domain schema (groups 1-4, 6 and 7)', () => {
       payload: { from: 'Running', to: 'NeedsAttention', reason: 'sandbox_crashed' },
       source: 'backend',
     });
+  });
+
+  it('stores the agent question when a sandbox needs Dan', async () => {
+    const project = await createProjectStore(pool).create({
+      name: 'Needs attention question fixture', repo: `${database}/attention-question`, default_branch: 'main',
+      default_agent: 'copilot', policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
+    });
+    const taskStore = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    const task = await taskStore.create({
+      projectId: project.id, title: 'Scaffold question', request: 'Ask for missing information',
+    });
+    if (!task) throw new Error('Needs attention question task was not created');
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    const sandboxSessionId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+      VALUES (${task.id}, N'attention-question-session', N'1', N'jarvis-runner-base-1x2', N'1x2',
+        N'jarvis-runner-base@sha256:fixture', N'Active')`);
+    const eventHub = createEventHub<TaskEventMessage>();
+    const published: TaskEventMessage[] = [];
+    eventHub.subscribe((event) => published.push(event));
+    const store = createSandboxHeartbeatStore(pool, eventHub);
+    const question = 'Which license should this project use?';
+
+    expect(await store.markNeedsAttention(String(sandboxSessionId), question)).toBe('needs_attention');
+    const taskDetail = await taskStore.get(task.id, 10, 0);
+    expect(taskDetail?.state).toBe('NeedsAttention');
+    expect(taskDetail?.events).toEqual(expect.arrayContaining([expect.objectContaining({
+      type: 'state_changed',
+      summary: `Question for Dan: ${question}`,
+      payload: { from: 'Running', to: 'NeedsAttention', reason: 'agent_question', question },
+    })]));
+    expect(published).toHaveLength(1);
+    expect(published[0]?.summary).toBe(`Question for Dan: ${question}`);
+    const sandbox = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .query<{ status: string; endReason: string }>(`SELECT status, end_reason AS endReason
+        FROM dbo.sandbox_sessions WHERE id = @sandboxSessionId;`);
+    expect(sandbox.recordset).toEqual([{ status: 'Ended', endReason: 'done' }]);
+  });
+
+  it.each(['completed', 'session_question', 'completed_before_turn'])(
+    'keeps a %s turn out of generic NeedsAttention crash cleanup and expires it without changing state',
+    async (type) => {
+    const eventHub = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, eventHub);
+    const project = await createProjectStore(pool).create({
+      name: 'Idle expiry fixture', repo: `${database}/idle-expiry-${type}`, default_branch: 'main',
+      default_agent: 'copilot', policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
+    });
+    const task = await taskStore.create({
+      projectId: project.id, title: 'Continue after expiry', request: 'Continue the completed turn',
+    });
+    if (!task) throw new Error('Idle expiry task was not created');
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    const sandboxSessionId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+      VALUES (${task.id}, N'idle-expiry-session-${type}', N'1', N'jarvis-runner-base-1x2', N'1x2',
+        N'jarvis-runner-base@sha256:fixture', N'Active')`);
+    const invocationId = `idle-expiry-${randomUUID()}`;
+    const recordCompletion = () => taskStore.recordEvent({
+      taskId: task.id,
+      type: type === 'completed_before_turn' ? 'completed' : type,
+      summary: 'The agent needs a clarification.',
+      source: 'runner',
+      payload: { invocationId, eventIndex: 1, data: { question: 'Which license?' } },
+    });
+    if (type === 'completed_before_turn') await recordCompletion();
+    await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .input('invocationId', sql.NVarChar(255), invocationId)
+      .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+        VALUES (@sandboxSessionId, @invocationId, N'task', N'idle-expiry-acp', N'running');`);
+    if (type !== 'completed_before_turn') await recordCompletion();
+    if (type !== 'session_question') {
+      expect((await taskStore.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+    }
+    const dispatcherStore = createDispatcherStore(pool, eventHub);
+    expect(await dispatcherStore.endTaskSessions(task.id, 'NeedsAttention')).toEqual([]);
+    const session = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .query<{ status: string; endReason: string | null }>(
+        'SELECT status, end_reason AS endReason FROM dbo.sandbox_sessions WHERE id = @sandboxSessionId;');
+    expect(session.recordset).toEqual([{ status: 'Active', endReason: null }]);
+
+    const heartbeatStore = createSandboxHeartbeatStore(pool, eventHub);
+    expect(await heartbeatStore.listRunning()).toContainEqual({
+      sandboxSessionId: String(sandboxSessionId), foundrySessionId: `idle-expiry-session-${type}`,
+      agentName: 'jarvis-runner-base-1x2', invocationId, invocationCompleted: true,
+    });
+    expect(await heartbeatStore.markNeedsAttention(
+      String(sandboxSessionId), undefined, 'old-invocation', true,
+    )).toBe(false);
+    const published: TaskEventMessage[] = [];
+    eventHub.subscribe((event) => published.push(event));
+    expect(await heartbeatStore.markNeedsAttention(
+      String(sandboxSessionId), undefined, invocationId,
+    )).toBe('idle_expired');
+
+    const detail = await taskStore.get(task.id, 10, 0);
+    expect(detail).toMatchObject({
+      state: 'NeedsAttention',
+      latestSessionEndReason: 'idle_expired',
+      events: expect.arrayContaining([expect.objectContaining({
+        type: 'sandbox_idle_expired',
+        payload: { reason: 'idle_expired', invocationId },
+      })]),
+    });
+    const turn = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .input('invocationId', sql.NVarChar(255), invocationId)
+      .query<{ status: string }>(`SELECT status FROM dbo.sandbox_turns
+        WHERE sandbox_session_id = @sandboxSessionId AND invocation_id = @invocationId;`);
+    expect(turn.recordset).toEqual([{ status: 'completed' }]);
+    expect(published).toHaveLength(1);
+    expect(published[0]).toMatchObject({ type: 'sandbox_idle_expired', taskId: task.id });
+    expect(await heartbeatStore.markNeedsAttention(
+      String(sandboxSessionId), undefined, invocationId,
+    )).toBe(false);
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    const continuedSessionId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+      VALUES (${task.id}, N'continued-session-${type}', N'1', N'jarvis-runner-base-1x2', N'1x2',
+        N'jarvis-runner-base@sha256:fixture', N'Active')`);
+    expect(await dispatcherStore.endTaskSessions(task.id, 'NeedsAttention')).toEqual([]);
+    expect(await dispatcherStore.endTaskSessions(task.id, 'NeedsAttention', true)).toEqual([]);
+    const continued = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(continuedSessionId))
+      .query<{ status: string; endReason: string | null }>(
+        'SELECT status, end_reason AS endReason FROM dbo.sandbox_sessions WHERE id = @sandboxSessionId;');
+    expect(continued.recordset).toEqual([{ status: 'Active', endReason: null }]);
+    expect((await taskStore.transition(task.id, 'Cancelled')).kind).toBe('ok');
+    await dispatcherStore.endTaskSessions(task.id, 'Cancelled');
   });
 
   it('creates, updates, lists, and archives projects through the SQL store', async () => {

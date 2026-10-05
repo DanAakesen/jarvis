@@ -79,6 +79,7 @@ function fixture(
     create: vi.fn(async () => task),
     list: vi.fn(async () => [task]),
     get: vi.fn(async () => detail),
+    updateModelConfig: vi.fn(async () => ({ kind: 'not-found' as const })),
     getActiveRepository: vi.fn(async () => 'DanAakesen/jarvis-test-target'),
     getEventsAfter: vi.fn(async (taskId, eventId, limit) => detail.events
       .filter((event) => BigInt(event.id) > BigInt(eventId))
@@ -303,6 +304,23 @@ describe('factory tasks API', () => {
     expect(unavailable.statusCode).toBe(503);
   });
 
+  it('accepts the authenticated recover control action', async () => {
+    const controller: TaskController = {
+      control: vi.fn(async () => ({ kind: 'ok', task: { ...task, state: 'Running' } })),
+    };
+    const { app } = fixture({}, undefined, controller);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/factory/tasks/42/controls',
+      headers,
+      payload: { action: 'recover' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ id: '42', state: 'Running' });
+    expect(controller.control).toHaveBeenCalledWith('42', { action: 'recover' });
+  });
+
   it('authenticates the event stream and validates resume IDs', async () => {
     const { app, store } = fixture();
     expect((await app.inject({ url: '/factory/tasks/42/events' })).statusCode).toBe(401);
@@ -362,6 +380,7 @@ describe('factory tasks API', () => {
     };
     try {
       expect(await readFrame('id: 20')).toContain('"id":"20"');
+      expect(await readFrame('event: ready')).toBe('event: ready\ndata: {}\n\n');
       expect(store.getEventsAfter).toHaveBeenCalledWith('42', '19', 200);
       const interval = timerSpy.mock.calls.find(([, delay]) => delay === 25_000)?.[0];
       expect(interval).toBeDefined();
@@ -371,6 +390,30 @@ describe('factory tasks API', () => {
       eventHub.publish(later);
       expect(await readFrame('id: 21')).toContain('"id":"21"');
     } finally {
+      controller.abort();
+      await reader.cancel().catch(() => {});
+      timerSpy.mockRestore();
+    }
+  });
+
+  it('signals an empty replay is ready only after SQL completes, not on a heartbeat', async () => {
+    let completeReplay!: (events: TaskEventMessage[]) => void;
+    const replay = new Promise<TaskEventMessage[]>((resolve) => { completeReplay = resolve; });
+    const { app } = fixture({ getEventsAfter: vi.fn(() => replay) });
+    const timerSpy = vi.spyOn(globalThis, 'setInterval');
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+    const response = await fetch(`${address}/factory/tasks/42/events`, { headers, signal: controller.signal });
+    const reader = response.body!.getReader();
+    try {
+      const interval = timerSpy.mock.calls.find(([, delay]) => delay === 25_000)?.[0];
+      expect(interval).toBeDefined();
+      interval?.();
+      expect(new TextDecoder().decode((await reader.read()).value)).toBe(': heartbeat\n\n');
+      completeReplay([]);
+      expect(new TextDecoder().decode((await reader.read()).value)).toBe('event: ready\ndata: {}\n\n');
+    } finally {
+      completeReplay([]);
       controller.abort();
       await reader.cancel().catch(() => {});
       timerSpy.mockRestore();

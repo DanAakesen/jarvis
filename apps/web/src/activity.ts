@@ -13,7 +13,23 @@ export interface RunningTask {
   startedAt: string;
 }
 
-export type ActivityCategory = 'attention' | 'release' | 'credential';
+export type ActivityCategory = 'attention' | 'release' | 'credential' | 'alert' | 'mode';
+export type ConfirmationActionKind =
+  | 'merge'
+  | 'delete'
+  | 'send_mail'
+  | 'calendar_change'
+  | 'create_repository'
+  | 'computer_use'
+  | 'spend_money'
+  | 'other';
+
+export interface BrowserConfirmation {
+  id: string;
+  actionKind: ConfirmationActionKind;
+  summary: string;
+  expiresAt: string;
+}
 
 export interface ActivityItem {
   id: string;
@@ -27,7 +43,14 @@ export interface ActivityItem {
 export type NowFeed =
   | { status: 'loading' }
   | { status: 'unavailable'; message: string }
-  | { status: 'ready'; running: readonly RunningTask[]; items: readonly ActivityItem[]; updatedAt: string };
+  | {
+    status: 'ready';
+    running: readonly RunningTask[];
+    items: readonly ActivityItem[];
+    confirmations: readonly BrowserConfirmation[];
+    updatedAt: string;
+    awayMode: boolean;
+  };
 
 export type NowFeedStreamStatus = 'connecting' | 'connected' | 'reconnecting' | 'unavailable';
 
@@ -35,6 +58,8 @@ export const activityCategories: readonly { id: ActivityCategory; heading: strin
   { id: 'attention', heading: 'Needs attention', empty: 'No tasks need attention.' },
   { id: 'release', heading: 'Releases and deployments', empty: 'No recent releases or deployments.' },
   { id: 'credential', heading: 'Credential warnings', empty: 'No credential warnings.' },
+  { id: 'alert', heading: 'Alerts', empty: 'No active alerts.' },
+  { id: 'mode', heading: 'Away mode', empty: 'No away mode changes.' },
 ];
 
 export const agentNames: Record<CodingAgent, string> = { codex: 'Codex', copilot: 'Copilot' };

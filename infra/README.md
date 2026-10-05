@@ -19,8 +19,12 @@ See the [Azure constraints](../docs/agent-context.md#azure) and
 
 ## Required deployment inputs
 
-`main.bicep` requires `backendIdentityResourceId`, `sqlAdminGroupObjectId` and
-`foundryNameTimestamp`. `backendImage` is optional: empty skips the backend app,
+`main.bicep` requires `backendIdentityResourceId`, `sqlAdminGroupObjectId`,
+`foundryNameTimestamp`, and `budgetContactEmails`. The Deploy workflow reads
+the comma-separated addresses from the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub
+secret and writes a protected temporary parameters file; do not put addresses
+in the repository. This configures the email-only Azure Monitor action group
+used by both app alert rules and budget thresholds. `backendImage` is optional: empty skips the backend app,
 which the Deploy workflow uses only before ACR holds the first backend image.
 The workflow takes the IDs from `bootstrap.output.json` and deploys as
 `jarvis-infra`.
@@ -30,3 +34,15 @@ The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`) fixed at
 reuses it. A new value would create a new account and project, so change it only
 after the account was deleted, and then to a fresh value (L2). Normal updates
 keep the existing resources; deletion is not part of routine deployment.
+
+## Notes search setup
+
+P7-10 uses the `notesFolderPath` deployment parameter, defaulting to `/Jarvis/Notes`,
+and the backend identity for Microsoft Graph. Graph Search requires the tenant-wide
+`Files.Read.All` application role and does not support `Sites.Selected`. After
+reviewing and approving that permission, the coordinator can run
+[`setup-notes-search.ps1`](setup-notes-search.ps1) from an Azure CLI session
+authorized to assign Graph application roles. The script is safe to rerun. The
+backend fixes searches to Dan's OneDrive and filters both the Graph query and
+returned links to the configured folder. No Azure or OneDrive live check was
+performed by the coding agent.

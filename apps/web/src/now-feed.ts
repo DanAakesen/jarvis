@@ -1,7 +1,12 @@
-import type { ActivityItem, NowFeed } from './activity';
+import type { ActivityItem, NowFeed, ConfirmationActionKind } from './activity';
+import { backendFetch } from './backend-request';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxSseFrameLength = 64 * 1024;
+const confirmationIdPattern = /^[A-Za-z0-9_-]{43}$/;
+const confirmationKinds = new Set<ConfirmationActionKind>([
+  'merge', 'delete', 'send_mail', 'calendar_change', 'create_repository', 'computer_use', 'spend_money', 'other',
+]);
 
 export interface NowFeedStreamOptions {
   backendUrl: string;
@@ -32,20 +37,30 @@ function validTime(value: unknown): value is string {
 
 function isActivityItem(value: unknown): value is ActivityItem {
   return isRecord(value) && validId(value.id) &&
-    (value.category === 'attention' || value.category === 'release' || value.category === 'credential') &&
+    (value.category === 'attention' || value.category === 'release' ||
+      value.category === 'credential' || value.category === 'alert' || value.category === 'mode') &&
     typeof value.title === 'string' && value.title.length > 0 && value.title.length <= 400 &&
     (value.link === null || typeof value.link === 'string') && validTime(value.at);
 }
 
 function isNowFeed(value: unknown): value is Extract<NowFeed, { status: 'ready' }> {
   return isRecord(value) && validTime(value.updatedAt) &&
+    typeof value.awayMode === 'boolean' &&
     Array.isArray(value.running) && value.running.length <= 100 &&
     value.running.every((task) => isRecord(task) && validId(task.id) &&
       typeof task.title === 'string' && task.title.length > 0 && task.title.length <= 200 &&
       typeof task.project === 'string' && task.project.length > 0 && task.project.length <= 100 &&
       (task.agent === 'codex' || task.agent === 'copilot') &&
       typeof task.activity === 'string' && task.activity.length <= 400 && validTime(task.startedAt)) &&
-    Array.isArray(value.items) && value.items.length <= 100 && value.items.every(isActivityItem);
+    Array.isArray(value.items) && value.items.length <= 100 && value.items.every(isActivityItem) &&
+    Array.isArray(value.confirmations) && value.confirmations.length <= 10 &&
+    value.confirmations.every((confirmation) =>
+      isRecord(confirmation) && typeof confirmation.id === 'string' &&
+      confirmationIdPattern.test(confirmation.id) &&
+      typeof confirmation.actionKind === 'string' &&
+      confirmationKinds.has(confirmation.actionKind as ConfirmationActionKind) &&
+      typeof confirmation.summary === 'string' && confirmation.summary.length > 0 &&
+      confirmation.summary.length <= 4000 && validTime(confirmation.expiresAt));
 }
 
 async function authorizedRequest(
@@ -56,7 +71,7 @@ async function authorizedRequest(
 ): Promise<Response> {
   const token = await getAccessToken();
   try {
-    return await fetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
+    return await backendFetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
       ...init,
       headers: {
         Authorization: `${['Bear', 'er'].join('')} ${token}`,
@@ -115,6 +130,32 @@ export async function dismissNowActivity(
   }
 }
 
+export async function resolveNowConfirmation(
+  backendUrl: string,
+  id: string,
+  decision: 'approve' | 'reject',
+  getAccessToken: () => Promise<string>,
+): Promise<void> {
+  if (!confirmationIdPattern.test(id)) throw new TypeError('Invalid confirmation ID.');
+  const response = await authorizedRequest(backendUrl, `/now/confirmations/${id}`, getAccessToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision }),
+  });
+  if (response.status === 404) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error('This confirmation is no longer available.');
+  }
+  if (response.status === 409) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error('Away mode is on. Confirm this request in Teams.');
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    throw responseError(response.status);
+  }
+}
+
 function waitForReconnect(delay: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     const finish = () => {
@@ -138,7 +179,7 @@ async function readNowEvents(body: ReadableStream<Uint8Array>, signal: AbortSign
   const processLine = (line: string) => {
     if (line.endsWith('\r')) line = line.slice(0, -1);
     if (!line) {
-      if (event === 'now') onUpdate();
+      if (event === 'now' || event === 'mode') onUpdate();
       event = '';
       frameLength = 0;
       return;

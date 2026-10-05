@@ -85,10 +85,14 @@ class ModelMessage:
 
 @dataclass(frozen=True, slots=True)
 class ModelSettings:
-    """Jarvis model choices captured when one hosted session starts."""
+    """Jarvis settings captured when one hosted session starts."""
 
     model: str
     reasoning_effort: str
+    tone: str = "british_butler"
+    response_style: str = "concise"
+    custom_instructions: str = ""
+    away_mode: bool = False
 
 
 DEFAULT_MODEL_SETTINGS = ModelSettings("gpt-5.6-luna", "none")

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { backendFetch } from '../backend-request';
 import { Link } from 'react-router-dom';
 import { streamTaskEvents } from '../task-events';
 import { TaskControls } from './TaskControls';
@@ -18,7 +19,7 @@ interface TaskEvent {
 }
 
 const usageSources = ['sandbox', 'jarvis_model', 'voice', 'codex', 'copilot'] as const;
-const usageMetrics = ['minutes', 'input_tokens', 'output_tokens', 'turns', 'premium_requests'] as const;
+const usageMetrics = ['minutes', 'input_tokens', 'output_tokens', 'turns', 'premium_requests', 'screen_frames'] as const;
 
 interface TaskUsageRecord {
   id: string | null;
@@ -42,6 +43,7 @@ interface TaskDetail {
   modelOverride: string | null;
   reasoningOverride: string | null;
   state: TaskState;
+  latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
   attemptCount: number;
   branch: string | null;
   createdAt: string;
@@ -121,6 +123,8 @@ function isTaskDetail(value: unknown): value is TaskDetail {
     (value.modelOverride === null || typeof value.modelOverride === 'string') &&
     (value.reasoningOverride === null || typeof value.reasoningOverride === 'string') &&
     taskStates.includes(value.state as TaskState) && typeof value.attemptCount === 'number' &&
+    (value.latestSessionEndReason === undefined || value.latestSessionEndReason === null ||
+      ['done', 'cancelled', 'crashed', 'idle', 'idle_expired'].includes(String(value.latestSessionEndReason))) &&
     Number.isSafeInteger(value.attemptCount) && value.attemptCount >= 0 &&
     (typeof value.branch === 'string' || value.branch === null) && isDate(value.createdAt) &&
     (value.startedAt === null || isDate(value.startedAt)) &&
@@ -156,6 +160,7 @@ function usageLabel(metric: TaskUsageRecord['metric']): string {
     output_tokens: 'Output tokens',
     turns: 'Agent turns',
     premium_requests: 'Premium requests',
+    screen_frames: 'Screen frames',
   }[metric];
 }
 
@@ -222,9 +227,9 @@ async function fetchJson(
 
   let response: Response;
   try {
-    response = await fetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
+    response = await backendFetch(`${backendUrl.replace(/\/+$/, '')}${path}`, {
       headers: { Authorization: `${['Bear', 'er'].join('')} ${token}` },
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
+      ...(signal ? { signal } : {}),
     });
   } catch (cause) {
     throw new Error('Jarvis could not reach the task service. Try again.', { cause });
@@ -451,7 +456,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
   }
 
   return (
-    <section className="task-detail" aria-labelledby="task-heading">
+    <section className="task-detail" data-task-state={task?.state} aria-labelledby="task-heading">
       <Link className="home-link" to="/factory/tasks">Back to tasks</Link>
       <h1 id="task-heading">{task?.title ?? `Task ${taskId}`}</h1>
       {result.status === 'loading' && <p role="status">Loading task details…</p>}
@@ -500,22 +505,25 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId }: {
           </dl>
           <section className="task-detail-section task-actions" aria-labelledby="actions-heading">
             <h2 id="actions-heading">Task actions</h2>
-            <p id="task-actions-unavailable">Controls are available only when the task state permits them. Recovery is not available yet.</p>
             <p id="pull-request-unavailable">Pull-request links are not reported until the GitHub integration is available.</p>
             <TaskControls
               backendUrl={backendUrl}
               getAccessToken={getAccessToken}
               taskId={task.id}
               state={task.state}
+              latestSessionEndReason={task.latestSessionEndReason}
               onComplete={(state) => setLoaded((current) =>
                 current.key === requestKey && current.value.status === 'ready'
-                  ? { ...current, value: { ...current.value, task: { ...current.value.task, state } } }
+                  ? {
+                    ...current,
+                    value: {
+                      ...current.value,
+                      task: { ...current.value.task, state, latestSessionEndReason: null },
+                    },
+                  }
                   : current)}
             />
             <div className="action-row">
-              <button className="secondary-button" type="button" disabled aria-describedby="task-actions-unavailable">
-                Recover
-              </button>
               <button className="secondary-button" type="button" disabled aria-describedby="pull-request-unavailable">
                 Open pull request
               </button>

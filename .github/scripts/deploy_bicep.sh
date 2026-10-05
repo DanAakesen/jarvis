@@ -11,6 +11,21 @@ outputs="$1"
 image="${2:-}"
 identity=$(jq -er '.backendIdentity.resourceId' infra/bootstrap.output.json)
 sql_group=$(jq -er '.sqlAdminGroup.objectId' infra/bootstrap.output.json)
+if [[ -z "${JARVIS_BUDGET_CONTACT_EMAILS:-}" ]]; then
+  echo "::error::Set JARVIS_BUDGET_CONTACT_EMAILS to the comma-separated alert recipients, including Dan."
+  exit 1
+fi
+budget_emails=$(jq -cn --arg value "$JARVIS_BUDGET_CONTACT_EMAILS" \
+  '$value | split(",") | map(gsub("^\\s+|\\s+$"; ""))')
+if ! jq -e 'length > 0 and all(.[]; test("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$"))' <<<"$budget_emails" >/dev/null; then
+  echo "::error::JARVIS_BUDGET_CONTACT_EMAILS must contain valid comma-separated email addresses."
+  exit 1
+fi
+budget_parameters=$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/jarvis-budget-parameters.XXXXXX")
+chmod 600 "$budget_parameters"
+trap 'rm -f "$budget_parameters"' EXIT
+jq -n --argjson emails "$budget_emails" \
+  '{parameters: {budgetContactEmails: {value: $emails}}}' >"$budget_parameters"
 
 if [[ -z "$image" ]]; then
   image=$(az containerapp list --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
@@ -26,6 +41,24 @@ if [[ -n "${GITHUB_APP_ID:-}" ]]; then
   }
   parameters+=(githubAppId="$GITHUB_APP_ID")
 fi
+if [[ -n "${JARVIS_PC_BRIDGE_CLIENT_ID:-}" ]]; then
+  [[ "$JARVIS_PC_BRIDGE_CLIENT_ID" =~ ^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$ ]] || {
+    echo "::error::JARVIS_PC_BRIDGE_CLIENT_ID must be a UUID"
+    exit 1
+  }
+  parameters+=(pcBridgeClientId="$JARVIS_PC_BRIDGE_CLIENT_ID")
+fi
+if [[ -n "${JARVIS_GRAPH_APP_ID:-}" || -n "${JARVIS_GRAPH_TIME_ZONE:-}" ]]; then
+  [[ "${JARVIS_GRAPH_APP_ID:-}" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]] || {
+    echo "::error::JARVIS_GRAPH_APP_ID must be a UUID when Outlook is enabled."
+    exit 1
+  }
+  [[ "${JARVIS_GRAPH_TIME_ZONE:-}" =~ ^[A-Za-z_+-]+(/[A-Za-z0-9_+-]+)+$ ]] || {
+    echo "::error::JARVIS_GRAPH_TIME_ZONE must be an IANA time zone when Outlook is enabled."
+    exit 1
+  }
+  parameters+=(jarvisGraphAppId="$JARVIS_GRAPH_APP_ID" jarvisGraphTimeZone="$JARVIS_GRAPH_TIME_ZONE")
+fi
 if [[ -n "${ENTRA_JARVIS_AGENT_OBJECT_ID:-}" ]]; then
   parameters+=(jarvisAgentObjectId="$ENTRA_JARVIS_AGENT_OBJECT_ID")
 fi
@@ -37,7 +70,7 @@ fi
 
 az deployment group create --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" \
   --subscription "$SUBSCRIPTION_ID" --template-file infra/main.bicep \
-  --parameters @infra/main.parameters.json --parameters "${parameters[@]}" \
+  --parameters @infra/main.parameters.json --parameters "@$budget_parameters" --parameters "${parameters[@]}" \
   --output none --only-show-errors
 az deployment group show --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" \
   --subscription "$SUBSCRIPTION_ID" --query properties.outputs --output json --only-show-errors >"$outputs"

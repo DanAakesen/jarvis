@@ -53,6 +53,7 @@ function storeFixture(overrides: Partial<ConversationStore> = {}) {
       endedAt: null,
     })),
     endSession: vi.fn(async () => true),
+    getDanMessageIdBySourceItemId: vi.fn(async () => null),
     getSession: vi.fn(async () => ({
       id: '41',
       channel: 'chat' as const,
@@ -107,7 +108,7 @@ describe('conversation routes', () => {
       method: 'POST',
       url: '/conversation/sessions/41/turns',
       headers,
-      payload: { text: 'Hej Jarvis' },
+      payload: { text: 'Hej Jarvis', screenContext: 'A browser window shows a chart.' },
     });
 
     expect(response.statusCode).toBe(200);
@@ -119,6 +120,7 @@ describe('conversation routes', () => {
       messageId: '42',
       text: 'Hej Jarvis',
       language: 'da',
+      screenContext: 'A browser window shows a chart.',
     }, headers.authorization, expect.any(AbortSignal));
     expect(store.addMessage).toHaveBeenCalledWith({
       sessionId: '41',

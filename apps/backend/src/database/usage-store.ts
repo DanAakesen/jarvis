@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { databaseReadRequest } from './wake-retry.js';
 import type { UsageEntry, UsageStore } from '../core/usage.js';
 
 interface UsageRow extends Omit<UsageEntry, 'at'> {
@@ -9,12 +10,14 @@ interface UsageRow extends Omit<UsageEntry, 'at'> {
 export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
   return {
     async list(from, to) {
-      const { recordset } = await pool.request()
+      const { recordset } = await databaseReadRequest(pool)
         .input('from', sql.DateTime2, from)
         .input('to', sql.DateTime2, to)
         .query<UsageRow>(`WITH usage_rows AS (
           SELECT task_id AS taskId, project_id AS projectId, source, metric, quantity, cost_dkk AS costDkk, at,
-            CONVERT(bit, CASE WHEN source IN (N'sandbox', N'voice') THEN 1 ELSE 0 END) AS estimated
+            CONVERT(bit, CASE
+              WHEN source IN (N'sandbox', N'voice') OR
+                (source = N'jarvis_model' AND metric = N'screen_frames') THEN 1 ELSE 0 END) AS estimated
           FROM dbo.usage
           WHERE at < @to AND (@from IS NULL OR at >= @from)
           UNION ALL

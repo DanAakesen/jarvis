@@ -3,7 +3,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { coreModule } from './core/index.js';
 import { factoryModule } from './factory/index.js';
-import { ToolRefusal, type JarvisTool } from './core/tool-registry.js';
+import { ToolFailure, ToolRefusal, type JarvisTool } from './core/tool-registry.js';
 import type { BackendModule } from './modules.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -48,10 +48,11 @@ describe('backend module composition', () => {
 
     const listed = await app.inject({ url: '/tools', headers });
     expect(listed.statusCode).toBe(200);
-    expect(listed.json()).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'get_status_summary' }),
+    expect(listed.json()).toEqual([
+      ...coreModule.tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
+      ...factoryModule.tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
       { name: tool.name, description: tool.description, inputSchema: tool.inputSchema },
-    ]));
+    ]);
 
     const called = await app.inject({
       method: 'POST', url: '/tools/extension_echo', headers: { ...headers, 'x-jarvis-message-id': '42' },
@@ -158,6 +159,40 @@ describe('backend module composition', () => {
     expect(malformed.json()).toMatchObject({ outcome: 'error', confirmation: 'Not done: extension_bad_refusal failed.' });
   });
 
+  it('returns safe, tool-specific failure explanations without changing the error outcome', async () => {
+    const record = vi.fn(async () => {});
+    const tool: JarvisTool = {
+      name: 'extension_failure_explained',
+      description: 'Fails with a safe explanation.',
+      inputSchema: { type: 'object' },
+      execute: async () => { throw new ToolFailure('Notes search is temporarily unavailable.'); },
+    };
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, factoryModule, extension('extension', [tool])],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      toolCallStore: { record },
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/extension_failure_explained',
+      headers: { ...headers, 'x-jarvis-message-id': '42' },
+      payload: {},
+    });
+
+    expect(response.json()).toEqual({
+      tool: 'extension_failure_explained',
+      outcome: 'error',
+      result: { error: 'Notes search is temporarily unavailable.' },
+      confirmation: 'Not done: extension_failure_explained failed.',
+    });
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({
+      result: { error: 'Notes search is temporarily unavailable.' },
+      outcome: 'error',
+    }));
+  });
+
   it('rejects malformed message IDs before executing a tool', async () => {
     const execute = vi.fn(async () => ({ ok: true }));
     const tool: JarvisTool = {
@@ -225,10 +260,8 @@ describe('backend module composition', () => {
     expect((await app.inject({ url: '/health' })).json()).toEqual({ status: 'ok' });
     expect((await app.inject({ method: 'POST', url: '/extension/echo', headers, payload: { text: 'hello' } })).json()).toEqual({ text: 'hello' });
     expect((await app.inject({ method: 'POST', url: '/extension/echo', headers, payload: {} })).statusCode).toBe(400);
-    expect(app.jarvisTools.list()).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'get_status_summary', moduleId: 'core' }),
-      expect.objectContaining({ name: 'extension_echo', moduleId: 'extension' }),
-    ]));
+    expect(app.jarvisTools.list()).toHaveLength(coreModule.tools.length + factoryModule.tools.length + 1);
+    expect(app.jarvisTools.get(tool.name)).toMatchObject({ name: 'extension_echo', moduleId: 'extension' });
     expect(app.jarvisTools.get('missing')).toBeUndefined();
   });
 
@@ -287,12 +320,18 @@ describe('backend module composition', () => {
     expect(first.jarvisTools.get('echo')?.inputSchema).toEqual({ type: 'object', properties: { text: { type: 'string' } } });
     expect(Object.isFrozen(first.jarvisTools.get('echo')?.inputSchema.properties)).toBe(true);
     expect(Object.isFrozen(first.jarvisTools.list())).toBe(true);
-    expect(second.jarvisTools.list()).toEqual([expect.objectContaining({ name: 'get_status_summary', moduleId: 'core' })]);
+    expect(second.jarvisTools.list().map(({ name }) => name)).toEqual([
+      ...coreModule.tools.map(({ name }) => name),
+      ...factoryModule.tools.map(({ name }) => name),
+    ]);
   });
 
   it('keeps unimplemented APIs unavailable and reports missing task and settings storage', async () => {
     const app = fixture([]);
-    expect(app.jarvisTools.list()).toEqual([expect.objectContaining({ name: 'get_status_summary', moduleId: 'core' })]);
+    expect(app.jarvisTools.list().map(({ name }) => name)).toEqual([
+      ...coreModule.tools.map(({ name }) => name),
+      ...factoryModule.tools.map(({ name }) => name),
+    ]);
     expect((await app.inject({ url: '/factory/projects', headers })).statusCode).toBe(503);
     for (const url of ['/activity', '/events']) {
       expect((await app.inject({ url, headers })).statusCode).toBe(404);

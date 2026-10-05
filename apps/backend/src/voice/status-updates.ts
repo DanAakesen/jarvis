@@ -1,11 +1,10 @@
-import type { NowFeedEventHub } from '../core/now.js';
+import type { NowFeedEventHub, NowFeedStatusKind } from '../core/now.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 
 export type VoiceStatusKind =
   | 'task_finished'
   | 'needs_attention'
-  | 'pull_request_ready'
-  | 'deployment_failed';
+  | NowFeedStatusKind;
 
 const statusText: Readonly<Record<VoiceStatusKind, string>> = {
   task_finished: 'A task has finished',
@@ -64,8 +63,7 @@ export function createVoiceStatusAnnouncer(options: {
     if (kind) enqueue(kind);
   });
   const unsubscribeNowEvents = options.nowEvents.subscribe((event) => {
-    if (event.type === 'status' &&
-        (event.kind === 'pull_request_ready' || event.kind === 'deployment_failed')) enqueue(event.kind);
+    if (event.type === 'status') enqueue(event.kind);
   });
 
   return {

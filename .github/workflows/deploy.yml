@@ -30,6 +30,9 @@ env:
   INFRA_DEPLOYMENT: jarvis-infra
   ENTRA_JARVIS_AGENT_OBJECT_ID: ${{ vars.ENTRA_JARVIS_AGENT_OBJECT_ID }}
   GITHUB_APP_ID: ${{ vars.JARVIS_GITHUB_APP_ID }}
+  JARVIS_PC_BRIDGE_CLIENT_ID: ${{ vars.JARVIS_PC_BRIDGE_CLIENT_ID }}
+  JARVIS_GRAPH_APP_ID: ${{ vars.JARVIS_GRAPH_APP_ID }}
+  JARVIS_GRAPH_TIME_ZONE: ${{ vars.JARVIS_GRAPH_TIME_ZONE }}
 
 jobs:
   plan:
@@ -71,6 +74,8 @@ jobs:
     if: needs.plan.outputs.infra == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      JARVIS_BUDGET_CONTACT_EMAILS: ${{ secrets.JARVIS_BUDGET_CONTACT_EMAILS }}
     permissions:
       contents: read
       id-token: write
@@ -95,6 +100,7 @@ jobs:
       id-token: write
     env:
       IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      JARVIS_BUDGET_CONTACT_EMAILS: ${{ secrets.JARVIS_BUDGET_CONTACT_EMAILS }}
     steps:
       - uses: actions/checkout@v4
       - uses: azure/login@v2

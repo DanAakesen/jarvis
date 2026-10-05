@@ -3,7 +3,12 @@ import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import { ActivityPanel } from './ActivityPanel';
 import type { NowFeed, NowFeedStreamStatus } from './activity';
-import { dismissNowActivity, loadNowFeed, streamNowFeed } from './now-feed';
+import {
+  dismissNowActivity,
+  loadNowFeed,
+  resolveNowConfirmation,
+  streamNowFeed,
+} from './now-feed';
 
 export function NowFeedPanel({
   client,
@@ -68,6 +73,12 @@ export function NowFeedPanel({
     await refreshRef.current?.();
   }
 
+  async function resolveConfirmation(id: string, decision: 'approve' | 'reject') {
+    if (!config.backendUrl) throw new Error('Browser approvals are unavailable.');
+    await resolveNowConfirmation(config.backendUrl, id, decision, getAccessToken);
+    void refreshRef.current?.();
+  }
+
   function retryLoad() {
     setFeed({ status: 'loading' });
     setRetry((value) => value + 1);
@@ -77,6 +88,7 @@ export function NowFeedPanel({
     <ActivityPanel
       feed={feed}
       {...(config.backendUrl ? { onDismiss: dismiss } : {})}
+      {...(config.backendUrl ? { onResolveConfirmation: resolveConfirmation } : {})}
       onRetry={retryLoad}
       streamStatus={config.backendUrl ? streamStatus : 'unavailable'}
     />

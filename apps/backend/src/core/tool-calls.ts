@@ -17,10 +17,23 @@ export interface ToolCallStore {
  * recorded outcome and result, never from the model's own wording.
  */
 export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: unknown): string {
-  if (outcome === 'ok') return `Done: ${tool} succeeded.`;
+  if (outcome === 'ok') {
+    const confirmation = (result as { confirmation?: unknown } | null)?.confirmation;
+    if (tool.startsWith('memory_') && typeof confirmation === 'string' &&
+        confirmation.length > 0 && confirmation.length <= 300 &&
+        !Array.from(confirmation).some((character) => {
+          const code = character.charCodeAt(0);
+          return code < 32 || code === 127;
+        })) {
+      return confirmation;
+    }
+    return `Done: ${tool} succeeded.`;
+  }
   if (outcome === 'refused') {
     const reason = (result as { refused?: unknown } | null)?.refused;
     return `Not done: ${tool} was refused.${typeof reason === 'string' ? ` ${reason}` : ''}`;
   }
+  const failure = (result as { failure?: unknown } | null)?.failure;
+  if (typeof failure === 'string') return `Not done: ${tool} failed. ${failure}`;
   return `Not done: ${tool} failed.`;
 }
