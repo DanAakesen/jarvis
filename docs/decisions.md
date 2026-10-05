@@ -203,6 +203,69 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 | 2026-10-05 | P8-26 queues chat submissions locally in FIFO order, capturing language at Send/Enter; retain failed-turn feedback and offer Stop reply without changing voice. | One in-flight client turn avoids overlapping requests without backend changes. The next submission starts only after the previous promise and stream cleanup settle; Stop does not undo completed tool actions. The queue is not persisted across navigation/reload. Focused tests and scratch-auth/API Chromium checks cover desktop/phone, dark/light, removal, language, double Enter, Stop/next, error/next and reduced motion. | Implemented offline; live Entra/Foundry acceptance unverified |
 
+### P7-23 latency evidence
+
+5 October 2026 follow-up to reopened [#327](https://github.com/DanAakesen/jarvis/issues/327):
+keep reflex safety/auditing and its 800 ms parallel classification budget unchanged.
+Overlap chat settings with catalogue/live-context reads, retain the existing
+60-second container catalogue cache, and leave memory retrieval/embedding on demand.
+Do not cache live settings/task data or repeat #344's caller-chosen session routing,
+which #356 reverted after Foundry rejected chat invocations.
+
+| Evidence | First text / total duration | Source and limitation |
+| --- | --- | --- |
+| Original deployed baseline, 09:03–09:06 UTC | Backend turns 11.0, 11.7, 11.9, 16.8 s; hosted invocation 3.1, 4.8, 5.4 s; model 0.35, 0.79, 1.36 s | Application Insights/backend measurements supplied in #327; not independently queried here |
+| After #329, 10:41–10:43 UTC | `agent_first_byte` 8.8, 10.2, 11.5, 9.2 s; whole turn ends ~0.5 s later; Jev ~0.2 s | Coordinator's live issue comment; acceptance still missed |
+| 10:42:49 turn breakdown | Backend agent call 10:42:49.5 → `invoke_agent` 10:42:54 (~4.5 s); model starts ~10:42:57 (~3 s prep), takes 0.44 s | Coordinator's Application Insights evidence; gateway/container attribution remains a hypothesis |
+| Latest reported live baseline | First word 9–19 s | Coordinator's reopening/status comment |
+| This change, local HTTP smoke | First mock delta 0.005 s; done 0.757 s; delta-to-done gap 0.752 s | Actual Hypercorn + HTTP client with fake backend/model and a deliberate 0.75 s pause; proves local incremental delivery, not deployed performance |
+| This change, deployed after | **Not measured** | No authenticated Azure CLI account in this environment; no deployment or paid invocation performed |
+
+New agent `chat.latency` logs and spans/events identify verification, settings,
+catalogue/cache, live context, memory retrieval, prompt build, Responses creation,
+model first delta and first SSE delta out. Logs contain phase/duration/outcome
+only, and stage spans disable automatic exception-content recording. Embedding
+is backend-owned and already emits content-free `memory.embedding` timings.
+Backend `turn_first_token`/`turn_complete` include pre-agent SQL setup and completed
+assistant persistence; `agent_first_byte` still counts text only, not the initial
+SSE comment. The first-delta-out duration starts at agent handler entry, allowing
+comparison with backend latency to isolate work outside the container.
+
+Configuration inspection: `infra/main.bicep` sets **backend** minimum/maximum
+replicas to one. `.github/workflows/deploy.yml` sets the **hosted Jarvis agent**
+session idle timeout to 120 seconds and routes 100% of traffic to the active
+version; it does not declare an always-warm agent replica. Installed official
+`azure-ai-agentserver-invocations` SDK `_dispatch_invoke` and
+`_wrap_streaming_response` pass the response/body chunks through, and the model
+adapter requests `stream=True`. Gated ASGI tests prove a Responses text delta
+reaches SSE before `response.completed`, including disconnect cleanup. No
+buffering was reproduced locally. Public Microsoft Learn retrieval was blocked
+in this environment; no undocumented replica/session option was added.
+
+Post-deploy verification: send repeated short “hi” turns, including a first
+invocation and another after >120 seconds idle, and record the deployed agent
+version/time window. Compare `turn_first_token`, `turn_complete`,
+`agent_first_byte`, agent `first_delta_out`, preparation spans and `invoke_agent`
+start timestamps. Do not treat headers or keepalive comments as tokens.
+This Application Insights query returns only backend timing dimensions:
+
+```kusto
+traces
+| where timestamp > ago(1h)
+| where message == "chat.latency"
+| extend phase = tostring(customDimensions.phase),
+         durationMs = todouble(customDimensions.durationMs)
+| where phase in ("agent_first_byte", "turn_first_token", "turn_complete")
+| project timestamp, operation_Id, phase, durationMs
+| order by timestamp asc
+```
+
+Correlate those operations with agent stage spans/events and the hosted
+`invoke_agent` dependency before attributing a gap to cold start or routing.
+Acceptance remains **pending** until Application Insights shows ≤2.5 s first
+text and ≤4 s complete short reply. Offline checks: 148 hosted-agent tests,
+92 focused backend tests, agent Ruff/compileall and backend lint/build pass.
+
 ### P7-24 live transcription evidence
 
 Coordinator test on 5 October 2026, using synthesized Danish and English streamed in real time against the same Foundry resource:

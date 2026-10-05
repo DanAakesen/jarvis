@@ -53,7 +53,9 @@ const reconciliationDecisions = new Set([
   'foundry_interrupted', 'foundry_paused', 'foundry_unknown',
   'Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention', 'Done', 'Cancelled',
 ]);
-const chatLatencyPhases = new Set(['reflex_targets', 'jev', 'agent_first_byte']);
+const chatLatencyPhases = new Set([
+  'reflex_targets', 'jev', 'agent_first_byte', 'turn_first_token', 'turn_complete',
+]);
 const reflexReasons = new Set([
   'executed', 'unavailable', 'cancelled', 'not_addressed', 'not_action', 'incomplete_command',
   'low_confidence', 'confirmation_required', 'no_target', 'unsafe_target', 'unauthorized',

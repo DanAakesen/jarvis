@@ -95,6 +95,31 @@ describe('Foundry Invocations chat agent', () => {
     }).rejects.toThrow('ended unexpectedly');
     expect(partialChunks).toEqual(['Partial']);
   });
+
+  it('yields the first delta without waiting for done or the upstream connection to close', async () => {
+    const encoder = new TextEncoder();
+    let upstream!: ReadableStreamDefaultController<Uint8Array>;
+    const cancel = vi.fn();
+    const fetcher = vi.fn(async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        upstream = controller;
+        controller.enqueue(encoder.encode(': connected\n\nevent: delta\ndata: {"text":"Hi"}\n\n'));
+      },
+      cancel,
+    }), { headers: { 'content-type': 'text/event-stream' } }));
+    const { agent } = createAgent(fetcher);
+    const iterator = agent.stream(input, delegatedAuthorization, new AbortController().signal)[Symbol.asyncIterator]();
+    try {
+      await expect(iterator.next()).resolves.toEqual({ value: 'Hi', done: false });
+      expect(cancel).not.toHaveBeenCalled();
+      upstream.enqueue(encoder.encode('event: delta\ndata: {"text":" there"}\n\n'));
+      await expect(iterator.next()).resolves.toEqual({ value: ' there', done: false });
+    } finally {
+      await iterator.return?.();
+    }
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
   it('does not expose errors sent by the hosted agent', async () => {
     const { agent } = createAgent(vi.fn(async () => streamedResponse([
       'event: error\ndata: {"error":"provider details"}\n\n',
