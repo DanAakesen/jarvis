@@ -60,6 +60,87 @@ function JarvisWorkspaceRequest() {
 }
 
 describe('Workspace', () => {
+  it('bounds retained agent-closed windows and invalidates retained content when an ID is reused', () => {
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={[]} />);
+    const create = (viewId: string, title: string) => act(() => {
+      controller.current?.dispatch({
+        commandId: `create-${viewId}-${title}`, operation: 'create', viewId,
+        view: {
+          version: 1, title, renderer: 'list', source: { id: 'factory.tasks', status: 'complete' },
+          data: { items: [{ title }] },
+        },
+      });
+    });
+    for (let index = 0; index < 9; index++) {
+      create(`view-${index}`, `View${index}`);
+      act(() => { controller.current?.dispatch({
+        commandId: `close-${index}`, operation: 'close', viewId: `view-${index}`,
+      }); });
+    }
+    act(() => { expect(controller.current?.dispatch({
+      commandId: 'evicted', operation: 'restore', viewId: 'view-0',
+    })).toBe(false); });
+    create('view-8', 'Replacement');
+    act(() => { expect(controller.current?.dispatch({
+      commandId: 'new-content', operation: 'restore', viewId: 'view-8',
+    })).toBe(true); });
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.getByRole('article', { name: 'Replacement' })).not.toBeNull();
+  });
+
+  it('restores agent-closed generated content and geometry without generating another view', () => {
+    const controller = createRef<WorkspaceController>();
+    const view = {
+      version: 1 as const, title: 'Board', renderer: 'list' as const,
+      source: { id: 'factory.tasks' as const, status: 'complete' as const },
+      data: { items: [{ title: 'Existing board content' }] },
+    };
+    render(<Workspace ref={controller} views={[]} />);
+    act(() => { controller.current?.dispatch({ commandId: 'create-board', operation: 'create', viewId: 'board', view }); });
+    act(() => { controller.current?.dispatch({
+      commandId: 'resize-board', operation: 'resize', viewId: 'board', width: 0.9, height: 0.9, x: 0.05, y: 0.05,
+    }); });
+    act(() => { controller.current?.dispatch({ commandId: 'close-board', operation: 'close', viewId: 'board' }); });
+    expect(screen.queryByText('Existing board content')).toBeNull();
+    act(() => { expect(controller.current?.dispatch({
+      commandId: 'undo-close', operation: 'restore', viewId: 'board',
+    })).toBe(true); });
+    expect(screen.getByText('Existing board content')).not.toBeNull();
+    expect(screen.getByRole('article', { name: 'Board' }).style.getPropertyValue('--workspace-width')).toBe('90%');
+    fireEvent.click(screen.getByRole('button', { name: 'Close Board' }));
+    act(() => { expect(controller.current?.dispatch({
+      commandId: 'manual-close-restore', operation: 'restore', viewId: 'board',
+    })).toBe(false); });
+  });
+
+  it('applies an agent resize to tiled spans as well as layered geometry', () => {
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={views} />);
+    act(() => { controller.current?.dispatch({
+      commandId: 'bigger', operation: 'resize', viewId: 'research', width: 0.9, height: 0.9, x: 0.05, y: 0.05,
+    }); });
+    const window = screen.getByRole('article', { name: 'Research summary' });
+    expect(window.style.getPropertyValue('--workspace-columns')).toBe('2');
+    expect(window.style.getPropertyValue('--workspace-rows')).toBe('2');
+    expect(window.style.getPropertyValue('--workspace-width')).toBe('90%');
+  });
+
+  it('publishes open window titles and IDs, retaining minimised windows and removing closed ones', () => {
+    const onOpenWindowsChange = vi.fn();
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={views} onOpenWindowsChange={onOpenWindowsChange} />);
+    expect(onOpenWindowsChange).toHaveBeenLastCalledWith([
+      { viewId: 'research', title: 'Research summary' }, { viewId: 'sources', title: 'Sources' },
+    ]);
+    act(() => { controller.current?.dispatch({ commandId: 'minimise', operation: 'minimise', viewId: 'research' }); });
+    expect(onOpenWindowsChange).toHaveBeenLastCalledWith([
+      { viewId: 'research', title: 'Research summary' }, { viewId: 'sources', title: 'Sources' },
+    ]);
+    act(() => { controller.current?.dispatch({ commandId: 'close', operation: 'close', viewId: 'research' }); });
+    expect(onOpenWindowsChange).toHaveBeenLastCalledWith([{ viewId: 'sources', title: 'Sources' }]);
+  });
+
   it('keeps one phone view foreground, retains content state and supports named and keyboard switching', async () => {
     phoneViewport();
     const user = userEvent.setup();

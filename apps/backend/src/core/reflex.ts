@@ -1,7 +1,9 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
+import type { WorkspaceSnapshot } from '@jarvis/contracts';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { ToolFailure, ToolRefusal, type RegisteredTool } from './tool-registry.js';
+import { isWorkspaceReflexOperation } from './workspace-commands.js';
 
 const endpoint = 'https://api.typesafe.ai/v1/systemone';
 const model = 'jev-latest';
@@ -13,6 +15,7 @@ export interface ReflexTarget {
   readonly choice: string;
   readonly tool: RegisteredTool;
   readonly arguments: Readonly<Record<string, unknown>>;
+  readonly description?: string;
 }
 
 export interface ReflexClassification {
@@ -85,6 +88,15 @@ function fingerprintArguments(value: unknown): string {
   return createHash('sha256').update(normalize(value)).digest('hex');
 }
 
+function replayArguments(tool: string, arguments_: unknown): unknown {
+  if (tool !== 'workspace_command' || !record(arguments_)) return arguments_;
+  return Object.fromEntries(Object.entries(record(arguments_)!).filter(([key]) => key !== 'commandId'));
+}
+
+export function reflexActionSignature(target: ReflexTarget): string {
+  return `${target.tool.name}:${fingerprintArguments(replayArguments(target.tool.name, target.arguments))}`;
+}
+
 export function registerChatReflex(messageId: string): (result: ReflexActionResult | null) => void {
   let resolve!: (result: StoredChatReflexReplay | null) => void;
   const result = new Promise<StoredChatReflexReplay | null>((complete) => { resolve = complete; });
@@ -109,7 +121,7 @@ export function registerChatReflex(messageId: string): (result: ReflexActionResu
       result: action.result,
       outcome: action.outcome,
       note: action.note,
-      argumentsFingerprint: fingerprintArguments(action.arguments),
+      argumentsFingerprint: fingerprintArguments(replayArguments(action.tool, action.arguments)),
     } : null);
   };
 }
@@ -123,7 +135,7 @@ export async function findChatReflexReplay(
   if (!entry) return null;
   const action = await entry.result;
   if (!action || action.tool !== tool ||
-      action.argumentsFingerprint !== fingerprintArguments(arguments_)) return null;
+      action.argumentsFingerprint !== fingerprintArguments(replayArguments(tool, arguments_))) return null;
   return { tool: action.tool, result: action.result, outcome: action.outcome, note: action.note };
 }
 
@@ -211,7 +223,7 @@ export function createJevReflexClassifier(
 
       const choices: Record<string, string> = { main_agent: 'Use the main Jarvis agent.' };
       for (const target of targets) {
-        choices[target.choice] = `${target.tool.name} with arguments ${JSON.stringify(target.arguments)}`;
+        choices[target.choice] = `${target.description ?? target.tool.name} with arguments ${JSON.stringify(target.arguments)}`;
       }
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
       const questions: Record<string, unknown> = {
@@ -240,7 +252,7 @@ export function createJevReflexClassifier(
         },
         needs_confirmation: {
           type: 'noul',
-          instructions: 'Would the requested action have an external effect or require explicit confirmation?',
+          instructions: 'Would the requested action have an external effect or require explicit confirmation? Controlling Jarvis workspace windows and its context panel is reversible UI state and needs no confirmation.',
         },
       };
       if (context) {
@@ -367,22 +379,8 @@ export async function executeReflexAction(
   signal: AbortSignal,
   mode: 'partial' | 'final' | 'undo' = 'final',
 ): Promise<ReflexActionResult | null> {
-  const target = classification?.target;
-  const partialSafe = target?.tool.name === 'pause_task' && target.tool.reflexSafe === true ||
-    target?.tool.name === 'pc_open' && target.arguments.target === 'app' &&
-      target.arguments.value === 'edge' ||
-    target?.tool.name === 'pc_open' && target.arguments.target === 'url' &&
-      typeof target.arguments.value === 'string' && safeHttpUrl(target.arguments.value);
-  const modeSafe = mode === 'partial' ? partialSafe
-    : mode === 'undo' ? target?.tool.name === 'resume_task'
-      : target?.tool.reflexSafe === true;
-  if (!classification?.addressed || classification.intent !== 'action' ||
-      classification.completeCommand === false ||
-      classification.confidence < confidenceThreshold || classification.needsConfirmation ||
-      !target || !modeSafe ||
-      !request.principal || !request.server.toolCallStore) return null;
-  const validateInput = request.compileValidationSchema(target.tool.inputSchema, 'body');
-  if (!validateInput(target.arguments)) return null;
+  if (reflexSkipReason(classification, request, signal, mode)) return null;
+  const target = classification!.target!;
 
   const activityId = `reflex-${messageId}-${target.tool.name}`;
   request.server.jarvisActivityHub.publish({
@@ -410,7 +408,7 @@ export async function executeReflexAction(
     }
   }
   try {
-    await request.server.toolCallStore.record({
+    await request.server.toolCallStore!.record({
       messageId,
       tool: target.tool.name,
       arguments: target.tool.sensitive ? { redacted: true } : target.arguments,
@@ -442,8 +440,64 @@ export async function executeReflexAction(
     arguments: target.arguments,
     result,
     outcome,
-    note: `Reflex already did ${target.tool.name} (${outcome}): ${confirmation}`,
+    note: `Reflex already did ${target.description ?? target.tool.name} (${outcome}): ${confirmation}`,
   };
+}
+
+function reflexSkipReason(
+  classification: ReflexClassification | null,
+  request: FastifyRequest,
+  signal: AbortSignal,
+  mode: 'partial' | 'final' | 'undo',
+): string | null {
+  const target = classification?.target;
+  const partialSafe = target?.tool.name === 'workspace_command' && workspaceReflexSafe(target) ||
+    target?.tool.name === 'pause_task' && target.tool.reflexSafe === true ||
+    target?.tool.name === 'pc_open' && target.arguments.target === 'app' &&
+      target.arguments.value === 'edge' ||
+    target?.tool.name === 'pc_open' && target.arguments.target === 'url' &&
+      typeof target.arguments.value === 'string' && safeHttpUrl(target.arguments.value);
+  const modeSafe = mode === 'partial' ? partialSafe
+    : mode === 'undo' ? target?.tool.name === 'resume_task'
+      : target?.tool.reflexSafe === true || target?.tool.name === 'workspace_command' && workspaceReflexSafe(target);
+  if (signal.aborted) return 'cancelled';
+  if (!classification) return 'unavailable';
+  if (!classification.addressed) return 'not_addressed';
+  if (classification.intent !== 'action') return 'not_action';
+  if (classification.completeCommand === false) return 'incomplete_command';
+  if (classification.confidence < confidenceThreshold) return 'low_confidence';
+  if (classification.needsConfirmation) return 'confirmation_required';
+  if (!target) return 'no_target';
+  if (!modeSafe) return 'unsafe_target';
+  if (!request.principal) return 'unauthorized';
+  if (!request.server.toolCallStore) return 'audit_unavailable';
+  const validateInput = request.compileValidationSchema(target.tool.inputSchema, 'body');
+  return validateInput(target.arguments) ? null : 'invalid_arguments';
+}
+
+export function logReflexDecision(
+  request: FastifyRequest,
+  classification: ReflexClassification | null,
+  source: 'chat' | 'voice-partial' | 'voice-final',
+  startedAt: number,
+  signal: AbortSignal,
+  action: ReflexActionResult | null,
+  reason?: string,
+): void {
+  const confidence = classification?.confidence ?? 0;
+  request.log.info({
+    source,
+    addressed: classification?.addressed ?? false,
+    intent: classification?.intent ?? 'other',
+    tool: classification?.target?.tool.name ?? 'none',
+    confidence: confidence < 0.5 ? '<0.5' : confidence <= 0.8 ? '0.5–0.8' : '>0.8',
+    completeCommand: classification ? source === 'voice-partial'
+      ? classification.completeCommand === true : classification.completeCommand !== false : false,
+    executed: action?.outcome === 'ok',
+    reason: reason ?? (action ? action.outcome === 'ok' ? 'executed' : action.outcome :
+      reflexSkipReason(classification, request, signal, source === 'voice-partial' ? 'partial' : 'final') ?? 'execution_failed'),
+    latencyMs: Math.min(600_000, Math.max(0, performance.now() - startedAt)),
+  }, 'reflex.decision');
 }
 
 export async function undoPartialReflexAction(
@@ -452,6 +506,16 @@ export async function undoPartialReflexAction(
   messageId: string,
   signal: AbortSignal,
 ): Promise<ReflexActionResult | null> {
+  if (original.tool.name === 'workspace_command' && original.arguments.operation === 'close' &&
+      typeof original.arguments.viewId === 'string') {
+    return executeReflexAction({
+      addressed: true, intent: 'action', confidence: 1, needsConfirmation: false, completeCommand: true,
+      target: {
+        choice: `undo_${original.choice}`, tool: original.tool,
+        arguments: { commandId: randomUUID(), operation: 'restore', viewId: original.arguments.viewId },
+      },
+    }, request, messageId, signal);
+  }
   if (original.tool.name !== 'pause_task' || typeof original.arguments.taskId !== 'string') return null;
   const tool = request.server.jarvisTools.get('resume_task');
   if (!tool) return null;
@@ -476,25 +540,72 @@ function safeHttpUrl(value: string): boolean {
 }
 
 export async function reflexTargets(request: FastifyRequest, browserGoal?: string): Promise<ReflexTarget[]> {
+  const workspace = request.principal
+    ? request.server.workspaceCommands.snapshot(request.principal.objectId) : undefined;
   let taskIds: string[] = [];
   if (request.server.jarvisTools.get('pause_task')?.reflexSafe && request.server.taskStore) {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      taskIds = (await request.server.taskStore.list({ state: 'Running', limit: 100, offset: 0 }))
-        .map(({ id }) => id);
+      const running = request.server.taskStore.list({ state: 'Running', limit: 100, offset: 0 });
+      const tasks = workspace ? await Promise.race([
+        running,
+        new Promise<[]>((resolve) => { timeout = setTimeout(() => resolve([]), 150); }),
+      ]) : await running;
+      taskIds = tasks.map(({ id }) => id);
     } catch {
       taskIds = [];
+    } finally {
+      clearTimeout(timeout);
     }
   }
-  return createReflexTargets(request.server.jarvisTools.list(), taskIds, browserGoal);
+  return createReflexTargets(request.server.jarvisTools.list(), taskIds, browserGoal, workspace);
+}
+
+export function workspaceReflexSafe(target: ReflexTarget): boolean {
+  return target.tool.name === 'workspace_command' && isWorkspaceReflexOperation(target.arguments);
+}
+
+export function createWorkspaceReflexTargets(
+  tool: RegisteredTool,
+  snapshot: WorkspaceSnapshot,
+): ReflexTarget[] {
+  const targets: ReflexTarget[] = [];
+  const add = (description: string, arguments_: Record<string, unknown>) => {
+    targets.push({
+      choice: `workspace_${targets.length}`, tool, description,
+      arguments: { commandId: randomUUID(), ...arguments_ },
+    });
+  };
+  for (const { viewId, title } of snapshot.windows.slice(0, 32)) {
+    for (const operation of ['show', 'focus', 'minimise', 'restore', 'close']) {
+      add(`${operation} the Jarvis workspace window ${JSON.stringify(title)} (${viewId})`, { operation, viewId });
+    }
+    add(`make the Jarvis workspace window ${JSON.stringify(title)} bigger`, {
+      operation: 'resize', viewId, width: 0.9, height: 0.9, x: 0.05, y: 0.05,
+    });
+  }
+  for (const arrangement of ['tiled', 'layered']) {
+    add(`arrange Jarvis workspace windows ${arrangement}${arrangement === 'tiled' ? ' / side by side' : ''}`,
+      { operation: 'layout', arrangement });
+  }
+  for (const action of ['open', 'close']) {
+    add(`${action} the Jarvis context panel`, { operation: 'context-panel', action });
+  }
+  return targets;
 }
 
 export function createReflexTargets(
   tools: readonly RegisteredTool[],
   taskIds: readonly string[] = [],
   browserGoal?: string,
+  workspace?: WorkspaceSnapshot,
 ): ReflexTarget[] {
   const targets: ReflexTarget[] = [];
   for (const tool of tools) {
+    if (tool.name === 'workspace_command' && workspace) {
+      targets.push(...createWorkspaceReflexTargets(tool, workspace));
+      continue;
+    }
     if (!tool.reflexSafe) continue;
     const required = Array.isArray(tool.inputSchema.required) ? tool.inputSchema.required : [];
     if (tool.name === 'browser_do' && typeof browserGoal === 'string' &&

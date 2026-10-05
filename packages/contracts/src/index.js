@@ -168,7 +168,7 @@ const workspaceCommandVariants = [
   workspaceOperation('layout', ['arrangement']),
   {
     properties: { operation: { const: 'context-panel' }, action: { const: 'open' } },
-    required: ['operation', 'action', 'view'],
+    required: ['operation', 'action'],
   },
   ...['close', 'toggle'].map((action) => ({
     properties: { operation: { const: 'context-panel' }, action: { const: action } },
@@ -439,7 +439,7 @@ export function isWorkspaceCommand(value, options = {}) {
       return hasOnly('arrangement') && ['tiled', 'layered'].includes(value.arrangement);
     case 'context-panel':
       return value.action === 'open'
-        ? hasOnly('action', 'view') && isGeneratedView(value.view, options)
+        ? hasOnly('action', 'view') && (value.view === undefined || isGeneratedView(value.view, options))
         : ['close', 'toggle'].includes(value.action) && hasOnly('action');
     default:
       return false;

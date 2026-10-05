@@ -7,6 +7,8 @@ continues. Distinguish Dan's confirmed direction from proposals, examples and
 open questions. These notes describe a design under discussion; they do not
 claim that the proposed behaviour is implemented.
 
+Latest visual decision: [Accepted centred 3D stage — 5 October 2026](#accepted-centred-3d-stage--5-october-2026). It supersedes the earlier large-orb-only-in-voice and Concept B/C background treatments on the Jarvis page. Earlier discussion remains as history.
+
 ## Confirmed direction
 
 - Copilot is handling the current issues and PRs. This discussion focuses on
@@ -557,3 +559,40 @@ The number of theme presets follows the visual-system work.
 Dan selected the dark Task Lens board (image 2), added the project release bar from image 3 and retained the closable right task-details panel. He approved the combined image. [Approved mockup and requirements](docs/ui/software-factory/README.md) record the handoff for [issue #369](https://github.com/DanAakesen/jarvis/issues/369), P8-34. This is planned implementation, not evidence of a working screen.
 
 Reuse the thin shared rail, expandable navigation, bars, workspace tabs, Settings top-right and the existing conversation input. Preserve all six task states and real controls. The release bar is scoped to a selected project and uses existing release data; the panel reuses task detail, event, sandbox and usage data. Shared smoky glass follows #364. The 3D room and large orb remain exclusive to Jarvis. Missing data stays Not reported; subscription usage is not assigned an invented DKK price.
+
+## Accepted centred 3D stage — 5 October 2026
+
+Dan accepted the corrected live browser prototype as the implementation direction. He reported flickering during transitions; that defect remains unresolved. After reviewing the existing issues, he confirmed the two remaining scope choices: **the 3D stage is only on Jarvis**, and **light mode re-lights the same room**. No further product choice blocks the implementation breakdown. Exact light-mode values and state-specific animation details are implementation/review work, not permission to change the selected composition.
+
+### Scope and continuity
+
+- Keep the agreed typing/manual shell: thin left rail, expandable left navigation, thin top and bottom bars, contextual right panel, Settings top-right, central workspace/tabs and bottom-centred composer. Keep existing auth, chat, camera/sharing, voice, window and agent controls.
+- The live room and large persistent orb belong only on the Jarvis typing/voice page. Factory, Settings and other routes retain the shared shell and glass surface system without the stage or large orb. Future areas remain deferred.
+- Typing and voice run in the browser. The room and viewpoint remain continuous. Voice immediately hides the shell, history and input, wakes the same orb, and retains temporary windows. Ending voice restores typing/draft/focus and dims the orb without removing it.
+- Preserve the default-off minimise-all-windows-on-voice-entry preference, tabs/restore, natural spoken ending, the existing labelled End voice and dialog-first Escape behaviour. Do not persist generated windows or create a second window store.
+
+### Accepted room and orb
+
+- Use a real Three.js scene, not wallpaper: broad architectural depth, a stable lower viewpoint, restrained atmosphere, independently moving mechanisms and particles. Keep the orb in front, concentric mechanisms behind it, and the deeper chamber behind those.
+- With no visible content, orb, rear mechanisms and platform share the screen's centre line. The rear mechanisms align with the orb vertically; the platform sits below. Preserve the centred opening prompt and composer. Only the orb moves/scales to make space: left of content on wide browsers, docked below the foreground view on phones. Do not swing the room/camera or drag the platform sideways with it.
+- Keep the approved actual mirror floor. Orb light visibly illuminates surrounding geometry and changes with position/brightness; independent scene movement remains alive without becoming scattered clutter.
+- The orb stays visible in typing, active voice and after voice ends, including on phones. A calmer cyan/blue transparent exterior surrounds an open amber neural constellation at rest. Waking brightens the same exterior/core in place with the approved slower, non-linear motion. Do not introduce a new floor-rise entrance.
+- Keep visible open space in the core/exterior. No solid anatomical brain, full orange fill, opaque rear backing or distracting coarse arcs across its centre. Background glare is managed through composition/material/light balance.
+- Visual presence and wake-up do not enable the microphone or imply a backend sleep state. Real connecting, readiness, listening, thinking, tool calls, speaking, interruption, reconnect and errors come from existing observed contracts, with accessible labels and reduced-motion alternatives.
+
+### Surfaces, light appearance and phones
+
+- Use [selected image 3](docs/ui/centred-stage/selected-orb-and-stage.png) for orb/core, expansive stage and mirror; use [selected image 2](docs/ui/centred-stage/selected-glass-window.png) for rounded translucent smoky glass windows, generous readable spacing, typography and restrained controls. Corrected centred prototype captures override the generated image's left placement.
+- Carry the glass surface system into existing shared components and pages. Preserve each page's real workflow/data rather than copying the illustrative comparison data, two-column layout or source-balance slider everywhere.
+- Dark and light appearance share room geometry, camera, spatial composition, orb and reflection. Light mode changes lighting, materials, exposure/atmosphere and readable surface roles, not the room into a flat image. Existing validated theme preferences and approved dynamic tokens persist as before.
+- Phone retains one foreground view, swipe/direct-request switching and a reachable voice dock; with no content the orb recentres. Quality can adapt to GPU/browser capability without breaking HTML chat/voice/window controls. Reduced motion and unavailable/lost WebGL must retain a usable interface.
+
+### Evidence and implementation handoff
+
+[Selected images and desktop/phone captures](docs/ui/centred-stage/README.md) and [runnable prototype/source](docs/reference/ui-stage-prototype/README.md) are included in this handoff. They are a visual reference with illustrative content and simulated voice, not a deployed replacement for Jarvis. The immutable accepted standalone SHA-256 is `896dfe11aafc7be2312a7acb77033afd66f355e67fe0a790e91aee0202750d25`.
+
+The existing shell, temporary view contracts, workspace commands, transient activity and preference paths are reused from #235, #238, #241, #252, #253, #254 and #255. Their closed status does not establish every live integration; offline/live/device limits must stay explicit. New P8-28–P8-33 tasks cover room/reflection, persistent orb/runtime wiring, flicker-free transitions, real glass surfaces, re-lit light appearance, and phone/rendering resilience.
+
+Flicker must be diagnosed and verified in motion through entry/exit, reversal and repeated view operations. Older software-WebGL screenshots and interaction checks do not prove flicker-free rendering, real audio, hardware frame rate, Safari or physical-phone behavior. The demo has no real microphone/camera/AI access. No new PC vendor integration, provider tool, Banking or Health work is authorized by this design handoff.
+
+Implementation issues: [P8-28 #361](https://github.com/DanAakesen/jarvis/issues/361), [P8-29 #362](https://github.com/DanAakesen/jarvis/issues/362), [P8-30 #363](https://github.com/DanAakesen/jarvis/issues/363), [P8-31 #364](https://github.com/DanAakesen/jarvis/issues/364), [P8-32 #365](https://github.com/DanAakesen/jarvis/issues/365), [P8-33 #366](https://github.com/DanAakesen/jarvis/issues/366). All are unclaimed; dependency links gate work until the design handoff and prerequisite tasks are complete.

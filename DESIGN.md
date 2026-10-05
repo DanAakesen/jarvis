@@ -1,6 +1,6 @@
 # Design
 
-The shared shell and voice-workspace structure were agreed with Dan on 4 October 2026; final styling remains open. See [the complete UI discussion and wireframes](ui.md). Dan designs each page by giving an image generator the page's data points and actions from [PRODUCT.md](PRODUCT.md#page-requirements), then picks a direction. Record the chosen direction, references, and findings here. Requirements stay in PRODUCT.md; token values go in code.
+The shared shell and voice-workspace structure were agreed with Dan on 4 October 2026. On 5 October Dan accepted the centred live 3D Jarvis stage; its production implementation is planned under P8-28–P8-33. The latest direction below supersedes the earlier aurora/voice-only-orb presentation on the Jarvis page. See [the complete UI discussion and wireframes](ui.md). Dan designs each page by giving an image generator the page's data points and actions from [PRODUCT.md](PRODUCT.md#page-requirements), then picks a direction. Record the chosen direction, references, and findings here. Requirements stay in PRODUCT.md; token values go in code.
 
 ## Design goals
 
@@ -74,7 +74,19 @@ workspace consumers; those consumer windows remain owned by P8.
 - **Sleep switch:** the main page shows configured awake/asleep state (minimum replicas 1/0), pending and failure feedback, and explains a refusal while any task is Ready or Running. Settings links to the main-page control.
 - **Live updates:** cards and timeline entries change state without layout jumps; a visible marker for a disconnected or stale event stream. Only committed task updates are presented as current.
 
-## Visual direction
+## Accepted centred Jarvis stage (5 October 2026; planned)
+
+Dan approved the corrected [centred prototype](docs/reference/ui-stage-prototype/README.md) and selected [orb/stage image 3](docs/ui/centred-stage/selected-orb-and-stage.png) plus [glass-window image 2](docs/ui/centred-stage/selected-glass-window.png). [Corrected desktop and phone captures](docs/ui/centred-stage/README.md) define centring and continuity; generated stills guide materials, not pixel-identical rendering or product data.
+
+- **Only Jarvis:** mount the live room and large persistent orb only on the main typing/voice page. Other pages use the shared glass surfaces without 3D scenery. Keep the agreed shell geometry and real controls.
+- **One room across modes/themes:** stable lower camera, symmetric broad architecture, three depth layers, opposing concentric mechanism motion, restrained atmosphere, real floor mirror and light cast from the orb onto room surfaces. Dark/light share this geometry; light mode re-lights the room. The prototype does not implement light mode yet.
+- **Persistent identity:** subdued transparent cyan orb and open amber core in typing, brighter awake during voice, dimmed in place on exit. This supersedes the large voice orb growing from/collapsing into the composer and the older phone rule excluding a large dormant orb. The small composer control still explicitly starts voice; visible scenery never starts listening.
+- **Content-aware placement:** centre the orb/rear mechanisms/platform with no views. Only the orb glides/resizes left when wide-screen content appears, or docks below phone content. Camera, room and platform stay fixed; current tabs/window lifecycle, draft/focus restoration and default-off minimise preference remain.
+- **Glass and readability:** selected image 2 defines restrained smoky translucent window chrome, generous spacing, sans typography and icons. Adapt it to each real view. Keep text legible over the moving/reflected room, accessible labels, focus and touch controls; avoid a solid brain, opaque orb backing and coarse crossing arcs.
+
+P8-28–P8-33 port this direction into the current app and reuse runtime/workspace/settings contracts. Dan reports transition flicker in the prototype; it remains unresolved and requires frame/video inspection of entry/exit, interrupted reversals and window cycles. Existing software-WebGL checks are not hardware, live-voice or flicker verification. Detailed requirements and superseded experiments are in [ui.md](ui.md#accepted-centred-3d-stage--5-october-2026). Canonical token values remain in code, not this document.
+
+## Current implemented visual system (superseded on Jarvis by the planned stage)
 
 Dan's brief (4 October 2026): the UI should be stunning, with rich styling and motion, and feel alive when Jarvis is doing something, especially in voice mode. Three original animated concepts are in [docs/ui/concepts](docs/ui/concepts/README.md) with screenshots. Selected on autopilot for Dan's review: **Concept B, living aurora**, as the default dark appearance, and **Concept C, daylight studio**, as the light appearance. Concept A's precise ring and tick detail is not used.
 
@@ -87,7 +99,7 @@ Canonical colour, type, spacing, radius, surface, elevation and motion values be
 
 ## Voice end (P8-12, decided 4 October 2026; implemented in P8-10)
 
-Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop. On phone with foreground content, it sits inside the bottom dock below the compact orb/state row with the mute and inspection actions; with no phone content, it sits below the central orb. P8-23 keeps these controls grouped beneath the orb in both layouts. Ending voice collapses the orb back into the composer's small orb. A natural spoken ending also ends voice; the small composer orb only starts voice.
+Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop. On phone with foreground content, it sits inside the bottom dock below the compact orb/state row with the mute and inspection actions; with no phone content, it sits below the central orb. P8-23 keeps these controls grouped beneath the orb in both layouts. The current implementation collapses the voice orb back into the composer; P8-29/P8-30 replace that visual with the accepted persistent dormant orb while preserving these end controls. A natural spoken ending also ends voice; the small composer orb only starts voice.
 
 ## Foundation shell (P0-02)
 
@@ -428,11 +440,17 @@ surface, without decorative borders. Dan's messages remain plain text. While a
 reply streams, an unmatched `**` is temporarily closed for rendering so an open
 bold span does not flash as literal Markdown; persisted text is unchanged.
 
-P8-25 clears the submitted draft when the saved user message arrives, not when
-the reply ends. Typing remains available throughout the turn; Send, DA/EN and
-voice entry remain disabled until it ends. There is no queued send. Later draft
-edits survive acceptance, success and interruption; a failed unsaved submission
-keeps its draft, while uncertain delivery warns against resending.
+P8-26 extends P8-25 with a local FIFO queue. Send/Enter clears the draft
+immediately into a Dan bubble; waiting bubbles sit below the current reply with
+a quiet “Queued · Danish/English” label and a labelled 44px remove control.
+A polite, atomic live region announces the queue count, including zero.
+Send and DA/EN remain available during replies; language is captured per
+submission. Voice entry stays disabled until chat finishes, with voice mode
+otherwise unchanged. Starting a queued turn keeps its bubble visible as
+“Sending” until the saved user message arrives. Success, error and Stop reply
+advance the queue; errors and any partial text stay beside the failed turn.
+Later drafts survive acceptance, success and interruption; a failed unsaved
+submission keeps its draft, while uncertain delivery warns against resending.
 Before the first delta, a labelled “Jarvis is thinking…” status uses a quiet
 opacity-pulsing dot, static under reduced motion. Once text arrives, the reply
 and caret render on the open transcript surface, never inside an input-like box.
@@ -444,6 +462,15 @@ The sequence is load → send “hi” → saved user message and thinking statu
 type “Next message” with Send disabled → first Markdown delta → saved reply and
 stale history refresh, with both messages and the next draft retained.
 Screenshots label mocked auth/SSE; they do not verify live Foundry latency.
+
+P8-26 Chromium evidence at 1440×900 and 390×844 in both themes:
+`docs/ui/screenshots/p8-26-queued-{dark,light}-{desktop,phone}.png`.
+The captures show a streaming reply with two queued messages. Browser checks
+exercised queue removal by keyboard, double Enter, per-message language,
+Stop/next and error/next, with no horizontal overflow or page exceptions.
+Queue bubbles reuse the existing short entrance transition, static under
+reduced motion; controls do not wait for animation. The fixture label identifies
+scratch-only auth and streamed API mocks, not a live backend/Foundry check.
 
 Window titles are drag handles; right/bottom edges and the corner resize. Each
 window keeps minimise, maximise and close in its title actions, with a 44px
@@ -505,6 +532,8 @@ Concept B/C's translucent surfaces are the selected treatment; the earlier white
 wireframes remain structural references only.
 
 ## Temporary workspace composition (P8-06)
+
+P7-27 reuses these controls and states for Jev-directed chat/voice commands, without new chrome or styling. “Make the window bigger” uses a bounded large resize in layered mode and expands the existing row/column spans in tiled mode; command application never waits for animation. Context-panel opening preserves existing content and is idempotent. Agent-closed windows can be restored from a bounded in-memory cache, including after a contradicted voice partial; manual closes retain their discard behavior.
 
 The main workspace accepts an in-memory set of typed views. Desktop opens in a
 tiled arrangement and can switch to overlapping layers; using a layered window

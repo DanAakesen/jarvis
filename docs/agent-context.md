@@ -203,6 +203,12 @@ Dan's manual setup checklist:
 
 Status, 4 October 2026: Dan registered the App, installed it on all repositories of his account, trimmed its permissions, and stored `github-app-private-key` in Key Vault (P3-10). P3-02 code is merged but its live token issuance and sandbox push are not yet verified. The webhook receiver (P3-03) is implemented; webhook secret provisioning, App URL configuration, and live delivery remain Dan's post-merge steps. P3-05 uses a separate repository-scoped token with only Actions read permission in the backend, stores failed-job logs in the existing private `logs` container, and never passes that token to the sandbox. The backend setting `global.max_check_attempts` defaults to 3 and accepts 0–10; 0 disables automatic repairs. The receiver caches the webhook secret after its first successful lookup, so restart the backend when rotating it.
 
+## Accepted visual reference handoff
+
+The read-only [centred stage prototype](reference/ui-stage-prototype/README.md) and [selected images/captures](ui/centred-stage/README.md) support P8-28–P8-33. Its isolated lockfile is not part of the root workspaces; follow its README to run it. The accepted standalone is copied unchanged. Prototype commands/check reports are historical evidence, not validation of the production app or its Node 22 toolchain. Port selected scene code into the current app; do not deploy demo replies, simulated states or comparison fixtures.
+
+The 3D stage/large orb are Jarvis-only, light mode re-lights the same room, and dormant visuals do not enable microphone capture. Dan reported transition flicker after the earlier browser checks; it is unresolved. Keep live-provider/device limitations distinct from local checks. Original reference snapshots stay read-only.
+
 ## Setup and commands
 
 The repository uses npm workspaces for `apps/web`, `apps/backend`, and
@@ -238,12 +244,15 @@ Verified in Codex cloud for P0-02:
 | Focused P8-17 settings/theme checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
+| Focused P8-26 queue and cancellation tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-abort.test.tsx` |
 | Focused P7-08 camera, shell, chat and voice checks | `npm test --workspace @jarvis/web -- --run src/camera-capture.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/App.test.tsx src/voice-client.test.tsx`; `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/vision/screen.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
 | Focused P7-13 memory-tool, embedding, and migration tests | `npm test --workspace @jarvis/backend -- --run src/core/memory.test.ts src/core/memory-embeddings.test.ts src/database/migrations.test.ts` |
 | Focused P7-14 research tests | `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- --run src/core/web-research.test.ts src/core/usage.test.ts src/foundry/client.test.mts src/config.test.ts src/database/tool-call-store.test.ts`; `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_tool` |
 | Focused P7-04 reflex, chat and voice tests | `npm test --workspace @jarvis/backend -- --run src/core/reflex.test.ts src/core/conversation.test.ts src/voice/relay.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py` |
+| Focused P7-27 workspace reflex checks | `npm test --workspace @jarvis/backend -- --run src/core/reflex.test.ts src/core/workspace-commands.test.ts src/core/conversation.test.ts src/voice/relay.test.ts src/logging.test.ts`; `npm test --workspace @jarvis/web -- --run src/Workspace.test.tsx src/NowFeedPanel.test.tsx src/now-feed.test.ts src/App.test.tsx` |
 | Focused P7-23 chat latency checks | `npm test --workspace @jarvis/backend -- --run src/core/conversation.test.ts src/core/reflex.test.ts src/voice/relay.test.ts src/core/memory.test.ts src/core/memory-embeddings.test.ts src/logging.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py agents/jarvis/tests/test_jarvis_tools.py` |
+| Focused P7-30 cross-session follow-up checks | `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py`; `cd agents/jarvis && .venv/bin/python -m ruff check chat_runtime.py model_client.py tests/test_chat_runtime.py tests/test_model_client.py` |
 | Focused P7-20 streaming voice reflex checks | `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/core/reflex.test.ts src/database/conversation-store.test.ts src/voice/realtime.test.ts src/logging.test.ts`; `npm run lint --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_voice_provisioning.py` |
 | Focused P7-24 live partial-recognition checks | `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/voice/realtime.test.ts src/voice/speech-recognizer.test.ts src/logging.test.ts`; `npm test --workspace @jarvis/web -- --run src/voice-client.test.tsx`; `npm run lint --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
 | P7-13 isolated SQL migration/store contracts | `npm run test:database --workspace @jarvis/backend` |
@@ -271,6 +280,16 @@ Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
 returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
 P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised.
+
+P7-27 passed `npm test` (1,135 tests), `npm run lint`, and `npm run build`.
+Scratch-only auth/API fixtures in Chromium at 1440×1000 and 390×844 verified
+snapshot publication, tile/layer/enlarge, minimise/restore, context-panel
+open/close (including repeated idempotent opens), focus/close and restored
+agent-closed content. Reduced motion remained usable, with no phone overflow
+or page errors. Fake voice tests prove execution before the final transcript
+and no repeated final action. These checks do not prove live Jev/Foundry
+latency; the coordinator must measure “tile my windows” from chat send to
+visible layout change and verify it is under 1.5 seconds after deployment.
 P8-17 was inspected at 390 and 1280 px using a scratch-only signed-in auth stub
 and mock `/settings` and `/database/status` endpoints. The minimise-windows
 toggle was off initially, saved by PATCH, and still on after reload; neither
@@ -715,12 +734,16 @@ the companion on Dan's PC:
      -BridgeClientId <jarvis-pc-bridge-client-guid>
    ```
 
-   The installer stops an existing bridge process, copies app files under
-   `%LOCALAPPDATA%\Programs\Jarvis.PcBridge`, writes nonsecret settings under
-   `%LOCALAPPDATA%\Jarvis\PcBridge`, and creates a Startup shortcut. Launch the
-   installed executable once to sign in by device code; MSAL stores its refresh
-   cache with Windows DPAPI. Re-running the installer updates the files without
-   deleting that token cache. The bridge connects outbound and creates no
+   The installer stops existing tray and native-host processes, then retries file
+   copies briefly if Chrome restarts a native host during the update. It copies app
+   files under `%LOCALAPPDATA%\Programs\Jarvis.PcBridge`, updates only the
+   connection fields in `%LOCALAPPDATA%\Jarvis\PcBridge\settings.json`, and
+   creates a Startup shortcut. Existing browser automation and other user settings
+   are retained; the installer prints whether Chrome automation is on. If extension
+   files changed, reload the unpacked extension from `chrome://extensions`.
+   Launch the installed executable once to sign in by device code; MSAL stores its
+   refresh cache with Windows DPAPI. Re-running the installer updates the files
+   without deleting that token cache. The bridge connects outbound and creates no
    inbound firewall rule.
 4. Confirm the tray reports Online, then ask Jarvis to open an HTTP(S) URL or an
    allow-listed app. Check the authenticated Now feed for online/offline status.
@@ -784,6 +807,7 @@ From the repository root, the offline checks are:
 ```text
 dotnet test pc-bridge/Jarvis.PcBridge.Core.Tests/Jarvis.PcBridge.Core.Tests.csproj --configuration Release
 dotnet build pc-bridge/Jarvis.PcBridge/Jarvis.PcBridge.csproj --configuration Release
+pwsh -NoProfile -File pc-bridge/tests/BridgeInstaller.Helpers.Tests.ps1
 npm test --workspace @jarvis/backend -- --run src/pc-bridge/bridge.test.ts
 ```
 
