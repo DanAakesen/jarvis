@@ -247,4 +247,17 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   });
 });
 
+// MV3 suspends idle service workers and their reconnect timers. Wake periodically and on
+// browser start so the bridge link comes back after a bridge restart or Chrome relaunch.
+function ensureNativeHost() {
+  if (!nativePort) connectNativeHost();
+}
+
+chrome.runtime.onStartup.addListener(ensureNativeHost);
+chrome.runtime.onInstalled.addListener(ensureNativeHost);
+chrome.alarms.create("jarvis-bridge-keepalive", { periodInMinutes: 0.5 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "jarvis-bridge-keepalive") ensureNativeHost();
+});
+
 connectNativeHost();

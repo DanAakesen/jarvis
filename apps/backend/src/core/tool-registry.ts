@@ -8,6 +8,8 @@ export interface JarvisTool {
   readonly sensitive?: boolean;
   /** The reflex may execute this tool directly after a high-confidence, no-confirmation decision. */
   readonly reflexSafe?: boolean;
+  /** Phone sessions may execute this tool without a P7-03 Teams approval. */
+  readonly publicAllowedOnPhone?: boolean;
   /** The core dispatcher supplies validated input, the request and a cancellation signal. */
   readonly execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) => Promise<unknown>;
 }

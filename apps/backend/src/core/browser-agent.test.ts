@@ -282,7 +282,7 @@ describe('Jev browser agent', () => {
     }, env.request, new AbortController().signal)).rejects.toThrow(/HTTP or HTTPS/u);
 
     const disconnected = fixture(fixedPlanner({ operation: 'done' }));
-    const fallbackNote = "Opened in your default browser because the Chrome extension isn't connected.";
+    const fallbackNote = "Opened in Chrome directly because the Jarvis Chrome extension isn't connected.";
     disconnected.openUrl.mockResolvedValueOnce({ opened: true, note: fallbackNote });
     await expect(disconnected.agent.runClause({
       goal: 'Open the website',

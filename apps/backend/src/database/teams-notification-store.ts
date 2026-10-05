@@ -13,6 +13,7 @@ export interface TeamsNotificationStore {
     conversationId: string,
     actionKind: string,
     lifetimeSeconds: number,
+    phoneSessionId?: string | null,
   ): Promise<void>;
   resolveConfirmation(
     id: string,
@@ -100,22 +101,27 @@ export function createTeamsNotificationStore(pool: sql.ConnectionPool): TeamsNot
           WHEN NOT MATCHED THEN INSERT (owner_object_id, conversation_id, reference_json)
             VALUES (@ownerObjectId, @conversationId, @referenceJson);`);
     },
-    async createConfirmation(id, ownerObjectId, conversationId, actionKind, lifetimeSeconds) {
+    async createConfirmation(id, ownerObjectId, conversationId, actionKind, lifetimeSeconds, phoneSessionId = null) {
+      if (phoneSessionId !== null &&
+          (!/^[1-9]\d{0,18}$/u.test(phoneSessionId) || BigInt(phoneSessionId) > 9_223_372_036_854_775_807n)) {
+        throw new TypeError('Invalid phone session');
+      }
       await pool.request()
         .input('confirmationId', sql.Char(43), id)
         .input('ownerObjectId', sql.Char(36), ownerObjectId)
         .input('conversationId', sql.NVarChar(512), conversationId)
         .input('actionKind', sql.VarChar(32), actionKind)
         .input('lifetimeSeconds', sql.Int, lifetimeSeconds)
+        .input('phoneSessionId', sql.BigInt, phoneSessionId === null ? null : BigInt(phoneSessionId))
         .query(`UPDATE dbo.teams_confirmations SET status = 'expired', resolved_at = SYSUTCDATETIME()
           WHERE status = 'pending' AND expires_at <= SYSUTCDATETIME();
           DELETE FROM dbo.teams_confirmations
           WHERE expires_at < DATEADD(day, -1, SYSUTCDATETIME()) AND status <> 'executing';
           INSERT INTO dbo.teams_confirmations
-            (confirmation_id, owner_object_id, conversation_id, action_kind, status, expires_at)
+            (confirmation_id, owner_object_id, conversation_id, action_kind, status, expires_at, phone_session_id)
           VALUES
             (@confirmationId, @ownerObjectId, @conversationId, @actionKind, 'pending',
-              DATEADD(second, @lifetimeSeconds, SYSUTCDATETIME()));`);
+              DATEADD(second, @lifetimeSeconds, SYSUTCDATETIME()), @phoneSessionId);`);
     },
     async resolveConfirmation(id, ownerObjectId, conversationId, decision) {
       const { recordset } = await pool.request()

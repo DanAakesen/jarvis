@@ -7,6 +7,7 @@ export interface AuthConfig {
   // Hosted Jarvis agent identity; only routes that opt in accept it.
   agentObjectId?: string;
   pcBridgeClientId?: string;
+  phoneEventGridObjectId?: string;
 }
 
 // Nonsecret IDs from infra/bootstrap.output.json. Deployment can override them.
@@ -39,6 +40,15 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
       throw new ConfigurationError('ENTRA_JARVIS_AGENT_OBJECT_ID must differ from ENTRA_OWNER_OBJECT_ID');
     }
     values.agentObjectId = agent.toLowerCase();
+  }
+  const phoneEventGrid = env.ENTRA_PHONE_EVENT_GRID_OBJECT_ID;
+  if (phoneEventGrid !== undefined && phoneEventGrid !== '') {
+    if (!uuid.test(phoneEventGrid)) throw new ConfigurationError('ENTRA_PHONE_EVENT_GRID_OBJECT_ID must be a UUID');
+    if (phoneEventGrid.toLowerCase() === values.ownerObjectId ||
+        phoneEventGrid.toLowerCase() === values.agentObjectId) {
+      throw new ConfigurationError('ENTRA_PHONE_EVENT_GRID_OBJECT_ID must identify a separate service principal');
+    }
+    values.phoneEventGridObjectId = phoneEventGrid.toLowerCase();
   }
   const pcBridgeClientId = env.ENTRA_PC_BRIDGE_CLIENT_ID;
   if (pcBridgeClientId !== undefined && pcBridgeClientId !== '') {
