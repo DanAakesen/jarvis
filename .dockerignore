@@ -14,6 +14,12 @@
 !apps/backend/src/**
 !apps/web/
 !apps/web/package.json
+!packages/
+!packages/contracts/
+!packages/contracts/package.json
+!packages/contracts/src/
+!packages/contracts/src/index.js
+!packages/contracts/src/index.d.ts
 apps/backend/src/**/*.test.*
 apps/backend/src/**/vitest.config.*
 apps/backend/src/**/fixtures/**

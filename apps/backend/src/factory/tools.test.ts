@@ -113,7 +113,7 @@ describe('Software Factory Jarvis tools', () => {
     const response = await app.inject({ url: '/tools', headers });
     expect(response.statusCode).toBe(200);
     expect(response.json().map(({ name }: { name: string }) => name)).toEqual([
-      'set_jarvis_model', 'set_away_mode', ...names,
+      ...coreModule.tools.map(({ name }) => name), ...names,
     ]);
     expect(response.json().every(({ inputSchema }: { inputSchema: { type: string } }) =>
       inputSchema.type === 'object')).toBe(true);

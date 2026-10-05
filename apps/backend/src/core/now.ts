@@ -41,9 +41,12 @@ export interface NowFeedStore {
   dismiss(id: string): Promise<boolean>;
 }
 
+export type NowFeedStatusKind = 'pull_request_ready' | 'deployment_failed';
+
 export type NowFeedUpdate =
   | { type: 'refresh' }
-  | { type: 'mode_changed'; away: boolean };
+  | { type: 'mode_changed'; away: boolean }
+  | { type: 'status'; kind: NowFeedStatusKind };
 
 export type NowFeedEventHub = EventHub<NowFeedUpdate>;
 

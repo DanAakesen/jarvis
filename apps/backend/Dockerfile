@@ -5,8 +5,10 @@ RUN npm install --global npm@10.9.9
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY apps/backend/package.json apps/backend/package.json
 COPY apps/web/package.json apps/web/package.json
+COPY packages/contracts/package.json packages/contracts/package.json
 RUN npm ci --workspace @jarvis/backend --include-workspace-root
 COPY apps/backend/tsconfig.json apps/backend/tsconfig.json
+COPY packages/contracts/src packages/contracts/src
 COPY apps/backend/src apps/backend/src
 RUN npm run build --workspace @jarvis/backend
 
@@ -16,6 +18,7 @@ RUN npm install --global npm@10.9.9
 COPY package.json package-lock.json ./
 COPY apps/backend/package.json apps/backend/package.json
 COPY apps/web/package.json apps/web/package.json
+COPY packages/contracts/package.json packages/contracts/package.json
 RUN npm ci --omit=dev --workspace @jarvis/backend --include-workspace-root=false
 
 FROM node:22.23.3-bookworm-slim AS runtime
@@ -23,6 +26,8 @@ ENV NODE_ENV=production PORT=3000
 WORKDIR /app
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=production-dependencies /app/apps/backend ./apps/backend
+COPY --from=build /app/packages/contracts/package.json ./packages/contracts/package.json
+COPY --from=build /app/packages/contracts/src/index.js ./packages/contracts/src/index.js
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 COPY db/migrations ./db/migrations
 USER node

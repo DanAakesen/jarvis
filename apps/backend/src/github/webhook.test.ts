@@ -138,6 +138,46 @@ describe('GitHub webhook receiver', () => {
     expect(deliveries.size).toBe(1);
   });
 
+  it('publishes a short status event only when a pull request is marked ready for review', async () => {
+    const { app } = fixture();
+    const events: unknown[] = [];
+    const unsubscribe = app.nowEventHub.subscribe((event) => events.push(event));
+    const payload = payloadFor('pull_request') as Record<string, unknown>;
+    payload.action = 'ready_for_review';
+    const body = Buffer.from(JSON.stringify(payload));
+
+    const response = await deliver(app, 'ready-pr', 'pull_request', body);
+    const duplicate = await deliver(app, 'ready-pr', 'pull_request', body);
+
+    expect(response.statusCode).toBe(202);
+    expect(duplicate.json()).toEqual({ status: 'duplicate' });
+    expect(events).toEqual([
+      { type: 'refresh' },
+      { type: 'status', kind: 'pull_request_ready' },
+    ]);
+    unsubscribe();
+  });
+
+  it('publishes a short status event for a failed deployment', async () => {
+    const { app } = fixture();
+    const events: unknown[] = [];
+    const unsubscribe = app.nowEventHub.subscribe((event) => events.push(event));
+    const payload = payloadFor('deployment_status') as {
+      deployment_status: Record<string, unknown>;
+    };
+    payload.deployment_status.state = 'failure';
+    const body = Buffer.from(JSON.stringify(payload));
+
+    const response = await deliver(app, 'failed-deployment', 'deployment_status', body);
+
+    expect(response.statusCode).toBe(202);
+    expect(events).toEqual([
+      { type: 'refresh' },
+      { type: 'status', kind: 'deployment_failed' },
+    ]);
+    unsubscribe();
+  });
+
   it('sends completed failed workflow runs to the checks loop and allows webhook retries', async () => {
     const onMapping = vi.fn()
       .mockRejectedValueOnce(new Error('temporary log storage failure'))

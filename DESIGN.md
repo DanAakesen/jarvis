@@ -168,6 +168,8 @@ and the same labelled field grid as the other sections. Two columns make related
 the form stacks on narrow screens. Save feedback stays beside the save action,
 and loading, recovery, and unavailable actions remain explicit. Credentials show text status, expiry, and last-updated dates without secret
 values; manual renewal and reseed controls remain disabled with an explanation.
+The Voice section includes a labelled “Minimise all windows when starting voice”
+checkbox, off by default, saved with the other settings.
 The sleep control also remains disabled until its owning workflow exists; no
 new visual direction or palette is introduced. Checked in Chromium at
 390 and 1280 px with mock auth/settings: no horizontal overflow, controls at
@@ -386,9 +388,11 @@ tasks, not P8-04.
 Existing windows carry between modes by default. The optional minimise-on-voice
 setting defaults off; when enabled, voice begins with only the orb and windows
 remain docked on return to typing. Otherwise the earlier shell layout returns.
-Generated views are temporary; theme values persist. Small-orb input controls
-start voice explicitly. Concept B/C's translucent surfaces are the selected
-treatment; the earlier white wireframes remain structural references only.
+Generated views are temporary; theme values persist. P8-14 reuses the existing
+Now list treatment for its first signed-in fixture. Values render as React text
+and allowlisted links; view-provided markup is not interpreted. Small-orb input
+controls start voice explicitly. Concept B/C's translucent surfaces are the
+selected treatment; the earlier white wireframes remain structural references only.
 
 ## Temporary workspace composition (P8-06)
 
@@ -422,14 +426,15 @@ controls remain available there. The shell exposes the typed workspace command
 controller to page consumers; authenticated Jarvis delivery remains P8-15.
 Tab motion uses the P8-20 tokens and becomes static under reduced motion.
 
-## Proposed surfaces for accepted capability additions
+## Accepted capability surfaces
 
-Editable personality should live in **Settings → Jarvis → Personality**, reached
-through the agreed top-right Settings entry. Proposed fields are tone/response
-style and custom instructions, with Save and Reset to the current default and
-clear new-session application feedback. This placement is a recommendation, not
-a newly reviewed screen design. P8-19 owns the form; P7-16 owns its validated
-persistence and chat/voice application. Visual themes remain separate.
+Editable personality lives in **Settings → Jarvis → Personality**, reached
+through the agreed top-right Settings entry. P8-19 implements Tone, Response
+style, Custom instructions, Save settings, and Reset personality using the
+existing Settings form and theme tokens. Guidance explains that changes apply to
+new sessions and active sessions keep their current settings; visual themes,
+model choice, and voice identity remain separate. P7-16 owns validated
+persistence and session application.
 
 Research and generated image/video results use the existing dynamic workspace,
 with source links or artifact references and honest progress/error states.

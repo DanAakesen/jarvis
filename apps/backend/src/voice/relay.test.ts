@@ -174,6 +174,41 @@ describe('backend-relayed Voice Live WebSocket', () => {
     first.close();
   });
 
+  it('holds status announcements until Dan stops speaking', async () => {
+    const received: Record<string, unknown>[] = [];
+    let upstream: WebSocket | undefined;
+    const upstreamUrl = await echoServer((socket) => {
+      upstream = socket;
+      socket.on('message', (data) => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    });
+    const { app } = appFor((token, signal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    }));
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+
+    upstream!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }));
+    app.eventHub.publish({
+      taskId: '1',
+      id: 'event1',
+      type: 'state_changed',
+      summary: null,
+      payload: { to: 'Done' },
+      source: 'backend',
+      at: '2026-10-03T12:00:00.000Z',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 550));
+    expect(received.some((event) => event.type === 'response.create')).toBe(false);
+
+    upstream!.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
+    expect(received.find((event) => event.type === 'response.create')).toMatchObject({
+      response: { instructions: 'Speak this exact status update to Dan, verbatim: A task has finished.' },
+    });
+  });
+
   it('authenticates the browser and relays messages with only the backend Voice Live credential', async () => {
     const authorization = vi.fn();
     const upstreamUrl = await echoServer((socket, request) => {
