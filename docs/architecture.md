@@ -82,12 +82,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   controls are visibly disabled until their owning services/contracts exist.
 - P8-20 keeps the visual system in `apps/web/src/styles.css`: semantic light/dark
   roles, type and layout tokens, elevation/translucency, and shared motion rules.
-  `JarvisActivityProvider` tracks chat and voice turns as separate active sources,
-  so one ending cannot clear the other's top-bar status. `VoiceControls` maps the
-  actual P5-04 status and decoded playback PCM level to the labelled orb; it does
-  not infer tool calls or window activity. CSS aurora and state motion pause while
-  the document is hidden and reduce to fades/static readable states when motion
-  is reduced. No persistence or backend route is added.
+  P8-16 publishes typed chat/voice runtime activity through the existing
+  owner-authenticated `/now/events` SSE stream. `JarvisActivityProvider` tracks
+  event-derived operations and voice state, so one ending cannot clear another
+  active operation. The orb maps those reported states and decoded playback PCM;
+  listening is emitted only after the relay is ready and microphone audio is
+  observed. Tool-call events contain only tool name and normalized outcome, not
+  arguments, results, transcripts or secrets. Activity remains in memory and is
+  neither persisted nor included in Now snapshots. CSS aurora and state motion
+  pause while the document is hidden and reduce to fades/static readable states
+  when motion is reduced.
 - P8-07 keeps window lifecycle state in the mounted `Workspace` component.
   Minimised views remain mounted but hidden and inert; open/minimised/closed and
   maximised state is memory-only. The shell passes the component's typed
@@ -117,7 +121,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `voice.minimizeWindowsOnVoiceStart` preference is persisted through P8-17 and
   mirrored to device storage for immediate shell reads. P8-14 provides the safe
   list renderer in the Now panel; generated workspace delivery is provided by
-  P8-15, and tool-call activity remains P8-16. No workspace state is persisted.
+  P8-15. P8-16 provides typed activity to the top bar, orb and Jarvis-updated
+  workspace-window shimmer; speech output including P7-12 announcements follows
+  the same observed speaking state. No workspace or activity state is persisted.
 - P7-16 extends the same authenticated, validated `dbo.settings` key/value store
   with bounded personality preferences. Hosted chat and Danish voice read them
   for each new agent invocation/session; the backend snapshots them when it
@@ -288,6 +294,19 @@ from task-history replay and has a 25-second heartbeat. These routes use the
 default Dan-only authentication. Offline API and SQL Server integration tests
 cover the contracts; deployed Entra, SQL and streaming behavior remain
 unverified.
+
+P8-16 adds `jarvis-activity` SSE frames to that existing owner-authenticated
+stream. A strict shared contract permits only an activity ID, `chat`/`voice`
+source, state, and—for tool calls only—a tool name and `ok`/`refused`/`error`
+outcome. A volatile in-memory hub carries these events; no activity rows,
+conversation content, arguments, results, or secrets are written or sent.
+Chat thinking/terminal events follow the streamed turn, and chat tool events
+follow the recorded tool-call outcome. The voice relay reports only observed
+readiness, audio, response, interruption, reconnect, tool and failure events;
+listening is not emitted before readiness/audio. Disconnect closes pending
+voice tool activities. Browser reconnect clears transient states before new
+events arrive. Focused contract/backend/web tests cover these transitions and
+payload privacy; live Entra, Foundry and physical audio remain unverified.
 
 P1-09's task detail page reads `GET /factory/tasks/:id` in 100-event pages using
 `eventOffset`; the backend merges archived and SQL rows transparently. It resumes
@@ -1101,6 +1120,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then waits for explicit microphone activation. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
 | English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Completed voice transcripts are persisted as messages; voice tool calls are not stored as `tool_calls`. |
+| Runtime activity (P8-16) | The backend publishes transient, typed activity over owner-authenticated `/now/events`; the voice orb, top bar and workspace consume events from the same stream. Listening follows relay readiness and observed microphone audio; tool calls expose only name and normalized outcome. Speaking follows observed output audio, including P7-12 announcements, with no duplicate announcement. | Contract, mocked chat/voice protocol, authenticated SSE and web tests cover event validation, observed transitions, cancellation/disconnect and payload privacy. The local browser acceptance check covers the voice workspace; live Entra/Foundry and physical audio remain unverified. |
 | English status updates (P7-12) | The relay subscribes to committed task transitions and typed status kinds emitted after verified GitHub webhook processing for ready-for-review pull requests and failed deployments. It merges duplicate kinds over 500 ms, then speaks fixed wording only when Dan and Jarvis are idle and no tool call is active; a queued update is retried when Dan stops speaking. `get_status_summary` exposes bounded Now-feed counts, applies Away-mode visibility, and never returns activity text or logs. | Fake event-hub, webhook receiver, tool-route and relay tests cover filtering, duplicate deliveries, redaction and deferral. Live voice audio and production webhook delivery remain unverified. |
 | Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |
 | Visual inspection (P7-05/P7-08) | The browser captures a JPEG from the explicitly selected `getDisplayMedia` stream or, after Dan turns the camera on and grants permission, `getUserMedia`. A frame is captured only for an explicit chat/voice request. Authenticated `POST /screen/frames` checks Dan's identity, active `jarvis_sessions` row, JPEG/1 MiB limit, 3-second interval and shared `global.screen_share_daily_frame_cap` (default 300, range 1–300). It reserves the frame in `dbo.usage`, calls the configured vision deployment using the backend managed identity, then sends only the bounded description to chat context or Voice Live response instructions. No image is persisted or logged; chat messages, voice transcripts and task events do not contain the synthetic context. | Backend/web/agent contract tests exercise a fake camera stream/model and transient context. Screen and camera share `screen_frames` reservations and token/cost recording; estimated DKK uses the documented short-context Global Standard rates. Live deployment SKU, model image acceptance and billed cost remain to verify. Voice/session end and page teardown stop media; camera also stops after five minutes. |

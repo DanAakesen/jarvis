@@ -60,10 +60,12 @@ vi.mock('./voice-client', () => ({
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com' };
 const fetchMock = vi.fn<typeof fetch>();
+let activityStream: ReadableStreamDefaultController<Uint8Array> | null = null;
 
 beforeEach(() => {
   vi.clearAllMocks();
   voiceSessions.length = 0;
+  activityStream = null;
   localStorage.clear();
   createAuthClient.mockReturnValue(makeAuthClient());
   restoreProfile.mockResolvedValue(null);
@@ -275,9 +277,21 @@ describe('App shell', () => {
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
   });
 
-  it('shows the working indicator only while a real chat turn is pending', async () => {
+  it('shows chat work only after a runtime event and clears it on the reported terminal event', async () => {
     const user = userEvent.setup();
     let finish: (() => void) | undefined;
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/now/events') {
+        return new Response(new ReadableStream<Uint8Array>({
+          start(controller) { activityStream = controller; },
+          cancel() { activityStream = null; },
+        }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      }
+      return new Response(JSON.stringify({ state: 'awake' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    });
     sendChatTurn.mockImplementation(async (...args: unknown[]) => {
       const onUser = args[4] as (message: Record<string, unknown>) => void;
       onUser({
@@ -295,10 +309,17 @@ describe('App shell', () => {
 
     await user.type(screen.getByRole('textbox', { name: 'Message Jarvis' }), 'Start the task.');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(await screen.findByRole('status', { name: 'Jarvis is working' })).not.toBeNull();
+    expect(screen.queryByRole('status', { name: 'Jarvis is working' })).toBeNull();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    const publish = (event: { type: string; activityId: string; source: 'chat' }) => {
+      activityStream?.enqueue(new TextEncoder().encode(`event: jarvis-activity\ndata: ${JSON.stringify(event)}\n\n`));
+    };
+    publish({ type: 'thinking', activityId: '22222222-2222-4222-8222-222222222222', source: 'chat' });
+    expect(await screen.findByRole('status', { name: 'Jarvis is thinking' })).not.toBeNull();
 
     finish?.();
-    await waitFor(() => expect(screen.queryByRole('status', { name: 'Jarvis is working' })).toBeNull());
+    publish({ type: 'ended', activityId: '22222222-2222-4222-8222-222222222222', source: 'chat' });
+    expect(await screen.findByRole('status', { name: 'Jarvis activity ended' })).not.toBeNull();
   });
 
   it('hides navigation and area pages until Dan is signed in', async () => {

@@ -227,6 +227,7 @@ Verified in Codex cloud for P0-02:
 | All workspace lint checks | `npm run lint` in the repository root |
 | All workspace tests (single run) | `npm test` in the repository root |
 | Shared generated-view contract | `npm test --workspace @jarvis/contracts`; `npm run lint --workspace @jarvis/contracts` |
+| Focused P8-16 activity tests | `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- --run src/core/activity.test.ts src/core/conversation-activity.test.ts src/core/now.test.ts src/voice/relay.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx src/activity-context.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/VoiceOrb.test.tsx src/Workspace.test.tsx src/NowFeedPanel.test.tsx src/now-feed.test.ts` |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
@@ -333,6 +334,16 @@ phone voice layout belongs to P8-11. Focused checks:
 (44 passed), `npm run lint --workspace @jarvis/web`, and
 `npm run build --workspace @jarvis/web` (existing chunk-size advisory). Live
 Entra/API, physical phone hardware, and phone voice behavior remain unverified.
+P8-16's local acceptance used scratch-only auth and voice-client stubs, a mock
+backend/SSE fixture, and the real web app in Chromium at 1440×900 and 390×844.
+It verified that the ready voice workspace showed no listening state until
+microphone activation; then showed runtime listening, thinking, tool-call start
+and outcome, and speaking states in the orb/top bar. An SSE workspace-create
+fixture produced the matching temporary window shimmer. Neither
+viewport overflowed and Chromium reported no console/page exceptions. The
+screenshots and fixtures remain in `/tmp/p8-16-acceptance`, not the repository.
+This exercises the real browser UI against local protocol fixtures, not live
+Entra, Foundry, microphone hardware, or deployed streaming.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal
