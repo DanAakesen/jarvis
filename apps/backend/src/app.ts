@@ -15,6 +15,7 @@ import { conversationModule } from './core/conversation.js';
 import type { ConversationStore } from './core/conversation-store.js';
 import type { ConversationAgent } from './core/chat-agent.js';
 import type { ReflexClassifier } from './core/reflex.js';
+import type { BrowserAgent } from './core/browser-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskController, TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
 import type { GitHubAppTokenIssuer, GitHubRepositoryCatalog } from './github-app.js';
@@ -57,6 +58,7 @@ export interface BuildAppOptions {
   readonly sandboxHeartbeat?: SandboxHeartbeat;
   readonly conversationAgent?: ConversationAgent;
   readonly reflexClassifier?: ReflexClassifier;
+  readonly browserAgent?: BrowserAgent;
   readonly containerAppScaler?: ContainerAppScaler | null;
   readonly teamsNotifications?: TeamsNotificationService | null;
   readonly awayModeStore?: AwayModeStore | null;
@@ -87,6 +89,7 @@ declare module 'fastify' {
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
     reflexClassifier: ReflexClassifier | null;
+    browserAgent: BrowserAgent | null;
     teamsNotifications: TeamsNotificationService | null;
     awayModeStore: AwayModeStore | null;
     workspaceCommands: WorkspaceCommandBroker;
@@ -197,6 +200,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   }
   app.decorate('conversationAgent', options.conversationAgent ?? null);
   app.decorate('reflexClassifier', options.reflexClassifier ?? null);
+  app.decorate('browserAgent', options.browserAgent ?? null);
   app.decorate('teamsNotifications', options.teamsNotifications ?? null);
   registerModules(app, options.modules ?? [
     coreModule,
