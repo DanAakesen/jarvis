@@ -40,7 +40,7 @@
 .markdown-content { min-width: 0; color: var(--text); overflow-wrap: anywhere; }
 .markdown-content > :first-child { margin-top: 0; }
 .markdown-content > :last-child { margin-bottom: 0; }
-.markdown-content p { margin: var(--space-2) 0; white-space: normal; }
+.markdown-content p { margin: var(--space-2) 0; color: inherit; white-space: normal; }
 .markdown-content ul, .markdown-content ol { margin: var(--space-2) 0; padding-left: 1.4em; }
 .markdown-content li + li { margin-top: var(--space-1); }
 .markdown-content :not(pre) > code { padding: .12em .35em; border-radius: 5px; background: var(--code-surface); font-family: var(--font-mono); font-size: .9em; }

@@ -52,6 +52,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   existing state ownership; P8-16 still owns tool-activity events. Motion reuses
   the P8-20 tokens and hidden-tab/reduced-motion rules. No event plumbing,
   persistence or service contract changes.
+- P8-31 applies the selected smoky glass to existing shell, conversation,
+  temporary-workspace, contextual-panel, Factory and Settings surfaces through
+  the light/dark semantic tokens in `apps/web/src/styles.css`. Shared headings
+  use the selected sans typography; the real page content and typed renderers
+  remain unchanged. No route, data flow, API, persistence or production
+  dependency version changes. The production Three.js scene is still owned by
+  P8-28, so reflected-stage readability remains to be checked there.
 - React mounts into `apps/web/index.html`. BrowserRouter renders the home page
   and a catch-all page with a return link. Production static hosting must fall
   back to `index.html` for client routes (P0-11).
@@ -1623,8 +1630,8 @@ flowchart LR
 
 ## Planned Jarvis 3D presentation boundary (P8-28–P8-33)
 
-The accepted [stage reference](reference/ui-stage-prototype/README.md) uses Three.js, shaders, a planar floor reflector and HTML controls. Production currently uses the existing React/CSS visual system; this handoff does not change runtime packages or deployment. P8-28 ports the selected scene into the web app using the production toolchain, with managed allocation/disposal and off-route/hidden-tab lifecycle. The scene is mounted only on Jarvis. Its geometry/viewpoint persist across typing/voice and dark/light; light appearance re-lights the same room.
+The accepted [stage reference](reference/ui-stage-prototype/README.md) uses Three.js, shaders, a planar floor reflector and HTML controls. P8-31 updates the existing React/CSS visual system for shared glass surfaces without adding runtime packages or changing deployment; the current production dependency versions in the stack table remain unchanged. P8-28 ports the selected scene into the web app using the production toolchain, with managed allocation/disposal and off-route/hidden-tab lifecycle. The scene is mounted only on Jarvis. Its geometry/viewpoint persist across typing/voice and dark/light; light appearance re-lights the same room.
 
 Browser state owns scene placement, window geometry, theme application and animation. Reuse P8-14 typed declarative views, P8-15 authenticated workspace commands/acknowledgements, P8-16 transient observed runtime activity and decoded playback audio, and P8-17 validated preference persistence. Dormant/awake presentation does not start microphone capture or change backend sleep. No new backend view store, provider calls, generated-code execution or credential surface is needed. Phone quality adaptation, reduced motion and WebGL unavailable/lost recovery belong to P8-33; the HTML controls and actual chat/voice remain usable when 3D fails.
 
-The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. The production runtime integration, light appearance, hardware performance and transition-flicker correction remain planned.
+The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. The production runtime integration, light appearance, hardware performance and transition-flicker correction remain planned; P8-31's CSS-token changes add no production Three.js dependency.
