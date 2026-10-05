@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { backendFetch } from '../backend-request';
+import { useConversationIntents } from '../conversation-intents';
 import { streamTaskEvents } from '../task-events';
 import { useContextPanel } from '../context-panel-state';
 import { TaskDetailPage } from './TaskDetailPage';
@@ -219,7 +221,11 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [now, setNow] = useState(0);
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const selectedTaskIdRef = useRef('');
+  const [conversationDraft, setConversationDraft] = useState('');
+  const conversationIntents = useConversationIntents();
+  const navigate = useNavigate();
   const contextPanel = useContextPanel();
+  const closeContextPanel = contextPanel.close;
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const lastEventIds = useRef(new Map<string, string>());
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -235,8 +241,8 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const visibleTaskError = backendUrl ? error : 'Tasks are unavailable until the backend is deployed.';
 
   useEffect(() => () => {
-    if (selectedTaskIdRef.current) contextPanel.close();
-  }, [contextPanel.close]);
+    if (selectedTaskIdRef.current) closeContextPanel();
+  }, [closeContextPanel]);
 
   useEffect(() => {
     let active = true;
@@ -369,6 +375,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
       ...(modelOverride ? { modelOverride } : {}),
       ...(reasoningOverride ? { reasoningOverride } : {}),
     };
+
     try {
       const value = await request(backendUrl, getAccessToken, '/factory/tasks', 'POST', body);
       if (!isTask(value)) throw new Error('Jarvis returned invalid task data. Try again.');
@@ -382,6 +389,20 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     } finally {
       setCreating(false);
     }
+  };
+
+  const sendToJarvis = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const message = conversationDraft.trim();
+    if (!message || message.length > 20_000) return;
+    conversationIntents.sendMessage(message);
+    setConversationDraft('');
+    navigate('/');
+  };
+
+  const openVoiceStart = () => {
+    conversationIntents.focusVoiceStart();
+    navigate('/');
   };
 
   const streamValues = taskIds.split(',').filter(Boolean).map((id) => liveStatuses[id] ?? 'connecting');
@@ -574,6 +595,34 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
           <p className="task-data-note">Pull request, checks, and usage details will appear when those data sources are connected.</p>
         </>
       )}
+
+      <form className="factory-composer" onSubmit={sendToJarvis}>
+        <label className="visually-hidden" htmlFor="factory-ask-jarvis">Ask Jarvis</label>
+        <textarea
+          id="factory-ask-jarvis"
+          rows={1}
+          maxLength={20_000}
+          placeholder="Ask Jarvis"
+          value={conversationDraft}
+          onChange={(event) => setConversationDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+          aria-describedby="factory-composer-guidance"
+        />
+        <button className="primary-button" type="submit" disabled={!conversationDraft.trim()}>
+          Send
+        </button>
+        <button className="secondary-button" type="button" onClick={openVoiceStart}>
+          Start voice in Jarvis
+        </button>
+        <p id="factory-composer-guidance">
+          Sending opens the conversation and uses its normal message queue. Voice opens Jarvis with its explicit Start voice control focused; the microphone stays off until you activate it.
+        </p>
+      </form>
 
       {dialogOpen && (
         <div className="task-dialog-backdrop">

@@ -863,6 +863,39 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-release-actions { display: grid; justify-items: stretch; gap: 8px; }
 .task-release-actions p { margin: 0; font-size: 13px; }
 .task-release-actions .secondary-button { margin: 0; }
+.factory-composer {
+  position: sticky;
+  z-index: 1;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  max-width: 760px;
+  margin: 24px auto 0;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-window);
+  background: var(--surface-translucent);
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(var(--surface-blur));
+}
+.factory-composer textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 160px;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.factory-composer textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+.factory-composer .primary-button, .factory-composer .secondary-button { margin: 0; }
+.factory-composer > p { grid-column: 1 / -1; margin: 0; color: var(--text-muted); font-size: 12px; }
 .task-card-title {
   max-width: 100%;
   padding: 0;
@@ -1146,6 +1179,11 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 @media (max-width: 900px) {
   .task-release-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .task-release-actions { align-items: start; justify-items: start; }
+  .factory-composer { grid-template-columns: minmax(0, 1fr) auto; }
+  .factory-composer textarea { grid-column: 1 / -1; grid-row: 1; }
+  .factory-composer > p { grid-row: 3; }
+  .factory-composer .primary-button { grid-column: 1; }
+  .factory-composer .secondary-button { grid-column: 2; }
 }
 
 @media (max-width: 700px) {

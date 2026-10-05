@@ -6,6 +6,7 @@ import { sharedScreenContext, type CameraController, type ScreenShareController 
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
 import { MarkdownContent } from './MarkdownContent';
+import { useConversationIntents } from './conversation-intents';
 import {
   createChatSession,
   loadImageArtifactUrl,
@@ -118,6 +119,7 @@ export function ConversationHistory({
   camera?: CameraController;
 }) {
   const { onVoiceActiveChange } = useVoiceWorkspace();
+  const conversationIntents = useConversationIntents();
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -245,9 +247,8 @@ export function ConversationHistory({
     }
   }
 
-  function sendMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const text = draftValue.current.trim();
+  const submitText = useCallback((value: string) => {
+    const text = value.trim();
     if (!text || voiceActive) return;
     if (isSharedBrowserRequest(text) && !screenShare?.sharing) {
       setTurnError('Share the Chrome tab you want Jarvis to use, then ask again.');
@@ -264,6 +265,22 @@ export function ConversationHistory({
     setTurnError('');
     const queued = { id: ++nextQueueId.current, text, language };
     setQueue((current) => [...current, queued]);
+  }, [camera?.sharing, language, screenShare?.sharing, session, visionContext, voiceActive]);
+
+  useEffect(() => {
+    const intent = conversationIntents.pending[0];
+    if (!intent) return;
+    const timer = window.setTimeout(() => {
+      if (intent.type === 'message') submitText(intent.text);
+      else document.querySelector<HTMLButtonElement>('[aria-label="Start voice"]')?.focus({ preventScroll: true });
+      conversationIntents.consume(intent.id);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [conversationIntents, submitText]);
+
+  function sendMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    submitText(draftValue.current);
   }
 
   const runTurn = useCallback(async (queued: QueuedMessage) => {

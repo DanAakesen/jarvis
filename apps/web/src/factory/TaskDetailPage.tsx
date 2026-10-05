@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { backendFetch } from '../backend-request';
 import { Link } from 'react-router-dom';
 import { streamTaskEvents } from '../task-events';
+import { fetchReleaseView } from './release-data';
+import type { PullRequest, ReleaseView } from './release-data';
 import { TaskControls } from './TaskControls';
 
 type TaskState = 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
@@ -136,6 +138,25 @@ function isTaskDetail(value: unknown): value is TaskDetail {
 function isProjectLink(value: unknown): value is ProjectLink {
   return isObject(value) && isSqlId(value.id) && typeof value.name === 'string' &&
     typeof value.repo === 'string' && repositoryPattern.test(value.repo);
+}
+
+function isPullRequest(value: unknown): value is PullRequest {
+  return isObject(value) && typeof value.id === 'string' &&
+    typeof value.number === 'number' && Number.isSafeInteger(value.number) && value.number > 0 &&
+    typeof value.branch === 'string' && typeof value.headSha === 'string' &&
+    ['open', 'merged', 'closed'].includes(String(value.state)) &&
+    ['pending', 'passed', 'failed'].includes(String(value.checks)) &&
+    (value.taskId === null || isSqlId(value.taskId));
+}
+
+function isProjectReleaseData(
+  value: unknown,
+  projectId: string,
+): value is Pick<ReleaseView, 'project' | 'pullRequests'> {
+  return isObject(value) && isObject(value.project) && value.project.id === projectId &&
+    typeof value.project.name === 'string' && typeof value.project.repo === 'string' &&
+    repositoryPattern.test(value.project.repo) && Array.isArray(value.pullRequests) &&
+    value.pullRequests.every(isPullRequest);
 }
 
 function isOriginMessage(value: unknown): value is OriginMessage {
@@ -305,6 +326,10 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
   });
   const [project, setProject] = useState<ProjectLink | null>(null);
   const [projectKey, setProjectKey] = useState('');
+  const [releaseLookup, setReleaseLookup] = useState<{
+    key: string;
+    value: Pick<ReleaseView, 'project' | 'pullRequests'> | null;
+  }>({ key: '', value: null });
   const [originMessage, setOriginMessage] = useState<{ key: string; value: OriginMessage | null }>({
     key: '',
     value: null,
@@ -328,13 +353,20 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
   const previewEvents = task?.events.slice(-5).reverse() ?? [];
   const projectRequestKey = `${backendUrl ?? ''}:${task?.projectId ?? ''}`;
   const linkedProject = projectKey === projectRequestKey ? project : null;
+  const linkedReleaseData = releaseLookup.key === projectRequestKey ? releaseLookup.value : null;
   const currentStreamStatus = stream.key === requestKey ? stream.status : 'connecting';
   const taskProjectId = task?.projectId ?? '';
   const taskOriginMessageId = task?.originMessageId ?? null;
   const originMessageKey = `${requestKey}:${taskOriginMessageId ?? ''}`;
   const sourceMessage = originMessage.key === originMessageKey ? originMessage.value : null;
   const sourceMessageLoading = taskOriginMessageId !== null && originMessage.key !== originMessageKey;
-  const taskBranchUrl = branchUrl(linkedProject, task?.branch ?? null);
+  const taskBranchUrl = branchUrl(linkedReleaseData?.project ?? linkedProject, task?.branch ?? null);
+  const linkedPullRequest = compact
+    ? linkedReleaseData?.pullRequests.find((pullRequest) => pullRequest.taskId === task?.id)
+    : undefined;
+  const pullRequestUrl = linkedPullRequest && linkedReleaseData
+    ? `https://github.com/${linkedReleaseData.project.repo}/pull/${linkedPullRequest.number}`
+    : null;
 
   useEffect(() => {
     let active = true;
@@ -422,6 +454,28 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
+    if (!compact || !backendUrl || !taskProjectId) {
+      return () => { active = false; controller.abort(); };
+    }
+    void fetchReleaseView(backendUrl, taskProjectId, getAccessToken, controller.signal).then((value: unknown) => {
+      if (active) {
+        setReleaseLookup({
+          key: projectRequestKey,
+          value: isProjectReleaseData(value, taskProjectId) ? value : null,
+        });
+      }
+    }).catch(() => {
+      if (active) setReleaseLookup({ key: projectRequestKey, value: null });
+    });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [backendUrl, compact, getAccessToken, projectRequestKey, taskProjectId]);
+
+  useEffect(() => {
+    let active = true;
     if (!backendUrl || !taskOriginMessageId) return () => { active = false; };
     void loadOriginMessage(backendUrl, getAccessToken, taskOriginMessageId).then((value) => {
       if (active) setOriginMessage({ key: originMessageKey, value });
@@ -480,7 +534,9 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
             <div><dt>State</dt><dd>{task.state === 'NeedsAttention' ? 'Needs attention' : task.state === 'PauseRequested' ? 'Pause requested' : task.state}</dd></div>
             {compact && <div><dt>Activity</dt><dd>{task.events.at(-1)?.summary ?? 'Not reported'}</dd></div>}
             {reason && <div><dt>Reason</dt><dd>{reason}</dd></div>}
-            <div><dt>Project</dt><dd><Link to={`/factory/projects/${task.projectId}`}>{linkedProject?.name ?? `Project ${task.projectId}`}</Link></dd></div>
+            <div><dt>Project</dt><dd><Link to={`/factory/projects/${task.projectId}`}>
+              {linkedReleaseData?.project.name ?? linkedProject?.name ?? `Project ${task.projectId}`}
+            </Link></dd></div>
             <div><dt>Agent</dt><dd>{task.agent === 'codex' ? 'Codex' : 'Copilot'}</dd></div>
             <div><dt>Model override</dt><dd>{task.modelOverride ?? 'Provider default'}</dd></div>
             <div><dt>Reasoning override</dt><dd>{task.reasoningOverride ?? 'Provider default'}</dd></div>
@@ -489,8 +545,12 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                 ? <a href={taskBranchUrl} target="_blank" rel="noreferrer">{task.branch}</a>
                 : task.branch
               : 'Not available'}</dd></div>
-            <div><dt>Pull request</dt><dd>Not reported</dd></div>
-            <div><dt>Checks</dt><dd>Not reported</dd></div>
+            <div><dt>Pull request</dt><dd>{pullRequestUrl
+              ? <a href={pullRequestUrl} target="_blank" rel="noreferrer">#{linkedPullRequest!.number}</a>
+              : 'Not reported'}</dd></div>
+            <div><dt>Checks</dt><dd>{linkedPullRequest
+              ? <span className={`release-status state-${linkedPullRequest.checks}`}>{linkedPullRequest.checks}</span>
+              : 'Not reported'}</dd></div>
             <div><dt>Created</dt><dd>{formatDate(task.createdAt)}</dd></div>
             <div><dt>Started</dt><dd>{formatDate(task.startedAt)}</dd></div>
             <div><dt>Finished</dt><dd>{formatDate(task.finishedAt)}</dd></div>
@@ -512,7 +572,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
           </dl>
           <section className="task-detail-section task-actions" aria-labelledby="actions-heading">
             <h2 id="actions-heading">Task actions</h2>
-            <p id="pull-request-unavailable">Pull-request links are not reported until the GitHub integration is available.</p>
+            {!pullRequestUrl && <p id="pull-request-unavailable">Pull-request links are not reported until the GitHub integration is available.</p>}
             <TaskControls
               backendUrl={backendUrl}
               getAccessToken={getAccessToken}
@@ -530,11 +590,15 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                   }
                   : current)}
             />
-            <div className="action-row">
-              <button className="secondary-button" type="button" disabled aria-describedby="pull-request-unavailable">
-                Open pull request
-              </button>
-            </div>
+            {pullRequestUrl
+              ? <div className="action-row">
+                <a className="secondary-button" href={pullRequestUrl} target="_blank" rel="noreferrer">Open pull request</a>
+              </div>
+              : <div className="action-row">
+                <button className="secondary-button" type="button" disabled aria-describedby="pull-request-unavailable">
+                  Open pull request
+                </button>
+              </div>}
           </section>
           {compact && (
             <dl className="task-meta task-sandbox-summary">
@@ -544,7 +608,12 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                   : 'Not reported'}
               </dd></div>
               <div><dt>Heartbeat</dt><dd>Not reported</dd></div>
-              <div><dt>Writable disk</dt><dd>{measurements.length ? formatDate(measurements.at(-1)!.event.at) : 'Not reported'}</dd></div>
+              <div><dt>Writable disk</dt><dd>{measurements.length
+                ? <>
+                  {formatDisk(measurements.at(-1)!.reading.disk_free_bytes)} free of {formatDisk(measurements.at(-1)!.reading.disk_total_bytes)}
+                  <small>Measured {formatDate(measurements.at(-1)!.event.at)} · threshold {formatDisk(measurements.at(-1)!.reading.threshold_bytes)}</small>
+                </>
+                : 'Not reported'}</dd></div>
             </dl>
           )}
           {!compact && <section className="task-detail-section" aria-labelledby="disk-heading">
@@ -670,9 +739,9 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
             </>
             )}
           </section>
-          {compact && <Link className="task-open-full" to={`/factory/tasks/${taskId}`}>Open full task</Link>}
         </>
       )}
+      {compact && <Link className="task-open-full" to={`/factory/tasks/${taskId}`}>Open full task</Link>}
     </section>
   );
 }

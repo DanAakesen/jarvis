@@ -7,6 +7,7 @@ import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
 import { areas } from './areas';
 import { ContextPanel, ContextPanelProvider } from './ContextPanel';
+import { ConversationIntentProvider } from './ConversationIntentProvider';
 import type { CameraController } from './screen-sharing';
 import { useCamera } from './screen-sharing';
 import { useContextPanel } from './context-panel-state';
@@ -113,9 +114,11 @@ function Shell({ signedIn, config, session, camera }: {
   camera: CameraController;
 }) {
   return (
-    <ContextPanelProvider>
-      <ShellLayout signedIn={signedIn} config={config} session={session} camera={camera} />
-    </ContextPanelProvider>
+    <ConversationIntentProvider>
+      <ContextPanelProvider>
+        <ShellLayout signedIn={signedIn} config={config} session={session} camera={camera} />
+      </ContextPanelProvider>
+    </ConversationIntentProvider>
   );
 }
 

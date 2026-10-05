@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchReleaseView } from './ReleasePage';
-import type { ReleaseView } from './ReleasePage';
+import { fetchReleaseView } from './release-data';
+import type { ReleaseView } from './release-data';
 
 const idPattern = /^[1-9]\d{0,18}$/u;
 const releaseStatuses = ['building', 'deploying', 'released', 'failed'];
@@ -69,38 +69,43 @@ export function TaskReleaseBar({
   getAccessToken: () => Promise<string>;
   projectId: string;
 }) {
-  const [view, setView] = useState<ReleaseView | null>(null);
+  const [view, setView] = useState<{ data: ReleaseView; stale: boolean } | null>(null);
   const [result, setResult] = useState<{
-    projectId: string;
+    requestKey: string;
     status: 'loading' | 'ready' | 'error';
     message?: string;
-  }>({ projectId: '', status: 'loading' });
+  }>({ requestKey: '', status: 'loading' });
   const [refreshKey, setRefreshKey] = useState(0);
-  const currentView = view?.project.id === projectId ? view : null;
-  const currentResult = result.projectId === projectId ? result : null;
+  const requestKey = `${backendUrl ?? ''}:${projectId}:${refreshKey}`;
+  const currentView = view?.data.project.id === projectId ? view.data : null;
+  const currentStale = view?.data.project.id === projectId ? view.stale : false;
+  const currentResult = result.requestKey === requestKey ? result : null;
 
   useEffect(() => {
     const controller = new AbortController();
     const setError = (message: string) => {
-      if (!controller.signal.aborted) setResult({ projectId, status: 'error', message });
+      if (!controller.signal.aborted) setResult({ requestKey, status: 'error', message });
     };
-    if (!backendUrl) {
-      setError('Release data is unavailable until the backend is deployed.');
+    if (!projectId) {
+      return () => controller.abort();
+    } else if (!backendUrl) {
+      void Promise.resolve().then(() => setError('Release data is unavailable until the backend is deployed.'));
     } else if (!idPattern.test(projectId)) {
-      setError('Select an active project to load release context.');
+      void Promise.resolve().then(() => setError('Select an active project to load release context.'));
     } else {
-      setResult({ projectId, status: 'loading' });
       void fetchReleaseView(backendUrl, projectId, getAccessToken, controller.signal).then((data: unknown) => {
         if (controller.signal.aborted) return;
         if (!isReleaseView(data, projectId)) throw new Error('Jarvis returned invalid release data.');
-        setView(data);
-        setResult({ projectId, status: 'ready' });
+        const stale = data.graph !== null &&
+          Date.now() - Date.parse(data.graph.fetchedAt) > maxGraphAgeMs;
+        setView({ data, stale });
+        setResult({ requestKey, status: 'ready' });
       }).catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : 'Release data could not be loaded. Try again.');
       });
     }
     return () => controller.abort();
-  }, [backendUrl, getAccessToken, projectId, refreshKey]);
+  }, [backendUrl, getAccessToken, projectId, refreshKey, requestKey]);
 
   if (!projectId) {
     return (
@@ -137,8 +142,7 @@ export function TaskReleaseBar({
     ? [...currentView.graph.commits].sort((left, right) =>
       Date.parse(right.committedAt) - Date.parse(left.committedAt)).slice(0, 3)
     : [];
-  const stale = currentView.graph !== null &&
-    Date.now() - Date.parse(currentView.graph.fetchedAt) > maxGraphAgeMs;
+  const loading = !currentResult || currentResult.status === 'loading';
   const releaseUrl = latestRelease
     ? `/factory/projects/${projectId}/releases/${encodeURIComponent(latestRelease.id)}`
     : `/factory/projects/${projectId}/releases`;
@@ -198,7 +202,8 @@ export function TaskReleaseBar({
                 </li>
               ))}
             </ol>}
-        {stale && <p className="task-release-stale" role="status">Commit data may be stale. Fetched {formatDate(currentView.graph!.fetchedAt)}.</p>}
+        {currentStale && currentView.graph &&
+          <p className="task-release-stale" role="status">Commit data may be stale. Fetched {formatDate(currentView.graph.fetchedAt)}.</p>}
         {currentResult?.status === 'error' && currentResult.message && (
           <p className="task-release-stale" role="alert">Refresh failed; showing the last loaded project data. {currentResult.message}</p>
         )}
@@ -207,9 +212,9 @@ export function TaskReleaseBar({
         {currentView.releases.length === 0
           ? <p>No releases have been recorded for this project.</p>
           : null}
-        <button className="secondary-button" type="button" disabled={currentResult?.status === 'loading'}
+        <button className="secondary-button" type="button" disabled={loading}
           onClick={() => setRefreshKey((key) => key + 1)}>
-          {currentResult?.status === 'loading' ? 'Refreshing…' : 'Refresh'}
+          {loading ? currentView ? 'Refreshing…' : 'Loading…' : 'Refresh'}
         </button>
         <Link className="secondary-button" to={releaseUrl}>Open release</Link>
       </div>
