@@ -191,10 +191,14 @@ The voice orb follows status transitions reported by the browser voice client an
 The shared top bar reports when an actual chat turn or voice response is running. The orb's audio response uses decoded playback samples, not microphone input or an estimated level. The shell and current pages share the light/dark visual system; unavailable tool-call and workspace-window events are never inferred.
 
 Temporary client windows support title dragging, edge resizing and icon lifecycle
-actions. Keyboard arrangement lives under Arrange: focus Move or Resize and use
-arrow keys (Shift for larger layered steps); Escape closes the menu and returns
-focus. All presentation motion preserves readable states under reduced motion.
-P8-21 changes no conversation, workspace-delivery or persistence contracts.
+actions. Each window's accessible overflow control opens its keyboard Arrange
+actions; the workspace header retains its shared tile/layer control. Focus Move
+or Resize and use arrow keys (Shift for larger layered steps); Escape closes the
+disclosure and returns focus. The shell shows Jarvis once on the home route and
+adds the area and matching page on deeper routes. A local-fixture footer belongs
+only to screenshot fixtures and is absent from the production UI. All
+presentation motion preserves readable states under reduced motion. P8-21 and
+P8-22 change no conversation, workspace-delivery or persistence contracts.
 
 #### Software Factory — task view
 

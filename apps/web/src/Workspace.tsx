@@ -564,7 +564,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                 </h3>
                 <div className="workspace-window-actions">
                   {!maximized && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
-                    <summary className="workspace-arrange-trigger" aria-label={`Arrange ${view.title}`} title={`Arrange ${view.title}`}>
+                    <summary className="workspace-arrange-trigger" role="button" aria-label={`Arrange ${view.title}`} title={`Arrange ${view.title}`}>
                       <WindowIcon name="more" />
                     </summary>
                     <div className="workspace-arrange-options">

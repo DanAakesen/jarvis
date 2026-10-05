@@ -11,8 +11,8 @@ const views: WorkspaceView[] = [
   { id: 'sources', title: 'Sources', content: { status: 'loading' } },
 ];
 
-function arrangeTrigger(view: HTMLElement) {
-  return view.querySelector<HTMLElement>('.workspace-arrange-trigger')!;
+function arrangeTrigger(view: HTMLElement, title: string) {
+  return within(view).getByRole('button', { name: `Arrange ${title}` });
 }
 
 function JarvisRequestButtons() {
@@ -60,7 +60,7 @@ describe('Workspace', () => {
 
     for (const view of views) {
       const window = screen.getByRole('article', { name: view.title });
-      const trigger = arrangeTrigger(window);
+      const trigger = arrangeTrigger(window, view.title);
       const actions = window.querySelector('.workspace-window-actions')!;
 
       expect(trigger.getAttribute('aria-label')).toBe(`Arrange ${view.title}`);
@@ -82,7 +82,7 @@ describe('Workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Layer views' }));
     expect(screen.getByRole('button', { name: 'Layer views' }).getAttribute('aria-pressed')).toBe('true');
     const researchWindow = within(canvas).getByRole('article', { name: 'Research summary' });
-    await user.click(arrangeTrigger(researchWindow));
+    await user.click(arrangeTrigger(researchWindow, 'Research summary'));
     const move = screen.getByRole('button', { name: 'Move Research summary. Use arrow keys to move or reorder.' });
     move.focus();
     await user.keyboard('{ArrowRight}');
@@ -112,7 +112,7 @@ describe('Workspace', () => {
 
     const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
     const researchWindow = within(canvas).getByRole('article', { name: 'Research summary' });
-    await user.click(arrangeTrigger(researchWindow));
+    await user.click(arrangeTrigger(researchWindow, 'Research summary'));
     await user.click(screen.getByRole('button', { name: 'Move later Research summary' }));
     expect(within(canvas).getAllByRole('article').map((view) => view.textContent?.includes('Research summary')))
       .toEqual([false, true]);
@@ -128,7 +128,7 @@ describe('Workspace', () => {
     render(<Workspace views={views} />);
     const research = screen.getByRole('article', { name: 'Research summary' });
     expect(within(research).getByRole('button', { name: /^Move Research summary\./ }).closest('details')?.open).toBe(false);
-    const summary = arrangeTrigger(research);
+    const summary = arrangeTrigger(research, 'Research summary');
     expect(summary.getAttribute('aria-label')).toBe('Arrange Research summary');
     summary.focus();
     await user.keyboard('{Enter}');
@@ -162,7 +162,7 @@ describe('Workspace', () => {
     await user.click(within(screen.getByRole('heading', { name: 'Workspace' }).parentElement!).getByText('Arrange'));
     await user.click(screen.getByRole('button', { name: 'Layer views' }));
     const research = screen.getByRole('article', { name: 'Research summary' });
-    await user.click(arrangeTrigger(research));
+    await user.click(arrangeTrigger(research, 'Research summary'));
     const move = within(research).getByRole('button', { name: /^Move Research summary\./ });
     move.focus();
     expect(research.style.getPropertyValue('--workspace-x')).toBe('8%');
@@ -248,7 +248,7 @@ describe('Workspace', () => {
     const raisedSelector = workspaceStyles.match(/([^{}]+)\{\s*z-index: 1001;\s*\}/)?.[1]?.trim();
     expect(raisedSelector).toBe('.workspace-canvas:not(.workspace-canvas-has-maximized) .workspace-window:has(.workspace-arrange-menu[open])');
     const research = screen.getByRole('article', { name: 'Research summary' });
-    await user.click(arrangeTrigger(research));
+    await user.click(arrangeTrigger(research, 'Research summary'));
     expect(research.matches(raisedSelector!)).toBe(true);
     await user.click(screen.getByRole('button', { name: 'Maximise Sources' }));
     expect(research.querySelector('details')?.open).toBe(true);
@@ -290,7 +290,7 @@ describe('Workspace', () => {
     await user.click(within(screen.getByRole('heading', { name: 'Workspace' }).parentElement!).getByText('Arrange'));
     await user.click(screen.getByRole('button', { name: 'Layer views' }));
     const sourcesWindow = screen.getByRole('article', { name: 'Sources' });
-    await user.click(arrangeTrigger(sourcesWindow));
+    await user.click(arrangeTrigger(sourcesWindow, 'Sources'));
     await user.click(screen.getByRole('button', { name: 'Bring forward Sources' }));
     unmount();
 
