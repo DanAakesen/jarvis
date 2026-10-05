@@ -500,7 +500,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   transition: opacity var(--motion-state) var(--ease-standard), transform var(--motion-state) var(--ease-enter), box-shadow var(--motion-press) var(--ease-standard), display var(--motion-state) allow-discrete;
 }
 .workspace-window:focus-within { box-shadow: var(--panel-shadow), 0 0 0 2px var(--focus); }
-.workspace-window:has(.workspace-arrange-menu[open]) { z-index: 1001; }
+.workspace-canvas:not(.workspace-canvas-has-maximized) .workspace-window:has(.workspace-arrange-menu[open]) { z-index: 1001; }
 .workspace-window-dragging { user-select: none; box-shadow: var(--panel-shadow), 0 0 0 2px var(--focus); }
 @starting-style {
   .workspace-window { opacity: 0; transform: translateY(8px) scale(.98); }

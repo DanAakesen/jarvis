@@ -281,8 +281,9 @@ phone concepts depict voice, so they are appearance references, not equivalent
 typing-state captures. Browser checks covered 44px composer targets, visible
 focus, relative metadata, 320/280px overflow, draft reflow, pending controls,
 title dragging, edge resizing, Arrange keyboard/Escape focus, phone popup bounds,
-minimise/restore and static readable reduced-motion states. Settled surface
-contrast checks exceed AA. `npm test --workspace @jarvis/web` passed 189 tests;
+minimise/restore, maximised-window precedence over another open Arrange menu,
+and static readable reduced-motion states. Settled surface
+contrast checks exceed AA. `npm test --workspace @jarvis/web` passed 190 tests;
 `npm run lint --workspace @jarvis/web` and `npm run build --workspace @jarvis/web`
 passed (existing chunk-size warning). Real phone keyboards, hardware audio,
 live Entra/Azure, tool-call event delivery and generated/agent-directed windows

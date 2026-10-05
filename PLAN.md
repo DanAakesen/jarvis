@@ -4,7 +4,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **P8-21 (#293):** Complete offline. The main conversation now uses the selected Concept B/C surfaces, a floating DA/EN composer, quiet relative metadata and streaming feedback. Client windows support title dragging, edge resizing and compact Arrange shortcuts with reduced-motion-safe lifecycle transitions. Web tests (189), lint and build pass; labelled desktop/phone screenshots and concept comparisons are committed under `docs/ui/screenshots/p8-21-*`. Next: continue the existing P8-10/P8-11 voice-workspace and P8-14/P8-15/P8-16 runtime tasks; live auth, physical audio and agent-delivered windows remain unverified.
+- **P8-21 (#293):** Complete offline. The main conversation now uses the selected Concept B/C surfaces, a floating DA/EN composer, quiet relative metadata and streaming feedback. Client windows support title dragging, edge resizing and compact Arrange shortcuts with reduced-motion-safe lifecycle transitions. Web tests (190), lint and build pass; labelled desktop/phone screenshots and concept comparisons are committed under `docs/ui/screenshots/p8-21-*`. Next: continue the existing P8-10/P8-11 voice-workspace and P8-14/P8-15/P8-16 runtime tasks; live auth, physical audio and agent-delivered windows remain unverified.
 
 - **P7-06 (#204):** The .NET 10 Windows tray bridge, Dan-only authenticated backend protocol, allow-listed PC tools, fake-bridge tests, Entra bootstrap, optional deployment setting, installer, and setup documentation are implemented offline. After merge, the coordinator must provision Entra, deploy, install on Dan's PC, and verify sign-in and opening live. P8 owns any future UI.
 

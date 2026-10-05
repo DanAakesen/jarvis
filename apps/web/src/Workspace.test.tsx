@@ -212,6 +212,22 @@ describe('Workspace', () => {
     expect(mobile).toContain('grid-template-columns: minmax(0, 1fr) repeat(3, 44px); gap: 4px;');
   });
 
+  it('does not raise an open Arrange window above a different maximised window', async () => {
+    const user = userEvent.setup();
+    render(<Workspace views={views} />);
+    const workspaceStyles = readFileSync('src/styles.css', 'utf8');
+    const raisedSelector = workspaceStyles.match(/([^{}]+)\{\s*z-index: 1001;\s*\}/)?.[1]?.trim();
+    expect(raisedSelector).toBe('.workspace-canvas:not(.workspace-canvas-has-maximized) .workspace-window:has(.workspace-arrange-menu[open])');
+    const research = screen.getByRole('article', { name: 'Research summary' });
+    await user.click(within(research).getByText('Arrange'));
+    expect(research.matches(raisedSelector!)).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Maximise Sources' }));
+    expect(research.querySelector('details')?.open).toBe(true);
+    expect(research.matches(raisedSelector!)).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Restore size of Sources' }));
+    expect(research.matches(raisedSelector!)).toBe(true);
+  });
+
   it('shows empty, loading, error and interrupted states and recovers failed actions', async () => {
     const user = userEvent.setup();
     const retry = vi.fn().mockRejectedValue(new Error('private detail'));
