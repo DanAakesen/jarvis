@@ -24,12 +24,12 @@ export function createJarvisStageOrb() {
         float micro=pow(abs(sin(a*37.-lat*48.+sin(a*4.+uTime*.18)*2.)),54.);
         float fine=pow(abs(sin(a*26.+lat*39.+sin(lat*9.-uTime*.25)*4.)),40.);
         float thread=fine*smoothstep(.08,.42,rim)*mix(.025,.11,uAwake);
-        float detail=(veil*.15+micro*.035)*(.12+rim*.88);
-        float strength=mix(.35,1.15,uAwake);
+        float detail=(veil*.15+micro*.035)*(.12+rim*.88)*(1.+uEnergy*.45);
+        float strength=mix(.35,1.15,uAwake)*(1.+uEnergy*.18);
         vec3 c=mix(vec3(.18,.38,.48),uColor,uAwake)*(rim*2.25+detail*1.4)*strength;
         c+=vec3(.48,.78,1.)*pow(rim,6.)*.55*strength;
         c+=uColor*thread*2.4;
-        gl_FragColor=vec4(c,clamp(rim*.66+detail*.45+thread*.4+.004,0.,.78));}`,
+        gl_FragColor=vec4(c,clamp(rim*.66+detail*.45+thread*.4+uEnergy*.03+.004,0.,.78));}`,
   }));
   shell.renderOrder = 3;
   orb.add(shell);
@@ -98,7 +98,7 @@ export function createJarvisStageOrb() {
   const core = new THREE.Group();
   core.scale.setScalar(1.13);
   orb.add(core);
-  const coreUniforms = { uTime: uniforms.uTime, uAwake: uniforms.uAwake };
+  const coreUniforms = { uTime: uniforms.uTime, uAwake: uniforms.uAwake, uAudioLevel: uniforms.uEnergy };
   const nodes: THREE.Vector3[] = [];
   for (let index = 0; index < 64; index += 1) {
     const angle = index * 2.39996;
@@ -144,9 +144,9 @@ export function createJarvisStageOrb() {
       void main(){vUv=uv;vec3 p=position;
         p+=normalize(p+vec3(.0001))*sin(p.y*17.+p.z*13.+uTime*.48)*.009;
         gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,
-    fragmentShader: `uniform float uTime;uniform float uAwake;varying vec2 vUv;
-      void main(){float pulse=pow(.5+.5*sin(vUv.x*8.-uTime*(.3+uAwake*.6)),8.);
-        float energy=mix(.16,.92,uAwake);
+    fragmentShader: `uniform float uTime;uniform float uAwake;uniform float uAudioLevel;varying vec2 vUv;
+      void main(){float pulse=pow(.5+.5*sin(vUv.x*8.-uTime*(.3+uAwake*.6+uAudioLevel*.4)),8.);
+        float energy=mix(.16,.78,uAwake)+uAudioLevel*.12;
         vec3 c=mix(vec3(1.,.31,.04),vec3(1.,.48,.13),pulse);
         gl_FragColor=vec4(c*(1.2+pulse*.6),energy*(.64+pulse*.25));}`,
   });
@@ -177,9 +177,9 @@ export function createJarvisStageOrb() {
   pointGeometry.setAttribute('aSize', new THREE.Float32BufferAttribute(pointSizes, 1));
   const sparks = new THREE.Points(pointGeometry, new THREE.ShaderMaterial({
     uniforms: coreUniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    vertexShader: `attribute float aSeed;attribute float aSize;uniform float uTime;uniform float uAwake;varying float vEnergy;
+    vertexShader: `attribute float aSeed;attribute float aSize;uniform float uTime;uniform float uAwake;uniform float uAudioLevel;varying float vEnergy;
       void main(){vec3 p=position;p+=normalize(p+vec3(.0001))*sin(uTime*.42+aSeed*12.)*.012;
-        vEnergy=(.18+.82*uAwake)*(.45+.55*pow(.5+.5*sin(uTime*(.28+uAwake*.5)+aSeed*21.),4.));
+        vEnergy=min(1.,(.18+.82*uAwake+.2*uAudioLevel)*(.45+.55*pow(.5+.5*sin(uTime*(.28+uAwake*.5)+aSeed*21.),4.)));
         vec4 v=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*v;
         float scale=length(modelMatrix[0].xyz);
         float pointScale=scale<1.?scale/2.3:1.;
@@ -207,7 +207,7 @@ export function createJarvisStageOrb() {
     uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: `attribute float aSeed;uniform float uTime;uniform float uAwake;varying float vAlpha;
       void main(){vec3 p=position*(1.+sin(uTime*.3+aSeed*12.)*.005);
-        vAlpha=(.15+.6*uAwake)*(.25+.75*pow(.5+.5*sin(uTime*.25+aSeed*50.),4.));
+        vAlpha=(.15+.6*uAwake+uEnergy*.08)*(.25+.75*pow(.5+.5*sin(uTime*.25+aSeed*50.),4.));
         vec4 v=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*v;gl_PointSize=clamp((32.+48.*uAwake)/max(1.,-v.z),1.4,5.);}`,
     fragmentShader: `uniform vec3 uColor;varying float vAlpha;void main(){float d=length(gl_PointCoord-.5)*2.;if(d>1.)discard;
       gl_FragColor=vec4(mix(uColor,vec3(.8,.95,1.),.4),pow(1.-d,2.)*vAlpha);}`,
@@ -215,9 +215,10 @@ export function createJarvisStageOrb() {
   motes.renderOrder = 4;
   orb.add(motes);
 
-  function update(time: number, awake: number) {
+  function update(time: number, awake: number, audioLevel: number) {
     uniforms.uTime.value = time;
     uniforms.uAwake.value = awake;
+    uniforms.uEnergy.value = audioLevel;
     core.rotation.set(Math.sin(time * 0.075) * 0.09, time * 0.045, Math.cos(time * 0.07) * 0.05);
     ribbons.rotation.y = time * 0.028;
     motes.rotation.y = -time * 0.012;
