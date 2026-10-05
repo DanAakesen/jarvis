@@ -34,6 +34,21 @@ describe('SQL conversation store', () => {
     expect(query.mock.calls[0]?.[0]).toContain('INSERT INTO dbo.jarvis_sessions');
   });
 
+  it('creates a phone session', async () => {
+    const startedAt = new Date('2026-10-03T12:00:00Z');
+    const { store, input, query } = fixture({
+      recordset: [{ id: '42', channel: 'phone', language: 'da', started_at: startedAt, ended_at: null }],
+      recordsets: [],
+      rowsAffected: [1],
+    });
+
+    await expect(store.createSession({ channel: 'phone', language: 'da' })).resolves.toMatchObject({
+      id: '42', channel: 'phone', language: 'da', startedAt, endedAt: null,
+    });
+    expect(input).toHaveBeenCalledWith('channel', sql.NVarChar(16), 'phone');
+    expect(query.mock.calls[0]?.[0]).toContain('INSERT INTO dbo.jarvis_sessions');
+  });
+
   it('loads the session channel, language, and active state', async () => {
     const startedAt = new Date('2026-10-03T12:00:00Z');
     const endedAt = null;

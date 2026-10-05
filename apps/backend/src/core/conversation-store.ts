@@ -1,4 +1,4 @@
-export type ConversationChannel = 'chat' | 'voice';
+export type ConversationChannel = 'chat' | 'voice' | 'phone';
 export type ConversationLanguage = 'da' | 'en';
 export type ConversationRole = 'dan' | 'jarvis';
 
