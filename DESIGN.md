@@ -123,7 +123,9 @@ sign-in; the header wraps on narrow screens.
   Scratch-auth Chromium checks at 390 and 1280 px exercised Share, the visible
   status/Stop action, a mocked chat inspection, and stream cleanup; neither
   viewport overflowed or reported console errors. Real display capture and the
-  live backend/model remain unverified.
+  live backend/model remain unverified. P7-19 reuses these controls for shared-tab
+  tasks: an action request captures one fresh frame and its selected window label;
+  no new browser surface or persistent page content is introduced.
 - **Camera (P7-08):** the shared top-bar control explicitly starts/stops browser
   camera permission and shows an On/Off label on desktop; the pressed surface and
   camera icon retain the state on the narrowest phones. Chat and voice expose a

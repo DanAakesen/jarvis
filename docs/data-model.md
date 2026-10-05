@@ -565,6 +565,10 @@ Global Standard Global rates in
 2026 (1.3157 DKK/input million, 7.8941 DKK/output million), rounded to four
 decimal places. Usage marks screen-frame rows as estimated. The frame and its
 base64 request buffer are transient; neither is represented in the data model.
+P7-19's selected display label and bounded vision description are likewise
+request-only context for matching a live Chrome tab. They are excluded from
+conversation transcripts, task events and sensitive tool-call audit payloads;
+the existing `usage` frame/token accounting is the only persisted P7-05 data.
 
 ## 8 · Phone notifications
 
