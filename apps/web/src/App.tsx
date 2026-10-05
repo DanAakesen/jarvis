@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
@@ -17,6 +17,8 @@ import { useSignIn, type SignInSession } from './useSignIn';
 import { backendFetch } from './backend-request';
 import { Workspace, type WorkspaceController } from './Workspace';
 import { WorkspaceCommandContext } from './workspace-command-state';
+import { VoiceWorkspaceContext } from './voice-workspace-state';
+import { readVoiceWorkspacePreference } from './voice-workspace-preference';
 
 type ShellIconName = 'home' | 'factory' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close';
 
@@ -111,11 +113,21 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const navigationToggle = useRef<HTMLButtonElement>(null);
   const workspaceController = useRef<WorkspaceController>(null);
   const contextPanel = useContextPanel();
+  const [voiceActive, setVoiceActive] = useState(false);
+  const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const workspaceCommands = useMemo(() => ({
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0]) => (
       workspaceController.current?.dispatch(command) ?? false
     ),
+    minimiseAll: () => workspaceController.current?.minimiseAll(),
+    hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
   }), []);
+  const onVoiceActiveChange = useCallback((active: boolean) => {
+    if (active && readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart) {
+      workspaceController.current?.minimiseAll();
+    }
+    setVoiceActive(active);
+  }, []);
   const [navigationOpen, setNavigationOpen] = useState(() => (
     typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches
   ));
@@ -180,7 +192,9 @@ function ShellLayout({ signedIn, config, session, camera }: {
   }
 
   return (
-    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && navigationOpen} data-context-open={signedIn && contextPanel.isOpen}>
+    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && navigationOpen}
+      data-context-open={signedIn && contextPanel.isOpen} data-voice-active={voiceActive}
+      data-voice-has-windows={voiceHasWindows}>
       <a className="skip-link" href="#content">Skip to content</a>
       {signedIn && (
         <nav className="area-rail" aria-label="Areas">
@@ -260,12 +274,14 @@ function ShellLayout({ signedIn, config, session, camera }: {
       <main id="content" className="shell-main" tabIndex={-1}>
         {presenceError && <p className="browser-presence-error" role="alert">{presenceError}</p>}
         <WorkspaceCommandContext.Provider value={workspaceCommands}>
-          <Outlet />
-          {signedIn && (
-            <div className="workspace-shell-area" hidden={pathname !== '/'}>
-              <Workspace ref={workspaceController} views={[]} />
-            </div>
-          )}
+          <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange }}>
+            <Outlet />
+            {signedIn && (
+              <div className="workspace-shell-area" hidden={pathname !== '/'}>
+                <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows} />
+              </div>
+            )}
+          </VoiceWorkspaceContext.Provider>
         </WorkspaceCommandContext.Provider>
       </main>
       <footer className="bottom-bar">

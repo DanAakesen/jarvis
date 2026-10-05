@@ -86,7 +86,7 @@ describe('VoiceControls', () => {
       onStatus: (status: 'ready' | 'listening', message: string) => void;
     };
     act(() => options.onStatus('ready', 'Microphone is off.'));
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Stop voice' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'End voice' }));
     expect(instance.client.enableMicrophone).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Enable microphone' }));
     expect(instance.client.enableMicrophone).toHaveBeenCalledOnce();
@@ -98,7 +98,7 @@ describe('VoiceControls', () => {
     expect(instance.client.setMuted).toHaveBeenCalledWith(true);
     expect(screen.getByRole('button', { name: 'Unmute' }).getAttribute('aria-pressed')).toBe('true');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Stop voice' }));
+    fireEvent.click(screen.getByRole('button', { name: 'End voice' }));
     expect(instance.client.stop).toHaveBeenCalledOnce();
     expect(onSessionEnded).toHaveBeenCalledOnce();
     expect(screen.queryByRole('button', { name: 'Start voice' })).not.toBeNull();
@@ -141,7 +141,7 @@ describe('VoiceControls', () => {
     let finishFirst!: () => void;
     first.client.enableMicrophone.mockImplementationOnce(() => new Promise<void>((resolve) => { finishFirst = resolve; }));
     fireEvent.click(screen.getByRole('button', { name: 'Enable microphone' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Stop voice' }));
+    fireEvent.click(screen.getByRole('button', { name: 'End voice' }));
 
     const second = startSession();
     expect(screen.getByRole('button', { name: 'Enable microphone' })).toHaveProperty('disabled', false);

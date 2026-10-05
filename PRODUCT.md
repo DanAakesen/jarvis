@@ -331,7 +331,7 @@ The Usage page offers 7-, 30-, and 90-day periods plus all time. It shows task-l
 - What usage Codex and Copilot report per turn ([data model](docs/data-model.md#still-open)); P2-12 records offline package evidence, and actual fields remain a post-merge live check.
 - Whether Foundry sandboxes can get the documented 20 GiB disk (Decision 9).
 
-## Shared UI direction (4 October 2026; planned)
+## Shared UI direction (4 October 2026; confirmed, implementation in progress)
 
 The confirmed requirements and proposed feature placement are in [ui.md](ui.md).
 Jarvis has one typing shell with expandable navigation and context panels, and a
@@ -343,6 +343,16 @@ workspace; Dan can restore it from the tab, and Jarvis can request restore
 through the workspace command interface. Authenticated Jarvis delivery remains
 P8-15. Closing a view changes only the temporary workspace and does not delete
 conversation or source records.
+Voice enters immediately, hiding typing history and the composer. On desktop, the
+orb is centred without content windows and moves left when windows are present;
+the existing layout carries into voice and returns on natural end, connection
+failure, Escape, or End voice. A speech interruption leaves voice active. The
+optional “Minimise all windows when starting voice”
+setting is off by default; when enabled, windows return as workspace tabs. P8-10
+persists this preference through P8-17's account settings and mirrors it to
+device storage for immediate shell reads. P8-14 supplies the safe generated-list
+renderer; P8-15 supplies generated workspace windows and Jarvis-directed
+commands, and P8-16 supplies tool-call activity.
 Voice is explicitly started; the always-available assistant does not continuously
 listen. Desktop and phone layouts follow the mode/window rules in ui.md. Theme
 variables can be changed on demand and persist until changed again. Banking and

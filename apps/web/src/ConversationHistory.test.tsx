@@ -6,6 +6,7 @@ import { ConversationHistory } from './ConversationHistory';
 import type { CameraController } from './screen-sharing';
 import { JarvisActivityProvider } from './activity-provider';
 import { useJarvisActivity } from './activity-context';
+import { VoiceWorkspaceContext } from './voice-workspace-state';
 import type { VoiceClientOptions } from './voice-client';
 
 const { loadConversationHistory, createChatSession, sendChatTurn, voiceSessions } = vi.hoisted(() => ({
@@ -47,16 +48,18 @@ const assistantMessage = {
   id: '52', sessionId: '41', role: 'jarvis' as const, text: 'I am ready.', model: null, voiceMinutes: null, at: '2026-10-03T12:02:00.000Z',
 };
 
-function renderConversation(historyRefresh = 0, camera?: CameraController) {
+function renderConversation(historyRefresh = 0, camera?: CameraController, onVoiceActiveChange = vi.fn()) {
   return render(
     <JarvisActivityProvider>
       <MemoryRouter>
-        <ConversationHistory
-          client={client}
-          config={config}
-          historyRefresh={historyRefresh}
-          {...(camera ? { camera } : {})}
-        />
+        <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange }}>
+          <ConversationHistory
+            client={client}
+            config={config}
+            historyRefresh={historyRefresh}
+            {...(camera ? { camera } : {})}
+          />
+        </VoiceWorkspaceContext.Provider>
       </MemoryRouter>
     </JarvisActivityProvider>,
   );
@@ -360,7 +363,7 @@ describe('ConversationHistory', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(screen.queryByText('I started the task.')).not.toBeNull();
     expect(screen.getByText('I started the task.').closest('[hidden]')).not.toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Stop voice' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'End voice' }));
     if (exit === 'stop') {
       await user.keyboard('{Enter}');
     } else {
@@ -374,6 +377,41 @@ describe('ConversationHistory', () => {
     expect(document.activeElement).toBe(input);
     expect(screen.getByRole('button', { name: 'English' }).getAttribute('aria-pressed')).toBe('true');
     if (exit !== 'error') await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps the fullscreen voice session active through speaking interruption and ends on Escape', async () => {
+    const onVoiceActiveChange = vi.fn();
+    renderConversation(0, undefined, onVoiceActiveChange);
+    await screen.findByRole('heading', { name: 'What’s on your mind?' });
+    await userEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+
+    const voice = voiceSessions[0];
+    if (!voice) throw new Error('Voice client was not created.');
+    expect(onVoiceActiveChange).toHaveBeenLastCalledWith(true);
+    expect(screen.queryByRole('textbox')).toBeNull();
+
+    act(() => {
+      voice.onStatus('speaking', 'Jarvis is speaking.');
+      voice.onStatus('listening', 'Listening after interruption.');
+    });
+    expect(screen.getByText('Listening after interruption.').getAttribute('role')).toBe('status');
+    expect(onVoiceActiveChange).toHaveBeenCalledTimes(1);
+
+    const menu = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Workspace menu';
+    menu.append(summary);
+    menu.open = true;
+    document.body.append(menu);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(menu.open).toBe(false);
+    expect(document.activeElement).toBe(summary);
+    expect(onVoiceActiveChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onVoiceActiveChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
+    menu.remove();
   });
 
   it('switches reply language with keyboard buttons and sends in that language', async () => {

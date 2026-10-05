@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { useMemo, useRef, useState } from 'react';
+import { createRef, useMemo, useRef, useState } from 'react';
 import { Workspace, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { useWorkspaceCommands, WorkspaceCommandContext } from './workspace-command-state';
 import { readFileSync } from 'node:fs';
@@ -31,6 +31,8 @@ function JarvisWorkspaceRequest() {
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0]) => (
       controller.current?.dispatch(command) ?? false
     ),
+    minimiseAll: () => controller.current?.minimiseAll(),
+    hasVisibleViews: () => controller.current?.hasVisibleViews() ?? false,
   }), []);
   return (
     <WorkspaceCommandContext.Provider value={commands}>
@@ -122,7 +124,14 @@ describe('Workspace', () => {
     resize.focus();
     await user.keyboard('{ArrowDown}');
     expect(research.style.getPropertyValue('--workspace-rows')).toBe('2');
+    const documentEscape = vi.fn();
+    const listenForEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') documentEscape();
+    };
+    document.addEventListener('keydown', listenForEscape);
     await user.keyboard('{Escape}');
+    document.removeEventListener('keydown', listenForEscape);
+    expect(documentEscape).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(summary);
     expect(summary.closest('details')?.open).toBe(false);
     expect(resize.closest('details')?.open).toBe(false);
@@ -266,6 +275,22 @@ describe('Workspace', () => {
     unmount();
 
     expect(window.localStorage.length).toBe(before);
+  });
+
+  it('exposes voice layout state and minimises every visible view into restorable tabs', () => {
+    const controller = createRef<WorkspaceController>();
+    const onVisibleViewsChange = vi.fn();
+    render(<Workspace ref={controller} views={views} onVisibleViewsChange={onVisibleViewsChange} />);
+
+    expect(controller.current?.hasVisibleViews()).toBe(true);
+    expect(onVisibleViewsChange).toHaveBeenLastCalledWith(true);
+    act(() => controller.current?.minimiseAll());
+
+    expect(controller.current?.hasVisibleViews()).toBe(false);
+    expect(onVisibleViewsChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getAllByRole('button', { name: /^Restore /u })).toHaveLength(2);
+    act(() => controller.current?.dispatch({ operation: 'restore', viewId: 'research' }));
+    expect(controller.current?.hasVisibleViews()).toBe(true);
   });
 
   it('minimises into a tab, preserves mounted content, and restores focus by keyboard', async () => {

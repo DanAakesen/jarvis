@@ -63,6 +63,37 @@ export function VoiceControls({
     if (active) stopButton.current?.focus();
   }, [active]);
 
+  useEffect(() => {
+    if (!active) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const dialog = document.querySelector<HTMLDialogElement>('dialog[open]');
+      if (dialog) {
+        event.preventDefault();
+        dialog.close();
+        return;
+      }
+      const openDetails = Array.from(document.querySelectorAll<HTMLDetailsElement>('details[open]'))
+        .filter((details) => !details.closest('[hidden]'));
+      const focusedDetails = document.activeElement instanceof HTMLElement
+        ? document.activeElement.closest<HTMLDetailsElement>('details[open]')
+        : null;
+      const details = focusedDetails && openDetails.includes(focusedDetails)
+        ? focusedDetails
+        : openDetails.at(-1);
+      if (details) {
+        event.preventDefault();
+        details.open = false;
+        details.querySelector('summary')?.focus();
+        return;
+      }
+      event.preventDefault();
+      client.current?.stop();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [active]);
+
   const start = () => {
     if (client.current || disabled) return;
     onActiveChange?.(true);
@@ -146,9 +177,15 @@ export function VoiceControls({
       {active && <VoiceOrb status={status} message={message} audioLevel={audioLevel} />}
       {status === 'error' && <p className="voice-error" role="alert">{message}</p>}
       {!active && <p id="voice-start-guidance" className="visually-hidden">{initialMessage}</p>}
+      {active && (
+        <button ref={stopButton} className="secondary-button voice-end-control" type="button"
+          onClick={stop} disabled={status === 'stopping'} aria-describedby="voice-status">
+          End voice
+        </button>
+      )}
       <div className="action-row">
         {active
-          ? <button ref={stopButton} className="secondary-button" type="button" onClick={stop} disabled={status === 'stopping'}>Stop voice</button>
+          ? null
           : <>
               <button className="input-orb" type="button" onClick={start} disabled={disabled} aria-label="Start voice" aria-describedby="voice-start-guidance" title="Start voice"><span aria-hidden="true" /></button>
               <span className="voice-start-label" aria-hidden="true">Start voice</span>

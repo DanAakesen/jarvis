@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { backendFetch } from './backend-request';
 import { useThemePreference } from './theme-preference-context';
+import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
 
 interface Settings {
   appearance: { theme: 'light' | 'dark' };
@@ -96,6 +97,14 @@ const defaultPersonality: Settings['personality'] = {
   responseStyle: 'concise',
   customInstructions: '',
 };
+
+function cacheVoiceWorkspacePreference(minimizeWindowsOnVoiceStart: boolean) {
+  try {
+    saveVoiceWorkspacePreference(minimizeWindowsOnVoiceStart);
+  } catch {
+    return;
+  }
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -272,6 +281,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       setSettings(result.settings);
       setOptions(result.options);
       setCredentials(result.credentials);
+      cacheVoiceWorkspacePreference(result.settings.voice.minimizeWindowsOnVoiceStart);
       setState('ready');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Settings could not be loaded. Try again.');
@@ -288,6 +298,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       setSettings(result.settings);
       setOptions(result.options);
       setCredentials(result.credentials);
+      cacheVoiceWorkspacePreference(result.settings.voice.minimizeWindowsOnVoiceStart);
       setState('ready');
     }).catch((cause: unknown) => {
       if (!active) return;
@@ -344,6 +355,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       setSavedSettings(result.settings);
       setSettings(result.settings);
       setOptions(result.options);
+      cacheVoiceWorkspacePreference(result.settings.voice.minimizeWindowsOnVoiceStart);
       setPersonalityResetMessage('');
       setMessage('Saved. These are defaults for new sessions and tasks; running work keeps its current settings.');
     } catch (cause) {
