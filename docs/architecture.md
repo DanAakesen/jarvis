@@ -82,6 +82,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   not infer tool calls or window activity. CSS aurora and state motion pause while
   the document is hidden and reduce to fades/static readable states when motion
   is reduced. No persistence or backend route is added.
+- P8-07 keeps window lifecycle state in the mounted `Workspace` component.
+  Minimised views remain mounted but hidden and inert; open/minimised/closed and
+  maximised state is memory-only. The shell passes the component's typed
+  `WorkspaceController` dispatch through `WorkspaceCommandContext` to the active
+  page. The current shell still supplies no generated views; P8-14 owns view data
+  and P8-15 owns authenticated Jarvis command delivery. No server route or
+  persistence is added here.
 - P7-16 extends the same authenticated, validated `dbo.settings` key/value store
   with bounded personality preferences. Hosted chat and Danish voice read them
   for each new agent invocation/session; the backend snapshots them when it

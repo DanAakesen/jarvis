@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
@@ -15,7 +15,8 @@ import { SettingsPage } from './SettingsPage';
 import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
 import { backendFetch } from './backend-request';
-import { Workspace } from './Workspace';
+import { Workspace, type WorkspaceController } from './Workspace';
+import { WorkspaceCommandContext } from './workspace-command-state';
 
 type ShellIconName = 'home' | 'factory' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close';
 
@@ -108,7 +109,13 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const getAccessToken = session.getAccessToken;
   const { working } = useJarvisActivity();
   const navigationToggle = useRef<HTMLButtonElement>(null);
+  const workspaceController = useRef<WorkspaceController>(null);
   const contextPanel = useContextPanel();
+  const workspaceCommands = useMemo(() => ({
+    dispatch: (command: Parameters<WorkspaceController['dispatch']>[0]) => (
+      workspaceController.current?.dispatch(command) ?? false
+    ),
+  }), []);
   const [navigationOpen, setNavigationOpen] = useState(() => (
     typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches
   ));
@@ -252,12 +259,14 @@ function ShellLayout({ signedIn, config, session, camera }: {
       </header>
       <main id="content" className="shell-main" tabIndex={-1}>
         {presenceError && <p className="browser-presence-error" role="alert">{presenceError}</p>}
-        <Outlet />
-        {signedIn && (
-          <div className="workspace-shell-area" hidden={pathname !== '/'}>
-            <Workspace views={[]} />
-          </div>
-        )}
+        <WorkspaceCommandContext.Provider value={workspaceCommands}>
+          <Outlet />
+          {signedIn && (
+            <div className="workspace-shell-area" hidden={pathname !== '/'}>
+              <Workspace ref={workspaceController} views={[]} />
+            </div>
+          )}
+        </WorkspaceCommandContext.Provider>
       </main>
       <footer className="bottom-bar">
         {signedIn && config.backendUrl && (

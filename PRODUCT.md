@@ -326,12 +326,18 @@ The confirmed requirements and proposed feature placement are in [ui.md](ui.md).
 Jarvis has one typing shell with expandable navigation and context panels, and a
 fullscreen voice workspace with a runtime-state-driven orb. Jarvis can create and
 arrange temporary views of accessible data, while Dan can override layouts and
-move/resize windows. Tabs retain minimised views within the active workspace.
+move/resize windows. Window chrome can minimise, maximise, or close a view.
+Minimising retains the mounted view in memory and exposes a tab in the active
+workspace; Dan can restore it from the tab, and Jarvis can request restore
+through the workspace command interface. Authenticated Jarvis delivery remains
+P8-15. Closing a view changes only the temporary workspace and does not delete
+conversation or source records.
 Voice is explicitly started; the always-available assistant does not continuously
 listen. Desktop and phone layouts follow the mode/window rules in ui.md. Theme
 variables can be changed on demand and persist until changed again. Banking and
 Fitness and Health are future areas; their detailed integrations remain deferred.
-This is planned behaviour, not a claim that the existing frontend implements it.
+Implementation status and live-service limitations are tracked in PLAN.md and
+the UI coverage report.
 
 ## Accepted capability additions (4 October 2026; planned)
 
