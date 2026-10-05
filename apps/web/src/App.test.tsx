@@ -393,6 +393,8 @@ describe('App shell', () => {
       const path = new URL(String(input)).pathname;
       if (path === '/now') {
         return new Response(JSON.stringify({
+          awayMode: false,
+          confirmations: [],
           updatedAt: '2026-10-04T00:00:00.000Z',
           running: [{
             id: '42', title: '<script>window.compromised = true</script>', project: 'Jarvis',
