@@ -71,8 +71,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `backendFqdn` as the public URL. Backend connectivity is unverified until then.
 - The home page uses a tenant-specific MSAL Browser client with the public web
   client ID and API scope. MSAL stores its cache in session storage; sign-in
-  requests only the delegated API scope and sends the access token to `/me`.
-  Cached accounts use silent token acquisition. A missing backend URL disables
+  redirects the whole page to Entra (no popup, so embedded browsers and popup
+  blockers work) and returns to the registered site root, where
+  `handleRedirectPromise` completes it. It requests only the delegated API scope
+  and sends the access token to `/me`. Cached accounts use silent token
+  acquisition through the `/redirect.html` bridge. A missing backend URL disables
   sign-in instead of presenting a false success state.
 - P1-07 adds the app shell. `useSignIn` owns the MSAL session for the whole
   app, so navigation never repeats sign-in. Until `/me` succeeds, every shell
