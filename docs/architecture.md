@@ -89,6 +89,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   page. The current shell still supplies no generated views; P8-14 owns view data
   and P8-15 owns authenticated Jarvis command delivery. No server route or
   persistence is added here.
+- P8-10 keeps voice-scene state in the conversation/shell client: P5-04 runtime
+  callbacks enter and leave fullscreen without an animation gate, and the
+  workspace reports visible-view changes so the shell can position the orb.
+  Natural/manual end, failure, and Escape restore typing; the client-side,
+  default-off `voice.minimizeWindowsOnVoiceStart` preference is validated in
+  local storage until P8-17 supplies account persistence. Generated views and
+  tool-call activity remain with P8-14/15 and P8-16 respectively; no backend
+  route or workspace persistence is added.
 - P7-16 extends the same authenticated, validated `dbo.settings` key/value store
   with bounded personality preferences. Hosted chat and Danish voice read them
   for each new agent invocation/session; the backend snapshots them when it

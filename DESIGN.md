@@ -74,9 +74,9 @@ Dan's brief (4 October 2026): the UI should be stunning, with rich styling and m
 - **Light appearance (C):** warm neutral surfaces and editorial typography with an ink-particle orb, so light mode keeps the same states and motion vocabulary.
 - **Constraints kept:** every orb state is also labelled in text; no gradient text, no emoji icons, no lone coloured borders; sample data appears in the concepts only.
 
-Canonical colour, type, spacing, radius, surface, elevation and motion values belong in `apps/web/src/styles.css`. P8-20 (#282) applies Concept B/C across the current shell and pages: the dark aurora is CSS-only, and the orb follows reported voice state plus decoded playback PCM. Chat/voice activity is explicit in the top bar; tool-call state and workspace windows remain unavailable until their runtime contracts exist. Hidden tabs pause animation; reduced motion uses fades and keeps the state label readable.
+Canonical colour, type, spacing, radius, surface, elevation and motion values belong in `apps/web/src/styles.css`. P8-20 (#282) applies Concept B/C across the current shell and pages: the dark aurora is CSS-only, and the orb follows reported voice state plus decoded playback PCM. Chat/voice activity is explicit in the top bar; tool-call state remains unavailable until P8-16, and generated workspace windows until P8-14/P8-15. P8-10 applies the voice-scene transition and composition to available client views. Hidden tabs pause animation; reduced motion uses fades and keeps the state label readable.
 
-## Voice end (P8-12, decided 4 October 2026)
+## Voice end (P8-12, decided 4 October 2026; implemented in P8-10)
 
 Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop and inside the bottom dock, right of the orb, on phone. Ending voice collapses the orb back into the composer's small orb. A natural spoken ending also ends voice; the small composer orb only starts voice.
 
@@ -324,8 +324,9 @@ an expandable disclosure rather than competing with the opening conversation.
 Only the small, labelled input orb starts voice. Voice hides history and the
 composer without discarding the draft or language; stop, natural end and failure
 restore typing focus. The ready state says the microphone is off and offers a
-separate Enable microphone action. The shell/fullscreen transition, window
-carry-over and final end-control behavior remain P8-10–P8-12.
+separate Enable microphone action. P8-10 implements the desktop shell/fullscreen
+transition, available-window carry-over and the selected end-control behavior;
+P8-11 owns phone view switching.
 
 ## Next-generation shared shell (structure agreed; P8-04 implemented)
 
@@ -347,18 +348,20 @@ The existing neutral theme remains; the specific placement and responsive
 proportions above are confirmed while other shell styling and the contents of
 these bars and panels remain open.
 
-Voice hides the shell and composer, using a full-page background and a
-state-driven orb: centred alone, left of content windows on desktop,
-bottom-docked behind one main phone view. Windows can tile, overlap, minimise
-into tabs and be restored by Dan or Jarvis. Those behaviors belong to later P8
-tasks, not P8-04.
+Voice hides the shell, composer, and history immediately, using a full-page
+background and a state-driven orb: centred alone, left of content windows on
+desktop, and bottom-docked on phone. P8-10 carries available windows across
+voice transitions; generated views and Jarvis-directed commands are supplied by
+P8-14/P8-15. Windows can tile, overlap, minimise into tabs and be restored.
 
 Existing windows carry between modes by default. The optional minimise-on-voice
 setting defaults off; when enabled, voice begins with only the orb and windows
 remain docked on return to typing. Otherwise the earlier shell layout returns.
 Generated views are temporary; theme values persist. Small-orb input controls
-start voice explicitly. Glass/transparency and futuristic styling are exploratory;
-white wireframe windows are not a selected final treatment.
+start voice explicitly. The minimise-on-voice preference currently uses
+device-local storage with a default-off value; P8-17 owns account persistence.
+Glass/transparency and futuristic styling are exploratory; white wireframe
+windows are not a selected final treatment.
 
 ## Temporary workspace composition (P8-06)
 
@@ -375,7 +378,8 @@ Window geometry, order, and the open view set remain in memory only. The host is
 currently empty until P8-14 provides generated-view data and P8-15 supplies
 Jarvis-directed workspace commands; those data and agent-control contracts are
 not part of P8-06. These structural choices reuse the shared Concept B/C surfaces
-and motion tokens in P8-20. Voice-layout transitions remain with P8-10 and P8-11.
+and motion tokens in P8-20. Desktop voice-layout transitions are implemented in
+P8-10; phone view switching remains with P8-11.
 
 ## Window lifecycle and tabs (P8-07)
 

@@ -102,16 +102,18 @@
 }
 
 @media (max-width: 700px) {
-  .app-shell[data-voice-active="true"] .voice-orb-presentation { top: auto; bottom: max(16px, env(safe-area-inset-bottom)); left: 16px; display: grid; width: calc(100vw - 32px); min-height: 92px; grid-template-columns: 68px minmax(0, 1fr) 96px; gap: 10px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 28px; background: var(--surface-translucent); box-shadow: var(--panel-shadow); text-align: left; transform: none; backdrop-filter: blur(var(--surface-blur)); }
+  .app-shell[data-voice-active="true"] .voice-orb-presentation { top: auto; bottom: max(16px, env(safe-area-inset-bottom)); left: 16px; display: grid; width: calc(100vw - 32px); min-height: 92px; grid-template-columns: 68px minmax(0, 1fr) 112px; gap: 10px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 28px; background: var(--surface-translucent); box-shadow: var(--panel-shadow); text-align: left; transform: none; backdrop-filter: blur(var(--surface-blur)); }
   .app-shell[data-voice-active="true"] .voice-orb { width: 68px; }
   .app-shell[data-voice-active="true"] .voice-orb-copy { text-align: left; }
   .app-shell[data-voice-active="true"] .voice-orb-status { font-size: var(--type-body); }
   .app-shell[data-voice-active="true"] .voice-orb-limitation { display: none; }
-  .app-shell[data-voice-active="true"] .voice-end-control { top: auto; right: 24px; bottom: max(40px, calc(env(safe-area-inset-bottom) + 40px)); left: auto; min-width: 88px; padding-inline: 10px; transform: none; }
+  .app-shell[data-voice-active="true"] .voice-end-control { top: auto; right: max(16px, env(safe-area-inset-right)); bottom: max(40px, calc(env(safe-area-inset-bottom) + 40px)); left: auto; width: 112px; min-width: 88px; max-width: calc(50vw - 20px); padding-inline: 10px; transform: none; }
   .app-shell[data-voice-active="true"] .voice-controls[data-active="true"] > .action-row { top: auto; right: 12px; bottom: max(126px, calc(env(safe-area-inset-bottom) + 126px)); left: 12px; display: flex; justify-content: center; gap: 6px; }
   .app-shell[data-voice-active="true"] .voice-controls[data-active="true"] > .action-row .secondary-button { min-height: 40px; padding-inline: 10px; font-size: var(--type-caption); }
   .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; top: 8vh; right: 12px; left: 12px; width: auto; height: calc(100vh - 150px); height: calc(100dvh - 150px); }
   .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-orb-presentation { top: auto; bottom: max(16px, env(safe-area-inset-bottom)); left: 16px; transform: none; }
+  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-orb-presentation { width: calc(100vw - 32px); }
+  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-end-control { left: auto; transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
