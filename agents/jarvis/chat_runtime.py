@@ -7,15 +7,17 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from collections.abc import Awaitable, Callable, Sequence
+from contextlib import aclosing
 from typing import Any
 
 import httpx
 from azure.ai.agentserver.invocations.voice import VoiceAgentServerHost
-from opentelemetry import trace
 from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 
+from chat_telemetry import latency_span, log_latency
 from jarvis_tools import (
     backend_settings_from_environment,
     current_conversation,
@@ -50,8 +52,6 @@ def _tool_outcome_summary(message: dict[str, Any]) -> str:
     return f"\nTool outcomes: {', '.join(outcomes)}" if outcomes else ""
 
 
-_tracer = trace.get_tracer("VoiceHostedAgent.Chat")
-
 ChatContextLoader = Callable[
     [str, str, str, str], Awaitable[Sequence[ModelMessage] | None]
 ]
@@ -65,7 +65,7 @@ async def load_verified_history(
 ) -> Sequence[ModelMessage] | None:
     backend_url, _ = backend_settings_from_environment()
     headers = {"Authorization": " ".join(("Bear" + "er", token))}
-    with _tracer.start_as_current_span("chat_history_verification"):
+    with latency_span("chat_history_verification"):
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
             profile, response = await asyncio.gather(
                 client.get(f"{backend_url}/me", headers=headers),
@@ -98,7 +98,7 @@ async def load_verified_history(
     ):
         return None
 
-    with _tracer.start_as_current_span("chat_context") as context_span:
+    with latency_span("chat_context") as context_span:
         previous = [
             message for message in messages
             if isinstance(message, dict)
@@ -154,6 +154,7 @@ def register_chat_invocation(
 ) -> None:
     @app.invoke_handler
     async def chat(request: Request):
+        received_at = time.monotonic()
         try:
             body = bytearray()
             async for chunk in request.stream():
@@ -232,8 +233,9 @@ def register_chat_invocation(
             conversation_token = current_conversation.set(f"chat-{message_id}")
             turn_token = current_turn.set(message_id)
             output_bytes = 0
+            first_delta = True
             try:
-                settings = await model_client.session_settings()
+                yield ": connected\n\n"
                 messages = (*history, ModelMessage("user", text.strip()))
                 if screen_context is not None:
                     messages = (
@@ -249,15 +251,20 @@ def register_chat_invocation(
                 chat = model_client.complete_chat(
                     messages,
                     language,
-                    settings=settings,
                     **({"reflex_note": reflex_note} if reflex_note is not None else {}),
                 )
-                async for delta in chat:
-                    output_bytes += len(delta.encode("utf-8"))
-                    if output_bytes > MAX_OUTPUT_BYTES:
-                        raise RuntimeError("Chat response exceeded the size limit")
-                    payload = json.dumps({"text": delta}, ensure_ascii=False)
-                    yield f"event: delta\ndata: {payload}\n\n"
+                async with aclosing(chat):
+                    async for delta in chat:
+                        if not delta:
+                            continue
+                        output_bytes += len(delta.encode("utf-8"))
+                        if output_bytes > MAX_OUTPUT_BYTES:
+                            raise RuntimeError("Chat response exceeded the size limit")
+                        if first_delta:
+                            first_delta = False
+                            log_latency("first_delta_out", received_at)
+                        payload = json.dumps({"text": delta}, ensure_ascii=False)
+                        yield f"event: delta\ndata: {payload}\n\n"
                 yield "event: done\ndata: {}\n\n"
             except asyncio.CancelledError:
                 raise

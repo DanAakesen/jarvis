@@ -99,7 +99,10 @@ export function createPhoneSessionStore(pool: sql.ConnectionPool): PhoneSessionS
       if (!/^[1-9]\d{0,18}$/u.test(sessionId) ||
           BigInt(sessionId) > 9_223_372_036_854_775_807n ||
           !callConnectionId || callConnectionId.length > 256 ||
-          /[\u0000-\u001f\u007f]/u.test(callConnectionId)) return false;
+          Array.from(callConnectionId).some((character) => {
+            const code = character.charCodeAt(0);
+            return code < 32 || code === 127;
+          })) return false;
       const { rowsAffected } = await pool.request()
         .input('sessionId', sql.BigInt, BigInt(sessionId))
         .input('callConnectionId', sql.NVarChar(256), callConnectionId)

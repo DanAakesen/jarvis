@@ -66,7 +66,7 @@ async function appFor({
     publicOrigin: 'https://jarvis.example',
     getAllowlist: async () => parsePhoneAllowlist(`{"entraObjectIds":["${ownerObjectId}"]}`),
     getToken: async () => 'foundry-token',
-    connect: (_token, _signal) => new websocket('ws://127.0.0.1:1'),
+    connect: () => new websocket('ws://127.0.0.1:1'),
   });
   const app = buildApp(config, undefined, {
     modules: [

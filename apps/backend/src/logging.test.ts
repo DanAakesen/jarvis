@@ -136,6 +136,9 @@ describe('structured log export', () => {
     logger.info({
       outcome: 'ok', durationMs: 45.6, query: 'memory-secret',
     }, 'memory.embedding');
+    for (const phase of ['turn_first_token', 'turn_complete']) {
+      logger.info({ phase, durationMs: 234.5, text: 'prompt-secret' }, 'chat.latency');
+    }
 
     expect(JSON.parse(records[0]!)).toMatchObject({
       phase: 'jev', durationMs: 123.4, msg: 'chat.latency',
@@ -143,6 +146,10 @@ describe('structured log export', () => {
     expect(JSON.parse(records[1]!)).toMatchObject({
       outcome: 'ok', durationMs: 45.6, msg: 'memory.embedding',
     });
+    expect(records.slice(2).map((record) => JSON.parse(record))).toEqual([
+      expect.objectContaining({ phase: 'turn_first_token', durationMs: 234.5 }),
+      expect.objectContaining({ phase: 'turn_complete', durationMs: 234.5 }),
+    ]);
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
   });

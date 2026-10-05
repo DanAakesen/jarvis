@@ -24,6 +24,7 @@ export interface ConversationToolCall {
   readonly tool: string;
   readonly outcome: 'ok' | 'refused' | 'error';
   readonly taskId: string | null;
+  readonly artifactId?: string;
 }
 
 export interface ConversationHistoryMessage extends ConversationMessage {

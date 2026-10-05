@@ -50,7 +50,10 @@ function record(value: unknown): Record<string, unknown> | undefined {
 
 function string(value: unknown, maximum: number): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= maximum &&
-    !/[\u0000-\u001f\u007f]/u.test(value);
+    !Array.from(value).some((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127;
+    });
 }
 
 function eventId(value: unknown): string | undefined {
