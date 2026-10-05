@@ -36,7 +36,16 @@ jobs:
           dotnet-version: 10.0.x
       - name: Bridge installer settings tests
         run: pwsh -NoProfile -File pc-bridge/tests/BridgeInstaller.Helpers.Tests.ps1
-      - run: dotnet test pc-bridge/Jarvis.PcBridge.Core.Tests/Jarvis.PcBridge.Core.Tests.csproj --configuration Release
+      # Name the hanging test and fail fast instead of burning the job timeout.
+      - run: >-
+          dotnet test pc-bridge/Jarvis.PcBridge.Core.Tests/Jarvis.PcBridge.Core.Tests.csproj --configuration Release
+          --blame-hang --blame-hang-timeout 2m --logger "console;verbosity=normal"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc-bridge-test-results
+          path: pc-bridge/Jarvis.PcBridge.Core.Tests/TestResults/**/Sequence*.xml
+          if-no-files-found: ignore
       - run: dotnet build pc-bridge/Jarvis.PcBridge/Jarvis.PcBridge.csproj --configuration Release
 
   container:
