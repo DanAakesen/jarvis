@@ -118,10 +118,22 @@ export type ActiveTaskGuardResult<T> =
   | { kind: 'active' }
   | { kind: 'idle'; value: T };
 
+export interface TaskModelConfig {
+  agent: TaskRecord['agent'];
+  modelOverride: string | null;
+  reasoningOverride: string | null;
+}
+
+export type TaskModelUpdateResult =
+  | { kind: 'ok'; task: TaskRecord }
+  | { kind: 'not-found' }
+  | { kind: 'not-ready' };
+
 export interface TaskStore {
   create(input: CreateTaskInput): Promise<TaskRecord | null>;
   list(filters: TaskListFilters): Promise<TaskRecord[]>;
   get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null>;
+  updateModelConfig(id: string, config: TaskModelConfig): Promise<TaskModelUpdateResult>;
   getActiveRepository(id: string, foundrySessionId: string): Promise<string | null>;
   getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]>;
   getRunningContext(): Promise<RunningTaskContextSnapshot>;

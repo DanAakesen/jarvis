@@ -7,6 +7,7 @@ import type { ToolCallRecord, ToolCallStore } from '../core/tool-calls.js';
 import { createRepoAdminRepositoryCreator } from '../credentials/repo-admin.js';
 import type { Project, ProjectStore } from './projects.js';
 import type { TaskEventHub, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
+import type { TeamsNotificationService } from '../teams/service.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const repositoryToken = 'repo-admin-test-token-not-for-sandbox';
@@ -73,6 +74,7 @@ it('uses configured defaults and keeps the repository secret out of task and rec
     },
     list: vi.fn(async () => []),
     get: vi.fn(async () => null),
+    updateModelConfig: vi.fn(async () => ({ kind: 'not-found' as const })),
     getEventsAfter: vi.fn(async () => []),
     getRunningContext: vi.fn(async () => ({ runningTasks: [], truncated: false })),
     transition: vi.fn(async () => ({ kind: 'not-found' as const })),
@@ -113,6 +115,15 @@ it('uses configured defaults and keeps the repository secret out of task and rec
   };
   const toolCalls: ToolCallRecord[] = [];
   const toolCallStore: ToolCallStore = { record: async (call) => { toolCalls.push(call); } };
+  const runConfirmed = vi.fn(async (_kind: unknown, _summary: unknown, action: () => Promise<string>) => action());
+  const teamsNotifications = {
+    notify: vi.fn(async () => {}),
+    requestConfirmation: vi.fn(async () => {}),
+    runConfirmed,
+    rememberMessage: vi.fn(async () => {}),
+    receiveConfirmation: vi.fn(async () => false),
+    expirePendingConfirmations: vi.fn(async () => {}),
+  } as unknown as TeamsNotificationService;
   const app = buildApp(config, undefined, {
     auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
     projectRepositoryCreator: createRepoAdminRepositoryCreator(
@@ -124,6 +135,7 @@ it('uses configured defaults and keeps the repository secret out of task and rec
     taskStore,
     settingsStore,
     toolCallStore,
+    teamsNotifications,
     eventHub: taskEventHub as TaskEventHub,
   });
   apps.push(app);
@@ -162,6 +174,12 @@ it('uses configured defaults and keeps the repository secret out of task and rec
   expect(taskInput.mock.calls[0]?.[0].request).toContain('DanAakesen/templates');
   expect(taskInput.mock.calls[0]?.[0].request).toContain('PowerShell 7 (pwsh)');
   expect(taskInput.mock.calls[0]?.[0].request).toContain('JARVIS_NEEDS_ATTENTION:');
+  expect(runConfirmed).toHaveBeenCalledWith(
+    'create_repository',
+    expect.stringContaining('Create the public repository DanAakesen/bright-app'),
+    expect.any(Function),
+    expect.any(AbortSignal),
+  );
   expect(JSON.stringify(taskInput.mock.calls[0]?.[0])).not.toContain(repositoryToken);
   expect(JSON.stringify(taskInput.mock.calls[0]?.[0])).not.toContain(vaultToken);
   expect(Object.keys(taskInput.mock.calls[0]?.[0] ?? {}).some((key) => /environment|token/iu.test(key))).toBe(false);

@@ -14,6 +14,11 @@ export interface Settings {
     model: string;
     reasoning: string;
   };
+  personality: {
+    tone: 'british_butler' | 'warm' | 'direct' | 'playful';
+    responseStyle: 'concise' | 'balanced' | 'detailed';
+    customInstructions: string;
+  };
   voice: {
     speechToTextModel: string;
     englishModel: string;
@@ -32,6 +37,7 @@ export interface Settings {
   global: {
     maxParallelTasks: number;
     maxCheckAttempts: number;
+    screenShareDailyFrameCap: number;
   };
   newProjects: {
     owner: string;
@@ -56,6 +62,11 @@ export interface SettingsStore {
 export const defaultSettings: Settings = {
   appearance: { theme: 'light' },
   jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
+  personality: {
+    tone: 'british_butler',
+    responseStyle: 'concise',
+    customInstructions: '',
+  },
   voice: {
     speechToTextModel: 'mai-transcribe',
     englishModel: 'gpt-realtime-2.1',
@@ -66,7 +77,7 @@ export const defaultSettings: Settings = {
   },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
-  global: { maxParallelTasks: 1, maxCheckAttempts: 3 },
+  global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300 },
   newProjects: {
     owner: 'DanAakesen',
     visibility: 'private',
@@ -85,6 +96,8 @@ export const settingsOptions = {
   themeDensities: ['compact', 'comfortable'],
   jarvisModels: ['gpt-5.6-luna'],
   reasoningEfforts: ['none', 'low', 'medium', 'high'],
+  personalityTones: ['british_butler', 'warm', 'direct', 'playful'],
+  personalityResponseStyles: ['concise', 'balanced', 'detailed'],
   speechToTextModels: ['mai-transcribe'],
   englishModels: ['gpt-realtime-2.1'],
   englishVoices: ['en-GB-Ryan:DragonHDLatestNeural'],
@@ -111,6 +124,11 @@ const settingKeys = {
     density: 'appearance.density',
   },
   jarvis: { model: 'jarvis.model', reasoning: 'jarvis.reasoning_effort' },
+  personality: {
+    tone: 'personality.tone',
+    responseStyle: 'personality.response_style',
+    customInstructions: 'personality.custom_instructions',
+  },
   voice: {
     speechToTextModel: 'voice.stt.model',
     englishModel: 'voice.en.model',
@@ -124,6 +142,7 @@ const settingKeys = {
   global: {
     maxParallelTasks: 'global.max_parallel_tasks',
     maxCheckAttempts: 'global.max_check_attempts',
+    screenShareDailyFrameCap: 'global.screen_share_daily_frame_cap',
   },
   newProjects: {
     owner: 'new_projects.owner',
@@ -164,6 +183,17 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
     if (key === 'model') return isOption(value, settingsOptions.jarvisModels);
     if (key === 'reasoning') return isOption(value, settingsOptions.reasoningEfforts);
   }
+  if (area === 'personality') {
+    if (key === 'tone') return isOption(value, settingsOptions.personalityTones);
+    if (key === 'responseStyle') return isOption(value, settingsOptions.personalityResponseStyles);
+    if (key === 'customInstructions') {
+      return typeof value === 'string' && value.length <= 2_000 &&
+        ![...value].some((character) => {
+          const code = character.charCodeAt(0);
+          return code < 0x20 && character !== '\n' && character !== '\r' && character !== '\t';
+        });
+    }
+  }
   if (area === 'voice') {
     if (key === 'speechToTextModel') return isOption(value, settingsOptions.speechToTextModels);
     if (key === 'englishModel') return isOption(value, settingsOptions.englishModels);
@@ -182,6 +212,9 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
   }
   if (area === 'global' && key === 'maxCheckAttempts') {
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 10;
+  }
+  if (area === 'global' && key === 'screenShareDailyFrameCap') {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 300;
   }
   if (area === 'newProjects') {
     if (key === 'owner') {
@@ -241,6 +274,14 @@ const settingsPatchSchema = {
             reasoning: selectSchema(settingsOptions.reasoningEfforts),
           },
         },
+        personality: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: {
+            tone: selectSchema(settingsOptions.personalityTones),
+            responseStyle: selectSchema(settingsOptions.personalityResponseStyles),
+            customInstructions: { type: 'string', maxLength: 2_000 },
+          },
+        },
         voice: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
@@ -268,6 +309,7 @@ const settingsPatchSchema = {
           properties: {
             maxParallelTasks: { type: 'integer', minimum: 1, maximum: 100 },
             maxCheckAttempts: { type: 'integer', minimum: 0, maximum: 10 },
+            screenShareDailyFrameCap: { type: 'integer', minimum: 1, maximum: 300 },
           },
         },
         newProjects: {
@@ -368,8 +410,22 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       response: {
         200: {
           type: 'object',
-          properties: { model: { type: 'string' }, reasoningEffort: { type: 'string' } },
-          required: ['model', 'reasoningEffort'],
+          properties: {
+            model: { type: 'string' },
+            reasoningEffort: { type: 'string' },
+            personality: {
+              type: 'object',
+              properties: {
+                tone: selectSchema(settingsOptions.personalityTones),
+                responseStyle: selectSchema(settingsOptions.personalityResponseStyles),
+                customInstructions: { type: 'string', maxLength: 2_000 },
+              },
+              required: ['tone', 'responseStyle', 'customInstructions'],
+              additionalProperties: false,
+            },
+            awayMode: { type: 'boolean' },
+          },
+          required: ['model', 'reasoningEffort', 'personality', 'awayMode'],
           additionalProperties: false,
         },
         403: {
@@ -390,7 +446,13 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const settings = await readSettings(app.settingsStore);
-    return { model: settings.jarvis.model, reasoningEffort: settings.jarvis.reasoning };
+    const awayMode = await app.awayModeStore?.read();
+    return {
+      model: settings.jarvis.model,
+      reasoningEffort: settings.jarvis.reasoning,
+      personality: settings.personality,
+      awayMode: awayMode?.away ?? false,
+    };
   });
 
   app.patch('/settings', { schema: { body: settingsPatchSchema } }, async (request, reply) => {

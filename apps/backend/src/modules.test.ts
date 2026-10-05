@@ -3,7 +3,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { coreModule } from './core/index.js';
 import { factoryModule } from './factory/index.js';
-import { ToolRefusal, type JarvisTool } from './core/tool-registry.js';
+import { ToolFailure, ToolRefusal, type JarvisTool } from './core/tool-registry.js';
 import type { BackendModule } from './modules.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -157,6 +157,40 @@ describe('backend module composition', () => {
       method: 'POST', url: '/tools/extension_bad_refusal', headers: { ...headers, 'x-jarvis-message-id': '42' }, payload: {},
     });
     expect(malformed.json()).toMatchObject({ outcome: 'error', confirmation: 'Not done: extension_bad_refusal failed.' });
+  });
+
+  it('returns safe, tool-specific failure explanations without changing the error outcome', async () => {
+    const record = vi.fn(async () => {});
+    const tool: JarvisTool = {
+      name: 'extension_failure_explained',
+      description: 'Fails with a safe explanation.',
+      inputSchema: { type: 'object' },
+      execute: async () => { throw new ToolFailure('Notes search is temporarily unavailable.'); },
+    };
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, factoryModule, extension('extension', [tool])],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      toolCallStore: { record },
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/extension_failure_explained',
+      headers: { ...headers, 'x-jarvis-message-id': '42' },
+      payload: {},
+    });
+
+    expect(response.json()).toEqual({
+      tool: 'extension_failure_explained',
+      outcome: 'error',
+      result: { error: 'Notes search is temporarily unavailable.' },
+      confirmation: 'Not done: extension_failure_explained failed.',
+    });
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({
+      result: { error: 'Notes search is temporarily unavailable.' },
+      outcome: 'error',
+    }));
   });
 
   it('rejects malformed message IDs before executing a tool', async () => {

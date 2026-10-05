@@ -11,6 +11,7 @@ import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
 import { coreModule } from '../core/index.js';
 import type { ConversationStore } from '../core/conversation-store.js';
+import type { SettingsStore } from '../core/settings.js';
 import { factoryModule } from '../factory/index.js';
 import type { BackendModule } from '../modules.js';
 import {
@@ -67,6 +68,7 @@ function appFor(
     })),
     getSession: vi.fn(async () => null),
     endSession: vi.fn(async () => true),
+    getDanMessageIdBySourceItemId: vi.fn(async () => '42'),
     addMessage: vi.fn<ConversationStore['addMessage']>(async (input) => ({
       id: '42',
       sessionId: input.sessionId,
@@ -77,6 +79,7 @@ function appFor(
     })),
     getHistory: vi.fn(async () => ({ messages: [], nextCursor: null })),
   } satisfies ConversationStore,
+  settingsStore?: SettingsStore,
 ) {
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
   const app = buildApp(config, createLogger(config, undefined, output), {
@@ -95,6 +98,7 @@ function appFor(
       return { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId };
     },
     conversationStore,
+    ...(settingsStore ? { settingsStore } : {}),
   });
   app.server.on('connection', (socket) => appSockets.push(socket));
   apps.push(app);
@@ -112,6 +116,64 @@ async function openBrowser(url: string, protocols = [VOICE_SUBPROTOCOL, `jarvis.
 }
 
 describe('backend-relayed Voice Live WebSocket', () => {
+  it('snapshots saved personality preferences for each new English voice session', async () => {
+    const serverSessions: Record<string, unknown>[][] = [];
+    const pendingUpdates: ((session: Record<string, unknown>) => void)[] = [];
+    const values: Record<string, unknown> = {
+      'personality.tone': '"warm"',
+      'personality.response_style': '"balanced"',
+      'personality.custom_instructions': JSON.stringify('Use plain language.'),
+    };
+    const settingsStore: SettingsStore = {
+      read: async () => ({ ...values }),
+      write: async () => {},
+    };
+    const upstreamUrl = await echoServer((socket) => {
+      const received: Record<string, unknown>[] = [];
+      serverSessions.push(received);
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'session.update' && event.session !== null &&
+            typeof event.session === 'object' && !Array.isArray(event.session)) {
+          pendingUpdates.shift()?.(event.session as Record<string, unknown>);
+        }
+      });
+    });
+    const { app } = appFor(
+      (token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }),
+      vi.fn(async () => voiceToken),
+      [],
+      [],
+      undefined,
+      undefined,
+      settingsStore,
+    );
+    const nextSessionUpdate = () => new Promise<Record<string, unknown>>((resolve) => {
+      pendingUpdates.push(resolve);
+    });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const firstUpdate = nextSessionUpdate();
+    const first = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    const firstSession = await firstUpdate;
+    const firstInstructions = String(firstSession.instructions);
+    expect(firstInstructions).toContain('warm and supportive');
+    expect(firstInstructions).toContain(JSON.stringify('Use plain language.'));
+
+    values['personality.tone'] = '"direct"';
+    const secondUpdate = nextSessionUpdate();
+    await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    const secondSession = await secondUpdate;
+
+    expect(String(secondSession.instructions)).toContain('direct and matter-of-fact');
+    expect(serverSessions[0]?.filter(({ type }) => type === 'session.update')).toHaveLength(1);
+    expect(serverSessions[0]?.[0]).toMatchObject({ type: 'session.update' });
+    first.close();
+  });
+
   it('authenticates the browser and relays messages with only the backend Voice Live credential', async () => {
     const authorization = vi.fn();
     const upstreamUrl = await echoServer((socket, request) => {
@@ -131,7 +193,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
     await app.listen({ host: '127.0.0.1', port: 0 });
     const address = app.server.address() as AddressInfo;
     const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
-    const reply = new Promise<string>((resolve) => browser.once('message', (data) => resolve(data.toString())));
+    const reply = new Promise<string>((resolve) => browser.on('message', (data) => {
+      if (data.toString() === 'audio-event') resolve(data.toString());
+    }));
     browser.send('audio-event');
 
     await expect(reply).resolves.toBe('audio-event');
@@ -141,6 +205,41 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(getToken).toHaveBeenCalledOnce();
     expect(records.join('')).not.toContain(browserToken);
     expect(records.join('')).not.toContain(voiceToken);
+  });
+
+  it('sends an ephemeral, validated screen description into the active voice response', async () => {
+    const forwarded: Record<string, unknown>[] = [];
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => forwarded.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    });
+    const { app, conversationStore } = appFor((token, signal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    }));
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = new WebSocket(`ws://127.0.0.1:${address.port}/voice`, [
+      VOICE_SUBPROTOCOL, `jarvis.auth.${browserToken}`,
+    ], { headers: { origin: 'http://localhost:5173' } });
+    browsers.push(browser);
+    let readyResolve!: (event: Record<string, unknown>) => void;
+    const ready = new Promise<Record<string, unknown>>((resolve) => { readyResolve = resolve; });
+    browser.on('message', (data) => {
+      const event = JSON.parse(data.toString()) as Record<string, unknown>;
+      if (event.type === 'jarvis.session.ready') readyResolve(event);
+    });
+    await once(browser, 'open');
+    await expect(ready).resolves.toMatchObject({ type: 'jarvis.session.ready', sessionId: '41' });
+    browser.send(JSON.stringify({
+      type: 'jarvis.screen.context',
+      description: 'A window shows a chart.',
+    }));
+    await vi.waitFor(() => expect(forwarded.some((event) =>
+      event.type === 'response.create' &&
+      String((event.response as Record<string, unknown> | undefined)?.instructions).includes('A window shows a chart.'),
+    )).toBe(true));
+
+    expect(conversationStore.addMessage).not.toHaveBeenCalled();
+    expect(forwarded.filter((event) => event.type === 'conversation.item.create')).toEqual([]);
   });
 
   it('stores completed voice transcripts, records a voice session, and waits for its final usage row', async () => {
@@ -293,7 +392,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice/da`);
     browser.send(JSON.stringify({ type: 'session.start', protocol_version: '1.0' }));
     const audio = JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' });
-    const audioReply = new Promise<string>((resolve) => browser.once('message', (data) => resolve(data.toString())));
+    const audioReply = new Promise<string>((resolve) => browser.on('message', (data) => {
+      if (data.toString() === audio) resolve(data.toString());
+    }));
     browser.send(audio);
 
     await expect(audioReply).resolves.toBe(audio);

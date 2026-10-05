@@ -521,6 +521,25 @@ do not create a new issue for it from this UI discussion.
 
 Planning issues: [UI breakdown #230](https://github.com/DanAakesen/jarvis/issues/230) and [enabling logic #231](https://github.com/DanAakesen/jarvis/issues/231).
 
+## Accepted feature additions from video review (4 October 2026)
+
+Dan selected long-term memory, web research, image/video generation and editable
+personality for Jarvis. These are planned capabilities, distinct from the existing
+ability to display data or create temporary views. Research results and generated
+media should use the existing dynamic workspace; the exact renderer catalogue
+remains the existing #256 decision. Long-term memory persists relevant knowledge
+and does not change the rule that generated UI views are unsaved.
+
+Recommended personality placement: **Settings → Jarvis → Personality**, accessed
+from top-right Settings, with tone/response style, custom instructions, save/reset
+and new-session application feedback. Dan accepted the capability; this proposed
+placement and field arrangement have not been separately reviewed. Do not conflate
+personality preferences with visual themes or model/voice selection.
+
+The detailed implementation tasks are in PLAN.md (P7-13–P7-16 and P8-19). Memory
+policy is decided on #263; research and media providers, costs and artifact
+retention wait for Dan (#264, #265).
+
 ## Initial allowlists (P8-18, decided 4 October 2026)
 
 No generated code ever runs: views are declarative JSON validated against these lists.

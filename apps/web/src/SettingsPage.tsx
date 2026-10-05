@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { backendFetch } from './backend-request';
+import { useThemePreference } from './theme-preference-context';
 
 interface Settings {
+  appearance: { theme: 'light' | 'dark' };
   jarvis: { model: string; reasoning: string };
+  personality: {
+    tone: 'british_butler' | 'warm' | 'direct' | 'playful';
+    responseStyle: 'concise' | 'balanced' | 'detailed';
+    customInstructions: string;
+  };
   voice: {
     speechToTextModel: string;
     englishModel: string;
@@ -13,7 +20,7 @@ interface Settings {
   };
   codex: { model: string; reasoning: string };
   copilot: { model: string };
-  global: { maxParallelTasks: number };
+  global: { maxParallelTasks: number; screenShareDailyFrameCap: number };
   newProjects: {
     owner: string;
     visibility: 'private' | 'public';
@@ -28,8 +35,11 @@ interface Settings {
 type SettingsPatch = { [Area in keyof Settings]?: Partial<Settings[Area]> };
 
 interface SettingsOptions {
+  themes: string[];
   jarvisModels: string[];
   reasoningEfforts: string[];
+  personalityTones: Settings['personality']['tone'][];
+  personalityResponseStyles: Settings['personality']['responseStyle'][];
   speechToTextModels: string[];
   englishModels: string[];
   englishVoices: string[];
@@ -57,6 +67,13 @@ const optionLabels: Record<string, string> = {
   'gpt-5.6-luna': 'GPT-5.6 Luna',
   'gpt-realtime-2.1': 'GPT Realtime 2.1',
   'mai-transcribe': 'MAI Transcribe',
+  british_butler: 'British butler',
+  warm: 'Warm',
+  direct: 'Direct',
+  playful: 'Playful',
+  concise: 'Concise',
+  balanced: 'Balanced',
+  detailed: 'Detailed',
   'en-GB-Ryan:DragonHDLatestNeural': 'Ryan HD (British English)',
   'da-DK-Harper:MAI-Voice-2': 'Harper (Danish)',
   da: 'Danish',
@@ -74,8 +91,21 @@ const optionLabels: Record<string, string> = {
   complete_without_deployment: 'Complete without deployment',
 };
 
+const defaultPersonality: Settings['personality'] = {
+  tone: 'british_butler',
+  responseStyle: 'concise',
+  customInstructions: '',
+};
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasUnsupportedControlCharacters(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 0x20 && character !== '\n' && character !== '\r' && character !== '\t';
+  });
 }
 
 function isSettingsResponse(value: unknown): value is SettingsResponse {
@@ -84,7 +114,8 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
   const options = value.options;
   const credentials = value.credentials;
   const optionKeys: (keyof SettingsOptions)[] = [
-    'jarvisModels', 'reasoningEfforts', 'speechToTextModels', 'englishModels',
+    'themes', 'jarvisModels', 'reasoningEfforts', 'personalityTones', 'personalityResponseStyles',
+    'speechToTextModels', 'englishModels',
     'englishVoices', 'danishVoices', 'languages', 'codexModels',
     'codexReasoningEfforts', 'copilotModels', 'projectVisibilities', 'projectAgents',
     'projectPolicies',
@@ -96,9 +127,19 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     (item.status === 'ok' || item.status === 'renew_soon' || item.status === 'failed' || item.status === 'unknown') &&
     (item.expiresAt === null || (typeof item.expiresAt === 'string' && Number.isFinite(Date.parse(item.expiresAt)))) &&
     (item.lastRenewedAt === null || (typeof item.lastRenewedAt === 'string' && Number.isFinite(Date.parse(item.lastRenewedAt)))));
-  return isObject(settings.jarvis) && isObject(settings.voice) && isObject(settings.codex) &&
+  return validOptions && validCredentials &&
+    isObject(settings.appearance) &&
+    (settings.appearance.theme === 'light' || settings.appearance.theme === 'dark') &&
+    isObject(settings.jarvis) && isObject(settings.personality) && isObject(settings.voice) && isObject(settings.codex) &&
     isObject(settings.copilot) && isObject(settings.global) && isObject(settings.newProjects) &&
     typeof settings.jarvis.model === 'string' && typeof settings.jarvis.reasoning === 'string' &&
+    typeof settings.personality.tone === 'string' &&
+    (options.personalityTones as string[]).includes(settings.personality.tone) &&
+    typeof settings.personality.responseStyle === 'string' &&
+    (options.personalityResponseStyles as string[]).includes(settings.personality.responseStyle) &&
+    typeof settings.personality.customInstructions === 'string' &&
+    settings.personality.customInstructions.length <= 2_000 &&
+    !hasUnsupportedControlCharacters(settings.personality.customInstructions) &&
     typeof settings.voice.speechToTextModel === 'string' && typeof settings.voice.englishModel === 'string' &&
     typeof settings.voice.englishVoice === 'string' && typeof settings.voice.danishVoice === 'string' &&
     (settings.voice.defaultLanguage === 'da' || settings.voice.defaultLanguage === 'en') &&
@@ -107,6 +148,9 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     typeof settings.copilot.model === 'string' && typeof settings.global.maxParallelTasks === 'number' &&
     Number.isSafeInteger(settings.global.maxParallelTasks) &&
     settings.global.maxParallelTasks >= 1 && settings.global.maxParallelTasks <= 100 &&
+    typeof settings.global.screenShareDailyFrameCap === 'number' &&
+    Number.isSafeInteger(settings.global.screenShareDailyFrameCap) &&
+    settings.global.screenShareDailyFrameCap >= 1 && settings.global.screenShareDailyFrameCap <= 300 &&
     typeof settings.newProjects.owner === 'string' &&
     (settings.newProjects.visibility === 'private' || settings.newProjects.visibility === 'public') &&
     typeof settings.newProjects.templatesRepository === 'string' &&
@@ -115,8 +159,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     typeof settings.newProjects.maxParallelTasks === 'number' &&
     Number.isSafeInteger(settings.newProjects.maxParallelTasks) &&
     settings.newProjects.maxParallelTasks >= 1 && settings.newProjects.maxParallelTasks <= 100 &&
-    typeof settings.newProjects.defaultBranch === 'string' &&
-    validOptions && validCredentials;
+    typeof settings.newProjects.defaultBranch === 'string';
 }
 
 const credentialNames: Record<CredentialStatus['name'], string> = {
@@ -203,13 +246,16 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
 }) {
+  const themePreference = useThemePreference();
   const [state, setState] = useState<LoadState>(backendUrl ? 'loading' : 'error');
   const [savedSettings, setSavedSettings] = useState<Settings | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [options, setOptions] = useState<SettingsOptions | null>(null);
   const [credentials, setCredentials] = useState<CredentialStatus[]>([]);
   const [saving, setSaving] = useState(false);
+  const [resettingPersonality, setResettingPersonality] = useState(false);
   const [message, setMessage] = useState('');
+  const [personalityResetMessage, setPersonalityResetMessage] = useState('');
   const [error, setError] = useState(backendUrl ? '' : 'Settings are unavailable until the backend is deployed.');
 
   const load = useCallback(async () => {
@@ -260,7 +306,29 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       ...current,
       [area]: { ...current[area], [key]: value },
     }) : current);
+    if (area === 'personality') setPersonalityResetMessage('');
     setMessage('');
+  };
+
+  const resetPersonality = async () => {
+    if (!settings || !savedSettings || !backendUrl || saving || personalityIsDefault) return;
+    setSaving(true);
+    setResettingPersonality(true);
+    setError('');
+    setMessage('');
+    setPersonalityResetMessage('');
+    try {
+      const result = await requestSettings(backendUrl, getAccessToken, 'PATCH', { personality: defaultPersonality });
+      setSavedSettings(result.settings);
+      setSettings((current) => current ? ({ ...current, personality: { ...result.settings.personality } }) : current);
+      setOptions(result.options);
+      setPersonalityResetMessage('Personality reset and saved. Defaults apply to new sessions.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Personality could not be reset. Try again.');
+    } finally {
+      setSaving(false);
+      setResettingPersonality(false);
+    }
   };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
@@ -276,6 +344,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       setSavedSettings(result.settings);
       setSettings(result.settings);
       setOptions(result.options);
+      setPersonalityResetMessage('');
       setMessage('Saved. These are defaults for new sessions and tasks; running work keeps its current settings.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Settings could not be saved. Try again.');
@@ -290,6 +359,13 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
     settings.global.maxParallelTasks >= 1 && settings.global.maxParallelTasks <= 100;
   const newProjectMaxTasksValid = settings !== null && Number.isSafeInteger(settings.newProjects.maxParallelTasks) &&
     settings.newProjects.maxParallelTasks >= 1 && settings.newProjects.maxParallelTasks <= 100;
+  const personalityInstructionsValid = settings !== null &&
+    settings.personality.customInstructions.length <= 2_000 &&
+    !hasUnsupportedControlCharacters(settings.personality.customInstructions);
+  const personalityIsDefault = settings !== null &&
+    settings.personality.tone === defaultPersonality.tone &&
+    settings.personality.responseStyle === defaultPersonality.responseStyle &&
+    settings.personality.customInstructions === defaultPersonality.customInstructions;
 
   return (
     <section className="settings-page" aria-labelledby="settings-heading">
@@ -303,6 +379,45 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       )}
       {state === 'ready' && settings && options && (
         <form onSubmit={(event) => { void save(event); }}>
+          <section className="settings-section" aria-labelledby="appearance-settings-heading">
+            <h2 id="appearance-settings-heading">Appearance</h2>
+            <p className="settings-explanation">Choose a light or dark appearance for every page. The accepted theme is saved separately from other settings.</p>
+            <fieldset className="choice-group theme-choice-group"
+              disabled={themePreference.state !== 'ready' || themePreference.saving}>
+              <legend>Theme</legend>
+              <label className="choice" htmlFor="theme-light">
+                <input id="theme-light" name="theme" type="radio" value="light"
+                  checked={themePreference.theme === 'light'}
+                  onChange={() => { void themePreference.saveTheme('light'); }} />
+                Light
+              </label>
+              <label className="choice" htmlFor="theme-dark">
+                <input id="theme-dark" name="theme" type="radio" value="dark"
+                  checked={themePreference.theme === 'dark'}
+                  onChange={() => { void themePreference.saveTheme('dark'); }} />
+                Dark
+              </label>
+            </fieldset>
+            {themePreference.state === 'loading' && <p className="settings-feedback" role="status">Loading saved theme…</p>}
+            {themePreference.state === 'error' && (
+              <div className="settings-feedback" role="alert">
+                <p>{themePreference.error}</p>
+                <button className="secondary-button" type="button" onClick={themePreference.retry}>Retry theme</button>
+              </div>
+            )}
+            {themePreference.state === 'ready' && themePreference.saving &&
+              <p className="settings-feedback" role="status">Saving theme…</p>}
+            {themePreference.state === 'ready' && themePreference.error &&
+              <p className="settings-feedback" role="alert">{themePreference.error}</p>}
+            {themePreference.state === 'ready' && !themePreference.error && themePreference.message &&
+              <p className="settings-feedback" role="status">{themePreference.message}</p>}
+            <button className="secondary-button theme-variable-button" type="button" disabled
+              aria-describedby="theme-variables-help">Edit theme variables</button>
+            <p className="settings-explanation" id="theme-variables-help">
+              Custom and Jarvis-directed variable changes are unavailable until their validated settings and tool update path is implemented.
+            </p>
+          </section>
+
           <section className="settings-section" aria-labelledby="jarvis-settings-heading">
             <h2 id="jarvis-settings-heading">Jarvis</h2>
             <div className="settings-grid">
@@ -314,6 +429,57 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
                 onChange={(value) => update('jarvis', 'reasoning', value)} />
             </div>
             <p className="settings-explanation">Model choices are limited to deployments currently configured for Jarvis.</p>
+          </section>
+
+          <section className="settings-section" aria-labelledby="personality-settings-heading">
+            <h2 id="personality-settings-heading">Jarvis Personality</h2>
+            <p className="settings-explanation" id="personality-session-help">
+              Personality changes apply to new sessions. Active sessions keep their current settings.
+            </p>
+            <div className="settings-grid">
+              <SelectField id="personality-tone" label="Tone" value={settings.personality.tone}
+                options={options.personalityTones} disabled={saving}
+                onChange={(value) => update('personality', 'tone', value as Settings['personality']['tone'])} />
+              <SelectField id="personality-response-style" label="Response style" value={settings.personality.responseStyle}
+                options={options.personalityResponseStyles} disabled={saving}
+                onChange={(value) => update('personality', 'responseStyle', value as Settings['personality']['responseStyle'])} />
+              <div className="settings-field">
+                <label htmlFor="personality-instructions">Custom instructions</label>
+                <textarea id="personality-instructions" rows={5} maxLength={2_000}
+                  value={settings.personality.customInstructions} disabled={saving}
+                  aria-describedby={`personality-instructions-help personality-instructions-count${personalityInstructionsValid ? '' : ' personality-instructions-error'}`}
+                  aria-invalid={!personalityInstructionsValid}
+                  onChange={(event) => update('personality', 'customInstructions', event.target.value)} />
+                <p className="settings-explanation" id="personality-instructions-help">
+                  Optional. Up to 2,000 characters. Keep instructions focused on tone and response style.
+                </p>
+                <p className="settings-explanation" id="personality-instructions-count">
+                  {settings.personality.customInstructions.length.toLocaleString()} / 2,000 characters
+                </p>
+                {!personalityInstructionsValid && (
+                  <p className="settings-validation-error" id="personality-instructions-error" role="alert">
+                    Remove control characters other than line breaks, tabs, and spaces.
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="settings-explanation" id="personality-reset-help">
+              {saving
+                ? 'Wait for the current save to finish before resetting.'
+                : personalityIsDefault
+                  ? 'The current personality already matches the default.'
+                  : 'Reset saves the current default immediately.'}
+            </p>
+            <div className="settings-actions">
+              <button className="secondary-button" type="button" disabled={saving || personalityIsDefault}
+                aria-describedby="personality-reset-help"
+                onClick={() => { void resetPersonality(); }}>Reset personality</button>
+            </div>
+            {(resettingPersonality || personalityResetMessage) && (
+              <p className="settings-explanation" role="status">
+                {resettingPersonality ? 'Resetting personality…' : personalityResetMessage}
+              </p>
+            )}
           </section>
 
           <section className="settings-section" aria-labelledby="voice-settings-heading">
@@ -377,6 +543,13 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
                 value={settings.global.maxParallelTasks} disabled={saving}
                 onChange={(event) => update('global', 'maxParallelTasks', Number(event.target.value))} />
               <p className="settings-explanation">Choose a whole number from 1 to 100.</p>
+            </div>
+            <div className="settings-field settings-number-field">
+              <label htmlFor="screen-share-daily-frame-cap">Daily screen inspection limit</label>
+              <input id="screen-share-daily-frame-cap" type="number" min="1" max="300" step="1"
+                value={settings.global.screenShareDailyFrameCap} disabled={saving}
+                onChange={(event) => update('global', 'screenShareDailyFrameCap', Number(event.target.value))} />
+              <p className="settings-explanation">Maximum screen frames sent to the vision model per UTC day (1–300).</p>
             </div>
             <p className="settings-explanation" id="sleep-switch-help">Manage backend sleep from the Jarvis main page.</p>
             <a className="home-link" href="/" aria-describedby="sleep-switch-help">Open the Jarvis main page</a>
@@ -450,8 +623,8 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
 
           <div className="settings-save">
             <button className="primary-button" type="submit"
-              disabled={!dirty || !maxTasksValid || !newProjectMaxTasksValid || saving}>
-              {saving ? 'Saving…' : 'Save settings'}
+              disabled={!dirty || !maxTasksValid || !newProjectMaxTasksValid || !personalityInstructionsValid || saving}>
+              {saving && !resettingPersonality ? 'Saving…' : 'Save settings'}
             </button>
             <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
               {error || message}

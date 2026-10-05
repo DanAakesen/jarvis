@@ -11,7 +11,11 @@ import { createWebhookDeliveryStore } from './webhook-delivery-store.js';
 import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
 import { createAlertActivityStore } from './alert-store.js';
+import { createAwayModeStore } from './away-mode-store.js';
+import { presenceAwayThresholdMs } from '../core/away-mode.js';
 import { createDispatcherStore } from './dispatcher-store.js';
+import { createConversationStore } from './conversation-store.js';
+import { createMemoryStore } from './memory-store.js';
 import {
   createTaskEventArchive,
   type TaskEventArchiveBlobStore,
@@ -29,9 +33,11 @@ const administrator = new sql.ConnectionPool({ ...configuration, database: 'mast
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
-  'activity', 'artifacts', 'credential_status', 'deployments', 'jarvis_sessions', 'messages', 'projects',
-  'pull_requests', 'releases', 'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives',
-  'task_events', 'tasks', 'tool_calls', 'usage', 'webhook_deliveries', 'workflow_runs',
+  'activity', 'artifacts', 'credential_status', 'deployments', 'jarvis_sessions', 'memories',
+  'memory_deletions', 'memory_history', 'messages', 'projects', 'pull_requests', 'releases',
+  'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks',
+  'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage',
+  'webhook_deliveries', 'workflow_runs',
 ];
 
 async function tables(): Promise<string[]> {
@@ -83,7 +89,7 @@ afterAll(async () => {
   await administrator.close();
 });
 
-describe('committed domain schema (groups 1-7)', () => {
+describe('committed domain schema (groups 1-8)', () => {
   it('boots the committed migration manifest twice without duplicate ledger rows', async () => {
     const committed = await readMigrations();
     expect(await applyMigrations(pool, committed)).toEqual(committed.map((migration) => migration.name));
@@ -110,6 +116,131 @@ describe('committed domain schema (groups 1-7)', () => {
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
       'UX_activity_alert_key',
     ]);
+  });
+  it('persists away mode and an in-progress Teams presence timer across store recreation', async () => {
+    const startedAt = new Date('2026-10-04T12:00:00.000Z');
+    const firstStore = createAwayModeStore(pool);
+    await firstStore.observePresence(true, startedAt);
+
+    const onModeChanged = vi.fn();
+    const restartedStore = createAwayModeStore(pool, onModeChanged);
+    expect(await restartedStore.read()).toEqual({
+      away: false,
+      source: null,
+      changedAt: null,
+      presenceAwaySince: startedAt.toISOString(),
+    });
+
+    expect(await restartedStore.observePresence(
+      true,
+      new Date(startedAt.getTime() + presenceAwayThresholdMs),
+    )).toMatchObject({
+      away: true,
+      source: 'teams_presence',
+      presenceAwaySince: startedAt.toISOString(),
+    });
+    await restartedStore.set(false, new Date(startedAt.getTime() + presenceAwayThresholdMs + 1));
+    expect(await createAwayModeStore(pool).read()).toMatchObject({ away: false, source: 'manual' });
+    expect((await pool.request().query<{ kind: string; title: string }>(
+      `SELECT kind, title FROM dbo.activity WHERE area = N'core' ORDER BY id;`,
+    )).recordset).toEqual([
+      { kind: 'away_mode', title: 'Away mode is on' },
+      { kind: 'away_mode', title: 'Away mode is off' },
+    ]);
+    expect(onModeChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains source-linked memory across sessions and store restarts, then forgets without deleting sources', async () => {
+    const conversations = createConversationStore(pool);
+    const firstSession = await conversations.createSession({ channel: 'chat', language: 'en' });
+    const firstSource = await conversations.addMessage({
+      sessionId: firstSession.id, role: 'dan', text: 'I prefer English for Jarvis.', model: null,
+    });
+    const secondSession = await conversations.createSession({ channel: 'voice', language: 'da' });
+    const secondSource = await conversations.addMessage({
+      sessionId: secondSession.id, role: 'dan', text: 'I prefer Danish for voice.', model: null,
+    });
+
+    const firstStore = createMemoryStore(pool);
+    await firstStore.initialize();
+    const searchSetup = await pool.request().query<{
+      fulltext_installed: boolean;
+      fulltext_indexed: boolean;
+    }>(`DECLARE @fullTextInstalled bit = 0;
+      BEGIN TRY
+        SET @fullTextInstalled = CASE
+          WHEN FULLTEXTSERVICEPROPERTY(N'IsFullTextInstalled') = 1 THEN 1 ELSE 0 END;
+      END TRY
+      BEGIN CATCH
+        SET @fullTextInstalled = 0;
+      END CATCH;
+      SELECT @fullTextInstalled AS fulltext_installed,
+        CONVERT(bit, CASE WHEN EXISTS (
+          SELECT 1 FROM sys.fulltext_indexes WHERE object_id = OBJECT_ID(N'dbo.memories')
+        ) AND @fullTextInstalled = 1 THEN 1 ELSE 0 END) AS fulltext_indexed;`);
+    if (searchSetup.recordset[0]?.fulltext_installed) {
+      expect(searchSetup.recordset[0]?.fulltext_indexed).toBe(true);
+    }
+    const initial = await firstStore.save({
+      category: 'preference',
+      key: 'language',
+      content: 'Dan prefers English for Jarvis.',
+      sourceMessageId: firstSource.id,
+      embedding: null,
+    }, new AbortController().signal);
+    const repeated = await firstStore.save({
+      category: 'preference',
+      key: 'language',
+      content: 'Dan prefers English for Jarvis.',
+      sourceMessageId: firstSource.id,
+      embedding: null,
+    }, new AbortController().signal);
+    const changed = await firstStore.save({
+      category: 'preference',
+      key: 'language',
+      content: 'Dan prefers Danish for Jarvis voice.',
+      sourceMessageId: secondSource.id,
+      embedding: null,
+    }, new AbortController().signal);
+
+    expect(initial).toMatchObject({ created: true, changed: true, memory: { revision: 1 } });
+    expect(repeated).toMatchObject({ created: false, changed: false, memory: { revision: 1 } });
+    expect(changed).toMatchObject({
+      created: false,
+      changed: true,
+      memory: { id: initial.memory.id, revision: 2, sourceMessageId: secondSource.id },
+    });
+
+    const afterRestart = createMemoryStore(pool);
+    await afterRestart.initialize();
+    const recalled = await afterRestart.list(5, new AbortController().signal);
+    expect(recalled.memories).toHaveLength(1);
+    expect(recalled.memories[0]).toMatchObject({
+      id: initial.memory.id,
+      content: 'Dan prefers Danish for Jarvis voice.',
+      sourceMessageId: secondSource.id,
+      revision: 2,
+    });
+    const versions = await afterRestart.history(initial.memory.id, 10, new AbortController().signal);
+    expect(versions.map(({ revision, sourceMessageId }) => ({ revision, sourceMessageId }))).toEqual([
+      { revision: 2, sourceMessageId: secondSource.id },
+      { revision: 1, sourceMessageId: firstSource.id },
+    ]);
+
+    const forgotten = await afterRestart.forget(
+      initial.memory.id, secondSource.id, new AbortController().signal,
+    );
+    expect(forgotten).toEqual({ category: 'preference', key: 'language' });
+    const afterForget = createMemoryStore(pool);
+    await afterForget.initialize();
+    expect((await afterForget.list(5, new AbortController().signal)).memories).toEqual([]);
+    const retainedSources = await pool.request().input('firstId', sql.BigInt, BigInt(firstSource.id))
+      .input('secondId', sql.BigInt, BigInt(secondSource.id))
+      .query('SELECT COUNT(*) AS count FROM dbo.messages WHERE id IN (@firstId, @secondId) AND role = N\'dan\';');
+    expect(retainedSources.recordset[0]?.count).toBe(2);
+    const deletionLog = await pool.request().input('memoryId', sql.BigInt, BigInt(initial.memory.id))
+      .query('SELECT COUNT(*) AS count FROM dbo.memory_deletions WHERE memory_id = @memoryId;');
+    expect(deletionLog.recordset[0]?.count).toBe(1);
   });
 
   it('ignores a concurrently repeated webhook delivery ID', async () => {
@@ -365,7 +496,7 @@ describe('committed domain schema (groups 1-7)', () => {
       createEventHub<TaskEventMessage>(),
       alertNotifier,
     );
-    await expect(heartbeatStore.markNeedsAttention(String(sandboxId))).resolves.toBe(true);
+    await expect(heartbeatStore.markNeedsAttention(String(sandboxId))).resolves.toBe('crashed');
     await expect(heartbeatStore.markNeedsAttention(String(sandboxId))).resolves.toBe(false);
     expect(alertNotifier).toHaveBeenCalledTimes(2);
 
@@ -906,13 +1037,14 @@ describe('committed domain schema (groups 1-7)', () => {
     expect(running).toEqual([{
       sandboxSessionId: String(sandboxSessionId), foundrySessionId: 'heartbeat-session',
       agentName: 'jarvis-runner-base-1x2', invocationId: 'heartbeat-invocation',
+      invocationCompleted: false,
     }]);
     await store.recordHeartbeat(String(sandboxSessionId));
     const heartbeat = await pool.request().query<{ at: Date | null }>(
       `SELECT last_heartbeat_at AS at FROM dbo.sandbox_sessions WHERE id = ${sandboxSessionId}`);
     expect(heartbeat.recordset[0]?.at).toBeInstanceOf(Date);
 
-    expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe(true);
+    expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe('crashed');
     expect(await store.markNeedsAttention(String(sandboxSessionId))).toBe(false);
     const result = await pool.request().query<{ taskState: string; sessionStatus: string; endReason: string; leaseOwner: string | null }>(
       `SELECT t.state AS taskState, s.status AS sessionStatus, s.end_reason AS endReason, t.lease_owner AS leaseOwner
@@ -956,7 +1088,7 @@ describe('committed domain schema (groups 1-7)', () => {
     const store = createSandboxHeartbeatStore(pool, eventHub);
     const question = 'Which license should this project use?';
 
-    expect(await store.markNeedsAttention(String(sandboxSessionId), question)).toBe(true);
+    expect(await store.markNeedsAttention(String(sandboxSessionId), question)).toBe('needs_attention');
     const taskDetail = await taskStore.get(task.id, 10, 0);
     expect(taskDetail?.state).toBe('NeedsAttention');
     expect(taskDetail?.events).toEqual(expect.arrayContaining([expect.objectContaining({
@@ -973,11 +1105,13 @@ describe('committed domain schema (groups 1-7)', () => {
     expect(sandbox.recordset).toEqual([{ status: 'Ended', endReason: 'done' }]);
   });
 
-  it('ends an idle-expired completed session without changing the task state', async () => {
+  it.each(['completed', 'session_question', 'completed_before_turn'])(
+    'keeps a %s turn out of generic NeedsAttention crash cleanup and expires it without changing state',
+    async (type) => {
     const eventHub = createEventHub<TaskEventMessage>();
     const taskStore = createTaskStore(pool, eventHub);
     const project = await createProjectStore(pool).create({
-      name: 'Idle expiry fixture', repo: `${database}/idle-expiry`, default_branch: 'main',
+      name: 'Idle expiry fixture', repo: `${database}/idle-expiry-${type}`, default_branch: 'main',
       default_agent: 'copilot', policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
     });
     const task = await taskStore.create({
@@ -987,30 +1121,47 @@ describe('committed domain schema (groups 1-7)', () => {
     expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
     const sandboxSessionId = await scalar(`INSERT dbo.sandbox_sessions
       (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
-      VALUES (${task.id}, N'idle-expiry-session', N'1', N'jarvis-runner-base-1x2', N'1x2',
+      VALUES (${task.id}, N'idle-expiry-session-${type}', N'1', N'jarvis-runner-base-1x2', N'1x2',
         N'jarvis-runner-base@sha256:fixture', N'Active')`);
     const invocationId = `idle-expiry-${randomUUID()}`;
+    const recordCompletion = () => taskStore.recordEvent({
+      taskId: task.id,
+      type: type === 'completed_before_turn' ? 'completed' : type,
+      summary: 'The agent needs a clarification.',
+      source: 'runner',
+      payload: { invocationId, eventIndex: 1, data: { question: 'Which license?' } },
+    });
+    if (type === 'completed_before_turn') await recordCompletion();
     await pool.request()
       .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
       .input('invocationId', sql.NVarChar(255), invocationId)
       .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
         VALUES (@sandboxSessionId, @invocationId, N'task', N'idle-expiry-acp', N'running');`);
-    await taskStore.recordEvent({
-      taskId: task.id,
-      type: 'session_question',
-      summary: 'The agent needs a clarification.',
-      source: 'runner',
-      payload: { invocationId, eventIndex: 1, data: { question: 'Which license?' } },
-    });
+    if (type !== 'completed_before_turn') await recordCompletion();
+    if (type !== 'session_question') {
+      expect((await taskStore.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+    }
+    const dispatcherStore = createDispatcherStore(pool, eventHub);
+    expect(await dispatcherStore.endTaskSessions(task.id, 'NeedsAttention')).toEqual([]);
+    const session = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .query<{ status: string; endReason: string | null }>(
+        'SELECT status, end_reason AS endReason FROM dbo.sandbox_sessions WHERE id = @sandboxSessionId;');
+    expect(session.recordset).toEqual([{ status: 'Active', endReason: null }]);
 
     const heartbeatStore = createSandboxHeartbeatStore(pool, eventHub);
-    expect((await heartbeatStore.listRunning()).some((sandbox) =>
-      sandbox.sandboxSessionId === String(sandboxSessionId))).toBe(true);
+    expect(await heartbeatStore.listRunning()).toContainEqual({
+      sandboxSessionId: String(sandboxSessionId), foundrySessionId: `idle-expiry-session-${type}`,
+      agentName: 'jarvis-runner-base-1x2', invocationId, invocationCompleted: true,
+    });
+    expect(await heartbeatStore.markNeedsAttention(
+      String(sandboxSessionId), undefined, 'old-invocation', true,
+    )).toBe(false);
     const published: TaskEventMessage[] = [];
     eventHub.subscribe((event) => published.push(event));
     expect(await heartbeatStore.markNeedsAttention(
       String(sandboxSessionId), undefined, invocationId,
-    )).toBe(true);
+    )).toBe('idle_expired');
 
     const detail = await taskStore.get(task.id, 10, 0);
     expect(detail).toMatchObject({
@@ -1032,6 +1183,20 @@ describe('committed domain schema (groups 1-7)', () => {
     expect(await heartbeatStore.markNeedsAttention(
       String(sandboxSessionId), undefined, invocationId,
     )).toBe(false);
+    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+    const continuedSessionId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+      VALUES (${task.id}, N'continued-session-${type}', N'1', N'jarvis-runner-base-1x2', N'1x2',
+        N'jarvis-runner-base@sha256:fixture', N'Active')`);
+    expect(await dispatcherStore.endTaskSessions(task.id, 'NeedsAttention')).toEqual([]);
+    expect(await dispatcherStore.endTaskSessions(task.id, 'NeedsAttention', true)).toEqual([]);
+    const continued = await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(continuedSessionId))
+      .query<{ status: string; endReason: string | null }>(
+        'SELECT status, end_reason AS endReason FROM dbo.sandbox_sessions WHERE id = @sandboxSessionId;');
+    expect(continued.recordset).toEqual([{ status: 'Active', endReason: null }]);
+    expect((await taskStore.transition(task.id, 'Cancelled')).kind).toBe('ok');
+    await dispatcherStore.endTaskSessions(task.id, 'Cancelled');
   });
 
   it('creates, updates, lists, and archives projects through the SQL store', async () => {

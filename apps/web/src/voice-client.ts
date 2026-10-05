@@ -1,5 +1,5 @@
 export type VoiceLanguage = 'da' | 'en';
-export type VoiceStatus = 'stopped' | 'connecting' | 'stopping' | 'listening' | 'thinking' | 'speaking' | 'reconnecting' | 'error';
+export type VoiceStatus = 'stopped' | 'connecting' | 'ready' | 'stopping' | 'listening' | 'thinking' | 'speaking' | 'reconnecting' | 'error';
 
 type VoiceSocket = Omit<Pick<WebSocket, 'addEventListener' | 'removeEventListener' | 'send' | 'close' | 'readyState'>, 'readyState'> & {
   readonly readyState: number;
@@ -8,7 +8,7 @@ type VoiceSocket = Omit<Pick<WebSocket, 'addEventListener' | 'removeEventListene
 export interface VoiceAudio {
   prepare(): Promise<void>;
   open(sendAudio: (audio: string) => void): Promise<void>;
-  play(audio: string): void;
+  play(audio: string): number;
   stopPlayback(): void;
   hasPlayback(): boolean;
   setPlaybackEndedHandler(handler: () => void): void;
@@ -22,7 +22,10 @@ export interface VoiceClientOptions {
   getAccessToken: () => Promise<string>;
   language?: VoiceLanguage;
   onStatus: (status: VoiceStatus, message: string) => void;
+  onAudioLevel?: (level: number) => void;
   onSessionEnded?: () => void;
+  onSessionReady?: (sessionId: string) => void;
+  onVisionRequest?: (source: 'camera' | 'screen', transcript: string) => void;
   createSocket?: (url: string, protocols: string[]) => VoiceSocket;
   createAudio?: () => VoiceAudio;
   delay?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -46,6 +49,16 @@ function decodeEvent(data: unknown): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function requestedVisionSource(transcript: string): 'camera' | 'screen' | undefined {
+  if (/\b(?:what am i holding|what(?:'s| is) in my hand|look at (?:my|the) camera|what can you see|hvad holder jeg|hvad er det jeg holder|kig på (?:mit )?kamera(?:et)?|hvad kan du se)\b/iu.test(transcript)) {
+    return 'camera';
+  }
+  if (/\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen|kig på (?:min )?skærm(?:en)?|hvad (?:er der|kan du se) på (?:min )?skærm(?:en)?)\b/iu.test(transcript)) {
+    return 'screen';
+  }
+  return undefined;
 }
 
 function voiceUrl(backendUrl: string | null, language: VoiceLanguage): string {
@@ -264,20 +277,23 @@ function browserAudio(): VoiceAudio {
       mute.connect(context.destination);
     },
     play(encoded) {
-      if (!context) return;
+      if (!context) return 0;
       let binary: string;
-      try { binary = atob(encoded); } catch { return; }
+      try { binary = atob(encoded); } catch { return 0; }
       const byteLength = binary.length - (binary.length % 2);
-      if (!byteLength) return;
+      if (!byteLength) return 0;
       const pcm = new DataView(new ArrayBuffer(byteLength));
       for (let index = 0; index < byteLength; index += 1) {
         pcm.setUint8(index, binary.charCodeAt(index));
       }
       const buffer = context.createBuffer(1, byteLength / 2, SAMPLE_RATE);
       const samples = buffer.getChannelData(0);
+      let energy = 0;
       for (let index = 0; index < samples.length; index += 1) {
         samples[index] = pcm.getInt16(index * 2, true) / 0x8000;
+        energy += samples[index]! * samples[index]!;
       }
+      const audioLevel = samples.length > 0 ? Math.min(1, Math.sqrt(energy / samples.length) * 4) : 0;
       const sourceNode = context.createBufferSource();
       sourceNode.buffer = buffer;
       sourceNode.connect(context.destination);
@@ -291,6 +307,7 @@ function browserAudio(): VoiceAudio {
       sourceNode.start(startAt);
       scheduledUntil = startAt + buffer.duration;
       playing.add(sourceNode);
+      return audioLevel;
     },
     stopPlayback,
     hasPlayback: () => playing.size > 0,
@@ -320,12 +337,15 @@ export class BrowserVoiceClient {
   private running = false;
   private muted = false;
   private microphoneOpen = false;
+  private microphoneOpening = false;
+  private sessionReady = false;
   private playbackAllowed = false;
   private responseFinished = false;
   private stopping = false;
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
   private stopOpenSocket: VoiceSocket | undefined;
   private stopOpenHandler: (() => void) | undefined;
+  private screenSessionReady = false;
 
   constructor(private readonly options: VoiceClientOptions) {
     this.language = options.language ?? 'da';
@@ -333,6 +353,7 @@ export class BrowserVoiceClient {
     this.makeSocket = options.createSocket ?? createSocket;
     this.delay = options.delay ?? abortableDelay;
     this.audio.setPlaybackEndedHandler(() => {
+      this.options.onAudioLevel?.(0);
       if (this.running && this.microphoneOpen && this.responseFinished) {
         this.publish('listening', 'Listening for your voice.');
       }
@@ -391,6 +412,44 @@ export class BrowserVoiceClient {
     this.audio.setMuted(muted);
   }
 
+  sendScreenContext(description: string): void {
+    if (!this.running || !this.screenSessionReady || description.trim().length === 0 ||
+        description.length > 5_000 || this.socket?.readyState !== WebSocket.OPEN) {
+      throw new Error('The active voice session is not ready for screen context.');
+    }
+    this.socket.send(JSON.stringify({ type: 'jarvis.screen.context', description }));
+  }
+
+  async enableMicrophone(): Promise<void> {
+    const socket = this.socket;
+    if (!socket || socket.readyState !== WebSocket.OPEN || !this.running || this.stopping ||
+        !this.sessionReady || this.microphoneOpen || this.microphoneOpening) return;
+    this.muted = false;
+    this.microphoneOpening = true;
+    try {
+      await this.audio.open((audio) => {
+        if (this.running && !this.stopping && socket === this.socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: 'input_audio_buffer.append', audio }));
+        }
+      });
+      if (!this.running || this.stopping || socket !== this.socket || socket.readyState !== WebSocket.OPEN) {
+        this.audio.closeInput();
+        return;
+      }
+      this.microphoneOpen = true;
+      this.playbackAllowed = true;
+      this.audio.setMuted(this.muted);
+      this.publish('listening', 'Listening for your voice.');
+    } catch {
+      this.audio.closeInput();
+      if (this.running && !this.stopping && socket === this.socket) {
+        this.publish('ready', 'Microphone access was not granted. Check browser permissions, then enable the microphone to retry.');
+      }
+    } finally {
+      this.microphoneOpening = false;
+    }
+  }
+
   private publish(status: VoiceStatus, message: string): void {
     this.options.onStatus(status, message);
   }
@@ -436,28 +495,12 @@ export class BrowserVoiceClient {
             await waitForVoiceEvent(socket, ['session.updated'], signal, WARMUP_TIMEOUT_MS);
           }
           if (!this.running || signal.aborted) break;
-          try {
-            await this.audio.open((audio) => {
-              if (socket === this.socket && socket) {
-                socket.send(JSON.stringify({ type: 'input_audio_buffer.append', audio }));
-              }
-            });
-          } catch {
-            if (this.running && !signal.aborted) {
-              this.running = false;
-              this.publish('error', 'Microphone access was not granted. Check browser permissions and try again.');
-            }
-            break;
-          }
           if (this.stopping) {
-            this.audio.closeInput();
             await waitForClose(socket, signal);
             break;
           }
-          this.microphoneOpen = true;
-          this.playbackAllowed = true;
-          this.audio.setMuted(this.muted);
-          this.publish('listening', 'Listening for your voice.');
+          this.sessionReady = true;
+          this.publish('ready', 'Voice is ready. Microphone is off; enable it when you want to speak.');
           await waitForClose(socket, signal);
           reconnects += 1;
         } catch (error) {
@@ -471,6 +514,8 @@ export class BrowserVoiceClient {
             socket.close();
           }
           this.microphoneOpen = false;
+          this.sessionReady = false;
+          this.screenSessionReady = false;
           this.playbackAllowed = false;
           this.responseFinished = false;
           this.audio.stopPlayback();
@@ -499,10 +544,20 @@ export class BrowserVoiceClient {
   private receive(data: unknown): void {
     const event = decodeEvent(data);
     if (!event || typeof event.type !== 'string') return;
-    if (event.type === 'jarvis.session.ended') {
+    if (event.type === 'jarvis.session.ready') {
+      if (typeof event.sessionId === 'string' && /^[1-9]\d{0,18}$/u.test(event.sessionId)) {
+        this.screenSessionReady = true;
+        this.options.onSessionReady?.(event.sessionId);
+      }
+    } else if (event.type === 'jarvis.session.ended') {
       this.finishStop(true);
+    } else if (event.type === 'conversation.item.input_audio_transcription.completed' &&
+        typeof event.transcript === 'string') {
+      const source = requestedVisionSource(event.transcript);
+      if (source) this.options.onVisionRequest?.(source, event.transcript);
     } else if (event.type === 'input_audio_buffer.speech_started' || event.type === 'speech_started') {
       this.audio.stopPlayback();
+      this.options.onAudioLevel?.(0);
       this.playbackAllowed = false;
       this.responseFinished = false;
       if (this.running && this.microphoneOpen) this.publish('listening', 'Listening for your voice.');
@@ -512,17 +567,22 @@ export class BrowserVoiceClient {
       if (this.running && this.microphoneOpen) this.publish('thinking', 'Jarvis is thinking.');
     } else if (event.type === 'response.audio.delta' || event.type === 'response.output_audio.delta') {
       if (typeof event.delta === 'string' && this.running && this.microphoneOpen && this.playbackAllowed) {
-        this.audio.play(event.delta);
+        this.options.onAudioLevel?.(this.audio.play(event.delta));
         this.publish('speaking', 'Jarvis is speaking.');
       }
     } else if (event.type === 'response.done' && this.running && this.microphoneOpen) {
       this.responseFinished = true;
-      if (!this.audio.hasPlayback()) this.publish('listening', 'Listening for your voice.');
+      if (!this.audio.hasPlayback()) {
+        this.options.onAudioLevel?.(0);
+        this.publish('listening', 'Listening for your voice.');
+      }
     }
   }
 
   private finishStop(sessionEnded: boolean, failed = false): void {
     this.running = false;
+    this.sessionReady = false;
+    this.screenSessionReady = false;
     this.stopping = false;
     if (this.stopTimer !== undefined) clearTimeout(this.stopTimer);
     this.stopTimer = undefined;
@@ -536,6 +596,7 @@ export class BrowserVoiceClient {
     this.socket?.close(1000, 'Voice stopped');
     this.socket = undefined;
     this.audio.dispose();
+    this.options.onAudioLevel?.(0);
     this.publish(
       failed ? 'error' : 'stopped',
       failed ? 'Voice session could not be saved. Stop voice and try again.' : 'Voice is off.',

@@ -1,12 +1,21 @@
 import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
-import { projectRoutes } from './projects.js';
+import { ToolRefusal } from '../core/tool-registry.js';
+import { readSettings } from '../core/settings.js';
+import {
+  GitHubRepositoryUnavailableError,
+  ProjectConflictError,
+  RepositoryNotAvailableError,
+  manageExistingRepository,
+  projectRoutes,
+} from './projects.js';
 import { createProjectTool } from './new-project.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
 import type {
   CreateTaskInput, RecordTaskEventInput, TaskControlCommand, TaskEventMessage, TaskListFilters,
 } from './task-store.js';
 import { factoryTools } from './tools.js';
+import { registerReleaseViewRoutes } from './release-view.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxResponseBytes = 1024 * 1024;
@@ -47,8 +56,52 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 
 export const factoryModule: BackendModule = {
   id: 'factory',
-  tools: [...factoryTools, createProjectTool],
+  tools: [...factoryTools, createProjectTool, {
+    name: 'manage_repository',
+    description: 'Register an existing repository from the GitHub App installation using the New projects defaults.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repository: { type: 'string', minLength: 3, maxLength: 140, pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' },
+      },
+      required: ['repository'],
+      additionalProperties: false,
+    },
+    execute: async (input, request, signal) => {
+      try {
+        return await manageExistingRepository(request.server, (input as { repository: string }).repository, undefined, signal);
+      } catch (error) {
+        if (error instanceof ProjectConflictError) throw new ToolRefusal('That repository is already managed by Jarvis.');
+        if (error instanceof RepositoryNotAvailableError) throw new ToolRefusal('That repository is not available in the GitHub App installation.');
+        if (error instanceof GitHubRepositoryUnavailableError) throw error;
+        throw error;
+      }
+    },
+  }],
   registerRoutes: async (app) => {
+    registerReleaseViewRoutes(app);
+    app.get<{ Querystring: { refresh?: boolean } }>('/factory/repositories', {
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: { refresh: { type: 'boolean', default: false } },
+          additionalProperties: false,
+        },
+      },
+    }, async (request, reply) => {
+      const catalog = app.githubRepositoryCatalog;
+      const settingsStore = app.settingsStore;
+      if (!catalog || !settingsStore) return reply.code(503).send({ error: 'GitHub repository service unavailable' });
+      const settings = await readSettings(settingsStore);
+      try {
+        const listing = await catalog.list(settings.newProjects.owner, request.query.refresh ?? false);
+        return sendBounded(reply.header('Cache-Control', 'no-store'), listing);
+      } catch {
+        request.log.warn('github.repository_list_failed');
+        return reply.code(502).send({ error: 'GitHub repository service unavailable' });
+      }
+    });
+
     app.post<{ Body: CreateTaskInput }>('/factory/tasks', {
       schema: {
         body: {
@@ -227,6 +280,7 @@ export const factoryModule: BackendModule = {
       let closed = false;
       let replaying = true;
       let pending: TaskEventMessage[] = [];
+      let eventDelivery = Promise.resolve();
       const replayedIds = new Set<string>();
       const cleanup = () => {
         if (closed) return;
@@ -255,9 +309,17 @@ export const factoryModule: BackendModule = {
             return;
           }
           pending.push(event);
-        } else {
-          writeEvent(event);
+          return;
         }
+        eventDelivery = eventDelivery.then(async () => {
+          try {
+            if ((await app.awayModeStore?.read())?.away) return;
+            if (closed) return;
+            writeEvent(event);
+          } catch {
+            end();
+          }
+        });
       });
       reply.hijack();
       const heartbeat = setInterval(() => {
@@ -286,13 +348,18 @@ export const factoryModule: BackendModule = {
           if (events.length < eventReplayPageSize) break;
         }
         if (closed) return;
-        replaying = false;
-        const buffered = pending.sort((left, right) =>
-          BigInt(left.id) < BigInt(right.id) ? -1 : BigInt(left.id) > BigInt(right.id) ? 1 : 0);
-        pending = [];
-        for (const event of buffered) {
-          if (!writeEvent(event)) return;
+        while (pending.length) {
+          const away = (await app.awayModeStore?.read())?.away ?? false;
+          const buffered = pending.sort((left, right) =>
+            BigInt(left.id) < BigInt(right.id) ? -1 : BigInt(left.id) > BigInt(right.id) ? 1 : 0);
+          pending = [];
+          if (!away) {
+            for (const event of buffered) {
+              if (!writeEvent(event)) return;
+            }
+          }
         }
+        replaying = false;
         if (!response.write('event: ready\ndata: {}\n\n')) end();
       };
       void replay().catch(end);

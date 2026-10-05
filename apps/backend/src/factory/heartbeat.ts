@@ -5,17 +5,18 @@ export interface RunningSandbox {
   foundrySessionId: string;
   agentName: string;
   invocationId: string;
+  invocationCompleted?: boolean;
 }
 
 export interface SandboxHeartbeatStore {
   listRunning(): Promise<RunningSandbox[]>;
-  recordHeartbeat(sandboxSessionId: string): Promise<void>;
+  recordHeartbeat(sandboxSessionId: string, invocationId?: string, invocationCompleted?: boolean): Promise<void>;
   markNeedsAttention(
     sandboxSessionId: string,
     question?: string,
     invocationId?: string,
     invocationCompleted?: boolean,
-  ): Promise<boolean>;
+  ): Promise<'crashed' | 'idle_expired' | 'needs_attention' | false>;
   resolvePause(sandboxSessionId: string, state: 'Running' | 'Paused'): Promise<boolean>;
 }
 
@@ -28,6 +29,14 @@ interface HeartbeatOptions {
   failureConfirmMs?: number;
   now?: () => number;
   onError?: (error: unknown) => void;
+  onDecision?: (decision: HeartbeatDecision) => void;
+}
+
+export interface HeartbeatDecision {
+  sandboxSessionId: string;
+  invocationId: string;
+  httpStatus: number | null;
+  decision: string;
 }
 
 interface TrackedSandbox {
@@ -56,6 +65,7 @@ export class SandboxHeartbeat {
   private readonly failureConfirmMs: number;
   private readonly now: () => number;
   private readonly onError: (error: unknown) => void;
+  private readonly onDecision: (decision: HeartbeatDecision) => void;
   private completionHandler: ((sandbox: RunningSandbox) => Promise<boolean>) | undefined;
   private started = false;
 
@@ -68,6 +78,7 @@ export class SandboxHeartbeat {
     this.failureConfirmMs = options.failureConfirmMs ?? heartbeatFailureConfirmMs;
     this.now = options.now ?? Date.now;
     this.onError = options.onError ?? (() => {});
+    this.onDecision = options.onDecision ?? (() => {});
   }
 
   async start(): Promise<void> {
@@ -82,7 +93,7 @@ export class SandboxHeartbeat {
     if (previous) this.cancel(previous);
     const entry: TrackedSandbox = {
       sandbox, failures: 0, failureSince: undefined, timer: undefined, controller: undefined, pending: undefined,
-      invocationCompleted: false, completionHandled: false,
+      invocationCompleted: sandbox.invocationCompleted ?? false, completionHandled: false,
     };
     this.tracked.set(sandbox.sandboxSessionId, entry);
     if (this.started) this.poll(entry);
@@ -120,58 +131,83 @@ export class SandboxHeartbeat {
   }
 
   private async pollOnce(entry: TrackedSandbox, signal: AbortSignal): Promise<void> {
+    let httpStatus: number | null = null;
+    const log = (decision: string) => this.onDecision({
+      sandboxSessionId: entry.sandbox.sandboxSessionId,
+      invocationId: entry.sandbox.invocationId,
+      httpStatus,
+      decision,
+    });
     try {
-      const result = await this.clientFor(entry.sandbox.agentName).status(entry.sandbox.invocationId, { signal });
-      if (signal.aborted) return;
+      const result = await this.clientFor(entry.sandbox.agentName).status(entry.sandbox.invocationId, {
+        signal, onResponse: (statusCode) => { httpStatus = statusCode; },
+      });
+      if (signal.aborted) { log('cancelled'); return; }
       if (result.sessionId !== entry.sandbox.foundrySessionId) {
         throw new Error('Foundry status did not match the tracked session');
       }
-      await this.store.recordHeartbeat(entry.sandbox.sandboxSessionId);
+      await this.store.recordHeartbeat(
+        entry.sandbox.sandboxSessionId, entry.sandbox.invocationId, result.status === 'completed',
+      );
+      if (signal.aborted) { log('cancelled'); return; }
       entry.failures = 0;
+      entry.failureSince = undefined;
       if (result.status === 'paused') {
         const paused = await this.store.resolvePause(entry.sandbox.sandboxSessionId, 'Paused');
-        if (paused) this.untrack(entry.sandbox.sandboxSessionId);
+        log(paused ? 'paused' : 'pause_unchanged');
+        if (paused && !signal.aborted) this.untrack(entry.sandbox.sandboxSessionId);
       } else if (result.status === 'running' || result.status === 'queued') {
         await this.store.resolvePause(entry.sandbox.sandboxSessionId, 'Running');
+        log(result.status);
       } else if (result.status === 'completed') {
         entry.invocationCompleted = true;
         if (this.completionHandler && !entry.completionHandled) {
           const handled = await this.completionHandler(entry.sandbox);
           entry.completionHandled = true;
-          if (handled) this.untrack(entry.sandbox.sandboxSessionId);
+          if (handled && !signal.aborted) this.untrack(entry.sandbox.sandboxSessionId);
         }
+        log('completed');
       } else if (result.status === 'needs_attention') {
-        await this.store.markNeedsAttention(
+        const decision = await this.store.markNeedsAttention(
           entry.sandbox.sandboxSessionId, result.error ?? undefined, entry.sandbox.invocationId, entry.invocationCompleted,
         );
-        this.untrack(entry.sandbox.sandboxSessionId);
+        log(decision || 'unchanged');
+        if (!signal.aborted) this.untrack(entry.sandbox.sandboxSessionId);
       } else if (result.status === 'failed') {
-        await this.store.markNeedsAttention(
+        const decision = await this.store.markNeedsAttention(
           entry.sandbox.sandboxSessionId, undefined, entry.sandbox.invocationId, entry.invocationCompleted,
         );
-        this.untrack(entry.sandbox.sandboxSessionId);
+        log(decision || 'unchanged');
+        if (!signal.aborted) this.untrack(entry.sandbox.sandboxSessionId);
+      } else {
+        log(result.status);
       }
     } catch (error) {
-      if (signal.aborted) return;
+      if (error instanceof FoundryClientError) httpStatus = error.statusCode ?? httpStatus;
+      if (signal.aborted) { log('cancelled'); return; }
       if (isSandboxCrashResponse(error)) {
         entry.failureSince ??= this.now();
         entry.failures += 1;
         if (entry.failures >= 2 || this.now() - entry.failureSince >= this.failureConfirmMs) {
           try {
-            await this.store.markNeedsAttention(
+            const decision = await this.store.markNeedsAttention(
               entry.sandbox.sandboxSessionId, undefined, entry.sandbox.invocationId, entry.invocationCompleted,
             );
-            this.untrack(entry.sandbox.sandboxSessionId);
+            log(decision || 'unchanged');
+            if (!signal.aborted) this.untrack(entry.sandbox.sandboxSessionId);
           } catch (storeError) {
+            log('persistence_failed');
             this.onError(storeError);
           }
           return;
         }
+        log('confirm_failure');
         this.schedule(entry, this.failureConfirmMs);
         return;
       }
       entry.failures = 0;
       entry.failureSince = undefined;
+      log('poll_failed');
       this.onError(error);
     }
   }

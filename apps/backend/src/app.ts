@@ -14,8 +14,9 @@ import type { ConversationStore } from './core/conversation-store.js';
 import type { ConversationAgent } from './core/chat-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskController, TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
-import type { GitHubAppTokenIssuer } from './github-app.js';
+import type { GitHubAppTokenIssuer, GitHubRepositoryCatalog } from './github-app.js';
 import type { ProjectStore } from './factory/projects.js';
+import type { ReleaseGraphReader, ReleaseViewStore } from './factory/release-view.js';
 import type { RepositoryCreator } from './factory/new-project.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
@@ -25,16 +26,21 @@ import type { UsageStore } from './core/usage.js';
 import type { SandboxHeartbeat } from './factory/heartbeat.js';
 import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
+import type { TeamsNotificationService } from './teams/service.js';
+import type { AwayModeStore } from './core/away-mode.js';
 
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
   readonly auth?: TokenVerifier;
   readonly modules?: readonly BackendModule[];
   readonly projectStore?: ProjectStore;
+  readonly releaseViewStore?: ReleaseViewStore;
+  readonly releaseGraphReader?: ReleaseGraphReader;
   readonly projectRepositoryCreator?: RepositoryCreator;
   readonly toolCallStore?: ToolCallStore;
   readonly taskStore?: TaskStore;
   readonly githubAppTokenIssuer?: GitHubAppTokenIssuer;
+  readonly githubRepositoryCatalog?: GitHubRepositoryCatalog;
   readonly taskController?: TaskController;
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
@@ -46,16 +52,22 @@ export interface BuildAppOptions {
   readonly sandboxHeartbeat?: SandboxHeartbeat;
   readonly conversationAgent?: ConversationAgent;
   readonly containerAppScaler?: ContainerAppScaler | null;
+  readonly teamsNotifications?: TeamsNotificationService | null;
+  readonly awayModeStore?: AwayModeStore | null;
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
+    ownerObjectId: string;
     databaseStatus: () => boolean;
     projectStore: ProjectStore | null;
+    releaseViewStore: ReleaseViewStore | null;
+    releaseGraphReader: ReleaseGraphReader | null;
     projectRepositoryCreator: RepositoryCreator | null;
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
     githubAppTokenIssuer: GitHubAppTokenIssuer | null;
+    githubRepositoryCatalog: GitHubRepositoryCatalog | null;
     taskController: TaskController | null;
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
@@ -66,6 +78,8 @@ declare module 'fastify' {
     conversationStore: ConversationStore | null;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
+    teamsNotifications: TeamsNotificationService | null;
+    awayModeStore: AwayModeStore | null;
   }
 }
 
@@ -91,6 +105,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   });
   // Authenticate before CORS can finish OPTIONS requests in its onRequest hook.
   installAuthentication(app, config, options.auth);
+  app.decorate('ownerObjectId', config.auth.ownerObjectId);
+  app.decorate('awayModeStore', options.awayModeStore ?? null);
   app.register(cors, {
     origin: (origin, callback) => callback(null, origin === undefined || origins.has(origin)),
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -115,15 +131,47 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));
   app.decorate('databaseStatus', options.databaseStatus ?? (() => false));
   app.decorate('projectStore', options.projectStore ?? null);
+  app.decorate('releaseViewStore', options.releaseViewStore ?? null);
+  app.decorate('releaseGraphReader', options.releaseGraphReader ?? null);
   app.decorate('projectRepositoryCreator', options.projectRepositoryCreator ?? null);
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);
   app.decorate('githubAppTokenIssuer', options.githubAppTokenIssuer ?? null);
+  app.decorate('githubRepositoryCatalog', options.githubRepositoryCatalog ?? null);
   app.decorate('taskController', options.taskController ?? null);
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
-  const unsubscribeTaskEvents = app.eventHub.subscribe(() => app.nowEventHub.publish({ type: 'refresh' }));
+  const unsubscribeTaskEvents = app.eventHub.subscribe((event) => {
+    void (async () => {
+      let state: Awaited<ReturnType<AwayModeStore['read']>> | undefined;
+      try {
+        state = await app.awayModeStore?.read();
+      } catch {
+        app.log.warn('away_mode.task_route_failed');
+        return;
+      }
+      const away = state?.away ?? false;
+      if (!away) {
+        app.nowEventHub.publish({ type: 'refresh' });
+        return;
+      }
+
+      const payload = event.payload;
+      const nextState = typeof payload === 'object' && payload !== null && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>).to
+        : undefined;
+      if (event.type !== 'state_changed' || typeof nextState !== 'string' ||
+        !['Ready', 'Running', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'].includes(nextState) ||
+        !app.teamsNotifications) return;
+      try {
+        const kind = nextState === 'NeedsAttention' ? 'warning' : nextState === 'Done' ? 'success' : 'info';
+        await app.teamsNotifications.notify(kind, `Task ${event.taskId} is now ${nextState}.`);
+      } catch {
+        app.log.warn('away_mode.task_notification_failed');
+      }
+    })();
+  });
   app.addHook('onClose', async () => { unsubscribeTaskEvents(); });
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
@@ -134,6 +182,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     app.addHook('onClose', async () => { await options.sandboxHeartbeat!.stop(); });
   }
   app.decorate('conversationAgent', options.conversationAgent ?? null);
+  app.decorate('teamsNotifications', options.teamsNotifications ?? null);
   registerModules(app, options.modules ?? [
     coreModule,
     conversationModule,

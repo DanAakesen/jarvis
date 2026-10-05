@@ -4,6 +4,7 @@ import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { flattenSettings, type SettingsStore } from './settings.js';
 import type { CredentialStatusStore } from '../credentials/credential-status.js';
+import type { AwayModeStore } from './away-mode.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const authorization = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
@@ -26,11 +27,12 @@ function fixture(settingsStore?: SettingsStore, auth: TokenVerifier = async () =
   objectId: config.auth.ownerObjectId,
   tenantId: config.auth.tenantId,
   displayName: 'Dan',
-}), credentialStatusStore?: CredentialStatusStore) {
+}), credentialStatusStore?: CredentialStatusStore, awayModeStore?: AwayModeStore) {
   const app = buildApp(config, undefined, {
     auth,
     ...(settingsStore ? { settingsStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
+    ...(awayModeStore ? { awayModeStore } : {}),
   });
   apps.push(app);
   return app;
@@ -50,10 +52,11 @@ describe('settings API', () => {
       settings: {
         appearance: { theme: 'light' },
         jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
+        personality: { tone: 'british_butler', responseStyle: 'concise', customInstructions: '' },
         voice: { defaultLanguage: 'da', minimizeWindowsOnVoiceStart: false },
         codex: { model: 'default' },
         copilot: { model: 'default' },
-        global: { maxParallelTasks: 1, maxCheckAttempts: 3 },
+        global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300 },
         newProjects: {
           owner: 'DanAakesen',
           visibility: 'private',
@@ -118,9 +121,10 @@ describe('settings API', () => {
       headers: authorization,
       payload: {
         settings: {
+          appearance: { theme: 'dark' },
           jarvis: { reasoning: 'high' },
           voice: { defaultLanguage: 'en' },
-          global: { maxParallelTasks: 4, maxCheckAttempts: 2 },
+          global: { maxParallelTasks: 4, maxCheckAttempts: 2, screenShareDailyFrameCap: 270 },
         },
       },
     });
@@ -128,17 +132,90 @@ describe('settings API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       settings: {
+        appearance: { theme: 'dark' },
         jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
         voice: { defaultLanguage: 'en' },
-        global: { maxParallelTasks: 4, maxCheckAttempts: 2 },
+        global: { maxParallelTasks: 4, maxCheckAttempts: 2, screenShareDailyFrameCap: 270 },
       },
     });
     expect(values).toEqual({
+      'appearance.theme': '"dark"',
       'jarvis.reasoning_effort': '"high"',
       'voice.default_language': '"en"',
       'global.max_parallel_tasks': '4',
       'global.max_check_attempts': '2',
+      'global.screen_share_daily_frame_cap': '270',
     });
+    const readBack = await app.inject({ url: '/settings', headers: authorization });
+    expect(readBack.json().settings.appearance).toEqual({ theme: 'dark' });
+  });
+
+  it('persists bounded personality preferences and supports restoring their defaults', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const customInstructions = 'Use a warmer tone and explain technical terms.';
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: '/settings',
+      headers: authorization,
+      payload: {
+        settings: {
+          personality: {
+            tone: 'warm',
+            responseStyle: 'detailed',
+            customInstructions,
+          },
+        },
+      },
+    });
+
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().settings.personality).toEqual({
+      tone: 'warm',
+      responseStyle: 'detailed',
+      customInstructions,
+    });
+    expect(values).toEqual({
+      'personality.tone': '"warm"',
+      'personality.response_style': '"detailed"',
+      'personality.custom_instructions': JSON.stringify(customInstructions),
+    });
+    expect((await app.inject({ url: '/settings', headers: authorization })).json().settings.personality)
+      .toEqual(updated.json().settings.personality);
+
+    const reset = await app.inject({
+      method: 'PATCH',
+      url: '/settings',
+      headers: authorization,
+      payload: {
+        settings: {
+          personality: {
+            tone: 'british_butler',
+            responseStyle: 'concise',
+            customInstructions: '',
+          },
+        },
+      },
+    });
+    expect(reset.statusCode).toBe(200);
+    expect(reset.json().settings.personality).toEqual({
+      tone: 'british_butler',
+      responseStyle: 'concise',
+      customInstructions: '',
+    });
+  });
+
+  it('accepts custom instructions at the configured limit', async () => {
+    const app = fixture(createStore().store);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/settings',
+      headers: authorization,
+      payload: { settings: { personality: { customInstructions: 'x'.repeat(2_000) } } },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().settings.personality.customInstructions).toHaveLength(2_000);
   });
 
   it('saves and reads New projects defaults', async () => {
@@ -217,17 +294,39 @@ describe('settings API', () => {
 
   it('returns only effective Jarvis model settings to the agent identity', async () => {
     const { store } = createStore();
-    await store.write({ jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' } });
+    await store.write({
+      jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
+      personality: {
+        tone: 'direct',
+        responseStyle: 'balanced',
+        customInstructions: 'Prefer plain language.',
+      },
+    });
+    const awayModeStore = {
+      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null })),
+      set: vi.fn(),
+      markPresent: vi.fn(),
+      observePresence: vi.fn(),
+    } as unknown as AwayModeStore;
     const app = fixture(store, async () => ({
       kind: 'jarvis-agent',
       objectId: '00000000-0000-0000-0000-000000000001',
       tenantId: config.auth.tenantId,
-    }));
+    }), undefined, awayModeStore);
 
     const response = await app.inject({ url: '/agent/settings', headers: authorization });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ model: 'gpt-5.6-luna', reasoningEffort: 'high' });
+    expect(response.json()).toEqual({
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'high',
+      personality: {
+        tone: 'direct',
+        responseStyle: 'balanced',
+        customInstructions: 'Prefer plain language.',
+      },
+      awayMode: true,
+    });
   });
 
   it('does not expose agent settings to Dan or when persistence is unavailable', async () => {
@@ -261,9 +360,15 @@ describe('settings API', () => {
     { settings: { voice: { minimizeWindowsOnVoiceStart: 'yes' } } },
     { settings: { jarvis: { model: 'not-available' } } },
     { settings: { jarvis: { reasoning: 'unsupported' } } },
+    { settings: { personality: { tone: 'unbounded' } } },
+    { settings: { personality: { responseStyle: 'unbounded' } } },
+    { settings: { personality: { customInstructions: 'x'.repeat(2_001) } } },
+    { settings: { personality: { customInstructions: '\u0000' } } },
     { settings: { global: { maxParallelTasks: 101 } } },
     { settings: { global: { maxCheckAttempts: 11 } } },
     { settings: { global: { maxCheckAttempts: -1 } } },
+    { settings: { global: { screenShareDailyFrameCap: 0 } } },
+    { settings: { global: { screenShareDailyFrameCap: 301 } } },
     { settings: { voice: { unknown: 'value' } } },
     { settings: { newProjects: { owner: '-invalid' } } },
     { settings: { newProjects: { visibility: 'internal' } } },
@@ -304,6 +409,26 @@ describe('settings API', () => {
     expect((await app.inject({ url: '/settings', headers: authorization })).json().settings.jarvis.reasoning).toBe('high');
   });
 
+  it('preserves the accepted theme when a later theme update is rejected', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const accepted = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { appearance: { theme: 'dark' } } },
+    });
+    expect(accepted.statusCode).toBe(200);
+
+    const rejected = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { appearance: { theme: 'solarized' } } },
+    });
+
+    expect(rejected.statusCode).toBe(400);
+    expect(values['appearance.theme']).toBe('"dark"');
+    const readBack = await app.inject({ url: '/settings', headers: authorization });
+    expect(readBack.json().settings.appearance).toEqual({ theme: 'dark' });
+  });
+
   it('ignores persisted keys and values outside the current catalog', async () => {
     const store: SettingsStore = {
       read: async () => ({
@@ -311,6 +436,8 @@ describe('settings API', () => {
         'global.max_parallel_tasks': '1000',
         'new_projects.visibility': '"internal"',
         'new_projects.default_branch': '"invalid branch"',
+        'personality.tone': '"unbounded"',
+        'personality.custom_instructions': JSON.stringify('x'.repeat(2_001)),
         'internal.secret': '"never-return-this"',
       }),
       write: async () => {},
@@ -322,6 +449,7 @@ describe('settings API', () => {
     expect(response.json()).toMatchObject({
       settings: {
         jarvis: { model: 'gpt-5.6-luna' },
+        personality: { tone: 'british_butler', customInstructions: '' },
         global: { maxParallelTasks: 1 },
         newProjects: { visibility: 'private', defaultBranch: 'main' },
       },
