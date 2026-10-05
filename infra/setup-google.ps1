@@ -27,8 +27,18 @@ $clientId = $null
 $clientSecret = $null
 $refreshToken = $null
 
+# Windows PowerShell 5.1 turns redirected native stderr into a terminating error under
+# $ErrorActionPreference = 'Stop', which skipped the Key Vault retries (L95).
+function Invoke-Native([scriptblock]$Command) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & $Command 2>$null }
+    finally { $ErrorActionPreference = $previous }
+}
+
 function Invoke-Az {
-    $output = & az @args 2>$null
+    $azArgs = $args
+    $output = Invoke-Native { & az @azArgs }
     if ($LASTEXITCODE -ne 0) {
         throw "Azure CLI command failed: az $($args -join ' ')"
     }
@@ -252,8 +262,10 @@ try {
         $file = Write-SecretFile $secret.Name $secret.Value
         $stored = $false
         for ($attempt = 1; $attempt -le 12; $attempt++) {
-            & az keyvault secret set --vault-name $keyVaultName --name $secret.Name `
-                --file $file --content-type text/plain --output none --only-show-errors 2>$null
+            Invoke-Native {
+                & az keyvault secret set --vault-name $keyVaultName --name $secret.Name `
+                    --file $file --content-type text/plain --output none --only-show-errors
+            }
             if ($LASTEXITCODE -eq 0) { $stored = $true; break }
             Start-Sleep -Seconds 5
         }
@@ -270,8 +282,10 @@ finally {
     if ($listener) { $listener.Stop() }
     if ($requestBytes) { $requestBytes.Dispose() }
     if ($roleAssignmentId) {
-        & az role assignment delete --ids $roleAssignmentId --subscription $SubscriptionId `
-            --output none --only-show-errors 2>$null
+        Invoke-Native {
+            & az role assignment delete --ids $roleAssignmentId --subscription $SubscriptionId `
+                --output none --only-show-errors
+        }
         if ($LASTEXITCODE -ne 0) {
             Write-Warning 'Temporary Key Vault access could not be removed. Delete the role assignment manually.'
         }
