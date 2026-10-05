@@ -53,6 +53,7 @@ function storeFixture(overrides: Partial<ConversationStore> = {}) {
       endedAt: null,
     })),
     endSession: vi.fn(async () => true),
+    getDanMessageIdBySourceItemId: vi.fn(async () => null),
     getSession: vi.fn(async () => ({
       id: '41',
       channel: 'chat' as const,
