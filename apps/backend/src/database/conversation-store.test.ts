@@ -79,6 +79,28 @@ describe('SQL conversation store', () => {
     expect(query.mock.calls[0]?.[0]).toContain('ended_at IS NULL');
   });
 
+  it('updates an existing user message when a partial becomes final', async () => {
+    const at = new Date('2026-10-03T12:01:00Z');
+    const { store, input, query } = fixture({
+      recordset: [{ id: '42', session_id: '41', role: 'dan', text: 'Open my browser, go to Google', model: null, at }],
+      recordsets: [],
+      rowsAffected: [1],
+    });
+
+    await expect(store.updateMessage!('42', 'Open my browser, go to Google')).resolves.toEqual({
+      id: '42',
+      sessionId: '41',
+      role: 'dan',
+      text: 'Open my browser, go to Google',
+      model: null,
+      at,
+    });
+
+    expect(input).toHaveBeenNthCalledWith(1, 'messageId', sql.BigInt, 42n);
+    expect(input).toHaveBeenNthCalledWith(2, 'text', sql.NVarChar(sql.MAX), 'Open my browser, go to Google');
+    expect(query.mock.calls[0]?.[0]).toContain("WHERE id = @messageId AND role = N'dan'");
+  });
+
   it('returns only a bounded older page and attaches tool-call references', async () => {
     const { store, input, query } = fixture({
       recordset: [],

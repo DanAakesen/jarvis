@@ -19,7 +19,15 @@ export interface ReflexClassification {
   readonly intent: 'action' | 'question' | 'other';
   readonly confidence: number;
   readonly needsConfirmation: boolean;
+  readonly completeCommand?: boolean;
+  readonly contradictsExecuted?: boolean;
   readonly target: ReflexTarget | null;
+}
+
+export interface ReflexContext {
+  readonly executed: readonly string[];
+  readonly partial?: boolean;
+  readonly final?: boolean;
 }
 
 export interface ReflexClassifier {
@@ -28,6 +36,7 @@ export interface ReflexClassifier {
     language: 'da' | 'en',
     targets: readonly ReflexTarget[],
     signal: AbortSignal,
+    context?: ReflexContext,
   ): Promise<ReflexClassification | null>;
 }
 
@@ -109,7 +118,7 @@ export function createJevReflexClassifier(
   fetcher: typeof fetch = fetch,
 ): ReflexClassifier {
   return {
-    async classify(text, language, targets, signal) {
+    async classify(text, language, targets, signal, context) {
       if (typeof text !== 'string' || !text.trim() || text.length > 20_000 || signal.aborted) return null;
       let apiKey: string | undefined;
       try {
@@ -124,38 +133,55 @@ export function createJevReflexClassifier(
         choices[target.choice] = `${target.tool.name} with arguments ${JSON.stringify(target.arguments)}`;
       }
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
-      const body = JSON.stringify({
-        model,
-        state: { text: text.trim(), language },
-        questions: {
-          addressed: {
-            type: 'noul',
-            instructions: 'Is Dan directly addressing Jarvis with this turn?',
-          },
-          intent: {
-            type: 'choice',
-            instructions: 'Classify the requested intent.',
-            criteria: {
-              action: 'Dan asks Jarvis to perform an action.',
-              question: 'Dan asks Jarvis for information or an answer.',
-              other: 'No clear request is present.',
-            },
-          },
-          target: {
-            type: 'choice',
-            instructions: 'Choose one exact route. Use main_agent unless one listed safe action completely matches the request.',
-            criteria: choices,
-          },
-          confidence: {
-            type: 'score',
-            instructions: 'How confidently is the intent and requested action fully understood?',
-            criteria: ['uncertain', 'certain'],
-          },
-          needs_confirmation: {
-            type: 'noul',
-            instructions: 'Would the requested action have an external effect or require explicit confirmation?',
+      const questions: Record<string, unknown> = {
+        addressed: {
+          type: 'noul',
+          instructions: 'Is Dan directly addressing Jarvis with this turn?',
+        },
+        intent: {
+          type: 'choice',
+          instructions: 'Classify the requested intent.',
+          criteria: {
+            action: 'Dan asks Jarvis to perform an action.',
+            question: 'Dan asks Jarvis for information or an answer.',
+            other: 'No clear request is present.',
           },
         },
+        target: {
+          type: 'choice',
+          instructions: 'Choose one exact route. Use main_agent unless one listed safe action completely matches the request.',
+          criteria: choices,
+        },
+        confidence: {
+          type: 'score',
+          instructions: 'How confidently is the intent and requested action fully understood?',
+          criteria: ['uncertain', 'certain'],
+        },
+        needs_confirmation: {
+          type: 'noul',
+          instructions: 'Would the requested action have an external effect or require explicit confirmation?',
+        },
+      };
+      if (context) {
+        questions.complete_command = {
+          type: 'noul',
+          instructions: 'Does the latest stable transcript contain a new, complete command not already listed as executed?',
+        };
+        if (context.final && context.executed.length > 0) {
+          questions.contradicts_executed = {
+            type: 'noul',
+            instructions: 'Does this final transcript explicitly contradict one of the listed executed actions?',
+          };
+        }
+      }
+      const body = JSON.stringify({
+        model,
+        state: {
+          text: text.trim(),
+          language,
+          ...(context ? { already_executed: context.executed.slice(-8) } : {}),
+        },
+        questions,
       });
 
       let response: Response;
@@ -200,11 +226,19 @@ export function createJevReflexClassifier(
         const routeAnswer = answer(answers, 'target', 'choice');
         const confidenceAnswer = answer(answers, 'confidence', 'score');
         const confirmation = answer(answers, 'needs_confirmation', 'noul')?.noul;
+        const completeCommand = context
+          ? answer(answers, 'complete_command', 'noul')?.noul
+          : undefined;
+        const contradiction = context?.final && context.executed.length > 0
+          ? answer(answers, 'contradicts_executed', 'noul')?.noul
+          : undefined;
         const intent = intentAnswer?.choice;
         const choice = routeAnswer?.choice;
         const routeConfidence = routeAnswer?.confidence;
         const confidenceScore = confidenceAnswer?.score;
         if (!validProbability(addressed) || !validProbability(confirmation) ||
+            (context && !validProbability(completeCommand)) ||
+            (context?.final && context.executed.length > 0 && !validProbability(contradiction)) ||
             (intent !== 'action' && intent !== 'question' && intent !== 'other') ||
             typeof intentAnswer?.confidence !== 'number' || !validProbability(intentAnswer.confidence) ||
             typeof choice !== 'string' || !Object.hasOwn(choices, choice) ||
@@ -216,6 +250,8 @@ export function createJevReflexClassifier(
           intent,
           confidence: Math.min(intentAnswer.confidence, routeConfidence, confidenceScore),
           needsConfirmation: confirmation >= 0.5,
+          ...(completeCommand === undefined ? {} : { completeCommand: completeCommand >= confidenceThreshold }),
+          ...(contradiction === undefined ? {} : { contradictsExecuted: contradiction >= confidenceThreshold }),
           target,
         };
       } catch {
@@ -230,11 +266,20 @@ export async function executeReflexAction(
   request: FastifyRequest,
   messageId: string,
   signal: AbortSignal,
+  mode: 'partial' | 'final' = 'final',
 ): Promise<ReflexActionResult | null> {
   const target = classification?.target;
+  const partialSafe = target?.tool.name === 'pause_task' && target.tool.reflexSafe === true ||
+    target?.tool.name === 'pc_open' && target.arguments.target === 'url' &&
+      typeof target.arguments.value === 'string' && safeHttpUrl(target.arguments.value);
+  const modeSafe = mode === 'partial' ? partialSafe
+    : mode === 'undo' ? target?.tool.name === 'resume_task'
+      : target?.tool.reflexSafe === true;
   if (!classification?.addressed || classification.intent !== 'action' ||
+      classification.completeCommand === false ||
       classification.confidence < confidenceThreshold || classification.needsConfirmation ||
-      !target || !target.tool.reflexSafe || !request.principal || !request.server.toolCallStore) return null;
+      !target || !modeSafe ||
+      !request.principal || !request.server.toolCallStore) return null;
   if (!request.validateInput(target.arguments, target.tool.inputSchema, 'body')) return null;
 
   const activityId = `reflex-${messageId}-${target.tool.name}`;
@@ -293,6 +338,35 @@ export async function executeReflexAction(
     outcome,
     note: `Reflex already did ${target.tool.name} (${outcome}): ${confirmation}`,
   };
+}
+
+export async function undoPartialReflexAction(
+  original: ReflexTarget,
+  request: FastifyRequest,
+  messageId: string,
+  signal: AbortSignal,
+): Promise<ReflexActionResult | null> {
+  if (original.tool.name !== 'pause_task' || typeof original.arguments.taskId !== 'string') return null;
+  const tool = request.server.jarvisTools.get('resume_task');
+  if (!tool) return null;
+  return executeReflexAction({
+    addressed: true,
+    intent: 'action',
+    confidence: 1,
+    needsConfirmation: false,
+    completeCommand: true,
+    target: { choice: `undo_${original.choice}`, tool, arguments: { taskId: original.arguments.taskId } },
+  }, request, messageId, signal, 'undo');
+}
+
+function safeHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') &&
+      Boolean(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
 }
 
 export async function reflexTargets(request: FastifyRequest): Promise<ReflexTarget[]> {

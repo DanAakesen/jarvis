@@ -12,7 +12,13 @@ import {
 import type { BackendModule } from '../modules.js';
 import type { ConversationMessage, ConversationRole } from '../core/conversation-store.js';
 import { defaultSettings, readSettings } from '../core/settings.js';
-import { executeReflexAction, reflexTargets } from '../core/reflex.js';
+import {
+  executeReflexAction,
+  reflexTargets,
+  undoPartialReflexAction,
+  type ReflexActionResult,
+  type ReflexTarget,
+} from '../core/reflex.js';
 import { createVoiceStatusAnnouncer } from './status-updates.js';
 
 export const VOICE_LIVE_SCOPE = 'https://ai.azure.com/.default';
@@ -21,10 +27,88 @@ export const DANISH_VOICE_AGENT_NAME = 'jarvis-voice-mai';
 const MAX_MESSAGE_BYTES = 1_048_576;
 const MAX_TRANSCRIPT_CHARACTERS = 20_000;
 const MAX_TRANSCRIPTS_PER_SESSION = 1_000;
+const MAX_REFLEX_ACTIONS_PER_TURN = 8;
 const TOKEN_TIMEOUT_MS = 10_000;
 const CONNECTION_TIMEOUT_MS = 10_000;
 
 export type VoiceConnectionFactory = (token: string, signal: AbortSignal) => WebSocket;
+
+interface VoiceReflexLedgerEntry {
+  readonly target: ReflexTarget;
+  readonly signature: string;
+  readonly result: ReflexActionResult;
+  undone: boolean;
+  undoAttempted: boolean;
+  undoResult?: ReflexActionResult | null;
+}
+
+interface PartialTranscript {
+  text: string;
+  stableLength: number;
+}
+
+function actionSignature(target: ReflexTarget): string {
+  return `${target.tool.name}:${JSON.stringify(target.arguments)}`;
+}
+
+function partialSafeTarget(target: ReflexTarget): boolean {
+  if (target.tool.name === 'pause_task') return target.tool.reflexSafe === true;
+  if (target.tool.name !== 'pc_open' || target.arguments.target !== 'url' ||
+      typeof target.arguments.value !== 'string') return false;
+  try {
+    const url = new URL(target.arguments.value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') &&
+      Boolean(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+function browserUrlTargets(request: Parameters<typeof reflexTargets>[0], text: string): ReflexTarget[] {
+  const tool = request.server.jarvisTools.get('pc_open');
+  if (!tool) return [];
+  const targets: ReflexTarget[] = [];
+  if (/\b(?:open|launch)\s+(?:(?:my|the)\s+)?(?:browser|chrome)\b/iu.test(text) ||
+      /\b(?:åbn|start)\s+(?:(?:min|den)\s+)?(?:browser|chrome)\b/iu.test(text)) {
+    targets.push({
+      choice: 'partial_open_browser',
+      tool,
+      arguments: { target: 'url', value: 'https://www.google.com/' },
+    });
+  }
+  const destination = /(?:\b(?:go|navigate)\s+to\b|\b(?:gå|naviger)\s+til\b)\s+([^\s,;.!?]+)/iu.exec(text)?.[1];
+  if (destination) {
+    const host = destination.replace(/^https?:\/\//iu, '').replace(/\/.*$/u, '').toLowerCase();
+    const domain = host === 'google' ? 'www.google.com' : host.includes('.') ? host : undefined;
+    if (domain && /^[a-z0-9.-]{1,253}$/u.test(domain)) {
+      targets.push({
+        choice: `partial_navigate_${targets.length}`,
+        tool,
+        arguments: { target: 'url', value: `https://${domain}/` },
+      });
+    }
+  }
+  return targets;
+}
+
+function reflexSummary(target: ReflexTarget, outcome: ReflexActionResult['outcome']): string {
+  if (target.tool.name === 'pc_open' && target.arguments.target === 'url' &&
+      typeof target.arguments.value === 'string') {
+    try {
+      return `${outcome === 'ok' ? 'navigated to' : 'could not navigate to'} ${new URL(target.arguments.value).hostname} (${outcome})`;
+    } catch { /* The URL was already validated by the registered tool. */ }
+  }
+  const action = target.tool.name === 'pause_task' ? 'paused task' : 'opened browser';
+  return `${outcome === 'ok' ? action : `could not ${action}`} (${outcome})`;
+}
+
+function ledgerInstructions(entries: readonly VoiceReflexLedgerEntry[]): string | undefined {
+  if (entries.length === 0) return undefined;
+  const notes = entries.map(({ target, result, undone, undoAttempted, undoResult }) =>
+    `${reflexSummary(target, result.outcome)}${undone ? `; then undone: ${undoResult?.note ?? 'reversed'}` :
+      undoAttempted ? `; could not undo: ${undoResult?.note ?? 'the executor has no reversible operation'}` : ''}: ${result.note}`);
+  return `Reflex turn ledger: ${notes.join('; ')}. Report refused, failed, and undone actions honestly. Do not repeat any action that already succeeded.`;
+}
 
 export interface VoiceRelayOptions {
   readonly getToken: (scope: string, signal: AbortSignal) => Promise<string>;
@@ -198,7 +282,18 @@ function registerVoiceRoute(
     const savedTranscripts = new Set<string>();
     const savedUserMessages = new Map<string, ConversationMessage>();
     const reflexedItems = new Set<string>();
+    const partialTranscripts = new Map<string, PartialTranscript>();
+    const disabledPartialItems = new Set<string>();
+    const reflexLedger = new Map<string, VoiceReflexLedgerEntry[]>();
     let reflexPending = false;
+    let finalReflexPending = false;
+    let pendingPartialReflex = 0;
+    let partialTranscriptionDeltas = 0;
+    let stablePartialClauses = 0;
+    let firstActionLatencyMs: number | undefined;
+    let speechStoppedAt: number | undefined;
+    let speechToFirstWordMs: number | undefined;
+    let metricsLogged = false;
     const sessionReady = store.createSession({ channel: 'voice', language })
       .then((session) => { sessionId = session.id; });
 
@@ -208,37 +303,186 @@ function registerVoiceRoute(
       publishActivity('listening');
     };
 
-    const handleEnglishEndOfTurn = async (itemId: string, text: string) => {
+    const savePartialMessage = async (itemId: string, text: string): Promise<ConversationMessage> => {
+      await sessionReady;
+      const existing = savedUserMessages.get(itemId);
+      const message = existing && store.updateMessage
+        ? await store.updateMessage(existing.id, text)
+        : existing ?? await store.addMessage({
+          sessionId: sessionId!,
+          role: 'dan',
+          text,
+          model: null,
+          sourceItemId: itemId,
+        });
+      if (!message) throw new Error('Voice partial transcript was not stored');
+      savedUserMessages.set(itemId, message);
+      latestDanMessage = message;
+      request.jarvisMemorySourceMessageId = message.id;
+      return message;
+    };
+
+    const queueStablePartial = (itemId: string, text: string, receivedAt: number) => {
+      stablePartialClauses += 1;
+      pendingPartialReflex += 1;
+      reflexPending = true;
+      transcriptQueue = transcriptQueue.then(async () => {
+        if (!app.reflexClassifier || controller.signal.aborted ||
+            reflexLedger.get(itemId)?.length === MAX_REFLEX_ACTIONS_PER_TURN) return;
+        const ledger = reflexLedger.get(itemId) ?? [];
+        const targets = [
+          ...await reflexTargets(request),
+          ...browserUrlTargets(request, text),
+        ];
+        const classification = await app.reflexClassifier.classify(
+          text,
+          language,
+          targets,
+          controller.signal,
+          { executed: ledger.map(({ target, result }) => `${reflexSummary(target, result.outcome)}: ${result.note}`), partial: true },
+        );
+        const target = classification?.target;
+        if (!classification?.completeCommand || !target || !partialSafeTarget(target)) return;
+        const signature = actionSignature(target);
+        if (ledger.some((entry) => entry.signature === signature)) return;
+        const message = await savePartialMessage(itemId, text.trim());
+        const action = await executeReflexAction(classification, request, message.id, controller.signal, 'partial');
+        if (!action) return;
+        const entry: VoiceReflexLedgerEntry = {
+          target, signature, result: action, undone: false, undoAttempted: false,
+        };
+        ledger.push(entry);
+        reflexLedger.set(itemId, ledger);
+        firstActionLatencyMs ??= performance.now() - receivedAt;
+        if (!english) {
+          sendUpstream({
+            type: 'conversation.item.create',
+            item: {
+              type: 'message',
+              role: 'assistant',
+              content: [{ type: 'input_text', text: `Reflex already did: ${reflexSummary(target, action.outcome)}. ${action.note}` }],
+            },
+          });
+        }
+      }).catch(() => {
+        if (!controller.signal.aborted) request.log.warn('voice.partial_reflex_failed');
+      }).finally(() => {
+        pendingPartialReflex -= 1;
+        reflexPending = finalReflexPending || pendingPartialReflex > 0;
+        statusAnnouncer?.flush();
+      });
+    };
+
+    const receiveTranscriptionDelta = (event: Record<string, unknown>) => {
+      const itemId = event.item_id;
+      const delta = event.delta;
+      if (typeof itemId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/u.test(itemId) ||
+          typeof delta !== 'string' || !delta || reflexedItems.has(itemId) ||
+          disabledPartialItems.has(itemId)) return;
+      partialTranscriptionDeltas += 1;
+      const state = partialTranscripts.get(itemId) ?? { text: '', stableLength: 0 };
+      if (!partialTranscripts.has(itemId) && partialTranscripts.size >= MAX_TRANSCRIPTS_PER_SESSION) return;
+      if (state.text.length + delta.length > MAX_TRANSCRIPT_CHARACTERS) {
+        partialTranscripts.delete(itemId);
+        disabledPartialItems.add(itemId);
+        return;
+      }
+      state.text += delta;
+      partialTranscripts.set(itemId, state);
+      const boundary = /[,;.!?]/gu;
+      boundary.lastIndex = state.stableLength;
+      let match: RegExpExecArray | null;
+      while ((match = boundary.exec(state.text)) !== null) {
+        const stableLength = match.index + match[0].length;
+        const clause = state.text.slice(state.stableLength, match.index).trim();
+        state.stableLength = stableLength;
+        if (!clause || /^jarvis$/iu.test(clause)) continue;
+        const stableText = state.text.slice(0, stableLength);
+        const receivedAt = performance.now();
+        queueStablePartial(itemId, stableText, receivedAt);
+      }
+    };
+
+    const logReflexMetrics = () => {
+      if (metricsLogged) return;
+      metricsLogged = true;
+      request.log.info({
+        language,
+        partialTranscriptionDeltas,
+        stablePartialClauses,
+        firstActionLatencyMs: firstActionLatencyMs === undefined ? null : Number(firstActionLatencyMs.toFixed(2)),
+        speechToFirstWordMs: speechToFirstWordMs === undefined ? null : Number(speechToFirstWordMs.toFixed(2)),
+      }, 'voice.reflex_metrics');
+    };
+
+    const handleVoiceEndOfTurn = async (itemId: string, text: string) => {
       if (reflexedItems.has(itemId) || reflexedItems.size >= MAX_TRANSCRIPTS_PER_SESSION) return;
       reflexedItems.add(itemId);
+      partialTranscripts.delete(itemId);
+      disabledPartialItems.delete(itemId);
+      finalReflexPending = true;
       reflexPending = true;
       try {
         await transcriptQueue;
         const message = savedUserMessages.get(itemId);
-        let reflexNote: string | undefined;
+        const ledger = reflexLedger.get(itemId) ?? [];
+        let finalAction: ReflexActionResult | null = null;
         if (message && app.reflexClassifier) {
           const classification = await app.reflexClassifier.classify(
             text,
-            'en',
+            language,
             await reflexTargets(request),
             controller.signal,
+            { executed: ledger.map(({ target, result }) => `${reflexSummary(target, result.outcome)}: ${result.note}`), final: true },
           );
-          const action = await executeReflexAction(classification, request, message.id, controller.signal);
-          reflexNote = action?.note;
+          if (classification?.contradictsExecuted) {
+            for (const entry of [...ledger].reverse()) {
+              entry.undoAttempted = true;
+              const undo = await undoPartialReflexAction(entry.target, request, message.id, controller.signal);
+              entry.undoResult = undo;
+              if (undo?.outcome === 'ok') entry.undone = true;
+            }
+          }
+          const target = classification?.target;
+          const alreadyExecuted = target && ledger.some((entry) => entry.signature === actionSignature(target) &&
+            entry.result.outcome === 'ok' && !entry.undone);
+          if (!alreadyExecuted) {
+            finalAction = await executeReflexAction(classification, request, message.id, controller.signal);
+          }
         }
         if (controller.signal.aborted || endRequested) return;
-        sendUpstream({
-          type: 'response.create',
-          ...(reflexNote ? {
-            response: {
-              instructions: `The backend reflex already acted. ${reflexNote} Acknowledge briefly and do not repeat the action.`,
+        const instructions = ledgerInstructions(ledger);
+        if (english) {
+          sendUpstream({
+            type: 'response.create',
+            ...(instructions || finalAction ? {
+              response: {
+                instructions: [
+                  instructions,
+                  finalAction?.note,
+                  'Acknowledge the outcome briefly and do not repeat an action already completed.',
+                ].filter(Boolean).join(' '),
+              },
+            } : {}),
+          });
+        } else if (instructions || finalAction) {
+          sendUpstream({
+            type: 'conversation.item.create',
+            item: {
+              type: 'message',
+              role: 'assistant',
+              content: [{
+                type: 'input_text',
+                text: [instructions, finalAction?.note].filter(Boolean).join(' '),
+              }],
             },
-          } : {}),
-        });
+          });
+        }
       } catch {
-        if (!controller.signal.aborted && !endRequested) sendUpstream({ type: 'response.create' });
+        if (!controller.signal.aborted && !endRequested && english) sendUpstream({ type: 'response.create' });
       } finally {
-        reflexPending = false;
+        finalReflexPending = false;
+        reflexPending = pendingPartialReflex > 0;
         statusAnnouncer?.flush();
       }
     };
@@ -283,20 +527,23 @@ function registerVoiceRoute(
         const indexedKey = `${key}:${event.content_index}`;
         if (savedTranscripts.has(indexedKey)) return;
         savedTranscripts.add(indexedKey);
-      } else if (savedTranscripts.has(key)) {
+      } else if (savedTranscripts.has(key) && role !== 'dan') {
         return;
       }
       if (!savedTranscripts.has(key)) savedTranscripts.add(key);
       const sourceItemId = role === 'dan' && typeof itemId === 'string' &&
         /^[A-Za-z0-9_-]{1,128}$/u.test(itemId) ? itemId : undefined;
       transcriptQueue = transcriptQueue.then(async () => {
-        const message = await store.addMessage({
-          sessionId: sessionId!,
-          role,
-          text: text.trim(),
-          model: role === 'jarvis' && english ? ENGLISH_REALTIME_MODEL : null,
-          ...(sourceItemId ? { sourceItemId } : {}),
-        });
+        const existing = sourceItemId ? savedUserMessages.get(sourceItemId) : undefined;
+        const message = existing && store.updateMessage
+          ? await store.updateMessage(existing.id, text.trim())
+          : await store.addMessage({
+            sessionId: sessionId!,
+            role,
+            text: text.trim(),
+            model: role === 'jarvis' && english ? ENGLISH_REALTIME_MODEL : null,
+            ...(sourceItemId ? { sourceItemId } : {}),
+          });
         if (!message) throw new Error('Voice transcript was not stored');
         if (role === 'dan') request.jarvisMemorySourceMessageId = message.id;
         if (role === 'dan') {
