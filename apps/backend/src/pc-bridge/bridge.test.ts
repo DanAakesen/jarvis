@@ -203,6 +203,48 @@ describe('authenticated PC bridge protocol', () => {
       ]);
     });
 
+    it.each(['Submit order', 'Purchase now', 'Send message'])(
+      'uses P7-03 confirmation before clicking %s',
+      async (label) => {
+        const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+        const { app } = fixture({ runConfirmed });
+        const url = await listen(app);
+        const bridge = await connectBridge(url);
+        const commands: Array<Record<string, unknown>> = [];
+        bridge.on('message', (data) => {
+          const command = JSON.parse(data.toString()) as Record<string, unknown>;
+          commands.push(command);
+          const arguments_ = command.arguments as Record<string, unknown>;
+          const result = command.command === 'browser_snapshot'
+            ? {
+              tabId: 'tab_1',
+              snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+              title: 'Checkout',
+              url: 'https://example.test/',
+              elements: [{ index: 0, role: 'button', name: label, value: '' }],
+            }
+            : arguments_.confirmed === true
+              ? { acted: true, action: 'click' }
+              : { confirmationRequired: true, actionKind: 'computer_use', summary: `Click "${label}" in Chrome.` };
+          bridge.send(JSON.stringify({ id: command.id, type: 'result', result }));
+        });
+
+        await callTool(app, 'pc_browser_snapshot', { tabId: 'tab_1' });
+        const response = await callTool(app, 'pc_browser_act', {
+          tabId: 'tab_1',
+          snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+          elementIndex: 0,
+          action: 'click',
+        });
+
+        expect(response.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'click' } });
+        expect(runConfirmed).toHaveBeenCalledWith(`Click "${label}" in Chrome.`, expect.any(Function), expect.any(AbortSignal));
+        expect(commands.map(({ command }) => command)).toEqual(['browser_snapshot', 'browser_act', 'browser_act']);
+        expect(commands.map(({ arguments: arguments_ }) => (arguments_ as Record<string, unknown>).confirmed))
+          .toEqual([undefined, false, true]);
+      },
+    );
+
     it('does not forward model selectors and refuses high-impact actions without confirmation', async () => {
       const { app } = fixture();
       const url = await listen(app);

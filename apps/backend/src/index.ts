@@ -26,6 +26,12 @@ import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
 import { coreModule } from './core/index.js';
 import { conversationModule } from './core/conversation.js';
 import { createJevReflexClassifier } from './core/reflex.js';
+import {
+  createBrowserAgent,
+  createBrowserAgentModule,
+  createFoundryBrowserTextModel,
+  createJevBrowserPlanner,
+} from './core/browser-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { BackendModule } from './modules.js';
 import {
@@ -199,6 +205,16 @@ try {
     return jevApiKeyRequest;
   };
   const reflexClassifier = createJevReflexClassifier(getJevApiKey);
+  const browserAgent = jevSecretClient && config.foundryProjectEndpoint && credential
+    ? createBrowserAgent(
+      createJevBrowserPlanner(getJevApiKey),
+      createFoundryBrowserTextModel(config.foundryProjectEndpoint, async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry browser identity unavailable');
+        return token.token;
+      }),
+    )
+    : undefined;
   let webhookSecret: string | undefined;
   let webhookSecretRequest: Promise<string | undefined> | undefined;
   const getWebhookSecret = () => {
@@ -412,6 +428,7 @@ try {
       onStatusError: () => logger.warn('pc_bridge.status_update_failed'),
     }),
   ];
+  if (browserAgent) modules.push(createBrowserAgentModule(browserAgent));
   if (workspaceArtifacts && config.foundryEndpoints && config.foundryRunnerAgentName) {
     modules.push(createImageGenerationModule({
       runner: clientFor(config.foundryRunnerAgentName),
@@ -483,6 +500,7 @@ try {
   const app = buildApp(config, logger, {
     modules,
     ...(jevSecretClient ? { reflexClassifier } : {}),
+    ...(browserAgent ? { browserAgent } : {}),
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(releaseViewStore ? { releaseViewStore } : {}),
     ...(releaseGraphReader ? { releaseGraphReader } : {}),

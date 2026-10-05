@@ -295,7 +295,7 @@ export async function executeReflexAction(
   };
 }
 
-export async function reflexTargets(request: FastifyRequest): Promise<ReflexTarget[]> {
+export async function reflexTargets(request: FastifyRequest, browserGoal?: string): Promise<ReflexTarget[]> {
   let taskIds: string[] = [];
   if (request.server.jarvisTools.get('pause_task')?.reflexSafe && request.server.taskStore) {
     try {
@@ -305,17 +305,27 @@ export async function reflexTargets(request: FastifyRequest): Promise<ReflexTarg
       taskIds = [];
     }
   }
-  return createReflexTargets(request.server.jarvisTools.list(), taskIds);
+  return createReflexTargets(request.server.jarvisTools.list(), taskIds, browserGoal);
 }
 
 export function createReflexTargets(
   tools: readonly RegisteredTool[],
   taskIds: readonly string[] = [],
+  browserGoal?: string,
 ): ReflexTarget[] {
   const targets: ReflexTarget[] = [];
   for (const tool of tools) {
     if (!tool.reflexSafe) continue;
     const required = Array.isArray(tool.inputSchema.required) ? tool.inputSchema.required : [];
+    if (tool.name === 'browser_do' && typeof browserGoal === 'string' &&
+        browserGoal.trim().length > 0 && browserGoal.length <= 4_000) {
+      targets.push({
+        choice: `target_${targets.length}`,
+        tool,
+        arguments: { goal: browserGoal.trim() },
+      });
+      continue;
+    }
     if (required.length === 0) {
       targets.push({ choice: `target_${targets.length}`, tool, arguments: {} });
       continue;

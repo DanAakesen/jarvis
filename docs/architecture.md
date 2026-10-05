@@ -638,6 +638,38 @@ freshness, occlusion, secret blocking, confirmation and audit redaction. A live
 Chrome launch with Dan's signed-in profile and local-page desktop evidence still
 requires verification on his Windows PC.
 
+### Ultrafast browser agent (P7-17)
+
+The backend registers `browser_do` when the existing Key Vault Jev key and Foundry
+project are configured. The P7-04 reflex may route a high-confidence chat or
+English voice request directly to that tool before the main agent reply; the
+hosted agent can also call it. P7-20 can invoke
+`request.server.browserAgent.runClause` with one recognized clause and the
+current tab ID, without owning the browser loop.
+
+Each step takes a new snapshot through the registered P7-18 tools and sends one
+Jev request containing the goal, recent actions, page title/URL, and bounded
+visible control table. That request chooses the operation and speculative
+indexed targets for click, type, select, scroll, and wait. The backend accepts
+only a high-confidence choice present in that snapshot; the selected index and
+snapshot ID go unchanged to `pc_browser_act`, where the PC bridge rechecks the
+same DOM node, freshness, visibility and occlusion. Clicks that the bridge
+identifies as submit/send/delete/sign-in/payment actions still require the
+existing P7-03 approval flow. The Foundry `gpt-5.6-luna` chat deployment with
+reasoning disabled writes a small validated JSON text value only for TYPE; a
+separate JSON check independently verifies Jev's DONE decision against a fresh
+snapshot.
+
+Runs stop after 20 steps or 30 seconds, propagate cancellation, and refuse low
+confidence or sensitive requests. Existing P8-16 tool activity events report the
+tool outcome; a transient P8-15 text window shows the step, selected action,
+observed target and final/blocked result. `browser_do` and the underlying browser
+tools are marked sensitive, so generic tool-call storage records neither page
+data nor typed text. Fake Jev, model, executor and workspace tests pass; the
+offline median fake step was 0.07 ms excluding page loads. Live Jev/Foundry,
+Dan's signed-in Chrome, Teams approval delivery and end-to-end voice/browser
+behavior remain unverified.
+
 P4-10 registers the Software Factory's `list_projects`, `list_tasks`, `get_task`,
 `create_task`, `steer_task`, `pause_task`, `resume_task`, and `cancel_task` tools.
 They call the injected project/task stores and task controller, so the same

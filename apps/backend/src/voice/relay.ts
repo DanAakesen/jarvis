@@ -220,7 +220,7 @@ function registerVoiceRoute(
           const classification = await app.reflexClassifier.classify(
             text,
             'en',
-            await reflexTargets(request),
+            await reflexTargets(request, text),
             controller.signal,
           );
           const action = await executeReflexAction(classification, request, message.id, controller.signal);
