@@ -215,7 +215,9 @@ jobs:
             fi
             sleep 15
           done
+          # Voice Live rejects a Bridge Protocol target without voiceLiveCompatible metadata (L99).
           definition=$(jq -cn --arg image "$AGENT_IMAGE" --arg backend "$BACKEND_URL" '{
+            metadata: {voiceLiveCompatible: "true", bridgeProtocolVersion: "1.0"},
             definition: {
               kind: "hosted",
               cpu: "1",
