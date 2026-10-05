@@ -18,7 +18,9 @@ describe('SQL usage store', () => {
       estimated: true,
       totalEntries: '1',
     };
-    const query = vi.fn(async () => ({ recordset: [row] }));
+    const query = vi.fn()
+      .mockResolvedValueOnce({ recordset: [row] })
+      .mockResolvedValueOnce({ recordset: [{ tool: 'image_generation', count: '2' }] });
     const input = vi.fn();
     const request = { input, query };
     input.mockReturnValue(request);
@@ -43,13 +45,18 @@ describe('SQL usage store', () => {
         estimated: row.estimated,
       }],
       totalEntries: '1',
+      dailyToolCounts: [{ tool: 'image_generation', count: '2' }],
     });
     expect(input).toHaveBeenNthCalledWith(1, 'from', sql.DateTime2, from);
     expect(input).toHaveBeenNthCalledWith(2, 'to', sql.DateTime2, to);
+    expect(input).toHaveBeenNthCalledWith(3, 'from', sql.DateTime2, new Date('2026-10-04T00:00:00.000Z'));
+    expect(input).toHaveBeenNthCalledWith(4, 'to', sql.DateTime2, to);
     expect(query.mock.calls[0]?.[0]).toContain('FROM dbo.usage');
     expect(query.mock.calls[0]?.[0]).toContain('FROM dbo.sandbox_sessions s');
     expect(query.mock.calls[0]?.[0]).toContain("u.source IN (N'codex', N'copilot') THEN NULL");
     expect(query.mock.calls[0]?.[0]).toContain('SUM(CASE WHEN u.source');
     expect(query.mock.calls[0]?.[0]).toContain('SELECT TOP (1000)');
+    expect(query.mock.calls[1]?.[0]).toContain('FROM dbo.tool_calls');
+    expect(query.mock.calls[1]?.[0]).toContain('COUNT_BIG(*)');
   });
 });

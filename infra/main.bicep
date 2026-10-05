@@ -49,6 +49,7 @@ param foundryNameTimestamp string
 var suffix = uniqueString(resourceGroup().id)
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+var blobUserDelegatorRoleId = 'db58b8e5-c6ad-4a2a-8342-4190687cbf4a'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
 var costManagementReaderRoleId = '72fafb9e-0641-4937-9268-a91bfd8191a3'
@@ -292,6 +293,16 @@ resource blobDataAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01'
   scope: storage
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', blobDataContributorRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource blobUserDelegatorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storage.id, backendIdentity.id, blobUserDelegatorRoleId)
+  scope: storage
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', blobUserDelegatorRoleId)
     principalId: backendIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
@@ -780,6 +791,8 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
   }
   dependsOn: [
     acrPullAssignment
+    blobDataAssignment
+    blobUserDelegatorAssignment
     taskEventsContainer
     backendFoundrySpeechUserAssignment
     speechUserAssignment

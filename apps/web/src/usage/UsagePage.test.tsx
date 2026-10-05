@@ -13,6 +13,10 @@ const report = {
   codexToolCallsToday: [{ tool: 'web_research', count: '3' }],
   totalEntries: '4',
   truncated: false,
+  dailyToolUsage: {
+    date: '2026-10-04',
+    tools: [{ tool: 'image_generation', count: '2' }],
+  },
   entries: [
     {
       taskId: '42', taskTitle: 'Fix the bug', projectId: '7', projectName: 'Jarvis',
@@ -67,6 +71,8 @@ describe('Usage page', () => {
     expect(within(table).getAllByText('—')).toHaveLength(2);
     expect(screen.getAllByText(/Includes estimated DKK for this group/)).toHaveLength(2);
     expect(screen.getByText(/sandbox and voice costs are estimates/)).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Jarvis tool calls today (UTC)' })).not.toBeNull();
+    expect(screen.getByText('image_generation').parentElement?.textContent).toBe('image_generation: 2');
     expect(screen.getByRole('heading', { name: 'Codex tool calls today (UTC)' })).not.toBeNull();
     expect(screen.getByText('3 calls')).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/usage?period=30d', {

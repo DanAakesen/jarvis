@@ -14,13 +14,14 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 | **5** | Parallel changes | **Confirmed:** one sandbox and branch per task isolates work (proven with parallel runs). **Open:** conflicts between PRs in one repository. |
 | **6** | Memory | **Confirmed:** one continuous conversation (sessions within one thread, see [data model](data-model.md)) keeps its original messages; compaction, generated views and durable memory have separate lifetimes. **Decided:** Azure SQL with vector search when available and full-text/substring fallback; small Foundry embeddings; automatically remember only clearly stated preferences, project facts, decisions and unfinished tasks. Never remember secrets, credentials, banking or health data unless Dan explicitly says “remember”. Dan may inspect, correct and forget; memories remain until deleted, and forgetting does not delete source conversations. |
 | **7** | Cost | **Confirmed:** minimum cost; cold starts acceptable. **Measured:** about 0.89 DKK per sandbox-hour plus about 33 DKK per month fixed. **Estimated:** voice ≈4 DKK per 30-minute day (billed meters to confirm). |
-| **8** | Subscriptions | **Confirmed:** Codex uses a Jarvis-only ChatGPT Pro login, with no API key; the Copilot seat may be used for Jarvis and has ample usage. **Proven:** both subscriptions in the sandbox, including parallel Codex, and Codex login renewal. **Implemented offline:** daily Codex renewal is serialized against task starts; a Codex usage-limit failure is reported as `Codex usage limit reached` and moves the task to Needs attention, and the P6-05 CI load test shows that this releases dispatch capacity. Live Key Vault renewal and real Codex Pro limits remain to verify (P6-08). |
+| **8** | Subscriptions | **Confirmed:** Codex uses a Jarvis-only ChatGPT Pro login, with no API key; coding tasks and image generation share its allowance. The Copilot seat may be used for Jarvis. **Proven:** both subscriptions in the sandbox, including parallel Codex, and Codex login renewal. **Implemented offline:** daily Codex renewal is serialized against task starts; a Codex usage-limit failure is reported clearly, and the P6-05 CI load test shows that this releases dispatch capacity. Live Key Vault renewal, real Codex limits, and image-generation availability remain to verify. |
 | **9** | Build and release | **Confirmed:** full builds, tests, releases, and deployments run in GitHub Actions; the sandbox runs targeted builds and tests only. The board shows a task view and a release view fed by GitHub webhooks. **Measured:** disk (6 GiB writable), not CPU or memory, limits builds in the sandbox; full-solution builds belong in GitHub Actions (L23). **Researched 3 October 2026:** Microsoft documents a per-session disk budget of *up to* 20 GiB at 1 vCPU or more (less below), about 20 % reserved for the system, the rest shared by the image, `$HOME`, and other writable paths; there is no setting to choose or raise it. The prototype got 6.0 GiB at both 1×2 and 2×4. Plan for 6 GiB; the runner reports disk per session (P6-07); Container Apps Jobs stays the fallback for a project whose builds don't fit. |
 
 ## Decision log
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-05 | P7-15 image generation uses Dan's existing ChatGPT/Codex subscription through a new `codex-tool` mode on the Foundry hosted runner. Use the built-in `image_generation` feature; default to configurable `gpt-5.5`. Do not check out a repository, pass prompts as shell text, retain temp workspaces, use a paid image API, or fall back when Codex refuses. Validate a bounded PNG/JPEG, upload it to the existing private `artifacts` Blob container, persist only owner-scoped metadata and a safe artifact ID, and open it in the workspace and conversation. Keep the invocation bounded/cancellable, expose usage-limit errors, and show daily UTC tool-call counts. Video is deferred indefinitely to a separate issue; artifact retention remains unresolved. | Dan verified locally with codex-cli 0.157.1 on his ChatGPT login on 5 October; `gpt-6.1-sol` is not accepted with that login. Offline runner/backend/store/contracts/UI tests cover the implementation, but live Codex generation, subscription limits, Azure Blob upload, and deployed artifact rendering remain unverified. This reuses subscription entitlement without adding a pay-per-call service or monthly cap. | Implemented offline; live acceptance pending |
 | 2026-10-05 | P7-27 keeps window control on the existing WorkspaceCommand broker. Publish only a bounded, owner/session-bound snapshot of open titles/IDs and context visibility; Jev chooses fixed reversible UI operations, including voice partials, without confirmation. Keep generated-view creation/update agent-only. Ignore delivery command IDs for semantic duplicate detection, cap task discovery at 150 ms when workspace targets are available, and allowlist one transcript-free `reflex.decision` event per attempted classification. | Window/layout control should not wait for the main model or SQL task discovery. Reusing the current controller, schema, acknowledgements and audit avoids another executor or persistence layer. Tests cover snapshot bounds/stale sessions, fixed targets, chat replay with a new delivery ID, partial-before-final workspace control, final duplicate suppression and log privacy. Context `open` without a view is idempotent and preserves existing content; agent-closed windows retain at most eight client-only entries for contradiction undo through `restore`. Manual close still discards generated content. Enlargement updates tiled spans as well as layered geometry. | Implemented offline; coordinator under-1.5-second chat acceptance pending |
 | 2026-10-05 | P7-30 keeps cross-session history in numeric message order, adds only each prior Jarvis turn's bounded audited tool-name/outcome summary to its context, and puts reference JSON before conversation history. Record per-turn context count, included ID range, previous Jarvis inclusion, and character count without text. | The backend already returns the newest 100 messages across sessions in ascending ID order with tool-call outcomes; the agent had ignored these outcomes and inserted reference JSON between the latest exchange and the follow-up. Regression tests cover the Danish `pc_open` refusal followed by English “try again” in a new session, telemetry without content, and retry tool selection. The exact live sequence remains for coordinator acceptance with Dan. | Implemented offline; coordinator live acceptance pending |
 | 2026-10-05 | Dan accepted the corrected centred 3D stage: live room and persistent transparent cyan orb/open amber core only on Jarvis; light appearance re-lights the same room. Shared glass styling extends to current pages without 3D. Preserve mirror, stable viewpoint, explicit voice/microphone rules and existing workspace logic. | Selected image 3 for orb/stage and image 2 for glass windows; corrected live prototype accepted in this chat. Dan reports transition flicker, still unresolved. Source, immutable standalone and labelled captures are in `docs/reference/ui-stage-prototype` and `docs/ui/centred-stage`. | Design confirmed; production port, light appearance, flicker fix and device/live acceptance planned under P8-28–P8-33 |
@@ -180,7 +181,7 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 | 2026-10-04 | Autopilot decisions by the coordinator at Dan's request ("take decisions as you think I would"; only truly Dan-only items stay in Needs Dan). P8-12: Escape ends voice and a labelled End voice control sits by the orb (DESIGN.md). P8-18: initial renderer, action and theme-token allowlists (ui.md); no generated code runs. P3-08 waits for the new shell and visual system | Unblocks the UI track; recorded on each issue for Dan's review | Decided on autopilot; Dan to review |
 | 2026-10-04 | P8-14 keeps the version-1 generated-view JSON Schema, TypeScript union, and runtime validator together in `@jarvis/contracts`. The authorized tool route validates tagged view results before returning or recording them; the signed-in Now panel uses the same contract for its bounded list fixture. Views and their source metadata stay transient; renderers receive data as React text/approved links, never executable markup. | One shared package prevents backend and browser allowlists from drifting. The 256 KiB envelope, per-renderer bounds, source/page status, registered-tool references, and configured Blob host are checked offline; no persistence or new data integration is needed. | Contract, backend route, and signed-in UI tests pass; live Entra and Azure source behavior remain unverified |
 | 2026-10-04 | Autopilot decisions for P7 (Microsoft paths first): away mode by voice plus Teams presence (Graph); Teams bot confirmations with Speech F0 and a fixed confirmation list (merge, delete, send mail, calendar changes, repository creation, computer use outside the browser, spending money); screen/camera vision on the existing Foundry account with a 300-frame daily cap; .NET 10 tray PC bridge with an allow-list; Windows UI Automation for computer use; Google Gmail and Calendar APIs using OAuth for Dan's personal account; notes folder as a setting with Graph keyword search; long-term memory in Azure SQL with vector search and a small embedding deployment | Each choice is on its issue. Vision and embeddings are pay-as-you-go Foundry usage like chat, with caps. P7-14's separate provider decision is recorded above; it uses the existing subscription, not a new API service. | Google mail/calendar confirmed in P7-22; other choices remain for review |
-| 2026-10-04 | Left for Dan (Needs Dan column): Teams calling's per-minute ACS cost (P7-01), paid Grounding with Bing Search (P7-14), paid image/video generation (P7-15) | These needed a new paid service approval or information only Dan had. Dan's 5 October decision supersedes the Bing item for P7-14. | P7-14 resolved; P7-01 and P7-15 remain waiting |
+| 2026-10-04 | Left for Dan (Needs Dan column): Teams calling's per-minute ACS cost (P7-01), paid image generation and video (P7-15) | These needed a new paid service approval or information only Dan had. Dan's 5 October decisions approved existing-subscription image generation, rejected a paid image API, and deferred video indefinitely. | P7-15 provider decision resolved; P7-01 and artifact retention remain open |
 | 2026-10-05 | P7-04 uses Jev from TypeSafe AI at `POST https://api.typesafe.ai/v1/systemone`, model `jev-latest` (pin `jev-1.13.0` after confidence tuning). The API key is `jev-api-key` in Key Vault, read only by the backend managed identity; Dan provisions it after merge with his external `set-jev-key.ps1`. Only a high-confidence, addressed, non-confirmation action may execute a registry tool marked `reflexSafe`; all other requests go to the main agent. English Voice Live uses semantic VAD with automatic response disabled so the backend can classify and act before requesting speech. | Dan confirmed endpoint/model/key placement and the $0.042 per million input-token cost (output tokens free) on 5 October 2026. Backend tests use a fake Jev provider; fake-provider classification measured 0.43 ms and final-transcript-to-response-request measured 1.04 ms offline, excluding Jev network and first generated audio. No new Azure role was needed because the backend identity already has Key Vault Secrets User. | Implemented offline; Dan's Key Vault provisioning and live Jev/Voice Live checks remain |
 | 2026-10-04 | Visual direction: Concept B (living aurora) as the dark default and Concept C (daylight studio) as the light appearance; P8-20 (#282) builds the shared visual and motion system | Dan asked for a stunning, animated UI that feels alive, especially in voice mode, and for decisions on autopilot. B's audio- and state-driven fluid orb carries information through motion; C proves the light theme keeps the same states. Concepts and screenshots in docs/ui/concepts | Decided on autopilot; Dan to review |
 | 2026-10-04 | P8-05 separates voice entry from microphone permission: the input orb starts a relay, readiness and reconnect keep capture off, and Enable microphone is an explicit action. Keep draft/language in the mounted conversation component; hide history/input during voice and restore focus on terminal states. | Meets the agreed typing-default and no-automatic-listening boundary without changing backend protocols. Existing neutral tokens remain until P8-20; fullscreen/window transitions and final voice-end behavior stay with P8-10–P8-12. Focused web tests cover keyboard, draft restoration, send failure, partial replies, permission denial, stop during activation and reconnect. | Implemented offline; physical audio and live Azure remain unverified |
@@ -204,6 +205,69 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 | 2026-10-05 | Danish voice returns to MAI Transcribe (`mai-transcribe`, `da`, phrase list) | P7-20 (#315) changed the Danish voice agent to `gpt-4o-mini-transcribe` for partial transcripts; after the automatic re-provisioning, every live Danish session closed within a second (`voice.reflex_metrics` with 0 deltas, UI stuck on Reconnecting). The previous setting was live-working | Accepted (coordinator fix); Danish partials need a model verified live with `da` and the phrase list |
 
 | 2026-10-05 | P8-26 queues chat submissions locally in FIFO order, capturing language at Send/Enter; retain failed-turn feedback and offer Stop reply without changing voice. | One in-flight client turn avoids overlapping requests without backend changes. The next submission starts only after the previous promise and stream cleanup settle; Stop does not undo completed tool actions. The queue is not persisted across navigation/reload. Focused tests and scratch-auth/API Chromium checks cover desktop/phone, dark/light, removal, language, double Enter, Stop/next, error/next and reduced motion. | Implemented offline; live Entra/Foundry acceptance unverified |
+
+### P7-23 latency evidence
+
+5 October 2026 follow-up to reopened [#327](https://github.com/DanAakesen/jarvis/issues/327):
+keep reflex safety/auditing and its 800 ms parallel classification budget unchanged.
+Overlap chat settings with catalogue/live-context reads, retain the existing
+60-second container catalogue cache, and leave memory retrieval/embedding on demand.
+Do not cache live settings/task data or repeat #344's caller-chosen session routing,
+which #356 reverted after Foundry rejected chat invocations.
+
+| Evidence | First text / total duration | Source and limitation |
+| --- | --- | --- |
+| Original deployed baseline, 09:03–09:06 UTC | Backend turns 11.0, 11.7, 11.9, 16.8 s; hosted invocation 3.1, 4.8, 5.4 s; model 0.35, 0.79, 1.36 s | Application Insights/backend measurements supplied in #327; not independently queried here |
+| After #329, 10:41–10:43 UTC | `agent_first_byte` 8.8, 10.2, 11.5, 9.2 s; whole turn ends ~0.5 s later; Jev ~0.2 s | Coordinator's live issue comment; acceptance still missed |
+| 10:42:49 turn breakdown | Backend agent call 10:42:49.5 → `invoke_agent` 10:42:54 (~4.5 s); model starts ~10:42:57 (~3 s prep), takes 0.44 s | Coordinator's Application Insights evidence; gateway/container attribution remains a hypothesis |
+| Latest reported live baseline | First word 9–19 s | Coordinator's reopening/status comment |
+| This change, local HTTP smoke | First mock delta 0.005 s; done 0.757 s; delta-to-done gap 0.752 s | Actual Hypercorn + HTTP client with fake backend/model and a deliberate 0.75 s pause; proves local incremental delivery, not deployed performance |
+| This change, deployed after | **Not measured** | No authenticated Azure CLI account in this environment; no deployment or paid invocation performed |
+
+New agent `chat.latency` logs and spans/events identify verification, settings,
+catalogue/cache, live context, memory retrieval, prompt build, Responses creation,
+model first delta and first SSE delta out. Logs contain phase/duration/outcome
+only, and stage spans disable automatic exception-content recording. Embedding
+is backend-owned and already emits content-free `memory.embedding` timings.
+Backend `turn_first_token`/`turn_complete` include pre-agent SQL setup and completed
+assistant persistence; `agent_first_byte` still counts text only, not the initial
+SSE comment. The first-delta-out duration starts at agent handler entry, allowing
+comparison with backend latency to isolate work outside the container.
+
+Configuration inspection: `infra/main.bicep` sets **backend** minimum/maximum
+replicas to one. `.github/workflows/deploy.yml` sets the **hosted Jarvis agent**
+session idle timeout to 120 seconds and routes 100% of traffic to the active
+version; it does not declare an always-warm agent replica. Installed official
+`azure-ai-agentserver-invocations` SDK `_dispatch_invoke` and
+`_wrap_streaming_response` pass the response/body chunks through, and the model
+adapter requests `stream=True`. Gated ASGI tests prove a Responses text delta
+reaches SSE before `response.completed`, including disconnect cleanup. No
+buffering was reproduced locally. Public Microsoft Learn retrieval was blocked
+in this environment; no undocumented replica/session option was added.
+
+Post-deploy verification: send repeated short “hi” turns, including a first
+invocation and another after >120 seconds idle, and record the deployed agent
+version/time window. Compare `turn_first_token`, `turn_complete`,
+`agent_first_byte`, agent `first_delta_out`, preparation spans and `invoke_agent`
+start timestamps. Do not treat headers or keepalive comments as tokens.
+This Application Insights query returns only backend timing dimensions:
+
+```kusto
+traces
+| where timestamp > ago(1h)
+| where message == "chat.latency"
+| extend phase = tostring(customDimensions.phase),
+         durationMs = todouble(customDimensions.durationMs)
+| where phase in ("agent_first_byte", "turn_first_token", "turn_complete")
+| project timestamp, operation_Id, phase, durationMs
+| order by timestamp asc
+```
+
+Correlate those operations with agent stage spans/events and the hosted
+`invoke_agent` dependency before attributing a gap to cold start or routing.
+Acceptance remains **pending** until Application Insights shows ≤2.5 s first
+text and ≤4 s complete short reply. Offline checks: 148 hosted-agent tests,
+92 focused backend tests, agent Ruff/compileall and backend lint/build pass.
 
 ### P7-24 live transcription evidence
 
