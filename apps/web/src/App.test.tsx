@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -275,6 +275,31 @@ describe('App shell', () => {
     await user.click(screen.getByRole('button', { name: 'End voice' }));
     expect(shell?.getAttribute('data-voice-active')).toBe('false');
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
+  });
+
+  it('keeps camera/sharing behind a labelled disclosure with Escape focus recovery', async () => {
+    const media = { matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal('matchMedia', vi.fn(() => media));
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const trigger = screen.getByLabelText('Camera and sharing controls');
+    const menu = trigger.closest('details')!;
+    await user.click(trigger);
+    expect(menu.open).toBe(true);
+    expect(within(menu).getByRole('button', { name: 'Share screen' }).hasAttribute('disabled')).toBe(true);
+    expect(within(menu).getByRole('button', { name: 'Camera off. Turn camera on.' })).not.toBeNull();
+    trigger.focus();
+    await user.keyboard('{Escape}');
+    expect(menu.open).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+    act(() => {
+      media.matches = false;
+      media.addEventListener.mock.calls.forEach(([, listener]) => listener());
+    });
+    expect(screen.queryByLabelText('Camera and sharing controls')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Camera off. Turn camera on.' }).closest('details')).toBeNull();
+    const topbar = screen.getByRole('button', { name: 'Camera off. Turn camera on.' }).closest('.topbar-actions') as HTMLElement;
+    expect(within(topbar).getByRole('button', { name: 'Share screen' }).closest('details')).toBeNull();
   });
 
   it('shows chat work only after a runtime event and clears it on the reported terminal event', async () => {
