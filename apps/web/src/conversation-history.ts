@@ -163,12 +163,17 @@ export async function sendChatTurn(
   onDelta: (text: string) => void,
   onDeliveryUncertain?: () => void,
   screenContext?: string,
+  sharedScreenContext?: { screenDescription: string; sharedWindowTitle?: string },
 ): Promise<ChatMessage> {
   const response = await chatResponse(
     client,
     config,
     `/conversation/sessions/${session.id}/turns`,
-    { text, ...(screenContext === undefined ? {} : { screenContext }) },
+    {
+      text,
+      ...(screenContext === undefined ? {} : { screenContext }),
+      ...(sharedScreenContext === undefined ? {} : { sharedScreenContext }),
+    },
     'text/event-stream',
     onDeliveryUncertain,
   );

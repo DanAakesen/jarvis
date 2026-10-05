@@ -1,4 +1,4 @@
-import { ClientSecretCredential, DefaultAzureCredential } from '@azure/identity';
+import { DefaultAzureCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { buildApp } from './app.js';
 import { BlobServiceClient } from '@azure/storage-blob';
@@ -61,7 +61,7 @@ import { createProjectPolicyEvaluator } from './github/project-policy.js';
 import { createGitHubDeliveryHandler } from './github/delivery.js';
 import { createPcBridgeModule } from './pc-bridge/bridge.js';
 import { createPcBridgeStatusStore } from './database/pc-bridge-status-store.js';
-import { createAlertNotifier } from './alerts.js';
+import { createAlertNotifier, notifyAlert } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
 import { createMemoryStore } from './database/memory-store.js';
@@ -70,8 +70,9 @@ import { createFoundryMemoryEmbedder } from './core/memory-embeddings.js';
 import { createGraphClient } from './graph/client.js';
 import { createNotesModule } from './notes/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
-import { createGraphClient as createOutlookGraphClient } from './outlook/graph-client.js';
-import { createOutlookModule } from './outlook/tools.js';
+import { createGoogleApiClient } from './google/api-client.js';
+import { createGoogleTokenProvider, type GoogleOAuthCredentials } from './google/oauth.js';
+import { createGoogleModule } from './google/tools.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
@@ -81,6 +82,7 @@ import { createEphemeralAudioStore } from './teams/audio-store.js';
 import { createAzureSpeechSynthesizer } from './teams/speech.js';
 import { createTeamsBotModule, createTeamsConnector } from './teams/bot.js';
 import { createTeamsNotificationService } from './teams/service.js';
+import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
 import { startGraphPresenceMonitor } from './graph/presence-monitor.js';
 
@@ -105,12 +107,15 @@ try {
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const nowEventHub = createEventHub<NowFeedUpdate>();
+  const alertActivityStore = database
+    ? createAlertActivityStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
+    : undefined;
   const awayModeStore = database
     ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({ type: 'mode_changed', away: state.away }))
     : undefined;
   const alertNotifier = createAlertNotifier(telemetry);
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
-    config.foundryEndpoints || config.githubAppId || config.graphAppId || config.teams || sleepResourceId
+    config.foundryEndpoints || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -137,32 +142,47 @@ try {
   const githubAppKeyVault = config.githubAppId && config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
     : undefined;
-  const graphSecretClient = config.graphAppId && config.keyVaultUri && credential
+  const googleSecretClient = config.googleTimeZone && config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
     : undefined;
-  let graphCredentialRequest: Promise<ClientSecretCredential> | undefined;
-  const outlookModule = config.graphAppId && config.graphTimeZone && graphSecretClient
-    ? createOutlookModule(createOutlookGraphClient({
-      getToken: async (scope, signal) => {
-        graphCredentialRequest ??= graphSecretClient.getSecret('jarvis-outlook-client-secret')
-          .then(({ value }) => {
-            if (!value || !value.trim() || value.length > 10_000 || /[\r\n]/u.test(value)) {
-              throw new Error('Outlook app credential is unavailable');
-            }
-            return new ClientSecretCredential(config.auth.tenantId, config.graphAppId!, value);
-          })
-          .catch((error: unknown) => {
-            graphCredentialRequest = undefined;
-            throw error;
-          });
-        const token = await (await graphCredentialRequest).getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Outlook Graph token is unavailable');
-        return token.token;
-      },
-    }), {
-      mailboxObjectId: config.auth.ownerObjectId,
-      timeZone: config.graphTimeZone,
-    })
+  const googleModule = config.googleTimeZone && googleSecretClient
+    ? createGoogleModule(createGoogleApiClient({
+      tokens: createGoogleTokenProvider({
+        getCredentials: async (): Promise<GoogleOAuthCredentials> => {
+          const [clientId, clientSecret, refreshToken] = await Promise.all([
+            googleSecretClient.getSecret('google-oauth-client-id'),
+            googleSecretClient.getSecret('google-oauth-client-secret'),
+            googleSecretClient.getSecret('google-refresh-token'),
+          ]);
+          if (![clientId.value, clientSecret.value, refreshToken.value].every((value) =>
+            typeof value === 'string' && value.trim() && value.length <= 10_000 && !/[\r\n]/u.test(value))) {
+            throw new Error('Google OAuth credentials are unavailable');
+          }
+          return {
+            clientId: clientId.value!,
+            clientSecret: clientSecret.value!,
+            refreshToken: refreshToken.value!,
+          };
+        },
+        onInvalidGrant: async () => {
+          if (!alertActivityStore) {
+            logger.warn('google.refresh_token_expired_alert_unavailable');
+            return;
+          }
+          try {
+            const alert = {
+              type: 'credential_expiry',
+              dedupeKey: 'credential:google-refresh-token:invalid-grant',
+              title: 'Google authorization needs attention',
+              link: null,
+            } as const;
+            if (await alertActivityStore.record(alert)) notifyAlert(alertNotifier, alert);
+          } catch {
+            logger.warn('google.refresh_token_expired_alert_persistence_failed');
+          }
+        },
+      }),
+    }), { timeZone: config.googleTimeZone })
     : undefined;
   const getGitHubAppPrivateKey = async () => {
     if (!githubAppKeyVault) throw new Error('GitHub App private key is unavailable');
@@ -366,6 +386,7 @@ try {
       eventHub,
       {
         onError: () => logger.warn('dispatcher.operation_failed'),
+        onReconciliation: (decision) => logger.info(decision, 'task_reconciliation.decision'),
         recoveryStore: createTaskRecoveryStore(database.pool, eventHub),
         workspaceFor: async (task) => {
           if (!task.branch) return null;
@@ -375,7 +396,16 @@ try {
             : null;
         },
         ...(githubAppTokenIssuer
-          ? { verifyDelivery: createGitHubDeliveryHandler(githubAppTokenIssuer, taskStore, config.staticWebAppOrigin) }
+          ? {
+            verifyDelivery: createGitHubDeliveryHandler(
+              githubAppTokenIssuer,
+              taskStore,
+              config.staticWebAppOrigin,
+              undefined,
+              async (mapping) => { await webhookDeliveryStore?.recordPullRequest(mapping); },
+              async (mapping) => { await projectPolicyEvaluator?.handle(mapping); },
+            ),
+          }
           : {}),
       },
     )
@@ -400,7 +430,7 @@ try {
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
     ...(webResearchModule ? [webResearchModule] : []),
-    ...(outlookModule ? [outlookModule] : []),
+    ...(googleModule ? [googleModule] : []),
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
       getSecret: getWebhookSecret,
@@ -455,6 +485,18 @@ try {
       ...(config.foundryProjectEndpoint
         ? { connectDanish: createDanishVoiceConnector(config.foundryProjectEndpoint) }
         : {}),
+      ...(config.foundryEndpoints
+        ? {
+          createPartialRecognizer: createAzureSpeechPartialRecognizerFactory(
+            config.foundryEndpoints.runtime,
+            async (scope, signal) => {
+              const token = await credential.getToken(scope, { abortSignal: signal });
+              if (!token) throw new Error('Speech identity unavailable');
+              return token.token;
+            },
+          ),
+        }
+        : {}),
     }));
   }
   if (config.teams && teamsNotifications && teamsAudioStore) {
@@ -469,9 +511,7 @@ try {
     alertNotifier,
     onAlert: () => nowEventHub.publish({ type: 'refresh' }),
   }) : undefined;
-  const budgetAlertStore = database
-    ? createAlertActivityStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
-    : undefined;
+  const budgetAlertStore = alertActivityStore;
   const budgetReader = database && credential && config.monthlyBudgetResourceId
     ? createArmBudgetReader({
       resourceId: config.monthlyBudgetResourceId,

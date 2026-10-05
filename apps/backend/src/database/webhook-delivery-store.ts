@@ -209,6 +209,17 @@ export function createWebhookDeliveryStore(
   alertNotifier?: AlertNotifier,
 ): WebhookDeliveryStore {
   return {
+    async recordPullRequest(mapping) {
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+      try {
+        await applyMapping(transaction, mapping);
+        await transaction.commit();
+      } catch (error) {
+        await transaction.rollback().catch(() => undefined);
+        throw error;
+      }
+    },
     async record({ deliveryId, event, outcome, mapping }) {
       const transaction = new sql.Transaction(pool);
       await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);

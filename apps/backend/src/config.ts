@@ -21,8 +21,7 @@ export interface BackendConfig {
   foundryMemoryEmbeddingDeploymentName?: string;
   codexToolModel: string;
   githubAppId?: string;
-  graphAppId?: string;
-  graphTimeZone?: string;
+  googleTimeZone?: string;
   monthlyBudgetResourceId?: string;
   notesFolderPath: string;
   teams?: {
@@ -147,20 +146,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (githubAppId !== undefined && keyVaultUri === undefined) {
     throw new ConfigurationError('KEY_VAULT_URI is required when GITHUB_APP_ID is configured');
   }
-  const graphAppId = env.JARVIS_GRAPH_APP_ID;
-  if (graphAppId !== undefined && !/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(graphAppId)) {
-    throw new ConfigurationError('JARVIS_GRAPH_APP_ID must be a UUID');
+  const googleTimeZone = env.JARVIS_GOOGLE_TIME_ZONE;
+  if (googleTimeZone !== undefined && keyVaultUri === undefined) {
+    throw new ConfigurationError('KEY_VAULT_URI is required when JARVIS_GOOGLE_TIME_ZONE is configured');
   }
-  const graphTimeZone = env.JARVIS_GRAPH_TIME_ZONE;
-  if (graphAppId !== undefined && keyVaultUri === undefined) {
-    throw new ConfigurationError('KEY_VAULT_URI is required when JARVIS_GRAPH_APP_ID is configured');
-  }
-  if ((graphAppId === undefined) !== (graphTimeZone === undefined)) {
-    throw new ConfigurationError('JARVIS_GRAPH_APP_ID and JARVIS_GRAPH_TIME_ZONE must be configured together');
-  }
-  if (graphTimeZone !== undefined) {
-    try { new Intl.DateTimeFormat('en-GB', { timeZone: graphTimeZone }); }
-    catch { throw new ConfigurationError('JARVIS_GRAPH_TIME_ZONE must be a supported time zone'); }
+  if (googleTimeZone !== undefined) {
+    try { new Intl.DateTimeFormat('en-GB', { timeZone: googleTimeZone }); }
+    catch { throw new ConfigurationError('JARVIS_GOOGLE_TIME_ZONE must be a supported time zone'); }
   }
   const monthlyBudgetResourceId = env.JARVIS_MONTHLY_BUDGET_RESOURCE_ID;
   if (monthlyBudgetResourceId !== undefined &&
@@ -234,8 +226,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
     codexToolModel,
     ...(githubAppId === undefined ? {} : { githubAppId }),
-    ...(graphAppId === undefined ? {} : { graphAppId: graphAppId.toLowerCase() }),
-    ...(graphTimeZone === undefined ? {} : { graphTimeZone }),
+    ...(googleTimeZone === undefined ? {} : { googleTimeZone }),
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
     ...(teams ? { teams } : {}),
     notesFolderPath: notesFolderPath.replace(/\/+$/u, ''),

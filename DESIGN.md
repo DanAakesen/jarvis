@@ -8,7 +8,7 @@ The shared shell and voice-workspace structure were agreed with Dan on 4 October
 - **One app, many areas.** One app shell with area navigation. The Software Factory is the first area; later areas (Banking, Health and fitness, Calendar) must fit without redesigning the shell.
 - **Live and honest.** State changes appear without refresh. Stale or disconnected data is shown as such; progress uses observed milestones, not invented percentages.
 - **Full transparency.** Every task shows what the agent did, what it used, and what it cost.
-- **Headless Outlook tools (P7-09).** Calendar and mail actions are available through conversation only; P8 owns any future visual surface. A staged change must state exactly what will happen and how to confirm it; mail text is treated as untrusted content.
+- **Headless Google tools (P7-22).** Google Calendar and Gmail actions are available through conversation only; P8 owns any future visual surface. A staged change must state exactly what will happen and how to confirm it; mail text is treated as untrusted content.
 
 ## Page set (phase 1)
 
@@ -132,7 +132,9 @@ sign-in; the header wraps on narrow screens.
   Scratch-auth Chromium checks at 390 and 1280 px exercised Share, the visible
   status/Stop action, a mocked chat inspection, and stream cleanup; neither
   viewport overflowed or reported console errors. Real display capture and the
-  live backend/model remain unverified.
+  live backend/model remain unverified. P7-19 reuses these controls for shared-tab
+  tasks: an action request captures one fresh frame and its selected window label;
+  no new browser surface or persistent page content is introduced.
 - **Camera (P7-08):** the shared top-bar control explicitly starts/stops browser
   camera permission and shows an On/Off label on desktop; the pressed surface and
   camera icon retain the state on the narrowest phones. Chat and voice expose a
@@ -419,6 +421,12 @@ Messages enter with a short opacity/translation transition; streaming keeps a
 live caret beside readable text. Only a published tool-call state gets the
 running-tool shimmer; thinking is not treated as a tool call. Running Now tasks
 use a restrained sheen, while completed outcomes stay static.
+
+P8-24 keeps the established body typography for Jarvis's safe Markdown replies;
+inline and fenced code use the shared monospace face and theme-specific code
+surface, without decorative borders. Dan's messages remain plain text. While a
+reply streams, an unmatched `**` is temporarily closed for rendering so an open
+bold span does not flash as literal Markdown; persisted text is unchanged.
 
 Window titles are drag handles; right/bottom edges and the corner resize. Each
 window keeps minimise, maximise and close in its title actions, with a 44px

@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 5 October 2026 for P7-02, P7-03, P7-08, P7-09 and P7-13. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, headless Outlook tools, and long-term memory. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 5 October 2026 for P7-02, P7-03, P7-08, P7-13 and P7-22. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, Google Calendar/Gmail tools, and long-term memory. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -136,7 +136,7 @@ The refresh is published after the status transaction commits. Commands, window
 titles, URLs, paths, access tokens, and message contents are not persisted as
 bridge activity.
 
-P7-09 adds no Outlook tables or migration. Pending calendar/mail writes are held only in the single backend process for up to ten minutes and are discarded on expiry or restart; a later verified Dan message must match the exact confirmation phrase before the backend executes the write. Outlook tool arguments and results are redacted from persisted tool-call records. Mail bodies are passed to the model only for the current bounded search result and are not recorded as tool-call data.
+P7-22 adds no Google Calendar/Gmail tables or migration. Pending calendar/mail writes are held only in the single backend process for up to ten minutes and are discarded on expiry or restart; a later verified Dan message must match the exact confirmation phrase before the backend executes the write. Google tool arguments and results are redacted from persisted tool-call records. Mail bodies are passed to the model only for the current bounded search result and are not recorded as tool-call data.
 
 ## 1 · Jarvis core
 
@@ -566,6 +566,10 @@ Global Standard Global rates in
 2026 (1.3157 DKK/input million, 7.8941 DKK/output million), rounded to four
 decimal places. Usage marks screen-frame rows as estimated. The frame and its
 base64 request buffer are transient; neither is represented in the data model.
+P7-19's selected display label and bounded vision description are likewise
+request-only context for matching a live Chrome tab. They are excluded from
+conversation transcripts, task events and sensitive tool-call audit payloads;
+the existing `usage` frame/token accounting is the only persisted P7-05 data.
 
 ## 8 · Phone notifications
 

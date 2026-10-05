@@ -166,13 +166,22 @@ export function VoiceControls({
       setScreenError(source === 'camera'
         ? 'Turn on the camera from the top bar before asking Jarvis to inspect a frame.'
         : 'Start screen sharing before asking Jarvis to inspect a frame.');
+      if (source === 'screen') {
+        try { client.current.sendScreenContextUnavailable(); } catch { /* The voice session may be closing. */ }
+      }
       return;
     }
     try {
-      const description = await capture.inspect(sessionId);
-      client.current.sendScreenContext(description);
+      const context = await capture.inspect(sessionId);
+      client.current.sendScreenContext(
+        context.description,
+        source === 'screen' ? context.sharedWindowTitle : undefined,
+      );
     } catch (reason) {
       setScreenError(reason instanceof Error ? reason.message : 'Jarvis could not inspect the visual frame.');
+      if (source === 'screen') {
+        try { client.current.sendScreenContextUnavailable(); } catch { /* The voice session may be closing. */ }
+      }
     }
   };
 

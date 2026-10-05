@@ -43,7 +43,7 @@ describe('English realtime session', () => {
       voice_type: 'azure-standard',
       voice_locale: 'en-GB',
     });
-    expect(session.input_audio_transcription).toEqual({ model: 'gpt-4o-mini-transcribe' });
+    expect(session.input_audio_transcription).toEqual({ model: 'mai-transcribe' });
     expect(session.tools).toEqual([{
       type: 'function',
       name: 'echo',
@@ -144,6 +144,26 @@ describe('English realtime session', () => {
         outcome: 'refused',
         result: { refused: 'Task T-101 is not running.' },
         confirmation: 'Not done: echo was refused. Task T-101 is not running.',
+      }),
+    );
+  });
+
+  it('keeps an explicit browser-stop refusal visible after cancellation', async () => {
+    const execute = vi.mocked(tool.execute);
+    execute.mockClear();
+    const controller = new AbortController();
+    execute.mockImplementation(async () => {
+      controller.abort();
+      throw new ToolRefusal('Browser task stopped before completion.');
+    });
+    const request = { validateInput: vi.fn(() => true) } as unknown as FastifyRequest;
+
+    await expect(executeRealtimeToolCall(call(), registry, request, controller.signal)).resolves.toBe(
+      JSON.stringify({
+        tool: 'echo',
+        outcome: 'refused',
+        result: { refused: 'Browser task stopped before completion.' },
+        confirmation: 'Not done: echo was refused. Browser task stopped before completion.',
       }),
     );
   });

@@ -299,6 +299,50 @@ def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch)
     assert result == [ModelMessage("user", "Older"), ModelMessage("assistant", "Answer")]
 
 
+def test_load_verified_history_requests_profile_and_history_concurrently(monkeypatch) -> None:
+    history = {
+        "messages": [
+            {"id": "42", "role": "dan", "text": "Current", "channel": "chat", "language": "en"},
+        ],
+        "nextCursor": None,
+    }
+    history_started = asyncio.Event()
+
+    class Response:
+        def __init__(self, status_code: int, data=None) -> None:
+            self.status_code = status_code
+            self.content = b"{}"
+            self._data = data or {}
+
+        def json(self):
+            return self._data
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, url, headers):
+            assert headers["Authorization"] == AUTHORIZATION
+            if url.endswith("/me"):
+                await asyncio.wait_for(history_started.wait(), timeout=1)
+                return Response(200)
+            history_started.set()
+            return Response(200, history)
+
+    monkeypatch.setattr(
+        chat_runtime, "backend_settings_from_environment",
+        lambda: ("https://backend.example", "scope"),
+    )
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
+
+    assert asyncio.run(
+        chat_runtime.load_verified_history(TOKEN, "42", "Current", "en")
+    ) == []
+
+
 def test_load_verified_history_rejects_a_message_that_does_not_match_storage(monkeypatch) -> None:
     class Response:
         status_code = 401
