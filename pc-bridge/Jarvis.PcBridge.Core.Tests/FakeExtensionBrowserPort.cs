@@ -9,18 +9,29 @@ internal sealed class FakeExtensionBrowserPort(FakeCdpTarget target) : IExtensio
     private readonly Dictionary<string, ClientWebSocket> _sessions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SemaphoreSlim> _gates = new(StringComparer.Ordinal);
     private int _nextId;
+    private bool _tabAvailable = true;
 
     public bool IsConnected { get; set; } = true;
     public int DetachCount { get; private set; }
+    public int SessionCount => _sessions.Count;
     public List<string> Methods { get; } = [];
+    public event Action<string>? TabRemoved;
 
     public Task<BrowserTabPage> ListTabsAsync(int offset, int limit, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        IReadOnlyList<BrowserTab> tabs = offset == 0
+        IReadOnlyList<BrowserTab> tabs = offset == 0 && IsConnected && _tabAvailable
             ? [new BrowserTab("tab_1", "Search", "https://example.test/search", true)]
             : [];
         return Task.FromResult(new BrowserTabPage(tabs, null));
+    }
+
+    public void RemoveTab(string tabId)
+    {
+        _tabAvailable = false;
+        if (_sessions.Remove(tabId, out var socket)) socket.Dispose();
+        if (_gates.Remove(tabId, out var gate)) gate.Dispose();
+        TabRemoved?.Invoke(tabId);
     }
 
     public async Task<JsonDocument> SendCommandAsync(

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text.Json;
@@ -36,7 +37,7 @@ public sealed class BrowserExecutor : IDisposable
     private readonly bool _ownsHttpClient;
     private readonly Uri _targetsUri;
     private readonly IExtensionBrowserPort? _extensionPort;
-    private readonly Dictionary<string, TargetSession> _sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, TargetSession> _sessions = new(StringComparer.Ordinal);
 
     public BrowserExecutor(
         Func<bool> isEnabled,
@@ -48,6 +49,7 @@ public sealed class BrowserExecutor : IDisposable
         _isEnabled = isEnabled;
         _focusedWindowTitle = focusedWindowTitle;
         _extensionPort = extensionPort;
+        if (_extensionPort is not null) _extensionPort.TabRemoved += OnExtensionTabRemoved;
         _httpClient = httpClient ?? new HttpClient(new HttpClientHandler
         {
             UseProxy = false,
@@ -286,7 +288,7 @@ public sealed class BrowserExecutor : IDisposable
                 catch { }
                 finally
                 {
-                    _sessions.Remove(tabId);
+                    _sessions.TryRemove(tabId, out _);
                     session.Dispose();
                 }
             }
@@ -352,8 +354,7 @@ public sealed class BrowserExecutor : IDisposable
         if (_sessions.TryGetValue(target.Id, out var existing))
         {
             if (existing.IsOpen) return existing;
-            existing.Dispose();
-            _sessions.Remove(target.Id);
+            if (_sessions.TryRemove(target.Id, out var removed)) removed.Dispose();
         }
         if (target.IsExtension && _extensionPort?.IsConnected == true)
         {
@@ -391,11 +392,15 @@ public sealed class BrowserExecutor : IDisposable
     private void RemoveClosedSessions(IReadOnlyCollection<CdpTarget> targets)
     {
         var ids = targets.Select(target => target.Id).ToHashSet(StringComparer.Ordinal);
-        foreach (var (id, session) in _sessions.Where(item => !ids.Contains(item.Key)).ToArray())
+        foreach (var (id, _) in _sessions.Where(item => !ids.Contains(item.Key)).ToArray())
         {
-            session.Dispose();
-            _sessions.Remove(id);
+            if (_sessions.TryRemove(id, out var session)) session.Dispose();
         }
+    }
+
+    private void OnExtensionTabRemoved(string tabId)
+    {
+        if (_sessions.TryRemove(tabId, out var session)) session.Dispose();
     }
 
     private bool TryValidateWebSocketUrl(string? value, out Uri endpoint)
@@ -459,6 +464,7 @@ public sealed class BrowserExecutor : IDisposable
 
     public void Dispose()
     {
+        if (_extensionPort is not null) _extensionPort.TabRemoved -= OnExtensionTabRemoved;
         foreach (var session in _sessions.Values) session.Dispose();
         _sessions.Clear();
         if (_ownsHttpClient) _httpClient.Dispose();
@@ -615,6 +621,7 @@ public sealed class BrowserExecutor : IDisposable
         private readonly string? _tabId;
         private readonly SemaphoreSlim _commandGate = new(1, 1);
         private int _nextId;
+        private int _disposed;
 
         public TargetSession(ClientWebSocket socket) => _socket = socket;
 
@@ -708,12 +715,12 @@ public sealed class BrowserExecutor : IDisposable
 
         public void Dispose()
         {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
             if (_socket?.State is WebSocketState.Open or WebSocketState.CloseReceived)
             {
                 try { _socket.Abort(); } catch { }
             }
             _socket?.Dispose();
-            _commandGate.Dispose();
         }
     }
 }

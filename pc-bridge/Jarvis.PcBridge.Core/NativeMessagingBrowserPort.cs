@@ -29,6 +29,7 @@ public sealed class NativeMessagingBrowserPort : IExtensionBrowserPort, IAsyncDi
     public NativeMessagingBrowserPort() => _acceptLoop = AcceptLoopAsync();
 
     public bool IsConnected => _connection?.IsConnected == true;
+    public event Action<string>? TabRemoved;
 
     public async Task<BrowserTabPage> ListTabsAsync(
         int offset,
@@ -192,6 +193,19 @@ public sealed class NativeMessagingBrowserPort : IExtensionBrowserPort, IAsyncDi
             if (payload is null) return;
             using var message = JsonDocument.Parse(payload);
             var root = message.RootElement;
+            var type = root.TryGetProperty("type", out var typeValue) ? typeValue.GetString() : null;
+            if (type == "event")
+            {
+                if (root.TryGetProperty("event", out var eventValue) &&
+                    eventValue.GetString() == "tab_removed" &&
+                    root.TryGetProperty("tabId", out var tabValue) &&
+                    tabValue.ValueKind == JsonValueKind.String &&
+                    IsExtensionTabId(tabValue.GetString()!))
+                {
+                    TabRemoved?.Invoke(tabValue.GetString()!);
+                }
+                continue;
+            }
             if (!root.TryGetProperty("id", out var idValue) ||
                 idValue.ValueKind != JsonValueKind.String ||
                 !Guid.TryParseExact(idValue.GetString(), "D", out _) ||
@@ -200,7 +214,6 @@ public sealed class NativeMessagingBrowserPort : IExtensionBrowserPort, IAsyncDi
                 continue;
             }
 
-            var type = root.TryGetProperty("type", out var typeValue) ? typeValue.GetString() : null;
             if (type is not ("result" or "error")) continue;
             completion.TrySetResult(JsonDocument.Parse(root.GetRawText()));
         }

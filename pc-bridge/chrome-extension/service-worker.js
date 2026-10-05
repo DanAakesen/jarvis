@@ -214,6 +214,14 @@ chrome.debugger.onDetach.addListener((source) => {
   }
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => { void detach(tabId); });
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void detach(tabId);
+  post({
+    id: crypto.randomUUID(),
+    type: "event",
+    event: "tab_removed",
+    tabId: `tab_${tabId}`,
+  });
+});
 
 connectNativeHost();

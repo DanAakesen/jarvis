@@ -5,6 +5,7 @@ namespace Jarvis.PcBridge.Core;
 public interface IExtensionBrowserPort
 {
     bool IsConnected { get; }
+    event Action<string>? TabRemoved;
 
     Task<BrowserTabPage> ListTabsAsync(int offset, int limit, CancellationToken cancellationToken);
 

@@ -81,6 +81,31 @@ public sealed class NativeMessagingBrowserPortTests
         await Assert.ThrowsAsync<BrowserActionRefusedException>(() => tabsTask);
     }
 
+    [Fact]
+    public async Task Relays_closed_tab_events_from_the_extension()
+    {
+        await using var port = new NativeMessagingBrowserPort();
+        await using var extension = new NamedPipeClientStream(
+            ".",
+            NativeMessagingBrowserPort.PipeName,
+            PipeDirection.InOut,
+            PipeOptions.Asynchronous);
+        await extension.ConnectAsync(5000);
+        var removed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        port.TabRemoved += tabId => removed.TrySetResult(tabId);
+
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            id = Guid.NewGuid().ToString("D"),
+            type = "event",
+            @event = "tab_removed",
+            tabId = "tab_21",
+        });
+        await WriteFrameAsync(extension, payload);
+
+        Assert.Equal("tab_21", await removed.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
     private static async Task<JsonDocument> ReadMessageAsync(Stream stream)
     {
         var header = new byte[sizeof(int)];
@@ -101,6 +126,11 @@ public sealed class NativeMessagingBrowserPortTests
             type = "result",
             result = document.RootElement,
         });
+        await WriteFrameAsync(stream, payload);
+    }
+
+    private static async Task WriteFrameAsync(Stream stream, byte[] payload)
+    {
         var header = new byte[sizeof(int)];
         BinaryPrimitives.WriteInt32LittleEndian(header, payload.Length);
         await stream.WriteAsync(header);

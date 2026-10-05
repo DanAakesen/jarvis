@@ -187,6 +187,30 @@ public sealed class BrowserExecutorTests
         Assert.Equal(1, extensionPort.DetachCount);
     }
 
+    [Fact]
+    public async Task Extension_tab_removal_releases_its_snapshot_session()
+    {
+        await using var target = await FakeCdpTarget.StartAsync();
+        await using var extensionPort = new FakeExtensionBrowserPort(target);
+        using var executor = new BrowserExecutor(
+            () => true,
+            () => null,
+            targetsUri: new Uri("http://127.0.0.1:9222/json/list"),
+            extensionPort: extensionPort);
+
+        var snapshot = await Execute(executor, "browser_snapshot", """{"tabId":"tab_1"}""");
+        var snapshotId = (string)snapshot.GetType().GetProperty("SnapshotId")!.GetValue(snapshot)!;
+        Assert.Equal(1, extensionPort.SessionCount);
+
+        extensionPort.RemoveTab("tab_1");
+
+        Assert.Equal(0, extensionPort.SessionCount);
+        await AssertRefused(
+            executor,
+            $$"""{"tabId":"tab_1","snapshotId":"{{snapshotId}}","elementIndex":0,"action":"click","confirmed":false}""",
+            "not_found");
+    }
+
     private static async Task<object> Execute(BrowserExecutor executor, string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);
