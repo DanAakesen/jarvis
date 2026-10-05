@@ -790,6 +790,23 @@ only a completed assistant response; an interrupted turn leaves Dan's message
 visible and the UI warns that an action may have completed. The browser never
 receives agent credentials.
 
+P7-23 starts consuming the hosted-agent stream before scheduling the chat reflex.
+Reflex target discovery and Jev classification run concurrently with the reply;
+their combined classification budget is 800 ms and late results are discarded.
+An accepted action still passes the existing confirmation/safety checks, is
+written to the tool-call audit, and publishes the existing tool activity events.
+Disconnect cancellation reaches both streams. Voice relay partial handling is
+unchanged.
+
+The hosted agent loads the 60-second cached tool catalogue and live task context
+concurrently, and verifies the delegated profile and stored conversation history
+in parallel. OpenTelemetry spans measure catalogue/cache, context, memory search,
+prompt construction and model-call stages; the backend exports allowlisted
+durations for reflex targets, Jev and the first agent byte, plus memory embedding
+duration/outcome. These signals contain no message, prompt, memory, tool argument
+or result content. The issue's live acceptance target is at most 2.5 seconds to
+the first token and 4 seconds for a short greeting.
+
 The conversation store shares the process-owned SQL pool and uses the existing
 group-one schema; no migration or new service is required. Tool calls continue to
 be written by the P4-02 dispatcher against their source message. The task schema

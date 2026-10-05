@@ -99,6 +99,20 @@ function logChatLatency(
   }, 'chat.latency');
 }
 
+async function raceWithAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T | undefined> {
+  if (signal.aborted) return undefined;
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<undefined>((resolve) => {
+    onAbort = () => resolve(undefined);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([operation, aborted]);
+  } finally {
+    if (onAbort) signal.removeEventListener('abort', onAbort);
+  }
+}
+
 async function runChatReflex(
   request: FastifyRequest,
   classifier: ReflexClassifier,
@@ -114,7 +128,9 @@ async function runChatReflex(
     const targetsStartedAt = performance.now();
     let targets: ReflexTarget[];
     try {
-      targets = await reflexTargets(request, text);
+      const resolvedTargets = await raceWithAbort(reflexTargets(request, text), classificationSignal);
+      if (resolvedTargets === undefined) return;
+      targets = resolvedTargets;
     } finally {
       logChatLatency(request, 'reflex_targets', targetsStartedAt);
     }
@@ -123,12 +139,12 @@ async function runChatReflex(
     const jevStartedAt = performance.now();
     let classification: Awaited<ReturnType<ReflexClassifier['classify']>>;
     try {
-      classification = await classifier.classify(
-        text,
-        language,
-        targets,
+      const result = await raceWithAbort(
+        classifier.classify(text, language, targets, classificationSignal),
         classificationSignal,
       );
+      if (result === undefined) return;
+      classification = result;
     } finally {
       logChatLatency(request, 'jev', jevStartedAt);
     }

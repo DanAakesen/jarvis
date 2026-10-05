@@ -150,10 +150,8 @@ describe('conversation routes', () => {
       const reflexClassifier: ReflexClassifier = {
         classify: vi.fn((_text, _language, _targets, signal) => {
           classifierSignal = signal;
-          return new Promise<null>((resolve) => signal.addEventListener('abort', () => {
-            onAbort();
-            resolve(null);
-          }, { once: true }));
+          signal.addEventListener('abort', onAbort, { once: true });
+          return new Promise<null>(() => {});
         }),
       };
       const app = createApp(store, { conversationAgent: chatAgent, reflexClassifier });
