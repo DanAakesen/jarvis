@@ -1,5 +1,5 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
@@ -9,7 +9,13 @@ import { VoiceControls } from './VoiceControls';
 const clients = vi.hoisted(() => ({
   instances: [] as Array<{
     options: unknown;
-    client: { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; setMuted: ReturnType<typeof vi.fn>; enableMicrophone: ReturnType<typeof vi.fn> };
+    client: {
+      start: ReturnType<typeof vi.fn>;
+      stop: ReturnType<typeof vi.fn>;
+      setMuted: ReturnType<typeof vi.fn>;
+      sendScreenContext: ReturnType<typeof vi.fn>;
+      enableMicrophone: ReturnType<typeof vi.fn>;
+    };
   }>,
 }));
 
@@ -17,6 +23,7 @@ vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
     readonly start = vi.fn();
     readonly setMuted = vi.fn();
+    readonly sendScreenContext = vi.fn();
     readonly enableMicrophone = vi.fn(async () => {});
     readonly stop: ReturnType<typeof vi.fn>;
 
@@ -145,5 +152,39 @@ describe('VoiceControls', () => {
     expect(screen.getByRole('button', { name: 'Enabling microphone…' })).toHaveProperty('disabled', true);
     await act(async () => { finishSecond(); });
     expect(screen.getByRole('button', { name: 'Enable microphone' })).toHaveProperty('disabled', false);
+  });
+
+  it('sends an on-request camera description to voice and turns the camera off when voice ends', async () => {
+    const camera = {
+      sharing: true,
+      starting: false,
+      inspecting: false,
+      error: '',
+      start: vi.fn(async () => {}),
+      stop: vi.fn(),
+      inspect: vi.fn(async () => 'A red mug.'),
+    };
+    render(
+      <VoiceControls
+        client={{} as PublicClientApplication}
+        config={config}
+        camera={camera}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+    const instance = clients.instances[0];
+    if (!instance) throw new Error('Voice client was not created.');
+    const options = instance.options as {
+      onSessionReady: (sessionId: string) => void;
+      onVisionRequest: (source: 'camera' | 'screen', transcript: string) => void;
+      onStatus: (status: 'stopped', message: string) => void;
+    };
+    act(() => options.onSessionReady('42'));
+    options.onVisionRequest('camera', 'What am I holding?');
+
+    await waitFor(() => expect(camera.inspect).toHaveBeenCalledWith('42'));
+    expect(instance.client.sendScreenContext).toHaveBeenCalledWith('A red mug.');
+    act(() => options.onStatus('stopped', 'Voice is off.'));
+    expect(camera.stop).toHaveBeenCalledOnce();
   });
 });

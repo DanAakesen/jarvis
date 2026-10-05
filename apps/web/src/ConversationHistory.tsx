@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { Link } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
+import type { CameraController, ScreenShareController } from './screen-sharing';
 import { VoiceControls } from './VoiceControls';
 import { useJarvisActivity } from './activity-context';
-import type { ScreenShareController } from './screen-sharing';
 import {
   createChatSession,
   loadConversationHistory,
@@ -36,12 +36,14 @@ export function ConversationHistory({
   historyRefresh = 0,
   children,
   screenShare,
+  camera,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
   historyRefresh?: number;
   children?: ReactNode;
   screenShare?: ScreenShareController;
+  camera?: CameraController;
 }) {
   const { beginWorking } = useJarvisActivity();
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
@@ -57,6 +59,11 @@ export function ConversationHistory({
   const [streamedText, setStreamedText] = useState('');
   const [interruptedText, setInterruptedText] = useState('');
   const [turnError, setTurnError] = useState('');
+  const [visionContext, setVisionContext] = useState<{
+    sessionId: string;
+    description: string;
+    source: 'camera' | 'screen';
+  } | null>(null);
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceRefresh, setVoiceRefresh] = useState(0);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -73,7 +80,6 @@ export function ConversationHistory({
     if (wasBusy.current && !busy) input.current?.focus();
     wasBusy.current = busy;
   }, [voiceActive, sending]);
-  const [screenContext, setScreenContext] = useState<{ sessionId: string; description: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -118,6 +124,12 @@ export function ConversationHistory({
     event.preventDefault();
     const text = draft.trim();
     if (!text || sending || voiceActive) return;
+    const currentCameraContext = session !== null && visionContext?.source === 'camera' &&
+      visionContext.sessionId === session.id && session.language === language;
+    if (isCameraRequest(text) && !camera?.sharing && !currentCameraContext) {
+      setTurnError('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
+      return;
+    }
     const finishWorking = beginWorking('chat-turn');
     setSending(true);
     setTurnError('');
@@ -132,10 +144,12 @@ export function ConversationHistory({
         ? session
         : await createChatSession(client, config, language);
       setSession(activeSession);
-      contextForTurn = screenContext?.sessionId === activeSession.id ? screenContext.description : undefined;
-      setScreenContext(null);
-      if (/what(?:'s| is) on (?:my|the) screen|look at (?:my|the) screen/iu.test(text) &&
-          screenShare?.sharing && contextForTurn === undefined) {
+      const currentVisionContext = visionContext?.sessionId === activeSession.id ? visionContext : null;
+      contextForTurn = currentVisionContext?.description;
+      setVisionContext(null);
+      if (isCameraRequest(text) && camera?.sharing && currentVisionContext?.source !== 'camera') {
+        contextForTurn = await camera.inspect(activeSession.id);
+      } else if (isScreenRequest(text) && screenShare?.sharing && currentVisionContext?.source !== 'screen') {
         contextForTurn = await screenShare.inspect(activeSession.id);
       }
       const assistant = await sendChatTurn(
@@ -174,19 +188,28 @@ export function ConversationHistory({
     }
   }
 
-  async function inspectScreen() {
-    if (!screenShare?.sharing || sending) return;
+  async function inspectVision(source: 'camera' | 'screen') {
+    const capture = source === 'camera' ? camera : screenShare;
+    if (!capture?.sharing || sending || capture.inspecting) return;
     setTurnError('');
     try {
       const activeSession = session?.language === language
         ? session
         : await createChatSession(client, config, language);
       setSession(activeSession);
-      const description = await screenShare.inspect(activeSession.id);
-      setScreenContext({ sessionId: activeSession.id, description });
+      const description = await capture.inspect(activeSession.id);
+      setVisionContext({ sessionId: activeSession.id, description, source });
     } catch (reason) {
-      setTurnError(reason instanceof Error ? reason.message : 'Jarvis could not inspect the shared screen.');
+      setTurnError(reason instanceof Error ? reason.message : 'Jarvis could not inspect the visual frame.');
     }
+  }
+
+  function isCameraRequest(text: string) {
+    return /\b(?:what am i holding|what(?:'s| is) in my hand|look at (?:my|the) camera|what can you see)\b/iu.test(text);
+  }
+
+  function isScreenRequest(text: string) {
+    return /\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen)\b/iu.test(text);
   }
 
   const displayedVoiceUsage = new Set<string>();
@@ -316,24 +339,34 @@ export function ConversationHistory({
           Enter to send; Shift+Enter for a new line.
         </p>
         <div className="action-row">
-          <button className="secondary-button" type="button" onClick={() => void inspectScreen()}
-            disabled={sending || !screenShare?.sharing}>
-            Look at screen
+          <button className="secondary-button" type="button" onClick={() => void inspectVision('screen')}
+            disabled={sending || !screenShare?.sharing || screenShare.inspecting}>
+            {screenShare?.inspecting ? 'Looking at screen…' : 'Look at screen'}
+          </button>
+          <button className="secondary-button" type="button" onClick={() => void inspectVision('camera')}
+            disabled={sending || !camera?.sharing || camera.inspecting}
+            aria-describedby="camera-inspection-guidance">
+            {camera?.inspecting ? 'Looking at camera…' : 'Look at camera'}
           </button>
         </div>
-        {screenContext && screenContext.sessionId === session?.id &&
-          <p role="status">Screen context is ready for the next message; it will not be saved in conversation history.</p>}
+        <span id="camera-inspection-guidance" className="visually-hidden">
+          Turn on the camera from the top bar before asking Jarvis to inspect a frame.
+        </span>
+        {visionContext && visionContext.sessionId === session?.id &&
+          <p role="status">{visionContext.source === 'camera' ? 'Camera' : 'Screen'} context is ready for the next message; it will not be saved in conversation history.</p>}
       </form>
       <div className="conversation-actions">
       <VoiceControls
         client={client}
         config={config}
         {...(screenShare ? { screenShare } : {})}
+        {...(camera ? { camera } : {})}
         language={language}
         disabled={sending}
         onActiveChange={setVoiceActive}
         onSessionEnded={() => {
           screenShare?.stop();
+          camera?.stop();
           setVoiceRefresh((value) => value + 1);
         }}
       />

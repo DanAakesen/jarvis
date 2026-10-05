@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ConversationHistory } from './ConversationHistory';
+import type { CameraController } from './screen-sharing';
 import { JarvisActivityProvider } from './activity-provider';
 import { useJarvisActivity } from './activity-context';
 import type { VoiceClientOptions } from './voice-client';
@@ -46,11 +47,18 @@ const assistantMessage = {
   id: '52', sessionId: '41', role: 'jarvis' as const, text: 'I am ready.', model: null, voiceMinutes: null, at: '2026-10-03T12:02:00.000Z',
 };
 
-function renderConversation(historyRefresh = 0) {
+function renderConversation(historyRefresh = 0, camera?: CameraController) {
   return render(
-    <MemoryRouter>
-      <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
-    </MemoryRouter>,
+    <JarvisActivityProvider>
+      <MemoryRouter>
+        <ConversationHistory
+          client={client}
+          config={config}
+          historyRefresh={historyRefresh}
+          {...(camera ? { camera } : {})}
+        />
+      </MemoryRouter>
+    </JarvisActivityProvider>,
   );
 }
 
@@ -126,9 +134,11 @@ describe('ConversationHistory', () => {
     expect(await screen.findByText('I started the task.')).not.toBeNull();
 
     view.rerender(
-      <MemoryRouter>
-        <ConversationHistory client={client} config={config} historyRefresh={1} />
-      </MemoryRouter>,
+      <JarvisActivityProvider>
+        <MemoryRouter>
+          <ConversationHistory client={client} config={config} historyRefresh={1} />
+        </MemoryRouter>
+      </JarvisActivityProvider>,
     );
 
     await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
@@ -171,6 +181,61 @@ describe('ConversationHistory', () => {
       expect.any(Function),
       undefined,
     );
+  });
+
+  it('inspects the camera for a spoken-equivalent chat request and keeps the description transient', async () => {
+    const camera: CameraController = {
+      sharing: true,
+      starting: false,
+      inspecting: false,
+      error: '',
+      start: vi.fn(async () => {}),
+      stop: vi.fn(),
+      inspect: vi.fn(async () => 'A red mug in Dan’s hand.'),
+    };
+    sendChatTurn.mockResolvedValue(assistantMessage);
+    renderConversation(0, camera);
+
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'What am I holding?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
+    expect(camera.inspect).toHaveBeenCalledWith(session.id);
+    expect(sendChatTurn).toHaveBeenCalledWith(
+      client,
+      config,
+      session,
+      'What am I holding?',
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+      'A red mug in Dan’s hand.',
+    );
+    expect(screen.queryByText('A red mug in Dan’s hand.')).toBeNull();
+  });
+
+  it('does not send a camera request while the camera is off', async () => {
+    renderConversation(0, {
+          sharing: false,
+          starting: false,
+          inspecting: false,
+          error: '',
+          start: vi.fn(async () => {}),
+          stop: vi.fn(),
+          inspect: vi.fn(async () => 'A red mug.'),
+        });
+
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'What am I holding?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect((await screen.findByRole('alert')).textContent)
+      .toBe('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
+    expect(createChatSession).not.toHaveBeenCalled();
+    expect(sendChatTurn).not.toHaveBeenCalled();
   });
 
   it('keeps chat activity active until an in-flight turn settles after unmount', async () => {
