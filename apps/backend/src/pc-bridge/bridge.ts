@@ -217,7 +217,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
     tools: [
       {
         name: 'pc_open',
-        description: 'On Dan’s PC, open an HTTP(S) URL, an allow-listed app, a folder under C:\\Repo in VS Code, or focus a window by its exact title.',
+        description: 'Open files and allow-listed apps on Dan’s PC; websites open in Dan’s Chrome. Use browser_do for work on a website.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -526,6 +526,10 @@ function hasControlCharacters(value: string): boolean {
 
 function validResult(command: PcCommand['name'], value: unknown): value is Record<string, unknown> {
   if (!isRecord(value)) return false;
+  if (command === 'open_url' && Object.keys(value).length === 2) {
+    return value.opened === true &&
+      value.note === "Opened in your default browser because the Chrome extension isn't connected.";
+  }
   if (['open_url', 'open_app', 'open_folder'].includes(command)) {
     return Object.keys(value).length === 1 && value.opened === true;
   }

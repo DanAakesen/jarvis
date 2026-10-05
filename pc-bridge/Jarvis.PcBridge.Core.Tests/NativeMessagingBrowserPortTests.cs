@@ -9,6 +9,31 @@ namespace Jarvis.PcBridge.Core.Tests;
 public sealed class NativeMessagingBrowserPortTests
 {
     [Fact]
+    public async Task Requests_a_validated_active_foreground_extension_tab()
+    {
+        await using var port = new NativeMessagingBrowserPort();
+        await using var extension = new NamedPipeClientStream(
+            ".",
+            NativeMessagingBrowserPort.PipeName,
+            PipeDirection.InOut,
+            PipeOptions.Asynchronous);
+        await extension.ConnectAsync(5000);
+
+        var openTask = port.OpenUrlAsync("https://google.com", CancellationToken.None);
+        using (var request = await ReadMessageAsync(extension))
+        {
+            Assert.Equal("open_url", request.RootElement.GetProperty("type").GetString());
+            Assert.Equal("https://google.com/", request.RootElement.GetProperty("url").GetString());
+            await RespondAsync(extension, request.RootElement.GetProperty("id").GetString()!,
+                """{"opened":true,"focused":true}""");
+        }
+        await openTask;
+
+        await Assert.ThrowsAsync<BrowserActionRefusedException>(() =>
+            port.OpenUrlAsync("javascript:alert(1)", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Correlates_tab_cdp_and_detach_messages_with_a_fake_extension_port()
     {
         await using var port = new NativeMessagingBrowserPort();

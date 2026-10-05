@@ -9,6 +9,8 @@ namespace Jarvis.PcBridge;
 public sealed class WindowsCommandExecutor
 {
     private const string RepoRoot = @"C:\Repo";
+    private const string BrowserFallbackNote =
+        "Opened in your default browser because the Chrome extension isn't connected.";
 
     public Task<object> ExecuteAsync(BridgeCommand command, CancellationToken cancellationToken)
     {
@@ -18,7 +20,7 @@ public sealed class WindowsCommandExecutor
 
         object result = command.Command switch
         {
-            "open_url" => OpenUrl(command.Arguments.GetProperty("url").GetString()!),
+            "open_url" => OpenUrlInDefaultBrowser(command.Arguments.GetProperty("url").GetString()!),
             "open_app" => OpenApp(command.Arguments.GetProperty("app").GetString()!),
             "open_folder" => OpenFolder(command.Arguments.GetProperty("relativePath").GetString()!),
             "active_window" => ReadActiveWindow(),
@@ -28,18 +30,19 @@ public sealed class WindowsCommandExecutor
         return Task.FromResult(result);
     }
 
-    private static object OpenUrl(string value)
+    public object OpenUrlInDefaultBrowser(string value)
     {
         if (!CommandPolicy.TryNormalizeUrl(value, out var url)) throw new CommandRefusedException("not_allowed");
         Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-        return new { opened = true };
+        return new { opened = true, note = BrowserFallbackNote };
     }
 
     private static object OpenApp(string app)
     {
         var executable = FindExecutable(app);
         if (executable is null) throw new CommandRefusedException("not_found");
-        Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false });
+        using var process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false });
+        AllowForeground(process);
         return new { opened = true };
     }
 
@@ -63,8 +66,15 @@ public sealed class WindowsCommandExecutor
         if (code is null) throw new CommandRefusedException("not_found");
         var start = new ProcessStartInfo(code) { UseShellExecute = false };
         start.ArgumentList.Add(fullPath);
-        Process.Start(start);
+        using var process = Process.Start(start);
+        AllowForeground(process);
         return new { opened = true };
+    }
+
+    private static void AllowForeground(Process? process)
+    {
+        if (process is null || !AllowSetForegroundWindow((uint)process.Id))
+            throw new CommandRefusedException("failed");
     }
 
     private static bool ContainsReparsePoint(string root, string fullPath)
@@ -162,6 +172,10 @@ public sealed class WindowsCommandExecutor
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetForegroundWindow(IntPtr handle);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AllowSetForegroundWindow(uint processId);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
