@@ -97,7 +97,7 @@ export const coreModule: BackendModule = {
           request.jarvisMemorySourceMessageId = messageId;
         }
         if (validMessageId && !app.toolCallStore) return reply.code(503).send({ error: 'Tool execution unavailable' });
-        if (validMessageId && voiceItemHeader === undefined && tool.reflexSafe) {
+        if (validMessageId && voiceItemHeader === undefined && (tool.reflexSafe || tool.name === 'workspace_command')) {
           const reflex = await findChatReflexReplay(messageId!, tool.name, request.body);
           if (reflex) {
             return {

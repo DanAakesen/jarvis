@@ -26,6 +26,8 @@ const events = new Set([
   'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
   'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
   'voice.partials_unavailable', 'chat.latency', 'memory.embedding',
+  'reflex.decision',
+  'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -52,6 +54,12 @@ const reconciliationDecisions = new Set([
   'Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention', 'Done', 'Cancelled',
 ]);
 const chatLatencyPhases = new Set(['reflex_targets', 'jev', 'agent_first_byte']);
+const reflexReasons = new Set([
+  'executed', 'unavailable', 'cancelled', 'not_addressed', 'not_action', 'incomplete_command',
+  'low_confidence', 'confirmation_required', 'no_target', 'unsafe_target', 'unauthorized',
+  'audit_unavailable', 'invalid_arguments', 'execution_failed', 'refused', 'error',
+  'already_executed', 'shared_context_required',
+]);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
@@ -59,6 +67,18 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (typeof input.method === 'string' && /^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$/.test(input.method)) fields.method = input.method;
   if (typeof input.route === 'string' && /^\/[\w/:-]{0,100}$/.test(input.route)) fields.route = input.route;
   if (typeof input.reason === 'string' && authDenialReasons.has(input.reason)) fields.reason = input.reason;
+  if (input.msg === 'reflex.decision') {
+    if (['chat', 'voice-partial', 'voice-final'].includes(String(input.source))) fields.source = input.source;
+    if (['action', 'question', 'other'].includes(String(input.intent))) fields.intent = input.intent;
+    if (['<0.5', '0.5–0.8', '>0.8'].includes(String(input.confidence))) fields.confidence = input.confidence;
+    for (const key of ['addressed', 'completeCommand', 'executed']) {
+      if (typeof input[key] === 'boolean') fields[key] = input[key];
+    }
+    if (typeof input.tool === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(input.tool)) fields.tool = input.tool;
+    if (typeof input.reason === 'string' && reflexReasons.has(input.reason)) fields.reason = input.reason;
+    if (typeof input.latencyMs === 'number' && Number.isFinite(input.latencyMs) &&
+        input.latencyMs >= 0 && input.latencyMs <= 600_000) fields.latencyMs = input.latencyMs;
+  }
   for (const key of ['statusCode', 'responseTime', 'port']) {
     if (typeof input[key] === 'number' && Number.isFinite(input[key])) fields[key] = input[key];
   }
@@ -105,6 +125,22 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.decision === 'string' && reconciliationDecisions.has(input.decision)) {
       fields.decision = input.decision;
     }
+  }
+  if (input.msg === 'conversation.reply_failed' || input.msg === 'voice.upstream_error' ||
+      input.msg === 'voice.upstream_closed' || input.msg === 'voice.connection_failed') {
+    // Short, fixed-vocabulary diagnostics only: our own error messages and upstream close reasons.
+    if (typeof input.failure === 'string' && /^[A-Za-z0-9 .:,'()_-]{1,120}$/.test(input.failure)) {
+      fields.failure = input.failure;
+    }
+    if (typeof input.closeCode === 'number' && Number.isInteger(input.closeCode) &&
+        input.closeCode >= 1000 && input.closeCode <= 4999) {
+      fields.closeCode = input.closeCode;
+    }
+    if (typeof input.httpStatus === 'number' && Number.isInteger(input.httpStatus) &&
+        input.httpStatus >= 100 && input.httpStatus <= 599) {
+      fields.httpStatus = input.httpStatus;
+    }
+    if (input.language === 'da' || input.language === 'en') fields.language = input.language;
   }
   if (input.msg === 'voice.reflex_metrics') {
     if (input.language === 'da' || input.language === 'en') fields.language = input.language;
