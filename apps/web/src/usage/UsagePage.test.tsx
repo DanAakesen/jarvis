@@ -130,4 +130,14 @@ describe('Usage page', () => {
     renderPage();
     expect(await screen.findByText('Codex tool counts are unavailable.')).not.toBeNull();
   });
+
+  it('rejects a Codex tool count outside the SQL bigint range', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      ...report, codexToolCallsToday: [{ tool: 'web_research', count: '9223372036854775808' }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    renderPage();
+
+    expect(await screen.findByRole('alert')).not.toBeNull();
+    expect(screen.getByText('The usage report returned unexpected data. Try again.')).not.toBeNull();
+  });
 });

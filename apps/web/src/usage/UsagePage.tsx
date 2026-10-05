@@ -85,7 +85,8 @@ function isUsageReport(value: unknown): value is UsageReport {
     (value.codexToolCallsToday === null || (Array.isArray(value.codexToolCallsToday) &&
       value.codexToolCallsToday.length <= 10 && value.codexToolCallsToday.every((count) =>
         isObject(count) && count.tool === 'web_research' &&
-        typeof count.count === 'string' && /^\d{1,19}$/.test(count.count)))) &&
+        typeof count.count === 'string' && /^\d{1,19}$/.test(count.count) &&
+        BigInt(count.count) <= maxSqlBigInt))) &&
     Array.isArray(value.entries) && value.entries.length <= 1000 && value.entries.every(isUsageEntry) &&
     typeof value.totalEntries === 'string' && /^\d+$/.test(value.totalEntries) &&
     typeof value.truncated === 'boolean';

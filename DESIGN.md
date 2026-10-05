@@ -20,7 +20,7 @@ The shared shell and voice-workspace structure were agreed with Dan on 4 October
 | Release view | Horizontal git graph per project (branches as lines, commits as dots), releases, workflow runs, deployments |
 | Projects | Project list and settings |
 | Settings | Models, reasoning, voices, limits, credential status |
-| Usage and cost | Usage by task, project, and period |
+| Usage and cost | Usage by task, project, and period, plus today's UTC web-research call count |
 
 The repository `PLAN.md` status workflow is GitHub metadata; it does not add a Jarvis UI control or visual state.
 
@@ -55,6 +55,15 @@ failure/retry, and populated states. On narrow screens only the table scrolls
 horizontally; the page itself stays within the viewport. Usage is part of the
 task detail response and appears alongside the task metadata, disk readings, and
 event timeline.
+
+## Web research usage (P7-14)
+
+The Usage page shows the recorded web-research calls for the current UTC day in a
+compact list beside period-based usage. Successful, refused, and failed calls
+count; an empty day and unavailable audit storage have distinct text states, and
+no subscription price is inferred. Research results keep their source title, URL,
+and backend receipt time in a typed result for the existing conversation and
+workspace consumers; those consumer windows remain owned by P8.
 
 ## Interactions to design
 

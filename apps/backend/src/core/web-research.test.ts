@@ -1,6 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { InvocationAccepted, InvocationSnapshot, RequestOptions } from '../foundry/client.js';
+import type { InvocationAccepted, InvocationSnapshot } from '../foundry/client.js';
 import { createWebResearchModule } from './web-research.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
@@ -26,7 +26,7 @@ function snapshot(overrides: Partial<InvocationSnapshot> = {}): InvocationSnapsh
 function client(initial: InvocationSnapshot = snapshot()) {
   return {
     startCodexTool: vi.fn(async () => accepted),
-    status: vi.fn(async (_invocationId: string, _options?: RequestOptions) => initial),
+    status: vi.fn(async () => initial),
     cancel: vi.fn(async () => ({ invocationId: accepted.invocationId, status: 'cancelled' as const })),
     deleteSession: vi.fn(async () => {}),
   };

@@ -380,12 +380,17 @@ export function isWebResearchResult(value) {
     !boundedString(value.answer, 20_000, 1) ||
     !Array.isArray(value.sources) || value.sources.length > 10) return false;
   const urls = new Set();
+  const containsAsciiControl = (text, includeSpace = false) =>
+    Array.from(text).some((character) => {
+      const code = character.charCodeAt(0);
+      return code === 0x7f || code < (includeSpace ? 0x21 : 0x20);
+    });
   return value.sources.every((source) => {
     if (!isObject(source) || Object.keys(source).some((key) => !['title', 'url', 'retrievedAt'].includes(key)) ||
       !boundedString(source.title, 200, 1) || source.title !== source.title.trim() ||
-      /[\u0000-\u001f\u007f]/.test(source.title) ||
+      containsAsciiControl(source.title) ||
       !boundedString(source.url, 2_048, 1) || source.url !== source.url.trim() ||
-      /[\u0000-\u0020\u007f]/.test(source.url) ||
+      containsAsciiControl(source.url, true) ||
       typeof source.retrievedAt !== 'string' || !Number.isFinite(Date.parse(source.retrievedAt))) return false;
     try {
       const url = new URL(source.url);

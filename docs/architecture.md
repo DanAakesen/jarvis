@@ -1029,11 +1029,36 @@ live provider selection remains unverified.
 
 ### Backend Foundry client
 
-`apps/backend/src/foundry/client.ts` implements start, Codex renewal start, steer, pause, resume, cancel, status and explicit session deletion. It stores distinct runtime and administration project endpoints for the same account/project. Administration preflight checks connections and the named agent's versions on the administration host; it creates no session. Sandbox sessions retain their Foundry `agent_name`, which lets the heartbeat poll sessions deployed under different runner variants.
+`apps/backend/src/foundry/client.ts` implements task start, Codex renewal and tool starts, steer, pause, resume, cancel, status and explicit session deletion. It stores distinct runtime and administration project endpoints for the same account/project. Administration preflight checks connections and the named agent's versions on the administration host; it creates no session. Sandbox sessions retain their Foundry `agent_name`, which lets the heartbeat poll sessions deployed under different runner variants.
 
 The module uses Node 22 native fetch and an injected identity provider requesting `https://ai.azure.com/.default`. Each HTTP call bounds authentication, fetch and response consumption to 30 seconds by default, limits response bodies to 1 MiB, propagates cancellation and refuses redirects. It validates responses and exposes sanitized typed failures, preserving HTTP status codes. The client has no retry loop or background polling; the renewal job owns its bounded polling and session cleanup. The dispatcher owns task retries/session lifetime, and the heartbeat owns crash detection and completed-turn idle expiry. Provider `completed` still requires GitHub branch/PR evidence; resume applies to clean pause/idle shutdown, while crash recovery and idle-expiry continuation start a new session on the task branch.
 
 Issue #30's offline contracts use actual locally recorded runner handler responses from #28 with ACP execution stubbed. P2-06 starts the heartbeat monitor after SQL startup and rehydrates active sessions once; P2-14 preserves completed-turn evidence so a confirmed idle expiry ends the session without a crash or task-state transition. Bicep supplies both project endpoints and grants the backend identity Foundry User on the project. Azure envelope/routing/authorization, SQL Server integration, and live expiry verification remain unverified. The [module guide](../apps/backend/src/foundry/README.md) describes the API, bounds and recording provenance.
+
+### Web research (P7-14)
+
+When SQL, Foundry endpoints, the configured runner agent and managed identity
+are available, the backend registers `web_research` in the authenticated tool
+catalogue. It accepts a bounded query, starts the runner's `codex-tool` mode
+without a repository checkout, polls for at most 305 seconds, and cancels and
+deletes the invocation session on completion, failure or caller cancellation.
+`JARVIS_CODEX_TOOL_MODEL` selects the ChatGPT-supported model (Bicep defaults to
+`gpt-5.5`); no Bing resource, pay-per-call search API, search credential or SQL
+migration is introduced.
+
+The runner uses Codex `web_search=live` in an empty temporary workspace and
+removes the workspace and file-backed login after the call. Its command disables
+the Codex `shell_tool` as well as selecting the read-only sandbox: read-only
+filesystem access alone would still allow generated shell commands to read
+`CODEX_HOME/auth.json`. The query and returned pages are untrusted data. The
+backend accepts only a bounded answer and up to ten unique HTTPS source URLs,
+returns their titles and backend receipt timestamps, and includes the retrieved
+URLs in the answer. Empty source results are explicitly disclosed; no URL is
+invented. Tool arguments/results are redacted from `tool_calls`, but the tool
+name/outcome/time remain for the UTC daily count returned by `/usage` and shown
+on the Usage page. This count covers successful, refused and failed calls and
+is displayed as unavailable if the audit query fails. Live Codex/web-search and
+deployed Azure acceptance remain unverified.
 
 ### Sandbox credentials
 
@@ -1256,7 +1281,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (SSE, dispatcher, Teams audio, and P7-09 pending confirmations use process-local state; more copies require shared state/Web PubSub); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `JARVIS_NOTES_FOLDER_PATH`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, `SPEECH_REGION`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID`, `JARVIS_GRAPH_APP_ID`, `JARVIS_GRAPH_TIME_ZONE`, `ENTRA_PC_BRIDGE_CLIENT_ID` |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (SSE, dispatcher, Teams audio, and P7-09 pending confirmations use process-local state; more copies require shared state/Web PubSub); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `JARVIS_NOTES_FOLDER_PATH`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `JARVIS_CODEX_TOOL_MODEL`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, `SPEECH_REGION`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID`, `JARVIS_GRAPH_APP_ID`, `JARVIS_GRAPH_TIME_ZONE`, `ENTRA_PC_BRIDGE_CLIENT_ID` |
 | Azure Bot Service | `bot-jarvis-{suffix}` | Global; F0; user-assigned managed identity; `MsTeamsChannel` enabled; endpoint `/api/messages` |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Azure Monitor action group | `jarvis-alerts` | Email receivers from required `budgetContactEmails`; no SMS/voice receivers |

@@ -334,6 +334,31 @@ const FLOWS = [
     ],
   },
   {
+    name: "Web research",
+    summary: "Chat and voice use the existing authenticated tool path to run bounded Codex live web search, validate source links, and expose a daily usage count.",
+    nodes: [
+      { id: "question", lane: "user", col: 1, s: "context", t: "Ask a research question", d: "The query is untrusted data, not a command." },
+      { id: "select", lane: "jarvis", col: 2, s: "proven", t: "Call web_research", d: "The registered tool accepts a query of at most 2,000 characters; the live agent's tool selection remains unverified." },
+      { id: "dispatch", lane: "backend", col: 3, s: "proven", t: "Authorize and validate the tool call", d: "The existing Jarvis-only tool route validates the schema and passes cancellation to the handler; query and result are redacted from the generic audit." },
+      { id: "invocation", lane: "foundry", col: 4, s: "proven", t: "Start codex-tool", d: "Foundry Invocations use the existing runner identity, configured ChatGPT model and no repository checkout.", ev: "Foundry client fake-response tests verify the request contract; live Azure routing remains unverified." },
+      { id: "search", lane: "runner", col: 5, s: "proven", t: "Search in an isolated workspace", d: "Codex runs web_search=live with shell_tool disabled, a read-only sandbox, bounded time/output, and an empty temporary workspace; cancellation kills the process.", ev: "Fake-process tests cover output bounds, timeout, cancellation, usage limits and workspace cleanup. The pinned CLI supports --disable shell_tool.", href: "https://github.com/openai/codex/tree/rust-v0.157.0" },
+      { id: "validate", lane: "backend", col: 6, s: "proven", t: "Validate and link returned sources", d: "Accept up to 10 unique HTTPS URLs with titles, add the backend receipt timestamp, and include only those returned URLs in the answer. Empty and invalid results are explicit failures." },
+      { id: "answer", lane: "jarvis", col: 7, s: "proven", t: "Return the source-linked answer", d: "The bounded typed result is available to chat, voice, and existing P8 consumers; dynamic-window creation remains P8-owned.", ev: "Shared contract and fake backend tests pass; live Codex search and Foundry delivery remain unverified." },
+      { id: "audit", lane: "data", col: 4, s: "proven", t: "Count the tool call", d: "Reuse the existing tool_calls tool/outcome/timestamp fields; query/result content stays redacted. No migration." },
+      { id: "usage", lane: "board", col: 6, s: "proven", t: "Show daily UTC research calls", d: "Usage page separates an empty day from unavailable audit data; counts include successful, refused and failed calls.", ev: "API/SQL fakes and Usage-page tests verify bounds, UTC boundaries and empty/unavailable states." },
+    ],
+    edges: [
+      ["question", "select", "proven", "bounded user query"],
+      ["select", "dispatch", "proven", "authenticated tool call"],
+      ["dispatch", "invocation", "proven", "query + selected model"],
+      ["invocation", "search", "proven", "Foundry invocation"],
+      ["search", "validate", "proven", "JSON answer + returned sources"],
+      ["validate", "answer", "proven", "typed answer + links"],
+      ["dispatch", "audit", "proven", "tool name + outcome + time"],
+      ["audit", "usage", "proven", "UTC day count"],
+    ],
+  },
+  {
     name: "Screen sharing and camera",
     summary: "Dan explicitly shares a screen or enables the camera, then requests one frame; the existing backend vision bridge supplies transient context to chat or voice.",
     nodes: [
