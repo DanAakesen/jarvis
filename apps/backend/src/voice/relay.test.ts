@@ -304,6 +304,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const { app, conversationStore } = appFor((token, signal) => new WebSocket(upstreamUrl, {
       headers: { Authorization: ['Bearer', token].join(' ') }, signal,
     }));
+    const activityEvents: unknown[] = [];
+    app.jarvisActivityHub.subscribe((event) => activityEvents.push(event));
     await app.listen({ host: '127.0.0.1', port: 0 });
     const address = app.server.address() as AddressInfo;
     const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
@@ -323,6 +325,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
     });
     await saved;
+    expect(activityEvents).toMatchObject([{ type: 'listening', source: 'voice' }]);
     const ended = new Promise<void>((resolve) => {
       browser.on('message', (data) => {
         if ((JSON.parse(data.toString()) as { type?: string }).type === 'jarvis.session.ended') resolve();
@@ -331,6 +334,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
     browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
 
     await ended;
+    await vi.waitFor(() => expect(activityEvents.map((event) => (event as { type: string }).type))
+      .toEqual(['listening', 'ended']));
+    expect(JSON.stringify(activityEvents)).not.toMatch(/How is the task|task going|transcript/iu);
     expect(conversationStore.createSession).toHaveBeenCalledWith({ channel: 'voice', language: 'en' });
     expect(conversationStore.addMessage.mock.calls.map(([input]) => [input.role, input.text])).toEqual([
       ['dan', 'How is the task going?'],
@@ -476,6 +482,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
           return;
         }
         if (event.type === 'input_audio_buffer.append') {
+          socket.send(JSON.stringify({ type: 'response.created', event_id: 'response-created' }));
+          socket.send(JSON.stringify({ type: 'response.audio.delta', event_id: 'audio-delta', delta: 'cHJpdmF0ZQ==' }));
           socket.send(JSON.stringify({
             type: 'response.function_call_arguments.done',
             event_id: 'tool-call-event',
@@ -502,6 +510,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
       [],
       [toolModule],
     );
+    const activityEvents: unknown[] = [];
+    app.jarvisActivityHub.subscribe((event) => activityEvents.push(event));
     await app.listen({ host: '127.0.0.1', port: 0 });
     const address = app.server.address() as AddressInfo;
     const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
@@ -509,6 +519,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       browserEvents.push(JSON.parse(data.toString()) as Record<string, unknown>);
     });
     const session = await sessionSent;
+    expect(activityEvents).toEqual([]);
     expect(session).toMatchObject({
       type: 'realtime',
       output_modalities: ['text', 'audio'],
@@ -542,6 +553,14 @@ describe('backend-relayed Voice Live WebSocket', () => {
     });
     expect(browserEvents.some((event) => event.type === 'response.function_call_arguments.done')).toBe(false);
     expect(browserEvents).toContainEqual({ type: 'response.done', event_id: 'response-done', response: {} });
+    expect(activityEvents).toMatchObject([
+      { type: 'listening', source: 'voice' },
+      { type: 'thinking', source: 'voice' },
+      { type: 'speaking', source: 'voice' },
+      { type: 'tool-call-started', source: 'voice', toolName: 'greet' },
+      { type: 'tool-call-finished', source: 'voice', toolName: 'greet', outcome: 'ok' },
+    ]);
+    expect(JSON.stringify(activityEvents)).not.toMatch(/Dan|arguments|Very good|private/iu);
   });
 
   it.each([

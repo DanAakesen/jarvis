@@ -48,8 +48,19 @@ const config = {
 } as PublicConfig;
 
 function WorkingProbe() {
-  const { working } = useJarvisActivity();
-  return <output aria-label="Jarvis work state">{working ? 'working' : 'idle'}</output>;
+  const { working, applyRuntimeActivity } = useJarvisActivity();
+  const activityId = '11111111-1111-4111-8111-111111111111';
+  const publish = (type: 'thinking' | 'speaking' | 'listening') => applyRuntimeActivity({
+    type, activityId, source: 'voice',
+  });
+  return (
+    <>
+      <output aria-label="Jarvis work state">{working ? 'working' : 'idle'}</output>
+      <button type="button" onClick={() => publish('thinking')}>Publish thinking</button>
+      <button type="button" onClick={() => publish('speaking')}>Publish speaking</button>
+      <button type="button" onClick={() => publish('listening')}>Publish listening</button>
+    </>
+  );
 }
 
 beforeEach(() => {
@@ -116,14 +127,15 @@ describe('VoiceControls', () => {
     const instance = clients.instances[0];
     if (!instance) throw new Error('Voice client was not created.');
     const options = instance.options as {
-      onStatus: (status: 'listening' | 'thinking' | 'speaking', message: string) => void;
+      onStatus: (status: 'ready', message: string) => void;
     };
 
-    act(() => options.onStatus('thinking', 'Jarvis is thinking.'));
+    act(() => options.onStatus('ready', 'Microphone is off.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish thinking' }));
     expect(screen.getByLabelText('Jarvis work state').textContent).toBe('working');
-    act(() => options.onStatus('speaking', 'Jarvis is speaking.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish speaking' }));
     expect(screen.getByLabelText('Jarvis work state').textContent).toBe('working');
-    act(() => options.onStatus('listening', 'Listening for your voice.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish listening' }));
     expect(screen.getByLabelText('Jarvis work state').textContent).toBe('idle');
   });
 

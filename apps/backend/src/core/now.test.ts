@@ -362,6 +362,19 @@ describe('Now feed API', () => {
       });
       const chunk = await reader.read();
       expect(new TextDecoder().decode(chunk.value)).toContain('event: now\ndata: {}');
+      const activity = {
+        type: 'tool-call-finished',
+        activityId: '11111111-1111-4111-8111-111111111111',
+        source: 'chat',
+        toolName: 'workspace_command',
+        outcome: 'ok',
+      } as const;
+      const activityFrame = reader.read();
+      app.jarvisActivityHub.publish(activity);
+      const activityChunk = new TextDecoder().decode((await activityFrame).value);
+      expect(activityChunk).toContain('event: jarvis-activity');
+      expect(activityChunk).toContain(JSON.stringify(activity));
+      expect(activityChunk).not.toMatch(/arguments|result|transcript|secret/iu);
     } finally {
       controller.abort();
       await reader.cancel().catch(() => {});

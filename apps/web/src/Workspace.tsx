@@ -85,6 +85,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
   const [actionSuccess, setActionSuccess] = useState<Record<string, string>>({});
   const [pendingActions, setPendingActions] = useState<ReadonlySet<string>>(new Set());
+  const [jarvisUpdatingIds, setJarvisUpdatingIds] = useState<ReadonlySet<string>>(new Set());
   const [activeGestureId, setActiveGestureId] = useState<string | null>(null);
   const [narrow, setNarrow] = useState(() => (
     typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 900px)').matches
@@ -92,6 +93,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   const canvas = useRef<HTMLDivElement>(null);
   const gestures = useRef(new Map<number, Gesture>());
   const pendingActionsRef = useRef(new Set<string>());
+  const jarvisUpdateTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const workspaceHeading = useRef<HTMLHeadingElement>(null);
   const windowElements = useRef(new Map<string, HTMLElement>());
   const windowHeadings = useRef(new Map<string, HTMLHeadingElement>());
@@ -105,6 +107,11 @@ export const Workspace = forwardRef<WorkspaceController, {
     update();
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => () => {
+    for (const timer of jarvisUpdateTimers.current.values()) clearTimeout(timer);
+    jarvisUpdateTimers.current.clear();
   }, []);
 
   const orderedViews = useMemo(() => {
@@ -251,6 +258,20 @@ export const Workspace = forwardRef<WorkspaceController, {
     const viewIndex = 'viewId' in command
       ? orderedViews.findIndex((view) => view.id === command.viewId)
       : -1;
+    const shimmerUpdatedView = (viewId: string) => {
+      setJarvisUpdatingIds((current) => new Set(current).add(viewId));
+      const previous = jarvisUpdateTimers.current.get(viewId);
+      if (previous) clearTimeout(previous);
+      jarvisUpdateTimers.current.set(viewId, setTimeout(() => {
+        jarvisUpdateTimers.current.delete(viewId);
+        setJarvisUpdatingIds((current) => {
+          if (!current.has(viewId)) return current;
+          const next = new Set(current);
+          next.delete(viewId);
+          return next;
+        });
+      }, 1_200));
+    };
     switch (command.operation) {
       case 'create':
         if (workspaceViews.some((view) => view.id === command.viewId)) return false;
@@ -265,6 +286,7 @@ export const Workspace = forwardRef<WorkspaceController, {
         }]);
         setGeometry((current) => ({ ...current, [command.viewId]: defaultGeometry(workspaceViews.length) }));
         setAnnouncement(`${command.view.title} created.`);
+        shimmerUpdatedView(command.viewId);
         return true;
       case 'update':
         if (!agentViews.some((view) => view.id === command.viewId) || closedViewIds.has(command.viewId)) return false;
@@ -280,6 +302,7 @@ export const Workspace = forwardRef<WorkspaceController, {
           }
           : view));
         setAnnouncement(`${command.view.title} updated.`);
+        shimmerUpdatedView(command.viewId);
         return true;
       case 'show':
         return focusView(command.viewId);
@@ -324,7 +347,7 @@ export const Workspace = forwardRef<WorkspaceController, {
       case 'context-panel':
         return false;
     }
-  }, [agentViews, closeView, closedViewIds, focusView, geometry, isViewOpen, minimiseView,
+  }, [agentViews, closeView, closedViewIds, focusView, geometry, isViewOpen, jarvisUpdateTimers, minimiseView,
     orderedViews, restoreView, workspaceViews]);
 
   const minimiseAll = useCallback(() => {
@@ -621,7 +644,7 @@ export const Workspace = forwardRef<WorkspaceController, {
 
           return (
             <article
-              className={`workspace-window${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}`}
+              className={`workspace-window${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}${jarvisUpdatingIds.has(view.id) ? ' workspace-window-jarvis-updating' : ''}`}
               key={view.id}
               style={style}
               aria-labelledby={titleId}

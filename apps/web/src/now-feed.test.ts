@@ -151,6 +151,34 @@ describe('Now feed client', () => {
     expect(updates).toHaveBeenCalledTimes(2);
   });
 
+  it('forwards only valid ephemeral Jarvis activity events from SSE', async () => {
+    const controller = new AbortController();
+    const onActivity = vi.fn(() => controller.abort());
+    const activity = {
+      type: 'tool-call-finished',
+      activityId: '11111111-1111-4111-8111-111111111111',
+      source: 'voice',
+      toolName: 'workspace_command',
+      outcome: 'refused',
+    };
+    fetchMock.mockResolvedValueOnce(eventStream([
+      `event: jarvis-activity\ndata: ${JSON.stringify(activity)}`,
+      `event: jarvis-activity\ndata: ${JSON.stringify({ ...activity, arguments: 'private input' })}`,
+    ].join('\n\n') + '\n\n'));
+
+    await streamNowFeed({
+      backendUrl: 'https://api.example.com',
+      getAccessToken,
+      onUpdate: () => {},
+      onStatus: () => {},
+      onActivity,
+      signal: controller.signal,
+    });
+
+    expect(onActivity).toHaveBeenCalledOnce();
+    expect(onActivity).toHaveBeenCalledWith(activity);
+  });
+
   it('delivers only validated workspace commands from the authenticated SSE stream', async () => {
     const sessionId = '12345678-1234-4234-8234-123456789abc';
     const command = {

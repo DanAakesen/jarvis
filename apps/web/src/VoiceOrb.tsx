@@ -6,7 +6,7 @@ type VoiceOrbState = {
   message: string;
 };
 
-const voiceOrbStates: Record<VoiceStatus | 'tool_call', VoiceOrbState> = {
+const voiceOrbStates: Record<VoiceStatus | 'tool_call' | 'interrupted', VoiceOrbState> = {
   stopped: { className: 'off', message: '' },
   connecting: { className: 'connecting', message: '' },
   ready: { className: 'off', message: '' },
@@ -17,9 +17,14 @@ const voiceOrbStates: Record<VoiceStatus | 'tool_call', VoiceOrbState> = {
   reconnecting: { className: 'reconnecting', message: '' },
   error: { className: 'unavailable', message: '' },
   tool_call: { className: 'tool-call', message: '' },
+  interrupted: { className: 'interrupted', message: '' },
 };
 
-export function VoiceOrb({ status, message, audioLevel = 0 }: { status: string; message: string; audioLevel?: number }) {
+export function VoiceOrb({ status, message, audioLevel = 0 }: {
+  status: string;
+  message: string;
+  audioLevel?: number;
+}) {
   const state = voiceOrbStates[status as keyof typeof voiceOrbStates] ?? {
     className: 'unavailable',
     message: 'Voice status unavailable. The runtime reported an unrecognized status.',
@@ -41,9 +46,6 @@ export function VoiceOrb({ status, message, audioLevel = 0 }: { status: string; 
         >
           {statusMessage}
         </p>
-        {status === 'tool_call' ? <span className="tool-call tool-call-running">Tool running</span> : <p className="voice-orb-limitation">
-          Tool-call activity is unavailable because the voice runtime does not publish that state yet.
-        </p>}
       </div>
     </div>
   );

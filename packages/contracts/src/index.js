@@ -404,3 +404,24 @@ export function isWorkspaceCommand(value, options = {}) {
       return false;
   }
 }
+
+const activityIdPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
+const toolNamePattern = /^[A-Za-z0-9_-]{1,64}$/;
+const activityStateTypes = new Set([
+  'listening', 'thinking', 'speaking', 'interrupted', 'reconnecting', 'failed', 'ended',
+]);
+
+export function isJarvisActivityEvent(value) {
+  if (!isObject(value) || !activityIdPattern.test(value.activityId) ||
+    !['chat', 'voice'].includes(value.source) || typeof value.type !== 'string') return false;
+  if (activityStateTypes.has(value.type)) {
+    return Object.keys(value).every((key) => ['type', 'activityId', 'source'].includes(key));
+  }
+  if (!['tool-call-started', 'tool-call-finished'].includes(value.type) ||
+    !boundedString(value.toolName, 64, 1) || !toolNamePattern.test(value.toolName)) return false;
+  return value.type === 'tool-call-started'
+    ? Object.keys(value).every((key) => ['type', 'activityId', 'source', 'toolName'].includes(key))
+    : Object.keys(value).every((key) =>
+      ['type', 'activityId', 'source', 'toolName', 'outcome'].includes(key)) &&
+      ['ok', 'refused', 'error'].includes(value.outcome);
+}

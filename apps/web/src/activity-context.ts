@@ -1,13 +1,21 @@
 import { createContext, useContext } from 'react';
+import type { JarvisActivityEvent } from '@jarvis/contracts';
 
-export type ActivitySource = 'chat-turn' | 'voice-turn';
 export type JarvisActivity = {
   working: boolean;
-  setWorking: (source: ActivitySource, active: boolean) => void;
-  beginWorking: (source: ActivitySource) => () => void;
+  voiceActivity: JarvisActivityEvent | null;
+  latestActivity: JarvisActivityEvent | null;
+  applyRuntimeActivity: (event: JarvisActivityEvent) => void;
+  clearRuntimeActivities: () => void;
 };
 
-const noActivity: JarvisActivity = { working: false, setWorking: () => {}, beginWorking: () => () => {} };
+const noActivity: JarvisActivity = {
+  working: false,
+  voiceActivity: null,
+  latestActivity: null,
+  applyRuntimeActivity: () => {},
+  clearRuntimeActivities: () => {},
+};
 export const JarvisActivityContext = createContext<JarvisActivity>(noActivity);
 
 export function useJarvisActivity(): JarvisActivity {

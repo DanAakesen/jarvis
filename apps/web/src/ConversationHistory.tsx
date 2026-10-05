@@ -5,7 +5,6 @@ import type { PublicConfig } from '../config/public-config';
 import type { CameraController, ScreenShareController } from './screen-sharing';
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
-import { useJarvisActivity } from './activity-context';
 import {
   createChatSession,
   loadConversationHistory,
@@ -55,7 +54,6 @@ export function ConversationHistory({
   screenShare?: ScreenShareController;
   camera?: CameraController;
 }) {
-  const { beginWorking } = useJarvisActivity();
   const { onVoiceActiveChange } = useVoiceWorkspace();
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -181,7 +179,6 @@ export function ConversationHistory({
       setTurnError('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
       return;
     }
-    const finishWorking = beginWorking('chat-turn');
     setSending(true);
     setTurnError('');
     setHistoryError('');
@@ -234,7 +231,6 @@ export function ConversationHistory({
       }
 
     } finally {
-      finishWorking();
       setSending(false);
     }
   }

@@ -43,19 +43,12 @@ describe('VoiceOrb', () => {
     expect((container.firstChild as HTMLElement).getAttribute('data-state')).toBe('reconnecting');
   });
 
-  it('does not imply tool activity when the runtime does not publish it', () => {
-    render(<VoiceOrb status="thinking" message="Jarvis is thinking." />);
-
-    expect(screen.getByText(/Tool-call activity is unavailable/u)).not.toBeNull();
-  });
-
   it('maps a published tool-call state and keeps unknown states unavailable', () => {
     const { container, rerender } = render(<VoiceOrb status="tool_call" message="Jarvis is using a tool." />);
 
     expect(screen.getByRole('status').textContent).toContain('Jarvis is using a tool.');
     expect((container.firstChild as HTMLElement).getAttribute('data-state')).toBe('tool-call');
-    expect(screen.getByText('Tool running').classList.contains('tool-call-running')).toBe(true);
-    expect(screen.queryByText(/Tool-call activity is unavailable/u)).toBeNull();
+    expect(screen.queryByText('Tool running')).toBeNull();
 
     rerender(<VoiceOrb status="future-runtime-state" message="Unexpected state." />);
     expect(screen.getByRole('alert').textContent).toContain('Voice status unavailable');

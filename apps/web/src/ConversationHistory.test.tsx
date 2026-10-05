@@ -66,8 +66,19 @@ function renderConversation(historyRefresh = 0, camera?: CameraController, onVoi
 }
 
 function ActivityProbe() {
-  const { working } = useJarvisActivity();
-  return <output data-testid="activity">{working ? 'working' : 'idle'}</output>;
+  const { working, applyRuntimeActivity } = useJarvisActivity();
+  const activityId = '11111111-1111-4111-8111-111111111111';
+  return (
+    <>
+      <output data-testid="activity">{working ? 'working' : 'idle'}</output>
+      <button type="button" onClick={() => applyRuntimeActivity({
+        type: 'thinking', activityId, source: 'chat',
+      })}>Publish chat thinking</button>
+      <button type="button" onClick={() => applyRuntimeActivity({
+        type: 'ended', activityId, source: 'chat',
+      })}>Publish chat end</button>
+    </>
+  );
 }
 
 beforeEach(() => {
@@ -248,7 +259,7 @@ describe('ConversationHistory', () => {
     expect(sendChatTurn).not.toHaveBeenCalled();
   });
 
-  it('keeps chat activity active until an in-flight turn settles after unmount', async () => {
+  it('derives chat activity from runtime events and keeps it across a conversation unmount', async () => {
     const finishers: Array<(value: typeof assistantMessage) => void> = [];
     sendChatTurn.mockImplementation(async () => new Promise((resolve) => { finishers.push(resolve); }));
     const content = (showConversation: boolean) => (
@@ -265,21 +276,15 @@ describe('ConversationHistory', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(screen.getByTestId('activity').textContent).toBe('idle');
+    fireEvent.click(screen.getByRole('button', { name: 'Publish chat thinking' }));
     expect(screen.getByTestId('activity').textContent).toBe('working');
 
     view.rerender(content(false));
     expect(screen.getByTestId('activity').textContent).toBe('working');
-    view.rerender(content(true));
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
-      target: { value: 'Another question' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
-
-    finishers[0]?.(assistantMessage);
-    expect(screen.getByTestId('activity').textContent).toBe('working');
-    finishers[1]?.(assistantMessage);
-    await waitFor(() => expect(screen.getByTestId('activity').textContent).toBe('idle'));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish chat end' }));
+    expect(screen.getByTestId('activity').textContent).toBe('idle');
+    await act(async () => finishers[0]?.(assistantMessage));
   });
 
   it('shows partial text and recovery guidance after an interrupted reply', async () => {

@@ -39,25 +39,51 @@ export function VoiceControls({
   screenShare?: ScreenShareController;
   camera?: CameraController;
 }) {
-  const { setWorking } = useJarvisActivity();
+  const { voiceActivity } = useJarvisActivity();
   const client = useRef<BrowserVoiceClient | null>(null);
   const screenSessionIdRef = useRef<string | null>(null);
-  const [status, setStatus] = useState<VoiceStatus>('stopped');
-  const [message, setMessage] = useState(initialMessage);
+  const [clientStatus, setClientStatus] = useState<VoiceStatus>('stopped');
+  const [clientMessage, setClientMessage] = useState(initialMessage);
   const [audioLevel, setAudioLevel] = useState(0);
   const [muted, setMuted] = useState(false);
   const [enabling, setEnabling] = useState(false);
   const stopButton = useRef<HTMLButtonElement>(null);
   const [screenSessionId, setScreenSessionId] = useState<string | null>(null);
   const [screenError, setScreenError] = useState('');
+  const runtimeVoiceActivity = voiceActivity?.source === 'voice' ? voiceActivity : null;
+  const runtimeStatus = runtimeVoiceActivity?.type === 'tool-call-started' ||
+      runtimeVoiceActivity?.type === 'tool-call-finished' ? 'tool_call'
+    : runtimeVoiceActivity?.type === 'interrupted' ? 'interrupted'
+      : runtimeVoiceActivity?.type === 'failed' && clientStatus === 'error' ? 'error'
+        : runtimeVoiceActivity?.type === 'listening' || runtimeVoiceActivity?.type === 'thinking' ||
+            runtimeVoiceActivity?.type === 'speaking' || runtimeVoiceActivity?.type === 'reconnecting'
+          ? runtimeVoiceActivity.type
+          : null;
+  const status = runtimeStatus ?? clientStatus;
+  const message = runtimeVoiceActivity?.type === 'tool-call-started'
+    ? `Jarvis is using ${runtimeVoiceActivity.toolName}.`
+    : runtimeVoiceActivity?.type === 'tool-call-finished'
+      ? `${runtimeVoiceActivity.toolName} ${runtimeVoiceActivity.outcome}.`
+      : runtimeVoiceActivity?.type === 'interrupted'
+        ? 'Jarvis’s response was interrupted.'
+        : runtimeVoiceActivity?.type === 'failed'
+          ? 'Voice activity failed.'
+          : runtimeVoiceActivity?.type === 'listening'
+            ? 'Listening for your voice.'
+            : runtimeVoiceActivity?.type === 'thinking'
+              ? 'Jarvis is thinking.'
+              : runtimeVoiceActivity?.type === 'speaking'
+                ? 'Jarvis is speaking.'
+                : runtimeVoiceActivity?.type === 'reconnecting'
+                  ? 'Voice connection ended. Reconnecting…'
+                  : clientMessage;
   const active = status !== 'stopped' && status !== 'error';
   const pending = status === 'connecting' || status === 'reconnecting' || status === 'stopping';
 
   useEffect(() => () => {
     client.current?.stop();
     client.current = null;
-    setWorking('voice-turn', false);
-  }, [setWorking]);
+  }, []);
 
   useEffect(() => {
     if (active) stopButton.current?.focus();
@@ -111,9 +137,8 @@ export function VoiceControls({
       },
       onVisionRequest: (source) => { void inspectAndSendVision(source); },
       onStatus: (nextStatus, nextMessage) => {
-        setStatus(nextStatus);
-        setMessage(nextMessage);
-        setWorking('voice-turn', nextStatus === 'thinking' || nextStatus === 'speaking');
+        setClientStatus(nextStatus);
+        setClientMessage(nextMessage);
         if (nextStatus === 'stopped' || nextStatus === 'error') {
           client.current = null;
           screenSessionIdRef.current = null;
