@@ -90,12 +90,17 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   reads the signed-in user's usage report. `/settings` is the shared settings entry. P1-11
   implements it as a responsive form for Jarvis, voice, coding-agent defaults,
   global task limits, and appearance. P8-13's shell-level theme provider loads
-  the accepted `appearance.theme` from `/settings`, saves light/dark changes
-  through the same authenticated API, and applies them to semantic CSS
-  variables on the document root. Theme changes take effect only after the
+  the   accepted `appearance.theme` from `/settings`, saves light/dark/system changes
+  through the same authenticated API, and resolves system mode from the OS
+  preference. It applies the effective mode and approved appearance tokens to
+  semantic CSS variables on the document root. Theme changes take effect only after the
   server returns the accepted value; rejected updates retain the previous
   appearance. Remaining voice samples, sleep, credential, and custom-theme
   controls are visibly disabled until their owning services/contracts exist.
+- P8-32 keeps the existing Jarvis Three.js scene mounted while theme changes
+  update its materials, lights, exposure and atmosphere from the semantic
+  `--stage-*` CSS roles. Shared glass roles keep foreground HTML readable over
+  either rendering; no additional preference or provider path is introduced.
 - P8-20 keeps the visual system in `apps/web/src/styles.css`: semantic light/dark
   roles, type and layout tokens, elevation/translucency, and shared motion rules.
   P8-16 publishes typed chat/voice runtime activity through the existing

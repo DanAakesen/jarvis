@@ -115,4 +115,48 @@ describe('shared glass tokens', () => {
 
     expect(tokenValue(source, ':root', '--font-heading')).toBe('var(--font-body)');
   });
+
+  it('gives the empty conversation readable glass placement clear of the orb', () => {
+    const styles = readFileSync('src/ConversationHistory.css', 'utf8');
+    const greeting = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'background');
+    const greetingPosition = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'align-self');
+    const headingFont = ruleDeclaration(styles, /\.conversation-greeting h2\s*\{([^}]*)\}/, 'font-family');
+    const summary = ruleDeclaration(styles, /^\.conversation-overview > summary\s*\{([^}]*)\}/m, 'background');
+    const emptyTranscriptLayout = ruleDeclaration(
+      styles, /\.conversation-transcript:has\(\.conversation-greeting\)\s*\{([^}]*)\}/, 'display',
+    );
+    const emptyDisclosureAlignment = ruleDeclaration(
+      styles, /\.conversation-transcript:has\(\.conversation-greeting\) > \.conversation-overview\s*\{([^}]*)\}/,
+      'align-self',
+    );
+
+    expect(greeting).toBe('var(--surface-translucent)');
+    expect(greetingPosition).toBe('flex-end');
+    expect(headingFont).toBe('var(--font-heading)');
+    expect(summary).toBe('var(--surface-translucent)');
+    expect(emptyTranscriptLayout).toBe('flex');
+    expect(emptyDisclosureAlignment).toBe('flex-end');
+    expect(styles).toContain('padding: clamp(16px, 12vh, 100px) 12px');
+    expect(styles).toContain('@media (max-width: 600px)');
+  });
+
+  it('gives Jarvis replies a readable semantic glass surface over the stage', () => {
+    const styles = readFileSync('src/ConversationHistory.css', 'utf8');
+    const jarvisMessage = ruleDeclaration(
+      styles, /\.conversation-message\[data-speaker="jarvis"\]\s*\{([^}]*)\}/, 'background',
+    );
+
+    expect(jarvisMessage).toBe('var(--surface-translucent)');
+  });
+
+  it('keeps theme-aware stage materials in the shared semantic CSS source', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+
+    for (const token of ['--stage-background', '--stage-floor', '--stage-wall', '--stage-inset',
+      '--stage-metal', '--stage-seam', '--stage-amber', '--stage-hemisphere', '--stage-ground',
+      '--stage-key', '--stage-rim', '--stage-orb', '--stage-reflector', '--stage-exposure']) {
+      expect(tokenValue(source, ':root', token)).toBeTruthy();
+      expect(tokenValue(source, ':root\\[data-theme="dark"\\]', token)).toBeTruthy();
+    }
+  });
 });

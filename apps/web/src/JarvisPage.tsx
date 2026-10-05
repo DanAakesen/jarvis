@@ -1,7 +1,7 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import { flushSync } from 'react-dom';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import { BackendSleepControl } from './BackendSleepControl';
 import { ConversationHistory } from './ConversationHistory';
@@ -10,6 +10,7 @@ import { NowFeedPanel } from './NowFeedPanel';
 import { ScreenShareControls } from './ScreenShareControls';
 import { useScreenShare, type CameraController } from './screen-sharing';
 import { useThemePreference } from './theme-preference-context';
+import { useJarvisActivity } from './activity-context';
 import './ConversationHistory.css';
 import { useWorkspaceCommands } from './workspace-command-state';
 
@@ -26,7 +27,9 @@ export function JarvisPage({
   getAccessToken: () => Promise<string>;
   camera: CameraController;
 }) {
-  const { theme } = useThemePreference();
+  const themePreference = useThemePreference();
+  const { resolvedTheme, refreshAppearance } = themePreference;
+  const { latestActivity } = useJarvisActivity();
   const screenShare = useScreenShare(config, getAccessToken);
   const workspace = useWorkspaceCommands();
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
@@ -34,12 +37,24 @@ export function JarvisPage({
     flushSync(() => { applied = workspace.dispatch(command, trustedBlobHost); });
     return applied;
   }, [workspace]);
+  useEffect(() => {
+    if (latestActivity?.type === 'tool-call-finished' &&
+        latestActivity.toolName === 'set_theme' && latestActivity.outcome === 'ok') {
+      void refreshAppearance();
+    }
+  }, [latestActivity, refreshAppearance]);
   return (
     <div className="jarvis-page">
-      <JarvisStage theme={theme}>
+      <JarvisStage theme={resolvedTheme} appearance={themePreference.appearance}>
         <h1 className="visually-hidden">Welcome, {name}</h1>
         <h2 id="conversation-heading" className="visually-hidden">Conversation</h2>
-        <ConversationHistory client={client} config={config} screenShare={screenShare} camera={camera}>
+        {themePreference.error && <p className="theme-update-error" role="alert">{themePreference.error}</p>}
+        <ConversationHistory
+          client={client}
+          config={config}
+          screenShare={screenShare}
+          camera={camera}
+        >
           <details className="conversation-overview">
             <summary>Activity, sharing and backend</summary>
             <div className="jarvis-side">

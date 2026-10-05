@@ -248,6 +248,7 @@ Verified in Codex cloud for P0-02:
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
 | Focused P8-17 settings/theme checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
+| Focused P8-32 appearance checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/theme-preference.test.tsx src/SettingsPage.test.tsx src/JarvisStage.test.tsx src/styles.test.tsx src/ConversationHistory.test.tsx`; `npm run lint --workspace @jarvis/web`; `npm run build --workspace @jarvis/web` |
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Focused P8-35 steering, queue, and control tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/backend -- --run src/core/conversation.test.ts src/database/conversation-store.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py` |
@@ -484,6 +485,32 @@ scene/glass text was also visually checked. No live backend/provider, real audio
 device, hardware GPU, physical phone, Safari or transition-flicker acceptance is
 claimed. The fixtures and generated audio are local test data, not production
 simulated state controls.
+P8-32 used a scratch-only auth/API fixture and Chromium with SwiftShader at
+1440×900 and 390×844, with reduced motion enabled. The browser rendered the real
+same-room WebGL stage under the light semantic palette; one canvas remained
+mounted while the saved `system` mode followed OS dark↔light changes, an open
+activity disclosure stayed open, and composer focus was retained. No microphone
+request, horizontal overflow, or browser error occurred. Review captures are
+[`p8-32-empty-light-desktop-1440.png`](ui/screenshots/p8-32-empty-light-desktop-1440.png)
+and [`p8-32-empty-light-phone-390.png`](ui/screenshots/p8-32-empty-light-phone-390.png).
+These use local API fixtures, do not verify live settings/provider behavior, and
+do not constitute approval of a light-mode mockup. Hardware GPU, physical
+devices, Safari, live voice, and P8-30 transition flicker remain unverified.
+Focused web tests also cover pending/rejected theme saves, invalid-token
+recovery, persisted system mode and stage activity/audio updates; shared
+contrast tests cover text, muted text, icons and focus on both glass roles.
+Follow-up review captures use the same scratch-only fixtures and reduced-motion
+Chromium setup: the empty-state Activity disclosure sits just below/right of the
+greeting at 1440×900 and 390×844, outside the orb rings, and Jarvis replies use
+the semantic translucent surface in light mode. Captures:
+[`p8-32-empty-dark-desktop-1440.png`](ui/screenshots/p8-32-empty-dark-desktop-1440.png),
+[`p8-32-empty-dark-phone-390.png`](ui/screenshots/p8-32-empty-dark-phone-390.png),
+and [`p8-32-conversation-light-desktop-1440.png`](ui/screenshots/p8-32-conversation-light-desktop-1440.png).
+The conversation text is local fixture content, not a live conversation;
+computed light-mode reply text is `rgb(23, 32, 42)` on the 92%-opaque
+`rgb(240, 245, 247)` glass; its conservative black-backed contrast is 12.5:1.
+No horizontal overflow or page errors occurred. This verifies local rendering,
+not live conversation data or physical/hardware rendering.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal
