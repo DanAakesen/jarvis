@@ -29,9 +29,27 @@ MAX_REQUEST_BYTES = 64 * 1024
 MAX_HISTORY_MESSAGES = 100
 MAX_CONTEXT_MESSAGES = 20
 MAX_CONTEXT_CHARACTERS = 32_000
+MAX_CONTEXT_TOOL_CALLS = 20
 MAX_OUTPUT_BYTES = 512 * 1024
 MESSAGE_ID = re.compile(r"^[1-9][0-9]{0,18}$")
 MAX_SQL_BIGINT = 9_223_372_036_854_775_807
+
+
+def _tool_outcome_summary(message: dict[str, Any]) -> str:
+    calls = message.get("toolCalls")
+    if not isinstance(calls, list):
+        return ""
+    outcomes = [
+        f"{call['tool']}={call['outcome']}"
+        for call in calls[:MAX_CONTEXT_TOOL_CALLS]
+        if isinstance(call, dict)
+        and isinstance(call.get("tool"), str)
+        and re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", call["tool"])
+        and call.get("outcome") in {"ok", "refused", "error"}
+    ]
+    return f"\nTool outcomes: {', '.join(outcomes)}" if outcomes else ""
+
+
 _tracer = trace.get_tracer("VoiceHostedAgent.Chat")
 
 ChatContextLoader = Callable[
@@ -80,29 +98,53 @@ async def load_verified_history(
     ):
         return None
 
-    previous = [
-        message for message in messages
-        if isinstance(message, dict)
-        and isinstance(message.get("id"), str)
-        and int(message["id"]) < int(message_id)
-        and message.get("role") in {"dan", "jarvis"}
-        and isinstance(message.get("text"), str)
-    ][-MAX_CONTEXT_MESSAGES:]
-    context: list[ModelMessage] = []
-    characters = 0
-    for message in reversed(previous):
-        content = message["text"]
-        if characters + len(content) > MAX_CONTEXT_CHARACTERS:
-            break
-        context.insert(
-            0,
-            ModelMessage(
-                "user" if message["role"] == "dan" else "assistant",
-                content,
-            ),
+    with _tracer.start_as_current_span("chat_context") as context_span:
+        previous = [
+            message for message in messages
+            if isinstance(message, dict)
+            and isinstance(message.get("id"), str)
+            and int(message["id"]) < int(message_id)
+            and message.get("role") in {"dan", "jarvis"}
+            and isinstance(message.get("text"), str)
+        ][-MAX_CONTEXT_MESSAGES:]
+        previous_jarvis = next(
+            (message for message in reversed(previous) if message["role"] == "jarvis"),
+            None,
         )
-        characters += len(content)
-    return context
+        context_items: list[tuple[str, ModelMessage]] = []
+        characters = 0
+        for message in reversed(previous):
+            content = message["text"]
+            if message["role"] == "jarvis":
+                content += _tool_outcome_summary(message)
+            if characters + len(content) > MAX_CONTEXT_CHARACTERS:
+                break
+            context_items.append(
+                (
+                    message["id"],
+                    ModelMessage(
+                        "user" if message["role"] == "dan" else "assistant",
+                        content,
+                    ),
+                )
+            )
+            characters += len(content)
+        context_items.reverse()
+        context = [item for _, item in context_items]
+        context_span.set_attribute("context.message_count", len(context))
+        context_span.set_attribute(
+            "context.oldest_message_id", context_items[0][0] if context_items else ""
+        )
+        context_span.set_attribute(
+            "context.newest_message_id", context_items[-1][0] if context_items else ""
+        )
+        context_span.set_attribute(
+            "context.previous_jarvis_message_included",
+            previous_jarvis is not None
+            and any(message_id == previous_jarvis["id"] for message_id, _ in context_items),
+        )
+        context_span.set_attribute("context.total_characters", characters)
+        return context
 
 
 def register_chat_invocation(
