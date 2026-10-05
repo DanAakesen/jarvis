@@ -1253,18 +1253,34 @@ function registerVoiceRoute(
             });
           }
         });
-        upstream.once('close', (code) => {
+        upstream.once('close', (code, reason) => {
+          if (!endRequested) {
+            request.log.warn({
+              closeCode: code,
+              failure: reason.toString('utf8').replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'none',
+              language,
+            }, 'voice.upstream_closed');
+          }
           if (!endRequested && browser.readyState === WebSocket.OPEN) {
             publishActivity(code === 1000 ? 'ended' : 'reconnecting');
             close(code === 1000 ? 1000 : 1011, 'Voice connection ended');
           }
         });
-        upstream.once('error', () => {
+        upstream.once('error', (error) => {
+          const status = /Unexpected server response: (\d{3})/u.exec(error.message)?.[1];
+          request.log.warn({
+            failure: error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120),
+            ...(status ? { httpStatus: Number(status) } : {}),
+            language,
+          }, 'voice.upstream_error');
           publishActivity('failed');
           close(1011, 'Voice connection failed');
         });
-      } catch {
-        request.log.warn('voice.connection_failed');
+      } catch (error) {
+        request.log.warn({
+          failure: error instanceof Error ? error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) : 'unknown',
+          language,
+        }, 'voice.connection_failed');
         publishActivity('failed');
         close(1011, 'Voice connection failed');
       }
