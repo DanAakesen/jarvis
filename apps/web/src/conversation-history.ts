@@ -84,6 +84,7 @@ async function chatResponse(
   body?: unknown,
   accept = 'application/json',
   onDeliveryUncertain?: () => void,
+  signal?: AbortSignal,
 ): Promise<Response> {
   if (!config.backendUrl) throw new Error('Chat is unavailable until the backend is deployed.');
   const token = await accessToken(client, config);
@@ -98,7 +99,7 @@ async function chatResponse(
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.any([AbortSignal.timeout(120_000), ...(signal ? [signal] : [])]),
     });
   } catch {
     onDeliveryUncertain?.();
@@ -164,6 +165,7 @@ export async function sendChatTurn(
   onDeliveryUncertain?: () => void,
   screenContext?: string,
   sharedScreenContext?: { screenDescription: string; sharedWindowTitle?: string },
+  signal?: AbortSignal,
 ): Promise<ChatMessage> {
   const response = await chatResponse(
     client,
@@ -176,6 +178,7 @@ export async function sendChatTurn(
     },
     'text/event-stream',
     onDeliveryUncertain,
+    signal,
   );
   if (!response.body) throw new Error('Jarvis returned an empty chat stream.');
 

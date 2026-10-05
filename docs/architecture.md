@@ -836,12 +836,22 @@ continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
 
-P8-25 keeps chat draft and turn state in `ConversationHistory`: acceptance clears
-only the unchanged submitted draft, and later edits survive completion/errors.
+P8-26 keeps chat draft, turn state and a removable FIFO queue in
+`ConversationHistory`. Each submission captures text and language and clears
+the draft locally. A synchronous in-flight guard permits only one active
+`sendChatTurn`; its promise settles (including stream cleanup) before the next
+queued submission starts. Later drafts survive completion/errors, and failed
+turn feedback remains visible while the queue advances. Stop reply passes an
+AbortSignal through the existing fetch/stream cancellation path; component
+unmount also aborts the active turn. Pending messages are in memory only and
+are not retained across navigation/reload.
 History pages and saved turn messages merge by ID in SQL's numeric-ID order;
 persisted entries replace optimistic metadata without removing absent entries.
 Older pagination retains its cursor across latest-page refreshes. These changes
 do not alter storage, SSE contracts, or the backend's first-byte latency.
+The backend retains its existing per-turn disconnect cancellation and does not
+reject overlapping turns; sequencing is owned by this client queue, not a new
+server-side queue or concurrency guard. Stop does not undo completed task actions.
 
 When `JARVIS_CHAT_AGENT_NAME` is configured, the backend uses its managed
 identity to call

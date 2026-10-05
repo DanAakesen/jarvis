@@ -17,6 +17,9 @@ import {
 
 const maxTaskId = 9_223_372_036_854_775_807n;
 
+type QueuedMessage = { id: number; text: string; language: 'da' | 'en' };
+type FailedTurn = QueuedMessage & { messageId?: string; error: string; partialReply: string };
+
 function relativeTime(at: string, now: number): string {
   const seconds = Math.round((Date.parse(at) - now) / 1000);
   const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
@@ -46,6 +49,18 @@ function validTaskId(value: string | null): value is string {
   return value !== null && /^[1-9]\d{0,18}$/.test(value) && BigInt(value) <= maxTaskId;
 }
 
+function isCameraRequest(text: string) {
+  return /\b(?:what am i holding|what(?:'s| is) in my hand|look at (?:my|the) camera|what can you see)\b/iu.test(text);
+}
+
+function isScreenRequest(text: string) {
+  return /\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen)\b/iu.test(text);
+}
+
+function isSharedBrowserRequest(text: string) {
+  return /\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b.{0,80}\b(?:here|this|that|it|these|those)\b|\b(?:here|this|that|it|these|those)\b.{0,80}\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b/iu.test(text);
+}
+
 export function ConversationHistory({
   client,
   config,
@@ -72,8 +87,10 @@ export function ConversationHistory({
   const [session, setSession] = useState<ChatSession | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [queue, setQueue] = useState<QueuedMessage[]>([]);
+  const [activeMessage, setActiveMessage] = useState<QueuedMessage | null>(null);
+  const [failedTurns, setFailedTurns] = useState<FailedTurn[]>([]);
   const [streamedText, setStreamedText] = useState('');
-  const [interruptedText, setInterruptedText] = useState('');
   const [turnError, setTurnError] = useState('');
   const [visionContext, setVisionContext] = useState<{
     sessionId: string;
@@ -89,6 +106,12 @@ export function ConversationHistory({
   const wasBusy = useRef(false);
   const hasFocusedInput = useRef(false);
   const hasLoadedOlder = useRef(false);
+  const nextQueueId = useRef(0);
+  const turnInFlight = useRef(false);
+  const draftValue = useRef('');
+  const turnController = useRef<AbortController | null>(null);
+
+  useEffect(() => () => { turnController.current?.abort(); }, []);
   const lastMessageId = messages.at(-1)?.id;
   const updateVoiceActive = useCallback((active: boolean) => {
     const update = () => {
@@ -132,7 +155,7 @@ export function ConversationHistory({
 
   useEffect(() => {
     if (!voiceActive && transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
-  }, [lastMessageId, streamedText, sending, voiceActive, loading]);
+  }, [lastMessageId, streamedText, sending, queue.length, failedTurns.length, voiceActive, loading]);
 
   useEffect(() => {
     const busy = voiceActive || sending;
@@ -181,11 +204,10 @@ export function ConversationHistory({
     }
   }
 
-  async function sendMessage(event: FormEvent<HTMLFormElement>) {
+  function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const submittedDraft = draft;
-    const text = submittedDraft.trim();
-    if (!text || sending || voiceActive) return;
+    const text = draftValue.current.trim();
+    if (!text || voiceActive) return;
     if (isSharedBrowserRequest(text) && !screenShare?.sharing) {
       setTurnError('Share the Chrome tab you want Jarvis to use, then ask again.');
       return;
@@ -196,19 +218,39 @@ export function ConversationHistory({
       setTurnError('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
       return;
     }
-    setSending(true);
+    draftValue.current = '';
+    setDraft('');
     setTurnError('');
+    setQueue((current) => [...current, { id: ++nextQueueId.current, text, language }]);
+  }
+
+  const runTurn = useCallback(async (queued: QueuedMessage) => {
+    const { text, language } = queued;
+    const controller = new AbortController();
+    turnController.current = controller;
+    turnInFlight.current = true;
+    setSending(true);
+    setActiveMessage(queued);
     setHistoryError('');
     setStreamedText('');
-    setInterruptedText('');
     let userMessageSaved = false;
+    let messageId: string | undefined;
     let partialReply = '';
     let contextForTurn: string | undefined;
     let sharedContextForTurn: { screenDescription: string; sharedWindowTitle?: string } | undefined;
     try {
+      if (isSharedBrowserRequest(text) && !screenShare?.sharing) {
+        throw new Error('Share the Chrome tab you want Jarvis to use, then ask again.');
+      }
+      const cameraContextReady = session?.language === language && visionContext?.source === 'camera' &&
+        visionContext.sessionId === session.id;
+      if (isCameraRequest(text) && !camera?.sharing && !cameraContextReady) {
+        throw new Error('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
+      }
       const activeSession = session?.language === language
         ? session
         : await createChatSession(client, config, language);
+      controller.signal.throwIfAborted();
       setSession(activeSession);
       const currentVisionContext = visionContext?.sessionId === activeSession.id ? visionContext : null;
       contextForTurn = currentVisionContext
@@ -245,7 +287,8 @@ export function ConversationHistory({
         text,
         (message) => {
           userMessageSaved = true;
-          setDraft((current) => current === submittedDraft ? '' : current);
+          messageId = message.id;
+          setActiveMessage(null);
           setMessages((current) => mergeMessages(current, [asHistoryMessage(message, activeSession.language)]));
         },
         (delta) => {
@@ -253,27 +296,59 @@ export function ConversationHistory({
           setStreamedText(partialReply);
         },
         () => {
-          if (!userMessageSaved) setDraft((current) => current === submittedDraft ? '' : current);
           userMessageSaved = true;
         },
         contextForTurn,
         sharedContextForTurn,
+        controller.signal,
       );
       setMessages((current) => mergeMessages(current, [asHistoryMessage(assistant, activeSession.language)]));
       setStreamedText('');
       setReload((value) => value + 1);
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : 'Jarvis could not finish the reply.';
-      setTurnError(message);
+      const message = controller.signal.aborted
+        ? 'Reply stopped. A task action may still have completed; check its status before trying again.'
+        : reason instanceof Error ? reason.message : 'Jarvis could not finish the reply.';
+      setFailedTurns((current) => [...current, {
+        ...queued,
+        ...(messageId ? { messageId } : {}),
+        error: message,
+        partialReply,
+      }]);
       if (userMessageSaved) {
-        setInterruptedText(partialReply);
         setStreamedText('');
         setReload((value) => value + 1);
+      } else if (!draftValue.current) {
+        draftValue.current = text;
+        setDraft(text);
       }
 
     } finally {
+      turnController.current = null;
+      setActiveMessage(null);
+      turnInFlight.current = false;
       setSending(false);
     }
+  }, [session, visionContext, client, config, camera, screenShare]);
+
+  useEffect(() => {
+    if (sending || voiceActive || turnInFlight.current || queue.length === 0) return;
+    const next = queue[0]!;
+    setQueue((current) => current.filter((message) => message.id !== next.id));
+    void runTurn(next);
+  }, [queue, sending, voiceActive, runTurn]);
+
+  function failedTurnFeedback(turn: FailedTurn) {
+    return (
+      <div key={turn.id}>
+        {turn.partialReply && <div className="interrupted-reply">
+          <p>Partial reply, interrupted:</p>
+          <MarkdownContent source={turn.partialReply} />
+        </div>}
+        <p className="chat-error" role="alert">{turn.error}</p>
+        <p className="chat-guidance">If a reply is interrupted, check the conversation and task status before sending again.</p>
+      </div>
+    );
   }
 
   async function inspectVision(source: 'camera' | 'screen') {
@@ -297,18 +372,6 @@ export function ConversationHistory({
     }
   }
 
-  function isCameraRequest(text: string) {
-    return /\b(?:what am i holding|what(?:'s| is) in my hand|look at (?:my|the) camera|what can you see)\b/iu.test(text);
-  }
-
-  function isScreenRequest(text: string) {
-    return /\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen)\b/iu.test(text);
-  }
-
-  function isSharedBrowserRequest(text: string) {
-    return /\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b.{0,80}\b(?:here|this|that|it|these|those)\b|\b(?:here|this|that|it|these|those)\b.{0,80}\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b/iu.test(text);
-  }
-
   const displayedVoiceUsage = new Set<string>();
 
   return (
@@ -323,7 +386,7 @@ export function ConversationHistory({
             Retry
           </button>
         </div>
-      ) : messages.length === 0 ? (
+      ) : messages.length === 0 && !sending && queue.length === 0 && failedTurns.length === 0 ? (
         <div className="conversation-greeting">
           <h2>What’s on your mind?</h2>
           <p>Make a plan, explore an idea, or pick up where you left off.</p>
@@ -372,6 +435,7 @@ export function ConversationHistory({
                       ))}
                     </ul>
                   )}
+                  {failedTurns.filter((turn) => turn.messageId === message.id).map(failedTurnFeedback)}
                 </li>
               );
             })}
@@ -379,8 +443,23 @@ export function ConversationHistory({
         </>
       )}
 
+      {failedTurns.filter((turn) => !turn.messageId).map((turn) => (
+        <div className="conversation-message" data-speaker="dan" key={turn.id}>
+          <div className="message-heading"><strong>Dan</strong></div>
+          <p>{turn.text}</p>
+          {failedTurnFeedback(turn)}
+        </div>
+      ))}
+      {activeMessage && <div className="conversation-message" data-speaker="dan">
+        <div className="message-heading"><strong>Dan</strong></div>
+        <p>{activeMessage.text}</p>
+        <p className="queued-state">Sending · {activeMessage.language === 'da' ? 'Danish' : 'English'}</p>
+      </div>}
       {sending && (
         <div className="streaming-message">
+          <button className="history-button stop-reply" type="button" onClick={() => turnController.current?.abort()}>
+            Stop reply
+          </button>
           {streamedText ? (
             <>
               <strong>Jarvis</strong>
@@ -397,12 +476,6 @@ export function ConversationHistory({
           )}
         </div>
       )}
-      {interruptedText && (
-        <div className="interrupted-reply">
-          <p>Partial reply, interrupted:</p>
-          <MarkdownContent source={interruptedText} />
-        </div>
-      )}
       {turnError && (
         <div>
           <p className="chat-error" role="alert">{turnError}</p>
@@ -410,6 +483,27 @@ export function ConversationHistory({
         </div>
       )}
       {sending && streamedText && <p className="chat-status" role="status" aria-live="polite">Jarvis is replying…</p>}
+      <p className={`queue-count${queue.length === 0 ? ' visually-hidden' : ''}`} aria-live="polite" aria-atomic="true">
+        {`${queue.length} ${queue.length === 1 ? 'message' : 'messages'} queued`}
+      </p>
+      {queue.length > 0 && <ol className="conversation-messages queued-messages" aria-label="Queued messages">
+        {queue.map((message) => (
+          <li className="conversation-message" data-speaker="dan" key={message.id}>
+            <div className="message-heading queued-heading">
+              <strong>Dan</strong>
+              <button className="queue-remove" type="button"
+                aria-label={`Remove queued message: ${message.text}`}
+                onClick={() => setQueue((current) => current.filter((item) => item.id !== message.id))}>
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <path d="m6 6 12 12M18 6 6 18" />
+                </svg>
+              </button>
+            </div>
+            <p>{message.text}</p>
+            <p className="queued-state">Queued · {message.language === 'da' ? 'Danish' : 'English'}</p>
+          </li>
+        ))}
+      </ol>}
       {children}
       </div>
 
@@ -440,7 +534,10 @@ export function ConversationHistory({
           placeholder="Ask Jarvis"
           maxLength={20_000}
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            draftValue.current = event.target.value;
+            setDraft(event.target.value);
+          }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
@@ -450,16 +547,16 @@ export function ConversationHistory({
           aria-describedby="chat-guidance"
         />
         <div className="composer-language" role="group" aria-label="Reply language">
-          <button type="button" aria-label="Danish" aria-pressed={language === 'da'} disabled={sending} onClick={() => setLanguage('da')}>DA</button>
-          <button type="button" aria-label="English" aria-pressed={language === 'en'} disabled={sending} onClick={() => setLanguage('en')}>EN</button>
+          <button type="button" aria-label="Danish" aria-pressed={language === 'da'} onClick={() => setLanguage('da')}>DA</button>
+          <button type="button" aria-label="English" aria-pressed={language === 'en'} onClick={() => setLanguage('en')}>EN</button>
         </div>
-        <button className="primary-button composer-send" type="submit" disabled={sending || !draft.trim()} aria-label="Send" title="Send message">
+        <button className="primary-button composer-send" type="submit" disabled={!draft.trim()} aria-label="Send" title="Send message">
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="m5 12 7-7 7 7M12 5v15" />
           </svg>
         </button>
         <p id="chat-guidance" className="visually-hidden">
-          {sending ? 'You can type your next message. Send and reply language are available when Jarvis finishes.' : 'Enter to send; Shift+Enter for a new line.'}
+          Enter to send; Shift+Enter for a new line. Messages sent during a reply queue in order.
         </p>
         {(screenShare?.sharing || camera?.sharing) && <div className="action-row composer-vision">
           <button className="secondary-button" type="button" onClick={() => void inspectVision('screen')}
