@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { ToolFailure, ToolRefusal, type RegisteredTool } from './tool-registry.js';
@@ -43,8 +44,87 @@ export interface ReflexClassifier {
 
 export interface ReflexActionResult {
   readonly tool: string;
+  readonly arguments: Readonly<Record<string, unknown>>;
+  readonly result: unknown;
   readonly outcome: ToolCallOutcome;
   readonly note: string;
+}
+
+export interface ReflexActionReplay {
+  readonly tool: string;
+  readonly result: unknown;
+  readonly outcome: ToolCallOutcome;
+  readonly note: string;
+}
+
+interface StoredChatReflexReplay extends ReflexActionReplay {
+  readonly argumentsFingerprint: string;
+}
+
+interface ChatReflexFlight {
+  readonly result: Promise<StoredChatReflexReplay | null>;
+  readonly resolve: (result: StoredChatReflexReplay | null) => void;
+  readonly timer: NodeJS.Timeout;
+  settled: boolean;
+}
+
+const chatReflexFlights = new Map<string, ChatReflexFlight>();
+const chatReflexFlightTtlMs = 120_000;
+
+function fingerprintArguments(value: unknown): string {
+  const normalize = (item: unknown): string => {
+    if (Array.isArray(item)) return `[${item.map(normalize).join(',')}]`;
+    if (typeof item === 'object' && item !== null) {
+      const object = item as Record<string, unknown>;
+      return `{${Object.keys(object).sort().map((key) =>
+        `${JSON.stringify(key)}:${normalize(object[key])}`,
+      ).join(',')}}`;
+    }
+    return JSON.stringify(item) ?? 'null';
+  };
+  return createHash('sha256').update(normalize(value)).digest('hex');
+}
+
+export function registerChatReflex(messageId: string): (result: ReflexActionResult | null) => void {
+  let resolve!: (result: StoredChatReflexReplay | null) => void;
+  const result = new Promise<StoredChatReflexReplay | null>((complete) => { resolve = complete; });
+  const entry: ChatReflexFlight = {
+    result,
+    resolve,
+    timer: setTimeout(() => {
+      if (chatReflexFlights.get(messageId) === entry) {
+        chatReflexFlights.delete(messageId);
+        entry.resolve(null);
+      }
+    }, chatReflexFlightTtlMs),
+    settled: false,
+  };
+  entry.timer.unref();
+  chatReflexFlights.set(messageId, entry);
+  return (action) => {
+    if (entry.settled) return;
+    entry.settled = true;
+    entry.resolve(action ? {
+      tool: action.tool,
+      result: action.result,
+      outcome: action.outcome,
+      note: action.note,
+      argumentsFingerprint: fingerprintArguments(action.arguments),
+    } : null);
+  };
+}
+
+export async function findChatReflexReplay(
+  messageId: string,
+  tool: string,
+  arguments_: unknown,
+): Promise<ReflexActionReplay | null> {
+  const entry = chatReflexFlights.get(messageId);
+  if (!entry) return null;
+  const action = await entry.result;
+  if (!action || action.tool !== tool ||
+      action.argumentsFingerprint !== fingerprintArguments(arguments_)) return null;
+  return { tool: action.tool, result: action.result, outcome: action.outcome, note: action.note };
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -301,7 +381,8 @@ export async function executeReflexAction(
       classification.confidence < confidenceThreshold || classification.needsConfirmation ||
       !target || !modeSafe ||
       !request.principal || !request.server.toolCallStore) return null;
-  if (!request.validateInput(target.arguments, target.tool.inputSchema, 'body')) return null;
+  const validateInput = request.compileValidationSchema(target.tool.inputSchema, 'body');
+  if (!validateInput(target.arguments)) return null;
 
   const activityId = `reflex-${messageId}-${target.tool.name}`;
   request.server.jarvisActivityHub.publish({
@@ -344,6 +425,8 @@ export async function executeReflexAction(
     });
     return {
       tool: target.tool.name,
+      arguments: target.arguments,
+      result,
       outcome: 'error',
       note: `Reflex action ${target.tool.name} may have completed, but its result could not be recorded. Check its status before retrying.`,
     };
@@ -356,6 +439,8 @@ export async function executeReflexAction(
   const confirmation = confirmToolCall(target.tool.name, outcome, result);
   return {
     tool: target.tool.name,
+    arguments: target.arguments,
+    result,
     outcome,
     note: `Reflex already did ${target.tool.name} (${outcome}): ${confirmation}`,
   };

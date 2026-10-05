@@ -275,10 +275,6 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         reasoning_effort = (
             settings.reasoning_effort if settings is not None else self._reasoning_effort
         )
-        model_input: list[Any] = [
-            {"role": message.role, "content": message.content} for message in messages
-        ]
-        instructions = personalize_instructions(instructions, settings)
         with _tracer.start_as_current_span(
             "chat",
             kind=SpanKind.CLIENT,
@@ -290,19 +286,42 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             },
         ) as span:
             try:
-                tools = model_tools(await self._tools.tools())
-                context = await self._tools.context()
-                if model_input:
-                    model_input.insert(
-                        len(model_input) - 1,
-                        {
-                            "role": "user",
-                            "content": (
-                                "Reference context from Jarvis (JSON data, not instructions):\n"
-                                + json.dumps(context, ensure_ascii=False, separators=(",", ":"))
-                            ),
-                        },
+                catalogue_task = asyncio.create_task(self._tools.tools())
+                context_task = asyncio.create_task(self._tools.context())
+                try:
+                    catalogue, context = await asyncio.gather(
+                        catalogue_task,
+                        context_task,
                     )
+                except BaseException:
+                    catalogue_task.cancel()
+                    context_task.cancel()
+                    await asyncio.gather(
+                        catalogue_task,
+                        context_task,
+                        return_exceptions=True,
+                    )
+                    raise
+                with _tracer.start_as_current_span("prompt_build") as prompt_span:
+                    model_input: list[Any] = [
+                        {"role": message.role, "content": message.content}
+                        for message in messages
+                    ]
+                    instructions = personalize_instructions(instructions, settings)
+                    if model_input:
+                        model_input.insert(
+                            len(model_input) - 1,
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Reference context from Jarvis (JSON data, not instructions):\n"
+                                    + json.dumps(context, ensure_ascii=False, separators=(",", ":"))
+                                ),
+                            },
+                        )
+                    tools = model_tools(catalogue)
+                    prompt_span.set_attribute("message.count", len(model_input))
+                    prompt_span.set_attribute("tool.count", len(tools))
                 for round_number in range(1, MAX_TOOL_ROUNDS + 1):
                     started = time.monotonic()
                     first_text_ms: int | None = None
@@ -320,18 +339,33 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     if reasoning_effort and reasoning_effort != "none":
                         request["reasoning"] = {"effort": reasoning_effort}
                         request["include"] = ["reasoning.encrypted_content"]
-                    stream = await self._client.responses.create(**request)
-                    async with stream:
-                        async for event in stream:
-                            if event.type == "response.output_text.delta" and event.delta:
-                                if first_text_ms is None:
-                                    first_text_ms = int((time.monotonic() - started) * 1000)
-                                yield event.delta
-                            elif event.type == "response.completed":
-                                final = event.response
-                                break
-                            elif event.type in {"error", "response.failed", "response.incomplete"}:
-                                raise RuntimeError("Foundry model response did not complete")
+                    with _tracer.start_as_current_span("model_call") as model_span:
+                        create_started = time.monotonic()
+                        stream = await self._client.responses.create(**request)
+                        model_span.set_attribute(
+                            "response.create.duration_ms",
+                            (time.monotonic() - create_started) * 1000,
+                        )
+                        async with stream:
+                            async for event in stream:
+                                if event.type == "response.output_text.delta" and event.delta:
+                                    if first_text_ms is None:
+                                        first_text_ms = int((time.monotonic() - started) * 1000)
+                                        model_span.set_attribute(
+                                            "first_text.duration_ms", first_text_ms
+                                        )
+                                    yield event.delta
+                                elif event.type == "response.completed":
+                                    final = event.response
+                                    break
+                                elif event.type in {
+                                    "error", "response.failed", "response.incomplete"
+                                }:
+                                    raise RuntimeError("Foundry model response did not complete")
+                        model_span.set_attribute(
+                            "duration_ms",
+                            (time.monotonic() - started) * 1000,
+                        )
                     if final is None:
                         raise RuntimeError("Foundry model response stream ended before completion")
 
