@@ -153,4 +153,31 @@ describe('SQL conversation store', () => {
       { id: jarvis.id, channel: 'voice', language: 'en', text: 'The task is complete.', voiceMinutes: usage.recordset[0]?.quantity },
     ]);
   });
+
+  it('persists the phone call binding separately from its transcript session', async () => {
+    const store = createConversationStore(pool);
+    const session = await store.createSession({ channel: 'phone', language: 'da' });
+    const eventId = randomUUID();
+    const callId = randomUUID();
+    await pool.request()
+      .input('sessionId', sql.BigInt, BigInt(session.id))
+      .input('eventId', sql.VarChar(128), eventId)
+      .input('callId', sql.VarChar(128), callId)
+      .input('callerKind', sql.VarChar(8), 'entra')
+      .input('callerId', sql.NVarChar(64), '12bcfab7-49ba-4cf7-8be7-780a13911f93')
+      .query(`INSERT INTO dbo.phone_sessions
+        (jarvis_session_id, event_id, call_id, caller_kind, caller_id)
+        VALUES (@sessionId, @eventId, @callId, @callerKind, @callerId);`);
+    const { recordset } = await pool.request()
+      .input('sessionId', sql.BigInt, BigInt(session.id))
+      .query(`SELECT ps.event_id, ps.call_id, ps.caller_kind, ps.trust_tier, ps.status, s.channel
+        FROM dbo.phone_sessions AS ps
+        INNER JOIN dbo.jarvis_sessions AS s ON s.id = ps.jarvis_session_id
+        WHERE ps.jarvis_session_id = @sessionId;`);
+
+    expect(recordset).toEqual([{
+      event_id: eventId, call_id: callId, caller_kind: 'entra', trust_tier: 'untrusted',
+      status: 'answering', channel: 'phone',
+    }]);
+  });
 });

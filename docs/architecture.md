@@ -417,6 +417,22 @@ socket duplicate headers, `/me` authorization and stalled-provider tests
 establish this offline boundary. No deployed Entra token was obtained; live
 browser sign-in and deployment verification remain #11.
 
+## Teams calling (P7-01)
+
+The accepted design is Teams Phone extensibility (preview) feeding ACS Call
+Automation, with a backend Event Grid callback that verifies the caller's Teams
+Entra object ID before answering. The caller helper accepts only an exact
+allow-listed Entra object ID; phone-number matches are not identity proof.
+Migration `0017_phone_call_sessions.sql` stores a phone session separately from
+its conversation and can link future confirmations to it. This is foundation
+only: the Event Grid route and authentication, answer/reject lifecycle,
+idempotent event processing, media WebSocket bridge to Voice Live, phone-session
+tool policy, and ACS/Event Grid Bicep are not implemented. The ACS media
+envelopes are distinct from the existing browser voice relay protocol, so
+interoperability must be covered by an offline adapter and a live acceptance
+call. Dan's purchased number, Azure configuration, real Teams call, and tool
+call remain unverified; no Azure resources or paid services have been created.
+
 ## Teams phone notifications and confirmations (P7-03)
 
 When Teams settings and the database are available, `index.ts` registers the
