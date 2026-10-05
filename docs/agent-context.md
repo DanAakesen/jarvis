@@ -496,6 +496,18 @@ devices, Safari, live voice, and P8-30 transition flicker remain unverified.
 Focused web tests also cover pending/rejected theme saves, invalid-token
 recovery, persisted system mode and stage activity/audio updates; shared
 contrast tests cover text, muted text, icons and focus on both glass roles.
+Follow-up review captures use the same scratch-only fixtures and reduced-motion
+Chromium setup: the empty-state Activity disclosure sits just below/right of the
+greeting at 1440×900 and 390×844, outside the orb rings, and Jarvis replies use
+the semantic translucent surface in light mode. Captures:
+[`p8-32-empty-dark-desktop-1440.png`](ui/screenshots/p8-32-empty-dark-desktop-1440.png),
+[`p8-32-empty-dark-phone-390.png`](ui/screenshots/p8-32-empty-dark-phone-390.png),
+and [`p8-32-conversation-light-desktop-1440.png`](ui/screenshots/p8-32-conversation-light-desktop-1440.png).
+The conversation text is local fixture content, not a live conversation;
+computed light-mode reply text is `rgb(23, 32, 42)` on the 92%-opaque
+`rgb(240, 245, 247)` glass; its conservative black-backed contrast is 12.5:1.
+No horizontal overflow or page errors occurred. This verifies local rendering,
+not live conversation data or physical/hardware rendering.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

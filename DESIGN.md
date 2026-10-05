@@ -430,12 +430,15 @@ Screen sharing, Now and backend controls sit under the activity disclosure;
 frame-inspection actions appear when a camera or screen is shared.
 P8-32 renders the greeting as one sans heading with ordinary supporting copy
 (not a subtitle) on smoky-light glass, placed clear of the orb rings; the
-activity disclosure has its own readable glass surface.
+activity disclosure sits directly below/right of the greeting, clear of the
+rings, on its own readable glass surface. Jarvis replies use the semantic
+translucent surface so their text remains readable over the re-lit room.
 
-Dan's messages sit on a quiet surface on the right; Jarvis's replies stay open
-on the left. There are no message dividers. Channel, language and relative time
-appear on hover or keyboard focus, and remain visible on touch devices and
-under reduced motion. The exact timestamp remains available on the time element.
+Dan's messages sit on a quiet surface on the right; Jarvis's replies stay left
+aligned on translucent glass. There are no message dividers. Channel, language
+and relative time appear on hover or keyboard focus, and remain visible on touch
+devices and under reduced motion. The exact timestamp remains available on the
+time element.
 Messages enter with a short opacity/translation transition; streaming keeps a
 live caret beside readable text. Only a published tool-call state gets the
 running-tool shimmer; thinking is not treated as a tool call. Running Now tasks
