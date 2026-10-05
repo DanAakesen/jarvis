@@ -56,7 +56,7 @@ def agent_settings(hosted_agent_name: str = HOSTED_AGENT_NAME) -> dict[str, Any]
         "hosted_agent_name": hosted_agent_name,
         "greeting": GREETING,
         "transcription": {
-            "model": "gpt-4o-mini-transcribe",
+            "model": "mai-transcribe",
             "language": "da",
             "phrase_list": PHRASE_LIST,
         },
