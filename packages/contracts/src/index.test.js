@@ -5,6 +5,7 @@ import {
   generatedViewRenderers,
   generatedViewSchema,
   isGeneratedView,
+  isWebResearchResult,
   isJarvisActivityEvent,
   isWorkspaceCommand,
   generatedViewVersion,
@@ -150,6 +151,54 @@ test('allows images only on GitHub hosts or the configured Jarvis Blob host', ()
   assert.equal(isGeneratedView(view), false);
   assert.equal(isGeneratedView(view, { trustedBlobHost: 'jarvisdata.blob.core.windows.net' }), true);
   assert.equal(isGeneratedView(view, { trustedBlobHost: 'other.blob.core.windows.net' }), false);
+});
+
+test('validates bounded web research results and permits only citation URLs in research views', () => {
+  const retrievedAt = '2026-10-05T07:00:00.000Z';
+  const sourceUrl = 'https://example.org/research';
+  const view = {
+    version: generatedViewVersion,
+    title: 'Web research sources',
+    renderer: 'list',
+    source: { id: 'web.research', status: 'complete' },
+    data: { items: [{
+      title: 'Research source',
+      description: 'Retrieved 2026-10-05; publication date unknown.',
+      action: { type: 'open-link', url: sourceUrl, label: 'Open source' },
+    }] },
+  };
+  const result = {
+    type: 'web-research',
+    version: 1,
+    status: 'complete',
+    query: 'A bounded query',
+    synthesis: 'A claim linked to a retrieved source.',
+    retrievedAt,
+    sources: [{
+      title: 'Research source',
+      url: sourceUrl,
+      retrievedAt,
+      publicationDate: null,
+      freshness: 'unknown',
+      supportedText: ['A claim linked to a retrieved source.'],
+    }],
+    unavailableSources: [],
+    unsupportedClaims: [],
+    view,
+  };
+  assert.equal(isGeneratedView(view), true);
+  assert.equal(isGeneratedView({ ...view, renderer: 'text', data: { format: 'plain', content: 'Research' } }), false);
+  assert.equal(isGeneratedView({
+    ...view,
+    source: { id: 'factory.tasks', status: 'complete' },
+  }), false);
+  assert.equal(isWebResearchResult(result), true);
+  assert.equal(isWebResearchResult({ ...result, sources: Array.from({ length: 6 }, () => result.sources[0]) }), false);
+  assert.equal(isWebResearchResult({
+    ...result,
+    sources: [{ ...result.sources[0], url: 'http://example.org/research' }],
+  }), false);
+  assert.equal(isWebResearchResult({ ...result, view: { ...view, source: { ...view.source, status: 'partial' } } }), false);
 });
 
 test('defines and validates bounded workspace commands for the approved operations', () => {

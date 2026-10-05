@@ -15,7 +15,7 @@ export interface GeneratedViewPage {
 }
 
 export interface GeneratedViewSource {
-  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage';
+  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'web.research';
   status: 'complete' | 'partial' | 'unavailable';
   updatedAt?: string;
   reason?: string;
@@ -98,6 +98,35 @@ export type GeneratedView =
   })
   | (GeneratedViewBase & { renderer: 'image'; data: { images: { url: string; alt: string }[] } });
 
+export interface WebResearchSource {
+  title: string;
+  url: string;
+  retrievedAt: string;
+  publicationDate: string | null;
+  freshness: 'unknown';
+  supportedText: string[];
+}
+
+export interface WebResearchUnavailableSource {
+  url: string;
+  title: string;
+  reason: string;
+}
+
+export interface WebResearchResult {
+  type: 'web-research';
+  version: 1;
+  status: 'complete' | 'partial' | 'unavailable';
+  query: string;
+  synthesis: string;
+  retrievedAt: string;
+  sources: WebResearchSource[];
+  unavailableSources: WebResearchUnavailableSource[];
+  unsupportedClaims: string[];
+  reason?: string;
+  view: GeneratedView;
+}
+
 export type WorkspaceCommand =
   | { commandId: string; operation: 'create' | 'update'; viewId: string; view: GeneratedView }
   | { commandId: string; operation: 'show' | 'close' | 'minimise' | 'restore' | 'focus'; viewId: string }
@@ -132,10 +161,12 @@ export type JarvisActivityEvent =
 export function isJarvisActivityEvent(value: unknown): value is JarvisActivityEvent;
 
 export const generatedViewSchema: Readonly<Record<string, unknown>>;
+export const webResearchResultSchema: Readonly<Record<string, unknown>>;
 export function isGeneratedView(
   value: unknown,
   options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
 ): value is GeneratedView;
+export function isWebResearchResult(value: unknown): value is WebResearchResult;
 export const workspaceCommandSchema: Readonly<Record<string, unknown>>;
 export function isWorkspaceCommand(
   value: unknown,

@@ -28,7 +28,7 @@ const externalLinkActionSchema = object({
     type: 'string',
     format: 'uri',
     maxLength: 2_000,
-    pattern: '^https://(?:github\\.com|(?:[a-z0-9-]+\\.)*azure\\.com|learn\\.microsoft\\.com)(?:[/?#].*)?$',
+    pattern: '^https://[^\\s/@]+(?:[/?#].*)?$',
   },
   label: string(200, 1),
 });
@@ -72,7 +72,7 @@ const listItem = object({
   action: { oneOf: [routeActionSchema, externalLinkActionSchema] },
 }, ['title']);
 const sourceSchema = object({
-  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage'] },
+  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage', 'web.research'] },
   status: { type: 'string', enum: ['complete', 'partial', 'unavailable'] },
   updatedAt: dateTime,
   reason: string(500),
@@ -137,6 +137,40 @@ export const generatedViewSchema = Object.freeze({
     actions: array(actionSchema, 10),
   }, ['version', 'title', 'renderer', 'source', 'data'])),
 });
+
+const webResearchSourceSchema = object({
+  title: string(200, 1),
+  url: {
+    type: 'string', format: 'uri', maxLength: 2_000,
+    pattern: '^https://[^\\s/@]+(?:[/?#].*)?$',
+  },
+  retrievedAt: dateTime,
+  publicationDate: { type: 'null' },
+  freshness: { const: 'unknown' },
+  supportedText: array(string(1_000, 1), 10),
+});
+const webResearchUnavailableSourceSchema = object({
+  url: {
+    type: 'string', format: 'uri', maxLength: 2_000,
+    pattern: '^https://[^\\s/@]+(?:[/?#].*)?$',
+  },
+  title: string(200, 1),
+  reason: string(500, 1),
+});
+export const webResearchResultSchema = Object.freeze(object({
+  type: { const: 'web-research' },
+  version: { const: 1 },
+  status: { type: 'string', enum: ['complete', 'partial', 'unavailable'] },
+  query: string(500, 1),
+  synthesis: string(8_000),
+  retrievedAt: dateTime,
+  sources: array(webResearchSourceSchema, 5),
+  unavailableSources: array(webResearchUnavailableSourceSchema, 5),
+  unsupportedClaims: array(string(500, 1), 10),
+  reason: string(500, 1),
+  view: generatedViewSchema,
+}, ['type', 'version', 'status', 'query', 'synthesis', 'retrievedAt', 'sources',
+  'unavailableSources', 'unsupportedClaims', 'view']));
 
 const workspaceCommandId = {
   ...string(128, 1),
@@ -216,7 +250,17 @@ function safeHttpsUrl(value, hosts, trustedBlobHost) {
   }
 }
 
-function validAction(value, registeredTools) {
+function safeWebSourceUrl(value) {
+  if (!boundedString(value, 2_000, 1)) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password && !url.port;
+  } catch {
+    return false;
+  }
+}
+
+function validAction(value, registeredTools, allowResearchLinks = false) {
   if (!isObject(value) || !generatedViewActionTypes.includes(value.type)) return false;
   switch (value.type) {
     case 'open-route': {
@@ -228,7 +272,8 @@ function validAction(value, registeredTools) {
     }
     case 'open-link':
       return Object.keys(value).every((key) => ['type', 'url', 'label'].includes(key)) &&
-        safeHttpsUrl(value.url, linkHosts) && boundedString(value.label, 200, 1);
+        (allowResearchLinks ? safeWebSourceUrl(value.url) : safeHttpsUrl(value.url, linkHosts)) &&
+        boundedString(value.label, 200, 1);
     case 'call-tool':
       return Object.keys(value).every((key) => ['type', 'tool'].includes(key)) &&
         typeof value.tool === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value.tool) &&
@@ -254,7 +299,7 @@ function validAction(value, registeredTools) {
 }
 
 function validSource(source) {
-  if (!isObject(source) || !['now', 'factory.tasks', 'factory.projects', 'usage'].includes(source.id) ||
+  if (!isObject(source) || !['now', 'factory.tasks', 'factory.projects', 'usage', 'web.research'].includes(source.id) ||
     !['complete', 'partial', 'unavailable'].includes(source.status) ||
     Object.keys(source).some((key) => !['id', 'status', 'updatedAt', 'reason', 'page'].includes(key))) return false;
   if (source.updatedAt !== undefined && (typeof source.updatedAt !== 'string' || Number.isNaN(Date.parse(source.updatedAt)))) return false;
@@ -273,7 +318,7 @@ function validSource(source) {
   return true;
 }
 
-function validData(renderer, data, trustedBlobHost) {
+function validData(renderer, data, trustedBlobHost, allowResearchLinks) {
   if (!isObject(data)) return false;
   switch (renderer) {
     case 'table':
@@ -296,7 +341,8 @@ function validData(renderer, data, trustedBlobHost) {
               Object.keys(detail).every((key) => ['label', 'value'].includes(key)) &&
               boundedString(detail.label, 100, 1) && boundedString(detail.value, 2_000)))) &&
           (item.action === undefined || (isObject(item.action) &&
-            ['open-route', 'open-link'].includes(item.action.type) && validAction(item.action))));
+            ['open-route', 'open-link'].includes(item.action.type) &&
+            validAction(item.action, undefined, allowResearchLinks))));
     case 'detail':
       return Object.keys(data).every((key) => key === 'fields') && Array.isArray(data.fields) &&
         data.fields.length <= 100 && data.fields.every((field) => isObject(field) &&
@@ -357,11 +403,52 @@ export function isGeneratedView(value, options = {}) {
   if (serialized === undefined || new TextEncoder().encode(serialized).byteLength > maxBytes ||
     !isObject(value) || Object.keys(value).some((key) =>
       !['version', 'title', 'renderer', 'source', 'data', 'actions'].includes(key))) return false;
+  const allowResearchLinks = value.source?.id === 'web.research';
   if (value.version !== generatedViewVersion || !generatedViewRenderers.includes(value.renderer) ||
+    (allowResearchLinks && value.renderer !== 'list') ||
     !boundedString(value.title, 200, 1) || !validSource(value.source) ||
-    !validData(value.renderer, value.data, options.trustedBlobHost) ||
+    !validData(value.renderer, value.data, options.trustedBlobHost, allowResearchLinks) ||
     (value.actions !== undefined && (!Array.isArray(value.actions) || value.actions.length > 10 ||
-      !value.actions.every((action) => validAction(action, options.registeredTools))))) return false;
+      !value.actions.every((action) => validAction(action, options.registeredTools, allowResearchLinks))))) return false;
+  return true;
+}
+
+export function isWebResearchResult(value) {
+  let serialized;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    return false;
+  }
+  if (serialized === undefined || new TextEncoder().encode(serialized).byteLength > maxBytes ||
+    !isObject(value) || Object.keys(value).some((key) => ![
+      'type', 'version', 'status', 'query', 'synthesis', 'retrievedAt', 'sources',
+      'unavailableSources', 'unsupportedClaims', 'reason', 'view',
+    ].includes(key)) ||
+    value.type !== 'web-research' || value.version !== 1 ||
+    !['complete', 'partial', 'unavailable'].includes(value.status) ||
+    !boundedString(value.query, 500, 1) || !boundedString(value.synthesis, 8_000) ||
+    typeof value.retrievedAt !== 'string' || Number.isNaN(Date.parse(value.retrievedAt)) ||
+    !Array.isArray(value.sources) || value.sources.length > 5 ||
+    !Array.isArray(value.unavailableSources) || value.unavailableSources.length > 5 ||
+    !Array.isArray(value.unsupportedClaims) || value.unsupportedClaims.length > 10 ||
+    (value.reason !== undefined && !boundedString(value.reason, 500, 1)) ||
+    !value.sources.every((source) => isObject(source) &&
+      Object.keys(source).every((key) => [
+        'title', 'url', 'retrievedAt', 'publicationDate', 'freshness', 'supportedText',
+      ].includes(key)) &&
+      boundedString(source.title, 200, 1) && safeWebSourceUrl(source.url) &&
+      typeof source.retrievedAt === 'string' && !Number.isNaN(Date.parse(source.retrievedAt)) &&
+      source.publicationDate === null && source.freshness === 'unknown' &&
+      Array.isArray(source.supportedText) && source.supportedText.length <= 10 &&
+      source.supportedText.every((text) => boundedString(text, 1_000, 1))) ||
+    !value.unavailableSources.every((source) => isObject(source) &&
+      Object.keys(source).every((key) => ['url', 'title', 'reason'].includes(key)) &&
+      safeWebSourceUrl(source.url) && boundedString(source.title, 200, 1) &&
+      boundedString(source.reason, 500, 1)) ||
+    !value.unsupportedClaims.every((claim) => boundedString(claim, 500, 1)) ||
+    !isGeneratedView(value.view) || value.view.source.id !== 'web.research' ||
+    value.view.source.status !== value.status) return false;
   return true;
 }
 
