@@ -249,13 +249,13 @@ describe('conversation routes', () => {
         stream: vi.fn(async function* () {
           const app = appRef.current;
           if (!app) throw new Error('Conversation app was not initialized');
-          const replay = await app.inject({
+          const toolResponse = await app.inject({
             method: 'POST',
             url: '/tools/get_status_summary',
             headers: { ...headers, 'x-jarvis-message-id': '42' },
             payload: {},
           });
-          yield (replay.json() as { confirmation: string }).confirmation;
+          yield (toolResponse.json() as { result: { summary: string } }).result.summary;
         }),
       };
       const recordCall = vi.fn(async () => {});
@@ -296,6 +296,7 @@ describe('conversation routes', () => {
       await vi.waitFor(() => expect(recordCall).toHaveBeenCalledOnce());
       expect(response.body).toContain('event: delta');
       expect(response.body).toContain('event: done');
+      expect(response.body).toContain('The Now feed shows 0 running tasks');
       expect(readNowFeed).toHaveBeenCalledOnce();
       expect(recordCall).toHaveBeenCalledWith(expect.objectContaining({
         messageId: '42',

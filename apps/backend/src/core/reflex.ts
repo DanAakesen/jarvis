@@ -45,12 +45,14 @@ export interface ReflexClassifier {
 export interface ReflexActionResult {
   readonly tool: string;
   readonly arguments: Readonly<Record<string, unknown>>;
+  readonly result: unknown;
   readonly outcome: ToolCallOutcome;
   readonly note: string;
 }
 
 export interface ReflexActionReplay {
   readonly tool: string;
+  readonly result: unknown;
   readonly outcome: ToolCallOutcome;
   readonly note: string;
 }
@@ -104,6 +106,7 @@ export function registerChatReflex(messageId: string): (result: ReflexActionResu
     entry.settled = true;
     entry.resolve(action ? {
       tool: action.tool,
+      result: action.result,
       outcome: action.outcome,
       note: action.note,
       argumentsFingerprint: fingerprintArguments(action.arguments),
@@ -121,7 +124,7 @@ export async function findChatReflexReplay(
   const action = await entry.result;
   if (!action || action.tool !== tool ||
       action.argumentsFingerprint !== fingerprintArguments(arguments_)) return null;
-  return { tool: action.tool, outcome: action.outcome, note: action.note };
+  return { tool: action.tool, result: action.result, outcome: action.outcome, note: action.note };
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -423,6 +426,7 @@ export async function executeReflexAction(
     return {
       tool: target.tool.name,
       arguments: target.arguments,
+      result,
       outcome: 'error',
       note: `Reflex action ${target.tool.name} may have completed, but its result could not be recorded. Check its status before retrying.`,
     };
@@ -436,6 +440,7 @@ export async function executeReflexAction(
   return {
     tool: target.tool.name,
     arguments: target.arguments,
+    result,
     outcome,
     note: `Reflex already did ${target.tool.name} (${outcome}): ${confirmation}`,
   };

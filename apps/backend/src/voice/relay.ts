@@ -481,6 +481,7 @@ function registerVoiceRoute(
               contradictedEntry.undoResult = {
                 tool: 'undo',
                 arguments: {},
+                result: { failure: 'Undo attempt failed.' },
                 outcome: 'error',
                 note: 'The undo attempt failed; the action may still be in effect.',
               };

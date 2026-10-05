@@ -68,11 +68,16 @@ describe('Jev reflex classifier', () => {
     finish({
       tool: 'pause_task',
       arguments: { taskId: '12' },
+      result: { taskId: '12', state: 'Paused' },
       outcome: 'ok',
       note: 'Reflex already did pause_task (ok): Done.',
     });
 
-    await expect(sameAction).resolves.toMatchObject({ tool: 'pause_task', outcome: 'ok' });
+    await expect(sameAction).resolves.toMatchObject({
+      tool: 'pause_task',
+      result: { taskId: '12', state: 'Paused' },
+      outcome: 'ok',
+    });
     await expect(otherAction).resolves.toBeNull();
   });
 

@@ -103,7 +103,7 @@ export const coreModule: BackendModule = {
             return {
               tool: tool.name,
               outcome: reflex.outcome,
-              result: { reflexAlreadyExecuted: true, confirmation: reflex.note },
+              result: reflex.result,
               confirmation: reflex.note,
             };
           }

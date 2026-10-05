@@ -796,9 +796,10 @@ their combined classification budget is 800 ms and late results are discarded.
 An accepted action still passes the existing confirmation/safety checks, is
 written to the tool-call audit, and publishes the existing tool activity events.
 The hosted agent reuses a matching same-turn reflex result instead of executing
-the same tool arguments twice; a 120-second in-process record retains only the
-tool name, outcome, confirmation and an argument fingerprint. Disconnect
-cancellation reaches both streams. Voice relay partial handling is unchanged.
+the same tool arguments twice; a 120-second in-process record retains the
+bounded tool result, confirmation and an argument fingerprint, but is never
+logged or persisted. Disconnect cancellation reaches both streams. Voice relay
+partial handling is unchanged.
 
 The hosted agent loads the 60-second cached tool catalogue and live task context
 concurrently, and verifies the delegated profile and stored conversation history
