@@ -1,13 +1,15 @@
 # Aggregate CI for the monorepo (P0-10). Runs every component check on each
-# PR, on pushes to main, and on workflow_dispatch for manual verification.
+# ready (non-draft) PR and on workflow_dispatch. Draft PRs and pushes to main are
+# skipped to save Actions minutes (L83): a PR merges only when it is up to date
+# with main and green, so the merged tree was already tested. Copilot PR ready
+# dispatches this workflow after marking a PR ready.
 # "CI result" is the single check to require on main before merging a PR.
 # Component workflows are reusable (workflow_call) so each check runs once.
 name: CI
 
 on:
   pull_request:
-  push:
-    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
@@ -20,30 +22,37 @@ concurrency:
 jobs:
   web:
     name: Web
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     uses: ./.github/workflows/web-ci.yml
 
   backend:
     name: Backend
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     uses: ./.github/workflows/backend-ci.yml
 
   database:
     name: Database
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     uses: ./.github/workflows/database-ci.yml
 
   foundry:
     name: Foundry
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     uses: ./.github/workflows/foundry-contract.yml
 
   runner:
     name: Runner
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     uses: ./.github/workflows/runner-ci.yml
 
   jarvis-agent:
     name: Jarvis agent
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     uses: ./.github/workflows/jarvis-agent-ci.yml
 
   python:
     name: Python lint, test and build
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -60,7 +69,7 @@ jobs:
 
   result:
     name: CI result
-    if: always()
+    if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     needs: [web, backend, database, foundry, runner, jarvis-agent, python]
     runs-on: ubuntu-latest
     timeout-minutes: 5

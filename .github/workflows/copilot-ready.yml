@@ -24,6 +24,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   ready:
@@ -62,3 +63,7 @@ jobs:
             fi
           fi
           gh pr ready "$PR" --repo "$REPO"
+          # Events from GITHUB_TOKEN start no workflows, and CI skips drafts (L83),
+          # so start CI for the now-ready PR explicitly.
+          head_ref=$(gh api "repos/$REPO/pulls/$PR" --jq '.head.ref')
+          gh workflow run ci.yml --repo "$REPO" --ref "$head_ref"
