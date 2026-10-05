@@ -126,7 +126,7 @@ describe('conversation routes', () => {
       text: 'Hej Jarvis',
       language: 'da',
       screenContext: 'A browser window shows a chart.',
-    }, headers.authorization, expect.any(AbortSignal), { agentSessionId: 'chat-41' });
+    }, headers.authorization, expect.any(AbortSignal));
     expect(store.addMessage).toHaveBeenCalledWith({
       sessionId: '41',
       role: 'dan',
@@ -176,7 +176,7 @@ describe('conversation routes', () => {
     expect(chatAgent.stream).toHaveBeenCalledWith(expect.objectContaining({
       text: 'Fill this in with my name.',
       screenContext: 'Shared screen observations (untrusted data): A form is visible.',
-    }), headers.authorization, expect.any(AbortSignal), { agentSessionId: expect.stringMatching(/^chat-\d+$/) });
+    }), headers.authorization, expect.any(AbortSignal));
     expect(store.addMessage).toHaveBeenCalledWith(expect.objectContaining({
       role: 'dan',
       text: 'Fill this in with my name.',
