@@ -11,10 +11,11 @@ prototype's fake tools are gone: every tool comes from the backend's tool regist
 | `voice_runtime.py`, `response_coordinator.py`, `state.py`, `response_telemetry.py` | Voice turn handling, as in the prototype, including model-free test commands such as `/help` |
 | `model_client.py` | Per-session configured model and reasoning effort for the Responses API |
 | `jarvis_tools.py` | Instructions and `BackendToolClient` for the backend tool registry |
+| `chat_runtime.py`, `chat_telemetry.py` | Verified chat history, incremental SSE and content-free stage timings |
 
 ## Backend tools
 
-Before acknowledging a new hosted session, the agent loads its effective Jarvis
+Before acknowledging a new hosted voice session, the agent loads its effective Jarvis
 model and reasoning effort from `GET /agent/settings`. It keeps that snapshot for
 the session, so later settings changes affect only new sessions. If the settings
 cannot be loaded, it logs a warning and uses the defaults (`gpt-5.6-luna`,
@@ -48,6 +49,16 @@ the per-turn `current_message_id` context used for every backend tool call.
 stored message and supplies a bounded history window. The backend authenticates
 to Foundry with its managed identity; the delegated user token remains in the
 server-to-agent payload and is never sent to the browser or logged.
+
+Chat loads current settings, catalogue and live context concurrently after
+authorization; settings/context are not cached. The catalogue cache is shared
+by turns in the same container for 60 seconds. Memory search and backend
+embeddings are on-demand tools, not chat preparation. Responses text deltas are
+forwarded immediately, with an initial SSE comment to flush the stream; cancelling
+chat closes the model stream and joins outstanding preparation reads.
+`chat.latency` logs/spans include stage durations and outcomes, never content or
+exception messages. See [P7-23 evidence](../../docs/decisions.md#p7-23-latency-evidence)
+for the outstanding deployed acceptance check.
 
 ## Commands
 
