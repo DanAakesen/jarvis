@@ -258,7 +258,7 @@ describe('Jarvis agent identity on the tool routes', () => {
     const listed = await app.inject({ url: '/tools', headers: { authorization } });
     expect(listed.statusCode).toBe(200);
     expect(listed.json().map(({ name }: { name: string }) => name)).toEqual([
-      'set_jarvis_model', 'set_away_mode', 'extension_echo',
+      ...coreModule.tools.map(({ name }) => name), 'extension_echo',
     ]);
 
     const called = await app.inject({

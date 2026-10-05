@@ -131,17 +131,19 @@ Dan never fills in a project form. He gives Jarvis, by voice or chat, a project 
 
 ### Settings
 
-Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered.
+Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered. Appearance and the optional voice-start window preference are persisted; generated views and window arrangement remain temporary.
 
 Dan can also change Jarvis's model or reasoning by chat or voice for the next session, and change the agent or verified model options on a Ready coding task. Running-task model changes are refused with a reason; they never alter an active turn.
 
 | Area | Setting | Default |
 | --- | --- | --- |
 | Jarvis | Model and reasoning effort | `gpt-5.6-luna`, reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
+| Appearance | Light, dark, or system mode; approved theme tokens | Light |
 | Personality | Tone, response style, and custom instructions (up to 2,000 characters) | British butler, concise, no custom instructions |
 | Voice | Speech to text | MAI Transcribe |
 | Voice | Voice per language | English: Ryan HD (British butler persona, addresses Dan as "sir"); Danish: Harper (MAI-Voice-2) |
 | Voice | Default language | Danish |
+| Voice | Minimise all windows when starting voice | Off |
 | Global | Screen inspections per day | 300 (configurable from 1 to 300) |
 | Codex | Model and reasoning effort | Codex default |
 | Copilot | Model | Copilot default |
@@ -264,8 +266,9 @@ the last-release field is explicitly unavailable rather than inferred.
 | --- | --- |
 | Appearance: light or dark mode across all signed-in pages | Change; persist across visits |
 | Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
+| Appearance: light/dark/system and approved theme tokens | Change (persisted across visits) |
 | Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset (applies to new sessions) |
-| Voice: speech-to-text model, voice per language, default language | Change; play a voice sample |
+| Voice: speech-to-text model, voice per language, default language, minimise windows on voice start (off by default) | Change; play a voice sample |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
 | New projects: owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | Change (applies to projects Jarvis registers) |

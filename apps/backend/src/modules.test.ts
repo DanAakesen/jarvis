@@ -321,16 +321,14 @@ describe('backend module composition', () => {
     expect(Object.isFrozen(first.jarvisTools.get('echo')?.inputSchema.properties)).toBe(true);
     expect(Object.isFrozen(first.jarvisTools.list())).toBe(true);
     expect(second.jarvisTools.list().map(({ name }) => name)).toEqual([
-      ...coreModule.tools.map(({ name }) => name),
-      ...factoryModule.tools.map(({ name }) => name),
+      ...coreModule.tools.map(({ name }) => name), ...factoryModule.tools.map(({ name }) => name),
     ]);
   });
 
   it('keeps unimplemented APIs unavailable and reports missing task and settings storage', async () => {
     const app = fixture([]);
     expect(app.jarvisTools.list().map(({ name }) => name)).toEqual([
-      ...coreModule.tools.map(({ name }) => name),
-      ...factoryModule.tools.map(({ name }) => name),
+      ...coreModule.tools.map(({ name }) => name), ...factoryModule.tools.map(({ name }) => name),
     ]);
     expect((await app.inject({ url: '/factory/projects', headers })).statusCode).toBe(503);
     for (const url of ['/activity', '/events']) {

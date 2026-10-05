@@ -137,7 +137,7 @@ Status as of 4 October 2026.
 | Agent-directed workspace views | Ask Jarvis to create, update, show, close, minimise, restore, focus, move and resize views, and change the layout or contextual panel | Both | Main page and voice workspace | Planned | P8-15 |
 | Generated data views | Inspect accessible information in temporary, typed views using registered renderers | Screen | Workspace | Planned | P8-14 |
 | Runtime activity | See Jarvis's actual listening, thinking, tool-call and speaking state | Both | Main page and voice workspace | Partial: client-reported chat/voice work is visible; tool-call activity awaits P8-16 | P8-16, P8-20 |
-| Persisted UI preferences and themes | Change light/dark theme values and choose whether windows minimise when voice starts | Screen | Settings and shell | Planned | P8-17 |
+| Persisted UI preferences and themes | Change light/dark/system appearance, approved theme tokens, and whether windows minimise when voice starts (off by default) | Screen | Settings and shell | In progress | P8-17 |
 | Generated-view and theme capabilities | Use the initial safe renderer/action and adjustable theme-token allowlists | — | UI planning | Decision recorded; implementation remains with P8-14/P8-15/P8-17 | P8-18 |
 
 ### Enabling-logic coverage

@@ -16,6 +16,7 @@ interface Settings {
     englishVoice: string;
     danishVoice: string;
     defaultLanguage: 'da' | 'en';
+    minimizeWindowsOnVoiceStart: boolean;
   };
   codex: { model: string; reasoning: string };
   copilot: { model: string };
@@ -142,6 +143,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     typeof settings.voice.speechToTextModel === 'string' && typeof settings.voice.englishModel === 'string' &&
     typeof settings.voice.englishVoice === 'string' && typeof settings.voice.danishVoice === 'string' &&
     (settings.voice.defaultLanguage === 'da' || settings.voice.defaultLanguage === 'en') &&
+    typeof settings.voice.minimizeWindowsOnVoiceStart === 'boolean' &&
     typeof settings.codex.model === 'string' && typeof settings.codex.reasoning === 'string' &&
     typeof settings.copilot.model === 'string' && typeof settings.global.maxParallelTasks === 'number' &&
     Number.isSafeInteger(settings.global.maxParallelTasks) &&
@@ -499,6 +501,17 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
                 options={options.languages} disabled={saving}
                 onChange={(value) => update('voice', 'defaultLanguage', value as 'da' | 'en')} />
             </div>
+            <label className="choice" htmlFor="minimize-windows-on-voice-start">
+              <input
+                id="minimize-windows-on-voice-start"
+                type="checkbox"
+                checked={settings.voice.minimizeWindowsOnVoiceStart}
+                disabled={saving}
+                onChange={(event) => update('voice', 'minimizeWindowsOnVoiceStart', event.target.checked)}
+              />
+              Minimise all windows when starting voice
+            </label>
+            <p className="settings-explanation">Off by default. When enabled, open windows are minimised for new voice sessions.</p>
             <p className="settings-explanation" id="voice-sample-help">Voice samples will be available when voice playback is connected.</p>
             <div className="settings-actions">
               <button className="secondary-button" type="button" disabled aria-describedby="voice-sample-help">Play English sample</button>

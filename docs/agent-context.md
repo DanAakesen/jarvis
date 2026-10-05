@@ -227,6 +227,7 @@ Verified in Codex cloud for P0-02:
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
+| Focused P8-17 settings/theme checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Focused P7-08 camera, shell, chat and voice checks | `npm test --workspace @jarvis/web -- --run src/camera-capture.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/App.test.tsx src/voice-client.test.tsx`; `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/vision/screen.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py` |
@@ -257,6 +258,15 @@ Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
 returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
 P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised.
+P8-17 was inspected at 390 and 1280 px using a scratch-only signed-in auth stub
+and mock `/settings` and `/database/status` endpoints. The minimise-windows
+toggle was off initially, saved by PATCH, and still on after reload; neither
+viewport overflowed and the browser reported no errors. This verifies the web
+form against mocks, not live Entra, backend, or SQL. The P8-13 theme controls
+are not present here, so theme UI persistence and applying a Jarvis tool result
+to an already-open shell remain unverified.
+The P8-17 SQL Server integration suite passed in Database CI run `37233600074`;
+running it locally still requires the isolated loopback SQL Server configuration.
 P1-12 was inspected at 390 and 1440 px with mocked sleep-status, scale, refusal,
 and failure responses; sleep/wake, refusal, retry, and the Settings link worked
 without horizontal overflow or browser errors. Mocks do not verify ARM scaling.

@@ -1,9 +1,9 @@
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
-import { defaultSettings, flattenSettings, type SettingsPatch, type SettingsStore } from '../core/settings.js';
+import { flattenSettings, settingsStoreKeys, type SettingsPatch, type SettingsStore } from '../core/settings.js';
 
 export function createSettingsStore(pool: sql.ConnectionPool): SettingsStore {
-  const keys = flattenSettings(defaultSettings).map(({ key }) => key);
+  const keys = settingsStoreKeys;
   const keyParameters = keys.map((_key, index) => `@key${index}`);
   return {
     async read() {
