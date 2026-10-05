@@ -92,6 +92,7 @@ describe('SQL conversation store', () => {
         language: 'da',
         role: 'jarvis',
         text: 'I started it.',
+        interrupted: false,
         toolCalls: [{ tool: 'factory_create_task', outcome: 'ok', taskId }],
       }],
       nextCursor: jarvis.id,

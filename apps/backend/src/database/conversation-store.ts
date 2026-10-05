@@ -190,10 +190,11 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
             role nvarchar(16) NOT NULL,
             text nvarchar(max) NOT NULL,
             model nvarchar(100) NULL,
+            interrupted bit NOT NULL,
             voice_minutes decimal(19,6) NULL,
             at datetime2(7) NOT NULL
           );
-          INSERT INTO @history (id, session_id, channel, language, role, text, model, voice_minutes, at)
+          INSERT INTO @history (id, session_id, channel, language, role, text, model, interrupted, voice_minutes, at)
           SELECT TOP (@take) m.id, m.jarvis_session_id, s.channel, COALESCE(m.language, s.language) AS language,
             m.role, m.text, m.model, m.interrupted,
             voice_usage.voice_minutes, m.at
