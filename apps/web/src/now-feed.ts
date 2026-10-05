@@ -5,6 +5,7 @@ import {
   isWorkspaceCommand,
   type JarvisActivityEvent,
   type WorkspaceCommand,
+  type WorkspaceSnapshot,
 } from '@jarvis/contracts';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -162,6 +163,25 @@ export async function resolveNowConfirmation(
     await response.body?.cancel().catch(() => {});
     throw new Error('Away mode is on. Confirm this request in Teams.');
   }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    throw responseError(response.status);
+  }
+}
+
+export async function publishWorkspaceSnapshot(
+  backendUrl: string,
+  sessionId: string,
+  snapshot: WorkspaceSnapshot,
+  getAccessToken: () => Promise<string>,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await authorizedRequest(backendUrl, '/now/workspace/state', getAccessToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId, ...snapshot }),
+    signal,
+  });
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});
     throw responseError(response.status);

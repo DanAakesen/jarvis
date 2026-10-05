@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react';
-import { isWorkspaceCommand, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
+import { isWorkspaceCommand, type GeneratedView, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 export type { WorkspaceCommand } from '@jarvis/contracts';
 
@@ -22,6 +22,7 @@ export interface WorkspaceController {
   dispatch: (command: WorkspaceCommand, trustedBlobHost?: string) => boolean;
   minimiseAll: () => void;
   hasVisibleViews: () => boolean;
+  snapshot?: WorkspaceSnapshot;
 }
 
 type Arrangement = 'tiled' | 'layered';
@@ -71,7 +72,8 @@ function defaultGeometry(index: number): Geometry {
 export const Workspace = forwardRef<WorkspaceController, {
   views: readonly WorkspaceView[];
   onVisibleViewsChange?: (visible: boolean) => void;
-}>(function Workspace({ views, onVisibleViewsChange }, ref) {
+  onOpenWindowsChange?: (windows: WorkspaceSnapshot['windows']) => void;
+}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange }, ref) {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
   const workspaceViews = useMemo(() => [...views, ...agentViews], [agentViews, views]);
@@ -156,6 +158,10 @@ export const Workspace = forwardRef<WorkspaceController, {
   const minimizedViews = useMemo(() => openViews.filter((view) => minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
   const visibleViews = useMemo(() => openViews.filter((view) => !minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
   const foreground = visibleViews.find((view) => view.id === foregroundViewId) ?? visibleViews[0];
+
+  useEffect(() => {
+    onOpenWindowsChange?.(openViews.slice(0, 32).map(({ id, title }) => ({ viewId: id, title })));
+  }, [onOpenWindowsChange, openViews]);
 
   useEffect(() => {
     onVisibleViewsChange?.(visibleViews.length > 0);
@@ -385,6 +391,7 @@ export const Workspace = forwardRef<WorkspaceController, {
           ...value,
           [command.viewId]: {
             ...(value[command.viewId] ?? current), x, y, width: command.width, height: command.height,
+            columns: command.width > 0.72 ? 2 : 1, rows: command.height > 0.72 ? 2 : 1,
           },
         }));
         setAnnouncement(`${workspaceViews.find((view) => view.id === command.viewId)?.title} resized.`);

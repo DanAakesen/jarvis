@@ -98,6 +98,11 @@ export type GeneratedView =
   })
   | (GeneratedViewBase & { renderer: 'image'; data: { images: { url: string; alt: string }[] } });
 
+export interface WorkspaceSnapshot {
+  windows: readonly { viewId: string; title: string }[];
+  contextPanelOpen: boolean;
+}
+
 export type WorkspaceCommand =
   | { commandId: string; operation: 'create' | 'update'; viewId: string; view: GeneratedView }
   | { commandId: string; operation: 'show' | 'close' | 'minimise' | 'restore' | 'focus'; viewId: string }

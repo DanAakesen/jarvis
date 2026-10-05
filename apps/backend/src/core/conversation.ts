@@ -11,6 +11,7 @@ import {
   executeReflexAction,
   registerChatReflex,
   reflexTargets,
+  logReflexDecision,
   type ReflexClassifier,
   type ReflexActionResult,
   type ReflexTarget,
@@ -126,6 +127,10 @@ async function runChatReflex(
   const budgetController = new AbortController();
   const timeout = setTimeout(() => budgetController.abort(), chatReflexBudgetMs);
   const classificationSignal = AbortSignal.any([signal, budgetController.signal]);
+  const startedAt = performance.now();
+  let attempted = false;
+  let classification: Awaited<ReturnType<ReflexClassifier['classify']>> = null;
+  let action: ReflexActionResult | null = null;
   try {
     const targetsStartedAt = performance.now();
     let targets: ReflexTarget[];
@@ -139,7 +144,7 @@ async function runChatReflex(
     if (classificationSignal.aborted) return null;
 
     const jevStartedAt = performance.now();
-    let classification: Awaited<ReturnType<ReflexClassifier['classify']>>;
+    attempted = true;
     try {
       const result = await raceWithAbort(
         classifier.classify(text, language, targets, classificationSignal),
@@ -151,11 +156,13 @@ async function runChatReflex(
       logChatLatency(request, 'jev', jevStartedAt);
     }
     if (classificationSignal.aborted) return null;
-    return await executeReflexAction(classification, request, messageId, signal);
+    action = await executeReflexAction(classification, request, messageId, signal);
+    return action;
   } catch {
     // Reflex is best effort; the agent stream owns the chat response.
     return null;
   } finally {
+    if (attempted) logReflexDecision(request, classification, 'chat', startedAt, classificationSignal, action);
     clearTimeout(timeout);
   }
 }

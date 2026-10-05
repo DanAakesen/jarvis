@@ -5,6 +5,7 @@ import { coreModule } from './index.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
 import type { WorkspaceCommand } from '@jarvis/contracts';
+import { executeReflexAction, reflexTargets, registerChatReflex } from './reflex.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const ownerId = config.auth.ownerObjectId;
@@ -40,6 +41,68 @@ function fixture() {
 }
 
 describe('workspace command delivery', () => {
+  it('accepts bounded snapshots only from the active owner session and clears them on reconnect', async () => {
+    const { app, broker } = fixture();
+    const connection = broker.connect(ownerId, () => true);
+    const payload = {
+      sessionId: connection.sessionId,
+      windows: [{ viewId: 'tasks', title: 'Tasks' }],
+      contextPanelOpen: false,
+    };
+    const publish = (body = payload, headers = userHeaders) => app.inject({
+      method: 'POST', url: '/now/workspace/state', headers, payload: body,
+    });
+    expect((await publish()).statusCode).toBe(204);
+    expect(broker.snapshot(ownerId)?.windows).toEqual(payload.windows);
+    expect((await publish(payload, agentHeaders)).statusCode).toBe(403);
+    const create = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: { ...userHeaders, 'x-jarvis-message-id': '101' },
+      payload: { commandId: 'owner-create', operation: 'create', viewId: 'research', view },
+    });
+    expect(create.json()).toMatchObject({ outcome: 'refused' });
+    expect((await publish({ ...payload, windows: Array.from({ length: 33 }, () => payload.windows[0]!) })).statusCode).toBe(400);
+    const current = broker.connect(ownerId, () => true);
+    expect(broker.snapshot(ownerId)).toBeUndefined();
+    expect((await publish()).statusCode).toBe(409);
+    expect((await publish({ ...payload, sessionId: current.sessionId, windows: [] })).statusCode).toBe(204);
+    current.close();
+    expect(broker.snapshot(ownerId)).toBeUndefined();
+  });
+
+  it.each(['final', 'partial'] as const)('executes %s workspace reflexes and replays the agent action despite a new command ID', async (mode) => {
+    const { app, broker, records } = fixture();
+    const delivered: WorkspaceCommand[] = [];
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        const command = (data as { command: WorkspaceCommand }).command;
+        delivered.push(command);
+        broker.acknowledge(ownerId, connection.sessionId, command.commandId, true);
+      }
+      return true;
+    });
+    broker.updateSnapshot(ownerId, connection.sessionId, { windows: [], contextPanelOpen: false });
+    app.post('/test/reflex', async (request) => {
+      const target = (await reflexTargets(request)).find(({ arguments: args }) => args.arrangement === 'tiled')!;
+      const finish = registerChatReflex('101');
+      const result = await executeReflexAction({
+        addressed: true, intent: 'action', confidence: 0.99, needsConfirmation: false,
+        completeCommand: true, target,
+      }, request, '101', new AbortController().signal, mode);
+      finish(result);
+      return result;
+    });
+    const reflex = await app.inject({ method: 'POST', url: '/test/reflex', headers: userHeaders });
+    expect(reflex.json()).toMatchObject({ outcome: 'ok', result: { applied: true, operation: 'layout' } });
+    const agent = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+      payload: { commandId: 'agent-different-id', operation: 'layout', arrangement: 'tiled' },
+    });
+    expect(agent.json()).toMatchObject({ outcome: 'ok', confirmation: expect.stringContaining('Reflex already did') });
+    expect(delivered).toHaveLength(1);
+    expect(records).toHaveLength(1);
+    connection.close();
+  });
+
   it('refuses disconnected workspaces and rejects invalid command schemas at the tool boundary', async () => {
     const { app, records } = fixture();
     const disconnected = await app.inject({

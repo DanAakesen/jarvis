@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { isWorkspaceCommand, workspaceCommandSchema, type WorkspaceCommand } from '@jarvis/contracts';
+import { isWorkspaceCommand, workspaceCommandSchema, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
@@ -15,6 +15,7 @@ type WorkspaceEventSender = (event: WorkspaceEvent, data: unknown) => boolean;
 interface WorkspaceConnection {
   readonly sessionId: string;
   readonly send: WorkspaceEventSender;
+  snapshot?: WorkspaceSnapshot;
 }
 
 interface CommandRecord {
@@ -58,6 +59,17 @@ function fingerprint(command: WorkspaceCommand): string {
 export class WorkspaceCommandBroker {
   private readonly connections = new Map<string, WorkspaceConnection>();
   private readonly records = new Map<string, Map<string, CommandRecord>>();
+
+  updateSnapshot(ownerId: string, sessionId: string, snapshot: WorkspaceSnapshot): boolean {
+    const connection = this.connections.get(ownerId);
+    if (connection?.sessionId !== sessionId) return false;
+    connection.snapshot = snapshot;
+    return true;
+  }
+
+  snapshot(ownerId: string): WorkspaceSnapshot | undefined {
+    return this.connections.get(ownerId)?.snapshot;
+  }
 
   connect(ownerId: string, send: WorkspaceEventSender): { sessionId: string; close: () => void } {
     const prior = this.connections.get(ownerId);
@@ -209,6 +221,38 @@ export class WorkspaceCommandBroker {
 }
 
 export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
+  app.post<{ Body: WorkspaceSnapshot & { sessionId: string } }>('/now/workspace/state', {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string', format: 'uuid' },
+          windows: {
+            type: 'array', maxItems: 32,
+            items: {
+              type: 'object',
+              properties: {
+                viewId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$' },
+                title: { type: 'string', minLength: 1, maxLength: 200 },
+              },
+              required: ['viewId', 'title'], additionalProperties: false,
+            },
+          },
+          contextPanelOpen: { type: 'boolean' },
+        },
+        required: ['sessionId', 'windows', 'contextPanelOpen'], additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    const { sessionId, windows, contextPanelOpen } = request.body;
+    if (!app.workspaceCommands.updateSnapshot(request.principal.objectId, sessionId, { windows, contextPanelOpen })) {
+      return reply.code(409).send({ error: 'Workspace connection is stale' });
+    }
+    return reply.code(204).send();
+  });
   app.post<{
     Params: { commandId: string };
     Body: { sessionId: string; applied: boolean; outcome?: WorkspaceCommandOutcome; reason?: string };
@@ -254,13 +298,24 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
   });
 }
 
+export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown>>): boolean {
+  return ['show', 'focus', 'minimise', 'restore', 'close', 'resize'].includes(String(args.operation)) ||
+    args.operation === 'layout' ||
+    args.operation === 'context-panel' && (args.action === 'toggle' || args.action === 'close');
+}
+
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
   description: 'Create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary view in Dan’s active workspace, or change its context panel.',
   inputSchema: workspaceCommandSchema,
   sensitive: true,
   async execute(input, request, signal) {
-    if (!request.agentPrincipal) throw new ToolRefusal('Only Jarvis can direct workspace commands.');
+    if (!request.agentPrincipal && (!request.principal ||
+        request.principal.objectId.toLowerCase() !== request.server.ownerObjectId.toLowerCase() ||
+        typeof input !== 'object' || input === null ||
+        !isWorkspaceReflexOperation(input as Record<string, unknown>))) {
+      throw new ToolRefusal('Only Jarvis can create or update views; the workspace owner can control existing windows.');
+    }
     if (!isWorkspaceCommand(input, generatedViewValidationOptions(request.server))) {
       throw new ToolRefusal('The workspace command or generated view is invalid.');
     }

@@ -16,6 +16,10 @@ import {
   executeReflexAction,
   reflexTargets,
   undoPartialReflexAction,
+  workspaceReflexSafe,
+  logReflexDecision,
+  reflexActionSignature,
+  type ReflexClassification,
   type ReflexActionResult,
   type ReflexTarget,
 } from '../core/reflex.js';
@@ -63,10 +67,11 @@ interface PartialTranscript {
 }
 
 function actionSignature(target: ReflexTarget): string {
-  return `${target.tool.name}:${JSON.stringify(target.arguments)}`;
+  return reflexActionSignature(target);
 }
 
 function partialSafeTarget(target: ReflexTarget): boolean {
+  if (workspaceReflexSafe(target)) return true;
   if (target.tool.name === 'pause_task') return target.tool.reflexSafe === true;
   if (target.tool.name !== 'pc_open') return false;
   if (target.arguments.target === 'app' && target.arguments.value === 'edge') return true;
@@ -108,6 +113,7 @@ function browserUrlTargets(request: Parameters<typeof reflexTargets>[0], text: s
 }
 
 function reflexSummary(target: ReflexTarget, outcome: ReflexActionResult['outcome']): string {
+  if (target.tool.name === 'workspace_command') return `${target.description ?? 'workspace action'} (${outcome})`;
   if (target.tool.name === 'pc_open' && target.arguments.target === 'url' &&
       typeof target.arguments.value === 'string') {
     try {
@@ -425,12 +431,17 @@ function registerVoiceRoute(
       transcriptQueue = transcriptQueue.then(async () => {
         if (!app.reflexClassifier || controller.signal.aborted ||
             reflexLedger.get(itemId)?.length === MAX_REFLEX_ACTIONS_PER_TURN) return;
+        const startedAt = performance.now();
+        let classification: ReflexClassification | null = null;
+        let action: ReflexActionResult | null = null;
+        let reason: string | undefined;
+        try {
         const ledger = reflexLedger.get(itemId) ?? [];
         const targets = [
           ...await reflexTargets(request),
           ...browserUrlTargets(request, text),
         ];
-        const classification = await app.reflexClassifier.classify(
+        classification = await app.reflexClassifier.classify(
           text,
           language,
           targets,
@@ -445,11 +456,18 @@ function registerVoiceRoute(
           },
         );
         const target = classification?.target;
-        if (!classification?.completeCommand || !target || !partialSafeTarget(target)) return;
+        if (!classification?.completeCommand) {
+          if (classification) reason = 'incomplete_command';
+          return;
+        }
+        if (!target || !partialSafeTarget(target)) return;
         const signature = actionSignature(target);
-        if (ledger.some((entry) => entry.signature === signature)) return;
+        if (ledger.some((entry) => entry.signature === signature)) {
+          reason = 'already_executed';
+          return;
+        }
         const message = await savePartialMessage(itemId, text.trim());
-        const action = await executeReflexAction(classification, request, message.id, controller.signal, 'partial');
+        action = await executeReflexAction(classification, request, message.id, controller.signal, 'partial');
         if (!action) return;
         const entry: VoiceReflexLedgerEntry = {
           id: `action-${ledger.length + 1}`,
@@ -471,6 +489,9 @@ function registerVoiceRoute(
               content: [{ type: 'input_text', text: `Reflex already did: ${reflexSummary(target, action.outcome)}. ${action.note}` }],
             },
           });
+        }
+        } finally {
+          logReflexDecision(request, classification, 'voice-partial', startedAt, controller.signal, action, reason);
         }
       }).catch(() => {
         if (!controller.signal.aborted) request.log.warn('voice.partial_reflex_failed');
@@ -645,13 +666,18 @@ function registerVoiceRoute(
       finalReflexPending = true;
       reflexPending = true;
       const sharedContextWait = sharedBrowserIntent(text) ? waitForSharedScreenContext(itemId) : undefined;
+      const startedAt = performance.now();
+      let attempted = false;
+      let classification: ReflexClassification | null = null;
+      let finalAction: ReflexActionResult | null = null;
+      let reason: string | undefined;
       try {
         await transcriptQueue;
         const message = savedUserMessages.get(itemId);
         const ledger = reflexLedger.get(itemId) ?? [];
-        let finalAction: ReflexActionResult | null = null;
         if (message && app.reflexClassifier) {
-          const classification = await app.reflexClassifier.classify(
+          attempted = true;
+          classification = await app.reflexClassifier.classify(
             text,
             language,
             [
@@ -703,6 +729,8 @@ function registerVoiceRoute(
               controller.signal,
               target?.tool.name === 'pc_open' ? 'partial' : 'final',
             );
+          } else {
+            reason = sharedContextWait ? 'shared_context_required' : 'already_executed';
           }
         }
         if (controller.signal.aborted || endRequested) return;
@@ -751,6 +779,7 @@ function registerVoiceRoute(
       } catch {
         if (!controller.signal.aborted && !endRequested && english) sendUpstream({ type: 'response.create' });
       } finally {
+        if (attempted) logReflexDecision(request, classification, 'voice-final', startedAt, controller.signal, finalAction, reason);
         finalReflexPending = false;
         reflexPending = pendingPartialReflex > 0;
         statusAnnouncer?.flush();

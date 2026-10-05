@@ -117,6 +117,29 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   The renderers use fixed React elements; generated HTML, JavaScript and CSS
   never execute. Offline route/controller tests cover the flow; live
   Entra/Foundry delivery remains unverified.
+- P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
+  and IDs, including minimised windows, plus context-panel visibility) through
+  owner-authenticated `POST /now/workspace/state`. The broker accepts only its
+  active `/now/events` session and drops the snapshot on disconnect/reconnect;
+  no view content or workspace state is persisted. Jev selects fixed
+  `workspace_command` targets for show/focus/minimise/restore/close, a large
+  resize, tiled/layered layout and context-panel visibility. Opening the panel
+  reuses the existing toggle only when the snapshot says it is closed.
+  Creation/update and new generated panel content remain agent-only.
+  Workspace operations are safe for stable voice partials as well as chat and
+  finals, using the existing owner authentication, validation, audit and
+  acknowledgement path. Resize also updates tiled spans so enlargement is
+  visible in either arrangement. With a workspace snapshot available, running
+  task discovery is capped at 150 ms so SQL cannot consume the chat reflex's
+  entire 800 ms classification budget. Chat replay and the voice ledger compare
+  semantic arguments without the workspace delivery ID; the agent receives the
+  recorded outcome/note rather than repeating the command.
+  Every attempted chat/voice classification emits an allowlisted
+  `reflex.decision`: source, addressed, intent, tool (or `none`), confidence
+  bucket, completeCommand, executed, bounded reason and latencyMs (0–600,000).
+  Transcripts, titles, view IDs, arguments and results are excluded. Offline
+  tests cover early voice execution and duplicate final decisions; live Jev
+  network latency and the under-1.5-second chat acceptance remain unverified.
 - P8-07's lifecycle remains in memory: closing a generated view removes only
   its temporary client entry, while closing an existing view changes only its
   workspace visibility. Neither action modifies conversation or source records.

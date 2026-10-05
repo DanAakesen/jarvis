@@ -506,6 +506,8 @@ wireframes remain structural references only.
 
 ## Temporary workspace composition (P8-06)
 
+P7-27 reuses these controls and states for Jev-directed chat/voice commands, without new chrome or styling. “Make the window bigger” uses a bounded large resize in layered mode and expands the existing row/column spans in tiled mode; command application never waits for animation.
+
 The main workspace accepts an in-memory set of typed views. Desktop opens in a
 tiled arrangement and can switch to overlapping layers; using a layered window
 raises it, with explicit order controls as a keyboard alternative. Move and resize

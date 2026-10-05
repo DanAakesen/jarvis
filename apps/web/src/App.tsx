@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import type { JarvisActivityEvent, WorkspaceCommand } from '@jarvis/contracts';
+import type { JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
@@ -132,10 +132,15 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const navigationToggle = useRef<HTMLButtonElement>(null);
   const workspaceController = useRef<WorkspaceController>(null);
   const contextPanel = useContextPanel();
+  const [openWindows, setOpenWindows] = useState<WorkspaceSnapshot['windows']>([]);
+  const onOpenWindowsChange = useCallback((windows: WorkspaceSnapshot['windows']) => {
+    setOpenWindows((current) => JSON.stringify(current) === JSON.stringify(windows) ? current : windows);
+  }, []);
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.('(max-width: 700px)').matches ?? false);
   const workspaceCommands = useMemo(() => ({
+    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen },
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       if (command.operation === 'context-panel') {
         if (command.action === 'open') {
@@ -156,7 +161,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
     },
     minimiseAll: () => workspaceController.current?.minimiseAll(),
     hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
-  }), [contextPanel]);
+  }), [contextPanel, openWindows]);
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
@@ -354,7 +359,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
             <Outlet />
             {signedIn && (
               <div className="workspace-shell-area" hidden={pathname !== '/'}>
-                <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows} />
+                <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} />
               </div>
             )}
             {signedIn && pathname !== '/' && (

@@ -60,6 +60,33 @@ function JarvisWorkspaceRequest() {
 }
 
 describe('Workspace', () => {
+  it('applies an agent resize to tiled spans as well as layered geometry', () => {
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={views} />);
+    act(() => { controller.current?.dispatch({
+      commandId: 'bigger', operation: 'resize', viewId: 'research', width: 0.9, height: 0.9, x: 0.05, y: 0.05,
+    }); });
+    const window = screen.getByRole('article', { name: 'Research summary' });
+    expect(window.style.getPropertyValue('--workspace-columns')).toBe('2');
+    expect(window.style.getPropertyValue('--workspace-rows')).toBe('2');
+    expect(window.style.getPropertyValue('--workspace-width')).toBe('90%');
+  });
+
+  it('publishes open window titles and IDs, retaining minimised windows and removing closed ones', () => {
+    const onOpenWindowsChange = vi.fn();
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={views} onOpenWindowsChange={onOpenWindowsChange} />);
+    expect(onOpenWindowsChange).toHaveBeenLastCalledWith([
+      { viewId: 'research', title: 'Research summary' }, { viewId: 'sources', title: 'Sources' },
+    ]);
+    act(() => { controller.current?.dispatch({ commandId: 'minimise', operation: 'minimise', viewId: 'research' }); });
+    expect(onOpenWindowsChange).toHaveBeenLastCalledWith([
+      { viewId: 'research', title: 'Research summary' }, { viewId: 'sources', title: 'Sources' },
+    ]);
+    act(() => { controller.current?.dispatch({ commandId: 'close', operation: 'close', viewId: 'research' }); });
+    expect(onOpenWindowsChange).toHaveBeenLastCalledWith([{ viewId: 'sources', title: 'Sources' }]);
+  });
+
   it('keeps one phone view foreground, retains content state and supports named and keyboard switching', async () => {
     phoneViewport();
     const user = userEvent.setup();
