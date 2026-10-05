@@ -67,12 +67,16 @@ describe('Foundry Invocations chat agent', () => {
       return streamedResponse(['event: delta\ndata: {"text":"Hi"}\n\n', 'event: done\ndata: {}\n\n']);
     });
     const { agent } = createAgent(fetch as typeof globalThis.fetch);
-    for await (const _text of agent.stream(
-      input, delegatedAuthorization, new AbortController().signal, { agentSessionId: 'chat-8' },
-    )) { /* drain */ }
-    for await (const _text of agent.stream(
-      input, delegatedAuthorization, new AbortController().signal, { agentSessionId: '../bad id' },
-    )) { /* drain */ }
+    const replies: string[] = [];
+    for (const agentSessionId of ['chat-8', '../bad id']) {
+      for await (const text of agent.stream(
+        input, delegatedAuthorization, new AbortController().signal, { agentSessionId },
+      )) {
+        replies.push(text);
+      }
+    }
+
+    expect(replies).toEqual(['Hi', 'Hi']);
 
     expect(urls).toHaveLength(2);
     expect(urls[0]).toContain('agent_session_id=chat-8');
