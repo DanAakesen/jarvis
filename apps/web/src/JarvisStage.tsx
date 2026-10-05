@@ -61,6 +61,7 @@ export function JarvisStage({ theme }: { theme: ThemeMode }) {
         if (!active) return;
         scene.current?.dispose();
         scene.current = null;
+        element.replaceChildren();
         element.dataset.ready = 'false';
         setFailure('The 3D room is unavailable. Chat and voice controls are still available.');
       }

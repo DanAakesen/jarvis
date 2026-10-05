@@ -71,6 +71,19 @@ describe('JarvisStage', () => {
       .toBe('The 3D room is unavailable. Chat and voice controls are still available.');
   });
 
+  it('removes a partially attached canvas when scene creation fails', async () => {
+    createScene.mockImplementation((element: HTMLElement) => {
+      element.appendChild(document.createElement('canvas'));
+      throw new Error('Scene initialization failed');
+    });
+
+    const { container } = render(<JarvisStage theme="dark" />);
+
+    expect((await screen.findByRole('status')).textContent)
+      .toBe('The 3D room is unavailable. Chat and voice controls are still available.');
+    expect(container.querySelector('.jarvis-stage canvas')).toBeNull();
+  });
+
   it('updates the renderer when the reduced-motion preference changes', async () => {
     const listeners = new Set<(event: MediaQueryListEvent) => void>();
     const media = {

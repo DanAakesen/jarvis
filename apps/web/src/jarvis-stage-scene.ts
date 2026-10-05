@@ -77,12 +77,30 @@ export function createJarvisStageScene(
     antialias: true,
     powerPreference: 'high-performance',
   });
+  const lifecycle = { removeListeners: () => {} };
+  try {
+    return createJarvisStageSceneWithRenderer(host, onContextLost, initialOptions, renderer, lifecycle);
+  } catch (error) {
+    lifecycle.removeListeners();
+    renderer.dispose();
+    renderer.forceContextLoss();
+    renderer.domElement.remove();
+    throw error;
+  }
+}
+
+function createJarvisStageSceneWithRenderer(
+  host: HTMLElement,
+  onContextLost: () => void,
+  initialOptions: JarvisStageOptions,
+  renderer: THREE.WebGLRenderer,
+  lifecycle: { removeListeners: () => void },
+) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, window.innerWidth < 700 ? 1 : 1.2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1;
-  host.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(43, window.innerWidth / window.innerHeight, 0.1, 80);
@@ -528,6 +546,11 @@ export function createJarvisStageScene(
     dispose();
     onContextLost();
   };
+  lifecycle.removeListeners = () => {
+    renderer.domElement.removeEventListener('webglcontextlost', onWebGlContextLost);
+    window.removeEventListener('resize', onResize);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+  };
   renderer.domElement.addEventListener('webglcontextlost', onWebGlContextLost);
   window.addEventListener('resize', onResize);
   document.addEventListener('visibilitychange', onVisibilityChange);
@@ -538,9 +561,7 @@ export function createJarvisStageScene(
     disposedOnce = true;
     disposed = true;
     stopAnimation();
-    renderer.domElement.removeEventListener('webglcontextlost', onWebGlContextLost);
-    window.removeEventListener('resize', onResize);
-    document.removeEventListener('visibilitychange', onVisibilityChange);
+    lifecycle.removeListeners();
     scene.traverse((object: THREE.Object3D) => {
       if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
         object.geometry.dispose();
@@ -554,14 +575,10 @@ export function createJarvisStageScene(
     renderer.domElement.remove();
   };
 
-  try {
-    setTheme(current.theme);
-    resize();
-    startAnimation();
-  } catch (error) {
-    dispose();
-    throw error;
-  }
+  host.appendChild(renderer.domElement);
+  setTheme(current.theme);
+  resize();
+  startAnimation();
 
   return {
     update(options: JarvisStageOptions) {
