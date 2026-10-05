@@ -314,6 +314,25 @@ P8-15 offline checks: `npm test --workspace @jarvis/contracts` (8/8);
 src/core/now.test.ts` (14/14), backend lint and build pass; `npm test
 --workspace @jarvis/web` (201/201), web lint and build pass. The web build reports
 the existing advisory for a minified chunk over 500 kB.
+
+P8-22 reused the scratch-only auth/API workflow with Chromium at 1440×900 and
+390×844 in dark/light appearances. The real shell rendered the real Workspace
+component with two explicitly identified local views; the screenshot harness
+added the fixture-only footer after verifying it was absent from the app. The
+production build also contains no footer text. Browser checks confirmed the home
+breadcrumb is only “Jarvis,” the deep Factory breadcrumb is “Jarvis / Software
+Factory / Tasks,” each window has one 44×44 overflow trigger and three 44×44
+lifecycle buttons, the phone popup stays within 390×844, and reduced motion
+removes window transitions. Keyboard Enter opens Arrange, Escape closes it and
+returns focus, and arrow keys reorder a window. There were no browser console or
+page errors. Screenshots and concept comparisons are
+`docs/ui/screenshots/p8-22-{dark,light}-{desktop,phone}*.png`; phone comparisons
+use the voice concepts as appearance references only, not layout parity, because
+phone voice layout belongs to P8-11. Focused checks:
+`npm test --workspace @jarvis/web -- --run src/App.test.tsx src/Workspace.test.tsx`
+(44 passed), `npm run lint --workspace @jarvis/web`, and
+`npm run build --workspace @jarvis/web` (existing chunk-size advisory). Live
+Entra/API, physical phone hardware, and phone voice behavior remain unverified.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

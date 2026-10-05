@@ -122,28 +122,28 @@ Status as of 4 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Complete Jarvis front end | One designed UI for all features above | Screen | All pages | Planned | P8-01, P8-04–P8-13 |
-| Shared app shell and area navigation | Navigate areas from the rail/sidebar; open Settings from the top-right; toggle the camera with an accessible on/off state | Screen | All pages | Built | P8-04, P7-08 |
+| Shared app shell and area navigation | Navigate areas from the rail/sidebar; show Jarvis once on home and the area/page on deeper routes; open Settings from the top-right; toggle the camera with an accessible on/off state | Screen | All pages | Built | P8-04, P7-08, P8-22 |
 | Conversation opening and voice entry | See the conversation on arrival, type from the bottom-centred composer, and explicitly start voice from the small orb; separately enable the microphone, and restore the draft and typing focus on exit | Both | Main page | Built (offline/browser fixtures) | P8-05 |
-| Workspace composition | Arrange temporary tiles or layers; drag titles, resize edges, or use Move/Resize arrow keys behind Arrange; reflow on narrow screens with reduced-motion-safe lifecycle feedback | Screen | Main workspace | Built (client; generated/agent-delivered views remain separate) | P8-06, P8-07, P8-21 |
+| Workspace composition | Arrange temporary tiles or layers; drag titles, resize edges, or use Move/Resize arrow keys from the per-window overflow; reflow on narrow screens with reduced-motion-safe lifecycle feedback | Screen | Main workspace | Built (client; generated/agent-delivered views remain separate) | P8-06, P8-07, P8-21, P8-22 |
 | Dynamic workspace views | View accessible information in temporary, question-relevant windows and ask Jarvis to create or arrange them | Screen | Main workspace | Built offline; live agent delivery unverified | P8-06, P8-14, P8-15 |
 | Window tabs and restore | Minimise a view without closing or saving it, then restore it from its tab or by asking Jarvis | Both | Main/voice workspace | Built offline; live agent delivery unverified | P8-07, P8-15 |
 | Contextual right panel | Open, close, or change relevant information without replacing the main content | Both | Main workspace | Built offline; live agent delivery unverified | P8-08, P8-15 |
 | Runtime-state orb | See listening, thinking, speaking, reconnect, and unavailable states from the actual voice client; tool-call activity is stated unavailable until its runtime event exists | Screen | Voice workspace | Built | P8-09, P8-16 |
-| Desktop voice workspace | Enter full-page voice, carry open views across modes, and restore the typing layout; optionally minimise windows on entry (off by default) | Voice/chat | Main page | Planned | P8-10 |
+| Desktop voice workspace | Enter full-page voice, carry open views across modes, and restore the typing layout; optionally minimise windows on entry (off by default) | Voice/chat | Main page | Built offline; safe generated list renderer is available, generated workspace delivery remains P8-15, tool activity remains P8-16, and account preference persistence is P8-17 | P8-10, P8-14, P8-15, P8-16, P8-17 |
 | Phone workspace | Show one main view, switch by swipe or request, and dock the active voice orb while content is foreground | Phone | Jarvis on phone | Planned | P8-11 |
-| Manual voice-end affordance | Use the selected manual end control and Escape-key behavior without changing natural spoken ending | Both | Voice workspace | Decision recorded; UI implementation pending | P8-12 |
+| Manual voice-end affordance | Use the selected manual end control and Escape-key behavior without changing natural spoken ending | Both | Voice workspace | Implemented in P8-10 per the P8-12 decision | P8-10, P8-12 |
 | Theme controls and client persistence | Choose and persist light/dark appearance across visits; semantic theme variables update across the app. Custom and Jarvis-directed token changes remain unavailable pending P8-17, which uses P8-18's recorded allowlist. | Screen | Shared shell, Settings | Built (offline; live settings unverified) | P8-13 |
 | Shared visual and motion system | Use Concept B's living aurora in dark mode and Concept C's daylight surfaces in light mode; see readable, responsive feedback tied only to real chat/voice state and playback audio | Screen/voice | Current shell, conversation, tasks, projects, settings and usage | Built offline; live auth/settings/voice remain unverified | P8-20 |
 | Conversation and workspace concept polish | Start from a calm greeting and compact floating composer; read divider-free messages, live caret and quiet metadata; operate translucent windows and Now cards with purposeful, reduced-motion-safe feedback | Screen | Main page and client workspace | Built offline; local screenshot fixtures, not live agent delivery | P8-21 |
 | Agent-directed workspace views | Ask Jarvis to create, update, show, close, minimise, restore, focus, move and resize views, and change the layout or contextual panel | Both | Main page and voice workspace | Built offline; live chat/voice delivery unverified | P8-15 |
 | Generated data views | Inspect accessible information in temporary, typed views using registered renderers | Screen | Now feed and temporary workspace | Built offline; live data/tool acceptance unverified | P8-14, P8-06, P8-15 |
 | Runtime activity | See Jarvis's actual listening, thinking, tool-call and speaking state | Both | Main page and voice workspace | Partial: client-reported chat/voice work is visible; tool-call activity awaits P8-16 | P8-16, P8-20 |
-| Persisted UI preferences and themes | Change light/dark/system appearance, approved theme tokens, and whether windows minimise when voice starts (off by default) | Screen | Settings and shell | In progress | P8-17 |
+| Persisted UI preferences and themes | Change light/dark/system appearance, approved theme tokens, and whether windows minimise when voice starts (off by default) | Screen | Settings and shell | Theme and voice-window preferences persist through P8-17; generated views remain transient | P8-10, P8-13, P8-17 |
 | Generated-view and theme capabilities | Use the initial safe renderer/action and adjustable theme-token allowlists | — | UI planning | Decision recorded; implementation remains with P8-14/P8-15/P8-17 | P8-18 |
 
 ### Enabling-logic coverage
 
-This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell composition and client-only interactions belong to the companion P8-02 breakdown. P8-02 allocated P8-04 through P8-13 to frontend tasks in PR #233. Matching consumers must be blocked by their backend prerequisites: P8-06 by P8-14 and P8-15; P8-07, P8-08, P8-10 and P8-11 by P8-15; P8-09, P8-10 and P8-11 by P8-16; and P8-10 and P8-13 by P8-17.
+This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell composition and client-only interactions belong to the companion P8-02 breakdown. P8-02 allocated P8-04 through P8-13 to frontend tasks in PR #233. P8-10 is implemented on the client without waiting for future contracts; follow-up consumers are P8-06 (P8-14/15), P8-07/08/11 (P8-15), P8-09/11 (P8-16), and P8-13 (P8-17).
 
 | Confirmed UI requirement in scope | Existing capability or issue | Coverage and owner |
 | --- | --- | --- |
@@ -157,7 +157,7 @@ This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell c
 #### Deferred decisions (needs-decision)
 
 - P8-18 records the initial generated-view renderer/action and theme-token allowlists in `ui.md`; P8-14, P8-15, and P8-17 implement them. The five-theme example is not a requirement.
-- P8-20 completes the shared orb styling and page motion system; detailed desktop/phone mode transitions remain P8-10/P8-11. P8-12's manual voice-end/Escape decision is recorded in DESIGN.md; its UI implementation remains future voice-workspace work.
+- P8-20 completes the shared orb styling and page motion system; desktop voice mode transitions are implemented in P8-10 and phone view switching remains P8-11. P8-12's manual voice-end/Escape decision is recorded in DESIGN.md and implemented by P8-10.
 - Banking and Fitness/Health integration detail remains deferred. Dan withdrew the proposed PC vendor integration; do not create an issue for it.
 
 ## Additional accepted Jarvis capabilities (planned)

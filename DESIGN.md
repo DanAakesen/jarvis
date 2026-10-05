@@ -76,7 +76,7 @@ Dan's brief (4 October 2026): the UI should be stunning, with rich styling and m
 
 Canonical colour, type, spacing, radius, surface, elevation and motion values belong in `apps/web/src/styles.css`. P8-20 (#282) applies Concept B/C across the current shell and pages: the dark aurora is CSS-only, and the orb follows reported voice state plus decoded playback PCM. P8-21 refines the conversation and client workspace on those same tokens. Chat/voice activity is explicit in the top bar; running tool feedback requires a published tool-call state. P8-14/P8-15 now render typed generated views in temporary windows and the contextual panel using fixed React elements; no generated code executes. Hidden tabs pause animation; reduced motion keeps all content and state labels readable.
 
-## Voice end (P8-12, decided 4 October 2026)
+## Voice end (P8-12, decided 4 October 2026; implemented in P8-10)
 
 Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop and inside the bottom dock, right of the orb, on phone. Ending voice collapses the orb back into the composer's small orb. A natural spoken ending also ends voice; the small composer orb only starts voice.
 
@@ -326,8 +326,9 @@ an expandable disclosure rather than competing with the opening conversation.
 Only the small, labelled input orb starts voice. Voice hides history and the
 composer without discarding the draft or language; stop, natural end and failure
 restore typing focus. The ready state says the microphone is off and offers a
-separate Enable microphone action. The shell/fullscreen transition, window
-carry-over and final end-control behavior remain P8-10–P8-12.
+separate Enable microphone action. P8-10 implements the desktop shell/fullscreen
+transition, available-window carry-over and the selected end-control behavior;
+P8-11 owns phone view switching.
 
 ### Concept polish (P8-21)
 
@@ -347,17 +348,27 @@ live caret beside readable text. Only a published tool-call state gets the
 running-tool shimmer; thinking is not treated as a tool call. Running Now tasks
 use a restrained sheen, while completed outcomes stay static.
 
-Window titles are drag handles; right/bottom edges and the corner resize.
-Arrange keeps movement, sizing and order controls out of the resting title bar.
-Open Arrange, focus **Move** or **Resize**, then use arrow keys; Shift makes
-larger steps in a layered desktop layout. In tiles, Move changes order and
-Resize changes the tile span. On narrow screens width stays full-screen.
-Escape closes Arrange and returns focus to its trigger. Window entry,
-focus, minimise and restore reuse the shared motion tokens without waiting
-for animation to update state; reduced motion removes displacement and shimmer.
+Window titles are drag handles; right/bottom edges and the corner resize. Each
+window keeps minimise, maximise and close in its title actions, with a 44px
+ellipsis disclosure for keyboard Arrange. The workspace header retains the
+shared tile/layer control. Open a window's overflow, focus **Move** or **Resize**,
+then use arrow keys; Shift makes larger steps in a layered desktop layout. In
+tiles, Move changes order and Resize changes the tile span. On narrow screens
+width stays full-screen. Escape closes Arrange and returns focus to its trigger.
+Window entry, focus, minimise and restore reuse the shared motion tokens without
+waiting for animation to update state; reduced motion removes displacement and
+shimmer.
 
-Local screenshot fixtures are in `docs/ui/screenshots/p8-21-*`; they are not
-production conversations or proof of live agent-directed windows.
+The top bar shows **Jarvis** once on the home route. Deeper routes show the area
+and the most specific matching page, such as **Jarvis / Software Factory /
+Tasks**. Phone layouts continue to hide the secondary breadcrumb to protect the
+single-line bar. The local-fixture footer is added only by screenshot capture;
+it is not part of the production shell or bundle.
+
+Local screenshot fixtures are in `docs/ui/screenshots/p8-21-*` and
+`docs/ui/screenshots/p8-22-*`; they are not production conversations or proof
+of live agent-directed windows. P8-22 phone captures show the typing shell and
+workspace, not the phone voice layout owned by P8-11.
 
 ## Next-generation shared shell (structure agreed; P8-04 implemented)
 
@@ -379,11 +390,11 @@ The existing neutral theme remains; the specific placement and responsive
 proportions above are confirmed while other shell styling and the contents of
 these bars and panels remain open.
 
-Voice hides the shell and composer, using a full-page background and a
-state-driven orb: centred alone, left of content windows on desktop,
-bottom-docked behind one main phone view. Windows can tile, overlap, minimise
-into tabs and be restored by Dan or Jarvis. Those behaviors belong to later P8
-tasks, not P8-04.
+Voice hides the shell, composer, and history immediately, using a full-page
+background and a state-driven orb: centred alone, left of content windows on
+desktop, and bottom-docked on phone. P8-10 carries available windows across
+voice transitions; generated views and Jarvis-directed commands are supplied by
+P8-14/P8-15. Windows can tile, overlap, minimise into tabs and be restored.
 
 Existing windows carry between modes by default. The optional minimise-on-voice
 setting defaults off; when enabled, voice begins with only the orb and windows
@@ -391,8 +402,10 @@ remain docked on return to typing. Otherwise the earlier shell layout returns.
 Generated views are temporary; theme values persist. P8-14 reuses the existing
 Now list treatment for its first signed-in fixture. Values render as React text
 and allowlisted links; view-provided markup is not interpreted. Small-orb input
-controls start voice explicitly. Concept B/C's translucent surfaces are the
-selected treatment; the earlier white wireframes remain structural references only.
+controls start voice explicitly. The minimise-on-voice preference persists with
+the account through P8-17, with a device-local cache for immediate startup.
+Concept B/C's translucent surfaces are the selected treatment; the earlier white
+wireframes remain structural references only.
 
 ## Temporary workspace composition (P8-06)
 
@@ -409,7 +422,8 @@ Window geometry, order, and the open view set remain in memory only. The host is
 currently empty until P8-14 provides generated-view data and P8-15 supplies
 Jarvis-directed workspace commands; those data and agent-control contracts are
 not part of P8-06. These structural choices reuse the shared Concept B/C surfaces
-and motion tokens in P8-20. Voice-layout transitions remain with P8-10 and P8-11.
+and motion tokens in P8-20. Desktop voice-layout transitions are implemented in
+P8-10; phone view switching remains with P8-11.
 
 ## Window lifecycle and tabs (P8-07)
 

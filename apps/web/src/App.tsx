@@ -20,6 +20,8 @@ import { useSignIn, type SignInSession } from './useSignIn';
 import { backendFetch } from './backend-request';
 import { Workspace, type WorkspaceController } from './Workspace';
 import { WorkspaceCommandContext } from './workspace-command-state';
+import { VoiceWorkspaceContext } from './voice-workspace-state';
+import { readVoiceWorkspacePreference } from './voice-workspace-preference';
 
 type ShellIconName = 'home' | 'factory' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close';
 
@@ -114,6 +116,8 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const navigationToggle = useRef<HTMLButtonElement>(null);
   const workspaceController = useRef<WorkspaceController>(null);
   const contextPanel = useContextPanel();
+  const [voiceActive, setVoiceActive] = useState(false);
+  const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const workspaceCommands = useMemo(() => ({
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       if (command.operation === 'context-panel') {
@@ -133,12 +137,20 @@ function ShellLayout({ signedIn, config, session, camera }: {
       }
       return workspaceController.current?.dispatch(command, trustedBlobHost) ?? false;
     },
+    minimiseAll: () => workspaceController.current?.minimiseAll(),
+    hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
   }), [contextPanel]);
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
     return applied;
   }, [workspaceCommands]);
+  const onVoiceActiveChange = useCallback((active: boolean) => {
+    if (active && readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart) {
+      workspaceController.current?.minimiseAll();
+    }
+    setVoiceActive(active);
+  }, []);
   const [navigationOpen, setNavigationOpen] = useState(() => (
     typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches
   ));
@@ -146,6 +158,9 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const activeArea = areas.find(({ path }) => pathname.startsWith(`/${path}`));
   const settingsActive = pathname.startsWith('/settings');
   const areaLabel = settingsActive ? 'Settings' : activeArea?.label ?? 'Jarvis';
+  const pageLabel = activeArea?.navigation
+    .filter(({ path }) => pathname === path || pathname.startsWith(`${path}/`))
+    .sort((left, right) => right.path.length - left.path.length)[0]?.label;
   const navigationItems = activeArea?.navigation ?? [{ label: 'Conversation', path: '/' }];
 
   useEffect(() => {
@@ -203,7 +218,9 @@ function ShellLayout({ signedIn, config, session, camera }: {
   }
 
   return (
-    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && navigationOpen} data-context-open={signedIn && contextPanel.isOpen}>
+    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && navigationOpen}
+      data-context-open={signedIn && contextPanel.isOpen} data-voice-active={voiceActive}
+      data-voice-has-windows={voiceHasWindows}>
       <a className="skip-link" href="#content">Skip to content</a>
       {signedIn && (
         <nav className="area-rail" aria-label="Areas">
@@ -250,7 +267,18 @@ function ShellLayout({ signedIn, config, session, camera }: {
       <header className="app-topbar">
         <div className="topbar-context">
           <Link className="brand" to="/" aria-label="Jarvis home">Jarvis</Link>
-          {signedIn && <><span className="topbar-separator" aria-hidden="true">/</span><span className="topbar-area-label">{areaLabel}</span></>}
+          {signedIn && areaLabel !== 'Jarvis' && (
+            <>
+              <span className="topbar-separator" aria-hidden="true">/</span>
+              <span className="topbar-area-label">{areaLabel}</span>
+              {pageLabel && pageLabel !== areaLabel && (
+                <>
+                  <span className="topbar-separator" aria-hidden="true">/</span>
+                  <span className="topbar-page-label" aria-current="page">{pageLabel}</span>
+                </>
+              )}
+            </>
+          )}
         </div>
         {signedIn && (
           <div className="topbar-actions">
@@ -283,22 +311,24 @@ function ShellLayout({ signedIn, config, session, camera }: {
       <main id="content" className="shell-main" tabIndex={-1}>
         {presenceError && <p className="browser-presence-error" role="alert">{presenceError}</p>}
         <WorkspaceCommandContext.Provider value={workspaceCommands}>
-          <Outlet />
-          {signedIn && (
-            <div className="workspace-shell-area" hidden={pathname !== '/'}>
-              <Workspace ref={workspaceController} views={[]} />
-            </div>
-          )}
-          {signedIn && pathname !== '/' && (
-            <div hidden>
-              <NowFeedPanel
-                client={session.client}
-                config={config}
-                getAccessToken={getAccessToken}
-                applyWorkspaceCommand={applyWorkspaceCommand}
-              />
-            </div>
-          )}
+          <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange }}>
+            <Outlet />
+            {signedIn && (
+              <div className="workspace-shell-area" hidden={pathname !== '/'}>
+                <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows} />
+              </div>
+            )}
+            {signedIn && pathname !== '/' && (
+              <div hidden>
+                <NowFeedPanel
+                  client={session.client}
+                  config={config}
+                  getAccessToken={getAccessToken}
+                  applyWorkspaceCommand={applyWorkspaceCommand}
+                />
+              </div>
+            )}
+          </VoiceWorkspaceContext.Provider>
         </WorkspaceCommandContext.Provider>
       </main>
       <footer className="bottom-bar">

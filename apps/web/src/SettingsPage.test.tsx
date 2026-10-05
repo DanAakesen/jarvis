@@ -90,6 +90,7 @@ function renderSettingsPage(url: string | null = backendUrl) {
 beforeEach(() => {
   getAccessToken.mockClear();
   fetchMock.mockReset();
+  localStorage.clear();
   themePreference.saveTheme.mockClear();
   themePreference.retry.mockClear();
   vi.stubGlobal('fetch', fetchMock);
@@ -373,6 +374,9 @@ describe('SettingsPage', () => {
     const [, request] = fetchMock.mock.calls[1]!;
     expect(JSON.parse(String(request?.body))).toEqual({
       settings: { voice: { minimizeWindowsOnVoiceStart: true } },
+    });
+    expect(JSON.parse(localStorage.getItem('jarvis.voice-workspace-preference') ?? '{}')).toEqual({
+      voice: { minimizeWindowsOnVoiceStart: true },
     });
   });
 

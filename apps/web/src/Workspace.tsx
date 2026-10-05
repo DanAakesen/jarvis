@@ -20,6 +20,8 @@ export interface WorkspaceView {
 
 export interface WorkspaceController {
   dispatch: (command: WorkspaceCommand, trustedBlobHost?: string) => boolean;
+  minimiseAll: () => void;
+  hasVisibleViews: () => boolean;
 }
 
 type Arrangement = 'tiled' | 'layered';
@@ -37,7 +39,7 @@ type Gesture = {
 const clamp = (value: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, value)) * 1000) / 1000;
 const percent = (value: number) => `${Number((value * 100).toFixed(2))}%`;
 
-function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'close' | 'view' }) {
+function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'close' | 'view' | 'more' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'minimise':
@@ -50,6 +52,8 @@ function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'clo
       return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>;
     case 'view':
       return <svg {...common}><rect x="4" y="5" width="16" height="14" rx="2" /><path d="M4 9h16" /></svg>;
+    case 'more':
+      return <svg {...common}><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>;
   }
 }
 
@@ -64,8 +68,10 @@ function defaultGeometry(index: number): Geometry {
   };
 }
 
-export const Workspace = forwardRef<WorkspaceController, { views: readonly WorkspaceView[] }>(
-  function Workspace({ views }, ref) {
+export const Workspace = forwardRef<WorkspaceController, {
+  views: readonly WorkspaceView[];
+  onVisibleViewsChange?: (visible: boolean) => void;
+}>(function Workspace({ views, onVisibleViewsChange }, ref) {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
   const workspaceViews = useMemo(() => [...views, ...agentViews], [agentViews, views]);
@@ -121,6 +127,11 @@ export const Workspace = forwardRef<WorkspaceController, { views: readonly Works
   const activeMaximizedViewId = maximizedViewId && viewIds.has(maximizedViewId) ? maximizedViewId : null;
   const openViews = useMemo(() => orderedViews.filter((view) => !closedViewIds.has(view.id)), [closedViewIds, orderedViews]);
   const minimizedViews = useMemo(() => openViews.filter((view) => minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
+  const visibleViews = useMemo(() => openViews.filter((view) => !minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
+
+  useEffect(() => {
+    onVisibleViewsChange?.(visibleViews.length > 0);
+  }, [onVisibleViewsChange, visibleViews.length]);
 
   useLayoutEffect(() => {
     const next = pendingFocus.current;
@@ -316,7 +327,21 @@ export const Workspace = forwardRef<WorkspaceController, { views: readonly Works
   }, [agentViews, closeView, closedViewIds, focusView, geometry, isViewOpen, minimiseView,
     orderedViews, restoreView, workspaceViews]);
 
-  useImperativeHandle(ref, () => ({ dispatch: dispatchCommand }), [dispatchCommand]);
+  const minimiseAll = useCallback(() => {
+    const ids = visibleViews.map(({ id }) => id);
+    if (ids.length === 0) return;
+    const focusedId = ids.find((id) => windowElements.current.get(id)?.contains(document.activeElement));
+    if (focusedId) pendingFocus.current = { target: 'tab', viewId: focusedId };
+    setMaximizedViewId(null);
+    setMinimizedViewIds((current) => new Set([...current, ...ids]));
+    setAnnouncement(`${ids.length} ${ids.length === 1 ? 'window' : 'windows'} minimised.`);
+  }, [visibleViews]);
+
+  useImperativeHandle(ref, () => ({
+    dispatch: dispatchCommand,
+    minimiseAll,
+    hasVisibleViews: () => visibleViews.length > 0,
+  }), [dispatchCommand, minimiseAll, visibleViews.length]);
 
   function raiseView(event: { target: EventTarget }, id: string) {
     if (arrangement !== 'layered' || narrow) return;
@@ -442,6 +467,7 @@ export const Workspace = forwardRef<WorkspaceController, { views: readonly Works
   function arrangeKeyDown(event: KeyboardEvent<HTMLDetailsElement>) {
     if (event.key !== 'Escape') return;
     event.preventDefault();
+    event.stopPropagation();
     event.currentTarget.open = false;
     event.currentTarget.querySelector('summary')?.focus();
   }
@@ -626,7 +652,9 @@ export const Workspace = forwardRef<WorkspaceController, { views: readonly Works
                 </h3>
                 <div className="workspace-window-actions">
                   {!maximized && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
-                    <summary>Arrange</summary>
+                    <summary className="workspace-arrange-trigger" role="button" aria-label={`Arrange ${view.title}`} title={`Arrange ${view.title}`}>
+                      <WindowIcon name="more" />
+                    </summary>
                     <div className="workspace-arrange-options">
                       <p id={`${titleId}-shortcuts`} className="workspace-shortcuts">
                         Focus Move or Resize, then use arrow keys. {narrow ? 'Up/down changes order or height; width stays full-screen.' : arrangement === 'tiled' ? 'Move changes order; Resize changes tile width or height.' : 'Shift + arrow makes a larger step.'} Escape closes Arrange.

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { useMemo, useRef, useState } from 'react';
+import { createRef, useMemo, useRef, useState } from 'react';
 import { Workspace, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { useWorkspaceCommands, WorkspaceCommandContext } from './workspace-command-state';
 import { readFileSync } from 'node:fs';
@@ -10,6 +10,10 @@ const views: WorkspaceView[] = [
   { id: 'research', title: 'Research summary', content: { status: 'ready', content: <p>Source-linked findings</p> } },
   { id: 'sources', title: 'Sources', content: { status: 'loading' } },
 ];
+
+function arrangeTrigger(view: HTMLElement, title: string) {
+  return within(view).getByRole('button', { name: `Arrange ${title}` });
+}
 
 function JarvisRequestButtons() {
   const workspace = useWorkspaceCommands();
@@ -31,6 +35,8 @@ function JarvisWorkspaceRequest() {
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0]) => (
       controller.current?.dispatch(command) ?? false
     ),
+    minimiseAll: () => controller.current?.minimiseAll(),
+    hasVisibleViews: () => controller.current?.hasVisibleViews() ?? false,
   }), []);
   return (
     <WorkspaceCommandContext.Provider value={commands}>
@@ -49,6 +55,20 @@ describe('Workspace', () => {
     expect(screen.queryByRole('group', { name: 'Workspace arrangement' })).toBeNull();
   });
 
+  it('keeps each window Arrange control in an overflow beside three lifecycle actions', () => {
+    render(<Workspace views={views} />);
+
+    for (const view of views) {
+      const window = screen.getByRole('article', { name: view.title });
+      const trigger = arrangeTrigger(window, view.title);
+      const actions = window.querySelector('.workspace-window-actions')!;
+
+      expect(trigger.getAttribute('aria-label')).toBe(`Arrange ${view.title}`);
+      expect(actions.querySelectorAll(':scope > details.workspace-arrange-menu')).toHaveLength(1);
+      expect(actions.querySelectorAll(':scope > button.workspace-icon-control')).toHaveLength(3);
+    }
+  });
+
   it('supports multiple views, switching layout, keyboard movement and order announcements', async () => {
     const user = userEvent.setup();
     render(<Workspace views={views} />);
@@ -62,7 +82,7 @@ describe('Workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Layer views' }));
     expect(screen.getByRole('button', { name: 'Layer views' }).getAttribute('aria-pressed')).toBe('true');
     const researchWindow = within(canvas).getByRole('article', { name: 'Research summary' });
-    await user.click(within(researchWindow).getByText('Arrange'));
+    await user.click(arrangeTrigger(researchWindow, 'Research summary'));
     const move = screen.getByRole('button', { name: 'Move Research summary. Use arrow keys to move or reorder.' });
     move.focus();
     await user.keyboard('{ArrowRight}');
@@ -92,7 +112,7 @@ describe('Workspace', () => {
 
     const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
     const researchWindow = within(canvas).getByRole('article', { name: 'Research summary' });
-    await user.click(within(researchWindow).getByText('Arrange'));
+    await user.click(arrangeTrigger(researchWindow, 'Research summary'));
     await user.click(screen.getByRole('button', { name: 'Move later Research summary' }));
     expect(within(canvas).getAllByRole('article').map((view) => view.textContent?.includes('Research summary')))
       .toEqual([false, true]);
@@ -108,7 +128,8 @@ describe('Workspace', () => {
     render(<Workspace views={views} />);
     const research = screen.getByRole('article', { name: 'Research summary' });
     expect(within(research).getByRole('button', { name: /^Move Research summary\./ }).closest('details')?.open).toBe(false);
-    const summary = within(research).getByText('Arrange');
+    const summary = arrangeTrigger(research, 'Research summary');
+    expect(summary.getAttribute('aria-label')).toBe('Arrange Research summary');
     summary.focus();
     await user.keyboard('{Enter}');
     const move = within(research).getByRole('button', { name: /^Move Research summary\./ });
@@ -122,7 +143,14 @@ describe('Workspace', () => {
     resize.focus();
     await user.keyboard('{ArrowDown}');
     expect(research.style.getPropertyValue('--workspace-rows')).toBe('2');
+    const documentEscape = vi.fn();
+    const listenForEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') documentEscape();
+    };
+    document.addEventListener('keydown', listenForEscape);
     await user.keyboard('{Escape}');
+    document.removeEventListener('keydown', listenForEscape);
+    expect(documentEscape).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(summary);
     expect(summary.closest('details')?.open).toBe(false);
     expect(resize.closest('details')?.open).toBe(false);
@@ -134,7 +162,7 @@ describe('Workspace', () => {
     await user.click(within(screen.getByRole('heading', { name: 'Workspace' }).parentElement!).getByText('Arrange'));
     await user.click(screen.getByRole('button', { name: 'Layer views' }));
     const research = screen.getByRole('article', { name: 'Research summary' });
-    await user.click(within(research).getByText('Arrange'));
+    await user.click(arrangeTrigger(research, 'Research summary'));
     const move = within(research).getByRole('button', { name: /^Move Research summary\./ });
     move.focus();
     expect(research.style.getPropertyValue('--workspace-x')).toBe('8%');
@@ -209,7 +237,8 @@ describe('Workspace', () => {
     expect(workspaceStyles).toContain('width: min(300px, 100%); min-width: 0; max-width: 100%;');
     const mobile = workspaceStyles.slice(workspaceStyles.indexOf('@media (max-width: 900px)'));
     expect(mobile).toContain('.workspace-window-heading h3 { flex-basis: 100%; }');
-    expect(mobile).toContain('grid-template-columns: minmax(0, 1fr) repeat(3, 44px); gap: 4px;');
+    expect(mobile).toContain('grid-template-columns: repeat(4, 44px); justify-content: end; gap: 4px;');
+    expect(mobile).toContain('.workspace-arrange-menu > summary { width: 44px; padding: 0; }');
   });
 
   it('does not raise an open Arrange window above a different maximised window', async () => {
@@ -219,7 +248,7 @@ describe('Workspace', () => {
     const raisedSelector = workspaceStyles.match(/([^{}]+)\{\s*z-index: 1001;\s*\}/)?.[1]?.trim();
     expect(raisedSelector).toBe('.workspace-canvas:not(.workspace-canvas-has-maximized) .workspace-window:has(.workspace-arrange-menu[open])');
     const research = screen.getByRole('article', { name: 'Research summary' });
-    await user.click(within(research).getByText('Arrange'));
+    await user.click(arrangeTrigger(research, 'Research summary'));
     expect(research.matches(raisedSelector!)).toBe(true);
     await user.click(screen.getByRole('button', { name: 'Maximise Sources' }));
     expect(research.querySelector('details')?.open).toBe(true);
@@ -261,11 +290,27 @@ describe('Workspace', () => {
     await user.click(within(screen.getByRole('heading', { name: 'Workspace' }).parentElement!).getByText('Arrange'));
     await user.click(screen.getByRole('button', { name: 'Layer views' }));
     const sourcesWindow = screen.getByRole('article', { name: 'Sources' });
-    await user.click(within(sourcesWindow).getByText('Arrange'));
+    await user.click(arrangeTrigger(sourcesWindow, 'Sources'));
     await user.click(screen.getByRole('button', { name: 'Bring forward Sources' }));
     unmount();
 
     expect(window.localStorage.length).toBe(before);
+  });
+
+  it('exposes voice layout state and minimises every visible view into restorable tabs', () => {
+    const controller = createRef<WorkspaceController>();
+    const onVisibleViewsChange = vi.fn();
+    render(<Workspace ref={controller} views={views} onVisibleViewsChange={onVisibleViewsChange} />);
+
+    expect(controller.current?.hasVisibleViews()).toBe(true);
+    expect(onVisibleViewsChange).toHaveBeenLastCalledWith(true);
+    act(() => controller.current?.minimiseAll());
+
+    expect(controller.current?.hasVisibleViews()).toBe(false);
+    expect(onVisibleViewsChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getAllByRole('button', { name: /^Restore /u })).toHaveLength(2);
+    act(() => controller.current?.dispatch({ commandId: 'voice-restore', operation: 'restore', viewId: 'research' }));
+    expect(controller.current?.hasVisibleViews()).toBe(true);
   });
 
   it('minimises into a tab, preserves mounted content, and restores focus by keyboard', async () => {
