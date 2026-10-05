@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
+import type { NowFeedStatusKind } from '../core/now.js';
 import { mapGithubWebhook, type GithubWebhookMapping } from './webhook-mapping.js';
 import type { WebhookDeliveryStore } from './webhook-delivery.js';
 
@@ -30,6 +31,14 @@ function validSignature(signature: string, body: Buffer, secret: string): boolea
   const supplied = Buffer.from(signature.slice('sha256='.length), 'hex');
   const expected = createHmac('sha256', secret).update(body).digest();
   return timingSafeEqual(supplied, expected);
+}
+
+function voiceStatusKind(event: string, payload: unknown, mapping: GithubWebhookMapping | undefined): NowFeedStatusKind | undefined {
+  if (mapping?.kind === 'deployment_status' && mapping.status === 'failure') return 'deployment_failed';
+  if (event === 'pull_request' && mapping?.kind === 'pull_request' &&
+      payload !== null && typeof payload === 'object' && !Array.isArray(payload) &&
+      (payload as Record<string, unknown>).action === 'ready_for_review') return 'pull_request_ready';
+  return undefined;
 }
 
 export function createGithubWebhookModule(options: WebhookOptions): BackendModule {
@@ -74,6 +83,7 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
           return reply.code(400).send({ error: 'Invalid webhook payload' });
         }
         const mapping = acceptedEvents.has(event) ? mapGithubWebhook(event, payload) : undefined;
+        const statusKind = voiceStatusKind(event, payload, mapping);
         let inserted: boolean;
         try {
           inserted = await options.deliveryStore.record({
@@ -93,6 +103,7 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
           request.log.error('github.webhook_mapping_failed');
           return reply.code(503).send({ error: 'Webhook processing unavailable' });
         }
+        if (inserted && statusKind) app.nowEventHub.publish({ type: 'status', kind: statusKind });
         return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
       });
     },

@@ -7,6 +7,7 @@ import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
 import { setJarvisModelTool } from './model-tools.js';
 import { setAwayModeTool } from './away-mode.js';
+import { getStatusSummaryTool } from './status.js';
 
 const memoryReadOnlyTools = new Set(['memory_search', 'memory_list', 'memory_history']);
 
@@ -28,7 +29,7 @@ function auditToolResult(toolName: string, outcome: ToolCallOutcome, result: unk
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setThemeTool, setJarvisModelTool, setAwayModeTool],
+  tools: [setThemeTool, setJarvisModelTool, setAwayModeTool, getStatusSummaryTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);
