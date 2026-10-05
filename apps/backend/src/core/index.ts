@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { generatedViewSchema, isGeneratedView } from '@jarvis/contracts';
+import { generatedViewSchema, isGeneratedView, isWebResearchResult, webResearchResultSchema } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
@@ -125,6 +125,12 @@ export const coreModule: BackendModule = {
             if (!validateView(result.view) || !isGeneratedView(result.view, {
               ...generatedViewValidationOptions(app),
             })) throw new Error('Tool returned an invalid generated view');
+          }
+          if (isObject(result) && result.type === 'web-research') {
+            const validateResearch = request.compileValidationSchema(webResearchResultSchema, 'body');
+            if (!validateResearch(result) || !isWebResearchResult(result)) {
+              throw new Error('Tool returned an invalid web research result');
+            }
           }
           const serialized = JSON.stringify(result);
           if (serialized === undefined || Buffer.byteLength(serialized) > 1024 * 1024) {

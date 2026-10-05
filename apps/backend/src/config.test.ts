@@ -86,6 +86,33 @@ describe('backend configuration', () => {
         .toThrow('JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME');
     }
   });
+  it('validates the approved web research deployment, connection, and monthly request cap', () => {
+    const FOUNDRY_PROJECT_ENDPOINT = 'https://resource.services.ai.azure.com/api/projects/jarvis';
+    expect(loadConfig({
+      FOUNDRY_PROJECT_ENDPOINT,
+      JARVIS_WEB_RESEARCH_DEPLOYMENT_NAME: 'gpt-4.1-mini',
+      JARVIS_BING_GROUNDING_CONNECTION_ID: 'GroundingWithBingSearch',
+    }).webResearch).toEqual({
+      deploymentName: 'gpt-4.1-mini',
+      connectionId: 'GroundingWithBingSearch',
+      monthlyCap: 350,
+    });
+    expect(loadConfig({}).webResearch).toBeUndefined();
+    expect(() => loadConfig({ JARVIS_WEB_RESEARCH_DEPLOYMENT_NAME: 'gpt-4.1-mini' }))
+      .toThrow('must be configured together');
+    expect(() => loadConfig({
+      JARVIS_BING_GROUNDING_CONNECTION_ID: 'GroundingWithBingSearch',
+    })).toThrow('must be configured together');
+    expect(() => loadConfig({
+      FOUNDRY_PROJECT_ENDPOINT,
+      JARVIS_WEB_RESEARCH_DEPLOYMENT_NAME: 'gpt-4.1-mini',
+      JARVIS_BING_GROUNDING_CONNECTION_ID: 'GroundingWithBingSearch',
+      JARVIS_WEB_RESEARCH_MONTHLY_CAP: '0',
+    })).toThrow('JARVIS_WEB_RESEARCH_MONTHLY_CAP');
+    expect(() => loadConfig({
+      JARVIS_WEB_RESEARCH_MONTHLY_CAP: '350.5',
+    })).toThrow('JARVIS_WEB_RESEARCH_MONTHLY_CAP');
+  });
   it('accepts a complete bot, audio-origin, and Speech F0 configuration', () => {
     expect(loadConfig({
       TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',

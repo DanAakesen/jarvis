@@ -76,12 +76,17 @@ import { createTeamsBotModule, createTeamsConnector } from './teams/bot.js';
 import { createTeamsNotificationService } from './teams/service.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
 import { startGraphPresenceMonitor } from './graph/presence-monitor.js';
+import { createWebResearchUsageStore } from './database/web-research-usage-store.js';
+import { createWebResearchModule } from './research/tools.js';
 
 try {
   const config = loadConfig();
   const databaseConfig = loadDatabaseConfig();
   if (config.teams && !databaseConfig) {
     throw new ConfigurationError('SQL is required for Teams conversations and confirmations');
+  }
+  if (config.webResearch && !databaseConfig) {
+    throw new ConfigurationError('SQL is required for the web research monthly request limit');
   }
   const archiveStorageAccount = loadTaskEventArchiveStorageAccount();
   if (databaseConfig && !archiveStorageAccount) {
@@ -399,6 +404,20 @@ try {
       onStatusError: () => logger.warn('pc_bridge.status_update_failed'),
     }),
   ];
+  if (database && credential && config.webResearch && config.foundryProjectEndpoint) {
+    modules.push(createWebResearchModule({
+      projectEndpoint: config.foundryProjectEndpoint,
+      deploymentName: config.webResearch.deploymentName,
+      connectionId: config.webResearch.connectionId,
+      monthlyCap: config.webResearch.monthlyCap,
+      usageStore: createWebResearchUsageStore(database.pool),
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Web research identity unavailable');
+        return token.token;
+      },
+    }));
+  }
   if (memoryStore) {
     modules.push(createMemoryModule({
       store: memoryStore,

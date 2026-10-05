@@ -254,7 +254,10 @@ function safeWebSourceUrl(value) {
   if (!boundedString(value, 2_000, 1)) return false;
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && !url.username && !url.password && !url.port;
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/gu, '');
+    return url.protocol === 'https:' && !url.username && !url.password && !url.port &&
+      hostname.includes('.') && !hostname.includes(':') && !/^(?:\d{1,3}\.){3}\d{1,3}$/u.test(hostname) &&
+      hostname !== 'localhost' && !/\.(?:localhost|local|internal|test|invalid)$/u.test(hostname);
   } catch {
     return false;
   }
@@ -449,6 +452,15 @@ export function isWebResearchResult(value) {
     !value.unsupportedClaims.every((claim) => boundedString(claim, 500, 1)) ||
     !isGeneratedView(value.view) || value.view.source.id !== 'web.research' ||
     value.view.source.status !== value.status) return false;
+  if ((value.status === 'complete' && (value.sources.length === 0 || value.reason !== undefined ||
+      value.unavailableSources.length > 0 || value.unsupportedClaims.length > 0)) ||
+      (value.status === 'partial' && (value.sources.length === 0 || value.reason === undefined)) ||
+      (value.status === 'unavailable' && (value.sources.length > 0 || value.reason === undefined)) ||
+      !isObject(value.view.data) || !Array.isArray(value.view.data.items) ||
+      value.view.data.items.length !== value.sources.length ||
+      value.view.data.items.some((item, index) => !isObject(item) ||
+        item.title !== value.sources[index]?.title || !isObject(item.action) ||
+        item.action.type !== 'open-link' || item.action.url !== value.sources[index]?.url)) return false;
   return true;
 }
 

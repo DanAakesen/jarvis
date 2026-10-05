@@ -19,6 +19,11 @@ export interface BackendConfig {
   foundryChatAgentName?: string;
   foundryProjectEndpoint?: string;
   foundryMemoryEmbeddingDeploymentName?: string;
+  webResearch?: {
+    deploymentName: string;
+    connectionId: string;
+    monthlyCap: number;
+  };
   githubAppId?: string;
   graphAppId?: string;
   graphTimeZone?: string;
@@ -131,6 +136,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (foundryMemoryEmbeddingDeploymentName !== undefined && foundryProjectEndpoint === undefined) {
     throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when memory embeddings are configured');
   }
+  const webResearchDeploymentName = env.JARVIS_WEB_RESEARCH_DEPLOYMENT_NAME;
+  const bingGroundingConnectionId = env.JARVIS_BING_GROUNDING_CONNECTION_ID;
+  if ((webResearchDeploymentName === undefined) !== (bingGroundingConnectionId === undefined)) {
+    throw new ConfigurationError('JARVIS_WEB_RESEARCH_DEPLOYMENT_NAME and JARVIS_BING_GROUNDING_CONNECTION_ID must be configured together');
+  }
+  if (webResearchDeploymentName !== undefined &&
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(webResearchDeploymentName)) {
+    throw new ConfigurationError('JARVIS_WEB_RESEARCH_DEPLOYMENT_NAME must be a valid deployment name');
+  }
+  if (bingGroundingConnectionId !== undefined &&
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(bingGroundingConnectionId)) {
+    throw new ConfigurationError('JARVIS_BING_GROUNDING_CONNECTION_ID must be a valid connection ID');
+  }
+  if (webResearchDeploymentName !== undefined && foundryProjectEndpoint === undefined) {
+    throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when web research is configured');
+  }
+  const webResearchCapValue = env.JARVIS_WEB_RESEARCH_MONTHLY_CAP ?? '350';
+  if (!/^\d+$/u.test(webResearchCapValue) || Number(webResearchCapValue) < 1 ||
+      Number(webResearchCapValue) > 100_000) {
+    throw new ConfigurationError('JARVIS_WEB_RESEARCH_MONTHLY_CAP must be an integer from 1 to 100000');
+  }
   const foundryRunnerAgentName = env.FOUNDRY_RUNNER_AGENT_NAME;
   if (foundryRunnerAgentName !== undefined && !/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName)) {
     throw new ConfigurationError('FOUNDRY_RUNNER_AGENT_NAME must be a valid agent name');
@@ -227,6 +253,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
+    ...(webResearchDeploymentName === undefined || bingGroundingConnectionId === undefined ? {} : {
+      webResearch: {
+        deploymentName: webResearchDeploymentName,
+        connectionId: bingGroundingConnectionId,
+        monthlyCap: Number(webResearchCapValue),
+      },
+    }),
     ...(githubAppId === undefined ? {} : { githubAppId }),
     ...(graphAppId === undefined ? {} : { graphAppId: graphAppId.toLowerCase() }),
     ...(graphTimeZone === undefined ? {} : { graphTimeZone }),

@@ -198,6 +198,16 @@ test('validates bounded web research results and permits only citation URLs in r
     ...result,
     sources: [{ ...result.sources[0], url: 'http://example.org/research' }],
   }), false);
+  assert.equal(isWebResearchResult({
+    ...result,
+    sources: [{ ...result.sources[0], url: 'https://127.0.0.1/research' }],
+  }), false);
+  assert.equal(isWebResearchResult({
+    ...result,
+    view: { ...view, data: { items: [{ title: 'Different source', action: {
+      type: 'open-link', url: 'https://other.example/research', label: 'Open source',
+    } }] } },
+  }), false);
   assert.equal(isWebResearchResult({ ...result, view: { ...view, source: { ...view.source, status: 'partial' } } }), false);
 });
 
