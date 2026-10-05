@@ -194,8 +194,16 @@ The shared top bar reports when an actual chat turn or voice response is running
 Temporary client windows support title dragging, edge resizing and icon lifecycle
 actions. Keyboard arrangement lives under Arrange: focus Move or Resize and use
 arrow keys (Shift for larger layered steps); Escape closes the menu and returns
-focus. All presentation motion preserves readable states under reduced motion.
-P8-21 changes no conversation, workspace-delivery or persistence contracts.
+focus. Each window's accessible overflow control opens its keyboard Arrange
+actions; the workspace header retains its shared tile/layer control. Escape
+closes the disclosure and returns focus. The shell shows Jarvis once on the home
+route and adds the area and matching page on deeper routes. All presentation
+motion preserves readable states under reduced motion. Jarvis workspace
+commands use the authenticated Now event stream, are scoped to the active
+signed-in workspace session, and are acknowledged only after the client applies
+or refuses them. Generated views and window state stay in memory; closing or
+changing a view does not change conversation or source data. A local-fixture
+footer belongs only to screenshot fixtures and is absent from the production UI.
 
 #### Software Factory — task view
 
@@ -341,8 +349,12 @@ arrange temporary views of accessible data, while Dan can override layouts and
 move/resize windows. Window chrome can minimise, maximise, or close a view.
 Minimising retains the mounted view in memory and exposes a tab in the active
 workspace; Dan can restore it from the tab, and Jarvis can request restore
-through the workspace command interface. Authenticated Jarvis delivery remains
-P8-15. Closing a view changes only the temporary workspace and does not delete
+through the workspace command interface. P8-15 validates each command against
+the shared generated-view and operation
+allowlists, delivers it to the active client, and waits for that client's
+application acknowledgement. Disconnected, stale, expired, cancelled, or
+partially applied commands return a refusal or error rather than false success.
+Closing a view changes only the temporary workspace and does not delete
 conversation or source records.
 Voice enters immediately, hiding typing history and the composer. On desktop, the
 orb is centred without content windows and moves left when windows are present;
@@ -361,9 +373,10 @@ Fitness and Health are future areas; their detailed integrations remain deferred
 Generated views use versioned declarative JSON over existing authorised, bounded
 data sources and the renderer/action allowlists recorded in `ui.md`. They are
 temporary; HTML, JavaScript, and CSS supplied with a view are never executed.
-P8-14 currently uses a safe list renderer for the signed-in Now feed; the
-generated-view workspace remains planned under P8-06. This is planned behaviour,
-not a claim that the full shared workspace already exists.
+P8-14's fixed React renderers display these typed views in the signed-in
+workspace and contextual panel. P8-15's authenticated command tool controls
+their in-memory lifecycle and layout; live Entra/Foundry delivery remains
+unverified.
 
 Implementation status and live-service limitations are tracked in PLAN.md and
 the UI coverage report.

@@ -349,6 +349,7 @@ describe('Now feed API', () => {
 
     try {
       expect(response.headers.get('content-type')).toContain('text/event-stream');
+      expect(new TextDecoder().decode((await reader.read()).value)).toContain('event: workspace-ready');
       app.eventHub.publish({
         id: '20',
         taskId: '42',
@@ -396,6 +397,7 @@ describe('Now feed API', () => {
     const reader = response.body!.getReader();
 
     try {
+      expect(new TextDecoder().decode((await reader.read()).value)).toContain('event: workspace-ready');
       const next = reader.read().then(({ value }) => new TextDecoder().decode(value));
       nowEventHub.publish({ type: 'refresh' });
       const received = await Promise.race([

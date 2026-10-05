@@ -74,7 +74,7 @@ Dan's brief (4 October 2026): the UI should be stunning, with rich styling and m
 - **Light appearance (C):** warm neutral surfaces and editorial typography with an ink-particle orb, so light mode keeps the same states and motion vocabulary.
 - **Constraints kept:** every orb state is also labelled in text; no gradient text, no emoji icons, no lone coloured borders; sample data appears in the concepts only.
 
-Canonical colour, type, spacing, radius, surface, elevation and motion values belong in `apps/web/src/styles.css`. P8-20 (#282) applies Concept B/C across the current shell and pages: the dark aurora is CSS-only, and the orb follows reported voice state plus decoded playback PCM. P8-21 refines the conversation and client workspace on those same tokens. Chat/voice activity is explicit in the top bar; running tool feedback requires a published tool-call state, and generated workspace windows still await P8-15 delivery. P8-14's safe list renderer is used in the Now panel. Hidden tabs pause animation; reduced motion keeps all content and state labels readable.
+Canonical colour, type, spacing, radius, surface, elevation and motion values belong in `apps/web/src/styles.css`. P8-20 (#282) applies Concept B/C across the current shell and pages: the dark aurora is CSS-only, and the orb follows reported voice state plus decoded playback PCM. P8-21 refines the conversation and client workspace on those same tokens. Chat/voice activity is explicit in the top bar; running tool feedback requires a published tool-call state. P8-14/P8-15 now render typed generated views in temporary windows and the contextual panel using fixed React elements; no generated code executes. Hidden tabs pause animation; reduced motion keeps all content and state labels readable.
 
 ## Voice end (P8-12, decided 4 October 2026; implemented in P8-10)
 
@@ -370,17 +370,27 @@ live caret beside readable text. Only a published tool-call state gets the
 running-tool shimmer; thinking is not treated as a tool call. Running Now tasks
 use a restrained sheen, while completed outcomes stay static.
 
-Window titles are drag handles; right/bottom edges and the corner resize.
-Arrange keeps movement, sizing and order controls out of the resting title bar.
-Open Arrange, focus **Move** or **Resize**, then use arrow keys; Shift makes
-larger steps in a layered desktop layout. In tiles, Move changes order and
-Resize changes the tile span. On narrow screens width stays full-screen.
-Escape closes Arrange and returns focus to its trigger. Window entry,
-focus, minimise and restore reuse the shared motion tokens without waiting
-for animation to update state; reduced motion removes displacement and shimmer.
+Window titles are drag handles; right/bottom edges and the corner resize. Each
+window keeps minimise, maximise and close in its title actions, with a 44px
+ellipsis disclosure for keyboard Arrange. The workspace header retains the
+shared tile/layer control. Open a window's overflow, focus **Move** or **Resize**,
+then use arrow keys; Shift makes larger steps in a layered desktop layout. In
+tiles, Move changes order and Resize changes the tile span. On narrow screens
+width stays full-screen. Escape closes Arrange and returns focus to its trigger.
+Window entry, focus, minimise and restore reuse the shared motion tokens without
+waiting for animation to update state; reduced motion removes displacement and
+shimmer.
 
-Local screenshot fixtures are in `docs/ui/screenshots/p8-21-*`; they are not
-production conversations or proof of live agent-directed windows.
+The top bar shows **Jarvis** once on the home route. Deeper routes show the area
+and the most specific matching page, such as **Jarvis / Software Factory /
+Tasks**. Phone layouts continue to hide the secondary breadcrumb to protect the
+single-line bar. The local-fixture footer is added only by screenshot capture;
+it is not part of the production shell or bundle.
+
+Local screenshot fixtures are in `docs/ui/screenshots/p8-21-*` and
+`docs/ui/screenshots/p8-22-*`; they are not production conversations or proof
+of live agent-directed windows. P8-22 phone captures show the typing shell and
+workspace, not the phone voice layout owned by P8-11.
 
 ## Next-generation shared shell (structure agreed; P8-04 implemented)
 

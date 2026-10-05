@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  acknowledgeWorkspaceCommand,
   dismissNowActivity,
   loadNowFeed,
   NowFeedStreamError,
@@ -148,6 +149,68 @@ describe('Now feed client', () => {
     });
 
     expect(updates).toHaveBeenCalledTimes(2);
+  });
+
+  it('delivers only validated workspace commands from the authenticated SSE stream', async () => {
+    const sessionId = '12345678-1234-4234-8234-123456789abc';
+    const command = {
+      commandId: 'create-view',
+      operation: 'create' as const,
+      viewId: 'research',
+      view: {
+        version: 1 as const,
+        title: 'Research summary',
+        renderer: 'list' as const,
+        source: { id: 'factory.tasks' as const, status: 'complete' as const },
+        data: { items: [{ title: 'Source-linked finding' }] },
+      },
+    };
+    const controller = new AbortController();
+    const ready = vi.fn();
+    const received = vi.fn(() => controller.abort());
+    fetchMock.mockResolvedValueOnce(eventStream([
+      `event: workspace-ready\ndata: ${JSON.stringify({ sessionId })}`,
+      `event: workspace-command\ndata: ${JSON.stringify({ command, expiresAt: Date.now() + 5_000 })}`,
+    ].join('\n\n') + '\n\n'));
+
+    await streamNowFeed({
+      backendUrl: 'https://api.example.com',
+      getAccessToken,
+      onUpdate: () => {},
+      onStatus: () => {},
+      onWorkspaceReady: ready,
+      onWorkspaceCommand: received,
+      signal: controller.signal,
+    });
+
+    expect(ready).toHaveBeenCalledWith(sessionId, undefined);
+    expect(received).toHaveBeenCalledWith(command, expect.any(Number), undefined);
+  });
+
+  it('posts authenticated command acknowledgements and rejects invalid IDs locally', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await acknowledgeWorkspaceCommand(
+      'https://api.example.com',
+      'command-1',
+      '12345678-1234-4234-8234-123456789abc',
+      true,
+      getAccessToken,
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.com/now/workspace/commands/command-1/ack',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ sessionId: '12345678-1234-4234-8234-123456789abc', applied: true }),
+      }),
+    );
+    await expect(acknowledgeWorkspaceCommand(
+      'https://api.example.com',
+      '../other',
+      '12345678-1234-4234-8234-123456789abc',
+      true,
+      getAccessToken,
+    )).rejects.toThrow('Invalid workspace command acknowledgement');
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it('does not retry a denied SSE request', async () => {

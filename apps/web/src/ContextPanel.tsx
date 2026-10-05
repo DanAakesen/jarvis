@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ContextPanelContext, useContextPanel } from './context-panel-state';
 import type { ContextPanelContent } from './context-panel-state';
+import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 
 const emptyContext: ContextPanelContent = { title: 'Context', status: 'empty' };
 
@@ -49,7 +50,9 @@ export function ContextPanel({ closeIcon }: { closeIcon: ReactNode }) {
     ? content.message ?? 'No relevant information is available yet.'
     : content.status === 'loading'
       ? content.message ?? 'Loading contextual information…'
-      : content.message;
+      : content.status === 'view'
+        ? undefined
+        : content.message;
 
   return (
     <aside
@@ -64,11 +67,18 @@ export function ContextPanel({ closeIcon }: { closeIcon: ReactNode }) {
           {closeIcon}
         </button>
       </div>
-      {content.status === 'loading'
-        ? <p role="status">{message}</p>
-        : content.status === 'error'
-          ? <p role="alert">{message}</p>
-          : <p>{message}</p>}
+      {content.status === 'view'
+        ? (
+          <GeneratedViewRenderer
+            view={content.view}
+            {...(content.trustedBlobHost ? { trustedBlobHost: content.trustedBlobHost } : {})}
+          />
+        )
+        : content.status === 'loading'
+          ? <p role="status">{message}</p>
+          : content.status === 'error'
+            ? <p role="alert">{message}</p>
+            : <p>{message}</p>}
     </aside>
   );
 }

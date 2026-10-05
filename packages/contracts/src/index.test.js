@@ -5,7 +5,9 @@ import {
   generatedViewRenderers,
   generatedViewSchema,
   isGeneratedView,
+  isWorkspaceCommand,
   generatedViewVersion,
+  workspaceCommandSchema,
 } from './index.js';
 
 const source = { id: 'factory.tasks', status: 'complete' };
@@ -115,4 +117,50 @@ test('allows images only on GitHub hosts or the configured Jarvis Blob host', ()
   assert.equal(isGeneratedView(view), false);
   assert.equal(isGeneratedView(view, { trustedBlobHost: 'jarvisdata.blob.core.windows.net' }), true);
   assert.equal(isGeneratedView(view, { trustedBlobHost: 'other.blob.core.windows.net' }), false);
+});
+
+test('defines and validates bounded workspace commands for the approved operations', () => {
+  const base = { commandId: 'cmd-1' };
+  const commands = [
+    { ...base, operation: 'create', viewId: 'research', view: listView() },
+    { ...base, operation: 'update', viewId: 'research', view: listView() },
+    ...['show', 'close', 'minimise', 'restore', 'focus'].map((operation) => ({
+      ...base, operation, viewId: 'research',
+    })),
+    { ...base, operation: 'move', viewId: 'research', x: 0.1, y: 0.2 },
+    { ...base, operation: 'resize', viewId: 'research', width: 0.6, height: 0.5, x: 0.1, y: 0.2 },
+    { ...base, operation: 'layout', arrangement: 'layered' },
+    { ...base, operation: 'context-panel', action: 'open', view: listView() },
+    ...['close', 'toggle'].map((action) => ({ ...base, operation: 'context-panel', action })),
+  ];
+
+  assert.equal(workspaceCommandSchema.oneOf.length, 13);
+  for (const command of commands) assert.equal(isWorkspaceCommand(command), true, command.operation);
+});
+
+test('rejects invalid workspace IDs, geometry, operations, and generated-view allowlists', () => {
+  const command = { commandId: 'cmd-1', operation: 'move', viewId: 'research', x: 0.1, y: 0.2 };
+  assert.equal(isWorkspaceCommand({ ...command, viewId: '../settings' }), false);
+  assert.equal(isWorkspaceCommand({ ...command, commandId: 'cmd bad' }), false);
+  assert.equal(isWorkspaceCommand({ ...command, operation: 'execute' }), false);
+  assert.equal(isWorkspaceCommand({ ...command, x: Number.NaN }), false);
+  assert.equal(isWorkspaceCommand({ ...command, x: -0.1 }), false);
+  assert.equal(isWorkspaceCommand({ ...command, y: 1.1 }), false);
+  assert.equal(isWorkspaceCommand({
+    commandId: 'cmd-2', operation: 'resize', viewId: 'research', width: 0.2, height: 0.5,
+  }), false);
+  assert.equal(isWorkspaceCommand({
+    commandId: 'cmd-3', operation: 'resize', viewId: 'research', width: 0.92, height: 0.8, x: 0.1,
+  }), false);
+  assert.equal(isWorkspaceCommand({
+    commandId: 'cmd-4', operation: 'layout', arrangement: 'script',
+  }), false);
+  assert.equal(isWorkspaceCommand({
+    commandId: 'cmd-5', operation: 'create', viewId: 'research', view: listView({ renderer: 'script' }),
+  }), false);
+  assert.equal(isWorkspaceCommand({
+    commandId: 'cmd-6', operation: 'context-panel', action: 'open', view: listView({
+      actions: [{ type: 'call-tool', tool: 'unknown_tool' }],
+    }),
+  }, { registeredTools: ['list_tasks'] }), false);
 });

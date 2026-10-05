@@ -1,11 +1,15 @@
 import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react';
+import { isWorkspaceCommand, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
+import { GeneratedViewRenderer } from './GeneratedViewRenderer';
+export type { WorkspaceCommand } from '@jarvis/contracts';
 
 export type WorkspaceViewContent =
   | { status: 'empty' }
   | { status: 'loading' }
   | { status: 'error'; message: string; retry?: () => void | Promise<void> }
   | { status: 'interrupted'; message: string; content?: ReactNode; resume?: () => void | Promise<void> }
+  | { status: 'generated'; view: GeneratedView; trustedBlobHost?: string }
   | { status: 'ready'; content: ReactNode };
 
 export interface WorkspaceView {
@@ -14,13 +18,8 @@ export interface WorkspaceView {
   content: WorkspaceViewContent;
 }
 
-export type WorkspaceCommand = {
-  operation: 'minimise' | 'restore' | 'focus' | 'close';
-  viewId: string;
-};
-
 export interface WorkspaceController {
-  dispatch: (command: WorkspaceCommand) => boolean;
+  dispatch: (command: WorkspaceCommand, trustedBlobHost?: string) => boolean;
   minimiseAll: () => void;
   hasVisibleViews: () => boolean;
 }
@@ -40,7 +39,7 @@ type Gesture = {
 const clamp = (value: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, value)) * 1000) / 1000;
 const percent = (value: number) => `${Number((value * 100).toFixed(2))}%`;
 
-function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'close' | 'view' }) {
+function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'close' | 'view' | 'more' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'minimise':
@@ -53,6 +52,8 @@ function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'clo
       return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>;
     case 'view':
       return <svg {...common}><rect x="4" y="5" width="16" height="14" rx="2" /><path d="M4 9h16" /></svg>;
+    case 'more':
+      return <svg {...common}><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>;
   }
 }
 
@@ -72,6 +73,8 @@ export const Workspace = forwardRef<WorkspaceController, {
   onVisibleViewsChange?: (visible: boolean) => void;
 }>(function Workspace({ views, onVisibleViewsChange }, ref) {
   const workspaceId = useId();
+  const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
+  const workspaceViews = useMemo(() => [...views, ...agentViews], [agentViews, views]);
   const [arrangement, setArrangement] = useState<Arrangement>('tiled');
   const [order, setOrder] = useState<string[]>([]);
   const [geometry, setGeometry] = useState<Record<string, Geometry>>({});
@@ -125,14 +128,14 @@ export const Workspace = forwardRef<WorkspaceController, {
   }, []);
 
   const orderedViews = useMemo(() => {
-    const initialOrder = new Map(views.map((view, index) => [view.id, index]));
+    const initialOrder = new Map(workspaceViews.map((view, index) => [view.id, index]));
     const currentOrder = new Map(order.map((id, index) => [id, index]));
-    return [...views].sort((left, right) => (
+    return [...workspaceViews].sort((left, right) => (
       (currentOrder.get(left.id) ?? order.length + initialOrder.get(left.id)!) -
       (currentOrder.get(right.id) ?? order.length + initialOrder.get(right.id)!)
     ));
-  }, [order, views]);
-  const viewIds = useMemo(() => new Set(views.map(({ id }) => id)), [views]);
+  }, [order, workspaceViews]);
+  const viewIds = useMemo(() => new Set(workspaceViews.map(({ id }) => id)), [workspaceViews]);
   const minimizedViewIds = useMemo(
     () => new Set([...minimizedViewIdsState].filter((id) => viewIds.has(id))),
     [minimizedViewIdsState, viewIds],
@@ -180,13 +183,13 @@ export const Workspace = forwardRef<WorkspaceController, {
       view.id, current[view.id] ?? defaultGeometry(index),
     ])));
     setOrder(ids);
-    setAnnouncement(`${views.find((view) => view.id === id)?.title} ${label}.`);
+    setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} ${label}.`);
     return true;
-  }, [orderedViews, views]);
+  }, [orderedViews, workspaceViews]);
 
   const isViewOpen = useCallback((id: string) => {
-    return views.some((view) => view.id === id) && !closedViewIds.has(id);
-  }, [closedViewIds, views]);
+    return workspaceViews.some((view) => view.id === id) && !closedViewIds.has(id);
+  }, [closedViewIds, workspaceViews]);
 
   const minimiseView = useCallback((id: string): boolean => {
     if (!isViewOpen(id)) return false;
@@ -196,9 +199,9 @@ export const Workspace = forwardRef<WorkspaceController, {
     }
     setMaximizedViewId((current) => current === id ? null : current);
     setMinimizedViewIds((current) => new Set(current).add(id));
-    setAnnouncement(`${views.find((view) => view.id === id)?.title} minimised.`);
+    setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} minimised.`);
     return true;
-  }, [isViewOpen, minimizedViewIds, views]);
+  }, [isViewOpen, minimizedViewIds, workspaceViews]);
 
   const restoreView = useCallback((id: string): boolean => {
     if (!isViewOpen(id)) return false;
@@ -212,12 +215,13 @@ export const Workspace = forwardRef<WorkspaceController, {
       next.delete(id);
       return next;
     });
-    setAnnouncement(`${views.find((view) => view.id === id)?.title} restored.`);
+    setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} restored.`);
     return true;
-  }, [foreground?.id, isViewOpen, phone, views]);
+  }, [foreground?.id, isViewOpen, phone, workspaceViews]);
 
   const closeView = useCallback((id: string): boolean => {
-    if (!views.some((view) => view.id === id)) return false;
+    const generated = agentViews.some((view) => view.id === id);
+    if (!workspaceViews.some((view) => view.id === id)) return false;
     if (closedViewIds.has(id)) return true;
     if (windowElements.current.get(id)?.contains(document.activeElement)) {
       const remaining = openViews.filter((view) => view.id !== id);
@@ -226,7 +230,23 @@ export const Workspace = forwardRef<WorkspaceController, {
         ? { target: minimizedViewIds.has(next.id) ? 'tab' : 'window', viewId: next.id }
         : { target: 'workspace' };
     }
-    setClosedViewIds((current) => new Set(current).add(id));
+    if (generated) {
+      setAgentViews((current) => current.filter((view) => view.id !== id));
+      setClosedViewIds((current) => {
+        if (!current.has(id)) return current;
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+      setGeometry((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+      setOrder((current) => current.filter((viewId) => viewId !== id));
+    } else {
+      setClosedViewIds((current) => new Set(current).add(id));
+    }
     setMinimizedViewIds((current) => {
       if (!current.has(id)) return current;
       const next = new Set(current);
@@ -234,9 +254,9 @@ export const Workspace = forwardRef<WorkspaceController, {
       return next;
     });
     setMaximizedViewId((current) => current === id ? null : current);
-    setAnnouncement(`${views.find((view) => view.id === id)?.title} closed.`);
+    setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} closed.`);
     return true;
-  }, [closedViewIds, minimizedViewIds, openViews, views]);
+  }, [agentViews, closedViewIds, minimizedViewIds, openViews, workspaceViews]);
 
   const focusView = useCallback((id: string): boolean => {
     if (!isViewOpen(id)) return false;
@@ -276,6 +296,87 @@ export const Workspace = forwardRef<WorkspaceController, {
     if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.5) switchView(dx < 0 ? 1 : -1);
   }
 
+  const dispatchCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string): boolean => {
+    if (!isWorkspaceCommand(command, trustedBlobHost ? { trustedBlobHost } : undefined)) return false;
+    const viewIndex = 'viewId' in command
+      ? orderedViews.findIndex((view) => view.id === command.viewId)
+      : -1;
+    switch (command.operation) {
+      case 'create':
+        if (workspaceViews.some((view) => view.id === command.viewId)) return false;
+        setAgentViews((current) => [...current, {
+          id: command.viewId,
+          title: command.view.title,
+          content: {
+            status: 'generated',
+            view: command.view,
+            ...(trustedBlobHost ? { trustedBlobHost } : {}),
+          },
+        }]);
+        setGeometry((current) => ({ ...current, [command.viewId]: defaultGeometry(workspaceViews.length) }));
+        setAnnouncement(`${command.view.title} created.`);
+        return true;
+      case 'update':
+        if (!agentViews.some((view) => view.id === command.viewId) || closedViewIds.has(command.viewId)) return false;
+        setAgentViews((current) => current.map((view) => view.id === command.viewId
+          ? {
+            ...view,
+            title: command.view.title,
+            content: {
+              status: 'generated',
+              view: command.view,
+              ...(trustedBlobHost ? { trustedBlobHost } : {}),
+            },
+          }
+          : view));
+        setAnnouncement(`${command.view.title} updated.`);
+        return true;
+      case 'show':
+        return focusView(command.viewId);
+      case 'close':
+        return closeView(command.viewId);
+      case 'minimise':
+        return minimiseView(command.viewId);
+      case 'restore':
+        return restoreView(command.viewId);
+      case 'focus':
+        return focusView(command.viewId);
+      case 'move': {
+        if (!isViewOpen(command.viewId) || viewIndex < 0) return false;
+        const current = geometry[command.viewId] ?? defaultGeometry(viewIndex);
+        if (command.x + current.width > 1 || command.y + current.height > 1) return false;
+        setGeometry((value) => ({
+          ...value,
+          [command.viewId]: { ...(value[command.viewId] ?? current), x: command.x, y: command.y },
+        }));
+        setAnnouncement(`${workspaceViews.find((view) => view.id === command.viewId)?.title} moved.`);
+        return true;
+      }
+      case 'resize': {
+        if (!isViewOpen(command.viewId) || viewIndex < 0) return false;
+        const current = geometry[command.viewId] ?? defaultGeometry(viewIndex);
+        const x = command.x ?? current.x;
+        const y = command.y ?? current.y;
+        if (x + command.width > 1 || y + command.height > 1) return false;
+        setGeometry((value) => ({
+          ...value,
+          [command.viewId]: {
+            ...(value[command.viewId] ?? current), x, y, width: command.width, height: command.height,
+          },
+        }));
+        setAnnouncement(`${workspaceViews.find((view) => view.id === command.viewId)?.title} resized.`);
+        return true;
+      }
+      case 'layout':
+        setArrangement(command.arrangement);
+        setAnnouncement(`Workspace arranged in ${command.arrangement} layout.`);
+        return true;
+      case 'context-panel':
+        return false;
+    }
+  }, [agentViews, closeView, closedViewIds, focusView, geometry, isViewOpen, minimiseView,
+    orderedViews, restoreView, workspaceViews]);
+
   const minimiseAll = useCallback(() => {
     const ids = visibleViews.map(({ id }) => id);
     if (ids.length === 0) return;
@@ -287,21 +388,10 @@ export const Workspace = forwardRef<WorkspaceController, {
   }, [visibleViews]);
 
   useImperativeHandle(ref, () => ({
-    dispatch(command) {
-      switch (command.operation) {
-        case 'minimise':
-          return minimiseView(command.viewId);
-        case 'restore':
-          return restoreView(command.viewId);
-        case 'focus':
-          return focusView(command.viewId);
-        case 'close':
-          return closeView(command.viewId);
-      }
-    },
+    dispatch: dispatchCommand,
     minimiseAll,
     hasVisibleViews: () => visibleViews.length > 0,
-  }), [closeView, focusView, minimiseAll, minimiseView, restoreView, visibleViews.length]);
+  }), [dispatchCommand, minimiseAll, visibleViews.length]);
 
   function raiseView(event: { target: EventTarget }, id: string) {
     if (arrangement !== 'layered' || narrow) return;
@@ -322,7 +412,7 @@ export const Workspace = forwardRef<WorkspaceController, {
       x: clamp(current.x + dx, 0, 1 - current.width),
       y: clamp(current.y + dy, 0, 1 - current.height),
     }), index);
-    setAnnouncement(`${views.find((view) => view.id === id)?.title} moved.`);
+    setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} moved.`);
   }
 
   function resizeBy(id: string, dw: number, dh: number, index: number) {
@@ -337,7 +427,7 @@ export const Workspace = forwardRef<WorkspaceController, {
         y: clamp(current.y, 0, 1 - height),
       };
     }, index);
-    setAnnouncement(`${views.find((view) => view.id === id)?.title} resized.`);
+    setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} resized.`);
   }
 
   function adjustTileSize(id: string, columns: number, rows: number, index: number) {
@@ -346,7 +436,7 @@ export const Workspace = forwardRef<WorkspaceController, {
       columns: clamp(current.columns + columns, 1, 2),
       rows: clamp(current.rows + rows, 1, 2),
     }), index);
-    setAnnouncement(`${views.find((view) => view.id === id)?.title} size changed.`);
+    setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} size changed.`);
   }
 
   function beginGesture(event: PointerEvent<HTMLElement>, id: string, kind: Gesture['kind'], index: number, edge?: Gesture['edge']) {
@@ -422,7 +512,7 @@ export const Workspace = forwardRef<WorkspaceController, {
       }
 
     }
-    setAnnouncement(`${views.find((view) => view.id === gesture.id)?.title} ${gesture.kind === 'move' ? 'moved' : 'resized'}.`);
+    setAnnouncement(`${workspaceViews.find((view) => view.id === gesture.id)?.title} ${gesture.kind === 'move' ? 'moved' : 'resized'}.`);
   }
 
   function arrangeKeyDown(event: KeyboardEvent<HTMLDetailsElement>) {
@@ -636,7 +726,9 @@ export const Workspace = forwardRef<WorkspaceController, {
                 </h3>
                 <div className="workspace-window-actions">
                   {!maximized && !phone && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
-                    <summary>Arrange</summary>
+                    <summary className="workspace-arrange-trigger" role="button" aria-label={`Arrange ${view.title}`} title={`Arrange ${view.title}`}>
+                      <WindowIcon name="more" />
+                    </summary>
                     <div className="workspace-arrange-options">
                       <p id={`${titleId}-shortcuts`} className="workspace-shortcuts">
                         Focus Move or Resize, then use arrow keys. {narrow ? 'Up/down changes order or height; width stays full-screen.' : arrangement === 'tiled' ? 'Move changes order; Resize changes tile width or height.' : 'Shift + arrow makes a larger step.'} Escape closes Arrange.
@@ -731,6 +823,12 @@ export const Workspace = forwardRef<WorkspaceController, {
                   </>
                 )}
                 {view.content.status === 'ready' && view.content.content}
+                {view.content.status === 'generated' && (
+                  <GeneratedViewRenderer
+                    view={view.content.view}
+                    {...(view.content.trustedBlobHost ? { trustedBlobHost: view.content.trustedBlobHost } : {})}
+                  />
+                )}
                 {actionSuccess[view.id] && <p role="status">{actionSuccess[view.id]}</p>}
                 {actionErrors[view.id] && <p role="alert">{actionErrors[view.id]}</p>}
               </div>

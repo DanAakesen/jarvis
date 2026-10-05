@@ -239,7 +239,9 @@ erDiagram
   is a persisted UI preference. Tool-originated changes do not themselves push to
   an open client; applying them without reload depends on P8-13 and remains
   unverified. Settings have no history. Generated views and window arrangement
-  are not represented in `settings` and remain temporary.
+  are not represented in `settings` and remain temporary. P8-15 command
+  envelopes, queue/idempotency state, generated views, and acknowledgements are
+  process/client memory only; no table or migration was added.
   At the start of a hosted Jarvis
   session, the agent keeps the effective model and reasoning effort in memory for
   that session; the snapshot is not persisted.

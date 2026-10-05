@@ -318,12 +318,43 @@ focus, relative metadata, 320/280px overflow, draft reflow, pending controls,
 title dragging, edge resizing, Arrange keyboard/Escape focus, phone popup bounds,
 minimise/restore, maximised-window precedence over another open Arrange menu,
 and static readable reduced-motion states. Settled surface
-contrast checks exceed AA. `npm test --workspace @jarvis/web` passed 190 tests;
+contrast checks exceed AA. `npm test --workspace @jarvis/web` passed 201 tests;
 `npm run lint --workspace @jarvis/web` and `npm run build --workspace @jarvis/web`
-passed (existing chunk-size warning). Real phone keyboards, hardware audio,
-live Entra/Azure, tool-call event delivery and generated/agent-directed windows
-remain unverified; local workspace screenshots mount the real component with
-explicitly labelled fixtures, not a new runtime integration.
+passed (existing chunk-size warning). P8-15 was also exercised in Chromium at
+1280×900 and 390×844 with a scratch signed-in stub and mock Now/SSE/ack endpoints:
+create, layout, move, resize, context-panel open/close, minimise, restore, show,
+and close all applied and received owner-session acknowledgements. Generated
+script-shaped text remained literal, the phone page had no horizontal overflow,
+and the browser reported no page/console errors. A route-transition check
+acknowledged a create command on Settings and showed the same in-memory view
+after returning to the conversation. These checks exercise the real client and
+authenticated event/ack flow against fixtures, not real chat/voice tool
+invocation. Live Entra/Foundry delivery, real phone keyboards, and hardware audio
+remain unverified.
+P8-15 offline checks: `npm test --workspace @jarvis/contracts` (8/8);
+`npm test --workspace @jarvis/backend -- src/core/workspace-commands.test.ts
+src/core/now.test.ts` (14/14), backend lint and build pass; `npm test
+--workspace @jarvis/web` (201/201), web lint and build pass. The web build reports
+the existing advisory for a minified chunk over 500 kB.
+
+P8-22 reused the scratch-only auth/API workflow with Chromium at 1440×900 and
+390×844 in dark/light appearances. The real shell rendered the real Workspace
+component with two explicitly identified local views; the screenshot harness
+added the fixture-only footer after verifying it was absent from the app. The
+production build also contains no footer text. Browser checks confirmed the home
+breadcrumb is only “Jarvis,” the deep Factory breadcrumb is “Jarvis / Software
+Factory / Tasks,” each window has one 44×44 overflow trigger and three 44×44
+lifecycle buttons, the phone popup stays within 390×844, and reduced motion
+removes window transitions. Keyboard Enter opens Arrange, Escape closes it and
+returns focus, and arrow keys reorder a window. There were no browser console or
+page errors. Screenshots and concept comparisons are
+`docs/ui/screenshots/p8-22-{dark,light}-{desktop,phone}*.png`; phone comparisons
+use the voice concepts as appearance references only, not layout parity, because
+phone voice layout belongs to P8-11. Focused checks:
+`npm test --workspace @jarvis/web -- --run src/App.test.tsx src/Workspace.test.tsx`
+(44 passed), `npm run lint --workspace @jarvis/web`, and
+`npm run build --workspace @jarvis/web` (existing chunk-size advisory). Live
+Entra/API, physical phone hardware, and phone voice behavior remain unverified.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

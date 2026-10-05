@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import type { WorkspaceCommand } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
@@ -11,6 +13,7 @@ import { useContextPanel } from './context-panel-state';
 import { DatabaseWakeStatus } from './DatabaseWakeStatus';
 import { JarvisPage } from './JarvisPage';
 import { NotFoundPage, SignInPage } from './pages';
+import { NowFeedPanel } from './NowFeedPanel';
 import { SettingsPage } from './SettingsPage';
 import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
@@ -117,12 +120,32 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.('(max-width: 700px)').matches ?? false);
   const workspaceCommands = useMemo(() => ({
-    dispatch: (command: Parameters<WorkspaceController['dispatch']>[0]) => (
-      workspaceController.current?.dispatch(command) ?? false
-    ),
+    dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
+      if (command.operation === 'context-panel') {
+        if (command.action === 'open') {
+          contextPanel.show({
+            title: command.view.title,
+            status: 'view',
+            view: command.view,
+            ...(trustedBlobHost ? { trustedBlobHost } : {}),
+          });
+        } else if (command.action === 'close') {
+          contextPanel.close();
+        } else {
+          contextPanel.toggle();
+        }
+        return true;
+      }
+      return workspaceController.current?.dispatch(command, trustedBlobHost) ?? false;
+    },
     minimiseAll: () => workspaceController.current?.minimiseAll(),
     hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
-  }), []);
+  }), [contextPanel]);
+  const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
+    let applied = false;
+    flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
+    return applied;
+  }, [workspaceCommands]);
   const onVoiceActiveChange = useCallback((active: boolean) => {
     if (active && readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart) {
       workspaceController.current?.minimiseAll();
@@ -136,6 +159,9 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const activeArea = areas.find(({ path }) => pathname.startsWith(`/${path}`));
   const settingsActive = pathname.startsWith('/settings');
   const areaLabel = settingsActive ? 'Settings' : activeArea?.label ?? 'Jarvis';
+  const pageLabel = activeArea?.navigation
+    .filter(({ path }) => pathname === path || pathname.startsWith(`${path}/`))
+    .sort((left, right) => right.path.length - left.path.length)[0]?.label;
   const navigationItems = activeArea?.navigation ?? [{ label: 'Conversation', path: '/' }];
   const captureControls = <>
     <UnavailableControl id="screen-share-status" label="Share screen" explanation="Share screen from Activity, sharing and backend in the conversation." icon="screen" />
@@ -254,7 +280,18 @@ function ShellLayout({ signedIn, config, session, camera }: {
       <header className="app-topbar">
         <div className="topbar-context">
           <Link className="brand" to="/" aria-label="Jarvis home">Jarvis</Link>
-          {signedIn && <><span className="topbar-separator" aria-hidden="true">/</span><span className="topbar-area-label">{areaLabel}</span></>}
+          {signedIn && areaLabel !== 'Jarvis' && (
+            <>
+              <span className="topbar-separator" aria-hidden="true">/</span>
+              <span className="topbar-area-label">{areaLabel}</span>
+              {pageLabel && pageLabel !== areaLabel && (
+                <>
+                  <span className="topbar-separator" aria-hidden="true">/</span>
+                  <span className="topbar-page-label" aria-current="page">{pageLabel}</span>
+                </>
+              )}
+            </>
+          )}
         </div>
         {signedIn && (
           <div className="topbar-actions">
@@ -302,6 +339,16 @@ function ShellLayout({ signedIn, config, session, camera }: {
             {signedIn && (
               <div className="workspace-shell-area" hidden={pathname !== '/'}>
                 <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows} />
+              </div>
+            )}
+            {signedIn && pathname !== '/' && (
+              <div hidden>
+                <NowFeedPanel
+                  client={session.client}
+                  config={config}
+                  getAccessToken={getAccessToken}
+                  applyWorkspaceCommand={applyWorkspaceCommand}
+                />
               </div>
             )}
           </VoiceWorkspaceContext.Provider>

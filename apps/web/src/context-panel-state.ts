@@ -1,10 +1,12 @@
 import { createContext, useContext } from 'react';
+import type { GeneratedView } from '@jarvis/contracts';
 
 export type ContextPanelContent =
   | { title: string; status: 'empty'; message?: string }
   | { title: string; status: 'loading'; message?: string }
   | { title: string; status: 'ready'; message: string }
-  | { title: string; status: 'error'; message: string };
+  | { title: string; status: 'error'; message: string }
+  | { title: string; status: 'view'; view: GeneratedView; trustedBlobHost?: string };
 
 export interface ContextPanelController {
   content: ContextPanelContent;
