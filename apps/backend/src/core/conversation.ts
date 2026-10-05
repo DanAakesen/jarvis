@@ -249,7 +249,7 @@ export const conversationModule: BackendModule = {
             text,
             language: session.language,
             ...(request.body.screenContext === undefined ? {} : { screenContext: request.body.screenContext }),
-          }, authorization, controller.signal, { agentSessionId: `chat-${sessionId}` })[Symbol.asyncIterator]();
+          }, authorization, controller.signal)[Symbol.asyncIterator]();
           let next = agentIterator.next();
           if (classifier && finishReflex) {
             void runChatReflex(
@@ -294,7 +294,7 @@ export const conversationModule: BackendModule = {
             publishActivity('interrupted');
           } else {
             request.log.warn(
-              { reason: error instanceof Error ? error.message.slice(0, 200) : 'unknown' },
+              { failure: error instanceof Error ? error.message.slice(0, 120) : 'unknown' },
               'conversation.reply_failed',
             );
             publishActivity('failed');
