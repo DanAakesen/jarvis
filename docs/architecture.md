@@ -866,13 +866,20 @@ with the `https://ai.azure.com/.default` scope. The application payload contains
 the caller's delegated authorization and the stored source-message ID; it is not
 forwarded as the Foundry HTTP `Authorization` header. The hosted agent registers
 the chat handler with the Invocations protocol and returns the application-defined
-text SSE stream. The agent verifies the caller through the backend's `/me` route,
-confirms the exact source message in stored history, and uses at most 20 earlier
-messages / 32,000 characters as context. Its existing Responses tool loop records
-calls against Dan's message ID using the agent identity. The backend persists
-only a completed assistant response; an interrupted turn leaves Dan's message
-visible and the UI warns that an action may have completed. The browser never
-receives agent credentials.
+text SSE stream. The agent verifies the caller through the backend's `/me` route
+and confirms the exact source message in stored history. The backend history page
+contains the newest 100 messages across sessions in ascending ID order; the agent
+uses at most 20 earlier messages / 32,000 characters, including prior messages
+across a language/session switch. Prior Jarvis messages carry a bounded summary
+of audited tool names and outcomes only, never arguments or results. Per-turn
+context telemetry records message count, oldest/newest included IDs, whether the
+latest prior Jarvis message was included, and total context characters, without
+message text. The current task/status reference JSON precedes conversation
+history in the model input so the latest exchange remains next to the new user
+message. The existing Responses tool loop records calls against Dan's message ID
+using the agent identity. The backend persists only a completed assistant
+response; an interrupted turn leaves Dan's message visible and the UI warns that
+an action may have completed. The browser never receives agent credentials.
 
 P7-23 starts consuming the hosted-agent stream before scheduling the chat reflex.
 Reflex target discovery and Jev classification run concurrently with the reply;
