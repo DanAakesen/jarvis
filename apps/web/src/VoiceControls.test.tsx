@@ -98,6 +98,7 @@ describe('VoiceControls', () => {
     };
     act(() => options.onStatus('ready', 'Microphone is off.'));
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'End voice' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Ready' })).not.toBeNull();
     expect(instance.client.enableMicrophone).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Enable microphone' }));
     expect(instance.client.enableMicrophone).toHaveBeenCalledOnce();
@@ -114,6 +115,60 @@ describe('VoiceControls', () => {
     expect(onSessionEnded).toHaveBeenCalledOnce();
     expect(screen.queryByRole('button', { name: 'Start voice' })).not.toBeNull();
     expect(screen.getByLabelText('Jarvis work state').textContent).toBe('idle');
+  });
+
+  it('groups labelled icon controls and End voice beneath the state orb', () => {
+    const screenShare = {
+      sharing: true,
+      starting: false,
+      inspecting: false,
+      error: '',
+      start: vi.fn(async () => {}),
+      stop: vi.fn(),
+      inspect: vi.fn(async () => 'A desk.'),
+    };
+    const camera = {
+      sharing: true,
+      starting: false,
+      inspecting: false,
+      error: '',
+      start: vi.fn(async () => {}),
+      stop: vi.fn(),
+      inspect: vi.fn(async () => 'A mug.'),
+    };
+    render(
+      <VoiceControls
+        client={{} as PublicClientApplication}
+        config={config}
+        screenShare={screenShare}
+        camera={camera}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+    const instance = clients.instances[0];
+    if (!instance) throw new Error('Voice client was not created.');
+    const options = instance.options as {
+      onSessionReady: (sessionId: string) => void;
+      onStatus: (status: 'listening', message: string) => void;
+    };
+    act(() => {
+      options.onSessionReady('42');
+      options.onStatus('listening', 'Listening for your voice.');
+    });
+
+    const heading = screen.getByRole('heading', { level: 1, name: 'Listening' });
+    const presentation = heading.closest('.voice-orb-presentation');
+    expect(presentation).not.toBeNull();
+    const controls = screen.getByRole('group', { name: 'Voice controls' });
+    expect(controls.parentElement?.parentElement).toBe(presentation);
+    for (const name of ['Mute', 'Look at screen', 'Look at camera']) {
+      const button = screen.getByRole('button', { name });
+      expect(button.querySelector('svg')).not.toBeNull();
+      expect(button.getAttribute('title')).toMatch(/.+/u);
+      expect(button.parentElement).toBe(controls);
+    }
+    expect(screen.getByRole('button', { name: 'End voice' }).parentElement).toBe(controls.parentElement);
   });
 
   it('marks actual thinking and speaking states as active work, then clears on listening', () => {

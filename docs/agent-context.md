@@ -366,6 +366,31 @@ viewport overflowed and Chromium reported no console/page exceptions. The
 screenshots and fixtures remain in `/tmp/p8-16-acceptance`, not the repository.
 This exercises the real browser UI against local protocol fixtures, not live
 Entra, Foundry, microphone hardware, or deployed streaming.
+
+P8-23 reused a scratch-only fixture with the real `VoiceControls`, `VoiceOrb`,
+`Workspace` and project CSS. Chromium captured desktop listening/thinking/
+speaking at 1440×900 in dark and light, and phone speaking at 390×844 in both
+appearances; the fixture used simulated voice state and labelled sample views.
+Four comparison captures pair the dark/light desktop and phone speaking images
+with their matching Concept B/C references.
+Checks covered the hidden Workspace heading/header Arrange, window menus, voice
+control names/tooltips, 320/280px overflow, hidden-document aurora pause,
+reduced-motion readability/static presentation, menu Escape with focus return,
+second Escape to end voice, End voice, and rapid entry/exit. No page errors or
+failed requests were observed. Screenshots are labelled fixture evidence, not
+live authentication, physical audio/camera, generated-window delivery or
+P8-16 tool-event acceptance. A representative desktop speaking capture was
+visually inspected; the other captures were checked for state/layout by the
+browser harness. A ready-state fixture at 390, 372, 360, 320, 300 and 280px
+verified the explicit microphone action has no inherited top margin, End voice
+stays inside the dock, and the workspace clears the expanded dock. The status
+heading and detail share one atomic live region, so permission feedback can be
+announced even when the status remains Ready. Focused checks: `npm test
+--workspace @jarvis/web -- --run src/Workspace.test.tsx
+src/ConversationHistory.test.tsx src/VoiceControls.test.tsx
+src/VoiceOrb.test.tsx src/App.test.tsx` (89 passed), `npm run lint
+--workspace @jarvis/web`, and `npm run build --workspace @jarvis/web` passed;
+the build retains its existing chunk-size advisory.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

@@ -22,7 +22,7 @@ The complete list of what Jarvis does or will do, for UI design and planning. Ea
 | **Phone** | Away from the browser: Teams app or phone |
 | **Background** | Runs without Dan; shows only its effects |
 
-Status as of 4 October 2026.
+Status as of 5 October 2026.
 
 ## Jarvis: conversation and voice
 
@@ -129,9 +129,9 @@ Status as of 4 October 2026.
 | Window tabs and restore | Minimise a view without closing or saving it, then restore it from its tab or by asking Jarvis | Both | Main/voice workspace | Built offline; live agent delivery unverified | P8-07, P8-15 |
 | Contextual right panel | Open, close, or change relevant information without replacing the main content | Both | Main workspace | Built offline; live agent delivery unverified | P8-08, P8-15 |
 | Runtime-state orb | See listening, thinking, tool-call outcomes, speaking, interruption, reconnect, and failure states from typed runtime activity; listening appears only after voice readiness and observed microphone audio | Screen | Voice workspace | Built offline; live Azure/physical audio unverified | P8-09, P8-16 |
-| Desktop voice workspace | Enter full-page voice, carry open views across modes, and restore the typing layout; optionally minimise windows on entry (off by default) | Voice/chat | Main page | Built offline; live chat/voice delivery unverified; account preference persistence is P8-17 | P8-10, P8-14, P8-15, P8-16, P8-17 |
-| Phone workspace | Show one foreground view, switch by swipe, named/keyboard controls or client request, and dock active voice below content; return the orb to the main space with no content | Phone | Jarvis on phone; compact typing top bar and composer | Built offline; real components verified with labelled fixtures, authenticated agent delivery remains P8-15 and physical-phone acceptance unverified | P8-11 |
-| Manual voice-end affordance | Use the selected manual end control and Escape-key behavior without changing natural spoken ending | Both | Voice workspace | Implemented in P8-10 per the P8-12 decision | P8-10, P8-12 |
+| Desktop voice workspace | Enter full-page voice, carry open views across modes, and restore the typing layout; optionally minimise windows on entry (off by default) | Voice/chat | Main page | Built offline; voice presentation uses P8-20 tokens and P8-22 window chrome; generated workspace delivery remains P8-15, tool activity P8-16, and preference persistence P8-17 | P8-10, P8-14, P8-15, P8-16, P8-17, P8-23 |
+| Phone workspace | Show one foreground view, switch by swipe, named/keyboard controls or client request, and dock active voice below content; return the orb to the main space with no content | Phone | Jarvis on phone; compact typing top bar and composer | Built offline; real components verified with labelled fixtures, authenticated agent delivery remains P8-15 and physical-phone acceptance unverified | P8-11, P8-23 |
+| Manual voice-end affordance | Use the selected manual end control and Escape-key behavior without changing natural spoken ending | Both | Voice workspace | Implemented in P8-10 per the P8-12 decision; P8-23 groups End voice with the orb actions | P8-10, P8-12, P8-23 |
 | Theme controls and client persistence | Choose and persist light/dark appearance across visits; semantic theme variables update across the app. Custom and Jarvis-directed token changes remain unavailable pending P8-17, which uses P8-18's recorded allowlist. | Screen | Shared shell, Settings | Built (offline; live settings unverified) | P8-13 |
 | Shared visual and motion system | Use Concept B's living aurora in dark mode and Concept C's daylight surfaces in light mode; see readable, responsive feedback tied only to real chat/voice state and playback audio | Screen/voice | Current shell, conversation, tasks, projects, settings and usage | Built offline; live auth/settings/voice remain unverified | P8-20 |
 | Conversation and workspace concept polish | Start from a calm greeting and compact floating composer; read divider-free messages, live caret and quiet metadata; operate translucent windows and Now cards with purposeful, reduced-motion-safe feedback | Screen | Main page and client workspace | Built offline; local screenshot fixtures, not live agent delivery | P8-21 |

@@ -695,9 +695,9 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   to { transform: translate3d(4%, -3%, 0) rotate(16deg) scale(1.04); }
 }
 .voice-orb-copy { min-width: 0; }
-.voice-orb-status { display: grid; gap: 2px; color: var(--text); font-size: 16px; font-weight: 650; }
+.voice-orb-status { margin: 0; color: var(--text); font-size: 16px; font-weight: 650; line-height: 1.2; }
 .voice-orb-status[role="alert"] { color: var(--error); }
-.voice-orb-limitation { margin-top: 6px; font-size: var(--type-caption); }
+.voice-orb-detail { margin: 0; color: var(--text-muted); font-size: var(--type-caption); line-height: 1.4; }
 .secondary-button { min-height: 44px; padding: 0 16px; border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
 .secondary-button:hover:not(:disabled) { background: var(--disabled-surface); }
 .secondary-button:active:not(:disabled) { background: var(--rule); transform: translateY(1px); }
