@@ -1112,6 +1112,8 @@ function registerVoiceRoute(
         });
         return;
       }
+      // Bridge Protocol control messages from older clients are not valid on the voice route.
+      if (event?.type === 'session.start') return;
       if (event?.type === 'session.update' || isBrowserControlledToolOutput(event)) {
         close(1008, 'Voice session is configured by the server');
         return;
