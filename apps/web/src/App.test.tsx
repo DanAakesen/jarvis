@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 
@@ -39,7 +40,9 @@ const {
 });
 vi.mock('./auth', () => ({ createAuthClient, restoreProfile, signIn }));
 vi.mock('./conversation-history', () => ({ loadConversationHistory, createChatSession, sendChatTurn }));
-vi.mock('./JarvisStage', () => ({ JarvisStage: () => <div data-testid="jarvis-stage" /> }));
+vi.mock('./JarvisStage', () => ({
+  JarvisStage: ({ children }: { children?: ReactNode }) => <div data-testid="jarvis-stage">{children}</div>,
+}));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
     constructor(private readonly options: {

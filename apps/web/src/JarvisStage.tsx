@@ -1,18 +1,30 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ThemeMode } from './theme-preference-context';
 import type { JarvisStageOptions, JarvisStageScene } from './jarvis-stage-scene';
+import { useJarvisActivity } from './activity-context';
+import { PlaybackAudioLevelContext } from './playback-audio-context';
 import './JarvisStage.css';
 
-export function JarvisStage({ theme }: { theme: ThemeMode }) {
+export function JarvisStage({ theme, children }: { theme: ThemeMode; children?: ReactNode }) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<JarvisStageScene | null>(null);
+  const { working, latestActivity } = useJarvisActivity();
+  const activityState = latestActivity?.type ?? null;
   const options = useRef<JarvisStageOptions>({
     theme,
     reducedMotion: false,
     voiceActive: false,
     hasWindows: false,
+    working,
+    activityState,
+    audioLevel: 0,
   });
   const [failure, setFailure] = useState('');
+  const setAudioLevel = useCallback((level: number) => {
+    const audioLevel = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0;
+    options.current = { ...options.current, audioLevel };
+    scene.current?.setAudioLevel(audioLevel);
+  }, []);
 
   useEffect(() => {
     const element = host.current;
@@ -81,14 +93,20 @@ export function JarvisStage({ theme }: { theme: ThemeMode }) {
   }, []);
 
   useEffect(() => {
+    options.current = { ...options.current, working, activityState };
+    scene.current?.update(options.current);
+  }, [activityState, working]);
+
+  useEffect(() => {
     options.current = { ...options.current, theme };
     scene.current?.update(options.current);
   }, [theme]);
 
   return (
-    <>
+    <PlaybackAudioLevelContext.Provider value={setAudioLevel}>
       <div ref={host} className="jarvis-stage" data-ready="false" aria-hidden="true" />
+      {children}
       {failure && <p className="jarvis-stage-fallback" role="status">{failure}</p>}
-    </>
+    </PlaybackAudioLevelContext.Provider>
   );
 }
