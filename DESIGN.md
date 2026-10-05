@@ -392,14 +392,15 @@ controls remain available there. The shell exposes the typed workspace command
 controller to page consumers; authenticated Jarvis delivery remains P8-15.
 Tab motion uses the P8-20 tokens and becomes static under reduced motion.
 
-## Proposed surfaces for accepted capability additions
+## Accepted capability surfaces
 
-Editable personality should live in **Settings → Jarvis → Personality**, reached
-through the agreed top-right Settings entry. Proposed fields are tone/response
-style and custom instructions, with Save and Reset to the current default and
-clear new-session application feedback. This placement is a recommendation, not
-a newly reviewed screen design. P8-19 owns the form; P7-16 owns its validated
-persistence and chat/voice application. Visual themes remain separate.
+Editable personality lives in **Settings → Jarvis → Personality**, reached
+through the agreed top-right Settings entry. P8-19 implements Tone, Response
+style, Custom instructions, Save settings, and Reset personality using the
+existing Settings form and theme tokens. Guidance explains that changes apply to
+new sessions and active sessions keep their current settings; visual themes,
+model choice, and voice identity remain separate. P7-16 owns validated
+persistence and session application.
 
 Research and generated image/video results use the existing dynamic workspace,
 with source links or artifact references and honest progress/error states.

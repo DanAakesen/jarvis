@@ -362,6 +362,7 @@ Dan accepted four additions after reviewing the supplied video transcript:
   change tool permissions or honest reporting. Settings placement and form
   details are proposed in DESIGN.md and ui.md.
 
-Tasks: P7-13–P7-16 and the P8-19 Personality settings UI. These are planned
-requirements, not claims of implemented behaviour. The existing Microsoft-first
-service and cost constraints remain in force.
+Tasks: P7-13–P7-16 and the P8-19 Personality settings UI. P7-16 and P8-19 are
+implemented and tested offline; live Azure session and settings behavior remain
+unverified. P7-13–P7-15 remain planned. The existing Microsoft-first service and
+cost constraints remain in force.
