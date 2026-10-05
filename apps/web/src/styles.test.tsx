@@ -121,9 +121,13 @@ describe('shared glass tokens', () => {
     const greeting = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'background');
     const greetingPosition = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'align-self');
     const headingFont = ruleDeclaration(styles, /\.conversation-greeting h2\s*\{([^}]*)\}/, 'font-family');
-    const summary = ruleDeclaration(styles, /\.conversation-overview > summary\s*\{([^}]*)\}/, 'background');
+    const summary = ruleDeclaration(styles, /^\.conversation-overview > summary\s*\{([^}]*)\}/m, 'background');
     const emptyTranscriptLayout = ruleDeclaration(
       styles, /\.conversation-transcript:has\(\.conversation-greeting\)\s*\{([^}]*)\}/, 'display',
+    );
+    const emptyDisclosureAlignment = ruleDeclaration(
+      styles, /\.conversation-transcript:has\(\.conversation-greeting\) > \.conversation-overview\s*\{([^}]*)\}/,
+      'align-self',
     );
 
     expect(greeting).toBe('var(--surface-translucent)');
@@ -131,8 +135,18 @@ describe('shared glass tokens', () => {
     expect(headingFont).toBe('var(--font-heading)');
     expect(summary).toBe('var(--surface-translucent)');
     expect(emptyTranscriptLayout).toBe('flex');
+    expect(emptyDisclosureAlignment).toBe('flex-end');
     expect(styles).toContain('padding: clamp(16px, 12vh, 100px) 12px');
     expect(styles).toContain('@media (max-width: 600px)');
+  });
+
+  it('gives Jarvis replies a readable semantic glass surface over the stage', () => {
+    const styles = readFileSync('src/ConversationHistory.css', 'utf8');
+    const jarvisMessage = ruleDeclaration(
+      styles, /\.conversation-message\[data-speaker="jarvis"\]\s*\{([^}]*)\}/, 'background',
+    );
+
+    expect(jarvisMessage).toBe('var(--surface-translucent)');
   });
 
   it('keeps theme-aware stage materials in the shared semantic CSS source', () => {

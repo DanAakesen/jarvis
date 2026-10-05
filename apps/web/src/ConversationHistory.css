@@ -24,6 +24,14 @@
 .conversation-input:focus-within { box-shadow: var(--dialog-shadow), 0 0 0 1px var(--focus); }
 .conversation-input[data-voice-active="true"] { display: block; margin: auto; }
 .conversation-overview { margin-top: var(--space-5); }
+.conversation-transcript:has(.conversation-greeting) > .conversation-overview {
+  align-self: flex-end;
+  width: min(320px, calc(100% - 24px));
+  margin: var(--space-2) 12px 0 0;
+}
+.conversation-transcript:has(.conversation-greeting) > .conversation-overview > summary {
+  margin: 0 0 0 auto;
+}
 .conversation-overview > summary {
   width: fit-content;
   min-height: 44px;
@@ -46,7 +54,7 @@
 .conversation-messages { margin: 20px 0; padding: 0; list-style: none; }
 .conversation-message { width: fit-content; max-width: 90%; margin: var(--space-5) 0; padding: var(--space-4) var(--space-5); border-radius: var(--radius-window); animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .conversation-message[data-speaker="dan"] { margin-left: auto; background: var(--surface-translucent); box-shadow: var(--soft-shadow); }
-.conversation-message[data-speaker="jarvis"] { padding-left: 0; }
+.conversation-message[data-speaker="jarvis"] { padding-left: var(--space-5); background: var(--surface-translucent); box-shadow: var(--soft-shadow); }
 .conversation-message:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .message-heading { margin-bottom: var(--space-2); font-size: var(--type-small); }
 .message-heading strong, .streaming-message > strong { font-weight: 650; }
