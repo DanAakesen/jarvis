@@ -148,6 +148,7 @@ export async function executeRealtimeToolCall(
   tools: ToolRegistry,
   request: FastifyRequest,
   signal: AbortSignal,
+  beforeExecute?: (tool: NonNullable<ReturnType<ToolRegistry['get']>>, input: unknown, signal: AbortSignal) => Promise<void>,
 ): Promise<string> {
   if (typeof call.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(call.name)) {
     return toolFailure('unknown_tool');
@@ -161,6 +162,7 @@ export async function executeRealtimeToolCall(
   try {
     const input: unknown = JSON.parse(call.arguments);
     if (!request.validateInput(input, tool.inputSchema, 'body')) return toolFailure(call.name);
+    await beforeExecute?.(tool, input, signal);
     result = await tool.execute(input, request, signal);
     const serializedResult = JSON.stringify(result);
     if (serializedResult === undefined || Buffer.byteLength(serializedResult) > MAX_TOOL_RESULT_BYTES) {

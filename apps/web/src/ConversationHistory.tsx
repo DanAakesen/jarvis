@@ -6,11 +6,13 @@ import { sharedScreenContext, type CameraController, type ScreenShareController 
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
 import { MarkdownContent } from './MarkdownContent';
+import { useConversationIntents } from './conversation-intents';
 import {
   createChatSession,
   loadImageArtifactUrl,
   loadConversationHistory,
   sendChatTurn,
+  steerChatTurn,
   waitForChatSetup,
   type ChatMessage,
   type ChatSession,
@@ -36,6 +38,7 @@ function asHistoryMessage(message: ChatMessage, language: 'da' | 'en'): Conversa
     ...message,
     channel: 'chat',
     language,
+    interrupted: false,
     voiceMinutes: null,
     toolCalls: [],
   };
@@ -118,6 +121,7 @@ export function ConversationHistory({
   camera?: CameraController;
 }) {
   const { onVoiceActiveChange } = useVoiceWorkspace();
+  const conversationIntents = useConversationIntents();
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,6 +137,7 @@ export function ConversationHistory({
   const [failedTurns, setFailedTurns] = useState<FailedTurn[]>([]);
   const [streamedText, setStreamedText] = useState('');
   const [turnError, setTurnError] = useState('');
+  const [steering, setSteering] = useState(false);
   const [visionContext, setVisionContext] = useState<{
     sessionId: string;
     description: string;
@@ -151,20 +156,13 @@ export function ConversationHistory({
   const turnInFlight = useRef(false);
   const draftValue = useRef('');
   const turnController = useRef<AbortController | null>(null);
+  const turnSession = useRef<ChatSession | null>(null);
 
   useEffect(() => () => { turnController.current?.abort(); }, []);
   const lastMessageId = messages.at(-1)?.id;
   const updateVoiceActive = useCallback((active: boolean) => {
-    const update = () => {
-      setVoiceActive(active);
-      onVoiceActiveChange(active);
-    };
-    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (document.startViewTransition && !reduceMotion) {
-      document.startViewTransition(update);
-    } else {
-      update();
-    }
+    setVoiceActive(active);
+    onVoiceActiveChange(active);
   }, [onVoiceActiveChange]);
 
   useLayoutEffect(() => {
@@ -245,9 +243,8 @@ export function ConversationHistory({
     }
   }
 
-  function sendMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const text = draftValue.current.trim();
+  const submitText = useCallback((value: string, queueOnly = false) => {
+    const text = value.trim();
     if (!text || voiceActive) return;
     if (isSharedBrowserRequest(text) && !screenShare?.sharing) {
       setTurnError('Share the Chrome tab you want Jarvis to use, then ask again.');
@@ -263,13 +260,50 @@ export function ConversationHistory({
     setDraft('');
     setTurnError('');
     const queued = { id: ++nextQueueId.current, text, language };
+    const activeSession = turnSession.current;
+    if (sending && !queueOnly && activeSession) {
+      setSteering(true);
+      void steerChatTurn(client, config, activeSession, text, language).then((message) => {
+        setMessages((current) => mergeMessages(current, [asHistoryMessage(message, message.language)]));
+      }).catch((reason: unknown) => {
+        setSteering(false);
+        const error = reason instanceof Error ? reason.message : 'Jarvis could not steer the active reply.';
+        if (error.includes('No active chat turn to steer')) {
+          setQueue((current) => [...current, queued]);
+        } else {
+          setTurnError(error);
+          if (!draftValue.current) {
+            draftValue.current = text;
+            setDraft(text);
+          }
+        }
+      });
+      return;
+    }
     setQueue((current) => [...current, queued]);
+  }, [camera?.sharing, client, config, language, screenShare?.sharing, sending, session, visionContext, voiceActive]);
+
+  useEffect(() => {
+    const intent = conversationIntents.pending[0];
+    if (!intent) return;
+    const timer = window.setTimeout(() => {
+      if (intent.type === 'message') submitText(intent.text);
+      else document.querySelector<HTMLButtonElement>('[aria-label="Start voice"]')?.focus({ preventScroll: true });
+      conversationIntents.consume(intent.id);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [conversationIntents, submitText]);
+
+  function sendMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    submitText(draftValue.current);
   }
 
   const runTurn = useCallback(async (queued: QueuedMessage) => {
     const { text, language } = queued;
     const controller = new AbortController();
     turnController.current = controller;
+    turnSession.current = null;
     turnInFlight.current = true;
     setSending(true);
     setActiveMessage(queued);
@@ -294,6 +328,7 @@ export function ConversationHistory({
         : await waitForChatSetup(() => createChatSession(client, config, language, controller.signal), controller.signal);
       controller.signal.throwIfAborted();
       setSession(activeSession);
+      turnSession.current = activeSession;
       const currentVisionContext = visionContext?.sessionId === activeSession.id ? visionContext : null;
       contextForTurn = currentVisionContext
         ? currentVisionContext.source === 'screen'
@@ -343,6 +378,15 @@ export function ConversationHistory({
         contextForTurn,
         sharedContextForTurn,
         controller.signal,
+        (message) => {
+          partialReply = '';
+          setMessages((current) => mergeMessages(current, [{
+            ...asHistoryMessage(message, activeSession.language),
+            interrupted: true,
+          }]));
+          setStreamedText('');
+          setSteering(false);
+        },
       );
       setMessages((current) => mergeMessages(current, [asHistoryMessage(assistant, activeSession.language)]));
       setStreamedText('');
@@ -367,6 +411,7 @@ export function ConversationHistory({
 
     } finally {
       turnController.current = null;
+      turnSession.current = null;
       setActiveMessage(null);
       turnInFlight.current = false;
       setSending(false);
@@ -395,7 +440,7 @@ export function ConversationHistory({
 
   async function inspectVision(source: 'camera' | 'screen') {
     const capture = source === 'camera' ? camera : screenShare;
-    if (!capture?.sharing || sending || capture.inspecting) return;
+    if (!capture?.sharing || capture.inspecting) return;
     setTurnError('');
     try {
       const activeSession = session?.language === language
@@ -456,6 +501,7 @@ export function ConversationHistory({
                   {message.role === 'jarvis' && message.channel === 'chat'
                     ? <MarkdownContent source={message.text} />
                     : <p>{message.text}</p>}
+                  {message.interrupted && <p className="interrupted-label">Interrupted</p>}
                   <div className="message-metadata">
                     <p className="message-language">
                       {message.channel === 'voice' ? 'Voice' : 'Chat'} · {message.language === 'da' ? 'Danish' : 'English'}
@@ -502,9 +548,6 @@ export function ConversationHistory({
       </div>}
       {sending && (
         <div className="streaming-message">
-          <button className="history-button stop-reply" type="button" onClick={() => turnController.current?.abort()}>
-            Stop reply
-          </button>
           {streamedText ? (
             <>
               <strong>Jarvis</strong>
@@ -519,6 +562,7 @@ export function ConversationHistory({
               Jarvis is thinking…
             </p>
           )}
+          {steering && <p className="chat-status" role="status" aria-live="polite">Steering…</p>}
         </div>
       )}
       {turnError && (
@@ -560,7 +604,6 @@ export function ConversationHistory({
         {...(screenShare ? { screenShare } : {})}
         {...(camera ? { camera } : {})}
         language={language}
-        disabled={sending}
         onActiveChange={updateVoiceActive}
         onSessionEnded={() => {
           screenShare?.stop();
@@ -584,9 +627,14 @@ export function ConversationHistory({
             setDraft(event.target.value);
           }}
           onKeyDown={(event) => {
+            if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              submitText(draftValue.current, true);
+              return;
+            }
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
+              submitText(draftValue.current);
             }
           }}
           aria-describedby="chat-guidance"
@@ -601,15 +649,15 @@ export function ConversationHistory({
           </svg>
         </button>
         <p id="chat-guidance" className="visually-hidden">
-          Enter to send; Shift+Enter for a new line. Messages sent during a reply queue in order.
+          Enter to send or steer the active reply; Ctrl+Enter queues. Shift+Enter adds a new line.
         </p>
         {(screenShare?.sharing || camera?.sharing) && <div className="action-row composer-vision">
           <button className="secondary-button" type="button" onClick={() => void inspectVision('screen')}
-            disabled={sending || !screenShare?.sharing || screenShare.inspecting}>
+            disabled={!screenShare?.sharing || screenShare.inspecting}>
             {screenShare?.inspecting ? 'Looking at screen…' : 'Look at screen'}
           </button>
           <button className="secondary-button" type="button" onClick={() => void inspectVision('camera')}
-            disabled={sending || !camera?.sharing || camera.inspecting}
+            disabled={!camera?.sharing || camera.inspecting}
             aria-describedby="camera-inspection-guidance">
             {camera?.inspecting ? 'Looking at camera…' : 'Look at camera'}
           </button>

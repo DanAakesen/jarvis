@@ -20,8 +20,12 @@ from starlette.responses import JSONResponse, StreamingResponse
 from chat_telemetry import latency_span, log_latency
 from jarvis_tools import (
     backend_settings_from_environment,
+    current_chat_phase_setter,
+    current_chat_session_id,
+    current_chat_turn_id,
     current_conversation,
     current_message_id,
+    current_steering_fetcher,
     current_turn,
 )
 from model_contract import StreamingModelClient
@@ -97,6 +101,10 @@ async def load_verified_history(
         or current.get("text") != text
     ):
         return None
+    session_id = current.get("sessionId")
+    current_chat_session_id.set(
+        session_id if isinstance(session_id, str) and MESSAGE_ID.fullmatch(session_id) else None
+    )
 
     with latency_span("chat_context") as context_span:
         previous = [
@@ -176,11 +184,17 @@ def register_chat_invocation(
         if match is None:
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
         message_id = payload.get("messageId") if isinstance(payload, dict) else None
+        turn_id = payload.get("turnId", message_id) if isinstance(payload, dict) else None
+        steering = payload.get("steering", False) if isinstance(payload, dict) else False
         text = payload.get("text") if isinstance(payload, dict) else None
         language = payload.get("language") if isinstance(payload, dict) else None
         screen_context = payload.get("screenContext") if isinstance(payload, dict) else None
         reflex_note = payload.get("reflexNote") if isinstance(payload, dict) else None
         expected_keys = {"messageId", "text", "language", "delegatedAuthorization"}
+        if isinstance(payload, dict) and "turnId" in payload:
+            expected_keys.add("turnId")
+        if isinstance(payload, dict) and "steering" in payload:
+            expected_keys.add("steering")
         if isinstance(payload, dict) and "screenContext" in payload:
             expected_keys.add("screenContext")
         if isinstance(payload, dict) and "reflexNote" in payload:
@@ -189,6 +203,10 @@ def register_chat_invocation(
             not isinstance(message_id, str)
             or not MESSAGE_ID.fullmatch(message_id)
             or int(message_id) > MAX_SQL_BIGINT
+            or not isinstance(turn_id, str)
+            or not MESSAGE_ID.fullmatch(turn_id)
+            or int(turn_id) > MAX_SQL_BIGINT
+            or not isinstance(steering, bool)
             or not isinstance(text, str)
             or not text.strip()
             or len(text) > 20_000
@@ -217,7 +235,10 @@ def register_chat_invocation(
         ):
             return JSONResponse({"error": "Invalid request"}, status_code=400)
         try:
+            current_chat_session_id.set(None)
             history = await context_loader(match.group(1), message_id, text, language)
+            chat_session_id = current_chat_session_id.get()
+            current_chat_session_id.set(None)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -232,11 +253,80 @@ def register_chat_invocation(
             message_token = current_message_id.set(message_id)
             conversation_token = current_conversation.set(f"chat-{message_id}")
             turn_token = current_turn.set(message_id)
+            chat_turn_token = current_chat_turn_id.set(turn_id)
+            chat_session_token = current_chat_session_id.set(chat_session_id)
             output_bytes = 0
+            steering_fetcher_token = None
+            phase_setter_token = None
             first_delta = True
             try:
                 yield ": connected\n\n"
-                messages = (*history, ModelMessage("user", text.strip()))
+                if chat_session_id is not None:
+                    cursor = turn_id
+
+                    async def fetch_steering() -> Sequence[tuple[str, str, str]]:
+                        nonlocal cursor
+                        backend_url, _ = backend_settings_from_environment()
+                        headers = {"Authorization": " ".join(("Bear" + "er", match.group(1)))}
+                        async with httpx.AsyncClient(
+                            timeout=10.0, follow_redirects=False
+                        ) as client:
+                            response = await client.get(
+                                f"{backend_url}/conversation/sessions/{chat_session_id}/turns/"
+                                f"{turn_id}/steering",
+                                params={"after": cursor},
+                                headers=headers,
+                            )
+                        if response.status_code != 200 or len(response.content) > 262_144:
+                            raise RuntimeError("Chat steering is unavailable")
+                        page: Any = response.json()
+                        messages = page.get("messages") if isinstance(page, dict) else None
+                        if not isinstance(messages, list) or len(messages) > 20:
+                            raise RuntimeError("Chat steering is invalid")
+                        parsed: list[tuple[str, str, str]] = []
+                        for message in messages:
+                            if (
+                                not isinstance(message, dict)
+                                or not isinstance(message.get("id"), str)
+                                or not MESSAGE_ID.fullmatch(message["id"])
+                                or not isinstance(message.get("text"), str)
+                                or not message["text"].strip()
+                                or len(message["text"]) > 20_000
+                                or message.get("language") not in {"da", "en"}
+                            ):
+                                raise RuntimeError("Chat steering is invalid")
+                            parsed.append((message["id"], message["text"], message["language"]))
+                        if parsed:
+                            cursor = parsed[-1][0]
+                        return parsed
+
+                    async def set_chat_phase(phase: str) -> None:
+                        if phase not in {"model", "tools"}:
+                            raise ValueError("Invalid chat phase")
+                        backend_url, _ = backend_settings_from_environment()
+                        headers = {"Authorization": " ".join(("Bear" + "er", match.group(1)))}
+                        async with httpx.AsyncClient(
+                            timeout=10.0, follow_redirects=False
+                        ) as client:
+                            response = await client.post(
+                                f"{backend_url}/conversation/sessions/{chat_session_id}/turns/"
+                                f"{turn_id}/phase",
+                                json={"phase": phase},
+                                headers=headers,
+                            )
+                        if response.status_code != 204:
+                            raise RuntimeError("Chat phase update is unavailable")
+
+                    steering_fetcher_token = current_steering_fetcher.set(fetch_steering)
+                    phase_setter_token = current_chat_phase_setter.set(set_chat_phase)
+                current_text = text.strip()
+                if steering:
+                    current_text = (
+                        "Dan interrupted your previous reply with this message; "
+                        "continue accordingly:\n"
+                        + current_text
+                    )
+                messages = (*history, ModelMessage("user", current_text))
                 if screen_context is not None:
                     messages = (
                         *messages,
@@ -271,9 +361,15 @@ def register_chat_invocation(
             except Exception:
                 yield "event: error\ndata: {}\n\n"
             finally:
+                if steering_fetcher_token is not None:
+                    current_steering_fetcher.reset(steering_fetcher_token)
+                if phase_setter_token is not None:
+                    current_chat_phase_setter.reset(phase_setter_token)
                 current_message_id.reset(message_token)
                 current_conversation.reset(conversation_token)
                 current_turn.reset(turn_token)
+                current_chat_turn_id.reset(chat_turn_token)
+                current_chat_session_id.reset(chat_session_token)
 
         return StreamingResponse(
             events(),

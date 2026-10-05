@@ -3,16 +3,49 @@
 .jarvis-page { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: var(--space-5) clamp(12px, 3vw, 40px); }
 .conversation-history { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
 .conversation-transcript { position: relative; flex: 1; min-height: 0; overflow-y: auto; padding: 0 max(4px, calc((100% - 760px) / 2)) var(--space-6); scrollbar-gutter: stable; }
-.conversation-greeting { display: grid; align-content: center; min-height: 80%; padding: var(--space-6) 0; text-align: center; }
-.conversation-greeting h2 { margin: 0; font-size: clamp(28px, 4vw, 40px); font-weight: 500; }
-.conversation-greeting p { max-width: 36ch; margin: var(--space-3) auto 0; color: var(--text-muted); }
+.conversation-transcript:has(.conversation-greeting) { display: flex; flex-direction: column; padding: clamp(16px, 12vh, 100px) 12px var(--space-6); }
+.conversation-greeting {
+  align-self: flex-end;
+  flex: 0 0 auto;
+  width: min(320px, 100%);
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--surface-translucent);
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(var(--surface-blur));
+}
+.conversation-greeting h2 { margin: 0; font-family: var(--font-heading); font-size: clamp(22px, 1.6vw, 24px); font-weight: 600; line-height: 1.2; }
+.conversation-greeting p { max-width: 36ch; margin: var(--space-3) 0 0; color: var(--text-muted); }
 .conversation-transcript[hidden], .composer[hidden] { display: none; }
 .conversation-transcript:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .conversation-input { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: var(--space-3); flex: 0 0 auto; width: 100%; max-width: 800px; margin: 0 auto; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-window); background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
 .conversation-input:focus-within { box-shadow: var(--dialog-shadow), 0 0 0 1px var(--focus); }
 .conversation-input[data-voice-active="true"] { display: block; margin: auto; }
 .conversation-overview { margin-top: var(--space-5); }
-.conversation-overview > summary { width: fit-content; min-height: 44px; margin: 0 auto; padding: var(--space-2) var(--space-3); color: var(--text-muted); cursor: pointer; font-size: var(--type-small); }
+.conversation-transcript:has(.conversation-greeting) > .conversation-overview {
+  align-self: flex-end;
+  width: min(320px, calc(100% - 24px));
+  margin: var(--space-2) 12px 0 0;
+}
+.conversation-transcript:has(.conversation-greeting) > .conversation-overview > summary {
+  margin: 0 0 0 auto;
+}
+.conversation-overview > summary {
+  width: fit-content;
+  min-height: 44px;
+  margin: 0 auto;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--surface-translucent);
+  box-shadow: var(--soft-shadow);
+  backdrop-filter: blur(var(--surface-blur));
+  color: var(--text);
+  cursor: pointer;
+  font-size: var(--type-small);
+}
 .conversation-overview summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .conversation-overview .jarvis-side { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); margin-top: var(--space-3); }
 .conversation-overview .now-panel { grid-column: 1; grid-row: 1 / 3; }
@@ -21,7 +54,7 @@
 .conversation-messages { margin: 20px 0; padding: 0; list-style: none; }
 .conversation-message { width: fit-content; max-width: 90%; margin: var(--space-5) 0; padding: var(--space-4) var(--space-5); border-radius: var(--radius-window); animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .conversation-message[data-speaker="dan"] { margin-left: auto; background: var(--surface-translucent); box-shadow: var(--soft-shadow); }
-.conversation-message[data-speaker="jarvis"] { padding-left: 0; }
+.conversation-message[data-speaker="jarvis"] { padding-left: var(--space-5); background: var(--surface-translucent); box-shadow: var(--soft-shadow); }
 .conversation-message:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .message-heading { margin-bottom: var(--space-2); font-size: var(--type-small); }
 .message-heading strong, .streaming-message > strong { font-weight: 650; }
@@ -32,7 +65,7 @@
 .queue-remove:hover { background: var(--surface-translucent); color: var(--text); }
 .queue-remove:active { transform: scale(.96); }
 .queue-remove:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.stop-reply { float: right; }
+.interrupted-label { margin: 0 0 var(--space-2); color: var(--warning-text); font-size: var(--type-small); font-weight: 600; }
 .message-metadata { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); margin-top: var(--space-2); color: var(--text-muted); font-size: var(--type-caption); opacity: 0; transition: opacity var(--motion-fade) var(--ease-standard); }
 .message-metadata p { margin: 0; font-size: inherit; }
 .conversation-message:hover .message-metadata, .conversation-message:focus-within .message-metadata { opacity: 1; }
@@ -121,8 +154,6 @@
 .app-shell[data-voice-active="true"] .voice-error { position: fixed; z-index: 5; top: max(20px, env(safe-area-inset-top)); right: 24px; bottom: auto; }
 .app-shell[data-voice-active="true"] .workspace-shell-area[hidden],
 .app-shell[data-voice-active="true"][data-voice-has-windows="false"] .workspace-shell-area { display: none; }
-.workspace-shell-area:not([hidden]) { view-transition-name: voice-workspace; }
-::view-transition-group(voice-workspace) { animation-duration: var(--motion-panel); animation-timing-function: var(--ease-enter); }
 .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; z-index: 2; top: 11vh; right: 3vw; display: block; width: min(48vw, 920px); height: 78vh; overflow: auto; }
 .app-shell[data-voice-active="true"] .workspace { height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 .app-shell[data-voice-active="true"] .workspace-heading,
@@ -154,11 +185,21 @@
 
 @media (max-width: 600px) {
   .jarvis-page { padding: var(--space-3); }
+  .conversation-transcript:has(.conversation-greeting) { padding: 0 8px var(--space-6); }
+  .conversation-greeting { padding: var(--space-3); }
+  .conversation-greeting h2 { font-size: 20px; }
+  .conversation-greeting p { margin-top: var(--space-2); font-size: 13px; line-height: 1.35; }
   .conversation-input { gap: var(--space-2); padding: var(--space-2); }
   .conversation-message { max-width: 96%; padding: var(--space-3) var(--space-4); }
   .conversation-history .composer { gap: var(--space-1); }
   .conversation-overview .jarvis-side { grid-template-columns: minmax(0, 1fr); }
   .conversation-overview .now-panel { grid-column: auto; grid-row: auto; }
+}
+
+@media (max-width: 360px) {
+  .conversation-greeting { padding: var(--space-2); }
+  .conversation-greeting h2 { font-size: 18px; line-height: 1.1; }
+  .conversation-greeting p { margin-top: var(--space-1); font-size: 12px; line-height: 1.2; }
 }
 
 @media (max-width: 700px) {
@@ -212,7 +253,6 @@
   .voice-icon-button, .app-shell[data-voice-active="true"] .voice-orb-presentation { transition: none; }
   .conversation-message, .streaming-message, .streaming-caret, .thinking-dot, .tool-call-running { animation: none; }
   .message-metadata { opacity: 1; }
-  ::view-transition-group(voice-workspace) { animation-duration: 0s; }
 }
 
 @media (max-width: 360px) {
@@ -234,14 +274,5 @@
 @keyframes tool-shimmer {
   from { background-position: 100% 0; }
   to { background-position: -100% 0; }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .input-orb span { view-transition-name: jarvis-orb; }
-  .voice-orb { view-transition-name: jarvis-orb; }
-  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
-  ::view-transition-group(jarvis-orb) {
-    animation-duration: var(--motion-panel);
-    animation-timing-function: var(--ease-enter);
-  }
 }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }

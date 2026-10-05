@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import websocket from '@fastify/websocket';
+import type { FastifyInstance } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
 import {
   createEnglishSessionUpdate,
@@ -49,7 +50,11 @@ function sharedBrowserIntent(text: string): boolean {
     .test(text);
 }
 
-export type VoiceConnectionFactory = (token: string, signal: AbortSignal) => WebSocket;
+export type VoiceConnectionFactory = (
+  token: string,
+  signal: AbortSignal,
+  agentSessionId?: string,
+) => WebSocket;
 
 interface VoiceReflexLedgerEntry {
   readonly id: string;
@@ -111,6 +116,7 @@ export interface VoiceRelayOptions {
   readonly connect?: VoiceConnectionFactory;
   readonly connectDanish?: VoiceConnectionFactory;
   readonly createPartialRecognizer?: PartialSpeechRecognizerFactory;
+  readonly registerPhoneMediaRoute?: (app: FastifyInstance) => void;
 }
 
 type SharedScreenContext = {
@@ -220,10 +226,10 @@ export function createDanishVoiceAgentEndpoint(projectEndpoint: string, sessionI
 }
 
 export function createDanishVoiceConnector(projectEndpoint: string): VoiceConnectionFactory {
-  return (token, signal) => {
+  return (token, signal, agentSessionId = randomUUID().replaceAll('-', '')) => {
     return new WebSocket(createDanishVoiceAgentEndpoint(
       projectEndpoint,
-      randomUUID().replaceAll('-', ''),
+      agentSessionId,
     ), {
       headers: {
         Authorization: ['Bearer', token].join(' '),
@@ -1112,6 +1118,8 @@ function registerVoiceRoute(
         });
         return;
       }
+      // Bridge Protocol control messages from older clients are not valid on the voice route.
+      if (event?.type === 'session.start') return;
       if (event?.type === 'session.update' || isBrowserControlledToolOutput(event)) {
         close(1008, 'Voice session is configured by the server');
         return;
@@ -1182,8 +1190,20 @@ function registerVoiceRoute(
           if (english) sendUpstream(createEnglishSessionUpdate(app.jarvisTools, personality, awayMode), flushQueued);
           else flushQueued();
         });
+        const upstreamEventTypes = new Set<string>();
         upstream.on('message', (data, binary) => {
           const event = parseVoiceEvent(data, binary);
+          if (typeof event?.type === 'string' && upstreamEventTypes.size < 40 &&
+              /^[a-z_.]{1,80}$/u.test(event.type)) upstreamEventTypes.add(event.type);
+          if (event?.type === 'error') {
+            const detail = (event as { error?: { code?: unknown; message?: unknown; type?: unknown } }).error;
+            const text = [detail?.type, detail?.code, detail?.message]
+              .filter((part): part is string => typeof part === 'string').join(': ');
+            request.log.warn({
+              failure: text.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown',
+              language,
+            }, 'voice.upstream_event_error');
+          }
           if (event?.type === 'conversation.item.input_audio_transcription.delta') {
             partialTranscriptionDeltas += 1;
             receiveTranscriptionDelta(event);
@@ -1289,6 +1309,7 @@ function registerVoiceRoute(
         upstream.once('close', (code, reason) => {
           if (!endRequested) {
             request.log.warn({
+              events: [...upstreamEventTypes].join(',').slice(0, 400),
               closeCode: code,
               failure: reason.toString('utf8').replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'none',
               language,
@@ -1333,6 +1354,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           handleProtocols: (protocols) => protocols.has(VOICE_SUBPROTOCOL) ? VOICE_SUBPROTOCOL : false,
         },
       });
+      options.registerPhoneMediaRoute?.(app);
       if (options.connect) {
         registerVoiceRoute(
           app,

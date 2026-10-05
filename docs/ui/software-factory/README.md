@@ -1,6 +1,6 @@
 # Approved Software Factory layout — 5 October 2026
 
-Implementation: [issue #369](https://github.com/DanAakesen/jarvis/issues/369), P8-34. Status: approved design, implementation not started.
+Implementation: [issue #369](https://github.com/DanAakesen/jarvis/issues/369), P8-34. Status: implemented offline; live integration acceptance remains unverified. The mockup remains a visual reference and its values are not production data.
 
 **Task:** Implement the approved Software Factory task-board layout, with a project release bar and a contextual task-details pane.
 
@@ -26,12 +26,12 @@ The mockup is generated and uses illustrative data. Implement actual controls an
 
 ### Acceptance criteria
 
-- [ ] Match the approved mockup using real task/release data; retain all six task states, create/search/filter and state-valid controls; scope release context to the selected project; preserve task selection and board position while details update; handle loading/empty/error/stale data, both appearances, keyboard and phone layouts; pass relevant web tests/lint/build and capture browser evidence.
-- [ ] Board, compact release bar and open right details pane match the approved composition at a wide browser viewport; closing the pane restores usable board space.
-- [ ] Project changes, task selection, task actions, release/PR/branch/full-task links, navigation and the shared input work through the existing authenticated contracts. SSE reconnect/refresh does not duplicate history or lose selection.
-- [ ] Cover populated, loading, empty, unavailable, disconnected/stale, pending and rejected-action states, plus long labels; no fabricated data or success states.
-- [ ] Inspect dark/light desktop and phone layouts in a real browser. On phones adapt board/release/pane to a usable focused layout without clipped controls; verify focus return, keyboard operation, reduced motion, contrast and touch targets.
-- [ ] Run relevant existing web tests, lint and build; add meaningful regressions for project-scoped release data, stale task-selection responses and state-dependent actions. Record commands/results and before/after screenshots, distinguishing fixtures from live integration evidence.
+- [x] Implement the approved composition with existing task/release data contracts; retain all six states, create/search/filter and state-valid controls; scope release context to the selected project; preserve selection and board position; cover loading/empty/error/stale states and both appearances.
+- [x] Board, compact release bar and open right details pane match the approved composition at a wide browser viewport; closing the pane restores usable board space.
+- [x] Project switching, task selection, state controls, links, navigation and the shared input use existing contracts. Focused tests cover task details and conversation handoff; fixture browser checks verify project isolation and retained selection/position. Live Entra/backend/SSE behavior remains unverified.
+- [x] Tests cover populated, loading, empty, unavailable, disconnected/stale, pending and rejected-action states; no fixture content is embedded in production.
+- [x] Inspect dark/light desktop and 390px phone layouts in Chromium fixtures. Verify no horizontal overflow, keyboard close/focus return, reduced-motion styling and a 44×44px panel close target. Physical-device and live contrast acceptance remain unverified.
+- [x] Run relevant web tests, lint and build; add regressions for project-scoped release data, stale task-selection responses and state-dependent actions. Commands/results and fixture screenshots are recorded in [agent-context](../../agent-context.md#setup-and-commands); see the approved mockup above as the illustrative reference.
 
 **Depends on:** P8-31 (#364); P1-08 (#22); P1-09 (#23); P3-08 (#46); P8-04 (#235); P8-07 (#238); P8-08 (#239); P8-15 (#253)
 

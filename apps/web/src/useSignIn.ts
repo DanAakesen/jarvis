@@ -45,9 +45,7 @@ export function useSignIn(config: PublicConfig): SignInSession {
     setState('signing-in');
     setMessage('');
     try {
-      const signedInProfile = await signIn(client, config);
-      setProfile(signedInProfile);
-      setState('signed-in');
+      await signIn(client, config); // The page now navigates to Microsoft sign-in.
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Jarvis could not verify your sign-in. Try again.');
       setState('error');

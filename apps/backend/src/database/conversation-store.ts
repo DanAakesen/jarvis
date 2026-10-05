@@ -6,6 +6,7 @@ import type {
   ConversationHistoryPage,
   ConversationLanguage,
   ConversationMessage,
+  ConversationSteeringMessage,
   ConversationRole,
   ConversationSession,
   ConversationStore,
@@ -36,6 +37,7 @@ interface MessageRow {
 interface HistoryRow extends MessageRow {
   channel: ConversationChannel;
   language: ConversationLanguage;
+  interrupted: boolean;
   voice_minutes: number | null;
 }
 
@@ -137,12 +139,15 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
         .input('role', sql.NVarChar(16), input.role)
         .input('text', sql.NVarChar(sql.MAX), input.text)
         .input('model', sql.NVarChar(100), input.model)
+        .input('language', sql.NVarChar(8), input.language ?? null)
+        .input('interrupted', sql.Bit, input.interrupted ?? false)
         .input('sourceItemId', sql.NVarChar(128), input.sourceItemId ?? null)
-        .query<MessageRow>(`INSERT INTO dbo.messages (jarvis_session_id, role, text, model, source_item_id)
+        .query<MessageRow>(`INSERT INTO dbo.messages
+            (jarvis_session_id, role, text, model, language, interrupted, source_item_id)
           OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
             CONVERT(varchar(20), INSERTED.jarvis_session_id) AS session_id,
             INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at
-          SELECT id, @role, @text, @model, @sourceItemId
+          SELECT id, @role, @text, @model, @language, @interrupted, @sourceItemId
           FROM dbo.jarvis_sessions
           WHERE id = @sessionId AND ended_at IS NULL;`);
       const row = result.recordset[0];
@@ -185,11 +190,13 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
             role nvarchar(16) NOT NULL,
             text nvarchar(max) NOT NULL,
             model nvarchar(100) NULL,
+            interrupted bit NOT NULL,
             voice_minutes decimal(19,6) NULL,
             at datetime2(7) NOT NULL
           );
-          INSERT INTO @history (id, session_id, channel, language, role, text, model, voice_minutes, at)
-          SELECT TOP (@take) m.id, m.jarvis_session_id, s.channel, s.language, m.role, m.text, m.model,
+          INSERT INTO @history (id, session_id, channel, language, role, text, model, interrupted, voice_minutes, at)
+          SELECT TOP (@take) m.id, m.jarvis_session_id, s.channel, COALESCE(m.language, s.language) AS language,
+            m.role, m.text, m.model, m.interrupted,
             voice_usage.voice_minutes, m.at
           FROM dbo.messages AS m
           INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id
@@ -203,7 +210,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
 
           SELECT CONVERT(varchar(20), id) AS id,
             CONVERT(varchar(20), session_id) AS session_id, channel, language, role, text, model,
-            voice_minutes, at
+            interrupted, voice_minutes, at
           FROM @history
           ORDER BY id;
 
@@ -239,6 +246,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
         ...messageFromRow(row),
         channel: row.channel,
         language: row.language,
+        interrupted: row.interrupted,
         voiceMinutes: row.voice_minutes,
         toolCalls: callsByMessage.get(row.id) ?? [],
       }));
@@ -246,6 +254,20 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
         messages,
         nextCursor: hasMore ? messages[0]?.id ?? null : null,
       } satisfies ConversationHistoryPage;
+    },
+
+    async getDanMessagesAfter({ sessionId, after, limit }) {
+      const result = await databaseReadRequest(pool)
+        .input('sessionId', sql.BigInt, BigInt(sessionId))
+        .input('afterId', sql.BigInt, BigInt(after))
+        .input('take', sql.Int, limit)
+        .query<ConversationSteeringMessage>(`SELECT TOP (@take)
+            CONVERT(varchar(20), m.id) AS id, m.text, COALESCE(m.language, s.language) AS language
+          FROM dbo.messages AS m
+          INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id
+          WHERE m.jarvis_session_id = @sessionId AND m.role = N'dan' AND m.id > @afterId
+          ORDER BY m.id;`);
+      return result.recordset;
     },
   };
 }

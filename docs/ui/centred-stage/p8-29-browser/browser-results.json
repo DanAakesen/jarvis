@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-05",
+  "browser": "Chromium via /usr/bin/chromium with SwiftShader",
+  "automation": "playwright-core 1.63.0 installed in a scratch directory",
+  "fixture": "Scratch-only auth stub, API responses, authenticated Now SSE event, and Voice WebSocket PCM response; no production demo selectors or live account data.",
+  "viewports": {
+    "desktop": [1440, 1000],
+    "phone": [390, 844]
+  },
+  "themes": ["dark", "light"],
+  "checks": {
+    "stageMountedInDormancy": true,
+    "stageCanvasCountBeforeDuringAndAfterVoice": 1,
+    "voiceEntryStates": ["connecting", "ready"],
+    "playbackResponseStatesObserved": ["listening", "speaking", "listening"],
+    "nowEventFixture": "schema-valid thinking event",
+    "microphoneRequestsBeforeExplicitEnable": 0,
+    "microphoneRequestsAfterExplicitEnable": 1,
+    "reducedMotionPreferenceMatched": true,
+    "phoneHorizontalOverflow": false,
+    "pageExceptions": 0,
+    "consoleAndShaderErrorsAfterFix": 0
+  },
+  "captures": [
+    "dormant-dark-desktop.png",
+    "dormant-dark-phone.png",
+    "dormant-light-desktop.png",
+    "dormant-light-phone.png",
+    "connecting-dark-desktop.png",
+    "ready-dark-desktop.png",
+    "playback-response-dark-desktop.png",
+    "dormant-after-voice-dark-desktop.png",
+    "thinking-dark-desktop.png"
+  ],
+  "limits": [
+    "Activity and PCM were local fixtures, not live Entra, backend, or Voice Live delivery.",
+    "The explicit microphone check used Chromium's fake media device; real microphone and speaker behavior was not tested.",
+    "SwiftShader results do not establish hardware-GPU performance, physical-phone behavior, Safari, or P8-30 transition-flicker acceptance."
+  ]
+}

@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ContextPanel, ContextPanelProvider } from '../ContextPanel';
 import { FactoryArea } from './FactoryArea';
 
 const streamHarness = vi.hoisted(() => ({
@@ -21,7 +22,21 @@ vi.mock('../task-events', () => ({
   }),
 }));
 
-const project = { id: '7', name: 'Jarvis', default_agent: 'copilot' as const };
+const project = {
+  id: '7', name: 'Jarvis', default_agent: 'copilot' as const,
+  repo: 'DanAakesen/jarvis', defaultBranch: 'main',
+};
+const projectRelease = {
+  project: { id: '7', name: 'Jarvis', repo: 'DanAakesen/jarvis', defaultBranch: 'main' },
+  releases: [],
+  pullRequests: [{
+    id: '11', number: 17, branch: 'copilot/fix-the-bug', headSha: 'abc1234', state: 'open',
+    checks: 'failed', taskId: '42',
+  }],
+  workflowRuns: [],
+  deployments: [],
+  graph: null,
+};
 const task = {
   id: '42',
   projectId: '7',
@@ -50,13 +65,16 @@ function response(body: unknown, status = 200) {
 
 function renderFactory() {
   return render(
-    <MemoryRouter initialEntries={['/factory/tasks']}>
-      <Routes>
-        <Route path="/factory/*" element={
-          <FactoryArea backendUrl="https://api.example.com" getAccessToken={getAccessToken} />
-        } />
-      </Routes>
-    </MemoryRouter>,
+    <ContextPanelProvider>
+      <MemoryRouter initialEntries={['/factory/tasks']}>
+        <Routes>
+          <Route path="/factory/*" element={
+            <FactoryArea backendUrl="https://api.example.com" getAccessToken={getAccessToken} />
+          } />
+        </Routes>
+        <ContextPanel closeIcon={<span aria-hidden="true">×</span>} />
+      </MemoryRouter>
+    </ContextPanelProvider>,
   );
 }
 
@@ -69,7 +87,14 @@ beforeEach(() => {
     const url = String(input);
     const method = init?.method ?? 'GET';
     if (url.endsWith('/factory/projects') && method === 'GET') return response([project]);
+    if (url.endsWith('/factory/projects/7/releases') && method === 'GET') return response(projectRelease);
     if (url.includes('/factory/tasks?') && method === 'GET') return response({ tasks: [boardTask], limit: 100, offset: 0 });
+    if (url.includes('/factory/tasks/42?') && method === 'GET') {
+      return response({
+        ...task, source: 'board', originMessageId: null, modelOverride: null, reasoningOverride: null,
+        latestSessionEndReason: null, events: [], usage: [],
+      });
+    }
     if (url.endsWith('/factory/tasks') && method === 'POST') {
       return response({ ...task, ...JSON.parse(String(init?.body)), id: '43', state: 'Ready' }, 201);
     }
@@ -93,7 +118,7 @@ describe('Factory task board', () => {
     expect(within(card).getByRole('button', { name: 'Pause' })).not.toBeNull();
     expect(within(card).getByRole('button', { name: 'Steer' })).not.toBeNull();
     expect(within(card).getAllByText('Not reported')).toHaveLength(3);
-    expect(within(card).getByRole('link', { name: 'Fix the bug' }).getAttribute('href')).toBe('/factory/tasks/42');
+    expect(within(card).getByRole('button', { name: 'Fix the bug' }).getAttribute('aria-pressed')).toBe('false');
     expect(await screen.findByText('Live updates connected.')).not.toBeNull();
     expect(streamHarness.callbacks.has('42')).toBe(true);
   });
@@ -177,5 +202,62 @@ describe('Factory task board', () => {
 
     expect((await screen.findByRole('alert')).textContent).toMatch(/Task data is unavailable/);
     expect(screen.getByRole('button', { name: 'Retry tasks' })).not.toBeNull();
+  });
+
+  it('opens task details in the shared panel and returns focus to the selected card', async () => {
+    const user = userEvent.setup();
+    renderFactory();
+
+    const title = await screen.findByRole('button', { name: 'Fix the bug' });
+    await user.click(title);
+
+    expect(await screen.findByText('Find and fix it')).not.toBeNull();
+    expect(screen.getByRole('link', { name: '#17' }).getAttribute('href'))
+      .toBe('https://github.com/DanAakesen/jarvis/pull/17');
+    expect(screen.getByRole('link', { name: 'Open pull request' }).getAttribute('href'))
+      .toBe('https://github.com/DanAakesen/jarvis/pull/17');
+    expect(screen.getByText('failed')).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Open full task' }).getAttribute('href')).toBe('/factory/tasks/42');
+    await user.click(screen.getByRole('button', { name: 'Close context panel' }));
+    expect(document.activeElement).toBe(title);
+  });
+
+  it('ignores a late detail response after selecting a different task', async () => {
+    const user = userEvent.setup();
+    let finishFirst: (() => void) | undefined;
+    const second = { ...task, id: '43', title: 'Second task', request: 'Second request' };
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/factory/projects')) return Promise.resolve(response([project]));
+      if (url.includes('/factory/tasks?')) return Promise.resolve(response({ tasks: [task, second], limit: 100, offset: 0 }));
+      if (url.includes('/factory/tasks/42?')) {
+        return new Promise<Response>((resolve) => {
+          finishFirst = () => resolve(response({
+            ...task, source: 'board', originMessageId: null, modelOverride: null, reasoningOverride: null,
+            latestSessionEndReason: null, events: [], usage: [],
+          }));
+        });
+      }
+      if (url.includes('/factory/tasks/43?')) {
+        return Promise.resolve(response({
+          ...second, source: 'board', originMessageId: null, modelOverride: null, reasoningOverride: null,
+          latestSessionEndReason: null, events: [], usage: [],
+        }));
+      }
+      return Promise.resolve(response({ error: 'Unexpected request', method }, 500));
+    });
+    renderFactory();
+
+    await user.click(await screen.findByRole('button', { name: 'Fix the bug' }));
+    await waitFor(() => expect(finishFirst).toBeDefined());
+    await user.click(screen.getByRole('button', { name: 'Second task' }));
+    expect(await screen.findByText('Second request')).not.toBeNull();
+    finishFirst?.();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Second task', level: 2 })).not.toBeNull();
+      expect(screen.queryByText('Find and fix it')).toBeNull();
+    });
   });
 });

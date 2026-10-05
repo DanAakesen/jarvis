@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ContextPanelContext, useContextPanel } from './context-panel-state';
 import type { ContextPanelContent } from './context-panel-state';
@@ -9,17 +9,21 @@ const emptyContext: ContextPanelContent = { title: 'Context', status: 'empty' };
 export function ContextPanelProvider({ children }: { children: ReactNode }) {
   const [content, setContent] = useState<ContextPanelContent>(emptyContext);
   const [isOpen, setIsOpen] = useState(false);
+  const returnFocusTarget = useRef<HTMLElement | null>(null);
 
   const close = useCallback(() => {
     if (typeof document !== 'undefined' &&
         document.getElementById('context-panel')?.contains(document.activeElement)) {
-      document.getElementById('context-panel-toggle')?.focus();
+      const target = returnFocusTarget.current;
+      (target?.isConnected ? target : document.getElementById('context-panel-toggle'))?.focus();
     }
+    returnFocusTarget.current = null;
     setIsOpen(false);
   }, []);
 
-  const show = useCallback((nextContent: ContextPanelContent) => {
+  const show = useCallback((nextContent: ContextPanelContent, returnFocus?: HTMLElement | null) => {
     setContent(nextContent);
+    returnFocusTarget.current = returnFocus ?? null;
     setIsOpen(true);
   }, []);
 
@@ -50,7 +54,7 @@ export function ContextPanel({ closeIcon }: { closeIcon: ReactNode }) {
     ? content.message ?? 'No relevant information is available yet.'
     : content.status === 'loading'
       ? content.message ?? 'Loading contextual information…'
-      : content.status === 'view'
+      : content.status === 'view' || content.status === 'custom'
         ? undefined
         : content.message;
 
@@ -74,11 +78,13 @@ export function ContextPanel({ closeIcon }: { closeIcon: ReactNode }) {
             {...(content.trustedBlobHost ? { trustedBlobHost: content.trustedBlobHost } : {})}
           />
         )
-        : content.status === 'loading'
-          ? <p role="status">{message}</p>
-          : content.status === 'error'
-            ? <p role="alert">{message}</p>
-            : <p>{message}</p>}
+        : content.status === 'custom'
+          ? isOpen ? content.content : null
+          : content.status === 'loading'
+            ? <p role="status">{message}</p>
+            : content.status === 'error'
+              ? <p role="alert">{message}</p>
+              : <p>{message}</p>}
     </aside>
   );
 }

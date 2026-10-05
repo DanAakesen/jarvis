@@ -104,6 +104,7 @@ _UUID = re.compile(r"^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$", re.IGNORECASE
 _TOOL_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _MESSAGE_ID = re.compile(r"^[1-9][0-9]{0,18}$")
 _VOICE_ITEM_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_PHONE_SESSION_ID = re.compile(r"^[1-9][0-9]{0,18}$")
 _READ_ONLY_MEMORY_TOOLS = {"memory_search", "memory_list", "memory_history"}
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
@@ -111,11 +112,26 @@ current_conversation: contextvars.ContextVar[str] = contextvars.ContextVar(
     "jarvis_conversation", default="local"
 )
 current_turn: contextvars.ContextVar[str] = contextvars.ContextVar("jarvis_turn", default="")
+current_phone_session_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "jarvis_phone_session_id", default=None
+)
 # The stored `messages.id` of Dan's message in this turn. The conversation store (P4-03)
 # sets it; without it the backend refuses tool calls, so none are attempted.
 current_message_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "jarvis_message_id", default=None
 )
+current_chat_session_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "jarvis_chat_session_id", default=None
+)
+current_chat_turn_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "jarvis_chat_turn_id", default=None
+)
+current_steering_fetcher: contextvars.ContextVar[
+    Callable[[], Awaitable[Sequence[tuple[str, str, str]]]] | None
+] = contextvars.ContextVar("jarvis_steering_fetcher", default=None)
+current_chat_phase_setter: contextvars.ContextVar[
+    Callable[[str], Awaitable[None]] | None
+] = contextvars.ContextVar("jarvis_chat_phase_setter", default=None)
 
 TokenProvider = Callable[[], Awaitable[str]]
 
@@ -451,6 +467,14 @@ class BackendToolClient:
             headers["X-Jarvis-Message-ID"] = message_id
         elif isinstance(voice_item_id, str) and _VOICE_ITEM_ID.fullmatch(voice_item_id):
             headers["X-Jarvis-Voice-Item-ID"] = voice_item_id
+        phone_session_id = current_phone_session_id.get()
+        if phone_session_id is not None:
+            if (
+                not _PHONE_SESSION_ID.fullmatch(phone_session_id)
+                or int(phone_session_id) > 9_223_372_036_854_775_807
+            ):
+                return _error(name, "This phone session is invalid; nothing was done.")
+            headers["X-Jarvis-Phone-Session-ID"] = phone_session_id
         try:
             async with self._http.stream(
                 "POST", f"{self._base_url}/tools/{name}", headers=headers, json=arguments

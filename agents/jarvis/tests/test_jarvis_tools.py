@@ -20,6 +20,7 @@ from jarvis_tools import (
     api_scope,
     backend_base_url,
     backend_settings_from_environment,
+    current_phone_session_id,
     current_turn,
     model_tools,
 )
@@ -279,6 +280,22 @@ async def test_voice_turn_passes_its_stored_transcript_item_id_to_tools() -> Non
     request = backend.requests[-1]
     assert request.headers["x-jarvis-voice-item-id"] == "item_abc123"
     assert "x-jarvis-message-id" not in request.headers
+
+
+async def test_phone_voice_turn_propagates_its_server_supplied_session_id() -> None:
+    backend = Backend()
+    client = make_client(backend)
+    await client.tools()
+    phone_token = current_phone_session_id.set("42")
+    turn_token = current_turn.set("item_phone")
+    try:
+        await client.call("create_task", "{}", None)
+    finally:
+        current_turn.reset(turn_token)
+        current_phone_session_id.reset(phone_token)
+
+    request = backend.requests[-1]
+    assert request.headers["x-jarvis-phone-session-id"] == "42"
 
 
 async def test_voice_can_search_memory_without_a_persisted_source_message() -> None:
