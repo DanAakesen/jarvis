@@ -42,6 +42,11 @@ transaction commits, the idempotent `setup/0016_long_term_memory.sql` creates th
 full-text catalog/index when installed; its paired down script removes memory tables
 and the voice source-item index/column.
 
+P8-14 generated views are versioned JSON contracts in the shared
+`@jarvis/contracts` workspace. A view carries bounded source/page metadata but
+is not stored in SQL or Blob; source records retain their existing storage and
+retention. P8-14 adds no tables or migrations.
+
 ## Overview
 
 Nine groups. Arrows show the main references between groups.

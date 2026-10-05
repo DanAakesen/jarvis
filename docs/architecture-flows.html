@@ -599,6 +599,27 @@ const FLOWS = [
     ],
   },
   {
+    name: "Generated views",
+    summary: "The signed-in Now page adapts its existing bounded source into a typed list contract and renders it with fixed React elements. Authorized tool results tagged as generated views pass the same JSON Schema and semantic checks before they return to Jarvis.",
+    nodes: [
+      { id: "context", lane: "user", col: 1, s: "context", t: "Dan signs in", d: "The shell opens only after the backend profile check." },
+      { id: "page", lane: "board", col: 2, s: "proven", t: "Load the Now source", d: "The browser sends its delegated token to GET /now.", ev: "App.test.tsx covers the signed-in request and renders its bounded fixture." },
+      { id: "api", lane: "backend", col: 3, s: "proven", t: "Authorize and bound the feed", d: "The existing route returns at most 100 running tasks and 100 activity items.", ev: "P1-13 backend and store tests cover the authenticated bounded source." },
+      { id: "source", lane: "data", col: 4, s: "proven", t: "Read current source records", d: "The feed is derived from existing tasks and activity; no view rows are stored." },
+      { id: "view", lane: "board", col: 5, s: "proven", t: "Create a versioned list", d: "The browser maps typed task data into the shared list contract.", ev: "The shared contract tests bound rows, bytes, page metadata and allowed identifiers." },
+      { id: "render", lane: "board", col: 6, s: "proven", t: "Render fixed React elements", d: "Titles/details are text; internal routes use allowlisted links.", ev: "The signed-in test confirms script-shaped text creates no script element." },
+      { id: "agent", lane: "jarvis", col: 2, s: "proven", t: "Call an authorized tool", d: "A tagged generated-view result can return only through the existing authorized tool route." },
+      { id: "validate", lane: "backend", col: 5, s: "proven", t: "Validate before returning", d: "Fastify JSON Schema and runtime bounds check the payload, registered tool IDs and configured Blob host.", ev: "Backend tool-route tests accept a valid fixture and sanitize malformed output." },
+      { id: "result", lane: "jarvis", col: 6, s: "proven", t: "Receive JSON, not executable code", d: "No generated HTML, JavaScript or CSS runs; window/action delivery remains P8-15." },
+    ],
+    edges: [
+      ["context", "page", "proven", "signed-in session"], ["page", "api", "proven", "delegated token"],
+      ["api", "source", "proven", "bounded read"], ["source", "view", "proven", "typed data"],
+      ["view", "render", "proven", "list contract"], ["agent", "validate", "proven", "tool result"],
+      ["validate", "result", "proven", "valid declarative JSON"],
+    ],
+  },
+  {
     name: "Teams notifications",
     summary: "After Dan starts a personal Teams chat, the backend can deliver proactive text, optional Speech F0 audio, and expiring approval cards. Only a verified one-time approval resumes a gated action.",
     nodes: [

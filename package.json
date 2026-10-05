@@ -10,6 +10,7 @@
     "npm": ">=10 <11"
   },
   "workspaces": [
+    "packages/contracts",
     "apps/web",
     "apps/backend"
   ],

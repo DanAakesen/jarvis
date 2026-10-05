@@ -388,6 +388,38 @@ describe('App shell', () => {
     expect(screen.getByRole('button', { name: 'Put the backend to sleep' })).toHaveProperty('disabled', false);
   });
 
+  it('renders bounded Now data as an allowlisted generated view after sign-in', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/now') {
+        return new Response(JSON.stringify({
+          awayMode: false,
+          confirmations: [],
+          updatedAt: '2026-10-04T00:00:00.000Z',
+          running: [{
+            id: '42', title: '<script>window.compromised = true</script>', project: 'Jarvis',
+            agent: 'copilot', activity: 'Running tests', startedAt: '2026-10-03T23:00:00.000Z',
+          }],
+          items: [],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (path === '/now/events') return new Response(null, { status: 404 });
+      return new Response(JSON.stringify({ waking: false }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    await renderSignedIn();
+
+    const title = await screen.findByRole('link', { name: '<script>window.compromised = true</script>' });
+    expect(title.getAttribute('href')).toBe('/factory/tasks/42');
+    expect(document.querySelector('script')).toBeNull();
+    expect(screen.getByText('Running tests')).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.com/now',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),
+    );
+  });
+
   it('keeps the session while moving between areas, settings and the main page', async () => {
     const user = userEvent.setup();
     await renderSignedIn();

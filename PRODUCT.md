@@ -341,6 +341,13 @@ Voice is explicitly started; the always-available assistant does not continuousl
 listen. Desktop and phone layouts follow the mode/window rules in ui.md. Theme
 variables can be changed on demand and persist until changed again. Banking and
 Fitness and Health are future areas; their detailed integrations remain deferred.
+Generated views use versioned declarative JSON over existing authorised, bounded
+data sources and the renderer/action allowlists recorded in `ui.md`. They are
+temporary; HTML, JavaScript, and CSS supplied with a view are never executed.
+P8-14 currently uses a safe list renderer for the signed-in Now feed; the
+generated-view workspace remains planned under P8-06. This is planned behaviour,
+not a claim that the full shared workspace already exists.
+
 Implementation status and live-service limitations are tracked in PLAN.md and
 the UI coverage report.
 

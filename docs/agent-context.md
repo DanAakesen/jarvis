@@ -204,8 +204,10 @@ Status, 4 October 2026: Dan registered the App, installed it on all repositories
 
 ## Setup and commands
 
-The repository uses npm workspaces for `apps/web` and `apps/backend`, one root
-lockfile, and shared strict TypeScript configuration. P0-02 implements the web
+The repository uses npm workspaces for `apps/web`, `apps/backend`, and
+`packages/contracts`, one root lockfile, and shared strict TypeScript
+configuration. P8-14 keeps the versioned JSON Schema and browser/backend view
+types in the contracts workspace. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
 Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3), and P2-01 (#27) adds sandbox and operations groups 4 and 6.
@@ -221,9 +223,10 @@ Verified in Codex cloud for P0-02:
 | Purpose | Command |
 | --- | --- |
 | Frozen dependency installation | `npm ci` in the repository root |
-| Both workspace builds | `npm run build` in the repository root |
-| Both workspace lint checks | `npm run lint` in the repository root (P0-03 adds backend lint) |
-| Both workspace tests (single run) | `npm test` in the repository root (P0-03 adds backend tests) |
+| All workspace builds | `npm run build` in the repository root |
+| All workspace lint checks | `npm run lint` in the repository root |
+| All workspace tests (single run) | `npm test` in the repository root |
+| Shared generated-view contract | `npm test --workspace @jarvis/contracts`; `npm run lint --workspace @jarvis/contracts` |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
