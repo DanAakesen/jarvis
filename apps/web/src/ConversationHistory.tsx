@@ -5,6 +5,7 @@ import type { PublicConfig } from '../config/public-config';
 import type { CameraController, ScreenShareController } from './screen-sharing';
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
+import { MarkdownContent } from './MarkdownContent';
 import {
   createChatSession,
   loadConversationHistory,
@@ -298,7 +299,9 @@ export function ConversationHistory({
                   <div className="message-heading">
                     <strong>{message.role === 'dan' ? 'Dan' : 'Jarvis'}</strong>
                   </div>
-                  <p>{message.text}</p>
+                  {message.role === 'jarvis' && message.channel === 'chat'
+                    ? <MarkdownContent source={message.text} />
+                    : <p>{message.text}</p>}
                   <div className="message-metadata">
                     <p className="message-language">
                       {message.channel === 'voice' ? 'Voice' : 'Chat'} · {message.language === 'da' ? 'Danish' : 'English'}
@@ -330,13 +333,17 @@ export function ConversationHistory({
       {sending && (
         <div className="streaming-message">
           <strong>Jarvis</strong>
-          <p className="streaming-reply" aria-label="Jarvis reply in progress">{streamedText}<span className="streaming-caret" aria-hidden="true" /></p>
+          <div className="streaming-reply" aria-label="Jarvis reply in progress">
+            <MarkdownContent source={streamedText} streaming />
+            <span className="streaming-caret" aria-hidden="true" />
+          </div>
         </div>
       )}
       {interruptedText && (
-        <p className="interrupted-reply">
-          Partial reply, interrupted: {interruptedText}
-        </p>
+        <div className="interrupted-reply">
+          <p>Partial reply, interrupted:</p>
+          <MarkdownContent source={interruptedText} />
+        </div>
       )}
       {turnError && (
         <div>

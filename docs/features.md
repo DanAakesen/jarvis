@@ -29,7 +29,7 @@ Status as of 5 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Sign-in | Sign in with his Microsoft account; everyone else is refused | Screen | All pages | Live | P0-08, P0-09 |
-| Chat | Type from the floating auto-growing composer, switch DA/EN, and read distinct messages with relative metadata and live streaming feedback; one continuous saved conversation with history and interruption recovery | Screen | Main page | Built | P4-03, P4-06, P4-09, P8-05, P8-21 |
+| Chat | Type from the floating auto-growing composer, switch DA/EN, and read distinct messages with relative metadata and live streaming feedback; Jarvis replies render safe Markdown while Dan's messages stay plain; one continuous saved conversation with history and interruption recovery | Screen | Main page | Built | P4-03, P4-06, P4-09, P8-05, P8-21, P8-24 |
 | English voice | Talk to Jarvis in English (gpt-realtime, Ryan HD, British butler persona) | Voice/chat | Main page | Built | P5-03, P5-04 |
 | Danish voice | Talk to Jarvis in Danish (MAI Transcribe, Harper) | Voice/chat | Main page | Built | P5-02, P5-04 |
 | Interrupt and reconnect | Interrupt Jarvis by speaking; voice reconnects automatically | Voice/chat | Main page | Built | P5-04 |
