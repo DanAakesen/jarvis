@@ -272,10 +272,14 @@ export const conversationModule: BackendModule = {
           if (!assistantMessage) throw new Error('Chat session ended');
           publishActivity('ended');
           yield streamEvent('done', assistantMessage);
-        } catch {
+        } catch (error) {
           if (controller.signal.aborted) {
             publishActivity('interrupted');
           } else {
+            request.log.warn(
+              { reason: error instanceof Error ? error.message.slice(0, 200) : 'unknown' },
+              'conversation.reply_failed',
+            );
             publishActivity('failed');
             yield streamEvent('error', {
               error: 'Jarvis could not finish the reply. A task action may still have completed; check its status before trying again.',

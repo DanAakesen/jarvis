@@ -125,6 +125,9 @@ function deploymentState(value: unknown): 'queued' | 'in_progress' | 'success' |
   return undefined;
 }
 
+// GitHub records workflow jobs that use these environments as deployments; they are not releases (L93).
+const NON_RELEASE_ENVIRONMENTS = new Set(['project-board', 'copilot']);
+
 export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMapping | undefined {
   const payload = object(value);
   if (!payload) return undefined;
@@ -219,6 +222,7 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
     const state = deploymentState(statusPayload?.state);
     const at = timestamp(statusPayload?.created_at);
     if (!id || !deploymentSha || !environment || !state || !at) return undefined;
+    if (NON_RELEASE_ENVIRONMENTS.has(environment.toLowerCase())) return undefined;
     return {
       kind: 'deployment_status',
       repository: repo,

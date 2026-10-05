@@ -28,7 +28,17 @@
 .message-metadata { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); margin-top: var(--space-2); color: var(--text-muted); font-size: var(--type-caption); opacity: 0; transition: opacity var(--motion-fade) var(--ease-standard); }
 .message-metadata p { margin: 0; font-size: inherit; }
 .conversation-message:hover .message-metadata, .conversation-message:focus-within .message-metadata { opacity: 1; }
-.conversation-message > p { margin: 0; color: var(--text); overflow-wrap: anywhere; white-space: pre-wrap; }
+.conversation-message[data-speaker="dan"] > p { margin: 0; color: var(--text); overflow-wrap: anywhere; white-space: pre-wrap; }
+.markdown-content { min-width: 0; color: var(--text); overflow-wrap: anywhere; }
+.markdown-content > :first-child { margin-top: 0; }
+.markdown-content > :last-child { margin-bottom: 0; }
+.markdown-content p { margin: var(--space-2) 0; white-space: normal; }
+.markdown-content ul, .markdown-content ol { margin: var(--space-2) 0; padding-left: 1.4em; }
+.markdown-content li + li { margin-top: var(--space-1); }
+.markdown-content :not(pre) > code { padding: .12em .35em; border-radius: 5px; background: var(--code-surface); font-family: var(--font-mono); font-size: .9em; }
+.markdown-content pre { max-width: 100%; margin: var(--space-3) 0; padding: var(--space-3) var(--space-4); overflow-x: auto; border-radius: var(--radius-control); background: var(--code-surface); color: var(--text); font-size: .9em; line-height: 1.45; }
+.markdown-content pre code { font-family: var(--font-mono); font-size: inherit; white-space: pre; }
+.markdown-content a { text-decoration-thickness: .08em; text-underline-offset: .2em; }
 .message-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
 .message-tools > li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tool-call { display: inline-block; padding: 4px 9px; border-radius: var(--radius-pill); background: var(--surface-muted); color: var(--text); font-size: 13px; overflow-wrap: anywhere; }
@@ -111,15 +121,17 @@
 .app-shell[data-voice-active="true"] .workspace-canvas-layered,
 .app-shell[data-voice-active="true"] .workspace-canvas-has-maximized { height: min(68vh, 680px); min-height: 320px; }
 .app-shell[data-voice-active="true"] .workspace-canvas-tiled .workspace-window { min-height: 220px; }
-.streaming-reply, .interrupted-reply { margin-top: 16px; padding: 12px 14px; border-radius: 6px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.streaming-reply, .interrupted-reply { margin-top: 16px; padding: 12px 14px; border-radius: 6px; overflow-wrap: anywhere; }
 .streaming-reply { background: var(--disabled-surface); color: var(--text); }
+.streaming-reply .markdown-content { display: contents; }
+.streaming-reply .markdown-content > p:last-child { display: inline; }
 .streaming-message { margin: var(--space-5) 0; animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .streaming-message > strong { font-size: var(--type-small); }
-.streaming-reply, .interrupted-reply { overflow-wrap: anywhere; white-space: pre-wrap; }
 .streaming-reply { margin: var(--space-2) 0; color: var(--text); }
 .streaming-caret { display: inline-block; width: 2px; height: 1em; margin-left: 4px; background: currentColor; vertical-align: -.1em; animation: caret-pulse 1s var(--ease-standard) infinite alternate; }
 .interrupted-reply { margin-top: var(--space-4); padding: var(--space-3) var(--space-4); border-radius: var(--radius-control); }
 .interrupted-reply { background: var(--warning-surface); color: var(--warning-text); }
+.interrupted-reply > p { margin: 0 0 var(--space-2); font-size: var(--type-small); font-weight: 600; }
 .history-button { min-height: 44px; padding: 0 14px; border: 1px solid var(--rule); border-radius: var(--radius-control); background: var(--surface); color: inherit; font: inherit; font-weight: 600; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
 .history-button:hover:not(:disabled) { background: var(--surface-muted); }
 .history-button:active:not(:disabled) { background: var(--disabled-surface); transform: translateY(1px); }

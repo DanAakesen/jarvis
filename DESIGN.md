@@ -420,6 +420,12 @@ live caret beside readable text. Only a published tool-call state gets the
 running-tool shimmer; thinking is not treated as a tool call. Running Now tasks
 use a restrained sheen, while completed outcomes stay static.
 
+P8-24 keeps the established body typography for Jarvis's safe Markdown replies;
+inline and fenced code use the shared monospace face and theme-specific code
+surface, without decorative borders. Dan's messages remain plain text. While a
+reply streams, an unmatched `**` is temporarily closed for rendering so an open
+bold span does not flash as literal Markdown; persisted text is unchanged.
+
 Window titles are drag handles; right/bottom edges and the corner resize. Each
 window keeps minimise, maximise and close in its title actions, with a 44px
 ellipsis disclosure for keyboard Arrange. The workspace header retains the
