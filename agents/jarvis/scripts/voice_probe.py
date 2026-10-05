@@ -33,13 +33,16 @@ async def main() -> int:
     started = time.monotonic()
     seen: dict[str, int] = {}
     try:
-        async with websockets.connect(url, additional_headers=headers, max_size=None, open_timeout=20) as ws:
+        async with websockets.connect(
+            url, additional_headers=headers, max_size=None, open_timeout=20
+        ) as ws:
             print(f"open after {time.monotonic() - started:.2f}s")
             silence = base64.b64encode(b"\0" * 4800).decode()
 
             async def feed() -> None:
                 while True:
-                    await ws.send(json.dumps({"type": "input_audio_buffer.append", "audio": silence}))
+                    append = {"type": "input_audio_buffer.append", "audio": silence}
+                    await ws.send(json.dumps(append))
                     await asyncio.sleep(0.1)
 
             feeder = asyncio.create_task(feed())
@@ -47,7 +50,8 @@ async def main() -> int:
                 deadline = started + SECONDS
                 while time.monotonic() < deadline:
                     try:
-                        raw = await asyncio.wait_for(ws.recv(), timeout=max(0.1, deadline - time.monotonic()))
+                        remaining = max(0.1, deadline - time.monotonic())
+                        raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
                     except asyncio.TimeoutError:
                         break
                     if isinstance(raw, bytes):
@@ -59,13 +63,15 @@ async def main() -> int:
                         print(f"{time.monotonic() - started:6.2f}s first {kind}")
                     seen[kind] = seen.get(kind, 0) + 1
                     if kind == "error" or kind.endswith(".failed"):
-                        detail = event.get("error") or event.get("response", {}).get("status_details") or {}
+                        response = event.get("response", {})
+                        detail = event.get("error") or response.get("status_details") or {}
                         print("ERROR", json.dumps(detail)[:600])
             finally:
                 feeder.cancel()
             print("event counts:", json.dumps(seen))
     except websockets.ConnectionClosed as closed:
-        print(f"closed by server after {time.monotonic() - started:.2f}s code={closed.code} reason={closed.reason!r}")
+        elapsed = time.monotonic() - started
+        print(f"closed by server after {elapsed:.2f}s code={closed.code} reason={closed.reason!r}")
         print("event counts:", json.dumps(seen))
         return 1
     except websockets.InvalidStatus as rejected:
