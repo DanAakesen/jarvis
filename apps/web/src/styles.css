@@ -674,13 +674,15 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
 .settings-field { display: grid; align-content: start; gap: 6px; min-width: 0; }
 .settings-field label { color: var(--text); font-weight: 600; }
-.settings-field select, .settings-field input {
+.settings-field select, .settings-field input, .settings-field textarea {
   width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--control-rule);
   border-radius: 6px; background: var(--surface); color: var(--text); font: inherit;
 }
-.settings-field select:focus-visible, .settings-field input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.settings-field select:disabled, .settings-field input:disabled { background: var(--disabled-surface); color: var(--disabled-text); cursor: not-allowed; }
+.settings-field select:focus-visible, .settings-field input:focus-visible, .settings-field textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.settings-field select:disabled, .settings-field input:disabled, .settings-field textarea:disabled { background: var(--disabled-surface); color: var(--disabled-text); cursor: not-allowed; }
+.settings-field textarea { min-height: 144px; resize: vertical; }
 .settings-explanation { margin-top: 12px; font-size: 14px; }
+.settings-validation-error { margin-top: 8px; color: var(--error); font-size: 14px; }
 .settings-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
 .settings-section > .secondary-button { margin-top: 12px; }
 .settings-save { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-top: 24px; }

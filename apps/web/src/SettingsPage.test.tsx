@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPage } from './SettingsPage';
@@ -7,12 +7,18 @@ import { ThemePreferenceContext, type ThemeMode, type ThemePreference } from './
 const settings = {
   appearance: { theme: 'light' as ThemeMode },
   jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
+  personality: {
+    tone: 'british_butler' as 'british_butler' | 'warm' | 'direct' | 'playful',
+    responseStyle: 'concise' as 'concise' | 'balanced' | 'detailed',
+    customInstructions: '',
+  },
   voice: {
     speechToTextModel: 'mai-transcribe',
     englishModel: 'gpt-realtime-2.1',
     englishVoice: 'en-GB-Ryan:DragonHDLatestNeural',
     danishVoice: 'da-DK-Harper:MAI-Voice-2',
     defaultLanguage: 'da' as 'da' | 'en',
+    minimizeWindowsOnVoiceStart: false,
   },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
@@ -32,6 +38,8 @@ const options = {
   themes: ['light', 'dark'],
   jarvisModels: ['gpt-5.6-luna'],
   reasoningEfforts: ['none', 'low', 'medium', 'high'],
+  personalityTones: ['british_butler', 'warm', 'direct', 'playful'],
+  personalityResponseStyles: ['concise', 'balanced', 'detailed'],
   speechToTextModels: ['mai-transcribe'],
   englishModels: ['gpt-realtime-2.1'],
   englishVoices: ['en-GB-Ryan:DragonHDLatestNeural'],
@@ -138,6 +146,93 @@ describe('SettingsPage', () => {
     })).toHaveProperty('disabled', true);
   });
 
+  it('loads and saves personality preferences through the existing settings endpoint', async () => {
+    const user = userEvent.setup();
+    const updated = {
+      ...settings,
+      personality: {
+        tone: 'warm' as const,
+        responseStyle: 'balanced' as const,
+        customInstructions: 'Use plain language and short paragraphs.',
+      },
+    };
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()))
+      .mockResolvedValueOnce(response(settingsResponse(updated)));
+    renderSettingsPage();
+
+    expect(await screen.findByRole('heading', { name: 'Jarvis Personality', level: 2 })).not.toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('value', 'british_butler');
+    expect(screen.getByRole('combobox', { name: 'Response style' })).toHaveProperty('value', 'concise');
+    expect(screen.getByText(/apply to new sessions/)).not.toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Custom instructions' })).toHaveProperty('maxLength', 2_000);
+    expect(screen.getByRole('button', {
+      name: 'Reset personality',
+      description: /already matches the default/,
+    })).toHaveProperty('disabled', true);
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Tone' }), 'warm');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Response style' }), 'balanced');
+    await user.type(screen.getByRole('textbox', { name: 'Custom instructions' }), updated.personality.customInstructions);
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    const [, request] = fetchMock.mock.calls[1]!;
+    expect(request).toMatchObject({ method: 'PATCH' });
+    expect(JSON.parse(String(request?.body))).toEqual({ settings: { personality: updated.personality } });
+  });
+
+  it('shows pending feedback and prevents duplicate saves', async () => {
+    const user = userEvent.setup();
+    const updated = { ...settings, personality: { ...settings.personality, tone: 'warm' as const } };
+    let resolveSave!: (value: Response) => void;
+    const pendingSave = new Promise<Response>((resolve) => { resolveSave = resolve; });
+    fetchMock.mockResolvedValueOnce(response(settingsResponse())).mockReturnValueOnce(pendingSave);
+    renderSettingsPage();
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Tone' }), 'warm');
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(screen.getByRole('button', { name: 'Saving…' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('disabled', true);
+    resolveSave(response(settingsResponse(updated)));
+    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+  });
+
+  it('resets personality to the current defaults and preserves edits when reset fails', async () => {
+    const user = userEvent.setup();
+    const customized = {
+      ...settings,
+      personality: {
+        tone: 'playful' as const,
+        responseStyle: 'detailed' as const,
+        customInstructions: 'Use jokes and detail.',
+      },
+    };
+    fetchMock.mockResolvedValueOnce(response(settingsResponse(customized)))
+      .mockResolvedValueOnce(response({ error: 'Internal server error' }, 500))
+      .mockResolvedValueOnce(response(settingsResponse()));
+    renderSettingsPage();
+
+    await screen.findByRole('heading', { name: 'Jarvis Personality', level: 2 });
+    await user.click(screen.getByRole('button', { name: 'Reset personality' }));
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/could not save settings \(HTTP 500\)/);
+    expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('value', 'playful');
+    expect(screen.getByRole('combobox', { name: 'Response style' })).toHaveProperty('value', 'detailed');
+    expect(screen.getByRole('textbox', { name: 'Custom instructions' })).toHaveProperty('value', customized.personality.customInstructions);
+    expect(screen.getByRole('button', { name: 'Reset personality' })).toHaveProperty('disabled', false);
+
+    await user.click(screen.getByRole('button', { name: 'Reset personality' }));
+    expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('value', settings.personality.tone);
+    expect(screen.getByRole('combobox', { name: 'Response style' })).toHaveProperty('value', settings.personality.responseStyle);
+    expect(screen.getByRole('textbox', { name: 'Custom instructions' })).toHaveProperty('value', '');
+    expect(await screen.findByText(/Personality reset and saved/)).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', true);
+    expect(screen.getByText(/already matches the default/)).not.toBeNull();
+    const [, request] = fetchMock.mock.calls[2]!;
+    expect(JSON.parse(String(request?.body))).toEqual({ settings: { personality: settings.personality } });
+  });
+
   it('offers light and dark modes and explains that custom variables are unavailable', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(response(settingsResponse()));
@@ -153,6 +248,51 @@ describe('SettingsPage', () => {
 
     await user.click(screen.getByRole('radio', { name: 'Dark' }));
     expect(themePreference.saveTheme).toHaveBeenCalledWith('dark');
+  });
+
+  it('shows custom-instruction validation and prevents saving invalid control characters', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()));
+    renderSettingsPage();
+
+    const instructions = await screen.findByRole('textbox', { name: 'Custom instructions' });
+    fireEvent.change(instructions, { target: { value: 'Invalid\u0001instruction' } });
+
+    expect(instructions.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByRole('alert').textContent).toMatch(/Remove control characters/);
+    expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', true);
+
+    await user.clear(instructions);
+    await user.type(instructions, 'Use clear language.');
+    expect(instructions.getAttribute('aria-invalid')).toBe('false');
+    expect(screen.queryByText(/Remove control characters/)).toBeNull();
+  });
+
+  it('keeps custom-instruction edits after a failed save and allows retry', async () => {
+    const user = userEvent.setup();
+    const updated = {
+      ...settings,
+      personality: { ...settings.personality, customInstructions: 'Use clear language.' },
+    };
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()))
+      .mockResolvedValueOnce(response({ error: 'Internal server error' }, 500))
+      .mockResolvedValueOnce(response(settingsResponse(updated)));
+    renderSettingsPage();
+
+    const instructions = await screen.findByRole('textbox', { name: 'Custom instructions' });
+    await user.type(instructions, updated.personality.customInstructions);
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/could not save settings \(HTTP 500\)/);
+    expect(instructions).toHaveProperty('value', updated.personality.customInstructions);
+    expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', false);
+
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    const [, request] = fetchMock.mock.calls[1]!;
+    expect(JSON.parse(String(request?.body))).toEqual({
+      settings: { personality: { customInstructions: updated.personality.customInstructions } },
+    });
   });
 
   it('shows credential dates and status without exposing values', async () => {
@@ -210,6 +350,30 @@ describe('SettingsPage', () => {
     expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
     const [, request] = fetchMock.mock.calls[1]!;
     expect(JSON.parse(String(request?.body))).toEqual({ settings: { newProjects: updated.newProjects } });
+  });
+
+  it('defaults voice window minimisation off and persists a changed preference', async () => {
+    const user = userEvent.setup();
+    const updated = {
+      ...settings,
+      voice: { ...settings.voice, minimizeWindowsOnVoiceStart: true },
+    };
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()))
+      .mockResolvedValueOnce(response(settingsResponse(updated)));
+    renderSettingsPage();
+
+    const toggle = await screen.findByRole('checkbox', { name: 'Minimise all windows when starting voice' });
+    expect(toggle).toHaveProperty('checked', false);
+    await user.click(toggle);
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    expect(await screen.findByRole('checkbox', { name: 'Minimise all windows when starting voice' }))
+      .toHaveProperty('checked', true);
+    const [, request] = fetchMock.mock.calls[1]!;
+    expect(JSON.parse(String(request?.body))).toEqual({
+      settings: { voice: { minimizeWindowsOnVoiceStart: true } },
+    });
   });
 
   it('offers retry when settings cannot be loaded', async () => {

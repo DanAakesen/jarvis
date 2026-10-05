@@ -94,7 +94,7 @@ Status as of 4 October 2026.
 | --- | --- | --- | --- | --- | --- |
 | Settings | Jarvis, voice and coding-agent defaults; global limits; app-wide light/dark appearance | Screen | Settings | Built | P1-11, P8-13 |
 | Jarvis model per session | Model and reasoning for new Jarvis sessions | Both | Settings; by voice with P7-11 | Built | P4-07 |
-| Personality preferences | Choose a tone and response style, and add bounded instructions for new chat and voice sessions | Both | Settings, chat and voice | Backend built; Settings UI pending | P7-16, P8-19 |
+| Personality preferences | Choose a tone and response style, and add bounded instructions for new chat and voice sessions | Both | Settings, chat and voice | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 | Credentials status | See credential expiry and renewal status (never values) | Screen | Settings | Built | P2-08 |
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |
 | Usage and cost | Sandbox, model, voice, Codex and Copilot usage per task, project, period | Screen | Usage | Built | P2-12, P6-01 |
@@ -137,7 +137,7 @@ Status as of 4 October 2026.
 | Agent-directed workspace views | Ask Jarvis to create, update, show, close, minimise, restore, focus, move and resize views, and change the layout or contextual panel | Both | Main page and voice workspace | Planned | P8-15 |
 | Generated data views | Inspect accessible information in temporary, typed views using registered renderers | Screen | Workspace | Planned | P8-14 |
 | Runtime activity | See Jarvis's actual listening, thinking, tool-call and speaking state | Both | Main page and voice workspace | Partial: client-reported chat/voice work is visible; tool-call activity awaits P8-16 | P8-16, P8-20 |
-| Persisted UI preferences and themes | Change light/dark theme values and choose whether windows minimise when voice starts | Screen | Settings and shell | Planned | P8-17 |
+| Persisted UI preferences and themes | Change light/dark/system appearance, approved theme tokens, and whether windows minimise when voice starts (off by default) | Screen | Settings and shell | In progress | P8-17 |
 | Generated-view and theme capabilities | Use the initial safe renderer/action and adjustable theme-token allowlists | — | UI planning | Decision recorded; implementation remains with P8-14/P8-15/P8-17 | P8-18 |
 
 ### Enabling-logic coverage
@@ -166,7 +166,7 @@ This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell c
 | Long-term memory | Recall preferences, decisions and unfinished work across sessions; inspect, correct and forget retained memories | Voice/chat | Existing conversation; dedicated management UI undecided | Planned (storage, capture and retention decisions open) | P7-13 |
 | Web research | Search and retrieve web sources, synthesise findings with links and show results through dynamic views | Both | Conversation and dynamic workspace | Planned (provider and cost decision open) | P7-14; existing P8-06/P8-14/P8-15 consumers |
 | Image and video generation | Generate visual assets, inspect truthful job status and view the resulting artifacts | Both | Conversation and dynamic workspace | Planned (providers, cost and retention decisions open) | P7-15; existing P8-06/P8-14/P8-15 consumers |
-| Editable personality | Configure tone/response style and custom instructions consistently for chat and voice; reset to the current default | Both | Proposed Settings → Jarvis → Personality | Planned | P7-16, P8-19 |
+| Editable personality | Set tone/response-style and custom-instruction defaults for new sessions; reset to the current default | Screen | Settings → Jarvis → Personality | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 
 Dan accepted these features on 4 October 2026. No new provider or paid service
 was selected, and no implementation was started by this planning change. Notes

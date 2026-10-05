@@ -256,7 +256,7 @@ const FLOWS = [
   },
   {
     name: "Settings",
-    summary: "A signed-in user edits global defaults or appearance, or Jarvis uses its authenticated model-setting tool. The backend validates partial changes and stores them; the client applies only an accepted theme, and future sessions/tasks read their applicable defaults.",
+    summary: "A signed-in user edits global defaults or asks Jarvis to set an approved theme token. The backend validates each value and stores partial changes; generated views and window state stay temporary.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "context", t: "Dan opens Settings", d: "The app shell already has a verified sign-in." },
       { id: "page", lane: "board", col: 2, s: "proven", t: "Load settings and theme", d: "The browser silently gets a delegated API token and calls `/settings`; the shell hydrates the saved appearance.", ev: "P1-11 and P8-13 tests cover authenticated settings reads, saved theme hydration, and the unavailable state." },
@@ -266,12 +266,17 @@ const FLOWS = [
       { id: "save", lane: "backend", col: 6, s: "proven", t: "PATCH /settings", d: "Persist only changed keys in one SQL transaction; return the effective accepted theme.", ev: "P7-16 route tests verify personality persistence/readback and reset through SettingsStore; P7-11 tests cover model-setting writes; P8-13 applies light/dark only after an accepted response, retaining the prior theme on rejection." },
       { id: "rows", lane: "data", col: 7, s: "proven", t: "Global rows in dbo.settings", d: "Reuses the P1-01 key/value table; `appearance.theme` and personality preferences need no migration or settings history.", ev: "P8-13 API tests verify theme readback; P7-16 covers personality persistence through the existing store." },
       { id: "next", lane: "backend", col: 8, s: "proven", t: "New session reads defaults", d: "Hosted chat reads personality settings per invocation; hosted Danish voice snapshots them at session start; English realtime snapshots them when the backend configures a new relay. Existing voice keeps its snapshot. Personality changes response style only, not identity, tools, permissions, language, model, voice, or action truth. Tasks continue to resolve overrides before saved defaults.", ev: "P7-16 backend and agent tests verify setting reads, per-session isolation, prompt precedence, and unchanged server-owned tool schemas. P4-07 and P7-11 cover model/reasoning reads and next-session updates; P2-05 handles task model overrides. Live Azure session and provider behavior remain unverified." },
+      { id: "theme-tool", lane: "jarvis", col: 4, s: "proven", t: "Call set_theme", d: "The agent submits only allowlisted appearance tokens to the authenticated tool route.", ev: "P8-17 tool tests cover accepted patches, invalid input, unavailable storage, and failed writes." },
+      { id: "theme-result", lane: "jarvis", col: 8, s: "proven", t: "Report the tool outcome", d: "A successful result contains accepted tokens; refusals and failures remain truthful.", ev: "P4-05 dispatcher tests and P8-17 theme-tool tests cover outcome reporting." },
+      { id: "theme-client", lane: "board", col: 9, s: "unknown", t: "Apply tokens to an open shell", d: "P8-13 must consume successful tool results to update the active theme without reload; this integration is not yet verified." },
     ],
     edges: [
-      ["start", "page", "docs", "open"], ["page", "read", "docs", "token + GET"],
-      ["read", "edit", "docs", "current values + catalog"], ["edit", "validate", "docs", "PATCH changed values"],
-      ["validate", "save", "docs", "valid"], ["save", "rows", "docs", "transactional upsert"],
-      ["rows", "next", "assumed", "future consumer"],
+      ["start", "page", "docs", "open settings"], ["start", "theme-tool", "docs", "chat/voice request"],
+      ["page", "read", "docs", "token + GET"], ["read", "edit", "docs", "current values + catalog"],
+      ["edit", "validate", "docs", "PATCH changed values"], ["theme-tool", "validate", "proven", "POST /tools/set_theme"],
+      ["validate", "save", "proven", "valid patch"], ["save", "rows", "proven", "transactional upsert"],
+      ["rows", "next", "docs", "future consumer"], ["save", "theme-result", "proven", "successful tool result"],
+      ["theme-result", "theme-client", "unknown", "accepted tokens"],
     ],
   },
   {

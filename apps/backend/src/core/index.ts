@@ -2,6 +2,7 @@ import type { BackendModule } from '../modules.js';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
+import { setThemeTool } from './theme.js';
 import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
 import { setJarvisModelTool } from './model-tools.js';
@@ -28,7 +29,7 @@ function auditToolResult(toolName: string, outcome: ToolCallOutcome, result: unk
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setJarvisModelTool, setAwayModeTool, getStatusSummaryTool],
+  tools: [setThemeTool, setJarvisModelTool, setAwayModeTool, getStatusSummaryTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);
