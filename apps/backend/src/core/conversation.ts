@@ -9,8 +9,10 @@ import type {
 } from './conversation-store.js';
 import {
   executeReflexAction,
+  registerChatReflex,
   reflexTargets,
   type ReflexClassifier,
+  type ReflexActionResult,
   type ReflexTarget,
 } from './reflex.js';
 
@@ -120,7 +122,7 @@ async function runChatReflex(
   language: ConversationLanguage,
   messageId: string,
   signal: AbortSignal,
-): Promise<void> {
+): Promise<ReflexActionResult | null> {
   const budgetController = new AbortController();
   const timeout = setTimeout(() => budgetController.abort(), chatReflexBudgetMs);
   const classificationSignal = AbortSignal.any([signal, budgetController.signal]);
@@ -129,12 +131,12 @@ async function runChatReflex(
     let targets: ReflexTarget[];
     try {
       const resolvedTargets = await raceWithAbort(reflexTargets(request, text), classificationSignal);
-      if (resolvedTargets === undefined) return;
+      if (resolvedTargets === undefined) return null;
       targets = resolvedTargets;
     } finally {
       logChatLatency(request, 'reflex_targets', targetsStartedAt);
     }
-    if (classificationSignal.aborted) return;
+    if (classificationSignal.aborted) return null;
 
     const jevStartedAt = performance.now();
     let classification: Awaited<ReturnType<ReflexClassifier['classify']>>;
@@ -143,15 +145,16 @@ async function runChatReflex(
         classifier.classify(text, language, targets, classificationSignal),
         classificationSignal,
       );
-      if (result === undefined) return;
+      if (result === undefined) return null;
       classification = result;
     } finally {
       logChatLatency(request, 'jev', jevStartedAt);
     }
-    if (classificationSignal.aborted) return;
-    await executeReflexAction(classification, request, messageId, signal);
+    if (classificationSignal.aborted) return null;
+    return await executeReflexAction(classification, request, messageId, signal);
   } catch {
     // Reflex is best effort; the agent stream owns the chat response.
+    return null;
   } finally {
     clearTimeout(timeout);
   }
@@ -222,6 +225,8 @@ export const conversationModule: BackendModule = {
         publishActivity('thinking');
         try {
           const agentStartedAt = performance.now();
+          const classifier = app.reflexClassifier;
+          const finishReflex = classifier ? registerChatReflex(userMessage.id) : undefined;
           const agentIterator = agent.stream({
             messageId: userMessage.id,
             text,
@@ -229,15 +234,15 @@ export const conversationModule: BackendModule = {
             ...(request.body.screenContext === undefined ? {} : { screenContext: request.body.screenContext }),
           }, authorization, controller.signal)[Symbol.asyncIterator]();
           let next = agentIterator.next();
-          if (app.reflexClassifier) {
+          if (classifier && finishReflex) {
             void runChatReflex(
               request,
-              app.reflexClassifier,
+              classifier,
               text,
               session.language,
               userMessage.id,
               controller.signal,
-            );
+            ).then(finishReflex, () => finishReflex(null));
           }
           let firstByteLogged = false;
           try {

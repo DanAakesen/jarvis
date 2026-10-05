@@ -480,6 +480,7 @@ function registerVoiceRoute(
             } catch {
               contradictedEntry.undoResult = {
                 tool: 'undo',
+                arguments: {},
                 outcome: 'error',
                 note: 'The undo attempt failed; the action may still be in effect.',
               };

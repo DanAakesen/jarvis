@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createToolRegistry } from './tool-registry.js';
-import { createJevReflexClassifier, createReflexTargets } from './reflex.js';
+import {
+  createJevReflexClassifier,
+  createReflexTargets,
+  findChatReflexReplay,
+  registerChatReflex,
+} from './reflex.js';
 
 function tool(reflexSafe: boolean) {
   return {
@@ -55,6 +60,22 @@ function response(
 }
 
 describe('Jev reflex classifier', () => {
+  it('replays a completed chat action only for the same registered tool arguments', async () => {
+    const finish = registerChatReflex('7000001');
+    const sameAction = findChatReflexReplay('7000001', 'pause_task', { taskId: '12' });
+    const otherAction = findChatReflexReplay('7000001', 'pause_task', { taskId: '13' });
+
+    finish({
+      tool: 'pause_task',
+      arguments: { taskId: '12' },
+      outcome: 'ok',
+      note: 'Reflex already did pause_task (ok): Done.',
+    });
+
+    await expect(sameAction).resolves.toMatchObject({ tool: 'pause_task', outcome: 'ok' });
+    await expect(otherAction).resolves.toBeNull();
+  });
+
   it('validates typed decisions and only offers registered reflex-safe targets', async () => {
     const tools = createToolRegistry([{ id: 'factory', tools: [tool(true), tool(false)] }]);
     const targets = createReflexTargets(tools.list(), ['12']);

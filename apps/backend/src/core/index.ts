@@ -12,6 +12,7 @@ import { setAwayModeTool } from './away-mode.js';
 import { getStatusSummaryTool } from './status.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspace-commands.js';
+import { findChatReflexReplay } from './reflex.js';
 
 const memoryReadOnlyTools = new Set(['memory_search', 'memory_list', 'memory_history']);
 
@@ -96,6 +97,17 @@ export const coreModule: BackendModule = {
           request.jarvisMemorySourceMessageId = messageId;
         }
         if (validMessageId && !app.toolCallStore) return reply.code(503).send({ error: 'Tool execution unavailable' });
+        if (validMessageId && voiceItemHeader === undefined && tool.reflexSafe) {
+          const reflex = await findChatReflexReplay(messageId!, tool.name, request.body);
+          if (reflex) {
+            return {
+              tool: tool.name,
+              outcome: reflex.outcome,
+              result: { reflexAlreadyExecuted: true, confirmation: reflex.note },
+              confirmation: reflex.note,
+            };
+          }
+        }
 
         const activityId = randomUUID();
         const source = voiceItemHeader === undefined ? 'chat' : 'voice';

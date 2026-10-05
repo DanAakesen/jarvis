@@ -244,8 +244,22 @@ describe('conversation routes', () => {
 
     it('reports a concurrent reflex action as tool activity and still streams the agent reply', async () => {
       const store = storeFixture();
-      const chatAgent = { stream: vi.fn(async function* () { yield 'There are no active updates.'; }) };
+      const appRef: { current?: ReturnType<typeof buildApp> } = {};
+      const chatAgent = {
+        stream: vi.fn(async function* () {
+          const app = appRef.current;
+          if (!app) throw new Error('Conversation app was not initialized');
+          const replay = await app.inject({
+            method: 'POST',
+            url: '/tools/get_status_summary',
+            headers: { ...headers, 'x-jarvis-message-id': '42' },
+            payload: {},
+          });
+          yield (replay.json() as { confirmation: string }).confirmation;
+        }),
+      };
       const recordCall = vi.fn(async () => {});
+      const readNowFeed = vi.fn(async () => ({ running: [], items: [] }));
       const toolCallStore = {
         record: recordCall,
         listCodexToolCalls: vi.fn(async () => []),
@@ -266,8 +280,9 @@ describe('conversation routes', () => {
         conversationAgent: chatAgent,
         reflexClassifier,
         toolCallStore,
-        nowFeedStore: { read: vi.fn(async () => ({ running: [], items: [] })) } as unknown as BuildAppOptions['nowFeedStore'],
+        nowFeedStore: { read: readNowFeed } as unknown as BuildAppOptions['nowFeedStore'],
       });
+      appRef.current = app;
       const activities: unknown[] = [];
       app.jarvisActivityHub.subscribe((event) => activities.push(event));
 
@@ -281,6 +296,7 @@ describe('conversation routes', () => {
       await vi.waitFor(() => expect(recordCall).toHaveBeenCalledOnce());
       expect(response.body).toContain('event: delta');
       expect(response.body).toContain('event: done');
+      expect(readNowFeed).toHaveBeenCalledOnce();
       expect(recordCall).toHaveBeenCalledWith(expect.objectContaining({
         messageId: '42',
         tool: 'get_status_summary',
