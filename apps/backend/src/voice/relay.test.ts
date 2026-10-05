@@ -6,14 +6,16 @@ import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 import { AuthenticationDenied } from '../auth/verify.js';
-import { buildApp } from '../app.js';
+import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
 import { coreModule } from '../core/index.js';
 import type { ConversationStore } from '../core/conversation-store.js';
 import type { SettingsStore } from '../core/settings.js';
+import type { ToolCallStore } from '../core/tool-calls.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { ReflexClassifier } from '../core/reflex.js';
+import type { TaskController, TaskRecord, TaskStore } from '../factory/task-store.js';
 import { factoryModule } from '../factory/index.js';
 import type { BackendModule } from '../modules.js';
 import {
@@ -79,13 +81,24 @@ function appFor(
       model: input.model,
       at: new Date('2026-10-03T12:00:01Z'),
     })),
+    updateMessage: vi.fn<NonNullable<ConversationStore['updateMessage']>>(async (id, text) => ({
+      id,
+      sessionId: '41',
+      role: 'dan',
+      text,
+      model: null,
+      at: new Date('2026-10-03T12:00:01Z'),
+    })),
     getHistory: vi.fn(async () => ({ messages: [], nextCursor: null })),
   } satisfies ConversationStore,
   settingsStore?: SettingsStore,
   reflexClassifier?: ReflexClassifier,
+  services: Pick<BuildAppOptions, 'taskStore' | 'taskController' | 'toolCallStore'> = {},
+  logLevel: 'info' | 'silent' = 'silent',
 ) {
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
-  const app = buildApp(config, createLogger(config, undefined, output), {
+  const appConfig = { ...config, logLevel };
+  const app = buildApp(appConfig, createLogger(appConfig, undefined, output), {
     modules: [
       coreModule,
       factoryModule,
@@ -100,6 +113,7 @@ function appFor(
       if (token !== browserToken) throw new AuthenticationDenied(401);
       return { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId };
     },
+    ...services,
     conversationStore,
     ...(settingsStore ? { settingsStore } : {}),
     ...(reflexClassifier ? { reflexClassifier } : {}),
@@ -117,6 +131,31 @@ async function openBrowser(url: string, protocols = [VOICE_SUBPROTOCOL, `jarvis.
     browser.once('error', reject);
   });
   return browser;
+}
+
+function taskReflexServices() {
+  const task = { id: '12', state: 'Running' } as unknown as TaskRecord;
+  const taskStore = {
+    list: vi.fn(async () => [task]),
+  } as unknown as TaskStore;
+  const taskController: TaskController = {
+    control: vi.fn(async () => ({ kind: 'ok' as const, task })),
+  };
+  const toolCallStore: ToolCallStore = { record: vi.fn(async () => {}) };
+  return { task, taskStore, taskController, toolCallStore };
+}
+
+function sendTimedPartialTranscript(socket: WebSocket, itemId: string) {
+  setTimeout(() => socket.send(JSON.stringify({
+    type: 'conversation.item.input_audio_transcription.delta',
+    item_id: itemId,
+    delta: 'Jarvis, ',
+  })), 1);
+  setTimeout(() => socket.send(JSON.stringify({
+    type: 'conversation.item.input_audio_transcription.delta',
+    item_id: itemId,
+    delta: 'pause task 12.',
+  })), 15);
 }
 
 describe('backend-relayed Voice Live WebSocket', () => {
@@ -265,12 +304,337 @@ describe('backend-relayed Voice Live WebSocket', () => {
       'en',
       expect.any(Array),
       expect.any(AbortSignal),
+      { executed: [], executedActions: [], final: true },
     );
     expect(received.findIndex((event) => event.type === 'response.create'))
       .toBeGreaterThan(received.findIndex((event) => event.type === 'input_audio_buffer.append'));
     const elapsedMs = responseRequestedAt! - turnStartedAt!;
     expect(elapsedMs).toBeLessThan(500);
     console.info(`Offline final-transcript-to-response-request latency: ${elapsedMs.toFixed(2)} ms`);
+  });
+
+  it('executes a completed partial before the final transcript and does not repeat it', async () => {
+    const itemId = 'partial_turn';
+    const received: Record<string, unknown>[] = [];
+    const records: string[] = [];
+    const services = taskReflexServices();
+    const classifier: ReflexClassifier = {
+      classify: vi.fn(async (_text, _language, targets, _signal, context) => ({
+        addressed: true,
+        intent: 'action' as const,
+        confidence: 0.99,
+        needsConfirmation: false,
+        completeCommand: true,
+        ...(context?.final ? { contradictedAction: null } : {}),
+        target: targets.find(({ tool }) => tool.name === 'pause_task') ?? null,
+      })),
+    };
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'input_audio_buffer.append') sendTimedPartialTranscript(socket, itemId);
+        if (event.type === 'response.create') {
+          socket.send(JSON.stringify({ type: 'response.created' }));
+          socket.send(JSON.stringify({ type: 'response.audio_transcript.delta', delta: 'Paused' }));
+          socket.send(JSON.stringify({ type: 'response.audio.delta', delta: 'AQID' }));
+        }
+      });
+    });
+    const { app, conversationStore } = appFor(
+      (token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }),
+      vi.fn(async () => voiceToken),
+      records,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      classifier,
+      services,
+      'info',
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+    browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
+
+    await vi.waitFor(() => expect(services.taskController.control).toHaveBeenCalledWith(
+      '12', { action: 'pause' },
+    ));
+    expect(received.some((event) =>
+      event.type === 'conversation.item.input_audio_transcription.completed',
+    )).toBe(false);
+    expect(conversationStore.addMessage).toHaveBeenCalledTimes(1);
+    expect(classifier.classify).toHaveBeenCalledWith(
+      'Jarvis, pause task 12.',
+      'en',
+      expect.any(Array),
+      expect.any(AbortSignal),
+      { executed: [], executedActions: [], partial: true },
+    );
+
+    const upstream = servers.at(-1)!.clients.values().next().value as WebSocket;
+    upstream.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
+    upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: itemId,
+      transcript: 'Jarvis, pause task 12.',
+    }));
+    await vi.waitFor(() => expect(received.some((event) =>
+      event.type === 'response.create' &&
+      String((event.response as Record<string, unknown> | undefined)?.instructions)
+        .includes('Reflex turn ledger'),
+    )).toBe(true));
+
+    expect(services.taskController.control).toHaveBeenCalledTimes(1);
+    expect(conversationStore.updateMessage).toHaveBeenCalledWith('42', 'Jarvis, pause task 12.');
+    expect(classifier.classify).toHaveBeenCalledWith(
+      'Jarvis, pause task 12.',
+      'en',
+      expect.any(Array),
+      expect.any(AbortSignal),
+      {
+        executed: ['paused task (ok): Reflex already did pause_task (ok): Done: pause_task succeeded.'],
+        executedActions: [{
+          id: 'action-1',
+          summary: 'paused task (ok): Reflex already did pause_task (ok): Done: pause_task succeeded.',
+        }],
+        final: true,
+      },
+    );
+    await new Promise<void>((resolve) => {
+      browser.once('close', () => resolve());
+      browser.close();
+    });
+    const metric = records.map((line) => {
+      try { return JSON.parse(line) as Record<string, unknown>; } catch { return undefined; }
+    }).find((record) => record?.msg === 'voice.reflex_metrics');
+    expect(metric).toMatchObject({
+      partialTranscriptionDeltas: 2,
+      stablePartialClauses: 1,
+    });
+    expect(metric?.firstActionLatencyMs).toEqual(expect.any(Number));
+    expect(metric?.speechToFirstWordMs).toEqual(expect.any(Number));
+    expect(metric?.speechToFirstAudioMs).toEqual(expect.any(Number));
+  });
+
+  it('runs Danish partial reflexes and reconciles the hosted agent user message', async () => {
+    const itemId = 'danish_partial';
+    const received: Record<string, unknown>[] = [];
+    const services = taskReflexServices();
+    const classifier: ReflexClassifier = {
+      classify: vi.fn(async (_text, _language, targets, _signal, context) => ({
+        addressed: true,
+        intent: 'action' as const,
+        confidence: 0.99,
+        needsConfirmation: false,
+        completeCommand: true,
+        ...(context?.final ? { contradictedAction: null } : {}),
+        target: targets.find(({ tool }) => tool.name === 'pause_task') ?? null,
+      })),
+    };
+    let upstream!: WebSocket;
+    const upstreamUrl = await echoServer((socket) => {
+      upstream = socket;
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'input_audio_buffer.append') {
+          setTimeout(() => socket.send(JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.delta',
+            item_id: itemId,
+            delta: 'Jarvis, ',
+          })), 1);
+          setTimeout(() => socket.send(JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.delta',
+            item_id: itemId,
+            delta: 'sæt opgave 12 på pause.',
+          })), 15);
+        }
+      });
+    });
+    const connector = (token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    });
+    const { app, conversationStore } = appFor(
+      connector,
+      vi.fn(async () => voiceToken),
+      [],
+      [],
+      connector,
+      undefined,
+      undefined,
+      classifier,
+      services,
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice/da`);
+    const ready = new Promise<void>((resolve) => browser.on('message', (data) => {
+      if ((JSON.parse(data.toString()) as Record<string, unknown>).type === 'jarvis.session.ready') resolve();
+    }));
+    await ready;
+    browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
+
+    await vi.waitFor(() => expect(services.taskController.control).toHaveBeenCalledWith(
+      '12', { action: 'pause' },
+    ));
+    expect(received.some((event) => event.type === 'user.message')).toBe(false);
+    expect(classifier.classify).toHaveBeenCalledWith(
+      'Jarvis, sæt opgave 12 på pause.',
+      'da',
+      expect.any(Array),
+      expect.any(AbortSignal),
+      { executed: [], executedActions: [], partial: true },
+    );
+
+    upstream.send(JSON.stringify({
+      type: 'user.message',
+      item_id: itemId,
+      content: [{ type: 'input_text', text: 'Jarvis, sæt opgave 12 på pause.' }],
+    }));
+    await vi.waitFor(() => expect(received.some((event) =>
+      event.type === 'conversation.item.create' &&
+      String(((event.item as Record<string, unknown> | undefined)?.content as Record<string, unknown>[] | undefined)?.[0]?.text)
+        .includes('Reflex turn ledger'),
+    )).toBe(true));
+    expect(services.taskController.control).toHaveBeenCalledTimes(1);
+    expect(conversationStore.updateMessage).toHaveBeenCalledWith('42', 'Jarvis, sæt opgave 12 på pause.');
+    expect(classifier.classify).toHaveBeenLastCalledWith(
+      'Jarvis, sæt opgave 12 på pause.',
+      'da',
+      expect.any(Array),
+      expect.any(AbortSignal),
+      {
+        executed: ['paused task (ok): Reflex already did pause_task (ok): Done: pause_task succeeded.'],
+        executedActions: [{
+          id: 'action-1',
+          summary: 'paused task (ok): Reflex already did pause_task (ok): Done: pause_task succeeded.',
+        }],
+        final: true,
+      },
+    );
+  });
+
+  it('holds a confirmation-requiring partial without executing it', async () => {
+    const itemId = 'unsafe_partial';
+    const received: Record<string, unknown>[] = [];
+    const services = taskReflexServices();
+    const classifier: ReflexClassifier = {
+      classify: vi.fn(async (_text, _language, targets) => ({
+        addressed: true,
+        intent: 'action' as const,
+        confidence: 0.99,
+        needsConfirmation: true,
+        completeCommand: true,
+        target: targets.find(({ tool }) => tool.name === 'pause_task') ?? null,
+      })),
+    };
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'input_audio_buffer.append') sendTimedPartialTranscript(socket, itemId);
+      });
+    });
+    const { app } = appFor(
+      (token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }),
+      vi.fn(async () => voiceToken),
+      [],
+      [],
+      undefined,
+      undefined,
+      undefined,
+      classifier,
+      services,
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+    browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
+    await vi.waitFor(() => expect(classifier.classify).toHaveBeenCalledWith(
+      'Jarvis, pause task 12.',
+      'en',
+      expect.any(Array),
+      expect.any(AbortSignal),
+      { executed: [], executedActions: [], partial: true },
+    ));
+    expect(services.taskController.control).not.toHaveBeenCalled();
+
+    const upstream = servers.at(-1)!.clients.values().next().value as WebSocket;
+    upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: itemId,
+      transcript: 'Jarvis, pause task 12.',
+    }));
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
+    expect(services.taskController.control).not.toHaveBeenCalled();
+  });
+
+  it('reverses a partial pause when the final transcript contradicts it', async () => {
+    const itemId = 'contradicted_partial';
+    const received: Record<string, unknown>[] = [];
+    const services = taskReflexServices();
+    const classifier: ReflexClassifier = {
+      classify: vi.fn(async (_text, _language, targets, _signal, context) => ({
+        addressed: true,
+        intent: 'action' as const,
+        confidence: 0.99,
+        needsConfirmation: false,
+        completeCommand: true,
+        ...(context?.final ? { contradictedAction: context.executedActions?.[0]?.id ?? null } : {}),
+        target: targets.find(({ tool }) => tool.name === 'pause_task') ?? null,
+      })),
+    };
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'input_audio_buffer.append') sendTimedPartialTranscript(socket, itemId);
+      });
+    });
+    const { app } = appFor(
+      (token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }),
+      vi.fn(async () => voiceToken),
+      [],
+      [],
+      undefined,
+      undefined,
+      undefined,
+      classifier,
+      services,
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+    browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
+    await vi.waitFor(() => expect(services.taskController.control).toHaveBeenCalledWith(
+      '12', { action: 'pause' },
+    ));
+
+    const upstream = servers.at(-1)!.clients.values().next().value as WebSocket;
+    upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: itemId,
+      transcript: 'Jarvis, do not pause task 12.',
+    }));
+    await vi.waitFor(() => expect(services.taskController.control).toHaveBeenCalledWith(
+      '12', { action: 'resume' },
+    ));
+    expect(services.taskController.control).toHaveBeenCalledTimes(2);
+    expect(received.some((event) =>
+      event.type === 'response.create' &&
+      String((event.response as Record<string, unknown> | undefined)?.instructions).includes('then undone'),
+    )).toBe(true);
   });
 
   it('authenticates the browser and relays messages with only the backend Voice Live credential', async () => {

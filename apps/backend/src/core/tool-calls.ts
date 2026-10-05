@@ -8,8 +8,14 @@ export interface ToolCallRecord {
   readonly outcome: ToolCallOutcome;
 }
 
+export interface CodexToolUsageCount {
+  readonly tool: 'web_research';
+  readonly count: string;
+}
+
 export interface ToolCallStore {
   record(call: ToolCallRecord): Promise<void>;
+  listCodexToolCalls?(from: Date, to: Date): Promise<CodexToolUsageCount[]>;
 }
 
 /**

@@ -4,6 +4,7 @@
 export const FOUNDRY_SCOPE = "https://ai.azure.com/.default";
 
 export type CodingAgent = "codex" | "copilot";
+export type CodexToolName = "web_research";
 export type InvocationStatus =
   | "queued" | "running" | "completed" | "failed" | "cancelled" | "needs_attention"
   | "cancelling" | "interrupted" | "paused" | "unknown";
@@ -87,6 +88,18 @@ function text(value: unknown, name: string): string {
     throw new TypeError(`${name} must contain 1–65536 characters`);
   }
   return value;
+}
+
+function codexToolRequest(tool: unknown, query: unknown, model: unknown): JsonObject {
+  if (tool !== "web_research") throw new TypeError("tool must be web_research");
+  if (typeof query !== "string" || !query.trim() || query.length > 2_000) {
+    throw new TypeError("query must contain 1–2000 characters");
+  }
+  const selectedModel = option(model, "model", 100);
+  if (selectedModel === undefined || selectedModel === "gpt-6.1-sol") {
+    throw new TypeError("model must be a supported ChatGPT Codex model");
+  }
+  return { agent: "codex", mode: "codex-tool", tool, query, model: selectedModel };
 }
 
 function option(value: unknown, name: string, limit: number): string | undefined {
@@ -221,6 +234,18 @@ export class FoundryClient {
       agent: "codex", mode: "renew-codex", min_days_left: 3,
     }, undefined, options);
     return this.accepted(body, "renew-codex", undefined, "codex");
+  }
+
+  async startCodexTool(
+    tool: CodexToolName,
+    query: string,
+    model: string,
+    options: RequestOptions = {},
+  ): Promise<InvocationAccepted> {
+    const body = await this.runtimeRequest(
+      "codex-tool", "protocols/invocations", "POST", codexToolRequest(tool, query, model), undefined, options,
+    );
+    return this.accepted(body, "codex-tool", undefined, "codex");
   }
 
   async steer(

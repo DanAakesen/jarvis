@@ -18,7 +18,7 @@ def test_danish_voice_agent_settings() -> None:
     assert DANISH_AGENT_NAME == "jarvis-voice-mai"
     assert settings["hosted_agent_name"] == HOSTED_AGENT_NAME == "jarvis"
     assert settings["transcription"] == {
-        "model": "mai-transcribe",
+        "model": "gpt-4o-mini-transcribe",
         "language": "da",
         "phrase_list": PHRASE_LIST,
     }

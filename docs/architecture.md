@@ -638,6 +638,38 @@ freshness, occlusion, secret blocking, confirmation and audit redaction. A live
 Chrome launch with Dan's signed-in profile and local-page desktop evidence still
 requires verification on his Windows PC.
 
+### Ultrafast browser agent (P7-17)
+
+The backend registers `browser_do` when the existing Key Vault Jev key and Foundry
+project are configured. The P7-04 reflex may route a high-confidence chat or
+English voice request directly to that tool before the main agent reply; the
+hosted agent can also call it. P7-20 can invoke
+`request.server.browserAgent.runClause` with one recognized clause and the
+current tab ID, without owning the browser loop.
+
+Each step takes a new snapshot through the registered P7-18 tools and sends one
+Jev request containing the goal, recent actions, page title/URL, and bounded
+visible control table. That request chooses the operation and speculative
+indexed targets for click, type, select, scroll, and wait. The backend accepts
+only a high-confidence choice present in that snapshot; the selected index and
+snapshot ID go unchanged to `pc_browser_act`, where the PC bridge rechecks the
+same DOM node, freshness, visibility and occlusion. Clicks that the bridge
+identifies as submit/send/delete/sign-in/payment actions still require the
+existing P7-03 approval flow. The Foundry `gpt-5.6-luna` chat deployment with
+reasoning disabled writes a small validated JSON text value only for TYPE; a
+separate JSON check independently verifies Jev's DONE decision against a fresh
+snapshot.
+
+Runs stop after 20 steps or 30 seconds, propagate cancellation, and refuse low
+confidence or sensitive requests. Existing P8-16 tool activity events report the
+tool outcome; a transient P8-15 text window shows the step, selected action,
+observed target and final/blocked result. `browser_do` and the underlying browser
+tools are marked sensitive, so generic tool-call storage records neither page
+data nor typed text. Fake Jev, model, executor and workspace tests pass; the
+offline median fake step was 0.07 ms excluding page loads. Live Jev/Foundry,
+Dan's signed-in Chrome, Teams approval delivery and end-to-end voice/browser
+behavior remain unverified.
+
 P4-10 registers the Software Factory's `list_projects`, `list_tasks`, `get_task`,
 `create_task`, `steer_task`, `pause_task`, `resume_task`, and `cancel_task` tools.
 They call the injected project/task stores and task controller, so the same
@@ -1029,11 +1061,36 @@ live provider selection remains unverified.
 
 ### Backend Foundry client
 
-`apps/backend/src/foundry/client.ts` implements start, Codex renewal start, steer, pause, resume, cancel, status and explicit session deletion. It stores distinct runtime and administration project endpoints for the same account/project. Administration preflight checks connections and the named agent's versions on the administration host; it creates no session. Sandbox sessions retain their Foundry `agent_name`, which lets the heartbeat poll sessions deployed under different runner variants.
+`apps/backend/src/foundry/client.ts` implements task start, Codex renewal and tool starts, steer, pause, resume, cancel, status and explicit session deletion. It stores distinct runtime and administration project endpoints for the same account/project. Administration preflight checks connections and the named agent's versions on the administration host; it creates no session. Sandbox sessions retain their Foundry `agent_name`, which lets the heartbeat poll sessions deployed under different runner variants.
 
 The module uses Node 22 native fetch and an injected identity provider requesting `https://ai.azure.com/.default`. Each HTTP call bounds authentication, fetch and response consumption to 30 seconds by default, limits response bodies to 1 MiB, propagates cancellation and refuses redirects. It validates responses and exposes sanitized typed failures, preserving HTTP status codes. The client has no retry loop or background polling; the renewal job owns its bounded polling and session cleanup. The dispatcher owns task retries/session lifetime, and the heartbeat owns crash detection and completed-turn idle expiry. Provider `completed` still requires GitHub branch/PR evidence; resume applies to clean pause/idle shutdown, while crash recovery and idle-expiry continuation start a new session on the task branch.
 
 Issue #30's offline contracts use actual locally recorded runner handler responses from #28 with ACP execution stubbed. P2-06 starts the heartbeat monitor after SQL startup and rehydrates active sessions once; P2-14 preserves completed-turn evidence so a confirmed idle expiry ends the session without a crash or task-state transition. Bicep supplies both project endpoints and grants the backend identity Foundry User on the project. Azure envelope/routing/authorization, SQL Server integration, and live expiry verification remain unverified. The [module guide](../apps/backend/src/foundry/README.md) describes the API, bounds and recording provenance.
+
+### Web research (P7-14)
+
+When SQL, Foundry endpoints, the configured runner agent and managed identity
+are available, the backend registers `web_research` in the authenticated tool
+catalogue. It accepts a bounded query, starts the runner's `codex-tool` mode
+without a repository checkout, polls for at most 305 seconds, and cancels and
+deletes the invocation session on completion, failure or caller cancellation.
+`JARVIS_CODEX_TOOL_MODEL` selects the ChatGPT-supported model (Bicep defaults to
+`gpt-5.5`); no Bing resource, pay-per-call search API, search credential or SQL
+migration is introduced.
+
+The runner uses Codex `web_search=live` in an empty temporary workspace and
+removes the workspace and file-backed login after the call. Its command disables
+the Codex `shell_tool` as well as selecting the read-only sandbox: read-only
+filesystem access alone would still allow generated shell commands to read
+`CODEX_HOME/auth.json`. The query and returned pages are untrusted data. The
+backend accepts only a bounded answer and up to ten unique HTTPS source URLs,
+returns their titles and backend receipt timestamps, and includes the retrieved
+URLs in the answer. Empty source results are explicitly disclosed; no URL is
+invented. Tool arguments/results are redacted from `tool_calls`, but the tool
+name/outcome/time remain for the UTC daily count returned by `/usage` and shown
+on the Usage page. This count covers successful, refused and failed calls and
+is displayed as unavailable if the audit query fails. Live Codex/web-search and
+deployed Azure acceptance remain unverified.
 
 ### Sandbox credentials
 
@@ -1164,10 +1221,11 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Area | Design | Evidence |
 | --- | --- | --- |
 | Browser connection | The composer orb explicitly connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. Readiness never opens capture: a separate Enable microphone action captures and sends mono 24 kHz PCM. Reconnect returns to microphone-off readiness. Provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, explicit activation, permission denial, interruption, stop during activation, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
-| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then waits for explicit microphone activation. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
-| English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
+| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then waits for explicit microphone activation. The hash-locked provisioner configures `gpt-4o-mini-transcribe` (`da`, phrase list) and Harper (`da-DK`); the backend relay observes streamed input transcription deltas and final user messages. Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
+| English session | The backend configures `gpt-realtime-2.1`, `gpt-4o-mini-transcribe` input transcription, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
 | Reflex (P7-04) | Chat turns and completed English Voice Live transcripts pass through the backend Jev client (`POST https://api.typesafe.ai/v1/systemone`, `jev-latest`) before the main responder. The client has a 1.2 s timeout, one 429 retry only when `Retry-After` is at most 500 ms, a 256 KiB response cap, and a 0.9 confidence threshold; unavailable or uncertain results fall through. The backend reads `jev-api-key` from Key Vault using its managed identity. A direct call requires Dan's authenticated request, an addressed high-confidence action, no confirmation flag, a registered `reflexSafe` tool, validated arguments, and available audit storage. Safe tool results become trusted handoff instructions so the main model acknowledges but does not repeat the action. | Fake-provider backend and hosted-agent tests cover classification, safe target filtering, fallback, retry, handoff, and final-transcript sequencing. Mock-provider classification measured 0.43 ms; final-transcript-to-response-request measured 1.04 ms offline. Both exclude Jev network latency and first generated audio. Live Jev/Key Vault, Danish voice routing, and Azure Voice Live remain unverified. |
-| English end-of-turn detection (P7-04) | Voice Live uses `azure_semantic_vad_en`, threshold `0.5`, 300 ms prefix padding, 700 ms silence duration, and `create_response: false`; the backend waits for the final transcription, runs reflex, then explicitly requests the voice response. | Relay tests verify semantic VAD settings and reflex-before-response ordering. Live Voice Live support/latency remains unverified. |
+| Streaming clause reflex (P7-20) | English and Danish relay `conversation.item.input_audio_transcription.delta` events into bounded stable clauses and one Jev request per new clause (up to eight per turn), with prior executions attached. Only high-confidence, complete partial actions (currently pause, allow-listed Edge launch, and HTTP(S) open/navigation) execute early. Unsafe and confirmation-requiring actions wait for the completed turn. A per-turn in-memory ledger prevents duplicate execution, replaces an early message with the final transcript, attempts supported undo on contradiction, and gives Jarvis truthful success/refusal/failure/undo context. Browser launch/navigation uses the existing PC bridge `pc_open` executor pending P7-17. | Timed fake-stream tests prove action-before-final, duplicate suppression, confirmation gating, contradiction undo, final message replacement, and metric emission. `voice.reflex_metrics` records delta/clause counts, stable-clause-delta-to-action latency, speech-stopped-to-first transcript-word latency, and speech-stopped-to-first-output-audio latency. These are offline fake timings, not live acoustic measurements. Live Voice Live delta delivery, Jev network latency, and first spoken-word timing remain unverified. |
+| English end-of-turn detection (P7-04) | Voice Live uses `azure_semantic_vad_en`, threshold `0.5`, 300 ms prefix padding, 700 ms silence duration, and `create_response: false`; after the final transcription, the relay reconciles the turn ledger and explicitly requests the voice response. | Relay tests verify semantic VAD settings and response ordering. Live Voice Live support/latency remains unverified. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Completed voice transcripts are persisted as messages; voice tool calls are not stored as `tool_calls`. |
 | Runtime activity (P8-16) | The backend publishes transient, typed activity over owner-authenticated `/now/events`; the voice orb, top bar and workspace consume events from the same stream. Listening follows relay readiness and observed microphone audio; tool calls expose only name and normalized outcome. Speaking follows observed output audio, including P7-12 announcements, with no duplicate announcement. | Contract, mocked chat/voice protocol, authenticated SSE and web tests cover event validation, observed transitions, cancellation/disconnect and payload privacy. The local browser acceptance check covers the voice workspace; live Entra/Foundry and physical audio remain unverified. |
 | English status updates (P7-12) | The relay subscribes to committed task transitions and typed status kinds emitted after verified GitHub webhook processing for ready-for-review pull requests and failed deployments. It merges duplicate kinds over 500 ms, then speaks fixed wording only when Dan and Jarvis are idle and no tool call is active; a queued update is retried when Dan stops speaking. `get_status_summary` exposes bounded Now-feed counts, applies Away-mode visibility, and never returns activity text or logs. | Fake event-hub, webhook receiver, tool-route and relay tests cover filtering, duplicate deliveries, redaction and deferral. Live voice audio and production webhook delivery remain unverified. |
@@ -1256,7 +1314,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (SSE, dispatcher, Teams audio, and P7-09 pending confirmations use process-local state; more copies require shared state/Web PubSub); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `JARVIS_NOTES_FOLDER_PATH`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, `SPEECH_REGION`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID`, `JARVIS_GRAPH_APP_ID`, `JARVIS_GRAPH_TIME_ZONE`, `ENTRA_PC_BRIDGE_CLIENT_ID` |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (SSE, dispatcher, Teams audio, and P7-09 pending confirmations use process-local state; more copies require shared state/Web PubSub); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `JARVIS_NOTES_FOLDER_PATH`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `JARVIS_CODEX_TOOL_MODEL`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, `SPEECH_REGION`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID`, `JARVIS_GRAPH_APP_ID`, `JARVIS_GRAPH_TIME_ZONE`, `ENTRA_PC_BRIDGE_CLIENT_ID` |
 | Azure Bot Service | `bot-jarvis-{suffix}` | Global; F0; user-assigned managed identity; `MsTeamsChannel` enabled; endpoint `/api/messages` |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Azure Monitor action group | `jarvis-alerts` | Email receivers from required `budgetContactEmails`; no SMS/voice receivers |

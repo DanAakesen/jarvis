@@ -29,6 +29,10 @@ which the Deploy workflow uses only before ACR holds the first backend image.
 The workflow takes the IDs from `bootstrap.output.json` and deploys as
 `jarvis-infra`.
 
+The optional `codexToolModel` parameter defaults to `gpt-5.5` and sets the
+backend's `JARVIS_CODEX_TOOL_MODEL` for P7-14. It selects a model for the
+existing Codex subscription; it does not provision a search service or API key.
+
 The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`) fixed at
 `20261003200000` in [`main.parameters.json`](main.parameters.json); every deploy
 reuses it. A new value would create a new account and project, so change it only

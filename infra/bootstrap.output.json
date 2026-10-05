@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-03T21:25:20.5587787Z",
+  "generatedAt": "2026-10-05T08:08:55.3217632Z",
   "tenantId": "802efa29-17f2-4a79-8f5f-38f087aed96a",
   "subscriptionId": "0ac7d719-89bc-4100-be87-a79d33e953a7",
   "location": "swedencentral",
@@ -22,8 +22,15 @@
   "web": {
     "appId": "36dc1d0c-5c0d-43bc-825d-5a14a610a386",
     "redirectUris": [
-      "http://localhost:5173"
+      "http://localhost:5173",
+      "http://localhost:5173/redirect.html",
+      "https://ambitious-mushroom-0161f9503.2.azurestaticapps.net",
+      "https://ambitious-mushroom-0161f9503.2.azurestaticapps.net/redirect.html"
     ]
+  },
+  "pcBridge": {
+    "appId": "611a3cb7-59d2-45c0-82c1-205cf7993439",
+    "signIn": "device code; delegated access_as_user"
   },
   "backendIdentity": {
     "resourceId": "/subscriptions/0ac7d719-89bc-4100-be87-a79d33e953a7/resourcegroups/rg-jarvis/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-jarvis-backend",
