@@ -77,7 +77,7 @@ export function createJarvisStageScene(
     antialias: true,
     powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, window.innerWidth < 700 ? 1 : 1.35));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, window.innerWidth < 700 ? 1 : 1.2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -96,6 +96,7 @@ export function createJarvisStageScene(
   let animating = false;
   let elapsed = 0;
   let previous = performance.now();
+  let lastFrame = previous - 1000 / 30;
   let current = initialOptions;
   let voicePosition = 0;
   let voiceVelocity = 0;
@@ -388,8 +389,11 @@ export function createJarvisStageScene(
     camera.lookAt(0, 3, 0);
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld(true);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, width < 700 ? 1 : 1.35));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, width < 700 ? 1 : 1.2));
     renderer.setSize(width, height);
+    const reflectionSize = width < 700 ? 512 : 768;
+    const target = reflection.getRenderTarget();
+    if (target.width !== reflectionSize || target.height !== reflectionSize) target.setSize(reflectionSize, reflectionSize);
     if (!disposed) draw(0);
   }
 
@@ -480,6 +484,7 @@ export function createJarvisStageScene(
     if (disposed || animating || current.reducedMotion || document.hidden) return;
     animating = true;
     previous = performance.now();
+    lastFrame = previous - 1000 / 30;
     animationFrame = window.requestAnimationFrame(frame);
   }
 
@@ -497,8 +502,13 @@ export function createJarvisStageScene(
       draw(0);
       return;
     }
+    if (now - lastFrame < 1000 / 30) {
+      animationFrame = window.requestAnimationFrame(frame);
+      return;
+    }
     const delta = Math.max(0, Math.min((now - previous) / 1000, 0.12));
     previous = now;
+    lastFrame = now;
     elapsed += delta;
     draw(delta);
     animationFrame = window.requestAnimationFrame(frame);
