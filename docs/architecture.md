@@ -670,6 +670,41 @@ offline median fake step was 0.07 ms excluding page loads. Live Jev/Foundry,
 Dan's signed-in Chrome, Teams approval delivery and end-to-end voice/browser
 behavior remain unverified.
 
+### Act on the shared Chrome tab (P7-19)
+
+While Dan is sharing, chat captures a fresh frame for a deictic browser request;
+the authenticated chat turn binds its bounded description and selected display
+label as transient request context and skips focused-tab reflex routing. English
+Voice Live recognizes phrases such as “fill this in” or “do it here,” skips
+focused-tab reflex routing, and waits for the browser to return that frame's
+bounded description and selected display label. If capture is unavailable or
+times out, the model is told not to use a browser tab and to ask Dan to share one.
+The description and label are transient request context, not transcript, task
+event, or persisted browser data.
+
+The sensitive `browser_do_shared` tool matches the label and vision description
+against the paginated live `pc_browser_tabs` result. A unique strong match
+supplies only that observed tab ID to the existing P7-17 `runTask`; tied, weak,
+or missing matches return a question listing bounded tab titles (and hosts) for
+Dan to clarify. A tab-title override is honored only when Dan named that exact
+title in the current message, the visual description has at least two matching
+words, and any informative display label has at least two matches. Weak or
+contradictory evidence produces a clarification instead of a tab selection.
+Chrome-offline refusal offers to send the steps instead. Voice tool
+calls bind the captured context to the authenticated session request; even if the
+model chooses generic `browser_do`, that request routes through shared-tab
+resolution instead of the focused tab. Saying “stop” cancels either shared
+browser tool route. Each action still uses a new P7-18 node-indexed
+snapshot and its freshness/visibility/occlusion checks. P7-03 confirmation,
+sensitive-field blocking, the 20-step/30-second bound, and the transient P8-15
+workspace progress remain unchanged. Voice speaks one fixed progress phrase after
+a tab is resolved; the exact “stop” transcript aborts the active browser tool.
+Fake tests cover current-context handoff, shared-tab resolution/pagination,
+ambiguity, offline fallback, execution, spoken progress, stop and confirmation.
+No new bridge, dependency, setting, or persistence is introduced. Dan's live
+Chrome form, Jev/Foundry, Voice Live and physical confirmation delivery remain
+unverified.
+
 P4-10 registers the Software Factory's `list_projects`, `list_tasks`, `get_task`,
 `create_task`, `steer_task`, `pause_task`, `resume_task`, and `cancel_task` tools.
 They call the injected project/task stores and task controller, so the same
@@ -789,6 +824,26 @@ calls against Dan's message ID using the agent identity. The backend persists
 only a completed assistant response; an interrupted turn leaves Dan's message
 visible and the UI warns that an action may have completed. The browser never
 receives agent credentials.
+
+P7-23 starts consuming the hosted-agent stream before scheduling the chat reflex.
+Reflex target discovery and Jev classification run concurrently with the reply;
+their combined classification budget is 800 ms and late results are discarded.
+An accepted action still passes the existing confirmation/safety checks, is
+written to the tool-call audit, and publishes the existing tool activity events.
+The hosted agent reuses a matching same-turn reflex result instead of executing
+the same tool arguments twice; a 120-second in-process record retains the
+bounded tool result, confirmation and an argument fingerprint, but is never
+logged or persisted. Disconnect cancellation reaches both streams. Voice relay
+partial handling is unchanged.
+
+The hosted agent loads the 60-second cached tool catalogue and live task context
+concurrently, and verifies the delegated profile and stored conversation history
+in parallel. OpenTelemetry spans measure catalogue/cache, context, memory search,
+prompt construction and model-call stages; the backend exports allowlisted
+durations for reflex targets, Jev and the first agent byte, plus memory embedding
+duration/outcome. These signals contain no message, prompt, memory, tool argument
+or result content. The issue's live acceptance target is at most 2.5 seconds to
+the first token and 4 seconds for a short greeting.
 
 The conversation store shares the process-owned SQL pool and uses the existing
 group-one schema; no migration or new service is required. Tool calls continue to
@@ -1231,7 +1286,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Runtime activity (P8-16) | The backend publishes transient, typed activity over owner-authenticated `/now/events`; the voice orb, top bar and workspace consume events from the same stream. Listening follows relay readiness and observed microphone audio; tool calls expose only name and normalized outcome. Speaking follows observed output audio, including P7-12 announcements, with no duplicate announcement. | Contract, mocked chat/voice protocol, authenticated SSE and web tests cover event validation, observed transitions, cancellation/disconnect and payload privacy. The local browser acceptance check covers the voice workspace; live Entra/Foundry and physical audio remain unverified. |
 | English status updates (P7-12) | The relay subscribes to committed task transitions and typed status kinds emitted after verified GitHub webhook processing for ready-for-review pull requests and failed deployments. It merges duplicate kinds over 500 ms, then speaks fixed wording only when Dan and Jarvis are idle and no tool call is active; a queued update is retried when Dan stops speaking. `get_status_summary` exposes bounded Now-feed counts, applies Away-mode visibility, and never returns activity text or logs. | Fake event-hub, webhook receiver, tool-route and relay tests cover filtering, duplicate deliveries, redaction and deferral. Live voice audio and production webhook delivery remain unverified. |
 | Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |
-| Visual inspection (P7-05/P7-08) | The browser captures a JPEG from the explicitly selected `getDisplayMedia` stream or, after Dan turns the camera on and grants permission, `getUserMedia`. A frame is captured only for an explicit chat/voice request. Authenticated `POST /screen/frames` checks Dan's identity, active `jarvis_sessions` row, JPEG/1 MiB limit, 3-second interval and shared `global.screen_share_daily_frame_cap` (default 300, range 1–300). It reserves the frame in `dbo.usage`, calls the configured vision deployment using the backend managed identity, then sends only the bounded description to chat context or Voice Live response instructions. No image is persisted or logged; chat messages, voice transcripts and task events do not contain the synthetic context. | Backend/web/agent contract tests exercise a fake camera stream/model and transient context. Screen and camera share `screen_frames` reservations and token/cost recording; estimated DKK uses the documented short-context Global Standard rates. Live deployment SKU, model image acceptance and billed cost remain to verify. Voice/session end and page teardown stop media; camera also stops after five minutes. |
+| Visual inspection (P7-05/P7-08) | The browser captures a JPEG from the explicitly selected `getDisplayMedia` stream or, after Dan turns the camera on and grants permission, `getUserMedia`. A frame is captured only for an explicit chat/voice request. Authenticated `POST /screen/frames` checks Dan's identity, active `jarvis_sessions` row, JPEG/1 MiB limit, 3-second interval and shared `global.screen_share_daily_frame_cap` (default 300, range 1–300). It reserves the frame in `dbo.usage`, calls the configured vision deployment using the backend managed identity, then sends only the bounded description to chat context or Voice Live response instructions. P7-19 also carries the selected display label alongside the description for shared-tab resolution; both remain transient and untrusted. No image is persisted or logged; chat messages, voice transcripts and task events do not contain the synthetic context. | Backend/web/agent contract tests exercise a fake camera stream/model and transient context. Screen and camera share `screen_frames` reservations and token/cost recording; estimated DKK uses the documented short-context Global Standard rates. Live deployment SKU, model image acceptance and billed cost remain to verify. Voice/session end and page teardown stop media; camera also stops after five minutes. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
 | Jarvis model | `gpt-5.6-luna`, reasoning `none`, strict action rules (L16) | ≈0.003 DKK per command |
 | Voices | English: `en-GB-Ryan:DragonHDLatestNeural`. Danish: `en-US-Harper:MAI-Voice-2` locked to `da-DK` with `voice_locale`. Language toggle in the UI. | Chosen by Dan from samples |

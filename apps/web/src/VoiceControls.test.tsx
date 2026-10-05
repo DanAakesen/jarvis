@@ -125,7 +125,7 @@ describe('VoiceControls', () => {
       error: '',
       start: vi.fn(async () => {}),
       stop: vi.fn(),
-      inspect: vi.fn(async () => 'A desk.'),
+      inspect: vi.fn(async () => ({ description: 'A desk.' })),
     };
     const camera = {
       sharing: true,
@@ -134,7 +134,7 @@ describe('VoiceControls', () => {
       error: '',
       start: vi.fn(async () => {}),
       stop: vi.fn(),
-      inspect: vi.fn(async () => 'A mug.'),
+      inspect: vi.fn(async () => ({ description: 'A mug.' })),
     };
     render(
       <VoiceControls
@@ -229,7 +229,7 @@ describe('VoiceControls', () => {
       error: '',
       start: vi.fn(async () => {}),
       stop: vi.fn(),
-      inspect: vi.fn(async () => 'A red mug.'),
+      inspect: vi.fn(async () => ({ description: 'A red mug.' })),
     };
     render(
       <VoiceControls
@@ -250,7 +250,7 @@ describe('VoiceControls', () => {
     options.onVisionRequest('camera', 'What am I holding?');
 
     await waitFor(() => expect(camera.inspect).toHaveBeenCalledWith('42'));
-    expect(instance.client.sendScreenContext).toHaveBeenCalledWith('A red mug.');
+    expect(instance.client.sendScreenContext).toHaveBeenCalledWith('A red mug.', undefined);
     act(() => options.onStatus('stopped', 'Voice is off.'));
     expect(camera.stop).toHaveBeenCalledOnce();
   });

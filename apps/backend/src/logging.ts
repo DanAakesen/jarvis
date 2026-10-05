@@ -24,7 +24,7 @@ const events = new Set([
   'server.listening', 'server.stopping', 'server.stopped', 'server.failed',
   'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
-  'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
+  'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics', 'chat.latency', 'memory.embedding',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -50,6 +50,7 @@ const reconciliationDecisions = new Set([
   'foundry_interrupted', 'foundry_paused', 'foundry_unknown',
   'Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention', 'Done', 'Cancelled',
 ]);
+const chatLatencyPhases = new Set(['reflex_targets', 'jev', 'agent_first_byte']);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
@@ -59,6 +60,22 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (typeof input.reason === 'string' && authDenialReasons.has(input.reason)) fields.reason = input.reason;
   for (const key of ['statusCode', 'responseTime', 'port']) {
     if (typeof input[key] === 'number' && Number.isFinite(input[key])) fields[key] = input[key];
+  }
+  if (input.msg === 'chat.latency') {
+    if (typeof input.phase === 'string' && chatLatencyPhases.has(input.phase)) fields.phase = input.phase;
+    if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
+        input.durationMs >= 0 && input.durationMs <= 600_000) {
+      fields.durationMs = input.durationMs;
+    }
+  }
+  if (input.msg === 'memory.embedding') {
+    if (typeof input.outcome === 'string' && ['ok', 'fallback', 'cancelled'].includes(input.outcome)) {
+      fields.outcome = input.outcome;
+    }
+    if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
+        input.durationMs >= 0 && input.durationMs <= 600_000) {
+      fields.durationMs = input.durationMs;
+    }
   }
   if (input.msg === 'sandbox_heartbeat.decision') {
     if (typeof input.sandboxSessionId === 'string' && /^[1-9]\d{0,18}$/.test(input.sandboxSessionId)) {
