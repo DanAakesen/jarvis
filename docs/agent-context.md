@@ -299,11 +299,13 @@ composer offscreen; repeated start/end remains usable.
 Native touch also verifies nested horizontal source scrolling without switching
 views. Desktop camera/sharing controls render outside the phone disclosure and
 remain visible after resizing.
+Entering phone width keeps the desktop view being edited foreground and retains
+its input focus.
 Before/after screenshots use labelled local fixtures under
 `docs/ui/screenshots/p8-11-*`; they do not demonstrate live Entra, hardware audio
 or P8-15's generated-view/agent-command delivery. No production auth stub or
 browser package was added.
-Validation: `npm test --workspace @jarvis/web` passed 208 tests;
+Validation: `npm test --workspace @jarvis/web` passed 209 tests;
 `npm run lint --workspace @jarvis/web`, `npm run build --workspace @jarvis/web`
 and `git diff --check` passed (existing bundle-size warning).
 P8-21 used the same scratch-only auth/API fixture workflow with Chromium at

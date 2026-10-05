@@ -149,6 +149,25 @@ describe('Workspace', () => {
     expect(screen.getByRole('heading', { name: 'Research summary' })).not.toBeNull();
   });
 
+  it('keeps the desktop view being edited foreground and retains input focus when entering phone width', () => {
+    const media = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal('matchMedia', vi.fn(() => media));
+    render(<Workspace views={[
+      views[0]!,
+      { ...views[1]!, content: { status: 'ready', content: <input aria-label="Source note" defaultValue="Retained" /> } },
+    ]} />);
+    const input = screen.getByRole('textbox', { name: 'Source note' });
+    input.focus();
+    act(() => {
+      media.matches = true;
+      media.addEventListener.mock.calls.forEach(([, listener]) => listener());
+    });
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.getByRole('article', { name: 'Sources' })).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+    expect(screen.queryByRole('article', { name: 'Research summary' })).toBeNull();
+  });
+
   it('reserves phone content space above the conditional voice dock and leaves no-content voice centred', () => {
     const styles = readFileSync('src/ConversationHistory.css', 'utf8');
     const phone = styles.slice(styles.indexOf('@media (max-width: 700px)'));

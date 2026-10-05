@@ -112,7 +112,14 @@ export const Workspace = forwardRef<WorkspaceController, {
   useEffect(() => {
     const media = window.matchMedia?.('(max-width: 700px)');
     if (!media) return;
-    const update = () => { swipe.current = null; setPhone(media.matches); };
+    const update = () => {
+      swipe.current = null;
+      if (media.matches) {
+        const focusedView = [...windowElements.current].find(([, element]) => element.contains(document.activeElement));
+        if (focusedView) setForegroundViewId(focusedView[0]);
+      }
+      setPhone(media.matches);
+    };
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
