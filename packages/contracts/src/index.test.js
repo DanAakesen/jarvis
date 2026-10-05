@@ -6,9 +6,11 @@ import {
   generatedViewSchema,
   isGeneratedView,
   isJarvisActivityEvent,
+  isWebResearchResult,
   isWorkspaceCommand,
   generatedViewVersion,
   workspaceCommandSchema,
+  webResearchResultSchema,
 } from './index.js';
 
 const source = { id: 'factory.tasks', status: 'complete' };
@@ -42,6 +44,33 @@ test('accepts only bounded Jarvis activity fields and known outcomes', () => {
   assert.equal(isJarvisActivityEvent({
     type: 'tool-call-finished', activityId, source: 'chat', toolName: 'list_tasks', outcome: 'ok',
   }), true);
+});
+
+test('web research result schema and validator accept bounded source-linked results', () => {
+  const result = {
+    answer: 'A sourced answer.',
+    sources: [{
+      title: 'Example source',
+      url: 'https://example.com/research',
+      retrievedAt: '2026-10-05T07:32:00.000Z',
+    }],
+  };
+  assert.deepEqual(webResearchResultSchema.required, ['answer', 'sources']);
+  assert.equal(isWebResearchResult(result), true);
+  assert.equal(isWebResearchResult({ ...result, sources: [] }), true);
+  assert.equal(isWebResearchResult({ ...result, answer: 'a'.repeat(20_001) }), false);
+  assert.equal(isWebResearchResult({
+    ...result,
+    sources: [{ ...result.sources[0], url: 'http://example.com/research' }],
+  }), false);
+  assert.equal(isWebResearchResult({
+    ...result,
+    sources: [{ ...result.sources[0], retrievedAt: 'October 5, 2026' }],
+  }), false);
+  assert.equal(isWebResearchResult({
+    ...result,
+    sources: [result.sources[0], result.sources[0]],
+  }), false);
 });
 
 test('rejects malformed activity and any extra payload that could carry private data', () => {

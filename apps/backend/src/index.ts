@@ -26,6 +26,12 @@ import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
 import { coreModule } from './core/index.js';
 import { conversationModule } from './core/conversation.js';
 import { createJevReflexClassifier } from './core/reflex.js';
+import {
+  createBrowserAgent,
+  createBrowserAgentModule,
+  createFoundryBrowserTextModel,
+  createJevBrowserPlanner,
+} from './core/browser-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { BackendModule } from './modules.js';
 import {
@@ -70,6 +76,7 @@ import { createGoogleModule } from './google/tools.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
+import { createWebResearchModule } from './core/web-research.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
 import { createEphemeralAudioStore } from './teams/audio-store.js';
 import { createAzureSpeechSynthesizer } from './teams/speech.js';
@@ -216,6 +223,16 @@ try {
     return jevApiKeyRequest;
   };
   const reflexClassifier = createJevReflexClassifier(getJevApiKey);
+  const browserAgent = jevSecretClient && config.foundryProjectEndpoint && credential
+    ? createBrowserAgent(
+      createJevBrowserPlanner(getJevApiKey),
+      createFoundryBrowserTextModel(config.foundryProjectEndpoint, async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry browser identity unavailable');
+        return token.token;
+      }),
+    )
+    : undefined;
   let webhookSecret: string | undefined;
   let webhookSecretRequest: Promise<string | undefined> | undefined;
   const getWebhookSecret = () => {
@@ -285,6 +302,9 @@ try {
     }
     return client;
   };
+  const webResearchModule = database && credential && config.foundryEndpoints && config.foundryRunnerAgentName
+    ? createWebResearchModule(() => clientFor(config.foundryRunnerAgentName!), config.codexToolModel)
+    : undefined;
   const sandboxHeartbeat = database && config.foundryEndpoints
     ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub, alertNotifier), clientFor, {
       onDecision: (decision) => logger.info(decision, 'sandbox_heartbeat.decision'),
@@ -398,6 +418,7 @@ try {
     : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
+    ...(webResearchModule ? [webResearchModule] : []),
     ...(googleModule ? [googleModule] : []),
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
@@ -418,6 +439,7 @@ try {
       onStatusError: () => logger.warn('pc_bridge.status_update_failed'),
     }),
   ];
+  if (browserAgent) modules.push(createBrowserAgentModule(browserAgent));
   if (memoryStore) {
     modules.push(createMemoryModule({
       store: memoryStore,
@@ -480,6 +502,7 @@ try {
   const app = buildApp(config, logger, {
     modules,
     ...(jevSecretClient ? { reflexClassifier } : {}),
+    ...(browserAgent ? { browserAgent } : {}),
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(releaseViewStore ? { releaseViewStore } : {}),
     ...(releaseGraphReader ? { releaseGraphReader } : {}),

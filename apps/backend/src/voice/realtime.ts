@@ -112,6 +112,7 @@ export function createEnglishSessionUpdate(
           voice_locale: 'en-GB',
         },
       },
+      input_audio_transcription: { model: 'gpt-4o-mini-transcribe' },
       tools: tools.list().map(({ name, description, inputSchema }) => ({
         type: 'function',
         name,

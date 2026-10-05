@@ -83,6 +83,15 @@ const sourceSchema = object({
     nextOffset: { anyOf: [{ type: 'integer', minimum: 0, maximum: 10_000 }, { type: 'null' }] },
   }, ['limit', 'offset', 'nextOffset']),
 }, ['id', 'status']);
+const webResearchSourceSchema = object({
+  title: string(200, 1),
+  url: { type: 'string', format: 'uri', maxLength: 2_048, pattern: '^https://' },
+  retrievedAt: dateTime,
+});
+export const webResearchResultSchema = Object.freeze(object({
+  answer: string(20_000, 1),
+  sources: array(webResearchSourceSchema, 10),
+}));
 const cell = { anyOf: [string(2_000), { type: 'number' }, { type: 'boolean' }, { type: 'null' }] };
 const dataSchemas = {
   table: object({
@@ -363,6 +372,38 @@ export function isGeneratedView(value, options = {}) {
     (value.actions !== undefined && (!Array.isArray(value.actions) || value.actions.length > 10 ||
       !value.actions.every((action) => validAction(action, options.registeredTools))))) return false;
   return true;
+}
+
+export function isWebResearchResult(value) {
+  if (!isObject(value) ||
+    Object.keys(value).some((key) => !['answer', 'sources'].includes(key)) ||
+    !boundedString(value.answer, 20_000, 1) ||
+    !Array.isArray(value.sources) || value.sources.length > 10) return false;
+  const urls = new Set();
+  const containsAsciiControl = (text, includeSpace = false) =>
+    Array.from(text).some((character) => {
+      const code = character.charCodeAt(0);
+      return code === 0x7f || code < (includeSpace ? 0x21 : 0x20);
+    });
+  return value.sources.every((source) => {
+    if (!isObject(source) || Object.keys(source).some((key) => !['title', 'url', 'retrievedAt'].includes(key)) ||
+      !boundedString(source.title, 200, 1) || source.title !== source.title.trim() ||
+      containsAsciiControl(source.title) ||
+      !boundedString(source.url, 2_048, 1) || source.url !== source.url.trim() ||
+      containsAsciiControl(source.url, true) ||
+      typeof source.retrievedAt !== 'string' || !Number.isFinite(Date.parse(source.retrievedAt))) return false;
+    try {
+      const url = new URL(source.url);
+      if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.port ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(source.retrievedAt) ||
+        new Date(source.retrievedAt).toISOString() !== source.retrievedAt ||
+        urls.has(url.href)) return false;
+      urls.add(url.href);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 export function isWorkspaceCommand(value, options = {}) {

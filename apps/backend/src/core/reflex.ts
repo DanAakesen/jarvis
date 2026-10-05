@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { ToolFailure, ToolRefusal, type RegisteredTool } from './tool-registry.js';
@@ -19,7 +20,16 @@ export interface ReflexClassification {
   readonly intent: 'action' | 'question' | 'other';
   readonly confidence: number;
   readonly needsConfirmation: boolean;
+  readonly completeCommand?: boolean;
+  readonly contradictedAction?: string | null;
   readonly target: ReflexTarget | null;
+}
+
+export interface ReflexContext {
+  readonly executed: readonly string[];
+  readonly executedActions?: readonly { readonly id: string; readonly summary: string }[];
+  readonly partial?: boolean;
+  readonly final?: boolean;
 }
 
 export interface ReflexClassifier {
@@ -28,13 +38,93 @@ export interface ReflexClassifier {
     language: 'da' | 'en',
     targets: readonly ReflexTarget[],
     signal: AbortSignal,
+    context?: ReflexContext,
   ): Promise<ReflexClassification | null>;
 }
 
 export interface ReflexActionResult {
   readonly tool: string;
+  readonly arguments: Readonly<Record<string, unknown>>;
+  readonly result: unknown;
   readonly outcome: ToolCallOutcome;
   readonly note: string;
+}
+
+export interface ReflexActionReplay {
+  readonly tool: string;
+  readonly result: unknown;
+  readonly outcome: ToolCallOutcome;
+  readonly note: string;
+}
+
+interface StoredChatReflexReplay extends ReflexActionReplay {
+  readonly argumentsFingerprint: string;
+}
+
+interface ChatReflexFlight {
+  readonly result: Promise<StoredChatReflexReplay | null>;
+  readonly resolve: (result: StoredChatReflexReplay | null) => void;
+  readonly timer: NodeJS.Timeout;
+  settled: boolean;
+}
+
+const chatReflexFlights = new Map<string, ChatReflexFlight>();
+const chatReflexFlightTtlMs = 120_000;
+
+function fingerprintArguments(value: unknown): string {
+  const normalize = (item: unknown): string => {
+    if (Array.isArray(item)) return `[${item.map(normalize).join(',')}]`;
+    if (typeof item === 'object' && item !== null) {
+      const object = item as Record<string, unknown>;
+      return `{${Object.keys(object).sort().map((key) =>
+        `${JSON.stringify(key)}:${normalize(object[key])}`,
+      ).join(',')}}`;
+    }
+    return JSON.stringify(item) ?? 'null';
+  };
+  return createHash('sha256').update(normalize(value)).digest('hex');
+}
+
+export function registerChatReflex(messageId: string): (result: ReflexActionResult | null) => void {
+  let resolve!: (result: StoredChatReflexReplay | null) => void;
+  const result = new Promise<StoredChatReflexReplay | null>((complete) => { resolve = complete; });
+  const entry: ChatReflexFlight = {
+    result,
+    resolve,
+    timer: setTimeout(() => {
+      if (chatReflexFlights.get(messageId) === entry) {
+        chatReflexFlights.delete(messageId);
+        entry.resolve(null);
+      }
+    }, chatReflexFlightTtlMs),
+    settled: false,
+  };
+  entry.timer.unref();
+  chatReflexFlights.set(messageId, entry);
+  return (action) => {
+    if (entry.settled) return;
+    entry.settled = true;
+    entry.resolve(action ? {
+      tool: action.tool,
+      result: action.result,
+      outcome: action.outcome,
+      note: action.note,
+      argumentsFingerprint: fingerprintArguments(action.arguments),
+    } : null);
+  };
+}
+
+export async function findChatReflexReplay(
+  messageId: string,
+  tool: string,
+  arguments_: unknown,
+): Promise<ReflexActionReplay | null> {
+  const entry = chatReflexFlights.get(messageId);
+  if (!entry) return null;
+  const action = await entry.result;
+  if (!action || action.tool !== tool ||
+      action.argumentsFingerprint !== fingerprintArguments(arguments_)) return null;
+  return { tool: action.tool, result: action.result, outcome: action.outcome, note: action.note };
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -109,7 +199,7 @@ export function createJevReflexClassifier(
   fetcher: typeof fetch = fetch,
 ): ReflexClassifier {
   return {
-    async classify(text, language, targets, signal) {
+    async classify(text, language, targets, signal, context) {
       if (typeof text !== 'string' || !text.trim() || text.length > 20_000 || signal.aborted) return null;
       let apiKey: string | undefined;
       try {
@@ -124,38 +214,62 @@ export function createJevReflexClassifier(
         choices[target.choice] = `${target.tool.name} with arguments ${JSON.stringify(target.arguments)}`;
       }
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
-      const body = JSON.stringify({
-        model,
-        state: { text: text.trim(), language },
-        questions: {
-          addressed: {
-            type: 'noul',
-            instructions: 'Is Dan directly addressing Jarvis with this turn?',
-          },
-          intent: {
-            type: 'choice',
-            instructions: 'Classify the requested intent.',
-            criteria: {
-              action: 'Dan asks Jarvis to perform an action.',
-              question: 'Dan asks Jarvis for information or an answer.',
-              other: 'No clear request is present.',
-            },
-          },
-          target: {
-            type: 'choice',
-            instructions: 'Choose one exact route. Use main_agent unless one listed safe action completely matches the request.',
-            criteria: choices,
-          },
-          confidence: {
-            type: 'score',
-            instructions: 'How confidently is the intent and requested action fully understood?',
-            criteria: ['uncertain', 'certain'],
-          },
-          needs_confirmation: {
-            type: 'noul',
-            instructions: 'Would the requested action have an external effect or require explicit confirmation?',
+      const questions: Record<string, unknown> = {
+        addressed: {
+          type: 'noul',
+          instructions: 'Is Dan directly addressing Jarvis with this turn?',
+        },
+        intent: {
+          type: 'choice',
+          instructions: 'Classify the requested intent.',
+          criteria: {
+            action: 'Dan asks Jarvis to perform an action.',
+            question: 'Dan asks Jarvis for information or an answer.',
+            other: 'No clear request is present.',
           },
         },
+        target: {
+          type: 'choice',
+          instructions: 'Choose one exact route. Use main_agent unless one listed safe action completely matches the request.',
+          criteria: choices,
+        },
+        confidence: {
+          type: 'score',
+          instructions: 'How confidently is the intent and requested action fully understood?',
+          criteria: ['uncertain', 'certain'],
+        },
+        needs_confirmation: {
+          type: 'noul',
+          instructions: 'Would the requested action have an external effect or require explicit confirmation?',
+        },
+      };
+      if (context) {
+        questions.complete_command = {
+          type: 'noul',
+          instructions: 'Does the latest stable transcript contain a new, complete command not already listed as executed?',
+        };
+        if (context.final && context.executed.length > 0) {
+          const contradictedActionChoices: Record<string, string> = {
+            none: 'No listed executed action is explicitly contradicted.',
+          };
+          for (const action of context.executedActions ?? []) {
+            contradictedActionChoices[action.id] = action.summary;
+          }
+          questions.contradicted_action = {
+            type: 'choice',
+            instructions: 'Choose the one listed executed action explicitly contradicted by the final transcript, or none.',
+            criteria: contradictedActionChoices,
+          };
+        }
+      }
+      const body = JSON.stringify({
+        model,
+        state: {
+          text: text.trim(),
+          language,
+          ...(context ? { already_executed: context.executed.slice(-8) } : {}),
+        },
+        questions,
       });
 
       let response: Response;
@@ -200,22 +314,43 @@ export function createJevReflexClassifier(
         const routeAnswer = answer(answers, 'target', 'choice');
         const confidenceAnswer = answer(answers, 'confidence', 'score');
         const confirmation = answer(answers, 'needs_confirmation', 'noul')?.noul;
+        const completeCommand = context
+          ? answer(answers, 'complete_command', 'noul')?.noul
+          : undefined;
+        const contradictionAnswer = context?.final && context.executed.length > 0
+          ? answer(answers, 'contradicted_action', 'choice')
+          : undefined;
+        const contradictedAction = contradictionAnswer?.choice;
+        const contradictedActionChoices = new Set([
+          'none',
+          ...(context?.executedActions ?? []).map(({ id }) => id),
+        ]);
+        const selectedContradiction = typeof contradictedAction === 'string' &&
+          contradictedActionChoices.has(contradictedAction) ? contradictedAction : undefined;
         const intent = intentAnswer?.choice;
         const choice = routeAnswer?.choice;
         const routeConfidence = routeAnswer?.confidence;
         const confidenceScore = confidenceAnswer?.score;
         if (!validProbability(addressed) || !validProbability(confirmation) ||
+            (context && !validProbability(completeCommand)) ||
+            (context?.final && context.executed.length > 0 &&
+             selectedContradiction === undefined) ||
             (intent !== 'action' && intent !== 'question' && intent !== 'other') ||
             typeof intentAnswer?.confidence !== 'number' || !validProbability(intentAnswer.confidence) ||
             typeof choice !== 'string' || !Object.hasOwn(choices, choice) ||
             !validProbability(routeConfidence) || !validProbability(confidenceScore)) return null;
 
+        const completeCommandScore = validProbability(completeCommand) ? completeCommand : undefined;
         const target = choice === 'main_agent' ? null : targets.find((item) => item.choice === choice) ?? null;
         return {
           addressed: addressed >= confidenceThreshold,
           intent,
           confidence: Math.min(intentAnswer.confidence, routeConfidence, confidenceScore),
           needsConfirmation: confirmation >= 0.5,
+          ...(completeCommandScore === undefined ? {} : { completeCommand: completeCommandScore >= confidenceThreshold }),
+          ...(selectedContradiction === undefined ? {} : {
+            contradictedAction: selectedContradiction === 'none' ? null : selectedContradiction,
+          }),
           target,
         };
       } catch {
@@ -230,12 +365,24 @@ export async function executeReflexAction(
   request: FastifyRequest,
   messageId: string,
   signal: AbortSignal,
+  mode: 'partial' | 'final' | 'undo' = 'final',
 ): Promise<ReflexActionResult | null> {
   const target = classification?.target;
+  const partialSafe = target?.tool.name === 'pause_task' && target.tool.reflexSafe === true ||
+    target?.tool.name === 'pc_open' && target.arguments.target === 'app' &&
+      target.arguments.value === 'edge' ||
+    target?.tool.name === 'pc_open' && target.arguments.target === 'url' &&
+      typeof target.arguments.value === 'string' && safeHttpUrl(target.arguments.value);
+  const modeSafe = mode === 'partial' ? partialSafe
+    : mode === 'undo' ? target?.tool.name === 'resume_task'
+      : target?.tool.reflexSafe === true;
   if (!classification?.addressed || classification.intent !== 'action' ||
+      classification.completeCommand === false ||
       classification.confidence < confidenceThreshold || classification.needsConfirmation ||
-      !target || !target.tool.reflexSafe || !request.principal || !request.server.toolCallStore) return null;
-  if (!request.validateInput(target.arguments, target.tool.inputSchema, 'body')) return null;
+      !target || !modeSafe ||
+      !request.principal || !request.server.toolCallStore) return null;
+  const validateInput = request.compileValidationSchema(target.tool.inputSchema, 'body');
+  if (!validateInput(target.arguments)) return null;
 
   const activityId = `reflex-${messageId}-${target.tool.name}`;
   request.server.jarvisActivityHub.publish({
@@ -278,6 +425,8 @@ export async function executeReflexAction(
     });
     return {
       tool: target.tool.name,
+      arguments: target.arguments,
+      result,
       outcome: 'error',
       note: `Reflex action ${target.tool.name} may have completed, but its result could not be recorded. Check its status before retrying.`,
     };
@@ -290,12 +439,43 @@ export async function executeReflexAction(
   const confirmation = confirmToolCall(target.tool.name, outcome, result);
   return {
     tool: target.tool.name,
+    arguments: target.arguments,
+    result,
     outcome,
     note: `Reflex already did ${target.tool.name} (${outcome}): ${confirmation}`,
   };
 }
 
-export async function reflexTargets(request: FastifyRequest): Promise<ReflexTarget[]> {
+export async function undoPartialReflexAction(
+  original: ReflexTarget,
+  request: FastifyRequest,
+  messageId: string,
+  signal: AbortSignal,
+): Promise<ReflexActionResult | null> {
+  if (original.tool.name !== 'pause_task' || typeof original.arguments.taskId !== 'string') return null;
+  const tool = request.server.jarvisTools.get('resume_task');
+  if (!tool) return null;
+  return executeReflexAction({
+    addressed: true,
+    intent: 'action',
+    confidence: 1,
+    needsConfirmation: false,
+    completeCommand: true,
+    target: { choice: `undo_${original.choice}`, tool, arguments: { taskId: original.arguments.taskId } },
+  }, request, messageId, signal, 'undo');
+}
+
+function safeHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') &&
+      Boolean(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+export async function reflexTargets(request: FastifyRequest, browserGoal?: string): Promise<ReflexTarget[]> {
   let taskIds: string[] = [];
   if (request.server.jarvisTools.get('pause_task')?.reflexSafe && request.server.taskStore) {
     try {
@@ -305,17 +485,27 @@ export async function reflexTargets(request: FastifyRequest): Promise<ReflexTarg
       taskIds = [];
     }
   }
-  return createReflexTargets(request.server.jarvisTools.list(), taskIds);
+  return createReflexTargets(request.server.jarvisTools.list(), taskIds, browserGoal);
 }
 
 export function createReflexTargets(
   tools: readonly RegisteredTool[],
   taskIds: readonly string[] = [],
+  browserGoal?: string,
 ): ReflexTarget[] {
   const targets: ReflexTarget[] = [];
   for (const tool of tools) {
     if (!tool.reflexSafe) continue;
     const required = Array.isArray(tool.inputSchema.required) ? tool.inputSchema.required : [];
+    if (tool.name === 'browser_do' && typeof browserGoal === 'string' &&
+        browserGoal.trim().length > 0 && browserGoal.length <= 4_000) {
+      targets.push({
+        choice: `target_${targets.length}`,
+        tool,
+        arguments: { goal: browserGoal.trim() },
+      });
+      continue;
+    }
     if (required.length === 0) {
       targets.push({ choice: `target_${targets.length}`, tool, arguments: {} });
       continue;

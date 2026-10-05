@@ -28,6 +28,10 @@ param pcBridgeClientId string = ''
 @description('Dan’s IANA time zone used for Google Calendar day boundaries. Empty disables Google mail and calendar tools.')
 param jarvisGoogleTimeZone string = ''
 
+@description('A ChatGPT-supported model for Codex hosted-runner tools.')
+param codexToolModel string = 'gpt-5.5'
+
+
 @description('The subscription currency amount for the monthly resource group budget (300 DKK).')
 param monthlyBudgetAmount int = 300
 
@@ -371,7 +375,8 @@ resource gpt56LunaDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   ]
   sku: {
     name: 'GlobalStandard'
-    capacity: 1
+    // Global Standard bills per token; capacity is only the rate limit (1 = 1K TPM, too low for one chat turn with tools, L91).
+    capacity: 100
   }
   properties: {
     model: {
@@ -390,7 +395,8 @@ resource gptRealtime21Deployment 'Microsoft.CognitiveServices/accounts/deploymen
   ]
   sku: {
     name: 'GlobalStandard'
-    capacity: 1
+    // Regional quota maximum for gpt-realtime-2.1 Global Standard (L91).
+    capacity: 10
   }
   properties: {
     model: {
@@ -409,7 +415,8 @@ resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deploym
   ]
   sku: {
     name: 'GlobalStandard'
-    capacity: 1
+    // Memory capture and search embed in bursts (L91).
+    capacity: 20
   }
   properties: {
     model: {
@@ -680,6 +687,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'FOUNDRY_RUNNER_AGENT_NAME'
               value: 'jarvis-runner-node-1x2'
+            }
+            {
+              name: 'JARVIS_CODEX_TOOL_MODEL'
+              value: codexToolModel
             }
             {
               name: 'TEAMS_BOT_APP_ID'

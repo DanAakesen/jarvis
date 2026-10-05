@@ -1,9 +1,13 @@
 import { Writable } from 'node:stream';
+import type { AddressInfo } from 'node:net';
+import type { ServerResponse } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../app.js';
+import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
 import type { ConversationStore } from './conversation-store.js';
+import type { ReflexClassifier } from './reflex.js';
+import type { ToolCallStore } from './tool-calls.js';
 
 const config = loadConfig({});
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -32,12 +36,13 @@ const auth = async () => ({
   displayName: 'Dan Aakesen',
 });
 
-function createApp(store?: ConversationStore) {
+function createApp(store?: ConversationStore, options: Partial<BuildAppOptions> = {}) {
   const sink = { trackTrace: vi.fn(), flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}) };
   const output = new Writable({ write(_chunk, _encoding, done) { done(); } });
   const app = buildApp(config, createLogger(config, sink, output), {
     auth,
     ...(store ? { conversationStore: store } : {}),
+    ...options,
   });
   apps.push(app);
   return app;
@@ -135,6 +140,174 @@ describe('conversation routes', () => {
       model: null,
     });
   });
+
+    it('streams the agent reply while a slow reflex is cut off at its budget', async () => {
+      const store = storeFixture();
+      const chatAgent = { stream: vi.fn(async function* () { yield 'Hello'; }) };
+      let classifierSignal: AbortSignal | undefined;
+      let onAbort!: () => void;
+      const reflexAborted = new Promise<void>((resolve) => { onAbort = resolve; });
+      const reflexClassifier: ReflexClassifier = {
+        classify: vi.fn((_text, _language, _targets, signal) => {
+          classifierSignal = signal;
+          signal.addEventListener('abort', onAbort, { once: true });
+          return new Promise<null>(() => {});
+        }),
+      };
+      const app = createApp(store, { conversationAgent: chatAgent, reflexClassifier });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/conversation/sessions/41/turns',
+        headers,
+        payload: { text: 'Hello' },
+      });
+
+      expect(response.body).toContain('event: delta');
+      expect(chatAgent.stream).toHaveBeenCalledOnce();
+      expect(reflexClassifier.classify).toHaveBeenCalledOnce();
+      await reflexAborted;
+      expect(classifierSignal?.aborted).toBe(true);
+    });
+
+    it('keeps the agent reply when reflex classification fails', async () => {
+      const store = storeFixture();
+      const chatAgent = { stream: vi.fn(async function* () { yield 'Hello'; }) };
+      const reflexClassifier: ReflexClassifier = {
+        classify: vi.fn(async () => { throw new Error('provider detail'); }),
+      };
+      const app = createApp(store, { conversationAgent: chatAgent, reflexClassifier });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/conversation/sessions/41/turns',
+        headers,
+        payload: { text: 'Hello' },
+      });
+
+      expect(response.body).toContain('event: delta');
+      expect(response.body).toContain('event: done');
+      expect(response.body).not.toContain('provider detail');
+    });
+
+    it('cancels both the agent and reflex when the chat client disconnects', async () => {
+      const store = storeFixture();
+      let agentSignal!: AbortSignal;
+      let resolveAgentAbort!: () => void;
+      const agentAborted = new Promise<void>((resolve) => { resolveAgentAbort = resolve; });
+      const chatAgent = {
+        stream: vi.fn(async function* (_input, _authorization, signal: AbortSignal) {
+          agentSignal = signal;
+          signal.addEventListener('abort', resolveAgentAbort, { once: true });
+          yield 'Hello';
+          await new Promise<void>((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+        }),
+      };
+      let resolveReflexAbort!: () => void;
+      const reflexAborted = new Promise<void>((resolve) => { resolveReflexAbort = resolve; });
+      const reflexClassifier: ReflexClassifier = {
+        classify: vi.fn((_text, _language, _targets, signal) =>
+          new Promise<null>((resolve) => signal.addEventListener('abort', () => {
+            resolveReflexAbort();
+            resolve(null);
+          }, { once: true }))),
+      };
+      const app = createApp(store, { conversationAgent: chatAgent, reflexClassifier });
+      let serverResponse!: ServerResponse;
+      app.addHook('onRequest', async (_request, reply) => { serverResponse = reply.raw; });
+      const address = await app.listen({ port: 0, host: '127.0.0.1' });
+      const port = (app.server.address() as AddressInfo).port;
+      const controller = new AbortController();
+      const response = await fetch(`${address}/conversation/sessions/41/turns`, {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'Hello' }),
+        signal: controller.signal,
+      });
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let received = '';
+      while (!received.includes('event: delta')) {
+        const chunk = await reader.read();
+        if (chunk.done) throw new Error('Chat stream ended before its first delta');
+        received += decoder.decode(chunk.value);
+      }
+
+      controller.abort();
+      serverResponse.destroy();
+      await reader.cancel().catch(() => {});
+      await Promise.all([agentAborted, reflexAborted]);
+
+      expect(port).toBeGreaterThan(0);
+      expect(agentSignal.aborted).toBe(true);
+    });
+
+    it('reports a concurrent reflex action as tool activity and still streams the agent reply', async () => {
+      const store = storeFixture();
+      const appRef: { current?: ReturnType<typeof buildApp> } = {};
+      const chatAgent = {
+        stream: vi.fn(async function* () {
+          const app = appRef.current;
+          if (!app) throw new Error('Conversation app was not initialized');
+          const toolResponse = await app.inject({
+            method: 'POST',
+            url: '/tools/get_status_summary',
+            headers: { ...headers, 'x-jarvis-message-id': '42' },
+            payload: {},
+          });
+          yield (toolResponse.json() as { result: { summary: string } }).result.summary;
+        }),
+      };
+      const recordCall = vi.fn(async () => {});
+      const readNowFeed = vi.fn(async () => ({ running: [], items: [] }));
+      const toolCallStore = {
+        record: recordCall,
+        listCodexToolCalls: vi.fn(async () => []),
+      } as unknown as ToolCallStore;
+      const reflexClassifier: ReflexClassifier = {
+        classify: vi.fn(async (_text, _language, targets) => {
+          const target = targets.find(({ tool }) => tool.name === 'get_status_summary');
+          return target ? {
+            addressed: true,
+            intent: 'action',
+            confidence: 1,
+            needsConfirmation: false,
+            target,
+          } : null;
+        }),
+      };
+      const app = createApp(store, {
+        conversationAgent: chatAgent,
+        reflexClassifier,
+        toolCallStore,
+        nowFeedStore: { read: readNowFeed } as unknown as BuildAppOptions['nowFeedStore'],
+      });
+      appRef.current = app;
+      const activities: unknown[] = [];
+      app.jarvisActivityHub.subscribe((event) => activities.push(event));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/conversation/sessions/41/turns',
+        headers,
+        payload: { text: 'What is happening?' },
+      });
+
+      await vi.waitFor(() => expect(recordCall).toHaveBeenCalledOnce());
+      expect(response.body).toContain('event: delta');
+      expect(response.body).toContain('event: done');
+      expect(response.body).toContain('The Now feed shows 0 running tasks');
+      expect(readNowFeed).toHaveBeenCalledOnce();
+      expect(recordCall).toHaveBeenCalledWith(expect.objectContaining({
+        messageId: '42',
+        tool: 'get_status_summary',
+        outcome: 'ok',
+      }));
+      expect(activities).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: 'tool-call-started', source: 'chat', toolName: 'get_status_summary' }),
+        expect.objectContaining({ type: 'tool-call-finished', source: 'chat', toolName: 'get_status_summary', outcome: 'ok' }),
+      ]));
+    });
 
   it('rejects voice sessions and explains agent unavailability before saving a message', async () => {
     const store = storeFixture({
