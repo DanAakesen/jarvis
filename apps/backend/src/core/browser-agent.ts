@@ -734,9 +734,9 @@ function stronglyMatchesSharedContext(tab: BrowserTab, input: SharedBrowserTaskI
   const titleMatches = [...tabWords].filter((word) => titleWords.has(word)).length;
   const descriptionMatches = [...tabWords].filter((word) => descriptionWords.has(word)).length;
   const titleThreshold = Math.min(2, titleWords.size);
+  if (descriptionWords.size < 2 || descriptionMatches < 2) return false;
   if (titleWords.size > 0 && titleMatches < titleThreshold) return false;
-  if (descriptionWords.size > 0 && descriptionMatches < 2) return false;
-  return (titleThreshold > 0 && titleMatches >= titleThreshold) || descriptionMatches >= 2;
+  return true;
 }
 
 function resolveSharedTab(

@@ -440,6 +440,19 @@ describe('Jev browser agent', () => {
     expect(automatic.getSnapshot).not.toHaveBeenCalled();
   });
 
+  it('refuses title-only matching when the vision description has no useful words', async () => {
+    const tabs: BrowserTab[] = [
+      { id: 'tab_1', title: 'Contact', url: 'https://contacts.example.test/', focused: false },
+    ];
+    const env = fixture(fixedPlanner({ operation: 'done' }), undefined, tabs);
+    setSharedContext(env.request, 'UI', 'Contact - Chrome');
+
+    await expect(sharedTool(env).execute({
+      goal: 'Fill this in',
+    }, env.request, new AbortController().signal)).rejects.toThrow(/can’t confidently match/u);
+    expect(env.getSnapshot).not.toHaveBeenCalled();
+  });
+
   it('offers a steps fallback when the local bridge is offline', async () => {
     const env = fixture(fixedPlanner({ operation: 'done' }));
     setSharedContext(env.request, 'A form is visible.');
