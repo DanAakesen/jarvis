@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import type { WorkspaceCommand } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
@@ -11,6 +13,7 @@ import { useContextPanel } from './context-panel-state';
 import { DatabaseWakeStatus } from './DatabaseWakeStatus';
 import { JarvisPage } from './JarvisPage';
 import { NotFoundPage, SignInPage } from './pages';
+import { NowFeedPanel } from './NowFeedPanel';
 import { SettingsPage } from './SettingsPage';
 import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
@@ -131,6 +134,11 @@ function ShellLayout({ signedIn, config, session, camera }: {
       return workspaceController.current?.dispatch(command, trustedBlobHost) ?? false;
     },
   }), [contextPanel]);
+  const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
+    let applied = false;
+    flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
+    return applied;
+  }, [workspaceCommands]);
   const [navigationOpen, setNavigationOpen] = useState(() => (
     typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches
   ));
@@ -279,6 +287,16 @@ function ShellLayout({ signedIn, config, session, camera }: {
           {signedIn && (
             <div className="workspace-shell-area" hidden={pathname !== '/'}>
               <Workspace ref={workspaceController} views={[]} />
+            </div>
+          )}
+          {signedIn && pathname !== '/' && (
+            <div hidden>
+              <NowFeedPanel
+                client={session.client}
+                config={config}
+                getAccessToken={getAccessToken}
+                applyWorkspaceCommand={applyWorkspaceCommand}
+              />
             </div>
           )}
         </WorkspaceCommandContext.Provider>

@@ -303,7 +303,9 @@ passed (existing chunk-size warning). P8-15 was also exercised in Chromium at
 create, layout, move, resize, context-panel open/close, minimise, restore, show,
 and close all applied and received owner-session acknowledgements. Generated
 script-shaped text remained literal, the phone page had no horizontal overflow,
-and the browser reported no page/console errors. This checks the real client and
+and the browser reported no page/console errors. A route-transition check
+acknowledged a create command on Settings and showed the same in-memory view
+after returning to the conversation. These checks exercise the real client and
 authenticated event/ack flow against fixtures, not real chat/voice tool
 invocation. Live Entra/Foundry delivery, real phone keyboards, and hardware audio
 remain unverified.

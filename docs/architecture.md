@@ -102,6 +102,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `POST /now/workspace/commands/:commandId/ack` after applying or refusing it.
   Timeouts, cancellation, disconnects, stale sessions and partial failures are
   returned as refused/error results; no view or geometry rows are persisted.
+  On non-conversation signed-in routes, the shell keeps the command stream
+  mounted in a hidden Now panel while the workspace controller remains active.
   The renderers use fixed React elements; generated HTML, JavaScript and CSS
   never execute. Offline route/controller tests cover the flow; live
   Entra/Foundry delivery remains unverified.

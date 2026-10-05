@@ -198,6 +198,19 @@ describe('App shell', () => {
     await screen.findByRole('navigation', { name: 'Areas' });
   }
 
+  it('keeps the workspace command stream connected when navigating away from conversation', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const eventRequests = () => fetchMock.mock.calls.filter(([url]) => (
+      new URL(String(url)).pathname === '/now/events'
+    ));
+    await waitFor(() => expect(eventRequests()).toHaveLength(1));
+
+    await user.click(screen.getByRole('link', { name: 'Settings' }));
+    await screen.findByRole('heading', { name: 'Settings' });
+    await waitFor(() => expect(eventRequests()).toHaveLength(2));
+  });
+
   it('renders backend-reported waking in the shared signed-in shell', async () => {
     let resolveFeed!: (response: Response) => void;
     const pendingFeed = new Promise<Response>((resolve) => { resolveFeed = resolve; });
