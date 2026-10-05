@@ -205,7 +205,7 @@ export function createJarvisStageOrb() {
   outerGeometry.setAttribute('aSeed', new THREE.Float32BufferAttribute(outerSeeds, 1));
   const motes = new THREE.Points(outerGeometry, new THREE.ShaderMaterial({
     uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    vertexShader: `attribute float aSeed;uniform float uTime;uniform float uAwake;varying float vAlpha;
+    vertexShader: `attribute float aSeed;uniform float uTime;uniform float uAwake;uniform float uEnergy;varying float vAlpha;
       void main(){vec3 p=position*(1.+sin(uTime*.3+aSeed*12.)*.005);
         vAlpha=(.15+.6*uAwake+uEnergy*.08)*(.25+.75*pow(.5+.5*sin(uTime*.25+aSeed*50.),4.));
         vec4 v=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*v;gl_PointSize=clamp((32.+48.*uAwake)/max(1.,-v.z),1.4,5.);}`,
