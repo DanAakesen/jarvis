@@ -36,6 +36,12 @@ function asHistoryMessage(message: ChatMessage, language: 'da' | 'en'): Conversa
   };
 }
 
+function mergeMessages(current: ConversationHistoryMessage[], incoming: ConversationHistoryMessage[]) {
+  const messages = new Map(current.map((message) => [message.id, message]));
+  for (const message of incoming) messages.set(message.id, message);
+  return [...messages.values()].sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }));
+}
+
 function validTaskId(value: string | null): value is string {
   return value !== null && /^[1-9]\d{0,18}$/.test(value) && BigInt(value) <= maxTaskId;
 }
@@ -79,8 +85,10 @@ export function ConversationHistory({
   const [voiceRefresh, setVoiceRefresh] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const input = useRef<HTMLTextAreaElement>(null);
-  const replyEnd = useRef<HTMLDivElement>(null);
+  const transcript = useRef<HTMLDivElement>(null);
   const wasBusy = useRef(false);
+  const hasFocusedInput = useRef(false);
+  const hasLoadedOlder = useRef(false);
   const lastMessageId = messages.at(-1)?.id;
   const updateVoiceActive = useCallback((active: boolean) => {
     const update = () => {
@@ -123,12 +131,15 @@ export function ConversationHistory({
   }, []);
 
   useEffect(() => {
-    if (!voiceActive) replyEnd.current?.scrollIntoView?.({ block: 'end' });
-  }, [lastMessageId, streamedText, sending, voiceActive]);
+    if (!voiceActive && transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
+  }, [lastMessageId, streamedText, sending, voiceActive, loading]);
 
   useEffect(() => {
     const busy = voiceActive || sending;
-    if (wasBusy.current && !busy) input.current?.focus();
+    if (!busy && (!hasFocusedInput.current || wasBusy.current)) {
+      input.current?.focus({ preventScroll: true });
+      hasFocusedInput.current = true;
+    }
     wasBusy.current = busy;
   }, [voiceActive, sending]);
 
@@ -137,8 +148,8 @@ export function ConversationHistory({
     void loadConversationHistory(client, config).then((page) => {
       if (!active) return;
       setHistoryError('');
-      setMessages(page.messages);
-      setNextCursor(page.nextCursor);
+      setMessages((current) => mergeMessages(current, page.messages));
+      if (!hasLoadedOlder.current) setNextCursor(page.nextCursor);
     }).catch((reason: unknown) => {
       if (!active) return;
       setHistoryError(reason instanceof Error ? reason.message : 'Jarvis could not load conversation history.');
@@ -151,8 +162,6 @@ export function ConversationHistory({
   function retry() {
     setLoading(true);
     setHistoryError('');
-    setMessages([]);
-    setNextCursor(null);
     setReload((value) => value + 1);
   }
 
@@ -162,7 +171,8 @@ export function ConversationHistory({
     setHistoryError('');
     try {
       const page = await loadConversationHistory(client, config, nextCursor);
-      setMessages((current) => [...page.messages, ...current]);
+      hasLoadedOlder.current = true;
+      setMessages((current) => mergeMessages(current, page.messages));
       setNextCursor(page.nextCursor);
     } catch (reason) {
       setHistoryError(reason instanceof Error ? reason.message : 'Jarvis could not load older conversation history.');
@@ -173,7 +183,8 @@ export function ConversationHistory({
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const text = draft.trim();
+    const submittedDraft = draft;
+    const text = submittedDraft.trim();
     if (!text || sending || voiceActive) return;
     if (isSharedBrowserRequest(text) && !screenShare?.sharing) {
       setTurnError('Share the Chrome tab you want Jarvis to use, then ask again.');
@@ -234,25 +245,27 @@ export function ConversationHistory({
         text,
         (message) => {
           userMessageSaved = true;
-          setMessages((current) => [...current, asHistoryMessage(message, activeSession.language)]);
+          setDraft((current) => current === submittedDraft ? '' : current);
+          setMessages((current) => mergeMessages(current, [asHistoryMessage(message, activeSession.language)]));
         },
         (delta) => {
           partialReply += delta;
           setStreamedText(partialReply);
         },
-        () => { userMessageSaved = true; },
+        () => {
+          userMessageSaved = true;
+          setDraft((current) => current === submittedDraft ? '' : current);
+        },
         contextForTurn,
         sharedContextForTurn,
       );
-      setMessages((current) => [...current, asHistoryMessage(assistant, activeSession.language)]);
-      setDraft('');
+      setMessages((current) => mergeMessages(current, [asHistoryMessage(assistant, activeSession.language)]));
       setStreamedText('');
       setReload((value) => value + 1);
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : 'Jarvis could not finish the reply.';
       setTurnError(message);
       if (userMessageSaved) {
-        setDraft('');
         setInterruptedText(partialReply);
         setStreamedText('');
         setReload((value) => value + 1);
@@ -300,7 +313,7 @@ export function ConversationHistory({
 
   return (
     <section className="conversation-history" data-turn-active={sending || undefined} aria-label="Conversation">
-      <div className="conversation-transcript" hidden={voiceActive} tabIndex={0} aria-label="Conversation history">
+      <div ref={transcript} className="conversation-transcript" hidden={voiceActive} tabIndex={0} aria-label="Conversation history">
       {loading ? (
         <p role="status" aria-live="polite">Loading conversation history…</p>
       ) : historyError && messages.length === 0 ? (
@@ -368,11 +381,20 @@ export function ConversationHistory({
 
       {sending && (
         <div className="streaming-message">
-          <strong>Jarvis</strong>
-          <div className="streaming-reply" aria-label="Jarvis reply in progress">
-            <MarkdownContent source={streamedText} streaming />
-            <span className="streaming-caret" aria-hidden="true" />
-          </div>
+          {streamedText ? (
+            <>
+              <strong>Jarvis</strong>
+              <div className="streaming-reply" aria-label="Jarvis reply in progress">
+                <MarkdownContent source={streamedText} streaming />
+                <span className="streaming-caret" aria-hidden="true" />
+              </div>
+            </>
+          ) : (
+            <p className="chat-thinking" role="status" aria-live="polite">
+              <span className="thinking-dot" aria-hidden="true" />
+              Jarvis is thinking…
+            </p>
+          )}
         </div>
       )}
       {interruptedText && (
@@ -387,8 +409,7 @@ export function ConversationHistory({
           <p className="chat-guidance">If a reply is interrupted, check the conversation and task status before sending again.</p>
         </div>
       )}
-      {sending && <p className="chat-status" role="status" aria-live="polite">Jarvis is replying…</p>}
-      <div ref={replyEnd} />
+      {sending && streamedText && <p className="chat-status" role="status" aria-live="polite">Jarvis is replying…</p>}
       {children}
       </div>
 
@@ -426,7 +447,6 @@ export function ConversationHistory({
               event.currentTarget.form?.requestSubmit();
             }
           }}
-          disabled={sending}
           aria-describedby="chat-guidance"
         />
         <div className="composer-language" role="group" aria-label="Reply language">
@@ -439,7 +459,7 @@ export function ConversationHistory({
           </svg>
         </button>
         <p id="chat-guidance" className="visually-hidden">
-          Enter to send; Shift+Enter for a new line.
+          {sending ? 'You can type your next message. Send and reply language are available when Jarvis finishes.' : 'Enter to send; Shift+Enter for a new line.'}
         </p>
         {(screenShare?.sharing || camera?.sharing) && <div className="action-row composer-vision">
           <button className="secondary-button" type="button" onClick={() => void inspectVision('screen')}
