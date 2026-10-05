@@ -3,6 +3,7 @@
 Board columns (the project's Status field):
   Backlog      open issue still blocked by an open issue
   Needs Dan    open, unclaimed issue labelled needs-decision (waiting for Dan's answer)
+  (deferred)   open, unclaimed issue labelled deferred stays in Backlog
   Ready        open, not blocked, no worker label, no open linked PR
   In progress  open issue with a worker label (Codex, Copilot, Dan, Jarvis) or an open draft PR
   In review    open issue with an open, non-draft linked PR
@@ -27,6 +28,7 @@ WORKER_LABELS = {"Codex", "Copilot", "Dan", "Jarvis"}
 LINKED_ISSUE = re.compile(r"\b(?:fixes|closes|resolves)\s+#(\d+)\b", re.IGNORECASE)
 STATUSES = ("Backlog", "Needs Dan", "Ready", "In progress", "In review")
 DECISION_LABEL = "needs-decision"
+DEFERRED_LABEL = "deferred"
 API = "https://api.github.com"
 
 
@@ -44,6 +46,8 @@ def desired_status(issue: dict[str, Any], open_pulls: list[dict[str, Any]]) -> s
         return "In progress"
     if DECISION_LABEL in labels:
         return "Needs Dan"
+    if DEFERRED_LABEL in labels:
+        return "Backlog"
     if (issue.get("issue_dependencies_summary") or {}).get("blocked_by", 0) > 0:
         return "Backlog"
     return "Ready"
