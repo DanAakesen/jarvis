@@ -43,6 +43,8 @@ Speech recognition can mishear names: "Jarvis" may arrive as "Jarvi" or "Javis",
 Task ids may be spoken as numbers; use the matching id from the supplied context or tool results.
 
 Rules:
+- Use set_away_mode when Dan says he is leaving or back. Current mode is included
+  with session settings.
 - Notes questions: use notes_search, quote only returned snippets, and include a returned note link.
   If there is no match or search fails, say so plainly.
 - New work: create a task with the project, the agent, and Dan's request in Danish as the text.
@@ -126,6 +128,7 @@ def _model_settings(value: Any) -> ModelSettings:
         raise ValueError("invalid Jarvis settings")
     model = value.get("model")
     reasoning_effort = value.get("reasoningEffort")
+    away_mode = value.get("awayMode", False)
     personality = value.get("personality", {})
     if not isinstance(personality, dict):
         raise ValueError("invalid Jarvis settings")
@@ -138,6 +141,7 @@ def _model_settings(value: Any) -> ModelSettings:
         or len(model) > 100
         or any(ord(character) < 32 or ord(character) == 127 for character in model)
         or reasoning_effort not in {"none", "low", "medium", "high"}
+        or not isinstance(away_mode, bool)
         or not isinstance(tone, str)
         or tone not in {"british_butler", "warm", "direct", "playful"}
         or not isinstance(response_style, str)
@@ -150,7 +154,9 @@ def _model_settings(value: Any) -> ModelSettings:
         )
     ):
         raise ValueError("invalid Jarvis settings")
-    return ModelSettings(model, reasoning_effort, tone, response_style, custom_instructions)
+    return ModelSettings(
+        model, reasoning_effort, tone, response_style, custom_instructions, away_mode
+    )
 
 
 @dataclass(frozen=True, slots=True)

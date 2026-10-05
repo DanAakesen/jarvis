@@ -59,7 +59,7 @@ event timeline.
 ## Interactions to design
 
 - **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.
-- **Teams confirmation cards (P7-03):** one Adaptive Card headline names the action, body text gives its bounded summary, and ordinary supporting text states the five-minute expiry. Approve and Reject are explicit, distinct buttons; optional speech is a separate, non-autostarting audio attachment. This interaction lives in Teams and does not add browser UI.
+- **Confirmations (P7-02/P7-03):** while away, one Teams Adaptive Card headline names the action, body text gives its bounded summary, and ordinary supporting text states the five-minute expiry. Approve and Reject are explicit, distinct buttons; optional speech is a separate, non-autostarting audio attachment. While present, the Now panel lists expiring requests with the same summary and explicit Approve/Reject buttons. This queue appears only when requests are pending.
 - **Language toggle:** Danish ↔ English, visible wherever voice is active.
 - **Task controls:** steer, pause, resume, cancel, recover after a crash, and continue after a completed turn's session expires. Show a clear pending state (for example, "Continuing…" while a fresh session starts).
 - **Sleep switch:** the main page shows configured awake/asleep state (minimum replicas 1/0), pending and failure feedback, and explains a refusal while any task is Ready or Running. Settings links to the main-page control.
@@ -129,12 +129,19 @@ sign-in; the header wraps on narrow screens.
   stays visible but disabled, and is linked to that explanation with
   `aria-describedby`. No sample messages, tasks or states are shown.
 - **Activity panel:** Running tasks, Needs attention, Releases and deployments,
-  Credential warnings, and Alerts, each with an empty state. Item titles open their
+  Credential warnings, Alerts, and the current away/present mode, with an empty
+  state for each activity group. Item titles open their
   task, release or project. Dismiss shows "Dismissing…", keeps the item and
   explains a failure, and returns focus to the Now heading after removal.
   The panel loads its backend snapshot, offers retry when unavailable, and
   labels reconnecting or unavailable live updates while keeping the last
   snapshot visible.
+- **Away mode (P7-02):** The Now panel uses a labelled text status for present or
+  away and retains the existing list hierarchy. Mode-change entries appear as
+  ordinary activity rows; no color-only status or separate dashboard treatment.
+  An explicit, visible-browser activity request—not passive feed refresh—returns
+  Dan to present. Pending browser approvals use the panel's existing list and
+  button styles, with visible pending, failure, and recovery feedback.
 - **Alerts (P6-02):** Keep alerts in the existing Now activity panel as a
   separate, dismissible "Alerts" group; retain the condition title, timestamp,
   and task/release/project link where one exists. Budget alerts have no invented

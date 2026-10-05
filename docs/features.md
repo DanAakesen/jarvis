@@ -48,7 +48,7 @@ Status as of 4 October 2026.
 
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
-| Now panel | See running tasks, tasks needing attention, releases, deployments and credential warnings; dismiss items | Screen | Main page | Built | P1-13 |
+| Now panel | See away/present mode, running tasks, tasks needing attention, releases, deployments and credential warnings; dismiss items | Screen | Main page | Built | P1-13, P7-02 |
 | Sleep switch | Put the backend to sleep or wake it; refused while tasks are active | Screen | Main page | Built | P1-12 |
 | Database waking | Pages wait and show "waking" while the paused database resumes | Screen | All pages | In progress | P1-14 |
 
@@ -108,7 +108,7 @@ Status as of 4 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Teams calling | Call Jarvis from the Teams app (no paid number at first) | Phone | Teams | Planned (needs decision) | P7-01 |
-| Away mode | "I'm leaving": updates and confirmations go to the phone | Both | Main page, Phone | Planned (needs decision) | P7-02 |
+| Away mode | Toggle by voice/chat, automatic Teams Away/Offline detection after ten minutes, and automatic return to present on active browser use; see mode in Now and route task updates and approvals to Teams while away, browser while present | Both | Main page, Phone | Built offline; Graph admin consent and live phone check pending | P7-02 |
 | Phone confirmations | Receive Dan-only Teams notifications and approve or reject actions with optional Speech F0 voice notes | Phone | Teams | Built offline; live Azure/phone check pending | P7-03 |
 | Screen sharing | Share a screen or window; request an in-memory vision description in chat or voice | Both | Main page | Built (live acceptance pending) | P7-05 |
 | Local PC bridge | Jarvis opens HTTP(S) URLs, allow-listed apps, and folders under `C:\Repo` in VS Code; reports the active window title; or focuses a window by exact title | Voice/chat | PC companion | Built (offline; live Windows/Entra check unverified) | P7-06 |

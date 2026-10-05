@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 4 October 2026 for P7-03, P7-09 and P7-13. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, headless Outlook tools, and long-term memory. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 4 October 2026 for P7-02, P7-03, P7-09 and P7-13. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, headless Outlook tools, and long-term memory. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -112,7 +112,7 @@ flowchart LR
 | 5 | GitHub and release | Pull requests, checks, the release view (commits fetched from GitHub on demand) | `pull_requests`, `workflow_runs`, `releases`, `deployments` |
 | 6 | Operations | Safe webhook handling, credential expiry warnings | `webhook_deliveries`, `credential_status` |
 | 7 | Usage and cost | Transparency per task and project: sandbox time, model tokens, voice, Codex and Copilot usage | `usage` |
-| 8 | Phone notifications | Dan's validated Teams personal conversation and expiring one-time approvals | `teams_conversations`, `teams_confirmations` |
+| 8 | Notifications and confirmations | Dan's validated Teams conversation and expiring approvals for Teams or browser delivery | `teams_conversations`, `teams_confirmations` |
 | 9 | Long-term memory | Relevant source-linked preferences, project facts, decisions and unfinished tasks across sessions | `memories`, `memory_history`, `memory_deletions` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
@@ -207,7 +207,9 @@ erDiagram
   `new_projects.templates_repository`, `new_projects.default_agent`,
   `new_projects.policy`, `new_projects.max_parallel_tasks`, and
   `new_projects.default_branch` to the same global settings scope.
-  Values are JSON scalars. Model/voice/language/reasoning choices are validated
+  Page-setting values are JSON scalars; the internal `away.mode.state` value is
+  a validated JSON object and is not exposed as an editable Settings field.
+  Model/voice/language/reasoning choices are validated
   against the backend catalog; Codex/Copilot catalogs currently contain only
   `default`. P2-11 verified that the runner can apply explicit model overrides
   (and Codex reasoning) through provider options. Task rows retain an optional
@@ -222,6 +224,12 @@ erDiagram
   for future sessions/tasks, not live updates or history. At the start of a hosted Jarvis
   session, the agent keeps the effective model and reasoning effort in memory for
   that session; the snapshot is not persisted.
+- P7-02 stores one validated JSON state object at global setting key
+  `away.mode.state`: `away`, transition source/time and the start time of a
+  pending Teams Away/Offline interval. The existing key/value schema needs no
+  migration. A confirmed mode transition also inserts a `core/away_mode` activity
+  row in the same SQL transaction; the Now feed displays these rows and reads the
+  current value directly from the setting.
 - `activity` is the "what's happening" feed on the main page. It carries an `area`, so later areas can add to it without changes. The authenticated Now-feed read excludes `dismissed_at` rows; dismissing sets the UTC timestamp without deleting the activity record. P6-02 writes alerts in the same transaction as the condition where available, with a unique filtered `alert_key` index to suppress repeats. Keys identify deployment, sandbox session, credential expiry timestamp, or budget month; the feed never displays the key.
 
 ## 2 · Projects
@@ -552,7 +560,9 @@ erDiagram
 ```
 
 P7-03 stores one validated personal Teams conversation reference for Dan and
-single-use confirmation state bound to his object ID and conversation ID.
+single-use confirmation state bound to his object ID and delivery channel. The
+`conversation_id` value `browser` identifies a present-mode approval; its opaque
+ID and summary remain in the backend's bounded in-memory queue.
 `IX_teams_confirmations_expiry` supports expiry cleanup. Cards and message text
 are not persisted in these tables; voice bytes live only in a bounded in-memory
 store with five-minute links. Startup expires pending confirmations, and an

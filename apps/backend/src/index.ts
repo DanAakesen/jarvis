@@ -73,6 +73,8 @@ import { createEphemeralAudioStore } from './teams/audio-store.js';
 import { createAzureSpeechSynthesizer } from './teams/speech.js';
 import { createTeamsBotModule, createTeamsConnector } from './teams/bot.js';
 import { createTeamsNotificationService } from './teams/service.js';
+import { createAwayModeStore } from './database/away-mode-store.js';
+import { startGraphPresenceMonitor } from './graph/presence-monitor.js';
 
 try {
   const config = loadConfig();
@@ -95,6 +97,9 @@ try {
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const nowEventHub = createEventHub<NowFeedUpdate>();
+  const awayModeStore = database
+    ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({ type: 'mode_changed', away: state.away }))
+    : undefined;
   const alertNotifier = createAlertNotifier(telemetry);
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
     config.foundryEndpoints || config.githubAppId || config.graphAppId || config.teams || sleepResourceId
@@ -283,6 +288,11 @@ try {
       store: createTeamsNotificationStore(database.pool),
       connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
       audioStore: teamsAudioStore,
+      isAway: async () => {
+        if (!awayModeStore) throw new Error('Away mode is unavailable');
+        return (await awayModeStore.read()).away;
+      },
+      onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
       ...(teamsSpeech ? { speech: teamsSpeech } : {}),
     })
     : undefined;
@@ -444,6 +454,7 @@ try {
       nowFeedStore: createNowFeedStore(database.pool),
       usageStore: createUsageStore(database.pool),
     } : {}),
+    ...(awayModeStore ? { awayModeStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
     eventHub,
@@ -463,6 +474,18 @@ try {
         budgetReader,
         budgetAlertStore,
         () => logger.warn('budget_alert.check_failed'),
+      );
+    });
+  }
+  let stopPresenceMonitor: (() => Promise<void>) | undefined;
+  if (database && graphClient && awayModeStore) {
+    app.addHook('onClose', async () => { await stopPresenceMonitor?.(); });
+    app.addHook('onReady', async () => {
+      stopPresenceMonitor = startGraphPresenceMonitor(
+        graphClient,
+        config.auth.ownerObjectId,
+        awayModeStore,
+        () => logger.warn('away_mode.presence_poll_failed'),
       );
     });
   }

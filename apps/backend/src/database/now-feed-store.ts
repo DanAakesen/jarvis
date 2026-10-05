@@ -1,6 +1,6 @@
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
-import type { NowFeed, NowFeedStore, NowRunningTask, NowActivityItem } from '../core/now.js';
+import type { NowFeedSnapshot, NowFeedStore, NowRunningTask, NowActivityItem } from '../core/now.js';
 
 interface RunningTaskRow extends Omit<NowRunningTask, 'startedAt'> {
   startedAt: Date | string;
@@ -16,7 +16,7 @@ function iso(value: Date | string): string {
 
 export function createNowFeedStore(pool: sql.ConnectionPool): NowFeedStore {
   return {
-    async read(): Promise<NowFeed> {
+    async read(): Promise<NowFeedSnapshot> {
       const running = await databaseReadRequest(pool).query<RunningTaskRow>(`SELECT TOP (100)
         CAST(t.id AS varchar(19)) AS id, t.title, p.name AS project, t.agent,
         COALESCE(NULLIF(t.activity, N''), N'Running') AS activity,
@@ -48,6 +48,10 @@ export function createNowFeedStore(pool: sql.ConnectionPool): NowFeedStore {
           SELECT id, N'alert' AS category, title, link, at
           FROM dbo.activity
           WHERE dismissed_at IS NULL AND alert_key IS NOT NULL
+          UNION ALL
+          SELECT id, N'mode' AS category, title, link, at
+          FROM dbo.activity
+          WHERE dismissed_at IS NULL AND area = N'core' AND kind = N'away_mode'
         )
         SELECT TOP (100) CAST(id AS varchar(19)) AS id, category, title, link, at
         FROM visible ORDER BY at DESC, id DESC;`);
