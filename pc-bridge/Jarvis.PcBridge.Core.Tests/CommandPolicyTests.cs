@@ -13,6 +13,13 @@ public sealed class CommandPolicyTests
     [InlineData("open_folder", """{"relativePath":"jarvis\\apps\\backend"}""")]
     [InlineData("active_window", "{}")]
     [InlineData("focus_window", """{"title":"Jarvis - Visual Studio Code"}""")]
+    [InlineData("browser_tabs", "{}")]
+    [InlineData("browser_snapshot", """{"tabId":"tab_1"}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"click","confirmed":false}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"hello"}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"select","value":"option"}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"scroll","direction":"down"}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"wait","waitMs":10}""")]
     public void Accepts_allow_list_commands(string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);
@@ -33,6 +40,11 @@ public sealed class CommandPolicyTests
     [InlineData("focus_window", """{"title":"window\ninjection"}""")]
     [InlineData("open_app", """{"app":"vscode","path":"C:\\secret"}""")]
     [InlineData("run_command", """{"command":"whoami"}""")]
+    [InlineData("browser_snapshot", """{"tabId":"tab_1","url":"https://example.com"}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"click","selector":"#submit","confirmed":false}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"click","x":10,"y":12,"confirmed":false}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":501,"action":"click","confirmed":false}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"execute_script","text":"alert(1)"}""")]
     public void Rejects_commands_outside_the_policy(string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);

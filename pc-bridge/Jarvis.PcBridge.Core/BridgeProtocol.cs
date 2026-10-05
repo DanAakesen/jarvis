@@ -47,8 +47,12 @@ public static class BridgeProtocol
         }
     }
 
-    public static byte[] Success(string id, object result) =>
-        JsonSerializer.SerializeToUtf8Bytes(new BridgeResponse(id, "result", result), JsonOptions);
+    public static byte[] Success(string id, object result)
+    {
+        var response = JsonSerializer.SerializeToUtf8Bytes(new BridgeResponse(id, "result", result), JsonOptions);
+        if (response.Length > MaxMessageBytes) throw new InvalidDataException("Bridge response is too large.");
+        return response;
+    }
 
     public static byte[] Failure(string id, string error) =>
         JsonSerializer.SerializeToUtf8Bytes(new BridgeResponse(id, "error", Error: error), JsonOptions);
