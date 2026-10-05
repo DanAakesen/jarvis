@@ -164,7 +164,7 @@ export const Workspace = forwardRef<WorkspaceController, {
     onOpenWindowsChange?.(openViews.slice(0, 32).map(({ id, title }) => ({ viewId: id, title })));
   }, [onOpenWindowsChange, openViews]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     onVisibleViewsChange?.(visibleViews.length > 0);
   }, [onVisibleViewsChange, visibleViews.length]);
 
