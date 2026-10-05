@@ -138,6 +138,63 @@ export const generatedViewSchema = Object.freeze({
   }, ['version', 'title', 'renderer', 'source', 'data'])),
 });
 
+const workspaceCommandId = {
+  ...string(128, 1),
+  pattern: '^[A-Za-z0-9_-]{1,128}$',
+};
+const workspaceViewId = {
+  ...string(64, 1),
+  pattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
+};
+const workspaceCommandBase = { commandId: workspaceCommandId };
+const workspaceViewCommand = {
+  oneOf: [
+    ...['create', 'update'].map((operation) => object({
+      ...workspaceCommandBase,
+      operation: { const: operation },
+      viewId: workspaceViewId,
+      view: generatedViewSchema,
+    })),
+    ...['show', 'close', 'minimise', 'restore', 'focus'].map((operation) => object({
+      ...workspaceCommandBase,
+      operation: { const: operation },
+      viewId: workspaceViewId,
+    })),
+    object({
+      ...workspaceCommandBase,
+      operation: { const: 'move' },
+      viewId: workspaceViewId,
+      x: { type: 'number', minimum: 0, maximum: 1 },
+      y: { type: 'number', minimum: 0, maximum: 1 },
+    }),
+    object({
+      ...workspaceCommandBase,
+      operation: { const: 'resize' },
+      viewId: workspaceViewId,
+      width: { type: 'number', minimum: 0.32, maximum: 0.92 },
+      height: { type: 'number', minimum: 0.34, maximum: 0.92 },
+      x: { type: 'number', minimum: 0, maximum: 1 },
+      y: { type: 'number', minimum: 0, maximum: 1 },
+    }, ['commandId', 'operation', 'viewId', 'width', 'height']),
+    object({
+      ...workspaceCommandBase,
+      operation: { const: 'layout' },
+      arrangement: { enum: ['tiled', 'layered'] },
+    }),
+    object({
+      ...workspaceCommandBase,
+      operation: { const: 'context-panel' },
+      action: { const: 'open' },
+      view: generatedViewSchema,
+    }),
+    ...['close', 'toggle'].map((action) => object({
+      ...workspaceCommandBase,
+      operation: { const: 'context-panel' },
+      action: { const: action },
+    })),
+  ],
+};
+
 const routePattern = /^\/(?:$|factory\/tasks\/[1-9]\d{0,18}|factory\/(?:projects|releases)\/[1-9]\d{0,15}|usage|settings)(?:\?[^#]*)?$/;
 const taskRoutePattern = /^\/factory\/tasks\/([1-9]\d{0,18})(?:\?[^#]*)?$/;
 const linkHosts = new Set(['github.com', 'learn.microsoft.com']);
@@ -315,3 +372,45 @@ export function isGeneratedView(value, options = {}) {
       !value.actions.every((action) => validAction(action, options.registeredTools))))) return false;
   return true;
 }
+
+export function isWorkspaceCommand(value, options = {}) {
+  if (!isObject(value) ||
+    typeof value.commandId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value.commandId)) return false;
+  const hasOnly = (...keys) => Object.keys(value).every((key) => ['commandId', 'operation', ...keys].includes(key));
+  switch (value.operation) {
+    case 'create':
+    case 'update':
+      return hasOnly('viewId', 'view') &&
+        typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId) &&
+        isGeneratedView(value.view, options);
+    case 'show':
+    case 'close':
+    case 'minimise':
+    case 'restore':
+    case 'focus':
+      return hasOnly('viewId') &&
+        typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId);
+    case 'move':
+      return hasOnly('viewId', 'x', 'y') &&
+        typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId) &&
+        Number.isFinite(value.x) && value.x >= 0 && value.x <= 1 &&
+        Number.isFinite(value.y) && value.y >= 0 && value.y <= 1;
+    case 'resize':
+      return hasOnly('viewId', 'width', 'height', 'x', 'y') &&
+        typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId) &&
+        Number.isFinite(value.width) && value.width >= 0.32 && value.width <= 0.92 &&
+        Number.isFinite(value.height) && value.height >= 0.34 && value.height <= 0.92 &&
+        (value.x === undefined || (Number.isFinite(value.x) && value.x >= 0 && value.x + value.width <= 1)) &&
+        (value.y === undefined || (Number.isFinite(value.y) && value.y >= 0 && value.y + value.height <= 1));
+    case 'layout':
+      return hasOnly('arrangement') && ['tiled', 'layered'].includes(value.arrangement);
+    case 'context-panel':
+      return value.action === 'open'
+        ? hasOnly('action', 'view') && isGeneratedView(value.view, options)
+        : ['close', 'toggle'].includes(value.action) && hasOnly('action');
+    default:
+      return false;
+  }
+}
+
+export const workspaceCommandSchema = Object.freeze(workspaceViewCommand);
