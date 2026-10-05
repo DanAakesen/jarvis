@@ -38,6 +38,7 @@ export const getStatusSummaryTool: JarvisTool = {
   name: 'get_status_summary',
   description: 'Get a concise summary of current task and activity counts from the Now feed.',
   inputSchema,
+  reflexSafe: true,
   execute: async (input: unknown, request: FastifyRequest) => {
     if (!validInput(input)) throw new ToolRefusal('Status request is invalid.');
     if (!request.principal && !request.agentPrincipal) {

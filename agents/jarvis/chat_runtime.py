@@ -131,9 +131,12 @@ def register_chat_invocation(
         text = payload.get("text") if isinstance(payload, dict) else None
         language = payload.get("language") if isinstance(payload, dict) else None
         screen_context = payload.get("screenContext") if isinstance(payload, dict) else None
+        reflex_note = payload.get("reflexNote") if isinstance(payload, dict) else None
         expected_keys = {"messageId", "text", "language", "delegatedAuthorization"}
         if isinstance(payload, dict) and "screenContext" in payload:
             expected_keys.add("screenContext")
+        if isinstance(payload, dict) and "reflexNote" in payload:
+            expected_keys.add("reflexNote")
         if (
             not isinstance(message_id, str)
             or not MESSAGE_ID.fullmatch(message_id)
@@ -143,6 +146,18 @@ def register_chat_invocation(
             or len(text) > 20_000
             or language not in {"da", "en"}
             or set(payload) != expected_keys
+            or (
+                "reflexNote" in payload
+                and (
+                    not isinstance(reflex_note, str)
+                    or not reflex_note.strip()
+                    or len(reflex_note) > 1_000
+                    or any(
+                        ord(character) < 32 or ord(character) == 127
+                        for character in reflex_note
+                    )
+                )
+            )
             or (
                 "screenContext" in payload
                 and (
@@ -184,9 +199,13 @@ def register_chat_invocation(
                             + screen_context.strip(),
                         ),
                     )
-                async for delta in model_client.complete_chat(
-                    messages, language, settings=settings
-                ):
+                chat = model_client.complete_chat(
+                    messages,
+                    language,
+                    settings=settings,
+                    **({"reflex_note": reflex_note} if reflex_note is not None else {}),
+                )
+                async for delta in chat:
                     output_bytes += len(delta.encode("utf-8"))
                     if output_bytes > MAX_OUTPUT_BYTES:
                         raise RuntimeError("Chat response exceeded the size limit")

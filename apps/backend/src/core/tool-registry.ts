@@ -6,6 +6,8 @@ export interface JarvisTool {
   readonly inputSchema: Readonly<Record<string, unknown>>;
   /** Persist only outcome metadata for tools whose arguments or results contain private data. */
   readonly sensitive?: boolean;
+  /** The reflex may execute this tool directly after a high-confidence, no-confirmation decision. */
+  readonly reflexSafe?: boolean;
   /** The core dispatcher supplies validated input, the request and a cancellation signal. */
   readonly execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) => Promise<unknown>;
 }

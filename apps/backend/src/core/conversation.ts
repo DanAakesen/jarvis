@@ -6,6 +6,7 @@ import type {
   ConversationLanguage,
   ConversationRole,
 } from './conversation-store.js';
+import { executeReflexAction, reflexTargets } from './reflex.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$' };
@@ -143,11 +144,27 @@ export const conversationModule: BackendModule = {
         let answer = '';
         publishActivity('thinking');
         try {
+          let reflexNote: string | undefined;
+          if (app.reflexClassifier) {
+            try {
+              const classification = await app.reflexClassifier.classify(
+                text,
+                session.language,
+                await reflexTargets(request),
+                controller.signal,
+              );
+              const action = await executeReflexAction(classification, request, userMessage.id, controller.signal);
+              reflexNote = action?.note;
+            } catch {
+              reflexNote = undefined;
+            }
+          }
           for await (const delta of agent.stream({
             messageId: userMessage.id,
             text,
             language: session.language,
             ...(request.body.screenContext === undefined ? {} : { screenContext: request.body.screenContext }),
+            ...(reflexNote ? { reflexNote } : {}),
           }, authorization, controller.signal)) {
             answer += delta;
             if (Buffer.byteLength(answer) > 512 * 1024) throw new Error('Chat response exceeded the size limit');

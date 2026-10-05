@@ -136,7 +136,7 @@
 <body>
 <div class="page">
   <h1>Jarvis flows</h1>
-  <p class="intro">Status on 4 October 2026 from <a href="../PRODUCT.md">PRODUCT.md</a>, <a href="architecture.md">architecture.md</a>, <a href="decisions.md">decisions.md</a>, the <a href="reference/coding-sandbox-prototype/REPORT.md">coding-sandbox report</a> and the <a href="reference/voice-prototype/REPORT.md">voice report</a>. Each tab picks up where the previous one ends. Boxes are numbered left to right, then top to bottom. Select a box to see its evidence and connections.</p>
+  <p class="intro">Status on 5 October 2026 from <a href="../PRODUCT.md">PRODUCT.md</a>, <a href="architecture.md">architecture.md</a>, <a href="decisions.md">decisions.md</a>, the <a href="reference/coding-sandbox-prototype/REPORT.md">coding-sandbox report</a> and the <a href="reference/voice-prototype/REPORT.md">voice report</a>. Each tab picks up where the previous one ends. Boxes are numbered left to right, then top to bottom. Select a box to see its evidence and connections.</p>
   <div class="stats" id="stats" role="list" aria-label="Boxes and connections per status across all flows"></div>
   <div class="tabs" role="tablist" aria-label="Flows" id="tabs"></div>
   <div id="panels"></div>
@@ -177,7 +177,7 @@ const LANES = {
   voice:    { name: "Voice",            tech: "Voice Live · Ryan HD (EN) · Harper (DA)" },
   jarvis:   { name: "Jarvis agent",     tech: "Foundry hosted agent · voice bridge" },
   pc:       { name: "Dan's PC",         tech: ".NET 10 tray companion · Windows" },
-  model:    { name: "Model",            tech: "gpt-5.6-luna · gpt-realtime-2.1" },
+  model:    { name: "Model",            tech: "Jev · gpt-5.6-luna · gpt-realtime-2.1" },
   entra:    { name: "Microsoft Entra",  tech: "Tenant-specific OAuth 2.0 / OIDC" },
   graph:    { name: "Microsoft Graph",  tech: "OneDrive · Microsoft Search" },
   backend:  { name: "Backend",          tech: "Node.js · Container Apps" },
@@ -303,8 +303,9 @@ const FLOWS = [
       { id: "create", lane: "backend", col: 3, s: "proven", t: "Validate and create session", d: "One jarvis_sessions row per sitting." },
       { id: "sessionRow", lane: "data", col: 4, s: "proven", t: "Store the session", d: "Uses the existing group-one schema; no migration." },
       { id: "message", lane: "board", col: 2, s: "proven", t: "Send a chat turn", d: "POST /conversation/sessions/{id}/turns; the page displays streamed text and links valid task IDs." },
-      { id: "write", lane: "backend", col: 3, s: "proven", t: "Validate and save Dan's message", d: "Require an active chat session and persist the source message before invoking Jarvis." },
-      { id: "chat-agent", lane: "jarvis", col: 4, s: "proven", t: "Verify and stream a reply", d: "Foundry Invocations dispatches the app-defined payload to the hosted agent; the agent checks the delegated token and source message, snapshots personality settings for the invocation, then streams text while its tool loop records calls.", ev: "Backend/agent contract tests, including P7-16 prompt settings, pass offline; live Foundry streaming and tool-call linkage remain an Azure acceptance check (P4-09)." },
+      { id: "write", lane: "backend", col: 3, s: "proven", t: "Validate and save Dan's message", d: "Require an active chat session and persist the source message before running the reflex." },
+      { id: "reflex", lane: "backend", col: 4, s: "proven", t: "Classify and act before reply", d: "Jev classifies chat and final English voice transcripts; only high-confidence addressed actions with no confirmation may execute registered reflex-safe tools. Voice Live semantic VAD detects turn end; automatic reply is disabled until reflex completes.", ev: "P7-04 fake-provider tests cover classification/fallback, safe targets, handoff and voice ordering. Offline simple-command classification measured 0.43 ms and final transcript to response request 1.04 ms; no Jev network or generated-audio time. Danish voice remains on its hosted-agent path." },
+      { id: "chat-agent", lane: "jarvis", col: 4, s: "proven", t: "Verify and stream a reply", d: "Foundry Invocations dispatches the app-defined payload to the hosted agent; the agent checks the delegated token and source message, snapshots personality settings for the invocation, relays any trusted reflex result without repeating the action, then streams text while its tool loop records calls.", ev: "Backend/agent contract tests, including P7-04 reflex handoff and P7-16 prompt settings, pass offline; live Foundry streaming and tool-call linkage remain an Azure acceptance check (P4-09)." },
       { id: "messageRow", lane: "data", col: 4, s: "proven", t: "Store messages and tool calls", d: "The backend saves completed chat replies and voice transcripts; P4-02 records tool_calls against Dan's source message." },
       { id: "history", lane: "backend", col: 5, s: "proven", t: "Read a history page", d: "GET /conversation/history returns up to 50 messages, session voice minutes, and a message-ID cursor; maximum 100." },
       { id: "main", lane: "board", col: 6, s: "proven", t: "Show the conversation", d: "Chronological history, streaming replies, task-linked tool outcomes, voice minutes, loading/empty/error states, and older-history action.", ev: "Backend, agent and web contract tests pass offline; live Foundry access and browser sign-in remain unverified." },
@@ -320,7 +321,8 @@ const FLOWS = [
       ["sessionRow", "voiceUsage", "proven", "end session"],
       ["start", "message", "proven", "chat text or transcript"],
       ["message", "write", "proven", "bounded text + session ID"],
-      ["write", "chat-agent", "proven", "stored source message + delegated token"],
+      ["write", "reflex", "proven", "stored source message / final transcript"],
+      ["reflex", "chat-agent", "proven", "safe action result or main-agent fallthrough"],
       ["chat-agent", "messageRow", "proven", "text stream + tool calls"],
       ["chat-agent", "activity", "proven", "observed turn/tool events"],
       ["activity", "activityUI", "proven", "allowlisted SSE event"],

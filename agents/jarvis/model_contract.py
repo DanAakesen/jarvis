@@ -33,6 +33,7 @@ class StreamingModelClient(Protocol):
         language: str,
         *,
         settings: ModelSettings | None = None,
+        reflex_note: str | None = None,
     ) -> AsyncIterator[str]:
         """Yield ordered text-chat chunks."""
         if False:

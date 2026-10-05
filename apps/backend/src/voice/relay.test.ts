@@ -13,6 +13,7 @@ import { coreModule } from '../core/index.js';
 import type { ConversationStore } from '../core/conversation-store.js';
 import type { SettingsStore } from '../core/settings.js';
 import { ToolRefusal } from '../core/tool-registry.js';
+import type { ReflexClassifier } from '../core/reflex.js';
 import { factoryModule } from '../factory/index.js';
 import type { BackendModule } from '../modules.js';
 import {
@@ -81,6 +82,7 @@ function appFor(
     getHistory: vi.fn(async () => ({ messages: [], nextCursor: null })),
   } satisfies ConversationStore,
   settingsStore?: SettingsStore,
+  reflexClassifier?: ReflexClassifier,
 ) {
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
   const app = buildApp(config, createLogger(config, undefined, output), {
@@ -100,6 +102,7 @@ function appFor(
     },
     conversationStore,
     ...(settingsStore ? { settingsStore } : {}),
+    ...(reflexClassifier ? { reflexClassifier } : {}),
   });
   app.server.on('connection', (socket) => appSockets.push(socket));
   apps.push(app);
@@ -161,6 +164,19 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const first = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
     const firstSession = await firstUpdate;
     const firstInstructions = String(firstSession.instructions);
+    expect(firstSession).toMatchObject({
+      audio: {
+        input: {
+          turn_detection: {
+            type: 'azure_semantic_vad_en',
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 700,
+            create_response: false,
+          },
+        },
+      },
+    });
     expect(firstInstructions).toContain('warm and supportive');
     expect(firstInstructions).toContain(JSON.stringify('Use plain language.'));
 
@@ -208,6 +224,53 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(received.find((event) => event.type === 'response.create')).toMatchObject({
       response: { instructions: 'Speak this exact status update to Dan, verbatim: A task has finished.' },
     });
+  });
+
+  it('classifies the final English transcript before requesting the voice reply', async () => {
+    const received: Record<string, unknown>[] = [];
+    let turnStartedAt: number | undefined;
+    let responseRequestedAt: number | undefined;
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'input_audio_buffer.append') {
+          turnStartedAt = performance.now();
+          socket.send(JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.completed',
+            item_id: 'input_reflex',
+            transcript: 'Pause task 12',
+          }));
+        } else if (event.type === 'response.create') {
+          responseRequestedAt = performance.now();
+        }
+      });
+    });
+    const classifier: ReflexClassifier = {
+      classify: vi.fn(async () => null),
+    };
+    const { app } = appFor((token, signal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    }), vi.fn(async () => voiceToken), [], [], undefined, undefined, undefined, classifier);
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+    browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
+
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
+
+    expect(classifier.classify).toHaveBeenCalledWith(
+      'Pause task 12',
+      'en',
+      expect.any(Array),
+      expect.any(AbortSignal),
+    );
+    expect(received.findIndex((event) => event.type === 'response.create'))
+      .toBeGreaterThan(received.findIndex((event) => event.type === 'input_audio_buffer.append'));
+    const elapsedMs = responseRequestedAt! - turnStartedAt!;
+    expect(elapsedMs).toBeLessThan(500);
+    console.info(`Offline final-transcript-to-response-request latency: ${elapsedMs.toFixed(2)} ms`);
   });
 
   it('authenticates the browser and relays messages with only the backend Voice Live credential', async () => {
