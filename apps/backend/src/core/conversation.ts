@@ -150,7 +150,7 @@ export const conversationModule: BackendModule = {
               const classification = await app.reflexClassifier.classify(
                 text,
                 session.language,
-                await reflexTargets(request),
+                await reflexTargets(request, text),
                 controller.signal,
               );
               const action = await executeReflexAction(classification, request, userMessage.id, controller.signal);
