@@ -111,7 +111,7 @@ export function createFoundryInvocationConversationAgent(
       }
       if (!response.ok || !response.body ||
           !response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream')) {
-        throw new Error('Chat agent unavailable');
+        throw new Error(`Chat agent unavailable (HTTP ${response.status})`);
       }
 
       const reader = response.body.getReader();
