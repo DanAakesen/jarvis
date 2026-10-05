@@ -411,8 +411,13 @@ export class BrowserVoiceClient {
   }
 
   setMuted(muted: boolean): void {
+    if (this.muted === muted) return;
     this.muted = muted;
     this.audio.setMuted(muted);
+    const socket = this.socket;
+    if (this.microphoneOpen && socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: muted ? 'jarvis.microphone.muted' : 'jarvis.microphone.active' }));
+    }
   }
 
   sendScreenContext(description: string, sharedWindowTitle?: string): void {
@@ -457,6 +462,7 @@ export class BrowserVoiceClient {
       this.microphoneOpen = true;
       this.playbackAllowed = true;
       this.audio.setMuted(this.muted);
+      if (!this.muted) socket.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
       this.publish('listening', 'Listening for your voice.');
     } catch {
       this.audio.closeInput();

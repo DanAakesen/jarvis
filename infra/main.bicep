@@ -55,6 +55,7 @@ var costManagementReaderRoleId = '72fafb9e-0641-4937-9268-a91bfd8191a3'
 // Custom role created by infra/bootstrap.ps1: the deploy identity cannot create role definitions (L54).
 var backendAppScaleRoleId = '985158cb-2c3c-5b9b-bd65-897ed9be3e36'
 var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
+var cognitiveServicesUserRoleId = 'a97b65f3-24c7-4388-baec-2e87135dc908'
 var speechUserRoleId = 'f2dc8367-1007-4938-bd23-fe263f013447'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var speechAccountName = 'speechjarvis${suffix}'
@@ -339,6 +340,16 @@ resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
     publicNetworkAccess: 'Enabled'
     allowProjectManagement: true
     disableLocalAuth: true
+  }
+}
+
+resource backendFoundrySpeechUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryAccount.id, backendIdentity.id, cognitiveServicesUserRoleId)
+  scope: foundryAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesUserRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
   }
 }
 
@@ -770,6 +781,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
   dependsOn: [
     acrPullAssignment
     taskEventsContainer
+    backendFoundrySpeechUserAssignment
     speechUserAssignment
   ]
 }

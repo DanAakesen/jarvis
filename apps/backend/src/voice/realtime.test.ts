@@ -43,7 +43,7 @@ describe('English realtime session', () => {
       voice_type: 'azure-standard',
       voice_locale: 'en-GB',
     });
-    expect(session.input_audio_transcription).toEqual({ model: 'gpt-4o-mini-transcribe' });
+    expect(session.input_audio_transcription).toEqual({ model: 'mai-transcribe' });
     expect(session.tools).toEqual([{
       type: 'function',
       name: 'echo',
