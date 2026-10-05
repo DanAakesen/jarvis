@@ -32,7 +32,11 @@ function browserTool() {
   };
 }
 
-function response(route = 'target_0', confidence = 0.99) {
+function response(
+  route = 'target_0',
+  confidence = 0.99,
+  context: { completeCommand?: number; contradictedAction?: string } = {},
+) {
   return new Response(JSON.stringify({
     answers: {
       addressed: { type: 'noul', noul: 0.99 },
@@ -40,6 +44,12 @@ function response(route = 'target_0', confidence = 0.99) {
       target: { type: 'choice', choice: route, confidence },
       confidence: { type: 'score', score: confidence, confidence },
       needs_confirmation: { type: 'noul', noul: 0.01 },
+      ...(context.completeCommand === undefined ? {} : {
+        complete_command: { type: 'noul', noul: context.completeCommand },
+      }),
+      ...(context.contradictedAction === undefined ? {} : {
+        contradicted_action: { type: 'choice', choice: context.contradictedAction, confidence: 0.99 },
+      }),
     },
   }), { headers: { 'content-type': 'application/json' } });
 }
@@ -71,6 +81,56 @@ describe('Jev reflex classifier', () => {
     }));
     expect(String(fetcher.mock.calls[0]?.[1]?.body)).toContain('Jarvis, pause task 12');
     expect(String(fetcher.mock.calls[0]?.[1]?.body)).not.toContain('delete_task');
+  });
+
+  it('classifies a new partial command and checks final transcripts against the ledger', async () => {
+    const tools = createToolRegistry([{ id: 'factory', tools: [tool(true)] }]);
+    const targets = createReflexTargets(tools.list(), ['12']);
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response('target_0', 0.99, { completeCommand: 0.99 }))
+      .mockResolvedValueOnce(response('target_0', 0.99, {
+        completeCommand: 0.99,
+        contradictedAction: 'action-1',
+      }));
+    const classifier = createJevReflexClassifier(async () => 'fake-key', fetcher);
+    const signal = new AbortController().signal;
+
+    await expect(classifier.classify(
+      'Jarvis, pause task 12.',
+      'en',
+      targets,
+      signal,
+      { executed: [], partial: true },
+    )).resolves.toMatchObject({ completeCommand: true });
+    await expect(classifier.classify(
+      'Jarvis, do not pause task 12.',
+      'en',
+      targets,
+      signal,
+      {
+        executed: ['paused task 12'],
+        executedActions: [{ id: 'action-1', summary: 'pause task 12' }],
+        final: true,
+      },
+    )).resolves.toMatchObject({ completeCommand: true, contradictedAction: 'action-1' });
+
+    const partialRequest = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)) as {
+      state: { already_executed: string[] };
+      questions: Record<string, { type: string; criteria?: Record<string, string> }>;
+    };
+    const finalRequest = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)) as {
+      state: { already_executed: string[] };
+      questions: Record<string, { type: string; criteria?: Record<string, string> }>;
+    };
+    expect(partialRequest.state.already_executed).toEqual([]);
+    expect(partialRequest.questions.complete_command?.type).toBe('noul');
+    expect(partialRequest.questions.target?.type).toBe('choice');
+    expect(finalRequest.state.already_executed).toEqual(['paused task 12']);
+    expect(finalRequest.questions.contradicted_action?.type).toBe('choice');
+    expect(finalRequest.questions.contradicted_action?.criteria).toMatchObject({
+      none: 'No listed executed action is explicitly contradicted.',
+      'action-1': 'pause task 12',
+    });
   });
 
   it('offers the recognized browser clause as a fixed reflex-safe target', () => {
