@@ -95,7 +95,10 @@ Write-Host 'Jarvis PC bridge installed for the current Windows user.'
 Write-Host "Configuration: $settingsPath"
 Write-Host "Chrome browser automation: $(if ($browserAutomationEnabled) { 'on' } else { 'off' })."
 Write-Host 'The bridge starts at sign-in and connects outbound; no inbound network listener is created.'
-if ($extensionChanged) {
+if ($null -eq $installedExtensionHash) {
+    Write-Host 'Load the installed chrome-extension folder from chrome://extensions with Developer mode enabled.'
+}
+elseif ($extensionChanged) {
     Write-Host 'Chrome extension files changed. Reload the unpacked extension from chrome://extensions.'
 }
 else {
