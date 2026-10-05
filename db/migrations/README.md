@@ -15,11 +15,13 @@ expiring confirmation records (P7-03, #201).
 (P7-05, #203).
 `0017_phone_call_sessions.sql` adds persistent session and confirmation
 references for P7-01 phone calls.
-`0019_workspace_artifacts.sql` adds owner-scoped image artifact metadata for
-P7-15; private image bytes remain in the existing `artifacts` Blob container.
 `0018_tool_call_refused_outcome.sql` records refused Jarvis tool calls so daily
 usage counts include all outcomes. Its down migration refuses to remove the
 constraint while refused rows exist, preserving their truthful outcomes.
+`0019_workspace_artifacts.sql` adds owner-scoped image artifact metadata for
+P7-15; private image bytes remain in the existing `artifacts` Blob container.
+`0020_chat_message_steering.sql` adds per-message language overrides and the
+persisted interrupted-reply marker (P8-35).
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only

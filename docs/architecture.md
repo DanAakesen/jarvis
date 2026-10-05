@@ -896,24 +896,35 @@ continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
 
-P8-26 keeps chat draft, turn state and a removable FIFO queue in
+P8-26/P8-35 keep chat draft, turn state and a removable FIFO queue in
 `ConversationHistory`. Each submission captures text and language and clears
-the draft locally. A synchronous in-flight guard permits only one active
-`sendChatTurn`; its promise settles (including stream cleanup) before the next
-queued submission starts. Later drafts survive completion/errors, and failed
-turn feedback remains visible while the queue advances. Stop reply passes an
-AbortSignal through session creation, token acquisition and the existing fetch/stream cancellation
-path; cancellable setup waits also prevent slow visual inspection from blocking
-the queue or sending the stopped message when inspection later finishes. Component
-unmount also aborts the active turn. Pending messages are in memory only and
-are not retained across navigation/reload.
-History pages and saved turn messages merge by ID in SQL's numeric-ID order;
-persisted entries replace optimistic metadata without removing absent entries.
-Older pagination retains its cursor across latest-page refreshes. These changes
-do not alter storage, SSE contracts, or the backend's first-byte latency.
-The backend retains its existing per-turn disconnect cancellation and does not
-reject overlapping turns; sequencing is owned by this client queue, not a new
-server-side queue or concurrency guard. Stop does not undo completed task actions.
+the draft locally; Ctrl+Enter stages a message in the queue, and its promise
+settles (including stream cleanup) before the next queued submission starts.
+Enter/Send steers the active turn. A backend registry keyed by chat session
+rejects parallel turn creation and allows the steer request to join the active
+turn. During model generation it aborts only that model round, persists the
+partial Jarvis message with `interrupted=true`, and streams an `interrupted`
+event before continuing with the steering message. The new message's captured
+language is used for the continuation.
+
+The authenticated `POST /conversation/sessions/{id}/steer` route shares the
+conversation authorization boundary. `POST
+/conversation/sessions/{id}/turns/{messageId}/phase` records whether the hosted
+agent is in a model or tool phase; `GET
+/conversation/sessions/{id}/turns/{messageId}/steering?after={id}` returns
+bounded Dan messages newer than the cursor to the agent. While a tool runs,
+steering does not cancel it; the agent picks up messages at the next model
+boundary and retains existing confirmation checks. The registry is in-process
+memory, not cross-replica coordination; steering must reach the process holding
+the active stream. Disconnect cancellation still applies to the owning turn.
+
+Send, language and voice entry remain usable during a reply. A voice session
+can start while the chat SSE stream continues and persists into history.
+Pending queue messages remain local to the mounted conversation and are not
+retained across navigation/reload. History pages and saved turn messages merge
+by ID in SQL's numeric-ID order; persisted entries replace optimistic metadata
+without removing absent entries. Older pagination retains its cursor across
+latest-page refreshes.
 
 When `JARVIS_CHAT_AGENT_NAME` is configured, the backend uses its managed
 identity to call
@@ -1456,7 +1467,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Area | Design | Evidence |
 | --- | --- | --- |
 | Browser connection | The composer orb explicitly connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. Readiness never opens capture: a separate Enable microphone action captures and sends mono 24 kHz PCM. Explicit active/muted protocol events start/stop parallel Speech recognition; reconnect returns to microphone-off readiness. Provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, explicit activation, mute signaling, permission denial, interruption, stop during activation, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
-| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client connects to the voice wrapper (`/endpoint/protocols/voice`), waits for `session.created`, and then waits for explicit microphone activation. The wrapper owns its session configuration and greeting; the Bridge Protocol `session.start`/`/diag` warm-up applies only to direct hosted-agent connections. The hash-locked provisioner configures MAI Transcribe (`mai-transcribe`, `da`, phrase list) and Harper (`da-DK`); the backend uses `da-DK` Azure Speech interim hypotheses in parallel while unmuted. The Voice Live final message remains authoritative and reconciles the existing P7-20 ledger. Project names from bounded running-task context augment the default phrase hints. P7-20 briefly switched Danish to `gpt-4o-mini-transcribe`, which broke live Danish sessions on 5 October (L92); Voice Live now uses MAI for both final-transcript paths. Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
+| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | Every hosted `jarvis` version carries `voiceLiveCompatible: "true"` metadata, without which Foundry rejects the wrapper with `agent_not_voice_compatible`. The client connects to the voice wrapper (`/endpoint/protocols/voice`), waits for `session.created`, and then waits for explicit microphone activation. The wrapper owns its session configuration and greeting; the Bridge Protocol `session.start`/`/diag` warm-up applies only to direct hosted-agent connections. The hash-locked provisioner configures MAI Transcribe (`mai-transcribe`, `da`, phrase list) and Harper (`da-DK`); the backend uses `da-DK` Azure Speech interim hypotheses in parallel while unmuted. The Voice Live final message remains authoritative and reconciles the existing P7-20 ledger. Project names from bounded running-task context augment the default phrase hints. P7-20 briefly switched Danish to `gpt-4o-mini-transcribe`, which broke live Danish sessions on 5 October (L92); Voice Live now uses MAI for both final-transcript paths. Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
 | English session | The backend configures `gpt-realtime-2.1`, `mai-transcribe` input transcription, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. Parallel Azure Speech uses `en-GB` interim hypotheses while unmuted. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
 | Reflex (P7-04) | Chat turns and completed English Voice Live transcripts pass through the backend Jev client (`POST https://api.typesafe.ai/v1/systemone`, `jev-latest`) before the main responder. The client has a 1.2 s timeout, one 429 retry only when `Retry-After` is at most 500 ms, a 256 KiB response cap, and a 0.9 confidence threshold; unavailable or uncertain results fall through. The backend reads `jev-api-key` from Key Vault using its managed identity. A direct call requires Dan's authenticated request, an addressed high-confidence action, no confirmation flag, a registered `reflexSafe` tool, validated arguments, and available audit storage. Safe tool results become trusted handoff instructions so the main model acknowledges but does not repeat the action. | Fake-provider backend and hosted-agent tests cover classification, safe target filtering, fallback, retry, handoff, and final-transcript sequencing. Mock-provider classification measured 0.43 ms; final-transcript-to-response-request measured 1.04 ms offline. Both exclude Jev network latency and first generated audio. Live Jev/Key Vault, Danish voice routing, and Azure Voice Live remain unverified. |
 | Streaming clause reflex (P7-20/P7-24) | Voice Live deltas and parallel Azure Speech full interim hypotheses (Foundry AIServices custom subdomain; Entra managed identity; 24 kHz mono PCM) enter the same bounded stable-clause and per-turn Jev path (up to eight requests per turn), with prior executions attached. Speech recognition runs only while the mic is active and unmuted; `da-DK`/`en-GB` use fixed phrase hints plus up to 20 running-project names. Only high-confidence, complete partial actions (currently pause, allow-listed Edge launch, and HTTP(S) open/navigation) execute early. Unsafe and confirmation-requiring actions wait for the Voice Live final. That final remains the source of truth: it replaces an early message, reconciles the in-memory ledger and attempts supported undo on contradiction. No audio or interim hypotheses are stored; Speech failure logs `voice.partials_unavailable` and leaves final-transcript reflexes working. Browser launch/navigation uses the existing PC bridge `pc_open` executor pending P7-17. | Fake-recognizer and fake-stream tests cover action-before-final, duplicate suppression, confirmation gating, contradiction undo, final message replacement, Speech failure fallback and mute stop. `voice.reflex_metrics` records Voice Live delta count, Speech hypothesis count, stable-clause count, first-action latency, speech-stopped-to-first-transcript-word, and speech-stopped-to-first-output-audio. These are offline fake timings, not live acoustic measurements. Live account RBAC, Speech delivery, Jev latency, first spoken-word timing and Danish/English PC action timing remain coordinator acceptance. |

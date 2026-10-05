@@ -18,7 +18,12 @@ describe('Chrome extension URL opening', () => {
     const createTab = vi.fn(async () => ({ id: 17, windowId: 4 }));
     const updateWindow = vi.fn(async () => ({}));
     const chrome = {
-      runtime: { connectNative: vi.fn(() => nativePort) },
+      runtime: {
+        connectNative: vi.fn(() => nativePort),
+        onInstalled: { addListener: vi.fn() },
+        onStartup: { addListener: vi.fn() },
+      },
+      alarms: { create: vi.fn(), onAlarm: { addListener: vi.fn() } },
       tabs: { create: createTab, onRemoved: { addListener: vi.fn() } },
       windows: { update: updateWindow },
       debugger: { onDetach: { addListener: vi.fn() } },
@@ -50,7 +55,12 @@ describe('Chrome extension URL opening', () => {
     };
     const createTab = vi.fn(async () => ({ id: 17, windowId: 4 }));
     const chrome = {
-      runtime: { connectNative: vi.fn(() => nativePort) },
+      runtime: {
+        connectNative: vi.fn(() => nativePort),
+        onInstalled: { addListener: vi.fn() },
+        onStartup: { addListener: vi.fn() },
+      },
+      alarms: { create: vi.fn(), onAlarm: { addListener: vi.fn() } },
       tabs: { create: createTab, onRemoved: { addListener: vi.fn() } },
       windows: { update: vi.fn(async () => ({})) },
       debugger: { onDetach: { addListener: vi.fn() } },

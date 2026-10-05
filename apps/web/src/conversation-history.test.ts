@@ -4,6 +4,7 @@ import {
   loadImageArtifactUrl,
   loadConversationHistory,
   sendChatTurn,
+  steerChatTurn,
 } from './conversation-history';
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com/' };
@@ -51,8 +52,79 @@ describe('loadConversationHistory', () => {
     expect(url.searchParams.get('limit')).toBe('50');
     expect(url.searchParams.get('before')).toBe('42');
     const authorization = (request?.init?.headers as Record<string, string>).Authorization;
-    expect(authorization?.startsWith(['Bear', 'er'].join(' '))).toBe(true);
+    expect(authorization?.startsWith(['Bear', 'er'].join(''))).toBe(true);
     expect(client.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
+  });
+
+  describe('chat turn API', () => {
+      it('creates a session and reads streamed user and assistant messages', async () => {
+        const client = createClient();
+        const userMessage = {
+          id: '51',
+          sessionId: '41',
+          role: 'dan',
+          text: 'Hello',
+          model: null,
+          at: '2026-10-03T12:00:00.000Z',
+        };
+        const assistantMessage = {
+          ...userMessage,
+          id: '52',
+          role: 'jarvis',
+          text: 'Hello, Dan.',
+        };
+        const encoder = new TextEncoder();
+        const streamText = [
+          `event: user\ndata: ${JSON.stringify(userMessage)}\n\n`,
+          'event: delta\ndata: {"text":"Hello, "}\n\n',
+          `event: done\ndata: ${JSON.stringify(assistantMessage)}\n\n`,
+        ].join('');
+        const bytes = encoder.encode(streamText);
+        const fetch = vi.fn()
+          .mockResolvedValueOnce(new Response(JSON.stringify({
+            id: '41', channel: 'chat', language: 'en',
+          }), { status: 201 }))
+          .mockResolvedValueOnce(new Response(new ReadableStream({
+            start(controller) {
+              controller.enqueue(bytes.slice(0, 31));
+              controller.enqueue(bytes.slice(31));
+              controller.close();
+            },
+          }), { status: 200, headers: { 'content-type': 'text/event-stream' } }));
+        vi.stubGlobal('fetch', fetch);
+
+        const session = await createChatSession(client as never, config, 'en');
+        const onUserMessage = vi.fn();
+        const onDelta = vi.fn();
+        const reply = await sendChatTurn(
+          client as never,
+          config,
+          session,
+          'Hello',
+          onUserMessage,
+          onDelta,
+        );
+
+        expect(session).toEqual({ id: '41', language: 'en' });
+        expect(onUserMessage).toHaveBeenCalledWith(userMessage);
+        expect(onDelta).toHaveBeenCalledWith('Hello, ');
+        expect(reply).toEqual(assistantMessage);
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(String(fetch.mock.calls[1]?.[0])).toContain('/conversation/sessions/41/turns');
+      });
+
+      it('shows the backend refusal and does not retry a failed turn', async () => {
+        const client = createClient();
+        const fetch = vi.fn(async () => new Response(
+          JSON.stringify({ error: 'Chat is unavailable until the Jarvis agent is configured' }),
+          { status: 503 },
+        ));
+        vi.stubGlobal('fetch', fetch);
+
+        await expect(createChatSession(client as never, config, 'da'))
+          .rejects.toThrow('Chat is unavailable until the Jarvis agent is configured');
+        expect(fetch).toHaveBeenCalledOnce();
+      });
   });
 });
 
@@ -63,7 +135,8 @@ describe('loadImageArtifactUrl', () => {
       url: 'https://jarvisstore.blob.core.windows.net/artifacts/image.png?sp=r&spr=https',
     }), { status: 200 }));
     vi.stubGlobal('fetch', fetch);
-    const signal = new AbortController().signal;
+    const controller = new AbortController();
+    const signal = controller.signal;
 
     await expect(loadImageArtifactUrl(
       client as never,
@@ -76,8 +149,11 @@ describe('loadImageArtifactUrl', () => {
       '/factory/workspace-artifacts/images/7b96c6a9-9f80-4a8b-8a73-51517fe37512',
     );
     expect((fetch.mock.calls[0]?.[1]?.headers as Record<string, string>).Authorization)
-      .toBe(`${['Bear', 'er'].join(' ')} test-token`);
-    expect(fetch.mock.calls[0]?.[1]?.signal).toBe(signal);
+      .toBe(`${['Bear', 'er'].join('')} test-token`);
+    const requestSignal = fetch.mock.calls[0]?.[1]?.signal;
+    expect(requestSignal?.aborted).toBe(false);
+    controller.abort();
+    expect(requestSignal?.aborted).toBe(true);
 
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       url: 'https://attacker.example/image.png',
@@ -88,77 +164,6 @@ describe('loadImageArtifactUrl', () => {
       '7b96c6a9-9f80-4a8b-8a73-51517fe37512',
       signal,
     )).rejects.toThrow('untrusted image artifact URL');
-  });
-});
-
-describe('chat turn API', () => {
-  it('creates a session and reads streamed user and assistant messages', async () => {
-    const client = createClient();
-    const userMessage = {
-      id: '51',
-      sessionId: '41',
-      role: 'dan',
-      text: 'Hello',
-      model: null,
-      at: '2026-10-03T12:00:00.000Z',
-    };
-    const assistantMessage = {
-      ...userMessage,
-      id: '52',
-      role: 'jarvis',
-      text: 'Hello, Dan.',
-    };
-    const encoder = new TextEncoder();
-    const streamText = [
-      `event: user\ndata: ${JSON.stringify(userMessage)}\n\n`,
-      'event: delta\ndata: {"text":"Hello, "}\n\n',
-      `event: done\ndata: ${JSON.stringify(assistantMessage)}\n\n`,
-    ].join('');
-    const bytes = encoder.encode(streamText);
-    const fetch = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        id: '41', channel: 'chat', language: 'en',
-      }), { status: 201 }))
-      .mockResolvedValueOnce(new Response(new ReadableStream({
-        start(controller) {
-          controller.enqueue(bytes.slice(0, 31));
-          controller.enqueue(bytes.slice(31));
-          controller.close();
-        },
-      }), { status: 200, headers: { 'content-type': 'text/event-stream' } }));
-    vi.stubGlobal('fetch', fetch);
-
-    const session = await createChatSession(client as never, config, 'en');
-    const onUserMessage = vi.fn();
-    const onDelta = vi.fn();
-    const reply = await sendChatTurn(
-      client as never,
-      config,
-      session,
-      'Hello',
-      onUserMessage,
-      onDelta,
-    );
-
-    expect(session).toEqual({ id: '41', language: 'en' });
-    expect(onUserMessage).toHaveBeenCalledWith(userMessage);
-    expect(onDelta).toHaveBeenCalledWith('Hello, ');
-    expect(reply).toEqual(assistantMessage);
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(String(fetch.mock.calls[1]?.[0])).toContain('/conversation/sessions/41/turns');
-  });
-
-  it('shows the backend refusal and does not retry a failed turn', async () => {
-    const client = createClient();
-    const fetch = vi.fn(async () => new Response(
-      JSON.stringify({ error: 'Chat is unavailable until the Jarvis agent is configured' }),
-      { status: 503 },
-    ));
-    vi.stubGlobal('fetch', fetch);
-
-    await expect(createChatSession(client as never, config, 'da'))
-      .rejects.toThrow('Chat is unavailable until the Jarvis agent is configured');
-    expect(fetch).toHaveBeenCalledOnce();
   });
 });
 
@@ -179,5 +184,96 @@ describe('loadConversationHistory errors', () => {
 
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 401 })));
     await expect(loadConversationHistory(client as never, config)).rejects.toThrow(/could not verify/);
+  });
+});
+
+describe('chat steering API', () => {
+  it('sends steering messages through the authenticated conversation endpoint', async () => {
+    const client = createClient();
+    const message = {
+      id: '53',
+      sessionId: '41',
+      role: 'dan',
+      text: 'Continue with this instead',
+      language: 'da',
+      model: null,
+      at: '2026-10-05T12:00:00.000Z',
+    };
+    const fetch = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(async () => new Response(JSON.stringify(message), { status: 201 }));
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(steerChatTurn(
+      client as never,
+      config,
+      { id: '41', language: 'en' },
+      message.text,
+      'da',
+    )).resolves.toEqual(message);
+
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(
+      'https://api.example.com/conversation/sessions/41/steer',
+    );
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+      text: message.text,
+      language: 'da',
+    });
+    expect(fetch.mock.calls[0]?.[1]?.headers).toHaveProperty('Authorization');
+    expect(client.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
+  });
+
+  it('parses interrupted partial replies before the steered continuation', async () => {
+    const client = createClient();
+    const userMessage = {
+      id: '51',
+      sessionId: '41',
+      role: 'dan',
+      text: 'Hello',
+      model: null,
+      at: '2026-10-05T12:00:00.000Z',
+    };
+    const partialReply = {
+      ...userMessage,
+      id: '52',
+      role: 'jarvis',
+      text: 'I was going to',
+    };
+    const finalReply = {
+      ...partialReply,
+      id: '54',
+      text: 'I’ll continue with your new direction.',
+    };
+    const stream = [
+      `event: user\ndata: ${JSON.stringify(userMessage)}\n\n`,
+      'event: delta\ndata: {"text":"I was going to"}\n\n',
+      `event: interrupted\ndata: ${JSON.stringify(partialReply)}\n\n`,
+      'event: delta\ndata: {"text":"I’ll continue"}\n\n',
+      `event: done\ndata: ${JSON.stringify(finalReply)}\n\n`,
+    ].join('');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    })));
+
+    const session = { id: '41', language: 'en' as const };
+    const onInterrupted = vi.fn();
+    const onDelta = vi.fn();
+    await expect(sendChatTurn(
+      client as never,
+      config,
+      session,
+      'Hello',
+      vi.fn(),
+      onDelta,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      onInterrupted,
+    )).resolves.toEqual(finalReply);
+
+    expect(onInterrupted).toHaveBeenCalledWith(partialReply);
+    expect(onDelta.mock.calls).toEqual([['I was going to'], ['I’ll continue']]);
   });
 });
