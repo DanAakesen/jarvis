@@ -18,7 +18,10 @@ export interface BackendConfig {
   foundryRunnerAgentName?: string;
   foundryChatAgentName?: string;
   foundryProjectEndpoint?: string;
+  foundryMemoryEmbeddingDeploymentName?: string;
   githubAppId?: string;
+  graphAppId?: string;
+  graphTimeZone?: string;
   monthlyBudgetResourceId?: string;
   notesFolderPath: string;
   teams?: {
@@ -120,6 +123,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (foundryChatAgentName !== undefined && foundryProjectEndpoint === undefined) {
     throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when JARVIS_CHAT_AGENT_NAME is configured');
   }
+  const foundryMemoryEmbeddingDeploymentName = env.JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME;
+  if (foundryMemoryEmbeddingDeploymentName !== undefined &&
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(foundryMemoryEmbeddingDeploymentName)) {
+    throw new ConfigurationError('JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME must be a valid deployment name');
+  }
+  if (foundryMemoryEmbeddingDeploymentName !== undefined && foundryProjectEndpoint === undefined) {
+    throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when memory embeddings are configured');
+  }
   const foundryRunnerAgentName = env.FOUNDRY_RUNNER_AGENT_NAME;
   if (foundryRunnerAgentName !== undefined && !/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName)) {
     throw new ConfigurationError('FOUNDRY_RUNNER_AGENT_NAME must be a valid agent name');
@@ -130,6 +141,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   }
   if (githubAppId !== undefined && keyVaultUri === undefined) {
     throw new ConfigurationError('KEY_VAULT_URI is required when GITHUB_APP_ID is configured');
+  }
+  const graphAppId = env.JARVIS_GRAPH_APP_ID;
+  if (graphAppId !== undefined && !/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(graphAppId)) {
+    throw new ConfigurationError('JARVIS_GRAPH_APP_ID must be a UUID');
+  }
+  const graphTimeZone = env.JARVIS_GRAPH_TIME_ZONE;
+  if (graphAppId !== undefined && keyVaultUri === undefined) {
+    throw new ConfigurationError('KEY_VAULT_URI is required when JARVIS_GRAPH_APP_ID is configured');
+  }
+  if ((graphAppId === undefined) !== (graphTimeZone === undefined)) {
+    throw new ConfigurationError('JARVIS_GRAPH_APP_ID and JARVIS_GRAPH_TIME_ZONE must be configured together');
+  }
+  if (graphTimeZone !== undefined) {
+    try { new Intl.DateTimeFormat('en-GB', { timeZone: graphTimeZone }); }
+    catch { throw new ConfigurationError('JARVIS_GRAPH_TIME_ZONE must be a supported time zone'); }
   }
   const monthlyBudgetResourceId = env.JARVIS_MONTHLY_BUDGET_RESOURCE_ID;
   if (monthlyBudgetResourceId !== undefined &&
@@ -200,7 +226,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryRunnerAgentName === undefined ? {} : { foundryRunnerAgentName }),
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
+    ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
     ...(githubAppId === undefined ? {} : { githubAppId }),
+    ...(graphAppId === undefined ? {} : { graphAppId: graphAppId.toLowerCase() }),
+    ...(graphTimeZone === undefined ? {} : { graphTimeZone }),
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
     ...(teams ? { teams } : {}),
     notesFolderPath: notesFolderPath.replace(/\/+$/u, ''),

@@ -47,6 +47,7 @@ describe('committed SQL manifest', () => {
       '0004_credential_renewal.sql', '0005_task_event_archives.sql', '0007_usage.sql',
       '0008_activity_dismissals.sql', '0009_github_release_records.sql',
       '0010_idle_expired_sessions.sql', '0011_alert_deduplication.sql', '0014_teams_notifications.sql',
+      '0015_screen_frame_usage.sql', '0016_long_term_memory.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

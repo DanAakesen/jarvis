@@ -16,6 +16,7 @@ import { factoryModule } from './factory/index.js';
 import type { TaskController, TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
 import type { GitHubAppTokenIssuer, GitHubRepositoryCatalog } from './github-app.js';
 import type { ProjectStore } from './factory/projects.js';
+import type { ReleaseGraphReader, ReleaseViewStore } from './factory/release-view.js';
 import type { RepositoryCreator } from './factory/new-project.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
@@ -33,6 +34,8 @@ export interface BuildAppOptions {
   readonly auth?: TokenVerifier;
   readonly modules?: readonly BackendModule[];
   readonly projectStore?: ProjectStore;
+  readonly releaseViewStore?: ReleaseViewStore;
+  readonly releaseGraphReader?: ReleaseGraphReader;
   readonly projectRepositoryCreator?: RepositoryCreator;
   readonly toolCallStore?: ToolCallStore;
   readonly taskStore?: TaskStore;
@@ -58,6 +61,8 @@ declare module 'fastify' {
     ownerObjectId: string;
     databaseStatus: () => boolean;
     projectStore: ProjectStore | null;
+    releaseViewStore: ReleaseViewStore | null;
+    releaseGraphReader: ReleaseGraphReader | null;
     projectRepositoryCreator: RepositoryCreator | null;
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
@@ -126,6 +131,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));
   app.decorate('databaseStatus', options.databaseStatus ?? (() => false));
   app.decorate('projectStore', options.projectStore ?? null);
+  app.decorate('releaseViewStore', options.releaseViewStore ?? null);
+  app.decorate('releaseGraphReader', options.releaseGraphReader ?? null);
   app.decorate('projectRepositoryCreator', options.projectRepositoryCreator ?? null);
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);

@@ -56,7 +56,7 @@ describe('settings API', () => {
         voice: { defaultLanguage: 'da' },
         codex: { model: 'default' },
         copilot: { model: 'default' },
-        global: { maxParallelTasks: 1, maxCheckAttempts: 3 },
+        global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300 },
         newProjects: {
           owner: 'DanAakesen',
           visibility: 'private',
@@ -82,7 +82,7 @@ describe('settings API', () => {
           appearance: { theme: 'dark' },
           jarvis: { reasoning: 'high' },
           voice: { defaultLanguage: 'en' },
-          global: { maxParallelTasks: 4, maxCheckAttempts: 2 },
+          global: { maxParallelTasks: 4, maxCheckAttempts: 2, screenShareDailyFrameCap: 270 },
         },
       },
     });
@@ -93,7 +93,7 @@ describe('settings API', () => {
         appearance: { theme: 'dark' },
         jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
         voice: { defaultLanguage: 'en' },
-        global: { maxParallelTasks: 4, maxCheckAttempts: 2 },
+        global: { maxParallelTasks: 4, maxCheckAttempts: 2, screenShareDailyFrameCap: 270 },
       },
     });
     expect(values).toEqual({
@@ -102,6 +102,7 @@ describe('settings API', () => {
       'voice.default_language': '"en"',
       'global.max_parallel_tasks': '4',
       'global.max_check_attempts': '2',
+      'global.screen_share_daily_frame_cap': '270',
     });
     const readBack = await app.inject({ url: '/settings', headers: authorization });
     expect(readBack.json().settings.appearance).toEqual({ theme: 'dark' });
@@ -312,6 +313,8 @@ describe('settings API', () => {
     { settings: { global: { maxParallelTasks: 101 } } },
     { settings: { global: { maxCheckAttempts: 11 } } },
     { settings: { global: { maxCheckAttempts: -1 } } },
+    { settings: { global: { screenShareDailyFrameCap: 0 } } },
+    { settings: { global: { screenShareDailyFrameCap: 301 } } },
     { settings: { voice: { unknown: 'value' } } },
     { settings: { newProjects: { owner: '-invalid' } } },
     { settings: { newProjects: { visibility: 'internal' } } },

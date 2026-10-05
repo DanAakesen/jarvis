@@ -4,8 +4,8 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 
 ## Scope
 
-- Phase 1 only: the Jarvis core and the Software Factory area ([PRODUCT.md](../PRODUCT.md), [PLAN.md](../PLAN.md)).
-- Do not add tables, pages, or code for Banking, Health and fitness, Calendar, or other areas until their phase starts.
+- Phase 1 is the Jarvis core and Software Factory; active P7 tasks may add their named headless capabilities. P7-09 adds calendar and mail tools only; P8 owns any UI. See [PRODUCT.md](../PRODUCT.md) and [PLAN.md](../PLAN.md).
+- Do not add tables, pages, or code for Banking, Health and fitness, or other areas until their phase starts.
 - Single user (Dan). Keep the design as small as the requirements allow.
 
 ## Sources
@@ -18,7 +18,7 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 | Stack, runtime, sandbox, voice, dispatch, cost | [architecture.md](architecture.md) |
 | Tables, relationships, and groups | [data-model.md](data-model.md) |
 | Step-by-step flows with evidence status | [architecture-flows.html](architecture-flows.html) (open in a browser) |
-| Decisions and learnings L1–L40 | [decisions.md](decisions.md) |
+| Decisions and learnings L1–L78 | [decisions.md](decisions.md) |
 | Production operations | [Runbook](runbook.md) |
 | Prototype code and reports to port in P2 and P4 | [reference/](reference/) |
 | Open-source research | [open-source.md](open-source.md) |
@@ -132,6 +132,10 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - The [Deploy workflow](../.github/workflows/deploy.yml) is the only routine path to Azure: push to `main` deploys the parts changed since the last successful Deploy run; Dan's `workflow_dispatch` on `main` redeploys everything. Its Bicep deployment is always named `jarvis-infra`. Details: [production deploy](architecture.md#production-deploy-p0-11).
 - GitHub Actions OIDC: GitHub signs this repository's tokens with the immutable-ID subject `repo:DanAakesen@68902534/jarvis@1403065900:ref:refs/heads/main`, not `repo:DanAakesen/jarvis:ref:refs/heads/main`. `infra/bootstrap.ps1` reads the IDs with `gh api repos/DanAakesen/jarvis` and registers the federated credential `github-main-ids`. An `AADSTS700213` sign-in failure means the credential is missing: Dan re-runs bootstrap; the subject is printed under "Federated token details" in the `azure/login` step (L49).
 - Dan's Azure CLI defaults to the Microsoft tenant: pass `--subscription` in every command and script (L7). For Microsoft Graph, get the token with `az account get-access-token --subscription <id> --resource-type ms-graph`; `--tenant` picks the wrong account.
+- Outlook app-only access is authorized only by Exchange Online RBAC for Applications scoped to Dan's exact mailbox. Do not grant Microsoft Graph app roles in Entra: those grants are additive to Exchange RBAC and can bypass its mailbox scope.
+- After the approved core deployment, Dan runs `./infra/setup-outlook.ps1 -MailboxUpn <Dan's mailbox UPN>` from a PowerShell 7 session with the Azure CLI on the bootstrap subscription, GitHub CLI authenticated to the repository, and `ExchangeOnlineManagement` connected-capable. The signed-in operator needs permission to register an Entra app, create Exchange app scopes/assignments, write the backend Key Vault secret, and update GitHub Actions variables. No agent runs this script or accesses the tenant.
+- The setup script creates/reuses `jarvis-outlook`, creates the exact `PrimarySmtpAddress` scope, assigns only `Application Calendars.ReadWrite`, `Application Mail.ReadWrite`, and `Application Mail.Send`, stores the one-year client credential as Key Vault secret `jarvis-outlook-client-secret`, and sets nonsecret `JARVIS_GRAPH_APP_ID` and `JARVIS_GRAPH_TIME_ZONE` GitHub variables. Keep Entra `requiredResourceAccess` empty. `-RotateCredential` updates Key Vault and removes older credentials created by this script; afterward run Deploy on `main` so the single backend replica reloads the credential/configuration.
+- After deployment and Exchange propagation (allow up to 30 minutes), verify the app can read Dan's agenda and test mailbox items, and is denied access to a different mailbox. Then create and move a test event only after the exact later-message confirmation; verify no change occurs for a wrong, expired, or same-turn code. Do not use real mail recipients for send tests. These live checks remain the coordinator's post-merge responsibility.
 - P7-10 deploys `JARVIS_NOTES_FOLDER_PATH` from the `notesFolderPath` Bicep parameter (default `/Jarvis/Notes`). After merge, the coordinator must review and approve the broad Graph `Files.Read.All` application permission before running `./infra/setup-notes-search.ps1` with an administrator-authorized Azure CLI session. The script is idempotent and assigns the permission to `id-jarvis-backend`; Graph Search does not support `Sites.Selected`. The backend fixes the user to Dan and scopes queries and returned links to the configured folder. Live tenant consent and a known-note search remain unverified.
 - P7-02 reads Dan's Teams presence with the backend managed identity and requires the Microsoft Graph `Presence.Read.All` application role. After merge, a tenant administrator must review/grant that permission and run `./infra/setup-away-presence.ps1` from an Azure CLI session for the expected subscription. The script is idempotent and targets `id-jarvis-backend`; no Bicep or SQL migration is needed. Browser return is signaled by authenticated active-app requests to `POST /now/present`, not passive feed refreshes. Live consent, presence detection, Teams installation, and phone delivery remain unverified.
 - `az` runs through a `.cmd` file: avoid `&`, parentheses, and pipes inside arguments such as `--query` (L20); filter JSON in PowerShell instead.
@@ -226,6 +230,8 @@ Verified in Codex cloud for P0-02:
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
+| Focused P7-13 memory-tool, embedding, and migration tests | `npm test --workspace @jarvis/backend -- --run src/core/memory.test.ts src/core/memory-embeddings.test.ts src/database/migrations.test.ts` |
+| P7-13 isolated SQL migration/store contracts | `npm run test:database --workspace @jarvis/backend` |
 | Focused P3-05 failed-check tests | `npm test --workspace @jarvis/backend -- src/database/checks-loop-blob.test.ts src/database/checks-loop-store.test.ts src/github/checks-loop.test.ts src/github/actions-logs.test.ts src/github/webhook.test.ts src/core/settings.test.ts src/github-app.test.ts` |
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
@@ -258,17 +264,14 @@ list, create, update and archive worked, the settings form stacked on mobile,
 there was no horizontal overflow, controls were at least 44 px high, and no
 console exceptions occurred. Mocks do not verify live Entra, Azure SQL, or
 production API behavior.
-
-P8-13 was inspected in Chromium at 1440×1000 and 390×844 using the scratch auth
-stub and Vite settings mock. The mock rejected the first dark-mode PATCH with
-HTTP 400, after which the prior light appearance remained selected; retry
-accepted dark, and reloading Settings restored it. Keyboard navigation reached
-the dark radio with a visible native focus outline; the phone layout had no
-horizontal overflow. Muted-text contrast against the page/surface was at least
-6.25:1 in light mode and 8.99:1 in dark mode. The only browser console/network
-error was the intentionally rejected mock request; no page exceptions occurred.
-Screenshots are in `docs/ui/screenshots/p8-13-theme-settings-*.png`. These mocks
-do not verify live Entra, API authorization, or Azure SQL persistence.
+P8-05 conversation checks used the same scratch-only auth/API/audio fixtures at
+1440×900 and 390×844, plus 320/280 px overflow checks. Long history stays inside
+an independently scrolling transcript; the composer remains bottom-centred.
+Streaming, interruption, history retry, explicit voice entry, microphone
+permission denial, natural voice end, draft/focus restoration and reduced
+motion were exercised. Screenshots in `docs/ui/screenshots/p8-05-*` contain
+labelled local fixtures, not production conversations. A real phone keyboard,
+physical microphone/speakers and live Azure round-trip remain unverified.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal
@@ -320,6 +323,14 @@ the page had no horizontal overflow, selects measured 44 px, and only the table
 scrolls horizontally. The expected mocked 503 produced a browser network log;
 there were no other console errors or page exceptions. Live SQL and provider or
 voice usage remain unverified.
+P3-08 was inspected at 390×844 (dark theme) and 1280×1300 (light theme) in
+Chromium using scratch-only auth and mocked release/graph/API responses: opening
+a release, refresh, and keyboard focus on a commit link worked; its hit area was
+44×44 px and the document did not overflow either viewport. The desktop and
+phone screenshots are
+`docs/ui/screenshots/p3-08-release-view-desktop.png` and
+`docs/ui/screenshots/p3-08-release-view-phone.png`; their fixture data is mocked.
+Live Entra, Azure SQL, and GitHub behavior remain unverified.
 Never commit the stub or weaken sign-in in the app.
 
 Backend commands:
@@ -328,10 +339,12 @@ Backend commands:
 | --- | --- |
 | Backend lint / offline tests / targeted build | `npm run lint --workspace @jarvis/backend`; `npm test --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
 | Focused P3-07 release webhook contract | `npm test --workspace @jarvis/backend -- --run src/database/webhook-delivery-store.test.ts` |
+| Focused P3-08 release API and GitHub graph tests | `npm test --workspace @jarvis/backend -- --run src/factory/release-view.test.ts src/github/release-graph.test.ts src/github-app.test.ts` |
 | SQL Server migration, webhook mapping, and task-store integration tests (including event/activity transaction and sub-second publish contract) | `npm run test:database --workspace @jarvis/backend` (requires the isolated loopback SQL Server configuration used by `database-ci.yml`) |
 | Focused P2-07 backend control tests | `npm test --workspace @jarvis/backend -- src/factory/dispatcher.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts` |
 | Focused P2-14 completion/expiry regressions | `npm test --workspace @jarvis/backend -- src/factory/heartbeat.test.ts src/factory/dispatcher.test.ts src/database/sandbox-heartbeat-store.test.ts` |
 | Focused P2-07 web control tests | `npm test --workspace @jarvis/web -- src/factory/TaskControls.test.tsx src/factory/TasksPage.test.tsx src/factory/TaskDetailPage.test.tsx` |
+| Focused P3-08 release view and project navigation tests | `npm test --workspace @jarvis/web -- --run src/factory/ReleasePage.test.tsx src/factory/ProjectsPage.test.tsx src/App.test.tsx` |
 | P6-05 SQL Server parallel load test (CI `Database` job; prints a `P6-05 load:` summary line) | `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher-load.integration.test.ts` (isolated loopback SQL Server only) |
 | Focused P6-05 runner Codex limit test | `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_usage_limit` |
 | Start compiled backend | `npm start --workspace @jarvis/backend` (after its build) |
@@ -418,6 +431,13 @@ application-defined SSE reply. Never expose or log the delegated token. Without
 the agent name, chat remains unavailable and returns a visible 503; live Azure
 streaming and tool-call linkage require the post-merge acceptance check.
 
+P7-13 also uses `FOUNDRY_PROJECT_ENDPOINT` and the Bicep-provided
+`JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME` (`text-embedding-3-small`) with the
+backend managed identity and `https://ai.azure.com/.default` scope. This setting
+is optional for local development: memory retrieval falls back to SQL full-text
+or substring search when embeddings are not configured or unavailable. No API
+key or browser credential is used.
+
 Production runner calls use the optional paired `FOUNDRY_RUNTIME_ENDPOINT` and
 `FOUNDRY_ADMIN_ENDPOINT`, plus `FOUNDRY_RUNNER_AGENT_NAME`. Bicep supplies the
 project URLs and `jarvis-runner-node-1x2`; these are non-secret settings. When
@@ -501,6 +521,57 @@ one Codex task on `DanAakesen/jarvis-test-target`, verify pushes to their
 `jarvis/task-<id>` branches, and verify that a commit-free agent question appears
 as Needs attention.
 
+### Local PC bridge (P7-06)
+
+The .NET 10 Windows tray companion is in `pc-bridge/`. Its portable command
+policy and protocol projects run on Linux; `backend-ci.yml` also builds the
+`net10.0-windows` app with Windows targeting enabled.
+
+After merge, the coordinator must provision the app and deploy before installing
+the companion on Dan's PC:
+
+1. Run `infra/bootstrap.ps1` in Dan's signed-in Azure/GitHub session. It creates
+   or repairs `jarvis-pc-bridge`, pre-authorizes its delegated `access_as_user`
+   permission, and writes `JARVIS_PC_BRIDGE_CLIENT_ID` as an Actions variable.
+   Run the main Deploy workflow so Bicep configures `ENTRA_PC_BRIDGE_CLIENT_ID`
+   in the backend. Agents do not have Azure/tenant access.
+2. Get `backendFqdn` from the `jarvis-infra` deployment output. On Dan's Windows
+   PC, publish the self-contained app to a temporary directory:
+
+   ```powershell
+   dotnet publish .\pc-bridge\Jarvis.PcBridge\Jarvis.PcBridge.csproj `
+     --configuration Release --runtime win-x64 --self-contained true `
+     --output "$env:TEMP\jarvis-pc-bridge"
+   ```
+
+3. Install for the current Windows user with the IDs from
+   `infra/bootstrap.output.json`:
+
+   ```powershell
+   .\pc-bridge\Install-Bridge.ps1 `
+     -PublishPath "$env:TEMP\jarvis-pc-bridge" `
+     -BackendUrl https://<backendFqdn> `
+     -TenantId <tenant-guid> `
+     -ApiClientId <jarvis-api-client-guid> `
+     -BridgeClientId <jarvis-pc-bridge-client-guid>
+   ```
+
+   The installer stops an existing bridge process, copies app files under
+   `%LOCALAPPDATA%\Programs\Jarvis.PcBridge`, writes nonsecret settings under
+   `%LOCALAPPDATA%\Jarvis\PcBridge`, and creates a Startup shortcut. Launch the
+   installed executable once to sign in by device code; MSAL stores its refresh
+   cache with Windows DPAPI. Re-running the installer updates the files without
+   deleting that token cache. The bridge connects outbound and creates no
+   inbound firewall rule.
+4. Confirm the tray reports Online, then ask Jarvis to open an HTTP(S) URL or an
+   allow-listed app. Check the authenticated Now feed for online/offline status.
+   Verify active-window reads and exact-title focus with Dan present at the PC.
+
+The app allows only HTTP(S) URLs, VS Code, Edge, File Explorer, Windows Terminal,
+folders below `C:\Repo` in VS Code, active-window title, and exact-title focus.
+Offline policy/protocol tests do not verify live Entra sign-in or Windows
+execution; those remain coordinator post-merge checks.
+
 ### Database access and migrations (#7)
 
 - Configure `SQL_SERVER=<host>.database.windows.net`, `SQL_DATABASE=jarvis` and
@@ -524,7 +595,10 @@ as Needs attention.
   `0001_core_tables.sql` contains groups 1–3; `0002_sandbox_operations.sql`
   contains groups 4 and 6; `0003_sandbox_agent_name.sql` adds the heartbeat's
   Foundry routing field, and P6-03's `0005_task_event_archives.sql` indexes
-  committed Blob chunks for on-demand task-history reads.
+  committed Blob chunks for on-demand task-history reads. P7-13's
+  `0016_long_term_memory.sql` adds durable source-linked memories and conditional
+  vector/full-text capabilities; startup applies it through the existing locked,
+  checksummed migration runner.
   See [migration guide](../db/migrations/README.md).
 - Offline checks: `npm test --workspace @jarvis/backend`,
   `npm run lint --workspace @jarvis/backend`,
@@ -542,6 +616,16 @@ as Needs attention.
   and authenticates with its existing managed identity. No local credential or
   manual Azure setup is needed. Archive/restore contracts use a fake Blob store;
   the live Azure archive/restore check must happen after merge.
+- P7-13 needs no separate portal or bootstrap action. The existing Deploy workflow
+  reapplies Bicep and the backend startup migration applies `0016` through the
+  idempotent migration runner. Memory-store startup executes the idempotent
+  `db/migrations/setup/0016_long_term_memory.sql` after the migration transaction
+  commits. After merge, the coordinator checks that Deploy creates the
+  `text-embedding-3-small` deployment and that the backend is healthy;
+  then verify a harmless memory through chat and voice, a later session after a
+  backend restart, list/history, correction and forgetting. Confirm forgetting
+  prevents recall while original conversation records remain. Never use sensitive
+  real data for the smoke test.
 
 Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
@@ -712,6 +796,33 @@ to assign `Jarvis.Tools` and persist that same value as the
 infrastructure deployments. Cloud agents cannot run bootstrap or verify Azure;
 Dan verifies the hosted deployment and tools after this local step. Tool calls
 also need the stored message ID from P4-03, supplied by the caller in P4-06.
+
+### Screen sharing (P7-05)
+
+The backend uses the existing `FOUNDRY_PROJECT_ENDPOINT` and managed identity;
+Bicep already grants that identity `Foundry User`, so this feature adds no Azure
+resource, credential, or provisioning script. The migration runs at backend
+startup after merge. `global.screen_share_daily_frame_cap` defaults to 300 and
+is editable in Settings (1–300).
+
+After merge, Dan/coordinator should:
+
+1. Run the main `Deploy` workflow and confirm migration `0015_screen_frame_usage`
+   applied and the backend revision is ready.
+2. Confirm the configured `gpt-5.6-luna` deployment accepts image input and is
+   Global Standard. The DKK estimate uses the 2 October 2026 price snapshot
+   (1.3157 input and 7.8941 output DKK per million short-context tokens); update
+   the rate table if the live SKU or current price differs.
+3. In a signed-in browser, share a window, verify the persistent sharing status
+   and Stop control, request an inspection from chat and voice, and check that
+   Jarvis describes the visible content. Stop voice and leave the page to verify
+   stream cleanup. Confirm the three-second limit, configurable daily cap, usage
+   count, estimated DKK and absence of frame/message content in logs and history.
+
+Cloud agents cannot access the Azure tenant or verify billed usage. The screen
+bridge's fake-model tests prove the offline contract only; the live model,
+managed-identity exchange, SQL migration and browser screen capture remain
+unverified until this coordinator check.
 
 ## Release procedure
 

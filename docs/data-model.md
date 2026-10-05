@@ -1,11 +1,11 @@
 # Data model
 
-Version 1, updated 4 October 2026 for P7-02/P7-03. Scope: the Jarvis core and the Software Factory only. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 4 October 2026 for P7-02, P7-03, P7-09 and P7-13. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, headless Outlook tools, and long-term memory. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
 Issue #7 adds `dbo.schema_migrations`, an internal deployment ledger separate
-from the eight domain groups: `name nvarchar(255)` primary key, `checksum char(64)`
+from the nine domain groups: `name nvarchar(255)` primary key, `checksum char(64)`
 (SHA-256 of committed file bytes), and `applied_at datetime2(7)` defaulting to
 `SYSUTCDATETIME()`. The backend creates and writes it only while holding the
 transaction-owned `jarvis.schema-migrations` app lock. Its rows must remain an
@@ -28,13 +28,23 @@ before restoring the prior constraint.
 P6-02 adds nullable `activity.alert_key` and a filtered unique index in
 `0011_alert_deduplication.sql`; each event condition has one activity row and
 can be safely retried. Its down migration removes the index and column.
+P7-06 uses the existing `activity` row keyed by `pc_bridge_status` to publish the
+bridge's latest online/offline state to Now; no migration or retained command data
+is added.
+
 P7-03 adds the Teams conversation and confirmation tables in
 `0014_teams_notifications.sql`; its down migration removes both tables and the
 confirmation expiry index.
+P7-13 adds group 9 in `0016_long_term_memory.sql`: source-linked memories,
+revision history, a content-free deletion audit and nullable voice source-item IDs.
+The migration adds `vector(1536)` only when SQL exposes that type. After the
+transaction commits, the idempotent `setup/0016_long_term_memory.sql` creates the
+full-text catalog/index when installed; its paired down script removes memory tables
+and the voice source-item index/column.
 
 ## Overview
 
-Eight groups. Arrows show the main references between groups.
+Nine groups. Arrows show the main references between groups.
 
 ```mermaid
 flowchart LR
@@ -66,6 +76,11 @@ flowchart LR
     subgraph USE["7 · Usage and cost"]
         usage
     end
+    subgraph MEMORY["9 · Long-term memory"]
+        memories
+        memory_history
+        memory_deletions
+    end
     subgraph OPS["6 · Operations"]
         webhook_deliveries
         credential_status
@@ -83,6 +98,9 @@ flowchart LR
     activity -.-> releases
     usage --> tasks
     tasks --> messages
+    messages --> memories
+    memories --> memory_history
+    messages --> memory_deletions
 ```
 
 | # | Group | Supports | Tables |
@@ -95,10 +113,18 @@ flowchart LR
 | 6 | Operations | Safe webhook handling, credential expiry warnings | `webhook_deliveries`, `credential_status` |
 | 7 | Usage and cost | Transparency per task and project: sandbox time, model tokens, voice, Codex and Copilot usage | `usage` |
 | 8 | Notifications and confirmations | Dan's validated Teams conversation and expiring approvals for Teams or browser delivery | `teams_conversations`, `teams_confirmations` |
+| 9 | Long-term memory | Relevant source-linked preferences, project facts, decisions and unfinished tasks across sessions | `memories`, `memory_history`, `memory_deletions` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
-P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. Realtime voice tool calls are not stored in `tool_calls`. The existing group-one and group-seven schemas support this; no migration is needed.
+P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. P7-05 adds `screen_frames` to the Jarvis-model usage metrics in migration `0015_screen_frame_usage.sql`; the matching down migration removes those rows before restoring the prior constraint. Realtime voice tool calls are not stored in `tool_calls`.
+
+P7-06 records only the bridge's current status in the existing `activity` table.
+The refresh is published after the status transaction commits. Commands, window
+titles, URLs, paths, access tokens, and message contents are not persisted as
+bridge activity.
+
+P7-09 adds no Outlook tables or migration. Pending calendar/mail writes are held only in the single backend process for up to ten minutes and are discarded on expiry or restart; a later verified Dan message must match the exact confirmation phrase before the backend executes the write. Outlook tool arguments and results are redacted from persisted tool-call records. Mail bodies are passed to the model only for the current bounded search result and are not recorded as tool-call data.
 
 ## 1 · Jarvis core
 
@@ -156,10 +182,11 @@ erDiagram
     }
 ```
 
-- **One continuous conversation.** Jarvis has a single thread; each chat or voice sitting is a `jarvis_session` within it. Over time the thread needs compaction and memory (Decision 6, deferred); `messages` keeps the full record either way.
+- **One continuous conversation.** Jarvis has a single thread; each chat or voice sitting is a `jarvis_session` within it. `messages` keeps the complete source record; compaction and generated views do not own durable memory or change conversation retention.
 - P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language, voice minutes when recorded, and tool name, outcome, and task ID, not tool arguments or results. The main page reads history; P4-06 sends chat turns through the session turn endpoint, while the authenticated voice relay creates voice sessions and stores completed transcript events. No schema migration was needed.
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
 - P4-04's agent-only turn context reads up to 20 running tasks and their three latest `task_events` from the existing tables. It selects task status/activity and event type, summary, source, and time; it excludes task requests and event payloads, and clips summaries to 400 characters. No schema or migration change is needed.
+- P7-13's `memories` row is keyed by category and stable key, has one current Dan source message, and optionally stores a 1536-dimensional embedding. `memory_history` keeps each replaced source-linked revision; `memory_deletions` records only the forgotten memory ID, request message ID and deletion time, never deleted content. Forget cascades to revisions but does not remove messages. Chat writes use the existing message ID; voice persists the provider transcript item ID on `messages` and resolves it to Dan's stored transcript before a write. Retrieval joins the current source message and returns bounded source text.
 - The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; `ToolFailure` stores a bounded safe explanation with an `error` outcome, while unexpected failures stay generic. P7-10 stores its bounded query and returned title/snippet/link values in this existing table; no new table or migration is needed. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. P4-06 stores the source message before P4-09 sends its ID and the delegated token in the application payload to the hosted agent through Foundry Invocations. The agent registers its chat handler with that protocol, verifies the caller and message through the backend, and sets the message ID in the per-turn context used by tool calls. P4-04's running-task context is fetched by the model client on every turn. No data-model or migration change is required.
 - P3-12 `create_project` reuses `dbo.projects`, `dbo.tasks`, `dbo.messages`, and `dbo.tool_calls`: tool arguments/results contain the requested name/description and project/task identifiers, while the task uses `source = 'chat'` and references the calling message. The backend-only repository token is never persisted; the project starts with the `node`/`1x2` base defaults. No schema or migration change is required.
 - Session, message, history, task-origin, and tool-call behavior is covered by offline and disposable SQL Server tests; live Azure SQL writes have not been verified.
@@ -416,6 +443,7 @@ erDiagram
 - **Commits are not stored.** The release area shows a horizontal git graph per project (branches as lines, commits as dots): commits and branches come from the GitHub API when the page opens or when Dan asks Jarvis; the dots are coloured from `pull_requests`, `workflow_runs`, `releases` and `deployments`.
 - A failed task-PR workflow stores the bounded failed-job log in private Blob storage and steers the same task with a bounded excerpt and the log path. The backend limits repairs using `global.max_check_attempts`, persists attempt markers in `task_events`, and moves exhausted or unavailable repairs to NeedsAttention.
 - The release view reads `releases`, `workflow_runs` and `deployments`, plus commits from GitHub on demand.
+- P3-08 adds no table or migration. Authenticated `GET /factory/projects/:id/releases` returns the active project's persisted release, pull-request, workflow-run and deployment records plus a bounded GitHub graph; each response fetches the graph rather than persisting commit data. A failed graph read is represented as `graph: null` without discarding the SQL records.
 
 ## 6 · Operations
 
@@ -455,7 +483,7 @@ erDiagram
         bigint sandbox_session_id FK "nullable"
         bigint jarvis_session_id FK "nullable"
         string source "sandbox | jarvis_model | voice | codex | copilot"
-        string metric "minutes, input_tokens, output_tokens, turns, premium_requests"
+        string metric "minutes, input_tokens, output_tokens, screen_frames, turns, premium_requests"
         decimal quantity
         decimal cost_dkk "null for subscription use (Codex, Copilot)"
         string source_event_id "nullable; runner identity or voice session ID"
@@ -466,7 +494,7 @@ erDiagram
 | Source | Measured from | Cost in DKK |
 | --- | --- | --- |
 | Sandbox | Session start to end (`sandbox_sessions`) × size | Yes, ≈ 0.89 DKK per hour at 1 vCPU / 2 GiB |
-| Jarvis model | Token usage per model round | Yes, list price per model |
+| Jarvis model | Token usage per model round; screen frame count per inspection | Yes, list price per model; screen-frame amounts are estimated |
 | Voice | Connected relay duration per `jarvis_session` | Yes, estimated |
 | Codex | Turns, and tokens if `codex-acp` reports them | No: ChatGPT Pro subscription; usage shown only. Actual live report fields remain to verify |
 | Copilot | Turns, and premium requests if Copilot CLI reports them | No: Copilot seat; usage shown only. Actual live report fields remain to verify |
@@ -496,6 +524,19 @@ session total with its messages, and the main page displays it once per sitting.
   grouped breakdowns and marks partial results so displayed subtotals are not
   mistaken for full-period totals. Existing voice rows are included when P5-06
   has written them.
+
+P7-05 reserves one `jarvis_model`/`screen_frames` row per accepted inspection,
+keyed as `screen:<event ID>`. The reservation transaction verifies the active
+voice/chat session and enforces the UTC-day cap and per-session three-second
+interval; failed inference attempts still count toward the cap. On successful
+inference, input/output token rows and the frame row's `cost_dkk` are written in
+one transaction. DKK is estimated only when the model and both provider token
+counts are known; for `gpt-5.6-luna`, the implementation uses the short-context
+Global Standard Global rates in
+[`prices.json`](reference/voice-prototype/results/prices.json), fetched 2 October
+2026 (1.3157 DKK/input million, 7.8941 DKK/output million), rounded to four
+decimal places. Usage marks screen-frame rows as estimated. The frame and its
+base64 request buffer are transient; neither is represented in the data model.
 
 ## 8 · Phone notifications
 
@@ -554,6 +595,25 @@ P4-05 adds `refused` to the runtime tool-call outcomes, but the current
 `CK_tool_calls_outcome` constraint in `0001_core_tables.sql` still permits only
 `ok` and `error`. Persisting a refused call therefore needs a forward schema
 migration; the history API accepts and displays all three outcomes.
+
+## Long-term memory schema (group 9)
+
+`0016_long_term_memory.sql` adds:
+
+| Table/column | Contract |
+| --- | --- |
+| `memories` | One current row per `(category, memory_key)`, with validated content, a required source message, revision and update time; optional `vector(1536)` when supported |
+| `memory_history` | Previous values and their Dan source-message IDs; deleting a memory cascades only to its versions |
+| `memory_deletions` | Content-free audit of the memory ID and Dan message that requested forgetting; no FK to the deleted memory |
+| `messages.source_item_id` | Nullable provider transcript item identifier used to resolve a voice tool call to the saved Dan transcript; indexed only when non-null |
+
+All memory searches and list/history pages are bounded and join only Dan source
+messages. Vector search uses cosine distance when the SQL vector type is available;
+otherwise retrieval uses SQL full-text when installed and bounded substring search
+as the final fallback. A memory is independent of session boundaries, compaction,
+generated windows and the continued retention of its original source record.
+The full-text catalog is created outside migration transactions and remains empty
+after a down migration; the idempotent setup batch can recreate the index later.
 
 ## Conventions
 

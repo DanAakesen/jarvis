@@ -1,4 +1,4 @@
-import { DefaultAzureCredential } from '@azure/identity';
+import { ClientSecretCredential, DefaultAzureCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { buildApp } from './app.js';
 import { BlobServiceClient } from '@azure/storage-blob';
@@ -10,6 +10,7 @@ import { createDatabase, registerDatabase } from './database/lifecycle.js';
 import { createToolCallStore } from './database/tool-call-store.js';
 import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
+import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
@@ -45,17 +46,28 @@ import { createWebhookDeliveryStore } from './database/webhook-delivery-store.js
 import { createChecksLoopStore } from './database/checks-loop-store.js';
 import { createChecksLoopBlobStore } from './database/checks-loop-blob.js';
 import { createGitHubActionsLogClient } from './github/actions-logs.js';
+import { createGitHubReleaseGraphReader } from './github/release-graph.js';
 import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
 import { createProjectPolicyEvaluator } from './github/project-policy.js';
 import { createGitHubDeliveryHandler } from './github/delivery.js';
+import { createPcBridgeModule } from './pc-bridge/bridge.js';
+import { createPcBridgeStatusStore } from './database/pc-bridge-status-store.js';
 import { createAlertNotifier } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
+import { createMemoryStore } from './database/memory-store.js';
+import { createMemoryModule } from './core/memory.js';
+import { createFoundryMemoryEmbedder } from './core/memory-embeddings.js';
 import { createGraphClient } from './graph/client.js';
 import { createNotesModule } from './notes/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
+import { createGraphClient as createOutlookGraphClient } from './outlook/graph-client.js';
+import { createOutlookModule } from './outlook/tools.js';
+import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
+import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
+import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
 import { createEphemeralAudioStore } from './teams/audio-store.js';
 import { createAzureSpeechSynthesizer } from './teams/speech.js';
@@ -82,6 +94,7 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  const memoryStore = database ? createMemoryStore(database.pool) : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const nowEventHub = createEventHub<NowFeedUpdate>();
   const awayModeStore = database
@@ -89,7 +102,7 @@ try {
     : undefined;
   const alertNotifier = createAlertNotifier(telemetry);
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
-    config.foundryEndpoints || config.githubAppId || config.teams || sleepResourceId
+    config.foundryEndpoints || config.githubAppId || config.graphAppId || config.teams || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -115,6 +128,33 @@ try {
     : undefined;
   const githubAppKeyVault = config.githubAppId && config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
+    : undefined;
+  const graphSecretClient = config.graphAppId && config.keyVaultUri && credential
+    ? new SecretClient(config.keyVaultUri, credential)
+    : undefined;
+  let graphCredentialRequest: Promise<ClientSecretCredential> | undefined;
+  const outlookModule = config.graphAppId && config.graphTimeZone && graphSecretClient
+    ? createOutlookModule(createOutlookGraphClient({
+      getToken: async (scope, signal) => {
+        graphCredentialRequest ??= graphSecretClient.getSecret('jarvis-outlook-client-secret')
+          .then(({ value }) => {
+            if (!value || !value.trim() || value.length > 10_000 || /[\r\n]/u.test(value)) {
+              throw new Error('Outlook app credential is unavailable');
+            }
+            return new ClientSecretCredential(config.auth.tenantId, config.graphAppId!, value);
+          })
+          .catch((error: unknown) => {
+            graphCredentialRequest = undefined;
+            throw error;
+          });
+        const token = await (await graphCredentialRequest).getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Outlook Graph token is unavailable');
+        return token.token;
+      },
+    }), {
+      mailboxObjectId: config.auth.ownerObjectId,
+      timeZone: config.graphTimeZone,
+    })
     : undefined;
   const getGitHubAppPrivateKey = async () => {
     if (!githubAppKeyVault) throw new Error('GitHub App private key is unavailable');
@@ -160,6 +200,18 @@ try {
         return token.token;
       },
     )
+    : undefined;
+  const memoryEmbedder = config.foundryProjectEndpoint &&
+    config.foundryMemoryEmbeddingDeploymentName && credential
+    ? createFoundryMemoryEmbedder({
+      projectEndpoint: config.foundryProjectEndpoint,
+      deploymentName: config.foundryMemoryEmbeddingDeploymentName,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry memory embedding identity unavailable');
+        return token.token;
+      },
+    })
     : undefined;
   const foundryClients = new Map<string, FoundryClient>();
   const taskEventArchive = database && archiveStorageAccount && credential
@@ -245,6 +297,10 @@ try {
     })
     : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;
+  const releaseViewStore = database ? createReleaseViewStore(database.pool) : undefined;
+  const releaseGraphReader = githubAppTokenIssuer
+    ? createGitHubReleaseGraphReader(githubAppTokenIssuer)
+    : undefined;
   const projectPolicyEvaluator = database && taskStore && githubAppTokenIssuer
     ? createProjectPolicyEvaluator({
       store: createProjectPolicyStore(database.pool),
@@ -257,6 +313,9 @@ try {
     })
     : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
+  const pcBridgeStatusStore = database
+    ? createPcBridgeStatusStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
+    : undefined;
   const dispatcher = database && taskStore && settingsStore && sandboxHeartbeat && config.foundryEndpoints
     ? new TaskDispatcher(
       createDispatcherStore(database.pool, eventHub),
@@ -300,6 +359,7 @@ try {
     : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
+    ...(outlookModule ? [outlookModule] : []),
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
       getSecret: getWebhookSecret,
@@ -310,7 +370,27 @@ try {
         },
       } : {}),
     }),
+    createPcBridgeModule({
+      ...(pcBridgeStatusStore ? { onStatusChange: (online) => pcBridgeStatusStore.setStatus(online) } : {}),
+      onStatusError: () => logger.warn('pc_bridge.status_update_failed'),
+    }),
   ];
+  if (memoryStore) {
+    modules.push(createMemoryModule({
+      store: memoryStore,
+      ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
+    }));
+  }
+  if (database && settingsStore && config.foundryProjectEndpoint && credential) {
+    modules.push(createScreenVisionModule(new ScreenVisionService(
+      createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry screen identity unavailable');
+        return token.token;
+      }),
+      createScreenFrameUsageStore(database.pool),
+    )));
+  }
   if (graphClient) {
     modules.push(createNotesModule({
       graph: graphClient,
@@ -359,6 +439,8 @@ try {
   const app = buildApp(config, logger, {
     modules,
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
+    ...(releaseViewStore ? { releaseViewStore } : {}),
+    ...(releaseGraphReader ? { releaseGraphReader } : {}),
     ...(database && taskStore && settingsStore ? {
       ...(projectStore ? { projectStore } : {}),
       ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
@@ -439,6 +521,7 @@ try {
   try {
     if (database) {
       await database.initialize();
+      await memoryStore?.initialize();
       logger.info('database.ready');
     }
     await teamsNotifications?.expirePendingConfirmations();

@@ -8,6 +8,7 @@ The shared shell and voice-workspace structure were agreed with Dan on 4 October
 - **One app, many areas.** One app shell with area navigation. The Software Factory is the first area; later areas (Banking, Health and fitness, Calendar) must fit without redesigning the shell.
 - **Live and honest.** State changes appear without refresh. Stale or disconnected data is shown as such; progress uses observed milestones, not invented percentages.
 - **Full transparency.** Every task shows what the agent did, what it used, and what it cost.
+- **Headless Outlook tools (P7-09).** Calendar and mail actions are available through conversation only; P8 owns any future visual surface. A staged change must state exactly what will happen and how to confirm it; mail text is treated as untrusted content.
 
 ## Page set (phase 1)
 
@@ -27,6 +28,22 @@ Events archived after 90 days load through the same task-detail timeline and pag
 The disk section uses recorded task events, not a live filesystem estimate; show
 each reading's time and byte-derived human-readable values without implying that
 the current filesystem state is available.
+
+## Release view (P3-08)
+
+The per-project release page follows the existing shell and neutral surface tokens.
+The branch graph is a horizontally scrollable SVG; commit links expose state and
+commit details on hover or keyboard focus, with 44 px hit targets. Marker shape
+identifies record type and marker colour follows the linked record's status. A
+refresh reloads persisted records and the on-demand GitHub graph; graph failures
+leave release, run, and deployment records visible.
+
+Inspected with scratch-only auth and mocked API responses in Chromium at 1280×1300
+(light theme) and 390×844 (dark theme): release selection, refresh, keyboard
+focus, 44 px commit targets, and zero page-width overflow. Screenshots:
+[desktop](docs/ui/screenshots/p3-08-release-view-desktop.png) and
+[phone](docs/ui/screenshots/p3-08-release-view-phone.png). Fixture content is
+mocked; live Entra, Azure SQL, and GitHub data remain unverified.
 
 ## Task usage (P2-12)
 
@@ -57,7 +74,7 @@ Dan's brief (4 October 2026): the UI should be stunning, with rich styling and m
 - **Light appearance (C):** warm neutral surfaces and editorial typography with an ink-particle orb, so light mode keeps the same states and motion vocabulary.
 - **Constraints kept:** every orb state is also labelled in text; no gradient text, no emoji icons, no lone coloured borders; sample data appears in the concepts only.
 
-Token values belong in `apps/web/src/styles.css`; P8-20 (#282) implements this visual and motion system across the shell.
+Canonical colour, type, spacing, radius, surface, elevation and motion values belong in `apps/web/src/styles.css`. P8-20 (#282) applies Concept B/C across the current shell and pages: the dark aurora is CSS-only, and the orb follows reported voice state plus decoded playback PCM. Chat/voice activity is explicit in the top bar; tool-call state and workspace windows remain unavailable until their runtime contracts exist. Hidden tabs pause animation; reduced motion uses fades and keeps the state label readable.
 
 ## Voice end (P8-12, decided 4 October 2026)
 
@@ -94,9 +111,20 @@ sign-in; the header wraps on narrow screens.
   Keep the current page and pending controls visible; do not infer this state
   from elapsed time or replace it with an invented progress indicator.
 
-- **Main page:** the verified name is the headline. Conversation (chat,
-  language, voice, and persisted history) is the wide column; "Now" and Backend
-  sit beside it from 900 px and stack below it on narrower screens.
+- **Main page:** P8-05 supersedes the initial wide-column layout with a
+  conversation-first opening screen and a bottom-centred composer. "Now" and
+  Backend remain available through the Activity and backend disclosure.
+- **Screen sharing (P7-05):** keep the browser-selected share/stop control and
+  live sharing status in the conversation workflow, with a separate, explicit
+  Look at screen action for chat and voice. Keep the status and Stop action
+  visible while sharing; reuse the shared button, focus, and narrow-screen
+  wrapping conventions. This is the minimal P7 integration; P8-04 owns moving
+  the confirmed share control into the shared shell's top bar. Do not add camera
+  controls or continuous capture here.
+  Scratch-auth Chromium checks at 390 and 1280 px exercised Share, the visible
+  status/Stop action, a mocked chat inspection, and stream cleanup; neither
+  viewport overflowed or reported console errors. Real display capture and the
+  live backend/model remain unverified.
 - **Unavailable features:** each data area says what it will show. Each action
   stays visible but disabled, and is linked to that explanation with
   `aria-describedby`. No sample messages, tasks or states are shown.
@@ -227,7 +255,7 @@ The page uses the existing neutral app shell, with one page heading followed by
 labelled period and grouping controls. Project, agent, and source groups contain
 semantic tables of task-linked usage; rows show the source, metric, quantity,
 available DKK, and last-used time. Codex/Copilot costs stay absent, while
-sandbox and voice amounts are labelled estimates. The page identifies partial
+sandbox, voice, and screen-frame amounts are labelled estimates. The page identifies partial
 results when the 1,000-row API cap applies.
 
 Controls stack on narrow screens and only the table region can scroll
@@ -264,11 +292,12 @@ Invocations; live Azure streaming and tool-call linkage remain a post-merge chec
 
 ## Browser voice (P5-04)
 
-The Voice section uses the existing neutral panel and replaces unavailable
-actions with Start voice, Stop voice, and Mute/Unmute. Connection, listening,
-thinking, speaking, reconnecting, and failure feedback stays beside those controls; the
-mute action is unavailable until a session is ready. The microphone opens only
-after session setup and the Danish no-model warm-up complete. Speaking
+P8-05 moves Start voice into the composer's small orb. Active sessions retain
+Stop voice and Mute/Unmute while P8-12 supplies the final end-control placement.
+Connection, microphone-off readiness, listening, thinking, speaking,
+reconnecting, and failure feedback stays beside those controls.
+Enable microphone is a separate explicit action after session setup and the
+Danish no-model warm-up complete; reconnect also returns with capture off. Speaking
 interrupts playback. Controls wrap on narrow screens and use the shared 44 px
 button and visible-focus styles. Language selection and voice settings remain
 with P5-05; no new visual direction is chosen. A headless Chromium check at
@@ -277,6 +306,20 @@ reconnect, mute, and stop states with mocked relay/audio APIs. Physical
 microphone and speaker behavior remains unverified. Stop shows "Saving voice
 session…" until the backend has recorded usage, then refreshes conversation
 history.
+
+## Conversation opening and input (P8-05)
+
+The conversation fills the shared shell's main space using its existing neutral
+tokens; P8-20 still owns the selected aurora/daylight visual system. A bounded,
+independently scrolling transcript sits above the bottom-centred composer. New
+replies stay visible without moving the composer; loading older history does not
+jump to the latest reply. Activity and backend controls remain available under
+an expandable disclosure rather than competing with the opening conversation.
+Only the small, labelled input orb starts voice. Voice hides history and the
+composer without discarding the draft or language; stop, natural end and failure
+restore typing focus. The ready state says the microphone is off and offers a
+separate Enable microphone action. The shell/fullscreen transition, window
+carry-over and final end-control behavior remain P8-10–P8-12.
 
 ## Next-generation shared shell (structure agreed; P8-04 implemented)
 
@@ -309,6 +352,23 @@ remain docked on return to typing. Otherwise the earlier shell layout returns.
 Generated views are temporary; theme values persist. Small-orb input controls
 start voice explicitly. Glass/transparency and futuristic styling are exploratory;
 white wireframe windows are not a selected final treatment.
+
+## Temporary workspace composition (P8-06)
+
+The main workspace accepts an in-memory set of typed views. Desktop opens in a
+tiled arrangement and can switch to overlapping layers; using a layered window
+raises it, with explicit order controls as a keyboard alternative. Move and resize
+work with pointer gestures or focused arrow-key controls. At widths up to 900px,
+both arrangements reflow to a single-column view stack to keep content within the
+viewport.
+
+Each view presents ready, empty, loading, error, or interrupted content. Retry and
+continue feedback stays with the view, including partial interrupted content.
+Window geometry, order, and the open view set remain in memory only. The host is
+currently empty until P8-14 provides generated-view data and P8-15 supplies
+Jarvis-directed workspace commands; those data and agent-control contracts are
+not part of P8-06. These structural choices reuse the neutral shell tokens and
+do not settle the deferred full visual system in P8-20.
 
 ## Proposed surfaces for accepted capability additions
 

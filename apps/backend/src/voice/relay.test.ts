@@ -68,6 +68,7 @@ function appFor(
     })),
     getSession: vi.fn(async () => null),
     endSession: vi.fn(async () => true),
+    getDanMessageIdBySourceItemId: vi.fn(async () => '42'),
     addMessage: vi.fn<ConversationStore['addMessage']>(async (input) => ({
       id: '42',
       sessionId: input.sessionId,
@@ -192,7 +193,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
     await app.listen({ host: '127.0.0.1', port: 0 });
     const address = app.server.address() as AddressInfo;
     const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
-    const reply = new Promise<string>((resolve) => browser.once('message', (data) => resolve(data.toString())));
+    const reply = new Promise<string>((resolve) => browser.on('message', (data) => {
+      if (data.toString() === 'audio-event') resolve(data.toString());
+    }));
     browser.send('audio-event');
 
     await expect(reply).resolves.toBe('audio-event');
@@ -202,6 +205,41 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(getToken).toHaveBeenCalledOnce();
     expect(records.join('')).not.toContain(browserToken);
     expect(records.join('')).not.toContain(voiceToken);
+  });
+
+  it('sends an ephemeral, validated screen description into the active voice response', async () => {
+    const forwarded: Record<string, unknown>[] = [];
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => forwarded.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    });
+    const { app, conversationStore } = appFor((token, signal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    }));
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = new WebSocket(`ws://127.0.0.1:${address.port}/voice`, [
+      VOICE_SUBPROTOCOL, `jarvis.auth.${browserToken}`,
+    ], { headers: { origin: 'http://localhost:5173' } });
+    browsers.push(browser);
+    let readyResolve!: (event: Record<string, unknown>) => void;
+    const ready = new Promise<Record<string, unknown>>((resolve) => { readyResolve = resolve; });
+    browser.on('message', (data) => {
+      const event = JSON.parse(data.toString()) as Record<string, unknown>;
+      if (event.type === 'jarvis.session.ready') readyResolve(event);
+    });
+    await once(browser, 'open');
+    await expect(ready).resolves.toMatchObject({ type: 'jarvis.session.ready', sessionId: '41' });
+    browser.send(JSON.stringify({
+      type: 'jarvis.screen.context',
+      description: 'A window shows a chart.',
+    }));
+    await vi.waitFor(() => expect(forwarded.some((event) =>
+      event.type === 'response.create' &&
+      String((event.response as Record<string, unknown> | undefined)?.instructions).includes('A window shows a chart.'),
+    )).toBe(true));
+
+    expect(conversationStore.addMessage).not.toHaveBeenCalled();
+    expect(forwarded.filter((event) => event.type === 'conversation.item.create')).toEqual([]);
   });
 
   it('stores completed voice transcripts, records a voice session, and waits for its final usage row', async () => {
@@ -354,7 +392,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice/da`);
     browser.send(JSON.stringify({ type: 'session.start', protocol_version: '1.0' }));
     const audio = JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' });
-    const audioReply = new Promise<string>((resolve) => browser.once('message', (data) => resolve(data.toString())));
+    const audioReply = new Promise<string>((resolve) => browser.on('message', (data) => {
+      if (data.toString() === audio) resolve(data.toString());
+    }));
     browser.send(audio);
 
     await expect(audioReply).resolves.toBe(audio);
