@@ -92,9 +92,22 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Minimised views remain mounted but hidden and inert; open/minimised/closed and
   maximised state is memory-only. The shell passes the component's typed
   `WorkspaceController` dispatch through `WorkspaceCommandContext` to the active
-  page. The current shell still supplies no generated views; P8-14 owns view data
-  and P8-15 owns authenticated Jarvis command delivery. No server route or
-  persistence is added here.
+  page. P8-14 supplies bounded declarative view data and fixed React renderers.
+- P8-15 registers one sensitive `workspace_command` Jarvis tool with the shared
+  generated-view/operation schema. An in-memory broker binds each command to the
+  active owner's authenticated `/now/events` session, bounds pending work and
+  deduplicates command IDs. The event carries only validated JSON; the browser
+  dispatches through the current `WorkspaceCommandContext` controller and posts
+  an owner-authenticated acknowledgement to
+  `POST /now/workspace/commands/:commandId/ack` after applying or refusing it.
+  Timeouts, cancellation, disconnects, stale sessions and partial failures are
+  returned as refused/error results; no view or geometry rows are persisted.
+  The renderers use fixed React elements; generated HTML, JavaScript and CSS
+  never execute. Offline route/controller tests cover the flow; live
+  Entra/Foundry delivery remains unverified.
+- P8-07's lifecycle remains in memory: closing a generated view removes only
+  its temporary client entry, while closing an existing view changes only its
+  workspace visibility. Neither action modifies conversation or source records.
 - P7-16 extends the same authenticated, validated `dbo.settings` key/value store
   with bounded personality preferences. Hosted chat and Danish voice read them
   for each new agent invocation/session; the backend snapshots them when it

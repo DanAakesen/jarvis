@@ -296,12 +296,22 @@ focus, relative metadata, 320/280px overflow, draft reflow, pending controls,
 title dragging, edge resizing, Arrange keyboard/Escape focus, phone popup bounds,
 minimise/restore, maximised-window precedence over another open Arrange menu,
 and static readable reduced-motion states. Settled surface
-contrast checks exceed AA. `npm test --workspace @jarvis/web` passed 190 tests;
+contrast checks exceed AA. `npm test --workspace @jarvis/web` passed 201 tests;
 `npm run lint --workspace @jarvis/web` and `npm run build --workspace @jarvis/web`
-passed (existing chunk-size warning). Real phone keyboards, hardware audio,
-live Entra/Azure, tool-call event delivery and generated/agent-directed windows
-remain unverified; local workspace screenshots mount the real component with
-explicitly labelled fixtures, not a new runtime integration.
+passed (existing chunk-size warning). P8-15 was also exercised in Chromium at
+1280×900 and 390×844 with a scratch signed-in stub and mock Now/SSE/ack endpoints:
+create, layout, move, resize, context-panel open/close, minimise, restore, show,
+and close all applied and received owner-session acknowledgements. Generated
+script-shaped text remained literal, the phone page had no horizontal overflow,
+and the browser reported no page/console errors. This checks the real client and
+authenticated event/ack flow against fixtures, not real chat/voice tool
+invocation. Live Entra/Foundry delivery, real phone keyboards, and hardware audio
+remain unverified.
+P8-15 offline checks: `npm test --workspace @jarvis/contracts` (8/8);
+`npm test --workspace @jarvis/backend -- src/core/workspace-commands.test.ts
+src/core/now.test.ts` (14/14), backend lint and build pass; `npm test
+--workspace @jarvis/web` (201/201), web lint and build pass. The web build reports
+the existing advisory for a minified chunk over 500 kB.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal
