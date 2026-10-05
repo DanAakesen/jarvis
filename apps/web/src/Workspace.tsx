@@ -40,7 +40,7 @@ type Gesture = {
 const clamp = (value: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, value)) * 1000) / 1000;
 const percent = (value: number) => `${Number((value * 100).toFixed(2))}%`;
 
-function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'close' | 'view' }) {
+function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'close' | 'view' | 'more' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'minimise':
@@ -53,6 +53,8 @@ function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'clo
       return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>;
     case 'view':
       return <svg {...common}><rect x="4" y="5" width="16" height="14" rx="2" /><path d="M4 9h16" /></svg>;
+    case 'more':
+      return <svg {...common}><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>;
   }
 }
 
@@ -562,7 +564,9 @@ export const Workspace = forwardRef<WorkspaceController, {
                 </h3>
                 <div className="workspace-window-actions">
                   {!maximized && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
-                    <summary>Arrange</summary>
+                    <summary className="workspace-arrange-trigger" aria-label={`Arrange ${view.title}`} title={`Arrange ${view.title}`}>
+                      <WindowIcon name="more" />
+                    </summary>
                     <div className="workspace-arrange-options">
                       <p id={`${titleId}-shortcuts`} className="workspace-shortcuts">
                         Focus Move or Resize, then use arrow keys. {narrow ? 'Up/down changes order or height; width stays full-screen.' : arrangement === 'tiled' ? 'Move changes order; Resize changes tile width or height.' : 'Shift + arrow makes a larger step.'} Escape closes Arrange.

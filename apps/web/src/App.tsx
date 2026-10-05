@@ -135,6 +135,9 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const activeArea = areas.find(({ path }) => pathname.startsWith(`/${path}`));
   const settingsActive = pathname.startsWith('/settings');
   const areaLabel = settingsActive ? 'Settings' : activeArea?.label ?? 'Jarvis';
+  const pageLabel = activeArea?.navigation
+    .filter(({ path }) => pathname === path || pathname.startsWith(`${path}/`))
+    .sort((left, right) => right.path.length - left.path.length)[0]?.label;
   const navigationItems = activeArea?.navigation ?? [{ label: 'Conversation', path: '/' }];
 
   useEffect(() => {
@@ -241,7 +244,18 @@ function ShellLayout({ signedIn, config, session, camera }: {
       <header className="app-topbar">
         <div className="topbar-context">
           <Link className="brand" to="/" aria-label="Jarvis home">Jarvis</Link>
-          {signedIn && <><span className="topbar-separator" aria-hidden="true">/</span><span className="topbar-area-label">{areaLabel}</span></>}
+          {signedIn && areaLabel !== 'Jarvis' && (
+            <>
+              <span className="topbar-separator" aria-hidden="true">/</span>
+              <span className="topbar-area-label">{areaLabel}</span>
+              {pageLabel && pageLabel !== areaLabel && (
+                <>
+                  <span className="topbar-separator" aria-hidden="true">/</span>
+                  <span className="topbar-page-label" aria-current="page">{pageLabel}</span>
+                </>
+              )}
+            </>
+          )}
         </div>
         {signedIn && (
           <div className="topbar-actions">
