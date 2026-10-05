@@ -205,9 +205,9 @@ Status, 4 October 2026: Dan registered the App, installed it on all repositories
 
 ## Accepted visual reference handoff
 
-The read-only [centred stage prototype](reference/ui-stage-prototype/README.md) and [selected images/captures](ui/centred-stage/README.md) support P8-28–P8-33. Its isolated lockfile is not part of the root workspaces; follow its README to run it. The accepted standalone is copied unchanged. Prototype commands/check reports are historical evidence, not validation of the production app or its Node 22 toolchain. Port selected scene code into the current app; do not deploy demo replies, simulated states or comparison fixtures.
+The read-only [centred stage prototype](reference/ui-stage-prototype/README.md) and [selected images/captures](ui/centred-stage/README.md) support P8-28–P8-33. Its isolated lockfile is not part of the root workspaces; follow its README to run it. The accepted standalone is copied unchanged. Prototype commands/check reports are historical evidence, not validation of the production app or its Node 22 toolchain. The production scene is implemented offline in draft PR #375, lazily loaded on the Jarvis route only; do not ship the prototype, its demo replies, simulated states or comparison fixtures.
 
-The 3D stage/large orb are Jarvis-only, light mode re-lights the same room, and dormant visuals do not enable microphone capture. Dan reported transition flicker after the earlier browser checks; it is unresolved. Keep live-provider/device limitations distinct from local checks. Original reference snapshots stay read-only.
+The 3D stage/large orb are Jarvis-only, light mode re-lights the same room, and dormant visuals do not enable microphone capture. Reduced motion, hidden-tab pause, WebGL fallback/context-loss cleanup and route teardown are implemented. Labelled software-Chromium empty/typing/voice/window captures and three motion frames are in `ui/screenshots/p8-28-*`; three repeated route cycles reported no off-route canvas and lost each prior context. This run used scratch auth/API/voice fixtures; Factory's unconfigured API endpoints deliberately return 503. P8-31's separate draft PR #376 records shared-glass captures/contrast checks for current pages; review the combined PRs for text readability over the reflected stage. SwiftShader consumed several CPU cores, so hardware-GPU, physical-device, live-voice and reported transition-flicker acceptance remain unverified. Original reference snapshots stay read-only.
 
 ## Setup and commands
 
@@ -225,7 +225,9 @@ P7-19 reuses that existing key and P7-18's default-off Chrome toggle; it adds no
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
 and Python 3.12.14 (`.python-version`, for future Python work). Install from the
-repository root. Prototype dependencies are excluded from npm workspaces.
+repository root. The standalone reference prototype's dependencies remain
+outside npm workspaces; production `apps/web` uses `three@0.180.0` and dev-only
+`@types/three@0.180.0`.
 See [README.md](../README.md) for public web configuration and overrides.
 
 Verified in Codex cloud for P0-02:
@@ -239,6 +241,7 @@ Verified in Codex cloud for P0-02:
 | Shared generated-view contract | `npm test --workspace @jarvis/contracts`; `npm run lint --workspace @jarvis/contracts` |
 | Focused P8-16 activity tests | `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- --run src/core/activity.test.ts src/core/conversation-activity.test.ts src/core/now.test.ts src/voice/relay.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx src/activity-context.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/VoiceOrb.test.tsx src/Workspace.test.tsx src/NowFeedPanel.test.tsx src/now-feed.test.ts` |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
+| Focused P8-28 scene and route lifecycle checks | `npm test --workspace @jarvis/web -- --run src/JarvisStage.test.tsx src/App.test.tsx` |
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
 | Focused P8-17 settings/theme checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
@@ -435,6 +438,36 @@ src/ConversationHistory.test.tsx src/VoiceControls.test.tsx
 src/VoiceOrb.test.tsx src/App.test.tsx` (89 passed), `npm run lint
 --workspace @jarvis/web`, and `npm run build --workspace @jarvis/web` passed;
 the build retains its existing chunk-size advisory.
+P8-31 used the scratch-only signed-in harness and API/SSE fixtures with the real
+conversation, shell, temporary workspace, contextual panel, Factory and Settings
+pages. Chromium captured conversation at 1440×1000 and 390×844 in dark and light;
+additional captures cover the generated text view, empty context panel, Factory
+tasks at desktop/phone sizes, and Settings at desktop/phone sizes. Fixture states
+exercised conversation populated/empty/error/long text, Factory ready/loading/503,
+Settings ready/503, the phone camera/sharing disclosure, and the contextual
+panel's close/reopen behavior. Keyboard Arrange changed a layered view's position
+and size, Escape closed the menu, and minimise/restore succeeded. At 390px there
+was no horizontal overflow; visible app controls met 44px sizing, except the
+keyboard-only skip link (41px high). Keyboard focus on Settings displayed a
+solid 3px ring. Reduced motion matched and set the workspace transition to 0s.
+Chromium reported no page exceptions. Follow-up review found the earlier dark
+captures were taken while the 420ms light-to-dark surface transition was still
+running; the conversation and Factory dark captures were regenerated after the
+computed shell backgrounds matched the dark tokens. The settled colors are
+recorded in
+[`dark-rendered-styles.json`](ui/centred-stage/p8-31-browser/dark-rendered-styles.json).
+A ten-frame, 990ms PNG sequence records a
+workspace window entering; evidence and fixture summaries are in
+[`docs/ui/centred-stage/p8-31-browser/`](ui/centred-stage/p8-31-browser/),
+including a [side-by-side comparison](ui/centred-stage/p8-31-browser/glass-reference-comparison-dark-desktop.png)
+with selected image 2.
+All displayed conversation, task and generated-view content came from local
+fixtures, not live accounts or production data. Contrast tests calculate primary
+text, muted text, current-color icon and focus contrast on both glass surfaces
+against black and white backing extremes. The light muted-text token was darkened
+to meet AA, and conversation Markdown paragraphs now use the primary text role.
+Production does not yet mount the 3D room, so reflected-scene readability, live
+delivery and hardware behavior remain unverified.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

@@ -1,0 +1,175 @@
+[
+  {
+    "name": "desktop",
+    "colors": {
+      "theme": "dark",
+      "variables": {
+        "--surface-translucent": "rgb(9 16 23 / 90%)",
+        "--surface-muted": "rgb(8 15 22 / 92%)",
+        "--text": "#f3fff9",
+        "--text-muted": "#c0d0cd",
+        "--focus": "#a5f2dc"
+      },
+      "topbar": {
+        "background": "rgba(9, 16, 23, 0.9)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(192, 200, 208)",
+        "text": "Jarvis\nShare screen from Activity, sharing and backend in the conversation.\nOff\nCamera tur"
+      },
+      "rail": {
+        "background": "rgba(8, 15, 22, 0.92)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(192, 208, 205)",
+        "text": "Jarvis\nSoftware Factory\nUsage"
+      },
+      "sidebar": {
+        "background": "rgba(8, 15, 22, 0.92)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(192, 208, 205)",
+        "text": "Jarvis\nConversation"
+      },
+      "sidebarLink": {
+        "background": "rgba(16, 23, 33, 0.9)",
+        "color": "rgb(243, 255, 249)",
+        "icon": null,
+        "text": "Conversation"
+      },
+      "jarvisReply": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(243, 255, 249)",
+        "icon": null,
+        "text": "The conversation remains readable and usable."
+      },
+      "width": 1440,
+      "innerWidth": 1440
+    }
+  },
+  {
+    "name": "phone",
+    "colors": {
+      "theme": "dark",
+      "variables": {
+        "--surface-translucent": "rgb(9 16 23 / 90%)",
+        "--surface-muted": "rgb(8 15 22 / 92%)",
+        "--text": "#f3fff9",
+        "--text-muted": "#c0d0cd",
+        "--focus": "#a5f2dc"
+      },
+      "topbar": {
+        "background": "rgba(9, 16, 23, 0.9)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(243, 255, 249)",
+        "text": "Jarvis"
+      },
+      "rail": {
+        "background": "rgba(8, 15, 22, 0.92)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(243, 255, 249)",
+        "text": "Jarvis\nSoftware Factory\nUsage"
+      },
+      "sidebar": {
+        "background": "rgba(8, 15, 22, 0.92)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(192, 208, 205)",
+        "text": "Jarvis\nConversation"
+      },
+      "sidebarLink": {
+        "background": "rgba(16, 23, 33, 0.9)",
+        "color": "rgb(243, 255, 249)",
+        "icon": null,
+        "text": "Conversation"
+      },
+      "jarvisReply": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(243, 255, 249)",
+        "icon": null,
+        "text": "The conversation remains readable and usable."
+      },
+      "width": 390,
+      "innerWidth": 390
+    }
+  },
+  {
+    "name": "factoryDesktop",
+    "colors": {
+      "theme": "dark",
+      "variables": {
+        "--surface-translucent": "rgb(9 16 23 / 90%)",
+        "--surface-muted": "rgb(8 15 22 / 92%)",
+        "--text": "#f3fff9",
+        "--text-muted": "#c0d0cd",
+        "--focus": "#a5f2dc"
+      },
+      "topbar": {
+        "background": "rgba(9, 16, 23, 0.9)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(192, 200, 208)",
+        "text": "Jarvis\n/\nSoftware Factory\n/\nTasks\nShare screen from Activity, sharing and backend in the c"
+      },
+      "rail": {
+        "background": "rgba(8, 15, 22, 0.92)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(192, 208, 205)",
+        "text": "Jarvis\nSoftware Factory\nUsage"
+      },
+      "sidebar": {
+        "background": "rgba(8, 15, 22, 0.92)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(192, 208, 205)",
+        "text": "Software Factory\nTasks\nProjects"
+      },
+      "sidebarLink": {
+        "background": "rgba(16, 23, 33, 0.9)",
+        "color": "rgb(243, 255, 249)",
+        "icon": null,
+        "text": "Tasks"
+      },
+      "jarvisReply": null,
+      "width": 1440,
+      "innerWidth": 1440
+    }
+  },
+  {
+    "name": "factoryPhone",
+    "colors": {
+      "theme": "dark",
+      "variables": {
+        "--surface-translucent": "rgb(9 16 23 / 90%)",
+        "--surface-muted": "rgb(8 15 22 / 92%)",
+        "--text": "#f3fff9",
+        "--text-muted": "#c0d0cd",
+        "--focus": "#a5f2dc"
+      },
+      "topbar": {
+        "background": "rgba(9, 16, 23, 0.9)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(243, 255, 249)",
+        "text": "Jarvis"
+      },
+      "rail": {
+        "background": "rgba(8, 15, 22, 0.92)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(243, 255, 249)",
+        "text": "Jarvis\nSoftware Factory\nUsage"
+      },
+      "sidebar": {
+        "background": "rgba(8, 15, 22, 0.92)",
+        "color": "rgb(243, 255, 249)",
+        "icon": "rgb(192, 208, 205)",
+        "text": "Software Factory\nTasks\nProjects"
+      },
+      "sidebarLink": {
+        "background": "rgba(16, 23, 33, 0.9)",
+        "color": "rgb(243, 255, 249)",
+        "icon": null,
+        "text": "Tasks"
+      },
+      "jarvisReply": null,
+      "width": 390,
+      "innerWidth": 390
+    }
+  },
+  {
+    "pageErrors": []
+  }
+]
