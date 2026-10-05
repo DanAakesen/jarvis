@@ -417,6 +417,22 @@ socket duplicate headers, `/me` authorization and stalled-provider tests
 establish this offline boundary. No deployed Entra token was obtained; live
 browser sign-in and deployment verification remain #11.
 
+## Teams calling (P7-01)
+
+The accepted design is Teams Phone extensibility (preview) feeding ACS Call
+Automation, with a backend Event Grid callback that verifies the caller's Teams
+Entra object ID before answering. The caller helper accepts only an exact
+allow-listed Entra object ID; phone-number matches are not identity proof.
+Migration `0017_phone_call_sessions.sql` stores a phone session separately from
+its conversation and can link future confirmations to it. This is foundation
+only: the Event Grid route and authentication, answer/reject lifecycle,
+idempotent event processing, media WebSocket bridge to Voice Live, phone-session
+tool policy, and ACS/Event Grid Bicep are not implemented. The ACS media
+envelopes are distinct from the existing browser voice relay protocol, so
+interoperability must be covered by an offline adapter and a live acceptance
+call. Dan's purchased number, Azure configuration, real Teams call, and tool
+call remain unverified; no Azure resources or paid services have been created.
+
 ## Teams phone notifications and confirmations (P7-03)
 
 When Teams settings and the database are available, `index.ts` registers the
@@ -604,15 +620,23 @@ Linux Windows-target build run in backend CI. Real device-code sign-in, Windows
 process/window behavior, SQL production writes and the live PC opening flow
 remain unverified.
 
-### Chrome browser executor (P7-18)
+### Chrome browser executor (P7-18, P7-25)
 
 The existing authenticated PC bridge protocol adds `browser_tabs`,
 `browser_snapshot`, and `browser_act` commands and the matching backend tools.
 The tray companion keeps browser automation off by default; Dan enables it with
-the persisted Chrome toggle in the tray menu. Only then does the companion query
-`http://127.0.0.1:9222/json/list` and attach to a page target whose DevTools
-WebSocket resolves to loopback on that port. Chrome is not launched by the
-backend and no inbound bridge listener is added.
+the persisted Chrome toggle in the tray menu. When the Jarvis MV3 extension in
+Dan's normal Chrome profile is connected, the executor uses `chrome.tabs` for
+discovery and sends its fixed CDP operations through `chrome.debugger`. The
+extension's native-messaging host is registered by the installer under HKCU;
+the host relays length-prefixed messages to the running companion over a
+current-user-only named pipe. This adds no network listener, and the extension
+does not expose external messaging. Chrome's debugger notification is visible
+while attached; the executor detaches after each completed action and the
+extension has a 30-second idle-detach fallback. If the extension is not
+connected, the executor retains the existing loopback CDP transport at
+`http://127.0.0.1:9222/json/list`. Chrome 136 ignores that port on the default
+user-data directory, so Dan's normal profile uses the extension.
 
 Each snapshot is one fixed Jarvis-owned page evaluation. It returns at most 100
 visible, unobstructed actionable controls with role, accessible name, bounded
@@ -633,10 +657,12 @@ confirmation service it refuses. Browser tools are marked sensitive so their
 arguments and results (including typed text, tab URLs and page content) are
 redacted from the generic tool-call store. No browser data is persisted.
 
-The portable core and backend protocol tests use a fake CDP target and exercise
-freshness, occlusion, secret blocking, confirmation and audit redaction. A live
-Chrome launch with Dan's signed-in profile and local-page desktop evidence still
-requires verification on his Windows PC.
+The portable core exercises the same indexed-action contract through fake CDP
+and fake extension ports. Backend protocol tests cover command validation and
+audit redaction. A Windows build and offline tests do not prove native-host
+registration, Chrome profile behavior, or debugger attachment; the one-time
+unpacked-extension load and live acceptance in Dan's normal profile still
+require his Windows PC.
 
 ### Ultrafast browser agent (P7-17)
 
@@ -809,6 +835,13 @@ in pages of 50 (maximum 100), ordered oldest-to-newest within each page and
 continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
+
+P8-25 keeps chat draft and turn state in `ConversationHistory`: acceptance clears
+only the unchanged submitted draft, and later edits survive completion/errors.
+History pages and saved turn messages merge by ID in SQL's numeric-ID order;
+persisted entries replace optimistic metadata without removing absent entries.
+Older pagination retains its cursor across latest-page refreshes. These changes
+do not alter storage, SSE contracts, or the backend's first-byte latency.
 
 When `JARVIS_CHAT_AGENT_NAME` is configured, the backend uses its managed
 identity to call

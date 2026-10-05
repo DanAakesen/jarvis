@@ -27,6 +27,10 @@ $executable = Join-Path $source 'Jarvis.PcBridge.exe'
 if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
     throw 'PublishPath must contain Jarvis.PcBridge.exe.'
 }
+$extensionManifest = Join-Path $source 'chrome-extension\manifest.json'
+if (-not (Test-Path -LiteralPath $extensionManifest -PathType Leaf)) {
+    throw 'PublishPath must contain chrome-extension\manifest.json.'
+}
 
 $local = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
 $installDirectory = Join-Path $local 'Programs\Jarvis.PcBridge'
@@ -38,6 +42,19 @@ $shortcutPath = Join-Path $startupDirectory 'Jarvis PC bridge.lnk'
 Get-Process -Name 'Jarvis.PcBridge' -ErrorAction SilentlyContinue | Stop-Process -Force
 New-Item -ItemType Directory -Path $installDirectory, $settingsDirectory -Force | Out-Null
 Copy-Item -Path (Join-Path $source '*') -Destination $installDirectory -Recurse -Force
+
+$nativeHostManifestPath = Join-Path $installDirectory 'com.jarvis.pcbridge.json'
+$nativeHostManifest = [ordered]@{
+    name = 'com.jarvis.pcbridge'
+    description = 'Jarvis PC bridge Chrome extension transport'
+    path = (Join-Path $installDirectory 'Jarvis.PcBridge.exe')
+    type = 'stdio'
+    allowed_origins = @('chrome-extension://emeeijaopandgohikamdpjajpmkkdlbg/')
+} | ConvertTo-Json -Depth 4
+[IO.File]::WriteAllText($nativeHostManifestPath, $nativeHostManifest, [Text.UTF8Encoding]::new($false))
+$nativeHostKey = 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.jarvis.pcbridge'
+New-Item -Path $nativeHostKey -Force | Out-Null
+Set-Item -Path $nativeHostKey -Value $nativeHostManifestPath
 
 $settings = [ordered]@{
     BackendUrl = $backendUri.GetLeftPart([UriPartial]::Authority)
@@ -58,4 +75,5 @@ $shortcut.Save()
 
 Write-Host 'Jarvis PC bridge installed for the current Windows user.'
 Write-Host "Configuration: $settingsPath"
-Write-Host 'The bridge starts at sign-in and connects outbound; no inbound firewall rule is created.'
+Write-Host 'The bridge starts at sign-in and connects outbound; no inbound network listener is created.'
+Write-Host 'Load the installed chrome-extension folder once from chrome://extensions with Developer mode enabled.'

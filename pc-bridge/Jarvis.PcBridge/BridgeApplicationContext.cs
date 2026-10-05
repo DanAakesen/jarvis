@@ -12,6 +12,7 @@ public sealed class BridgeApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem _browserToggle;
     private BridgeSettings? _settings;
     private BrowserExecutor? _browserExecutor;
+    private NativeMessagingBrowserPort? _extensionPort;
     private BridgeTokenProvider? _tokenProvider;
 
     public BridgeApplicationContext()
@@ -45,6 +46,7 @@ public sealed class BridgeApplicationContext : ApplicationContext
         _icon.Visible = false;
         _icon.Dispose();
         _dispatcher.Dispose();
+        _extensionPort?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _stopping.Dispose();
         base.ExitThreadCore();
     }
@@ -58,8 +60,10 @@ public sealed class BridgeApplicationContext : ApplicationContext
             _browserToggle.Checked = settings.BrowserEnabled;
             _browserToggle.Text = BrowserToggleText(settings.BrowserEnabled);
             _browserToggle.Enabled = true;
+            _extensionPort = new NativeMessagingBrowserPort();
             _browserExecutor = new BrowserExecutor(() => _settings?.BrowserEnabled == true,
-                WindowsCommandExecutor.ReadActiveWindowTitle);
+                WindowsCommandExecutor.ReadActiveWindowTitle,
+                extensionPort: _extensionPort);
             _tokenProvider = await BridgeTokenProvider.CreateAsync(settings, _stopping.Token);
             var client = new BridgeClient(settings, _tokenProvider, new WindowsCommandExecutor(), _browserExecutor);
             await client.RunAsync(SetStatus, _stopping.Token);

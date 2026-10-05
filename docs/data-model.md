@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 5 October 2026 for P7-02, P7-03, P7-08, P7-13 and P7-22. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, Google Calendar/Gmail tools, and long-term memory. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 5 October 2026 for P7-01, P7-02, P7-03, P7-08, P7-13 and P7-22. Scope: the Jarvis core, Software Factory, Teams calling, notification and confirmation state, Google Calendar/Gmail tools, and long-term memory. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -35,6 +35,11 @@ is added.
 P7-03 adds the Teams conversation and confirmation tables in
 `0014_teams_notifications.sql`; its down migration removes both tables and the
 confirmation expiry index.
+P7-01 adds `phone_sessions` and its link from `teams_confirmations` in
+`0017_phone_call_sessions.sql`. Each phone session references one
+`jarvis_sessions` row, uniquely records the Event Grid event and call, and keeps
+caller kind/ID, untrusted tier, status, and lifecycle timestamps. The migration
+does not store audio or transcripts. Live call orchestration is not implemented.
 P7-13 adds group 9 in `0016_long_term_memory.sql`: source-linked memories,
 revision history, a content-free deletion audit and nullable voice source-item IDs.
 The migration adds `vector(1536)` only when SQL exposes that type. After the
@@ -93,6 +98,7 @@ flowchart LR
     subgraph PHONE["8 · Phone notifications"]
         teams_conversations
         teams_confirmations
+        phone_sessions
     end
     tool_calls --> tasks
     tasks --> projects
@@ -117,7 +123,7 @@ flowchart LR
 | 5 | GitHub and release | Pull requests, checks, the release view (commits fetched from GitHub on demand) | `pull_requests`, `workflow_runs`, `releases`, `deployments` |
 | 6 | Operations | Safe webhook handling, credential expiry warnings | `webhook_deliveries`, `credential_status` |
 | 7 | Usage and cost | Transparency per task/project and current UTC-day web-research calls; the latter reuses group-one `tool_calls` | `usage` |
-| 8 | Notifications and confirmations | Dan's validated Teams conversation and expiring approvals for Teams or browser delivery | `teams_conversations`, `teams_confirmations` |
+| 8 | Phone, notifications and confirmations | Phone-call sessions plus Dan's validated Teams conversation and expiring approvals for Teams or browser delivery | `phone_sessions`, `teams_conversations`, `teams_confirmations` |
 | 9 | Long-term memory | Relevant source-linked preferences, project facts, decisions and unfinished tasks across sessions | `memories`, `memory_history`, `memory_deletions` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.

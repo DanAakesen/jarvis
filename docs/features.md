@@ -29,7 +29,7 @@ Status as of 5 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Sign-in | Sign in with his Microsoft account; everyone else is refused | Screen | All pages | Live | P0-08, P0-09 |
-| Chat | Type from the floating auto-growing composer, switch DA/EN, and read distinct messages with relative metadata and live streaming feedback; Jarvis replies render safe Markdown while Dan's messages stay plain; one continuous saved conversation with history and interruption recovery | Screen | Main page | Built | P4-03, P4-06, P4-09, P8-05, P8-21, P8-24 |
+| Chat | Open at the latest messages with typing focus; the auto-growing composer clears on acceptance and stays editable during replies, with Send and DA/EN disabled until completion (no queue); thinking feedback precedes open-surface Markdown streaming; next drafts and saved messages survive interruption and ID-deduped history refresh | Screen | Main page | Built | P4-03, P4-06, P4-09, P8-05, P8-21, P8-24, P8-25 |
 | English voice | Talk to Jarvis in English (gpt-realtime, Ryan HD, British butler persona) | Voice/chat | Main page | Built | P5-03, P5-04 |
 | Danish voice | Talk to Jarvis in Danish (MAI Transcribe, Harper) | Voice/chat | Main page | Built | P5-02, P5-04 |
 | Interrupt and reconnect | Interrupt Jarvis by speaking; voice reconnects automatically | Voice/chat | Main page | Built | P5-04 |
@@ -107,7 +107,7 @@ Status as of 5 October 2026.
 
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
-| Teams calling | Call Jarvis from the Teams app (no paid number at first) | Phone | Teams | Planned (needs decision) | P7-01 |
+| Teams calling | Call Jarvis from the Teams app through ACS Call Automation; only Dan's verified Teams Entra identity is accepted | Phone | Teams | In progress; ACS relay and live call remain unverified | P7-01 |
 | Away mode | Toggle by voice/chat, automatic Teams Away/Offline detection after ten minutes, and automatic return to present on active browser use; see mode in Now and route task updates and approvals to Teams while away, browser while present | Both | Main page, Phone | Built offline; Graph admin consent and live phone check pending | P7-02 |
 | Phone confirmations | Receive Dan-only Teams notifications and approve or reject actions with optional Speech F0 voice notes | Phone | Teams | Built offline; live Azure/phone check pending | P7-03 |
 | Screen sharing | Share a screen or window; request an in-memory vision description and, for browser tasks, pass its selected display label only as transient context | Both | Main page | Built offline; live vision/form check pending | P7-05, P7-19 |
