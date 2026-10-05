@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { backendFetch } from './backend-request';
 import { useThemePreference } from './theme-preference-context';
-import { readVoiceWorkspacePreference, saveVoiceWorkspacePreference } from './voice-workspace-preference';
+import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
 
 interface Settings {
   appearance: { theme: 'light' | 'dark' };
   jarvis: { model: string; reasoning: string };
+  personality: {
+    tone: 'british_butler' | 'warm' | 'direct' | 'playful';
+    responseStyle: 'concise' | 'balanced' | 'detailed';
+    customInstructions: string;
+  };
   voice: {
     speechToTextModel: string;
     englishModel: string;
     englishVoice: string;
     danishVoice: string;
     defaultLanguage: 'da' | 'en';
+    minimizeWindowsOnVoiceStart: boolean;
   };
   codex: { model: string; reasoning: string };
   copilot: { model: string };
@@ -33,6 +39,8 @@ interface SettingsOptions {
   themes: string[];
   jarvisModels: string[];
   reasoningEfforts: string[];
+  personalityTones: Settings['personality']['tone'][];
+  personalityResponseStyles: Settings['personality']['responseStyle'][];
   speechToTextModels: string[];
   englishModels: string[];
   englishVoices: string[];
@@ -60,6 +68,13 @@ const optionLabels: Record<string, string> = {
   'gpt-5.6-luna': 'GPT-5.6 Luna',
   'gpt-realtime-2.1': 'GPT Realtime 2.1',
   'mai-transcribe': 'MAI Transcribe',
+  british_butler: 'British butler',
+  warm: 'Warm',
+  direct: 'Direct',
+  playful: 'Playful',
+  concise: 'Concise',
+  balanced: 'Balanced',
+  detailed: 'Detailed',
   'en-GB-Ryan:DragonHDLatestNeural': 'Ryan HD (British English)',
   'da-DK-Harper:MAI-Voice-2': 'Harper (Danish)',
   da: 'Danish',
@@ -77,8 +92,29 @@ const optionLabels: Record<string, string> = {
   complete_without_deployment: 'Complete without deployment',
 };
 
+const defaultPersonality: Settings['personality'] = {
+  tone: 'british_butler',
+  responseStyle: 'concise',
+  customInstructions: '',
+};
+
+function cacheVoiceWorkspacePreference(minimizeWindowsOnVoiceStart: boolean) {
+  try {
+    saveVoiceWorkspacePreference(minimizeWindowsOnVoiceStart);
+  } catch {
+    return;
+  }
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasUnsupportedControlCharacters(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 0x20 && character !== '\n' && character !== '\r' && character !== '\t';
+  });
 }
 
 function isSettingsResponse(value: unknown): value is SettingsResponse {
@@ -87,7 +123,8 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
   const options = value.options;
   const credentials = value.credentials;
   const optionKeys: (keyof SettingsOptions)[] = [
-    'themes', 'jarvisModels', 'reasoningEfforts', 'speechToTextModels', 'englishModels',
+    'themes', 'jarvisModels', 'reasoningEfforts', 'personalityTones', 'personalityResponseStyles',
+    'speechToTextModels', 'englishModels',
     'englishVoices', 'danishVoices', 'languages', 'codexModels',
     'codexReasoningEfforts', 'copilotModels', 'projectVisibilities', 'projectAgents',
     'projectPolicies',
@@ -99,14 +136,23 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     (item.status === 'ok' || item.status === 'renew_soon' || item.status === 'failed' || item.status === 'unknown') &&
     (item.expiresAt === null || (typeof item.expiresAt === 'string' && Number.isFinite(Date.parse(item.expiresAt)))) &&
     (item.lastRenewedAt === null || (typeof item.lastRenewedAt === 'string' && Number.isFinite(Date.parse(item.lastRenewedAt)))));
-  return isObject(settings.appearance) &&
+  return validOptions && validCredentials &&
+    isObject(settings.appearance) &&
     (settings.appearance.theme === 'light' || settings.appearance.theme === 'dark') &&
-    isObject(settings.jarvis) && isObject(settings.voice) && isObject(settings.codex) &&
+    isObject(settings.jarvis) && isObject(settings.personality) && isObject(settings.voice) && isObject(settings.codex) &&
     isObject(settings.copilot) && isObject(settings.global) && isObject(settings.newProjects) &&
     typeof settings.jarvis.model === 'string' && typeof settings.jarvis.reasoning === 'string' &&
+    typeof settings.personality.tone === 'string' &&
+    (options.personalityTones as string[]).includes(settings.personality.tone) &&
+    typeof settings.personality.responseStyle === 'string' &&
+    (options.personalityResponseStyles as string[]).includes(settings.personality.responseStyle) &&
+    typeof settings.personality.customInstructions === 'string' &&
+    settings.personality.customInstructions.length <= 2_000 &&
+    !hasUnsupportedControlCharacters(settings.personality.customInstructions) &&
     typeof settings.voice.speechToTextModel === 'string' && typeof settings.voice.englishModel === 'string' &&
     typeof settings.voice.englishVoice === 'string' && typeof settings.voice.danishVoice === 'string' &&
     (settings.voice.defaultLanguage === 'da' || settings.voice.defaultLanguage === 'en') &&
+    typeof settings.voice.minimizeWindowsOnVoiceStart === 'boolean' &&
     typeof settings.codex.model === 'string' && typeof settings.codex.reasoning === 'string' &&
     typeof settings.copilot.model === 'string' && typeof settings.global.maxParallelTasks === 'number' &&
     Number.isSafeInteger(settings.global.maxParallelTasks) &&
@@ -122,8 +168,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     typeof settings.newProjects.maxParallelTasks === 'number' &&
     Number.isSafeInteger(settings.newProjects.maxParallelTasks) &&
     settings.newProjects.maxParallelTasks >= 1 && settings.newProjects.maxParallelTasks <= 100 &&
-    typeof settings.newProjects.defaultBranch === 'string' &&
-    validOptions && validCredentials;
+    typeof settings.newProjects.defaultBranch === 'string';
 }
 
 const credentialNames: Record<CredentialStatus['name'], string> = {
@@ -217,13 +262,10 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
   const [options, setOptions] = useState<SettingsOptions | null>(null);
   const [credentials, setCredentials] = useState<CredentialStatus[]>([]);
   const [saving, setSaving] = useState(false);
+  const [resettingPersonality, setResettingPersonality] = useState(false);
   const [message, setMessage] = useState('');
+  const [personalityResetMessage, setPersonalityResetMessage] = useState('');
   const [error, setError] = useState(backendUrl ? '' : 'Settings are unavailable until the backend is deployed.');
-  const [minimizeWindowsOnVoiceStart, setMinimizeWindowsOnVoiceStart] = useState(
-    () => readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart,
-  );
-  const [voicePreferenceMessage, setVoicePreferenceMessage] = useState('');
-  const [voicePreferenceError, setVoicePreferenceError] = useState('');
 
   const load = useCallback(async () => {
     if (!backendUrl) {
@@ -239,6 +281,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       setSettings(result.settings);
       setOptions(result.options);
       setCredentials(result.credentials);
+      cacheVoiceWorkspacePreference(result.settings.voice.minimizeWindowsOnVoiceStart);
       setState('ready');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Settings could not be loaded. Try again.');
@@ -255,6 +298,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       setSettings(result.settings);
       setOptions(result.options);
       setCredentials(result.credentials);
+      cacheVoiceWorkspacePreference(result.settings.voice.minimizeWindowsOnVoiceStart);
       setState('ready');
     }).catch((cause: unknown) => {
       if (!active) return;
@@ -273,18 +317,28 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       ...current,
       [area]: { ...current[area], [key]: value },
     }) : current);
+    if (area === 'personality') setPersonalityResetMessage('');
     setMessage('');
   };
 
-  const updateVoiceWorkspacePreference = (value: boolean) => {
+  const resetPersonality = async () => {
+    if (!settings || !savedSettings || !backendUrl || saving || personalityIsDefault) return;
+    setSaving(true);
+    setResettingPersonality(true);
+    setError('');
+    setMessage('');
+    setPersonalityResetMessage('');
     try {
-      saveVoiceWorkspacePreference(value);
-      setMinimizeWindowsOnVoiceStart(value);
-      setVoicePreferenceMessage('Saved on this device.');
-      setVoicePreferenceError('');
-    } catch {
-      setVoicePreferenceError('This preference could not be saved on this device.');
-      setVoicePreferenceMessage('');
+      const result = await requestSettings(backendUrl, getAccessToken, 'PATCH', { personality: defaultPersonality });
+      setSavedSettings(result.settings);
+      setSettings((current) => current ? ({ ...current, personality: { ...result.settings.personality } }) : current);
+      setOptions(result.options);
+      setPersonalityResetMessage('Personality reset and saved. Defaults apply to new sessions.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Personality could not be reset. Try again.');
+    } finally {
+      setSaving(false);
+      setResettingPersonality(false);
     }
   };
 
@@ -301,6 +355,8 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       setSavedSettings(result.settings);
       setSettings(result.settings);
       setOptions(result.options);
+      cacheVoiceWorkspacePreference(result.settings.voice.minimizeWindowsOnVoiceStart);
+      setPersonalityResetMessage('');
       setMessage('Saved. These are defaults for new sessions and tasks; running work keeps its current settings.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Settings could not be saved. Try again.');
@@ -315,6 +371,13 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
     settings.global.maxParallelTasks >= 1 && settings.global.maxParallelTasks <= 100;
   const newProjectMaxTasksValid = settings !== null && Number.isSafeInteger(settings.newProjects.maxParallelTasks) &&
     settings.newProjects.maxParallelTasks >= 1 && settings.newProjects.maxParallelTasks <= 100;
+  const personalityInstructionsValid = settings !== null &&
+    settings.personality.customInstructions.length <= 2_000 &&
+    !hasUnsupportedControlCharacters(settings.personality.customInstructions);
+  const personalityIsDefault = settings !== null &&
+    settings.personality.tone === defaultPersonality.tone &&
+    settings.personality.responseStyle === defaultPersonality.responseStyle &&
+    settings.personality.customInstructions === defaultPersonality.customInstructions;
 
   return (
     <section className="settings-page" aria-labelledby="settings-heading">
@@ -380,6 +443,57 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
             <p className="settings-explanation">Model choices are limited to deployments currently configured for Jarvis.</p>
           </section>
 
+          <section className="settings-section" aria-labelledby="personality-settings-heading">
+            <h2 id="personality-settings-heading">Jarvis Personality</h2>
+            <p className="settings-explanation" id="personality-session-help">
+              Personality changes apply to new sessions. Active sessions keep their current settings.
+            </p>
+            <div className="settings-grid">
+              <SelectField id="personality-tone" label="Tone" value={settings.personality.tone}
+                options={options.personalityTones} disabled={saving}
+                onChange={(value) => update('personality', 'tone', value as Settings['personality']['tone'])} />
+              <SelectField id="personality-response-style" label="Response style" value={settings.personality.responseStyle}
+                options={options.personalityResponseStyles} disabled={saving}
+                onChange={(value) => update('personality', 'responseStyle', value as Settings['personality']['responseStyle'])} />
+              <div className="settings-field">
+                <label htmlFor="personality-instructions">Custom instructions</label>
+                <textarea id="personality-instructions" rows={5} maxLength={2_000}
+                  value={settings.personality.customInstructions} disabled={saving}
+                  aria-describedby={`personality-instructions-help personality-instructions-count${personalityInstructionsValid ? '' : ' personality-instructions-error'}`}
+                  aria-invalid={!personalityInstructionsValid}
+                  onChange={(event) => update('personality', 'customInstructions', event.target.value)} />
+                <p className="settings-explanation" id="personality-instructions-help">
+                  Optional. Up to 2,000 characters. Keep instructions focused on tone and response style.
+                </p>
+                <p className="settings-explanation" id="personality-instructions-count">
+                  {settings.personality.customInstructions.length.toLocaleString()} / 2,000 characters
+                </p>
+                {!personalityInstructionsValid && (
+                  <p className="settings-validation-error" id="personality-instructions-error" role="alert">
+                    Remove control characters other than line breaks, tabs, and spaces.
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="settings-explanation" id="personality-reset-help">
+              {saving
+                ? 'Wait for the current save to finish before resetting.'
+                : personalityIsDefault
+                  ? 'The current personality already matches the default.'
+                  : 'Reset saves the current default immediately.'}
+            </p>
+            <div className="settings-actions">
+              <button className="secondary-button" type="button" disabled={saving || personalityIsDefault}
+                aria-describedby="personality-reset-help"
+                onClick={() => { void resetPersonality(); }}>Reset personality</button>
+            </div>
+            {(resettingPersonality || personalityResetMessage) && (
+              <p className="settings-explanation" role="status">
+                {resettingPersonality ? 'Resetting personality…' : personalityResetMessage}
+              </p>
+            )}
+          </section>
+
           <section className="settings-section" aria-labelledby="voice-settings-heading">
             <h2 id="voice-settings-heading">Voice</h2>
             <div className="settings-grid">
@@ -399,16 +513,17 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
                 options={options.languages} disabled={saving}
                 onChange={(value) => update('voice', 'defaultLanguage', value as 'da' | 'en')} />
             </div>
-            <label className="choice voice-window-preference" htmlFor="minimize-windows-on-voice-start">
-              <input id="minimize-windows-on-voice-start" type="checkbox"
-                checked={minimizeWindowsOnVoiceStart}
-                onChange={(event) => updateVoiceWorkspacePreference(event.target.checked)} />
+            <label className="choice" htmlFor="minimize-windows-on-voice-start">
+              <input
+                id="minimize-windows-on-voice-start"
+                type="checkbox"
+                checked={settings.voice.minimizeWindowsOnVoiceStart}
+                disabled={saving}
+                onChange={(event) => update('voice', 'minimizeWindowsOnVoiceStart', event.target.checked)}
+              />
               Minimise all windows when starting voice
             </label>
-            <p className="settings-explanation">Off by default. This preference is saved on this device until account settings persistence is available.</p>
-            {voicePreferenceError && <p className="settings-feedback" role="alert">{voicePreferenceError}</p>}
-            {!voicePreferenceError && voicePreferenceMessage &&
-              <p className="settings-feedback" role="status">{voicePreferenceMessage}</p>}
+            <p className="settings-explanation">Off by default. When enabled, open windows are minimised for new voice sessions.</p>
             <p className="settings-explanation" id="voice-sample-help">Voice samples will be available when voice playback is connected.</p>
             <div className="settings-actions">
               <button className="secondary-button" type="button" disabled aria-describedby="voice-sample-help">Play English sample</button>
@@ -520,8 +635,8 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
 
           <div className="settings-save">
             <button className="primary-button" type="submit"
-              disabled={!dirty || !maxTasksValid || !newProjectMaxTasksValid || saving}>
-              {saving ? 'Saving…' : 'Save settings'}
+              disabled={!dirty || !maxTasksValid || !newProjectMaxTasksValid || !personalityInstructionsValid || saving}>
+              {saving && !resettingPersonality ? 'Saving…' : 'Save settings'}
             </button>
             <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
               {error || message}

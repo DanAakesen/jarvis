@@ -121,6 +121,63 @@ describe('backend module composition', () => {
     expect(failed.body).not.toContain('sensitive provider detail');
   });
 
+  it('validates generated-view tool results before returning or recording them', async () => {
+    const validResult = {
+      type: 'generated-view',
+      view: {
+        version: 1,
+        title: 'Current tasks',
+        renderer: 'list',
+        source: { id: 'factory.tasks', status: 'complete' },
+        data: {
+          items: [{
+            title: '<script>not code</script>',
+            action: { type: 'open-route', route: '/factory/tasks/9223372036854775807' },
+          }],
+        },
+      },
+    };
+    const execute = vi.fn()
+      .mockResolvedValueOnce(validResult)
+      .mockResolvedValueOnce({ type: 'generated-view', view: { ...validResult.view, renderer: 'script' } });
+    const record = vi.fn(async () => {});
+    const tool: JarvisTool = {
+      name: 'extension_view', description: 'Returns a generated view',
+      inputSchema: { type: 'object', additionalProperties: false },
+      execute,
+    };
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, factoryModule, extension('extension', [tool])],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      toolCallStore: { record },
+    });
+    apps.push(app);
+
+    const unauthorized = await app.inject({
+      method: 'POST', url: '/tools/extension_view', headers: { 'x-jarvis-message-id': '42' }, payload: {},
+    });
+    expect(unauthorized.statusCode).toBe(401);
+    expect(execute).not.toHaveBeenCalled();
+
+    const valid = await app.inject({
+      method: 'POST', url: '/tools/extension_view', headers: { ...headers, 'x-jarvis-message-id': '42' }, payload: {},
+    });
+    expect(valid.json()).toMatchObject({ outcome: 'ok', result: validResult });
+    expect(record).toHaveBeenLastCalledWith(expect.objectContaining({ result: validResult, outcome: 'ok' }));
+
+    const invalid = await app.inject({
+      method: 'POST', url: '/tools/extension_view', headers: { ...headers, 'x-jarvis-message-id': '43' }, payload: {},
+    });
+    expect(invalid.json()).toMatchObject({
+      outcome: 'error', result: { error: 'Tool execution failed' },
+    });
+    expect(record).toHaveBeenLastCalledWith(expect.objectContaining({
+      messageId: '43', result: { error: 'Tool execution failed' }, outcome: 'error',
+    }));
+    expect(invalid.body).not.toContain('<script>');
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
   it('reports a refused tool call as refused, never as done', async () => {
     const record = vi.fn(async () => {});
     const refusing: JarvisTool = {
@@ -321,16 +378,14 @@ describe('backend module composition', () => {
     expect(Object.isFrozen(first.jarvisTools.get('echo')?.inputSchema.properties)).toBe(true);
     expect(Object.isFrozen(first.jarvisTools.list())).toBe(true);
     expect(second.jarvisTools.list().map(({ name }) => name)).toEqual([
-      ...coreModule.tools.map(({ name }) => name),
-      ...factoryModule.tools.map(({ name }) => name),
+      ...coreModule.tools.map(({ name }) => name), ...factoryModule.tools.map(({ name }) => name),
     ]);
   });
 
   it('keeps unimplemented APIs unavailable and reports missing task and settings storage', async () => {
     const app = fixture([]);
     expect(app.jarvisTools.list().map(({ name }) => name)).toEqual([
-      ...coreModule.tools.map(({ name }) => name),
-      ...factoryModule.tools.map(({ name }) => name),
+      ...coreModule.tools.map(({ name }) => name), ...factoryModule.tools.map(({ name }) => name),
     ]);
     expect((await app.inject({ url: '/factory/projects', headers })).statusCode).toBe(503);
     for (const url of ['/activity', '/events']) {

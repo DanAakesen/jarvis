@@ -204,8 +204,10 @@ Status, 4 October 2026: Dan registered the App, installed it on all repositories
 
 ## Setup and commands
 
-The repository uses npm workspaces for `apps/web` and `apps/backend`, one root
-lockfile, and shared strict TypeScript configuration. P0-02 implements the web
+The repository uses npm workspaces for `apps/web`, `apps/backend`, and
+`packages/contracts`, one root lockfile, and shared strict TypeScript
+configuration. P8-14 keeps the versioned JSON Schema and browser/backend view
+types in the contracts workspace. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
 Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3), and P2-01 (#27) adds sandbox and operations groups 4 and 6.
@@ -221,12 +223,14 @@ Verified in Codex cloud for P0-02:
 | Purpose | Command |
 | --- | --- |
 | Frozen dependency installation | `npm ci` in the repository root |
-| Both workspace builds | `npm run build` in the repository root |
-| Both workspace lint checks | `npm run lint` in the repository root (P0-03 adds backend lint) |
-| Both workspace tests (single run) | `npm test` in the repository root (P0-03 adds backend tests) |
+| All workspace builds | `npm run build` in the repository root |
+| All workspace lint checks | `npm run lint` in the repository root |
+| All workspace tests (single run) | `npm test` in the repository root |
+| Shared generated-view contract | `npm test --workspace @jarvis/contracts`; `npm run lint --workspace @jarvis/contracts` |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
+| Focused P8-17 settings/theme checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
 | Focused P7-08 camera, shell, chat and voice checks | `npm test --workspace @jarvis/web -- --run src/camera-capture.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/App.test.tsx src/voice-client.test.tsx`; `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/vision/screen.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py` |
@@ -257,6 +261,15 @@ Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
 returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
 P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised.
+P8-17 was inspected at 390 and 1280 px using a scratch-only signed-in auth stub
+and mock `/settings` and `/database/status` endpoints. The minimise-windows
+toggle was off initially, saved by PATCH, and still on after reload; neither
+viewport overflowed and the browser reported no errors. This verifies the web
+form against mocks, not live Entra, backend, or SQL. The P8-13 theme controls
+are not present here, so theme UI persistence and applying a Jarvis tool result
+to an already-open shell remain unverified.
+The P8-17 SQL Server integration suite passed in Database CI run `37233600074`;
+running it locally still requires the isolated loopback SQL Server configuration.
 P1-12 was inspected at 390 and 1440 px with mocked sleep-status, scale, refusal,
 and failure responses; sleep/wake, refusal, retry, and the Settings link worked
 without horizontal overflow or browser errors. Mocks do not verify ARM scaling.
@@ -273,6 +286,22 @@ permission denial, natural voice end, draft/focus restoration and reduced
 motion were exercised. Screenshots in `docs/ui/screenshots/p8-05-*` contain
 labelled local fixtures, not production conversations. A real phone keyboard,
 physical microphone/speakers and live Azure round-trip remain unverified.
+P8-21 used the same scratch-only auth/API fixture workflow with Chromium at
+1440×900 and touch-emulated 390×844 in dark/light appearances. Empty, history,
+streaming, Now and workspace states are captured under `docs/ui/screenshots/p8-21-*`.
+Comparison images place the selected concept beside empty/history/streaming;
+phone concepts depict voice, so they are appearance references, not equivalent
+typing-state captures. Browser checks covered 44px composer targets, visible
+focus, relative metadata, 320/280px overflow, draft reflow, pending controls,
+title dragging, edge resizing, Arrange keyboard/Escape focus, phone popup bounds,
+minimise/restore, maximised-window precedence over another open Arrange menu,
+and static readable reduced-motion states. Settled surface
+contrast checks exceed AA. `npm test --workspace @jarvis/web` passed 190 tests;
+`npm run lint --workspace @jarvis/web` and `npm run build --workspace @jarvis/web`
+passed (existing chunk-size warning). Real phone keyboards, hardware audio,
+live Entra/Azure, tool-call event delivery and generated/agent-directed windows
+remain unverified; local workspace screenshots mount the real component with
+explicitly labelled fixtures, not a new runtime integration.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal
@@ -324,6 +353,15 @@ the page had no horizontal overflow, selects measured 44 px, and only the table
 scrolls horizontally. The expected mocked 503 produced a browser network log;
 there were no other console errors or page exceptions. Live SQL and provider or
 voice usage remain unverified.
+P8-19 was re-inspected alongside P8-13 Appearance in Chromium at 1280×900 and
+390×844 with scratch-only auth and `/settings` API mocks. Personality loaded,
+saved, recovered after a mocked HTTP 500 without losing edits, and reset to
+defaults; keyboard focus was visible, the page had no horizontal overflow, and
+interactive controls measured at least 44 px. The expected mocked failure was
+the only browser console error. Screenshots are in
+`docs/ui/screenshots/p8-19-personality-{desktop,phone}.png`; live Entra and
+Azure settings behavior remain unverified.
+
 P3-08 was inspected at 390×844 (dark theme) and 1280×1300 (light theme) in
 Chromium using scratch-only auth and mocked release/graph/API responses: opening
 a release, refresh, and keyboard focus on a commit link worked; its hit area was

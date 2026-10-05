@@ -34,6 +34,7 @@ type Gesture = {
   x: number;
   y: number;
   geometry: Geometry;
+  edge: 'right' | 'bottom' | undefined;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, value)) * 1000) / 1000;
@@ -81,6 +82,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
   const [actionSuccess, setActionSuccess] = useState<Record<string, string>>({});
   const [pendingActions, setPendingActions] = useState<ReadonlySet<string>>(new Set());
+  const [activeGestureId, setActiveGestureId] = useState<string | null>(null);
   const [narrow, setNarrow] = useState(() => (
     typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 900px)').matches
   ));
@@ -153,6 +155,9 @@ export const Workspace = forwardRef<WorkspaceController, {
     const [moved] = ids.splice(from, 1);
     if (!moved) return false;
     ids.splice(to, 0, moved);
+    setGeometry((current) => Object.fromEntries(orderedViews.map((view, index) => [
+      view.id, current[view.id] ?? defaultGeometry(index),
+    ])));
     setOrder(ids);
     setAnnouncement(`${views.find((view) => view.id === id)?.title} ${label}.`);
     return true;
@@ -216,9 +221,10 @@ export const Workspace = forwardRef<WorkspaceController, {
     restoreView(id);
     const index = orderedViews.findIndex((view) => view.id === id);
     if (index >= 0 && index !== orderedViews.length - 1) reorder(id, orderedViews.length - index - 1, 'brought forward');
-    pendingFocus.current = { target: 'window', viewId: id };
+    if (minimizedViewIds.has(id)) pendingFocus.current = { target: 'window', viewId: id };
+    else windowHeadings.current.get(id)?.focus();
     return true;
-  }, [isViewOpen, orderedViews, reorder, restoreView]);
+  }, [isViewOpen, minimizedViewIds, orderedViews, reorder, restoreView]);
 
   const minimiseAll = useCallback(() => {
     const ids = visibleViews.map(({ id }) => id);
@@ -293,27 +299,30 @@ export const Workspace = forwardRef<WorkspaceController, {
     setAnnouncement(`${views.find((view) => view.id === id)?.title} size changed.`);
   }
 
-  function beginGesture(event: PointerEvent<HTMLButtonElement>, id: string, kind: Gesture['kind'], index: number) {
+  function beginGesture(event: PointerEvent<HTMLElement>, id: string, kind: Gesture['kind'], index: number, edge?: Gesture['edge']) {
     if (event.button !== 0 && event.pointerType !== 'touch') return;
+    if (activeMaximizedViewId === id) return;
     const bounds = canvas.current?.getBoundingClientRect();
     if (!bounds) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    setActiveGestureId(id);
     gestures.current.set(event.pointerId, {
       id,
       kind,
       x: event.clientX,
       y: event.clientY,
       geometry: geometryFor(id, index),
+      edge,
     });
   }
 
-  function updateGesture(event: PointerEvent<HTMLButtonElement>) {
+  function updateGesture(event: PointerEvent<HTMLElement>) {
     const gesture = gestures.current.get(event.pointerId);
     const bounds = canvas.current?.getBoundingClientRect();
-    if (!gesture || !bounds) return;
-    const dx = (event.clientX - gesture.x) / bounds.width;
-    const dy = (event.clientY - gesture.y) / bounds.height;
+    if (!gesture || !bounds?.width || !bounds.height) return;
+    const dx = gesture.edge === 'bottom' ? 0 : (event.clientX - gesture.x) / bounds.width;
+    const dy = gesture.edge === 'right' ? 0 : (event.clientY - gesture.y) / bounds.height;
     updateGeometry(gesture.id, (current) => {
       if (arrangement === 'tiled' || (arrangement === 'layered' && narrow)) {
         if (gesture.kind === 'move') return current;
@@ -340,18 +349,37 @@ export const Workspace = forwardRef<WorkspaceController, {
     }, orderedViews.findIndex((view) => view.id === gesture.id));
   }
 
-  function endGesture(event: PointerEvent<HTMLButtonElement>) {
+  function endGesture(event: PointerEvent<HTMLElement>) {
     const gesture = gestures.current.get(event.pointerId);
     if (!gesture) return;
     gestures.current.delete(event.pointerId);
+    setActiveGestureId(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (event.type === 'pointercancel') {
+      updateGeometry(gesture.id, () => gesture.geometry, 0);
+      setAnnouncement('Arrangement cancelled.');
+      return;
+    }
     if ((arrangement === 'tiled' || narrow) && gesture.kind === 'move') {
       const dx = event.clientX - gesture.x;
       const dy = event.clientY - gesture.y;
       if (Math.max(Math.abs(dx), Math.abs(dy)) > 24) {
-        if (reorder(gesture.id, dx < 0 || (dx === 0 && dy < 0) ? -1 : 1, 'reordered')) return;
+        const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+        if (reorder(gesture.id, delta < 0 ? -1 : 1, 'reordered')) return;
       }
+
     }
     setAnnouncement(`${views.find((view) => view.id === gesture.id)?.title} ${gesture.kind === 'move' ? 'moved' : 'resized'}.`);
+  }
+
+  function arrangeKeyDown(event: KeyboardEvent<HTMLDetailsElement>) {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.open = false;
+    event.currentTarget.querySelector('summary')?.focus();
   }
 
   function moveHandleKeyDown(event: KeyboardEvent<HTMLButtonElement>, id: string, index: number) {
@@ -424,7 +452,7 @@ export const Workspace = forwardRef<WorkspaceController, {
       <header className="workspace-heading">
         <h2 ref={workspaceHeading} id={`${workspaceId}-heading`} tabIndex={-1}>Workspace</h2>
         {openViews.length > 0 && (
-          <details className="workspace-arrangements">
+          <details className="workspace-arrangements" onKeyDown={arrangeKeyDown}>
             <summary>Arrange</summary>
             <div className="workspace-arrangement-options" role="group" aria-label="Workspace arrangement">
               <button
@@ -453,7 +481,7 @@ export const Workspace = forwardRef<WorkspaceController, {
         <p className="workspace-empty">All views are minimised. Select a tab to restore a view.</p>
       ) : (
         <p className="workspace-guidance">
-          {narrow ? 'Views stack on this screen. Use the move controls to change their order.' : 'Arrange views by moving and resizing them, or choose a tiled layout.'}
+          {narrow ? 'Views stack on this screen. Drag a title to reorder, or use Arrange.' : 'Drag a title to move, drag an edge to resize, or use Arrange for keyboard controls.'}
         </p>
       )}
       {minimizedViews.length > 0 && (
@@ -503,7 +531,7 @@ export const Workspace = forwardRef<WorkspaceController, {
 
           return (
             <article
-              className={`workspace-window${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}`}
+              className={`workspace-window${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}`}
               key={view.id}
               style={style}
               aria-labelledby={titleId}
@@ -524,13 +552,21 @@ export const Workspace = forwardRef<WorkspaceController, {
                   }}
                   id={titleId}
                   tabIndex={-1}
+                  className={maximized ? undefined : 'workspace-title-drag'}
+                  onPointerDown={(event) => beginGesture(event, view.id, 'move', index)}
+                  onPointerMove={updateGesture}
+                  onPointerUp={endGesture}
+                  onPointerCancel={endGesture}
                 >
                   {view.title}
                 </h3>
                 <div className="workspace-window-actions">
-                  <details className="workspace-arrange-menu">
+                  {!maximized && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
                     <summary>Arrange</summary>
                     <div className="workspace-arrange-options">
+                      <p id={`${titleId}-shortcuts`} className="workspace-shortcuts">
+                        Focus Move or Resize, then use arrow keys. {narrow ? 'Up/down changes order or height; width stays full-screen.' : arrangement === 'tiled' ? 'Move changes order; Resize changes tile width or height.' : 'Shift + arrow makes a larger step.'} Escape closes Arrange.
+                      </p>
                       <button className="workspace-control" type="button" aria-label={`${arrangement === 'layered' && !narrow ? 'Send backward' : 'Move earlier'} ${view.title}`} disabled={index === 0} onClick={() => reorder(view.id, -1, 'reordered')}>
                         {arrangement === 'layered' && !narrow ? 'Send backward' : 'Move earlier'}
                       </button>
@@ -541,6 +577,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                         className="workspace-control workspace-move-handle"
                         type="button"
                         aria-label={`Move ${view.title}. Use arrow keys to move or reorder.`}
+                        aria-describedby={`${titleId}-shortcuts`}
                         onPointerDown={(event) => beginGesture(event, view.id, 'move', index)}
                         onPointerMove={updateGesture}
                         onPointerUp={endGesture}
@@ -573,6 +610,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                         className="workspace-control workspace-resize-handle"
                         type="button"
                         aria-label={`Resize ${view.title}. Use arrow keys to resize.`}
+                        aria-describedby={`${titleId}-shortcuts`}
                         onPointerDown={(event) => beginGesture(event, view.id, 'resize', index)}
                         onPointerMove={updateGesture}
                         onPointerUp={endGesture}
@@ -582,7 +620,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                         Resize
                       </button>
                     </div>
-                  </details>
+                  </details>}
                   <button className="workspace-icon-control" type="button" aria-label={`${maximized ? 'Restore size of' : 'Maximise'} ${view.title}`} onClick={() => setMaximizedViewId(maximized ? null : view.id)}>
                     <WindowIcon name={maximized ? 'restore' : 'maximise'} />
                   </button>
@@ -622,6 +660,32 @@ export const Workspace = forwardRef<WorkspaceController, {
                 {actionSuccess[view.id] && <p role="status">{actionSuccess[view.id]}</p>}
                 {actionErrors[view.id] && <p role="alert">{actionErrors[view.id]}</p>}
               </div>
+              {!maximized && <>
+                <div
+                  className="workspace-resize-edge workspace-resize-edge-right"
+                  aria-hidden="true"
+                  onPointerDown={(event) => beginGesture(event, view.id, 'resize', index, 'right')}
+                  onPointerMove={updateGesture}
+                  onPointerUp={endGesture}
+                  onPointerCancel={endGesture}
+                />
+                <div
+                  className="workspace-resize-edge workspace-resize-edge-bottom"
+                  aria-hidden="true"
+                  onPointerDown={(event) => beginGesture(event, view.id, 'resize', index, 'bottom')}
+                  onPointerMove={updateGesture}
+                  onPointerUp={endGesture}
+                  onPointerCancel={endGesture}
+                />
+                <div
+                  className="workspace-resize-edge workspace-resize-edge-corner"
+                  aria-hidden="true"
+                  onPointerDown={(event) => beginGesture(event, view.id, 'resize', index)}
+                  onPointerMove={updateGesture}
+                  onPointerUp={endGesture}
+                  onPointerCancel={endGesture}
+                />
+              </>}
             </article>
           );
         })}

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ConversationHistory } from './ConversationHistory';
 import type { CameraController } from './screen-sharing';
@@ -77,6 +77,11 @@ beforeEach(() => {
   createChatSession.mockResolvedValue(session);
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
 describe('ConversationHistory', () => {
   it('shows persisted tool outcomes and task links', async () => {
     loadConversationHistory.mockResolvedValue({
@@ -100,7 +105,7 @@ describe('ConversationHistory', () => {
 
     expect(screen.getByRole('status').textContent).toBe('Loading conversation history…');
     resolve?.({ messages: [], nextCursor: null });
-    expect(await screen.findByText('No messages yet. Send a message to begin the conversation.')).not.toBeNull();
+    expect(await screen.findByRole('heading', { name: 'What’s on your mind?' })).not.toBeNull();
   });
 
   it('offers a retry after a history failure', async () => {
@@ -110,7 +115,7 @@ describe('ConversationHistory', () => {
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'History unavailable');
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByText('No messages yet. Send a message to begin the conversation.')).not.toBeNull();
+    expect(await screen.findByRole('heading', { name: 'What’s on your mind?' })).not.toBeNull();
     expect(loadConversationHistory).toHaveBeenCalledTimes(2);
   });
 
@@ -170,6 +175,8 @@ describe('ConversationHistory', () => {
     expect(await screen.findByLabelText('Jarvis reply in progress')).toHaveProperty('textContent', 'I am');
     expect(screen.getByRole('status').textContent).toBe('Jarvis is replying…');
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'English' })).toHaveProperty('disabled', true);
+    expect(screen.getByLabelText('Jarvis reply in progress').querySelector('.streaming-caret')?.getAttribute('aria-hidden')).toBe('true');
     finish?.(assistantMessage);
 
     expect(await screen.findByText('I am ready.')).not.toBeNull();
@@ -326,7 +333,9 @@ describe('ConversationHistory', () => {
     fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
     expect(sendChatTurn).not.toHaveBeenCalled();
     await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Start voice' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Danish' }));
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'English' }));
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Send' }));
     await user.click(input);
@@ -345,7 +354,7 @@ describe('ConversationHistory', () => {
     const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
     await user.click(input);
     await user.type(input, 'Unsent draft');
-    await user.click(screen.getByRole('radio', { name: 'English' }));
+    await user.click(screen.getByRole('button', { name: 'English' }));
     const start = screen.getByRole('button', { name: 'Start voice' });
     start.focus();
     await user.keyboard('{Enter}');
@@ -366,14 +375,14 @@ describe('ConversationHistory', () => {
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(input);
     expect(input).toHaveProperty('value', 'Unsent draft');
     expect(document.activeElement).toBe(input);
-    expect(screen.getByRole('radio', { name: 'English' })).toHaveProperty('checked', true);
+    expect(screen.getByRole('button', { name: 'English' }).getAttribute('aria-pressed')).toBe('true');
     if (exit !== 'error') await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
   });
 
   it('keeps the fullscreen voice session active through speaking interruption and ends on Escape', async () => {
     const onVoiceActiveChange = vi.fn();
     renderConversation(0, undefined, onVoiceActiveChange);
-    await screen.findByText('No messages yet. Send a message to begin the conversation.');
+    await screen.findByRole('heading', { name: 'What’s on your mind?' });
     await userEvent.click(screen.getByRole('button', { name: 'Start voice' }));
 
     const voice = voiceSessions[0];
@@ -403,5 +412,76 @@ describe('ConversationHistory', () => {
     expect(onVoiceActiveChange).toHaveBeenLastCalledWith(false);
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
     menu.remove();
+  });
+
+  it('switches reply language with keyboard buttons and sends in that language', async () => {
+    const user = userEvent.setup();
+    createChatSession.mockResolvedValue({ ...session, language: 'en' });
+    sendChatTurn.mockResolvedValue(assistantMessage);
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Reply language' })).not.toBeNull();
+    screen.getByRole('button', { name: 'English' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'English' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Danish' }).getAttribute('aria-pressed')).toBe('false');
+    await user.type(input, 'Hello');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(createChatSession).toHaveBeenCalledWith(client, config, 'en'));
+  });
+
+  it('auto-grows the frameless input, bounds long drafts and shrinks again', async () => {
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    const height = vi.spyOn(input, 'scrollHeight', 'get').mockReturnValue(96);
+    fireEvent.change(input, { target: { value: 'A multiline draft' } });
+    expect(input.style.height).toBe('96px');
+    height.mockReturnValue(240);
+    fireEvent.change(input, { target: { value: 'A longer multiline draft' } });
+    expect(input.style.height).toBe('160px');
+    height.mockReturnValue(44);
+    fireEvent.change(input, { target: { value: '' } });
+    expect(input.style.height).toBe('44px');
+  });
+
+  it('reflows input height on width changes without a height-observer loop', async () => {
+    let resize: (() => void) | undefined;
+    const disconnect = vi.fn();
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { resize = callback; }
+      observe = vi.fn();
+      disconnect = disconnect;
+    });
+    const view = renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    const height = vi.spyOn(input, 'scrollHeight', 'get').mockReturnValue(96);
+    const box = vi.spyOn(input, 'getBoundingClientRect').mockReturnValue({ width: 390 } as DOMRect);
+    act(() => resize?.());
+    expect(input.style.height).toBe('96px');
+    height.mockReturnValue(144);
+    act(() => resize?.());
+    expect(input.style.height).toBe('96px');
+    box.mockReturnValue({ width: 200 } as DOMRect);
+    act(() => resize?.());
+    expect(input.style.height).toBe('144px');
+    view.unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('shows relative metadata with the exact time available and distinct speakers', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-03T12:02:00.000Z'));
+    loadConversationHistory.mockResolvedValue({
+      messages: [message, { ...message, id: '43', role: 'dan', text: 'Sure.', toolCalls: [] }],
+      nextCursor: null,
+    });
+    renderConversation();
+    const reply = (await screen.findByText('I started the task.')).closest('li');
+    expect(reply?.getAttribute('data-speaker')).toBe('jarvis');
+    expect(reply?.getAttribute('tabindex')).toBe('0');
+    expect(reply?.querySelector('time')?.textContent).toBe('2 minutes ago');
+    expect(reply?.querySelector('time')?.getAttribute('datetime')).toBe(message.at);
+    expect(reply?.querySelector('time')?.getAttribute('title')).toBe(new Date(message.at).toLocaleString());
+    expect(screen.getByText('Sure.').closest('li')?.getAttribute('data-speaker')).toBe('dan');
   });
 });

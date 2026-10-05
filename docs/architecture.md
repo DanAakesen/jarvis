@@ -4,13 +4,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 - Requirements: [PRODUCT.md](../PRODUCT.md). Feature summaries: [features.md](features.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L78): [decisions.md](decisions.md).
 - Data model: [data-model.md](data-model.md).
-- **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–24 show each flow as swimlanes, coloured by evidence (prototype/offline-tested, documented, assumed). Open it in a browser.
+- **Flow diagrams:** [architecture-flows.html](architecture-flows.html). Tab 0 shows the complete flow, and tabs 1–25 show each flow as swimlanes, coloured by evidence (prototype/offline-tested, documented, assumed). Open it in a browser.
 
 ## Stack overview
 
 | Area | Choice | Status |
 | --- | --- | --- |
-| Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `agents/jarvis`, `runner`, `infra`, `db`, and `pc-bridge`; npm workspaces for the two apps, one root lockfile | Implemented; P7-06 adds a .NET 10 Windows companion and portable protocol/policy project |
+| Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `packages/contracts`, `agents/jarvis`, `runner`, `infra`, `db`, and `pc-bridge`; npm workspaces for the two apps, one root lockfile | Implemented; P7-06 adds a .NET 10 Windows companion and portable protocol/policy project |
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions; P3-14 opens or reuses an App-token PR after completed task work and leaves policy completion to P3-06; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; P7-03 adds managed-identity Teams notifications, expiring confirmations and Speech F0 fallback; P7-09 adds app-only Graph tools scoped through Exchange RBAC for Applications; P7-02 adds persisted away state and a managed-identity Graph presence monitor; live Azure behavior remains unverified |
@@ -40,6 +40,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   restore input focus. Persisted voice completion refreshes history. The
   transcript scrolls independently; activity/backend controls are expandable
   within it. APIs and persisted conversation contracts are unchanged.
+- P8-21 keeps that ownership while polishing presentation: auto-growing input,
+  DA/EN pressed buttons, relative message metadata, streaming caret and
+  reduced-motion-safe transitions. `Workspace` reuses its existing geometry
+  operations for title dragging, edge resizing and Arrange keyboard controls.
+  Now surfaces reflect existing feed data; tool shimmer requires an explicit
+  tool-call state. No route, package, database or agent-delivery contract changes.
 - React mounts into `apps/web/index.html`. BrowserRouter renders the home page
   and a catch-all page with a return link. Production static hosting must fall
   back to `index.html` for client routes (P0-11).
@@ -92,11 +98,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 - P8-10 keeps voice-scene state in the conversation/shell client: P5-04 runtime
   callbacks enter and leave fullscreen without an animation gate, and the
   workspace reports visible-view changes so the shell can position the orb.
-  Natural/manual end, failure, and Escape restore typing; the client-side,
-  default-off `voice.minimizeWindowsOnVoiceStart` preference is validated in
-  local storage until P8-17 supplies account persistence. Generated views and
-  tool-call activity remain with P8-14/15 and P8-16 respectively; no backend
-  route or workspace persistence is added.
+  Natural/manual end, failure, and Escape restore typing; the default-off
+  `voice.minimizeWindowsOnVoiceStart` preference is persisted through P8-17 and
+  mirrored to device storage for immediate shell reads. P8-14 provides the safe
+  list renderer in the Now panel; generated workspace delivery remains P8-15,
+  and tool-call activity remains P8-16. No workspace state is persisted.
 - P7-16 extends the same authenticated, validated `dbo.settings` key/value store
   with bounded personality preferences. Hosted chat and Danish voice read them
   for each new agent invocation/session; the backend snapshots them when it
@@ -119,6 +125,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `POST /now/activity/:id/dismiss`, and refreshes snapshots from authenticated
   `/now/events`. The panel identifies unavailable data and reconnecting or
   unavailable live updates rather than claiming a stale snapshot is current.
+  P8-14 adds `@jarvis/contracts`, a shared version-1 JSON Schema and matching
+  TypeScript discriminated union for the P8-18 renderer/action allowlists. The
+  authenticated `/tools/:name` boundary validates tagged generated-view results
+  against the schema and semantic bounds; `call-tool` actions must name a
+  registered tool, and image URLs must use GitHub or the configured task-archive
+  Blob host. The serialized view is capped at 256 KiB. The signed-in Now panel
+  builds a list view from its existing bounded `/now` response and renders
+  values through fixed React elements. No generated HTML, JavaScript or CSS is
+  interpreted. Views remain ephemeral; live Entra/Azure behavior is unverified.
   P6-02 adds a dismissible Alerts group backed by `activity.alert_key`. Failed
   deployment, confirmed sandbox crash and credential-expiry activity is inserted
   transactionally with its source change and emits a hashed Application Insights
@@ -149,6 +164,18 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   repository, default agent, policy, per-project task limit, and default branch;
   these defaults reuse the existing settings table and are available to future
   project registration without changing the project API.
+  P8-17 adds global appearance mode and optional theme-token scalars plus
+  `voice.minimize_windows_on_voice_start` (default `false`) through the same
+  settings store. Appearance is bounded to light/dark/system; colors use
+  `#RRGGBB`, background uses the named visual presets, glow is 0–1, motion and
+  density use closed catalogs, and radius is 0–24. The registered `set_theme`
+  Jarvis tool validates its token patch and writes through `SettingsStore`;
+  the existing dispatcher records `ok`, `refused`, or sanitized `error`
+  outcomes. Successful calls return the accepted token patch. These values use
+  the existing JSON-scalar settings rows, without a migration. Window/view state
+  remains client-owned and is not stored. Applying tool-originated changes to an
+  already-open client without reload depends on the P8-13 consumer and remains
+  unverified.
   The SQL adapter is injected only when database configuration exists; the API
   returns 503 without it. The model catalog offers deployed Jarvis models and
   only provider defaults for Codex and Copilot because their available-model
@@ -1059,6 +1086,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then waits for explicit microphone activation. Local mock tests verify the Danish route and relay; the hash-locked provisioner sets MAI Transcribe (`da`, phrase list) and Harper (`da-DK`). Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
 | English session | The backend configures `gpt-realtime-2.1`, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Completed voice transcripts are persisted as messages; voice tool calls are not stored as `tool_calls`. |
+| English status updates (P7-12) | The relay subscribes to committed task transitions and typed status kinds emitted after verified GitHub webhook processing for ready-for-review pull requests and failed deployments. It merges duplicate kinds over 500 ms, then speaks fixed wording only when Dan and Jarvis are idle and no tool call is active; a queued update is retried when Dan stops speaking. `get_status_summary` exposes bounded Now-feed counts, applies Away-mode visibility, and never returns activity text or logs. | Fake event-hub, webhook receiver, tool-route and relay tests cover filtering, duplicate deliveries, redaction and deferral. Live voice audio and production webhook delivery remain unverified. |
 | Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |
 | Visual inspection (P7-05/P7-08) | The browser captures a JPEG from the explicitly selected `getDisplayMedia` stream or, after Dan turns the camera on and grants permission, `getUserMedia`. A frame is captured only for an explicit chat/voice request. Authenticated `POST /screen/frames` checks Dan's identity, active `jarvis_sessions` row, JPEG/1 MiB limit, 3-second interval and shared `global.screen_share_daily_frame_cap` (default 300, range 1–300). It reserves the frame in `dbo.usage`, calls the configured vision deployment using the backend managed identity, then sends only the bounded description to chat context or Voice Live response instructions. No image is persisted or logged; chat messages, voice transcripts and task events do not contain the synthetic context. | Backend/web/agent contract tests exercise a fake camera stream/model and transient context. Screen and camera share `screen_frames` reservations and token/cost recording; estimated DKK uses the documented short-context Global Standard rates. Live deployment SKU, model image acceptance and billed cost remain to verify. Voice/session end and page teardown stop media; camera also stops after five minutes. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |

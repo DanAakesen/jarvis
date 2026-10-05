@@ -54,6 +54,8 @@ describe('VoiceOrb', () => {
 
     expect(screen.getByRole('status').textContent).toContain('Jarvis is using a tool.');
     expect((container.firstChild as HTMLElement).getAttribute('data-state')).toBe('tool-call');
+    expect(screen.getByText('Tool running').classList.contains('tool-call-running')).toBe(true);
+    expect(screen.queryByText(/Tool-call activity is unavailable/u)).toBeNull();
 
     rerender(<VoiceOrb status="future-runtime-state" message="Unexpected state." />);
     expect(screen.getByRole('alert').textContent).toContain('Voice status unavailable');

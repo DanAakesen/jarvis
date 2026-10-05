@@ -53,7 +53,7 @@ describe('settings API', () => {
         appearance: { theme: 'light' },
         jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
         personality: { tone: 'british_butler', responseStyle: 'concise', customInstructions: '' },
-        voice: { defaultLanguage: 'da' },
+        voice: { defaultLanguage: 'da', minimizeWindowsOnVoiceStart: false },
         codex: { model: 'default' },
         copilot: { model: 'default' },
         global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300 },
@@ -68,6 +68,48 @@ describe('settings API', () => {
         },
       },
     });
+  });
+
+  it('persists allowlisted appearance tokens and the default-off voice window preference', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const patch = {
+      appearance: {
+        theme: 'system',
+        accent: '#a1B2c3',
+        'accent-secondary': '#123456',
+        'surface-tint': '#abcdef',
+        background: 'living-aurora',
+        glow: 0.75,
+        motion: 'calm',
+        radius: 24,
+        density: 'comfortable',
+      },
+      voice: { minimizeWindowsOnVoiceStart: true },
+    };
+
+    const saved = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings: patch },
+    });
+
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings).toMatchObject(patch);
+    expect(values).toEqual({
+      'appearance.theme': '"system"',
+      'appearance.accent': '"#a1B2c3"',
+      'appearance.accent-secondary': '"#123456"',
+      'appearance.surface-tint': '"#abcdef"',
+      'appearance.background': '"living-aurora"',
+      'appearance.glow': '0.75',
+      'appearance.motion': '"calm"',
+      'appearance.radius': '24',
+      'appearance.density': '"comfortable"',
+      'voice.minimize_windows_on_voice_start': 'true',
+    });
+    const reloaded = await app.inject({ url: '/settings', headers: authorization });
+    expect(reloaded.json().settings).toMatchObject(patch);
+    expect(reloaded.json().settings).not.toHaveProperty('windows');
+    expect(reloaded.json().settings).not.toHaveProperty('generatedViews');
   });
 
   it('saves a validated subset and returns the effective settings', async () => {
@@ -303,7 +345,19 @@ describe('settings API', () => {
   });
 
   it.each([
-    { settings: { appearance: { theme: 'system' } } },
+    { settings: { appearance: { theme: 'solarized' } } },
+    { settings: { appearance: { accent: 'rgb(1, 2, 3)' } } },
+    { settings: { appearance: { 'accent-secondary': '#12345' } } },
+    { settings: { appearance: { 'surface-tint': '#12345678' } } },
+    { settings: { appearance: { background: 'unregistered-preset' } } },
+    { settings: { appearance: { glow: 1.01 } } },
+    { settings: { appearance: { glow: -0.01 } } },
+    { settings: { appearance: { motion: 'none' } } },
+    { settings: { appearance: { radius: 24.01 } } },
+    { settings: { appearance: { radius: -0.01 } } },
+    { settings: { appearance: { density: 'spacious' } } },
+    { settings: { appearance: { customToken: '#123456' } } },
+    { settings: { voice: { minimizeWindowsOnVoiceStart: 'yes' } } },
     { settings: { jarvis: { model: 'not-available' } } },
     { settings: { jarvis: { reasoning: 'unsupported' } } },
     { settings: { personality: { tone: 'unbounded' } } },
@@ -337,6 +391,24 @@ describe('settings API', () => {
     expect(write).not.toHaveBeenCalled();
   });
 
+  it('rejects a mixed valid and invalid update without overwriting existing settings', async () => {
+    const { store, values } = createStore();
+    await store.write({ jarvis: { reasoning: 'high' } });
+    const before = { ...values };
+    const app = fixture(store);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/settings',
+      headers: authorization,
+      payload: { settings: { jarvis: { reasoning: 'low' }, appearance: { glow: 2 } } },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(values).toEqual(before);
+    expect((await app.inject({ url: '/settings', headers: authorization })).json().settings.jarvis.reasoning).toBe('high');
+  });
+
   it('preserves the accepted theme when a later theme update is rejected', async () => {
     const { store, values } = createStore();
     const app = fixture(store);
@@ -348,7 +420,7 @@ describe('settings API', () => {
 
     const rejected = await app.inject({
       method: 'PATCH', url: '/settings', headers: authorization,
-      payload: { settings: { appearance: { theme: 'system' } } },
+      payload: { settings: { appearance: { theme: 'solarized' } } },
     });
 
     expect(rejected.statusCode).toBe(400);

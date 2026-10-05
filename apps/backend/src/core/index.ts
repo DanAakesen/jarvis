@@ -1,11 +1,14 @@
+import { generatedViewSchema, isGeneratedView } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
+import { setThemeTool } from './theme.js';
 import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
 import { setJarvisModelTool } from './model-tools.js';
 import { setAwayModeTool } from './away-mode.js';
+import { getStatusSummaryTool } from './status.js';
 
 const memoryReadOnlyTools = new Set(['memory_search', 'memory_list', 'memory_history']);
 
@@ -25,9 +28,18 @@ function auditToolResult(toolName: string, outcome: ToolCallOutcome, result: unk
   };
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function trustedBlobHost(): string | undefined {
+  const account = process.env.TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT;
+  return account && /^[a-z0-9]{3,24}$/.test(account) ? `${account}.blob.core.windows.net` : undefined;
+}
+
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setJarvisModelTool, setAwayModeTool],
+  tools: [setThemeTool, setJarvisModelTool, setAwayModeTool, getStatusSummaryTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);
@@ -97,6 +109,14 @@ export const coreModule: BackendModule = {
         let result: unknown;
         try {
           result = await tool.execute(request.body, request, controller.signal);
+          if (isObject(result) && result.type === 'generated-view') {
+            const validateView = request.compileValidationSchema(generatedViewSchema, 'body');
+            const blobHost = trustedBlobHost();
+            if (!validateView(result.view) || !isGeneratedView(result.view, {
+              ...(blobHost ? { trustedBlobHost: blobHost } : {}),
+              registeredTools: app.jarvisTools.list().map(({ name }) => name),
+            })) throw new Error('Tool returned an invalid generated view');
+          }
           const serialized = JSON.stringify(result);
           if (serialized === undefined || Buffer.byteLength(serialized) > 1024 * 1024) {
             throw new Error('Tool result is not serializable or exceeds the size limit');
