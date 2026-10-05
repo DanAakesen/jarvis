@@ -28,6 +28,7 @@ const events = new Set([
   'voice.partials_unavailable', 'chat.latency', 'memory.embedding',
   'reflex.decision',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
+  'voice.upstream_event_error',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -128,7 +129,12 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       fields.decision = input.decision;
     }
   }
+  if (input.msg === 'voice.upstream_closed' && typeof input.events === 'string' &&
+      /^[a-z_.,]{0,400}$/.test(input.events)) {
+    fields.events = input.events;
+  }
   if (input.msg === 'conversation.reply_failed' || input.msg === 'voice.upstream_error' ||
+      input.msg === 'voice.upstream_event_error' ||
       input.msg === 'voice.upstream_closed' || input.msg === 'voice.connection_failed') {
     // Short, fixed-vocabulary diagnostics only: our own error messages and upstream close reasons.
     if (typeof input.failure === 'string' && /^[A-Za-z0-9 .:,'()_-]{1,120}$/.test(input.failure)) {

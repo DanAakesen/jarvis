@@ -91,6 +91,8 @@ describe('SQL conversation store', () => {
     expect(input).toHaveBeenNthCalledWith(2, 'role', sql.NVarChar(16), 'dan');
     expect(input).toHaveBeenNthCalledWith(3, 'text', sql.NVarChar(sql.MAX), 'Hello');
     expect(input).toHaveBeenNthCalledWith(4, 'model', sql.NVarChar(100), null);
+    expect(input).toHaveBeenNthCalledWith(5, 'language', sql.NVarChar(8), null);
+    expect(input).toHaveBeenNthCalledWith(6, 'interrupted', sql.Bit, false);
     expect(query.mock.calls[0]?.[0]).toContain('ended_at IS NULL');
   });
 
@@ -121,9 +123,9 @@ describe('SQL conversation store', () => {
       recordset: [],
       recordsets: [
         [
-          { id: '10', session_id: '1', channel: 'chat', language: 'da', role: 'dan', text: 'Older', model: null, voice_minutes: null, at: new Date('2026-10-03T12:00:00Z') },
-          { id: '11', session_id: '1', channel: 'voice', language: 'en', role: 'jarvis', text: 'Started', model: 'gpt-realtime-2.1', voice_minutes: 2.5, at: new Date('2026-10-03T12:01:00Z') },
-          { id: '12', session_id: '1', channel: 'chat', language: 'da', role: 'dan', text: 'Newest', model: null, voice_minutes: null, at: new Date('2026-10-03T12:02:00Z') },
+          { id: '10', session_id: '1', channel: 'chat', language: 'da', role: 'dan', text: 'Older', model: null, interrupted: false, voice_minutes: null, at: new Date('2026-10-03T12:00:00Z') },
+          { id: '11', session_id: '1', channel: 'voice', language: 'en', role: 'jarvis', text: 'Started', model: 'gpt-realtime-2.1', interrupted: false, voice_minutes: 2.5, at: new Date('2026-10-03T12:01:00Z') },
+          { id: '12', session_id: '1', channel: 'chat', language: 'da', role: 'dan', text: 'Newest', model: null, interrupted: false, voice_minutes: null, at: new Date('2026-10-03T12:02:00Z') },
         ],
         [
           { id: '90', message_id: '11', tool: 'factory_create_task', outcome: 'ok', task_id: '77' },
@@ -148,6 +150,7 @@ describe('SQL conversation store', () => {
           text: 'Started',
           model: 'gpt-realtime-2.1',
           voiceMinutes: 2.5,
+          interrupted: false,
           at: new Date('2026-10-03T12:01:00Z'),
           toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'ok', taskId: '77' }],
         },
@@ -160,6 +163,7 @@ describe('SQL conversation store', () => {
           text: 'Newest',
           model: null,
           voiceMinutes: null,
+          interrupted: false,
           at: new Date('2026-10-03T12:02:00Z'),
           toolCalls: [
             { id: '91', tool: 'factory_list_tasks', outcome: 'refused', taskId: null },
@@ -177,6 +181,21 @@ describe('SQL conversation store', () => {
     expect(input).toHaveBeenNthCalledWith(2, 'beforeId', sql.BigInt, 15n);
     expect(query.mock.calls[0]?.[0]).toContain('INNER JOIN @history AS h');
     expect(query.mock.calls[0]?.[0]).toContain("JSON_VALUE(tc.result, '$.artifactId')");
+  });
+
+  it('reads bounded Dan steering messages after the current turn cursor', async () => {
+    const { store, input, query } = fixture({
+      recordset: [{ id: '43', text: 'Continue', language: 'en' }],
+      recordsets: [],
+      rowsAffected: [],
+    });
+
+    await expect(store.getDanMessagesAfter({ sessionId: '41', after: '42', limit: 20 }))
+      .resolves.toEqual([{ id: '43', text: 'Continue', language: 'en' }]);
+    expect(input).toHaveBeenNthCalledWith(1, 'sessionId', sql.BigInt, 41n);
+    expect(input).toHaveBeenNthCalledWith(2, 'afterId', sql.BigInt, 42n);
+    expect(input).toHaveBeenNthCalledWith(3, 'take', sql.Int, 20);
+    expect(query.mock.calls[0]?.[0]).toContain("m.role = N'dan' AND m.id > @afterId");
   });
 
   it('ends a session idempotently and reports unknown sessions', async () => {

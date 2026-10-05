@@ -1,5 +1,6 @@
 import { DefaultAzureCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
+import { CallAutomationClient } from '@azure/communication-call-automation';
 import { buildApp } from './app.js';
 import { BlobServiceClient } from '@azure/storage-blob';
 import { ConfigurationError, loadConfig } from './config.js';
@@ -12,6 +13,7 @@ import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
 import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
+import { createPhoneSessionStore } from './database/phone-session-store.js';
 import { createTaskStore } from './database/task-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
 import { createTaskRecoveryStore } from './database/recovery-store.js';
@@ -85,6 +87,8 @@ import { createTeamsNotificationService } from './teams/service.js';
 import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
 import { startGraphPresenceMonitor } from './graph/presence-monitor.js';
+import { createPhoneCallModule } from './phone/calls.js';
+import { parsePhoneAllowlist } from './phone/caller.js';
 import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
 
@@ -107,6 +111,9 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
+  const phoneSessionStore = database && config.phone
+    ? createPhoneSessionStore(database.pool)
+    : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const nowEventHub = createEventHub<NowFeedUpdate>();
   const alertActivityStore = database
@@ -207,6 +214,23 @@ try {
   const webhookSecretClient = config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
     : undefined;
+  const phoneSecretClient = config.phone && config.keyVaultUri && credential
+    ? new SecretClient(config.keyVaultUri, credential)
+    : undefined;
+  let phoneAllowlist: ReturnType<typeof parsePhoneAllowlist> | undefined;
+  let phoneAllowlistRequest: Promise<ReturnType<typeof parsePhoneAllowlist>> | undefined;
+  const getPhoneAllowlist = () => {
+    if (phoneAllowlist) return Promise.resolve(phoneAllowlist);
+    if (!phoneSecretClient) return Promise.reject(new Error('Phone allow-list is unavailable'));
+    phoneAllowlistRequest ??= phoneSecretClient.getSecret('jarvis-phone-allowlist')
+      .then(({ value }) => {
+        if (!value) throw new Error('Phone allow-list is unavailable');
+        phoneAllowlist = parsePhoneAllowlist(value);
+        return phoneAllowlist;
+      })
+      .finally(() => { phoneAllowlistRequest = undefined; });
+    return phoneAllowlistRequest;
+  };
   const jevSecretClient = config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
     : undefined;
@@ -463,6 +487,24 @@ try {
       onStatusError: () => logger.warn('pc_bridge.status_update_failed'),
     }),
   ];
+  const phoneCallModule = config.phone && phoneSessionStore && phoneSecretClient && credential &&
+    config.teams && config.foundryProjectEndpoint
+    ? createPhoneCallModule({
+      client: new CallAutomationClient(config.phone.acsEndpoint, credential),
+      store: phoneSessionStore,
+      ownerObjectId: config.auth.ownerObjectId,
+      teamsResourceAccountObjectId: config.phone.teamsResourceAccountObjectId,
+      publicOrigin: config.teams.audioOrigin,
+      getAllowlist: getPhoneAllowlist,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry voice identity unavailable');
+        return token.token;
+      },
+      connect: createDanishVoiceConnector(config.foundryProjectEndpoint),
+    })
+    : undefined;
+  if (phoneCallModule) modules.push(phoneCallModule);
   if (browserAgent) modules.push(createBrowserAgentModule(browserAgent));
   if (workspaceArtifacts && config.foundryEndpoints && config.foundryRunnerAgentName) {
     modules.push(createImageGenerationModule({
@@ -503,7 +545,10 @@ try {
       },
       ...(config.voiceLiveEndpoint ? { connect: createVoiceLiveConnector(config.voiceLiveEndpoint) } : {}),
       ...(config.foundryProjectEndpoint
-        ? { connectDanish: createDanishVoiceConnector(config.foundryProjectEndpoint) }
+        ? {
+          connectDanish: createDanishVoiceConnector(config.foundryProjectEndpoint),
+          ...(phoneCallModule ? { registerPhoneMediaRoute: phoneCallModule.registerMediaRoute } : {}),
+        }
         : {}),
       ...(config.foundryEndpoints
         ? {
@@ -569,6 +614,7 @@ try {
     nowEventHub,
     ...(conversationAgent ? { conversationAgent } : {}),
     ...(teamsNotifications ? { teamsNotifications } : {}),
+    ...(phoneSessionStore ? { phoneSessionStore } : {}),
   });
   if (checksLoop) app.addHook('onClose', async () => { await checksLoop.stop(); });
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });

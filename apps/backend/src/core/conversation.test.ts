@@ -25,6 +25,7 @@ const history = {
     ...message,
     channel: 'chat' as const,
     language: 'da' as const,
+    interrupted: false,
     voiceMinutes: null,
     toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'refused' as const, taskId: null }],
   }],
@@ -68,6 +69,7 @@ function storeFixture(overrides: Partial<ConversationStore> = {}) {
     })),
     addMessage: vi.fn<ConversationStore['addMessage']>(async () => message),
     getHistory: vi.fn(async () => history),
+    getDanMessagesAfter: vi.fn(async () => []),
     ...overrides,
   } satisfies ConversationStore;
 }
@@ -123,6 +125,7 @@ describe('conversation routes', () => {
     expect(response.body).toContain('event: done');
     expect(chatAgent.stream).toHaveBeenCalledWith({
       messageId: '42',
+      turnId: '42',
       text: 'Hej Jarvis',
       language: 'da',
       screenContext: 'A browser window shows a chart.',
@@ -132,13 +135,136 @@ describe('conversation routes', () => {
       role: 'dan',
       text: 'Hej Jarvis',
       model: null,
+      language: 'da',
     });
     expect(store.addMessage).toHaveBeenCalledWith({
       sessionId: '41',
       role: 'jarvis',
       text: 'Hej, Dan.',
       model: null,
+      language: 'da',
     });
+  });
+
+  it('interrupts streamed text, saves it as interrupted, and restarts once with the steering message', async () => {
+    let nextMessageId = 41;
+    const steeringMessage = { id: '43', text: 'Continue in English.', language: 'en' as const };
+    const store = storeFixture({
+      addMessage: vi.fn(async (input) => ({
+        ...message,
+        id: String(++nextMessageId),
+        role: input.role,
+        text: input.text,
+      })),
+      getDanMessagesAfter: vi.fn(async ({ after }) =>
+        BigInt(after) < BigInt(steeringMessage.id) ? [steeringMessage] : []),
+    });
+    const appRef: { current?: ReturnType<typeof buildApp> } = {};
+    const chatAgent = {
+      stream: vi.fn(async function* (input, _authorization, signal: AbortSignal) {
+        if (input.messageId === '42') {
+          yield 'Partial reply';
+          const duplicate = await appRef.current!.inject({
+            method: 'POST',
+            url: '/conversation/sessions/41/turns',
+            headers,
+            payload: { text: 'Do not start another turn' },
+          });
+          expect(duplicate.statusCode).toBe(409);
+          const steering = await appRef.current!.inject({
+            method: 'POST',
+            url: '/conversation/sessions/41/steer',
+            headers,
+            payload: { text: steeringMessage.text, language: steeringMessage.language },
+          });
+          expect(steering.statusCode).toBe(202);
+          expect(signal.aborted).toBe(true);
+          throw new DOMException('Steered', 'AbortError');
+        }
+        expect(input).toMatchObject({
+          messageId: '43',
+          turnId: '42',
+          text: steeringMessage.text,
+          language: 'en',
+          steering: true,
+        });
+        yield 'Continued answer';
+      }),
+    };
+    const app = createApp(store, { conversationAgent: chatAgent });
+    appRef.current = app;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: { text: 'Original question' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('event: interrupted');
+    expect(response.body).toContain('event: done');
+    expect(chatAgent.stream).toHaveBeenCalledTimes(2);
+    expect(store.addMessage).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'jarvis',
+      text: 'Partial reply',
+      interrupted: true,
+    }));
+  });
+
+  it('does not abort tools and consumes steering at the next model-round boundary', async () => {
+    const steeringMessage = { id: '43', text: 'Answer in English.', language: 'en' as const };
+    const store = storeFixture({
+      addMessage: vi.fn(async (input) => ({
+        ...message,
+        id: input.role === 'dan' && input.text !== 'Original question' ? '43' : '42',
+        role: input.role,
+        text: input.text,
+      })),
+      getDanMessagesAfter: vi.fn(async ({ after }) =>
+        BigInt(after) < BigInt(steeringMessage.id) ? [steeringMessage] : []),
+    });
+    const appRef: { current?: ReturnType<typeof buildApp> } = {};
+    let toolPhaseSignal!: AbortSignal;
+    const chatAgent = {
+      stream: vi.fn(async function* (_input, _authorization, signal: AbortSignal) {
+        toolPhaseSignal = signal;
+        const app = appRef.current!;
+        await app.inject({
+          method: 'POST',
+          url: '/conversation/sessions/41/turns/42/phase',
+          headers,
+          payload: { phase: 'tools' },
+        });
+        await app.inject({
+          method: 'POST',
+          url: '/conversation/sessions/41/steer',
+          headers,
+          payload: { text: steeringMessage.text, language: steeringMessage.language },
+        });
+        expect(signal.aborted).toBe(false);
+        const pickedUp = await app.inject({
+          url: '/conversation/sessions/41/turns/42/steering?after=42',
+          headers,
+        });
+        expect(pickedUp.json()).toEqual({ messages: [steeringMessage] });
+        yield 'Tool finished; continuing in English.';
+      }),
+    };
+    const app = createApp(store, { conversationAgent: chatAgent });
+    appRef.current = app;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: { text: 'Original question' },
+    });
+
+    expect(response.body).toContain('event: done');
+    expect(response.body).not.toContain('event: interrupted');
+    expect(toolPhaseSignal.aborted).toBe(false);
+    expect(chatAgent.stream).toHaveBeenCalledOnce();
   });
 
   it('skips browser reflex for a shared-tab request and binds its transient context to the turn', async () => {

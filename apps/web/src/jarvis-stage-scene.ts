@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import type { JarvisActivityEvent } from '@jarvis/contracts';
 import type { ThemeMode } from './theme-preference-context';
 import { createJarvisStageOrb } from './JarvisStageOrb';
 
@@ -9,6 +10,9 @@ export type JarvisStageOptions = {
   reducedMotion: boolean;
   voiceActive: boolean;
   hasWindows: boolean;
+  working: boolean;
+  activityState: JarvisActivityEvent['type'] | null;
+  audioLevel: number;
 };
 
 export type JarvisStageScene = ReturnType<typeof createJarvisStageScene>;
@@ -70,6 +74,9 @@ export function createJarvisStageScene(
     reducedMotion: false,
     voiceActive: false,
     hasWindows: false,
+    working: false,
+    activityState: null,
+    audioLevel: 0,
   },
 ) {
   const renderer = new THREE.WebGLRenderer({
@@ -120,6 +127,8 @@ function createJarvisStageSceneWithRenderer(
   let voiceVelocity = 0;
   let windowPosition = 0;
   let windowVelocity = 0;
+  let activityPosition = 0;
+  let activityVelocity = 0;
 
   const themeMaterials: { material: THREE.MeshStandardMaterial; dark: string; light: string }[] = [];
   const standard = (
@@ -436,13 +445,17 @@ function createJarvisStageSceneWithRenderer(
       voiceVelocity = 0;
       windowPosition = Number(current.hasWindows);
       windowVelocity = 0;
+      activityPosition = current.working ? 0.72 : current.activityState ? 0.28 : 0;
+      activityVelocity = 0;
     } else {
       const factor = Math.max(0, Math.min(delta, 0.12));
       const steps = Math.max(1, Math.ceil(factor / (1 / 90)));
       const step = factor / steps;
+      const activityTarget = current.working ? 0.72 : current.activityState ? 0.28 : 0;
       const targets = [
         { value: () => voicePosition, velocity: () => voiceVelocity, set: (value: number, velocity: number) => { voicePosition = value; voiceVelocity = velocity; }, destination: Number(current.voiceActive), frequency: 6.6 },
         { value: () => windowPosition, velocity: () => windowVelocity, set: (value: number, velocity: number) => { windowPosition = value; windowVelocity = velocity; }, destination: Number(current.hasWindows), frequency: 7.8 },
+        { value: () => activityPosition, velocity: () => activityVelocity, set: (value: number, velocity: number) => { activityPosition = value; activityVelocity = velocity; }, destination: activityTarget, frequency: 5.4 },
       ];
       for (let index = 0; index < steps; index += 1) {
         for (const target of targets) {
@@ -461,7 +474,7 @@ function createJarvisStageSceneWithRenderer(
     orbRig.position.copy(orbWorld);
     const pixelRadius = mobile
       ? Math.min(width * 0.28, height * 0.16)
-      : Math.min(width * 0.18, height * 0.18);
+      : Math.min(width * 0.18, height * 0.18) * (1 - 0.2 * layout);
     const cameraDepth = orbWorld.clone().applyMatrix4(camera.matrixWorldInverse).z;
     const scale = pixelRadius * (-cameraDepth) * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) /
       height / 1.12;
@@ -471,12 +484,13 @@ function createJarvisStageSceneWithRenderer(
     wallLight.position.copy(orbWorld);
     wallLight.target.position.set(orbWorld.x * 0.72, orbWorld.y * 0.8 + 0.7, -14.5);
 
-    const awake = THREE.MathUtils.clamp(voicePosition, 0, 1);
-    const power = 0.26 + 0.74 * awake;
+    const audioLevel = THREE.MathUtils.clamp(current.audioLevel, 0, 1);
+    const awake = THREE.MathUtils.clamp(Math.max(voicePosition, activityPosition), 0, 1);
+    const power = 0.26 + 0.74 * awake + audioLevel * 0.06;
     themeColors.current.copy(themeColors.orb);
     orbVisual.uniforms.uColor.value.lerp(themeColors.current, current.reducedMotion ? 1 : 0.16);
-    orbVisual.uniforms.uEnergy.value = 0.12 + awake * 0.73;
-    orbVisual.update(current.reducedMotion ? 0 : elapsed, awake);
+    orbVisual.uniforms.uEnergy.value = audioLevel;
+    orbVisual.update(current.reducedMotion ? 0 : elapsed, awake, audioLevel);
     orbLight.color.copy(orbVisual.uniforms.uColor.value);
     orbLight.intensity = 100 * power;
     amberLight.intensity = 4 + 18 * awake;
@@ -592,6 +606,11 @@ function createJarvisStageSceneWithRenderer(
         startAnimation();
       }
       if (options.reducedMotion) draw(0);
+    },
+    setAudioLevel(level: number) {
+      if (disposed) return;
+      current = { ...current, audioLevel: THREE.MathUtils.clamp(level, 0, 1) };
+      if (current.reducedMotion && !document.hidden) draw(0);
     },
     dispose,
   };

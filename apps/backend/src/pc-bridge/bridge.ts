@@ -524,11 +524,16 @@ function hasControlCharacters(value: string): boolean {
   });
 }
 
+const BROWSER_FALLBACK_NOTES = new Set([
+  "Opened in Chrome directly because the Jarvis Chrome extension isn't connected.",
+  "Opened in your default browser because the Chrome extension isn't connected.",
+]);
+
 function validResult(command: PcCommand['name'], value: unknown): value is Record<string, unknown> {
   if (!isRecord(value)) return false;
   if (command === 'open_url' && Object.keys(value).length === 2) {
-    return value.opened === true &&
-      value.note === "Opened in your default browser because the Chrome extension isn't connected.";
+    // Accept the note from older bridges too; installed bridges update separately from the backend.
+    return value.opened === true && typeof value.note === 'string' && BROWSER_FALLBACK_NOTES.has(value.note);
   }
   if (['open_url', 'open_app', 'open_folder'].includes(command)) {
     return Object.keys(value).length === 1 && value.opened === true;

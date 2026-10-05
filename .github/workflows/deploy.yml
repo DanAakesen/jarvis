@@ -215,13 +215,15 @@ jobs:
             fi
             sleep 15
           done
+          # Voice Live needs voiceLiveCompatible metadata and the invocations_ws protocol on a Bridge target (L99).
           definition=$(jq -cn --arg image "$AGENT_IMAGE" --arg backend "$BACKEND_URL" '{
+            metadata: {voiceLiveCompatible: "true", bridgeProtocolVersion: "1.0"},
             definition: {
               kind: "hosted",
               cpu: "1",
               memory: "2Gi",
               container_configuration: {image: $image},
-              protocol_versions: [{protocol: "invocations", version: "2.0.0"}],
+              protocol_versions: [{protocol: "invocations", version: "2.0.0"}, {protocol: "invocations_ws", version: "1.0.0"}],
               environment_variables: {
                 AZURE_AI_MODEL_DEPLOYMENT_NAME: "gpt-5.6-luna",
                 JARVIS_BACKEND_URL: $backend
@@ -248,7 +250,7 @@ jobs:
           patch=$(jq -cn --arg version "$version" '{
             agent_endpoint: {
               version_selector: {version_selection_rules: [{agent_version: $version, traffic_percentage: 100, type: "FixedRatio"}]},
-              protocol_configuration: {invocations: {}}
+              protocol_configuration: {invocations: {}, invocations_ws: {}}
             }
           }')
           az rest --method patch --url "$FOUNDRY_ADMIN/agents/jarvis?api-version=v1" --resource https://ai.azure.com/ --headers Content-Type=application/merge-patch+json --body "$patch" --output none --only-show-errors

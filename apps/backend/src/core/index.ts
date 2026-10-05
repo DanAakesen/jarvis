@@ -13,6 +13,7 @@ import { getStatusSummaryTool } from './status.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspace-commands.js';
 import { findChatReflexReplay } from './reflex.js';
+import { executePhoneTool } from '../phone/approval.js';
 
 const memoryReadOnlyTools = new Set(['memory_search', 'memory_list', 'memory_history']);
 
@@ -88,6 +89,14 @@ export const coreModule: BackendModule = {
       app.post(`/tools/${tool.name}`, { config: { jarvisAgent: true }, schema: { body: tool.inputSchema } }, async (request, reply) => {
         const messageHeader = request.headers['x-jarvis-message-id'];
         const voiceItemHeader = request.headers['x-jarvis-voice-item-id'];
+        const phoneSessionHeader = request.headers['x-jarvis-phone-session-id'];
+        if (phoneSessionHeader !== undefined &&
+            (typeof phoneSessionHeader !== 'string' ||
+             !/^[1-9]\d{0,18}$/u.test(phoneSessionHeader) ||
+             BigInt(phoneSessionHeader) > 9_223_372_036_854_775_807n)) {
+          return reply.code(403).send({ error: 'Phone session unavailable' });
+        }
+        const phoneSessionId = typeof phoneSessionHeader === 'string' ? phoneSessionHeader : undefined;
         let messageId = typeof messageHeader === 'string' ? messageHeader : undefined;
         if (messageHeader === undefined && typeof voiceItemHeader === 'string' &&
             /^[A-Za-z0-9_-]{1,128}$/u.test(voiceItemHeader)) {
@@ -104,7 +113,8 @@ export const coreModule: BackendModule = {
           request.jarvisMemorySourceMessageId = messageId;
         }
         if (validMessageId && !app.toolCallStore) return reply.code(503).send({ error: 'Tool execution unavailable' });
-        if (validMessageId && voiceItemHeader === undefined && (tool.reflexSafe || tool.name === 'workspace_command')) {
+        if (validMessageId && phoneSessionId === undefined && voiceItemHeader === undefined &&
+            (tool.reflexSafe || tool.name === 'workspace_command')) {
           const reflex = await findChatReflexReplay(messageId!, tool.name, request.body);
           if (reflex) {
             return {
@@ -138,7 +148,17 @@ export const coreModule: BackendModule = {
         let outcome: ToolCallOutcome = 'ok';
         let result: unknown;
         try {
-          result = await tool.execute(request.body, request, controller.signal);
+          result = phoneSessionId === undefined
+            ? await tool.execute(request.body, request, controller.signal)
+            : await executePhoneTool({
+              tool,
+              sessionId: phoneSessionId,
+              callerId: app.ownerObjectId,
+              store: app.phoneSessionStore,
+              notifications: app.teamsNotifications,
+              signal: controller.signal,
+              execute: () => tool.execute(request.body, request, controller.signal),
+            });
           if (isObject(result) && result.type === 'generated-view') {
             const validateView = request.compileValidationSchema(generatedViewSchema, 'body');
             if (!validateView(result.view) || !isGeneratedView(result.view, {

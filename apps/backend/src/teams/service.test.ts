@@ -2,6 +2,7 @@ import type { ActivityLike, ConversationReference } from '@microsoft/teams.api';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createTeamsNotificationService,
+  withPhoneConfirmationSession,
   type TeamsNotificationService,
 } from './service.js';
 import type {
@@ -156,6 +157,25 @@ describe('Teams notification service', () => {
     expect(store.consumeApproval).toHaveBeenCalledOnce();
     expect(service.pendingBrowserConfirmations()).toEqual([]);
     expect(onConfirmationsChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it('links phone-session approvals to their originating call', async () => {
+    const { service, store } = harness(undefined, async () => false);
+    const operation = withPhoneConfirmationSession('42', () =>
+      service.requestConfirmation('other', 'Allow the phone call to read tasks.'));
+
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    const confirmation = service.pendingBrowserConfirmations()[0]!;
+    expect(store.createConfirmation).toHaveBeenCalledWith(
+      confirmation.id,
+      ownerObjectId,
+      'browser',
+      'other',
+      300,
+      '42',
+    );
+    await expect(service.resolveBrowserConfirmation(confirmation.id, 'approve')).resolves.toBe(true);
+    await expect(operation).resolves.toBeUndefined();
   });
 
   it('does not run the action after rejection or an identity mismatch', async () => {

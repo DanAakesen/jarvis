@@ -27,6 +27,11 @@ describe('phone caller verification', () => {
       allowlist,
     )).toEqual({ kind: 'entra', id: ownerObjectId });
     expect(trustedPhoneCaller(
+      { communicationUser: { id: `8:orgid:${ownerObjectId}` } },
+      ownerObjectId,
+      allowlist,
+    )).toEqual({ kind: 'entra', id: ownerObjectId });
+    expect(trustedPhoneCaller(
       { phoneNumber: { value: '+4512345678' } },
       ownerObjectId,
       allowlist,
@@ -38,6 +43,7 @@ describe('phone caller verification', () => {
     for (const caller of [
       { microsoftTeamsUser: { userId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' } },
       { microsoftTeamsUser: { userId: ownerObjectId, isAnonymous: true } },
+      { communicationUser: { id: `8:acs:${ownerObjectId}` } },
       { phoneNumber: { value: '+4599999999' } },
       { rawId: `4:+4512345678` },
       null,

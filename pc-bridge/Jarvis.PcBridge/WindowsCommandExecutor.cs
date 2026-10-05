@@ -10,7 +10,7 @@ public sealed class WindowsCommandExecutor
 {
     private const string RepoRoot = @"C:\Repo";
     private const string BrowserFallbackNote =
-        "Opened in your default browser because the Chrome extension isn't connected.";
+        "Opened in Chrome directly because the Jarvis Chrome extension isn't connected.";
 
     public Task<object> ExecuteAsync(BridgeCommand command, CancellationToken cancellationToken)
     {
@@ -30,10 +30,16 @@ public sealed class WindowsCommandExecutor
         return Task.FromResult(result);
     }
 
+    // Dan uses Chrome only: never hand a website to the Windows default browser (Edge).
     public object OpenUrlInDefaultBrowser(string value)
     {
         if (!CommandPolicy.TryNormalizeUrl(value, out var url)) throw new CommandRefusedException("not_allowed");
-        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        var chrome = FindExecutable("chrome");
+        if (chrome is null) throw new CommandRefusedException("not_found");
+        var start = new ProcessStartInfo(chrome) { UseShellExecute = false };
+        start.ArgumentList.Add(url);
+        using var process = Process.Start(start);
+        AllowForeground(process);
         return new { opened = true, note = BrowserFallbackNote };
     }
 
@@ -137,6 +143,12 @@ public sealed class WindowsCommandExecutor
                 Path.Combine(local, "Programs", "Microsoft VS Code", "Code.exe"),
                 Path.Combine(programFiles, "Microsoft VS Code", "Code.exe"),
                 Path.Combine(programFilesX86, "Microsoft VS Code", "Code.exe"),
+            ],
+            "chrome" =>
+            [
+                Path.Combine(programFiles, "Google", "Chrome", "Application", "chrome.exe"),
+                Path.Combine(programFilesX86, "Google", "Chrome", "Application", "chrome.exe"),
+                Path.Combine(local, "Google", "Chrome", "Application", "chrome.exe"),
             ],
             "edge" =>
             [

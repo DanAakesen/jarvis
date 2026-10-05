@@ -17,6 +17,7 @@ export interface ConversationHistoryMessage {
   language: 'da' | 'en';
   role: 'dan' | 'jarvis';
   text: string;
+  interrupted?: boolean;
   model: string | null;
   voiceMinutes?: number | null;
   at: string;
@@ -54,6 +55,7 @@ function isHistoryPage(value: unknown): value is ConversationHistoryPage {
         !['chat', 'voice'].includes(String(message.channel)) || !['da', 'en'].includes(String(message.language)) ||
         !['dan', 'jarvis'].includes(String(message.role)) || typeof message.text !== 'string' ||
         !(message.model === null || typeof message.model === 'string') ||
+        !(message.interrupted === undefined || typeof message.interrupted === 'boolean') ||
         !(message.voiceMinutes === undefined || message.voiceMinutes === null ||
           (typeof message.voiceMinutes === 'number' && Number.isFinite(message.voiceMinutes) && message.voiceMinutes >= 0)) ||
         typeof message.at !== 'string' || Number.isNaN(Date.parse(message.at)) ||
@@ -66,6 +68,10 @@ function isHistoryPage(value: unknown): value is ConversationHistoryPage {
         (typeof call.artifactId === 'string' &&
           /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(call.artifactId))));
   });
+}
+
+export interface SteeringMessage extends ChatMessage {
+  language: 'da' | 'en';
 }
 
 export async function waitForChatSetup<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
@@ -188,6 +194,7 @@ export async function sendChatTurn(
   screenContext?: string,
   sharedScreenContext?: { screenDescription: string; sharedWindowTitle?: string },
   signal?: AbortSignal,
+  onInterrupted?: (message: ChatMessage) => void,
 ): Promise<ChatMessage> {
   const response = await chatResponse(
     client,
@@ -232,6 +239,9 @@ export async function sendChatTurn(
         throw new Error('Jarvis returned an invalid chat stream.');
       }
       onDelta(payload.text);
+    } else if (event.event === 'interrupted') {
+      if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
+      onInterrupted?.(payload);
     } else if (event.event === 'done') {
       if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
       assistantMessage = payload;
@@ -262,6 +272,34 @@ export async function sendChatTurn(
     throw new Error('The reply was interrupted. A task action may still have completed; check its status before trying again.');
   }
   return assistantMessage;
+}
+
+export async function steerChatTurn(
+  client: PublicClientApplication,
+  config: PublicConfig,
+  session: ChatSession,
+  text: string,
+  language: 'da' | 'en',
+  signal?: AbortSignal,
+): Promise<SteeringMessage> {
+  const response = await chatResponse(
+    client,
+    config,
+    `/conversation/sessions/${session.id}/steer`,
+    { text, language },
+    'application/json',
+    undefined,
+    signal,
+  );
+  let value: unknown;
+  try { value = await response.json(); } catch {
+    throw new Error('Jarvis returned an invalid steering message.');
+  }
+  if (!isChatMessage(value, 'dan', session.id) || !isRecord(value) ||
+      (value.language !== 'da' && value.language !== 'en')) {
+    throw new Error('Jarvis returned an invalid steering message.');
+  }
+  return { ...value, language: value.language };
 }
 
 export async function loadConversationHistory(

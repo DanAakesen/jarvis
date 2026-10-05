@@ -13,7 +13,7 @@ export function createAuthClient(config: PublicConfig): PublicClientApplication 
     auth: {
       clientId: config.webClientId,
       authority: `https://login.microsoftonline.com/${config.tenantId}`,
-      // MSAL v5 returns popup and silent sign-in through the redirect bridge page (L63).
+      // Silent (iframe) token renewal returns through the redirect bridge page (L63).
       redirectUri: `${window.location.origin}/redirect.html`,
       postLogoutRedirectUri: `${window.location.origin}/redirect.html`,
     },
@@ -27,27 +27,39 @@ function signInFailureMessage(error: unknown): string {
   if (code === 'interaction_in_progress') {
     return 'A previous sign-in is still open in this tab. Close the tab, open Jarvis in a new tab and sign in.';
   }
-  if (code === 'popup_window_error' || code === 'empty_window_error') {
-    return 'The sign-in window could not open. Allow pop-ups for Jarvis and try again.';
-  }
   return typeof code === 'string' && /^[a-z_]{1,64}$/.test(code)
     ? `Microsoft sign-in did not complete (${code}). Try again.`
     : 'Microsoft sign-in did not complete. Try again.';
 }
 
-export async function signIn(client: PublicClientApplication, config: PublicConfig): Promise<UserProfile> {
-  let result;
+/**
+ * Sends the whole page to Microsoft sign-in; Entra returns it to the registered site root, where
+ * `restoreProfile` completes the sign-in. No popup, so embedded browsers and popup blockers work.
+ */
+export async function signIn(client: PublicClientApplication, config: PublicConfig): Promise<void> {
   try {
-    result = await client.loginPopup({ scopes: [config.apiScope], prompt: 'select_account' });
+    await client.loginRedirect({
+      scopes: [config.apiScope],
+      prompt: 'select_account',
+      redirectUri: `${window.location.origin}/`,
+    });
   } catch (error) {
     throw new Error(signInFailureMessage(error), { cause: error });
   }
-  if (!result.account || !result.accessToken) throw new Error('Microsoft sign-in did not return an API token.');
-  client.setActiveAccount(result.account);
-  return loadProfile(config, result.accessToken);
 }
 
 export async function restoreProfile(client: PublicClientApplication, config: PublicConfig): Promise<UserProfile | null> {
+  let redirected;
+  try {
+    redirected = await client.handleRedirectPromise();
+  } catch (error) {
+    throw new Error(signInFailureMessage(error), { cause: error });
+  }
+  if (redirected?.account) {
+    client.setActiveAccount(redirected.account);
+    if (redirected.accessToken) return loadProfile(config, redirected.accessToken);
+  }
+
   const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
   if (!account) return null;
   let result;

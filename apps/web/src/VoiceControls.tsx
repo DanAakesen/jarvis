@@ -1,7 +1,8 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
+import { PlaybackAudioLevelContext } from './playback-audio-context';
 import { VoiceOrb } from './VoiceOrb';
 import { BrowserVoiceClient, type VoiceLanguage, type VoiceStatus } from './voice-client';
 import type { CameraController, ScreenShareController } from './screen-sharing';
@@ -40,6 +41,7 @@ export function VoiceControls({
   camera?: CameraController;
 }) {
   const { voiceActivity } = useJarvisActivity();
+  const setPlaybackAudioLevel = useContext(PlaybackAudioLevelContext);
   const client = useRef<BrowserVoiceClient | null>(null);
   const screenSessionIdRef = useRef<string | null>(null);
   const [clientStatus, setClientStatus] = useState<VoiceStatus>('stopped');
@@ -130,7 +132,11 @@ export function VoiceControls({
       getAccessToken: () => accessToken(authClient, config),
       language,
       ...(onSessionEnded ? { onSessionEnded } : {}),
-      onAudioLevel: (level) => setAudioLevel(Math.max(0, Math.min(1, level))),
+      onAudioLevel: (level) => {
+        const normalized = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0;
+        setAudioLevel(normalized);
+        setPlaybackAudioLevel(normalized);
+      },
       onSessionReady: (sessionId) => {
         screenSessionIdRef.current = sessionId;
         setScreenSessionId(sessionId);

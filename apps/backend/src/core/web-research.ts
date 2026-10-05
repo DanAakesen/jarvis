@@ -113,6 +113,7 @@ export function createWebResearchModule(
       description: 'Research a topic using live web search and return a concise answer with retrieved source links.',
       inputSchema,
       sensitive: true,
+      publicAllowedOnPhone: true,
       execute: async (input, _request, signal) => {
         if (!isObject(input) || typeof input.query !== 'string' || !input.query.trim() ||
             input.query.length > 2_000) {

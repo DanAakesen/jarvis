@@ -22,7 +22,7 @@ public sealed class BrowserExecutorTests
 
         extension.IsConnected = false;
         const string fallbackNote =
-            "Opened in your default browser because the Chrome extension isn't connected.";
+            "Opened in Chrome directly because the Jarvis Chrome extension isn't connected.";
         var fallback = await executor.OpenUrlAsync(
             "https://example.test/",
             url => new { opened = true, note = fallbackNote, url },

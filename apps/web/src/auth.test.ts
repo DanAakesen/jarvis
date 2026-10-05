@@ -15,7 +15,8 @@ afterEach(() => { vi.unstubAllGlobals(); fetchMock.mockReset(); });
 
 function client(overrides: Partial<PublicClientApplication> = {}) {
   return {
-    loginPopup: vi.fn().mockResolvedValue({ account, accessToken: 'access-token' }),
+    loginRedirect: vi.fn().mockResolvedValue(undefined),
+    handleRedirectPromise: vi.fn().mockResolvedValue(null),
     setActiveAccount: vi.fn(),
     getActiveAccount: vi.fn().mockReturnValue(null),
     getAllAccounts: vi.fn().mockReturnValue([]),
@@ -25,18 +26,27 @@ function client(overrides: Partial<PublicClientApplication> = {}) {
 }
 
 describe('web authentication', () => {
-  it('requests the API scope, then sends its token to the protected profile endpoint', async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
+  it('redirects the page to Microsoft sign-in for the API scope and returns to the site root', async () => {
     const msal = client();
 
-    await expect(signIn(msal, config)).resolves.toEqual({ name: 'Dan Aakesen' });
+    await expect(signIn(msal, config)).resolves.toBeUndefined();
 
-    expect(msal.loginPopup).toHaveBeenCalledWith({
+    expect(msal.loginRedirect).toHaveBeenCalledWith({
       scopes: [config.apiScope],
       prompt: 'select_account',
+      redirectUri: `${window.location.origin}/`,
     });
+  });
+
+  it('completes a returning redirect and sends its token to the protected profile endpoint', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const msal = client({ handleRedirectPromise: vi.fn().mockResolvedValue({ account, accessToken: 'access-token' }) });
+
+    await expect(restoreProfile(msal, config)).resolves.toEqual({ name: 'Dan Aakesen' });
+
     expect(msal.setActiveAccount).toHaveBeenCalledWith(account);
+    expect(msal.acquireTokenSilent).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/me', expect.objectContaining({
       headers: { Authorization: `${['Bear', 'er'].join('')} access-token` },
     }));
@@ -45,18 +55,21 @@ describe('web authentication', () => {
   it('shows the backend denial without exposing its response body', async () => {
     fetchMock.mockResolvedValue(new Response('private provider detail', { status: 403 }));
     vi.stubGlobal('fetch', fetchMock);
+    const msal = client({ handleRedirectPromise: vi.fn().mockResolvedValue({ account, accessToken: 'access-token' }) });
 
-    await expect(signIn(client(), config)).rejects.toThrow("This Microsoft account isn't allowed to use Jarvis.");
+    await expect(restoreProfile(msal, config)).rejects.toThrow("This Microsoft account isn't allowed to use Jarvis.");
   });
 
   it('does not expose MSAL provider error details', async () => {
-    const msal = client({ loginPopup: vi.fn().mockRejectedValue(new Error('provider-secret detail')) });
+    const msal = client({ loginRedirect: vi.fn().mockRejectedValue(new Error('provider-secret detail')) });
 
     await expect(signIn(msal, config)).rejects.toThrow('Microsoft sign-in did not complete. Try again.');
-    vi.mocked(msal.loginPopup).mockRejectedValueOnce(Object.assign(new Error('busy'), { errorCode: 'interaction_in_progress' }));
+    vi.mocked(msal.loginRedirect).mockRejectedValueOnce(Object.assign(new Error('busy'), { errorCode: 'interaction_in_progress' }));
     await expect(signIn(msal, config)).rejects.toThrow('A previous sign-in is still open in this tab.');
-    vi.mocked(msal.loginPopup).mockRejectedValueOnce(Object.assign(new Error('x'), { errorCode: 'user_cancelled' }));
-    await expect(signIn(msal, config)).rejects.toThrow('Microsoft sign-in did not complete (user_cancelled). Try again.');
+    const returning = client({
+      handleRedirectPromise: vi.fn().mockRejectedValue(Object.assign(new Error('x'), { errorCode: 'user_cancelled' })),
+    });
+    await expect(restoreProfile(returning, config)).rejects.toThrow('Microsoft sign-in did not complete (user_cancelled). Try again.');
   });
 
   it('silently restores a cached account and returns null when no account is cached', async () => {
