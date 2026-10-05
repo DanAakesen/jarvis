@@ -38,6 +38,7 @@ Status as of 5 October 2026.
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built | P4-04 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built | P4-05 |
 | Software Factory tools | Ask Jarvis to list projects and tasks, create tasks, change the agent or model on a Ready task, and steer, pause, resume or cancel tasks | Voice/chat | Main page | Built | P4-10, P7-11 |
+| Image generation | Ask Jarvis to create an image with the existing ChatGPT/Codex subscription; open it in the workspace and inspect its saved artifact in chat history | Both | Main conversation and workspace | Built offline; live Codex and Blob acceptance pending | P7-15 |
 | Model switching by voice | Change Jarvis for the next session or a Ready task using verified provider options; running-task changes are refused | Voice/chat | Main page | Built (offline) | P7-11 |
 | Live status by voice | Jarvis announces important task changes and answers "what's going on?" | Voice/chat | — | Built (offline) | P7-12 |
 | Long-term memory | Recall relevant stated preferences, project facts, decisions and unfinished tasks with Dan's source; inspect, correct or forget them | Voice/chat | — | In progress | P7-13 |
@@ -97,7 +98,7 @@ Status as of 5 October 2026.
 | Personality preferences | Choose a tone and response style, and add bounded instructions for new chat and voice sessions | Both | Settings, chat and voice | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 | Credentials status | See credential expiry and renewal status (never values) | Screen | Settings | Built | P2-08 |
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |
-| Usage and cost | Sandbox, model, voice, Codex and Copilot usage per task, project, period | Screen | Usage | Built | P2-12, P6-01 |
+| Usage and cost | Sandbox, model, voice, Codex and Copilot usage per task, project, period; recorded Jarvis tool calls today by tool (not remaining ChatGPT quota or image cost) | Screen | Usage | Built | P2-12, P6-01, P7-15 |
 | Event archive | Old task events move to Blob and load on demand | Background | Task detail | Built | P6-03 |
 | Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Now + email | Main page; email-only Azure Monitor action group | Built (offline; live Azure delivery unverified) | P6-02 |
 | Backup drill | Database restore documented | Background | — | Planned | P6-04 |

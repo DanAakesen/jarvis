@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 5 October 2026 for P7-02, P7-03, P7-08, P7-09 and P7-13. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, headless Outlook tools, and long-term memory. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 5 October 2026 for P7-02, P7-03, P7-08, P7-09, P7-13 and P7-15. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, headless Outlook tools, long-term memory, and generated workspace image metadata. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -42,6 +42,16 @@ transaction commits, the idempotent `setup/0016_long_term_memory.sql` creates th
 full-text catalog/index when installed; its paired down script removes memory tables
 and the voice source-item index/column.
 
+P7-15 adds cross-cutting `dbo.workspace_artifacts` metadata in
+`0017_workspace_artifacts.sql`; it is owner-scoped and references no conversation
+or task by foreign key. Image bytes remain in the private Blob `artifacts`
+container. The tool result and `messages.tool_calls` retain only the artifact UUID;
+the browser resolves a fresh owner-authorized URL. There is no automatic artifact
+deletion while retention is unresolved. `0018_refused_tool_calls.sql` expands the
+existing tool-call outcome constraint to include runtime `refused` records, which
+the Usage page includes in its daily per-tool count. Its down migration refuses
+to restore the old constraint while refused rows exist.
+
 P8-14 generated views are versioned JSON contracts in the shared
 `@jarvis/contracts` workspace. A view carries bounded source/page metadata but
 is not stored in SQL or Blob; source records retain their existing storage and
@@ -49,7 +59,7 @@ retention. P8-14 adds no tables or migrations.
 
 ## Overview
 
-Nine groups. Arrows show the main references between groups.
+Ten groups. Arrows show the main references between groups.
 
 ```mermaid
 flowchart LR
@@ -94,6 +104,9 @@ flowchart LR
         teams_conversations
         teams_confirmations
     end
+    subgraph WORKSPACE["10 · Workspace artifacts"]
+        workspace_artifacts
+    end
     tool_calls --> tasks
     tasks --> projects
     sandbox_sessions --> tasks
@@ -119,6 +132,7 @@ flowchart LR
 | 7 | Usage and cost | Transparency per task and project: sandbox time, model tokens, voice, Codex and Copilot usage | `usage` |
 | 8 | Notifications and confirmations | Dan's validated Teams conversation and expiring approvals for Teams or browser delivery | `teams_conversations`, `teams_confirmations` |
 | 9 | Long-term memory | Relevant source-linked preferences, project facts, decisions and unfinished tasks across sessions | `memories`, `memory_history`, `memory_deletions` |
+| 10 | Workspace artifacts | Owner-scoped image metadata for generated workspace/chat previews; image bytes are private Blob objects | `workspace_artifacts` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
@@ -611,7 +625,7 @@ approval is atomically consumed before the backend invokes its action.
 | `projects` | `repo` is unique (case-insensitive) and shaped `owner/name` using `A–Z a–z 0–9 . _ -`; `max_parallel_tasks` ≥ 1, default 1; `active` defaults to 1; `merge_rules` is free text, nullable |
 | `tasks` | `state` defaults to `Ready`; `origin_message_id` is required unless `source = 'board'`; `lease_owner` and `lease_until` are both set or both null; `attempt_count` ≥ 0; `priority` defaults to 0; `started_at`/`finished_at` not before `created_at` |
 | `messages` | `model` and token counts are nullable (Dan's messages have none); token counts ≥ 0 |
-| `tool_calls` | `result` nullable; `0001` permits `ok` or `error`; `task_id` nullable |
+| `tool_calls` | `result` nullable; current outcome vocabulary is `ok`, `refused` or `error` (`0001` originally permitted only `ok`/`error`, expanded by `0018_refused_tool_calls.sql`); `task_id` nullable |
 | Foreign keys | No cascades. Projects are archived (`active = 0`), not deleted |
 | Indexes | Dispatcher `IX_tasks_state_next_attempt_at`; timeline `IX_task_events_task_id_at`; plus one per foreign key: `IX_messages_jarvis_session_id_at`, `IX_tasks_project_id_state` (also the per-project running count), filtered `IX_tasks_origin_message_id`, `IX_tool_calls_message_id`, filtered `IX_tool_calls_task_id` |
 
@@ -619,10 +633,16 @@ P6-03's `0005_task_event_archives.sql` adds the archive index table without chan
 the `task_events` producer schema. The API still validates every field (P1-03,
 P1-04); these checks are the last line of defence.
 
-P4-05 adds `refused` to the runtime tool-call outcomes, but the current
-`CK_tool_calls_outcome` constraint in `0001_core_tables.sql` still permits only
-`ok` and `error`. Persisting a refused call therefore needs a forward schema
-migration; the history API accepts and displays all three outcomes.
+`0017_workspace_artifacts.sql` stores `id` (`uniqueidentifier`), owner object ID,
+PNG/JPEG content type, byte size (1 byte–5 MiB), and creation time, with an owner/time
+index. Blob objects use `workspace-images/<artifact UUID>.png` or `.jpg` in the
+existing private `artifacts` container; metadata does not contain the Blob path,
+prompt, or signed URL. Ownership is checked on every read. Successful image tool
+records may retain the UUID to support conversation history; SAS URLs are minted
+on demand and never persisted. The `0017` down migration drops metadata only and
+does not delete Blob objects. `0018_refused_tool_calls.sql` makes the runtime
+`refused` outcome persistable so refused image requests remain visible and counted;
+its down migration refuses to proceed while refused rows exist.
 
 ## Long-term memory schema (group 9)
 
