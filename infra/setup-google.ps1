@@ -138,9 +138,12 @@ $redirectUri = "http://127.0.0.1:$port/"
 
 try {
     $operatorObjectId = [string](Invoke-Az ad signed-in-user show --query id --output tsv)
-    $roleAssignments = @(Invoke-Az role assignment list --scope $vaultId --assignee-object-id $operatorObjectId `
+    # Windows PowerShell 5.1 emits a parsed JSON array as one object, so an empty list counted as one
+    # existing assignment and the temporary role was never created (L95). Enumerate the array explicitly.
+    $roleAssignmentJson = Invoke-Az role assignment list --scope $vaultId --assignee-object-id $operatorObjectId `
         --query "[?roleDefinitionName=='Key Vault Secrets Officer' && scope=='$vaultId'].id" --output json |
-        ConvertFrom-Json)
+        Out-String
+    $roleAssignments = @(($roleAssignmentJson | ConvertFrom-Json) | Where-Object { $_ })
     if ($roleAssignments.Count -eq 0) {
         $assignment = Invoke-Az role assignment create --assignee-object-id $operatorObjectId `
             --assignee-principal-type User --role 'Key Vault Secrets Officer' --scope $vaultId --output json |
