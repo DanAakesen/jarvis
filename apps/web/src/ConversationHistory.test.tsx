@@ -388,8 +388,20 @@ describe('ConversationHistory', () => {
     expect(screen.getByText('Listening after interruption.').getAttribute('role')).toBe('status');
     expect(onVoiceActiveChange).toHaveBeenCalledTimes(1);
 
+    const menu = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Workspace menu';
+    menu.append(summary);
+    menu.open = true;
+    document.body.append(menu);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(menu.open).toBe(false);
+    expect(document.activeElement).toBe(summary);
+    expect(onVoiceActiveChange).toHaveBeenLastCalledWith(true);
+
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onVoiceActiveChange).toHaveBeenLastCalledWith(false);
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
+    menu.remove();
   });
 });

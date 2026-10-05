@@ -73,9 +73,14 @@ export function VoiceControls({
         dialog.close();
         return;
       }
-      const details = document.activeElement instanceof HTMLElement
+      const openDetails = Array.from(document.querySelectorAll<HTMLDetailsElement>('details[open]'))
+        .filter((details) => !details.closest('[hidden]'));
+      const focusedDetails = document.activeElement instanceof HTMLElement
         ? document.activeElement.closest<HTMLDetailsElement>('details[open]')
         : null;
+      const details = focusedDetails && openDetails.includes(focusedDetails)
+        ? focusedDetails
+        : openDetails.at(-1);
       if (details) {
         event.preventDefault();
         details.open = false;

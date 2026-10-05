@@ -116,6 +116,14 @@
   .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-end-control { left: auto; transform: none; }
 }
 
+@media (min-width: 701px) and (max-height: 600px) {
+  .app-shell[data-voice-active="true"] .voice-orb-presentation { width: min(70vw, 680px); flex-direction: row; gap: 24px; }
+  .app-shell[data-voice-active="true"] .voice-orb { width: clamp(112px, 26vh, 180px); }
+  .app-shell[data-voice-active="true"] .voice-orb-copy { text-align: left; }
+  .app-shell[data-voice-active="true"] .voice-end-control { top: auto; bottom: max(24px, env(safe-area-inset-bottom)); }
+  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-orb-presentation { width: min(42vw, 500px); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .history-button, .input-orb,
   .app-shell[data-voice-active="true"] .voice-orb-presentation { transition: none; }
