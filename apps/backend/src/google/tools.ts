@@ -18,6 +18,12 @@ const dateTimeSchema = {
   maxLength: 40,
   pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*(?:Z|[+-][0-9]{2}:[0-9]{2})$',
 };
+const calendarRangeBoundarySchema = {
+  anyOf: [
+    { type: 'string', format: 'date', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+    dateTimeSchema,
+  ],
+};
 const confirmationSchema = {
   type: 'object',
   properties: { confirmationCode: { type: 'string', pattern: '^[0-9]{8}$' } },
@@ -75,7 +81,10 @@ function localDateParts(date: Date, timeZone: string): { year: number; month: nu
 }
 
 function zonedMidnightUtc(year: number, month: number, day: number, timeZone: string): Date {
-  const target = Date.UTC(year, month - 1, day);
+  const targetDate = new Date(0);
+  targetDate.setUTCFullYear(year, month - 1, day);
+  targetDate.setUTCHours(0, 0, 0, 0);
+  const target = targetDate.getTime();
   let candidate = target;
   const format = new Intl.DateTimeFormat('en-GB', {
     timeZone,
@@ -90,7 +99,10 @@ function zonedMidnightUtc(year: number, month: number, day: number, timeZone: st
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const parts = format.formatToParts(new Date(candidate));
     const part = (type: string) => Number(parts.find((item) => item.type === type)?.value);
-    const represented = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second'));
+    const representedDate = new Date(0);
+    representedDate.setUTCFullYear(part('year'), part('month') - 1, part('day'));
+    representedDate.setUTCHours(part('hour'), part('minute'), part('second'), 0);
+    const represented = representedDate.getTime();
     const adjustment = target - represented;
     candidate += adjustment;
     if (adjustment === 0) break;
@@ -98,17 +110,68 @@ function zonedMidnightUtc(year: number, month: number, day: number, timeZone: st
   return new Date(candidate);
 }
 
-function googleDateTime(value: unknown): Date | undefined {
+function validDateParts(value: string): { year: number; month: number; day: number } | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+  if (!match) return undefined;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(0, 0, 0, 0);
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+    ? { year, month, day }
+    : undefined;
+}
+
+function localDateTimeUtc(value: string, timeZone: string): Date | undefined {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/u.exec(value);
+  const dateParts = match ? validDateParts(match[1]!) : undefined;
+  if (!match || !dateParts) return undefined;
+  const hour = Number(match[2]);
+  const minute = Number(match[3]);
+  const second = Number(match[4]);
+  if (hour > 23 || minute > 59 || second > 59) return undefined;
+  const millisecond = Number((match[5] ?? '').padEnd(3, '0'));
+  const targetDate = new Date(0);
+  targetDate.setUTCFullYear(dateParts.year, dateParts.month - 1, dateParts.day);
+  targetDate.setUTCHours(hour, minute, second, millisecond);
+  const target = targetDate.getTime() - millisecond;
+  let candidate = target;
+  const format = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const parts = format.formatToParts(new Date(candidate));
+    const part = (type: string) => Number(parts.find((item) => item.type === type)?.value);
+    const representedDate = new Date(0);
+    representedDate.setUTCFullYear(part('year'), part('month') - 1, part('day'));
+    representedDate.setUTCHours(part('hour'), part('minute'), part('second'), 0);
+    const adjustment = target - representedDate.getTime();
+    candidate += adjustment;
+    if (adjustment === 0) break;
+  }
+  return new Date(candidate + millisecond);
+}
+
+function googleDateTime(value: unknown, timeZone: string): Date | undefined {
   const start = object(value);
-  const dateTime = typeof start?.dateTime === 'string'
-    ? start.dateTime
-    : typeof start?.date === 'string'
-      ? `${start.date}T00:00:00Z`
-      : undefined;
-  if (!dateTime) return undefined;
-  const normalized = /(?:Z|[+-]\d{2}:\d{2})$/u.test(dateTime) ? dateTime : `${dateTime}Z`;
-  const parsed = new Date(normalized);
-  return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+  if (typeof start?.date === 'string') {
+    const parts = validDateParts(start.date);
+    return parts ? zonedMidnightUtc(parts.year, parts.month, parts.day, timeZone) : undefined;
+  }
+  if (typeof start?.dateTime !== 'string') return undefined;
+  const parsed = /(?:Z|[+-]\d{2}:\d{2})$/u.test(start.dateTime)
+    ? new Date(start.dateTime)
+    : localDateTimeUtc(start.dateTime, typeof start.timeZone === 'string' ? start.timeZone : timeZone);
+  return parsed && Number.isFinite(parsed.getTime()) ? parsed : undefined;
 }
 
 function requiredEvent(value: unknown): Record<string, unknown> {
@@ -119,9 +182,26 @@ function requiredEvent(value: unknown): Record<string, unknown> {
   return event;
 }
 
-function eventSummary(event: Record<string, unknown>) {
-  const start = googleDateTime(event.start);
-  const end = googleDateTime(event.end);
+function eventSummary(event: Record<string, unknown>, timeZone: string) {
+  const startValue = object(event.start);
+  const endValue = object(event.end);
+  const startDate = typeof startValue?.date === 'string' ? startValue.date : undefined;
+  const endDate = typeof endValue?.date === 'string' ? endValue.date : undefined;
+  if (startDate !== undefined || endDate !== undefined) {
+    const start = startDate ? validDateParts(startDate) : undefined;
+    const end = endDate ? validDateParts(endDate) : undefined;
+    if (!start || !end) throw new ToolFailure('Google Calendar returned an invalid all-day event.');
+    return {
+      id: event.id,
+      subject: event.summary,
+      start: startDate,
+      end: endDate,
+      allDay: true,
+      ...(typeof event.location === 'string' && event.location ? { location: event.location } : {}),
+    };
+  }
+  const start = googleDateTime(event.start, timeZone);
+  const end = googleDateTime(event.end, timeZone);
   if (!start || !end) throw new ToolFailure('Google Calendar returned an invalid event time.');
   return {
     id: event.id,
@@ -132,9 +212,9 @@ function eventSummary(event: Record<string, unknown>) {
   };
 }
 
-function calendarEvents(payload: Record<string, unknown>): Record<string, unknown>[] {
+function calendarEvents(payload: Record<string, unknown>, limit = 50): Record<string, unknown>[] {
   if (!Array.isArray(payload.items)) throw new ToolFailure('Google Calendar returned an invalid response.');
-  return payload.items.slice(0, 50).map(requiredEvent);
+  return payload.items.slice(0, limit).map(requiredEvent);
 }
 
 function calendarTruncated(payload: Record<string, unknown>, eventCount: number): boolean {
@@ -252,16 +332,21 @@ async function currentDanMessage(request: FastifyRequest): Promise<ConversationM
 function calendarViewPath(
   start: Date,
   end: Date,
+  maxResults = 50,
+  searchQuery?: string,
+  pageToken?: string,
 ): string {
-  const query = new URLSearchParams({
+  const params = new URLSearchParams({
     timeMin: start.toISOString(),
     timeMax: end.toISOString(),
-    maxResults: '50',
+    maxResults: String(maxResults),
     singleEvents: 'true',
     orderBy: 'startTime',
-    fields: 'items(id,summary,start,end,location,transparency),nextPageToken',
+    fields: 'items(id,summary,start,end,location,transparency,status,attendees(responseStatus,self)),nextPageToken',
   });
-  return `/calendars/primary/events?${query}`;
+  if (searchQuery) params.set('q', searchQuery);
+  if (pageToken) params.set('pageToken', pageToken);
+  return `/calendars/primary/events?${params}`;
 }
 
 function validateWindow(start: Date, end: Date, maximumDays: number): void {
@@ -269,6 +354,133 @@ function validateWindow(start: Date, end: Date, maximumDays: number): void {
   if (duration <= 0 || duration > maximumDays * 24 * 60 * 60_000) {
     throw new ToolRefusal(`The requested time window must be positive and no longer than ${maximumDays} days.`);
   }
+}
+
+function calendarDateBoundary(value: string, name: string, endBoundary: boolean, timeZone: string): Date {
+  const parts = validDateParts(value);
+  if (!parts) throw new ToolRefusal(`${name} must be a valid ISO date.`);
+  const date = new Date(0);
+  date.setUTCFullYear(parts.year, parts.month - 1, parts.day + (endBoundary ? 1 : 0));
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 1;
+  const day = date.getUTCDate();
+  return zonedMidnightUtc(year, month, day, timeZone);
+}
+
+function dateOrdinal(value: string): number {
+  const parts = validDateParts(value)!;
+  const date = new Date(0);
+  date.setUTCFullYear(parts.year, parts.month - 1, parts.day);
+  date.setUTCHours(0, 0, 0, 0);
+  return date.getTime() / 86_400_000;
+}
+
+function calendarRange(startValue: unknown, endValue: unknown, timeZone: string) {
+  if (typeof startValue !== 'string' || typeof endValue !== 'string') {
+    throw new ToolRefusal('start and end must be ISO dates or timezone-aware ISO date-times.');
+  }
+  const startDateOnly = validDateParts(startValue) !== undefined;
+  const endDateOnly = validDateParts(endValue) !== undefined;
+  if (startDateOnly !== endDateOnly) {
+    throw new ToolRefusal('start and end must both be dates or both be timezone-aware date-times.');
+  }
+  const start = startDateOnly
+    ? calendarDateBoundary(startValue, 'start', false, timeZone)
+    : dateTime(startValue, 'start');
+  const end = startDateOnly
+    ? calendarDateBoundary(endValue, 'end', true, timeZone)
+    : dateTime(endValue, 'end');
+  const days = startDateOnly
+    ? dateOrdinal(endValue) + 1 - dateOrdinal(startValue)
+    : (end.getTime() - start.getTime()) / 86_400_000;
+  if (days <= 0 || days > 62) {
+    throw new ToolRefusal('The requested calendar range must be positive and no longer than 62 days.');
+  }
+  return { start, end };
+}
+
+async function pagedCalendarEvents(
+  google: GoogleApiClient,
+  start: Date,
+  end: Date,
+  maxResults: number,
+  signal: AbortSignal,
+  query?: string,
+): Promise<{ events: Record<string, unknown>[]; truncated: boolean }> {
+  const events: Record<string, unknown>[] = [];
+  const seenTokens = new Set<string>();
+  let pageToken: string | undefined;
+  for (let page = 0; page < 100; page += 1) {
+    const pageSize = Math.min(50, maxResults - events.length);
+    const payload = await google.request(
+      'calendar',
+      calendarViewPath(start, end, pageSize, query, pageToken),
+      { signal },
+    );
+    const rawItems = Array.isArray(payload.items) ? payload.items : undefined;
+    if (!rawItems) throw new ToolFailure('Google Calendar returned an invalid response.');
+    const pageEvents = calendarEvents(payload, pageSize);
+    events.push(...pageEvents);
+    const next = typeof payload.nextPageToken === 'string' && payload.nextPageToken
+      ? payload.nextPageToken
+      : undefined;
+    const hasUnreturnedItems = rawItems.length > pageEvents.length;
+    if (!next) return { events, truncated: hasUnreturnedItems };
+    if (events.length >= maxResults || hasUnreturnedItems || seenTokens.has(next)) {
+      return { events, truncated: true };
+    }
+    seenTokens.add(next);
+    pageToken = next;
+  }
+  return { events, truncated: true };
+}
+
+function declinedByDan(event: Record<string, unknown>): boolean {
+  return Array.isArray(event.attendees) && event.attendees.some((attendee) => {
+    const item = object(attendee);
+    return item?.self === true && item.responseStatus === 'declined';
+  });
+}
+
+async function findNextCalendarEvent(
+  google: GoogleApiClient,
+  after: Date,
+  until: Date,
+  timeZone: string,
+  signal: AbortSignal,
+): Promise<{ event: ReturnType<typeof eventSummary> | null; truncated: boolean }> {
+  const seenTokens = new Set<string>();
+  let pageToken: string | undefined;
+  let inspected = 0;
+  for (let page = 0; page < 100; page += 1) {
+    const pageSize = Math.min(50, 100 - inspected);
+    const payload = await google.request(
+      'calendar',
+      calendarViewPath(after, until, pageSize, undefined, pageToken),
+      { signal },
+    );
+    const rawItems = Array.isArray(payload.items) ? payload.items : undefined;
+    if (!rawItems) throw new ToolFailure('Google Calendar returned an invalid response.');
+    const events = calendarEvents(payload, pageSize);
+    inspected += events.length;
+    for (const event of events) {
+      if (event.status === 'cancelled' || declinedByDan(event)) continue;
+      const start = googleDateTime(event.start, timeZone);
+      if (!start) throw new ToolFailure('Google Calendar returned an invalid event time.');
+      if (start.getTime() > after.getTime()) {
+        return { event: eventSummary(event, timeZone), truncated: false };
+      }
+    }
+    const next = typeof payload.nextPageToken === 'string' && payload.nextPageToken
+      ? payload.nextPageToken
+      : undefined;
+    if (!next) return { event: null, truncated: rawItems.length > events.length };
+    if (inspected >= 100 || rawItems.length > events.length) return { event: null, truncated: true };
+    if (seenTokens.has(next)) return { event: null, truncated: true };
+    seenTokens.add(next);
+    pageToken = next;
+  }
+  return { event: null, truncated: true };
 }
 
 function confirmationResult(
@@ -297,9 +509,10 @@ export function createGoogleModule(
   const tools: JarvisTool[] = [
     {
       name: 'calendar_today_agenda',
-      description: 'Read Dan’s Google Calendar events for today in his configured local time zone.',
+      description: 'Read Dan’s Google Calendar events for today in his configured local time zone. Read-only and safe for a quick reflex answer.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       sensitive: true,
+      reflexSafe: true,
       execute: async (_input, _request, signal) => {
         const today = localDateParts(now(), timeZone);
         const start = zonedMidnightUtc(today.year, today.month, today.day, timeZone);
@@ -307,8 +520,66 @@ export function createGoogleModule(
         const end = zonedMidnightUtc(nextDate.getUTCFullYear(), nextDate.getUTCMonth() + 1, nextDate.getUTCDate(), timeZone);
         try {
           const payload = await google.request('calendar', calendarViewPath(start, end), { signal });
-          const events = calendarEvents(payload).map(eventSummary);
+          const events = calendarEvents(payload).map((event) => eventSummary(event, timeZone));
           return { timeZone, events, truncated: calendarTruncated(payload, events.length) };
+        } catch (error) { googleFailure(error); }
+      },
+    },
+    {
+      name: 'calendar_list_events',
+      description: 'Read Dan’s Google Calendar events in a date or date-time range. Resolve relative requests such as “this week”, “next Monday”, or “in October” to ISO dates in Dan’s configured time zone; date endpoints include both dates, while date-times use an exclusive end. Use query for event text such as “dentist”. Results are paged and capped at 100. Read-only and safe for a quick reflex answer.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          start: calendarRangeBoundarySchema,
+          end: calendarRangeBoundarySchema,
+          query: { type: 'string', minLength: 1, maxLength: 200 },
+          maxResults: { type: 'integer', minimum: 1, maximum: 100 },
+        },
+        required: ['start', 'end'],
+        additionalProperties: false,
+      },
+      sensitive: true,
+      reflexSafe: true,
+      execute: async (raw, _request, signal) => {
+        const input = object(raw);
+        const { start, end } = calendarRange(input?.start, input?.end, timeZone);
+        const maxResults = input?.maxResults ?? 50;
+        if (typeof maxResults !== 'number' || !Number.isInteger(maxResults) ||
+            maxResults < 1 || maxResults > 100) {
+          throw new ToolRefusal('maxResults must be an integer from 1 to 100.');
+        }
+        const query = input?.query === undefined
+          ? undefined
+          : string(input.query, 'query', 1, 200);
+        try {
+          const result = await pagedCalendarEvents(google, start, end, maxResults, signal, query);
+          return {
+            timeZone,
+            events: result.events.map((event) => eventSummary(event, timeZone)),
+            truncated: result.truncated,
+          };
+        } catch (error) { googleFailure(error); }
+      },
+    },
+    {
+      name: 'calendar_next_event',
+      description: 'Find Dan’s next non-declined Google Calendar event starting after now, or after an explicit timezone-aware ISO date-time. Searches up to 60 days ahead. Read-only and safe for a quick reflex answer.',
+      inputSchema: {
+        type: 'object',
+        properties: { after: dateTimeSchema },
+        additionalProperties: false,
+      },
+      sensitive: true,
+      reflexSafe: true,
+      execute: async (raw, _request, signal) => {
+        const input = object(raw);
+        const after = input?.after === undefined ? now() : dateTime(input.after, 'after');
+        if (!Number.isFinite(after.getTime())) throw new ToolFailure('The current time is invalid.');
+        const until = new Date(after.getTime() + 60 * 86_400_000);
+        try {
+          const result = await findNextCalendarEvent(google, after, until, timeZone, signal);
+          return { timeZone, ...result };
         } catch (error) { googleFailure(error); }
       },
     },
@@ -340,7 +611,10 @@ export function createGoogleModule(
           const payload = await google.request('calendar', calendarViewPath(start, end), { signal });
           const events = calendarEvents(payload)
             .filter((event) => event.transparency !== 'transparent')
-            .map((event) => ({ start: googleDateTime(event.start), end: googleDateTime(event.end) }))
+            .map((event) => ({
+              start: googleDateTime(event.start, timeZone),
+              end: googleDateTime(event.end, timeZone),
+            }))
             .filter((event): event is { start: Date; end: Date } =>
               event.start !== undefined && event.end !== undefined && event.end > event.start)
             .sort((left, right) => left.start.getTime() - right.start.getTime());
@@ -448,7 +722,7 @@ export function createGoogleModule(
             `/calendars/primary/events/${encodeURIComponent(eventId)}`,
             { signal },
           ));
-          const preview = eventSummary(event);
+          const preview = eventSummary(event, timeZone);
           return pendingActions.stage({
             scope: 'calendar',
             sourceMessageId: source.id,

@@ -68,6 +68,19 @@ function decodedMimeBody(raw: string): string {
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
 describe('Google Calendar and Gmail tools', () => {
+  it('makes read-only calendar tools reflex-safe and keeps their audit data sensitive', () => {
+    const module = createGoogleModule(
+      { request: vi.fn(async () => ({ items: [] })) },
+      { timeZone: 'Europe/Copenhagen' },
+    );
+    for (const name of ['calendar_today_agenda', 'calendar_list_events', 'calendar_next_event']) {
+      expect(module.tools.find((tool) => tool.name === name)).toMatchObject({
+        reflexSafe: true,
+        sensitive: true,
+      });
+    }
+  });
+
   it('shows a reconnect message when Google credentials have expired', async () => {
     const request = vi.fn(async () => { throw new GoogleApiError('credentials-expired'); });
     const { app } = appFor(request);
@@ -102,6 +115,149 @@ describe('Google Calendar and Gmail tools', () => {
     const query = new URL(path, 'https://www.googleapis.com/calendar/v3').searchParams;
     expect(query.get('timeMin')).toBe('2026-03-28T23:00:00.000Z');
     expect(query.get('timeMax')).toBe('2026-03-29T22:00:00.000Z');
+  });
+
+  it('lists a local week across pages and maps text search to Google query', async () => {
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) => {
+      const query = new URL(args[1], 'https://www.googleapis.com/calendar/v3').searchParams;
+      return query.get('pageToken') === 'next-page'
+        ? {
+            items: [{
+              id: 'event-2', summary: 'Dentist',
+              start: { dateTime: '2026-10-08T08:00:00+02:00' },
+              end: { dateTime: '2026-10-08T09:00:00+02:00' },
+            }],
+          }
+        : {
+            items: [{
+              id: 'event-1', summary: 'Planning',
+              start: { dateTime: '2026-10-05T10:00:00+02:00' },
+              end: { dateTime: '2026-10-05T11:00:00+02:00' },
+            }],
+            nextPageToken: 'next-page',
+          };
+    });
+    const { app, records } = appFor(request);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_list_events',
+      headers: confirmHeaders('42'),
+      payload: { start: '2026-10-05', end: '2026-10-11', query: 'dentist', maxResults: 100 },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().result).toMatchObject({
+      timeZone: 'Europe/Copenhagen',
+      events: [
+        { id: 'event-1', start: '2026-10-05T08:00:00.000Z' },
+        { id: 'event-2', start: '2026-10-08T06:00:00.000Z' },
+      ],
+      truncated: false,
+    });
+    expect(request).toHaveBeenCalledTimes(2);
+    const firstQuery = new URL(request.mock.calls[0]![1], 'https://www.googleapis.com/calendar/v3').searchParams;
+    const secondQuery = new URL(request.mock.calls[1]![1], 'https://www.googleapis.com/calendar/v3').searchParams;
+    expect(firstQuery.get('timeMin')).toBe('2026-10-04T22:00:00.000Z');
+    expect(firstQuery.get('timeMax')).toBe('2026-10-11T22:00:00.000Z');
+    expect(firstQuery.get('q')).toBe('dentist');
+    expect(secondQuery.get('pageToken')).toBe('next-page');
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
+  });
+
+  it('returns no events for an empty range', async () => {
+    const request = vi.fn(async () => ({ items: [] }));
+    const { app } = appFor(request);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_list_events',
+      headers: confirmHeaders('42'),
+      payload: { start: '2026-10-12', end: '2026-10-12' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().result).toMatchObject({ events: [], truncated: false });
+  });
+
+  it('refuses calendar ranges longer than 62 days before calling Google', async () => {
+    const request = vi.fn(async () => ({ items: [] }));
+    const { app } = appFor(request);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_list_events',
+      headers: confirmHeaders('42'),
+      payload: { start: '2026-10-01', end: '2026-12-02' },
+    });
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'The requested calendar range must be positive and no longer than 62 days.' },
+    });
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('preserves multi-day all-day event dates without converting them to UTC', async () => {
+    const request = vi.fn(async () => ({
+      items: [{
+        id: 'holiday', summary: 'Holiday',
+        start: { date: '2026-10-05' },
+        end: { date: '2026-10-08' },
+      }],
+    }));
+    const { app } = appFor(request);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_list_events',
+      headers: confirmHeaders('42'),
+      payload: { start: '2026-10-05', end: '2026-10-08' },
+    });
+    expect(response.json().result.events).toEqual([{
+      id: 'holiday',
+      subject: 'Holiday',
+      start: '2026-10-05',
+      end: '2026-10-08',
+      allDay: true,
+    }]);
+  });
+
+  it('finds the next non-declined event on a later day', async () => {
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) => {
+      const query = new URL(args[1], 'https://www.googleapis.com/calendar/v3').searchParams;
+      return query.get('pageToken') === 'next-page'
+        ? {
+            items: [{
+              id: 'next-event', summary: 'Planning',
+              start: { dateTime: '2026-10-06T10:00:00+02:00' },
+              end: { dateTime: '2026-10-06T11:00:00+02:00' },
+            }],
+          }
+        : {
+            items: [{
+              id: 'declined', summary: 'Declined',
+              start: { dateTime: '2026-10-05T15:00:00+02:00' },
+              end: { dateTime: '2026-10-05T16:00:00+02:00' },
+              attendees: [{ self: true, responseStatus: 'declined' }],
+            }],
+            nextPageToken: 'next-page',
+          };
+    });
+    const { app } = appFor(request, { now: () => new Date('2026-10-05T12:00:00Z') });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_next_event',
+      headers: confirmHeaders('42'),
+      payload: {},
+    });
+
+    expect(response.json().result).toMatchObject({
+      timeZone: 'Europe/Copenhagen',
+      event: { id: 'next-event', start: '2026-10-06T08:00:00.000Z' },
+      truncated: false,
+    });
+    expect(request).toHaveBeenCalledTimes(2);
+    const query = new URL(request.mock.calls[0]![1], 'https://www.googleapis.com/calendar/v3').searchParams;
+    expect(query.get('timeMin')).toBe('2026-10-05T12:00:00.000Z');
+    expect(query.get('timeMax')).toBe('2026-12-04T12:00:00.000Z');
   });
 
   it('reports additional calendar pages even when the first page is short', async () => {

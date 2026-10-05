@@ -25,6 +25,14 @@
 .conversation-message:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .message-heading { margin-bottom: var(--space-2); font-size: var(--type-small); }
 .message-heading strong, .streaming-message > strong { font-weight: 650; }
+.queue-count, .conversation-message[data-speaker="dan"] > .queued-state { color: var(--text-muted); font-size: var(--type-small); }
+.queued-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.queue-remove { display: grid; place-items: center; width: 44px; height: 44px; padding: 10px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer; }
+.queue-remove svg { width: 18px; height: 18px; }
+.queue-remove:hover { background: var(--surface-translucent); color: var(--text); }
+.queue-remove:active { transform: scale(.96); }
+.queue-remove:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.stop-reply { float: right; }
 .message-metadata { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); margin-top: var(--space-2); color: var(--text-muted); font-size: var(--type-caption); opacity: 0; transition: opacity var(--motion-fade) var(--ease-standard); }
 .message-metadata p { margin: 0; font-size: inherit; }
 .conversation-message:hover .message-metadata, .conversation-message:focus-within .message-metadata { opacity: 1; }
