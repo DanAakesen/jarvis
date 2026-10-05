@@ -296,6 +296,9 @@ Shrinking to 390×480 simulated keyboard-height pressure; 844×390 checked resiz
 reflow. Neither substitutes for a physical phone keyboard or screen reader.
 All-minimised typing tabs stay visible above the transcript, without moving the
 composer offscreen; repeated start/end remains usable.
+Native touch also verifies nested horizontal source scrolling without switching
+views. Desktop camera/sharing controls render outside the phone disclosure and
+remain visible after resizing.
 Before/after screenshots use labelled local fixtures under
 `docs/ui/screenshots/p8-11-*`; they do not demonstrate live Entra, hardware audio
 or P8-15's generated-view/agent-command delivery. No production auth stub or
