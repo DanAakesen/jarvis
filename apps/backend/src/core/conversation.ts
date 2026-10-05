@@ -124,7 +124,7 @@ function streamEvent(event: string, data: unknown): string {
 
 function logChatLatency(
   request: FastifyRequest,
-  phase: 'reflex_targets' | 'jev' | 'agent_first_byte',
+  phase: 'reflex_targets' | 'jev' | 'agent_first_byte' | 'turn_first_token' | 'turn_complete',
   startedAt: number,
 ): void {
   request.log.info({
@@ -235,6 +235,7 @@ export const conversationModule: BackendModule = {
         response: { 400: errorResponse, 404: errorResponse, 503: errorResponse },
       },
     }, async (request, reply) => {
+      const turnStartedAt = performance.now();
       const store = app.conversationStore;
       const agent = app.conversationAgent;
       if (!store) return reply.code(503).send({ error: 'Conversation storage unavailable' });
@@ -318,11 +319,11 @@ export const conversationModule: BackendModule = {
               controller.signal,
             ).then(finishReflex, () => finishReflex(null));
           }
-
           let turnMessageId = userMessage.id;
           let turnText = text;
           let turnLanguage = session.language;
           let isSteering = false;
+          let firstTurnTokenLogged = false;
           while (!controller.signal.aborted) {
             const answer = '';
             let partial = answer;
@@ -353,6 +354,10 @@ export const conversationModule: BackendModule = {
                 if (!firstByteLogged) {
                   firstByteLogged = true;
                   logChatLatency(request, 'agent_first_byte', agentStartedAt);
+                }
+                if (!firstTurnTokenLogged) {
+                  firstTurnTokenLogged = true;
+                  logChatLatency(request, 'turn_first_token', turnStartedAt);
                 }
                 partial += delta;
                 if (Buffer.byteLength(partial) > 512 * 1024) throw new Error('Chat response exceeded the size limit');
@@ -409,6 +414,7 @@ export const conversationModule: BackendModule = {
             });
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
+            logChatLatency(request, 'turn_complete', turnStartedAt);
             yield streamEvent('done', assistantMessage);
             break;
           }

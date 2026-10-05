@@ -164,6 +164,10 @@ class FakeBackend:
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         if request.method == "GET":
+            if request.url.path == "/agent/settings":
+                return httpx.Response(200, json={
+                    "model": "deployment", "reasoningEffort": "none",
+                })
             if request.url.path == "/factory/context":
                 return httpx.Response(
                     self.context_status,
@@ -371,18 +375,22 @@ async def test_chat_picks_up_steering_after_a_tool_round_without_repeating_the_t
 
 
 @pytest.mark.asyncio
-async def test_fetches_tool_catalogue_and_live_context_concurrently() -> None:
+async def test_fetches_settings_tool_catalogue_and_live_context_concurrently() -> None:
     model, transport = client([completed()])
     started: set[str] = set()
     both_started = asyncio.Event()
 
     async def wait_for_both(name: str) -> None:
         started.add(name)
-        if len(started) == 2:
+        if len(started) == 3:
             both_started.set()
         await asyncio.wait_for(both_started.wait(), timeout=1)
 
     class ConcurrentBackend:
+        async def model_settings(self):
+            await wait_for_both("settings")
+            return ModelSettings("selected-model", "none", "warm")
+
         async def tools(self):
             await wait_for_both("tools")
             return ()
@@ -398,8 +406,97 @@ async def test_fetches_tool_catalogue_and_live_context_concurrently() -> None:
     )]
 
     assert chunks == []
-    assert started == {"tools", "context"}
+    assert started == {"tools", "context", "settings"}
     assert transport.responses.request is not None
+    assert transport.responses.request["model"] == "selected-model"
+    assert "warm and supportive" in transport.responses.request["instructions"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [False, True])
+async def test_chat_setup_cancels_and_joins_sibling_requests(failure: bool) -> None:
+    model, transport = client([completed()])
+    started: set[str] = set()
+    cancelled: set[str] = set()
+    ready = asyncio.Event()
+
+    async def block(name: str):
+        started.add(name)
+        if len(started) == 3:
+            ready.set()
+        try:
+            await ready.wait()
+            if failure and name == "settings":
+                raise BackendUnavailable("Settings unavailable")
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.add(name)
+            raise
+
+    class PendingBackend:
+        async def tools(self):
+            return await block("tools")
+
+        async def context(self):
+            return await block("context")
+
+        async def model_settings(self):
+            return await block("settings")
+
+    model._tools = PendingBackend()  # type: ignore[assignment]
+
+    async def consume():
+        return [chunk async for chunk in model.complete_chat([ModelMessage("user", "Hi")], "en")]
+
+    task = asyncio.create_task(consume())
+    try:
+        await asyncio.wait_for(ready.wait(), timeout=1)
+        if failure:
+            with pytest.raises(BackendUnavailable):
+                await task
+            assert cancelled == {"tools", "context"}
+        else:
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert cancelled == {"tools", "context", "settings"}
+        assert transport.responses.requests == []
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_chat_reuses_container_catalogue_but_refreshes_live_settings_and_context() -> None:
+    backend = FakeBackend()
+    model, _ = client([], rounds=[[completed()], [completed()]], backend=backend)
+    try:
+        for _ in range(2):
+            _ = [chunk async for chunk in model.complete_chat([ModelMessage("user", "Hi")], "en")]
+        paths = [request.url.path for request in backend.requests]
+        assert paths.count("/tools") == 1
+        assert paths.count("/factory/context") == 2
+        assert paths.count("/agent/settings") == 2
+        assert not any(path.startswith("/tools/memory") for path in paths)
+    finally:
+        await model.close()
+
+
+@pytest.mark.asyncio
+async def test_closing_chat_after_first_delta_closes_responses_stream() -> None:
+    model, transport = client([
+        SimpleNamespace(type="response.output_text.delta", delta="Hi"),
+        completed(),
+    ])
+    response = model.complete_chat([ModelMessage("user", "Hi")], "en")
+    try:
+        assert await anext(response) == "Hi"
+        assert not transport.responses.stream.exited
+        await response.aclose()
+        assert transport.responses.stream.exited
+    finally:
+        await response.aclose()
+        await model.close()
 
 
 @pytest.mark.asyncio
@@ -512,6 +609,7 @@ async def test_try_again_after_refused_pc_open_selects_pc_open_again() -> None:
     assert [request.url.path for request in backend.requests] == [
         "/tools",
         "/factory/context",
+        "/agent/settings",
         "/tools/pc_open",
     ]
 

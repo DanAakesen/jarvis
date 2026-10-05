@@ -20,12 +20,11 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
-from opentelemetry import trace
 
+from chat_telemetry import latency_span
 from state import ModelSettings
 
 logger = logging.getLogger("jarvis_tools")
-_tracer = trace.get_tracer("VoiceHostedAgent.Tools")
 
 INSTRUCTIONS = """You are Jarvis, Dan's voice assistant for his software factory.
 Dan speaks Danish. Always answer in short, natural spoken Danish: one or two sentences,
@@ -279,7 +278,7 @@ class BackendToolClient:
 
     async def tools(self) -> tuple[BackendTool, ...]:
         """Return the cached catalogue, reloading it after its time to live."""
-        with _tracer.start_as_current_span("tool_catalogue") as span:
+        with latency_span("tool_catalogue") as span:
             async with self._lock:
                 if (
                     self._catalogue is not None
@@ -303,6 +302,10 @@ class BackendToolClient:
 
     async def model_settings(self) -> ModelSettings:
         """Read effective Jarvis settings to snapshot for one new session."""
+        with latency_span("settings"):
+            return await self._model_settings()
+
+    async def _model_settings(self) -> ModelSettings:
         try:
             headers = {"Authorization": _bearer(await self._token())}
             async with self._http.stream(
@@ -353,7 +356,7 @@ class BackendToolClient:
 
     async def context(self) -> dict[str, Any]:
         """Fetch the bounded running-task snapshot for the next model turn."""
-        with _tracer.start_as_current_span("turn_context"):
+        with latency_span("turn_context"):
             try:
                 headers = {"Authorization": _bearer(await self._token())}
                 async with self._http.stream(
@@ -409,7 +412,8 @@ class BackendToolClient:
         """Execute one model tool call; failures are returned, never raised as success."""
         self.calls += 1
         span_name = "memory_retrieval" if name == "memory_search" else "backend_tool_call"
-        with _tracer.start_as_current_span(span_name, attributes={"tool.name": name}):
+        with latency_span(span_name) as span:
+            span.set_attribute("tool.name", name)
             result = await self._call(name, arguments_json, message_id)
         if result.get("outcome") != "ok":
             self.last_error = f"{name}: {result.get('outcome')}"

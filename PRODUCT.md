@@ -190,6 +190,8 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 The "Now" panel reads the persisted away/present mode, current running tasks and the latest non-dismissed task-attention, release/deployment, credential-warning, and alert activity. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes, and expiring credentials are emailed through stateful Azure Monitor rules; the monthly Azure budget sends its 80% threshold through the same email-only action group. The backend reads actual budget spend on a bounded 15-minute schedule for the Now item. These existing activity alerts remain email-only; while away, task-state updates and approval requests use Teams through P7-03. The browser feed shows only away-mode status/activity while away and suppresses ordinary refresh events; changing mode refreshes the status. Task changes, alerts, dismissals, and credential/budget alert writes refresh the full panel through authenticated server-sent events while Dan is present; reconnecting states identify when the displayed snapshot may be stale.
 
+The accepted next visual implementation keeps a subdued large orb and open amber core visible on the Jarvis typing/voice page at all times. Explicit voice entry brightens that same orb; exit returns it to dormancy. A stable living 3D room, centred stage and real mirror floor carry across modes; light appearance re-lights the same room. The room and large orb do not appear on Factory, Settings or other routes. Shared glass surfaces apply across existing pages. The previous shell, windows/tabs, phone single-view/dock, theme persistence and microphone/readiness rules remain. These presentation changes are planned under P8-28–P8-33; the approved visual prototype is not production behavior. See [accepted UI requirements](ui.md#accepted-centred-3d-stage--5-october-2026).
+
 The voice orb follows typed, transient runtime activity delivered over the authenticated event stream and includes a text alternative. Listening is shown only after the voice relay is ready and microphone audio is observed. Thinking, tool-call start and outcome, speaking, interruption, reconnect, and failure are shown only when reported by the runtime. Unknown states are unavailable, and motion is disabled when reduced motion is preferred.
 
 English and Danish voice keep Voice Live as the final-transcript source. While the microphone is active and unmuted, a parallel Azure Speech stream can provide interim clauses to the existing safe reflex path; mute, voice end, or disconnect stops that recognizer. If Speech is unavailable, voice continues with final-transcript reflexes.
@@ -219,8 +221,11 @@ footer belongs only to screenshot fixtures and is absent from the production UI.
 | Columns by state: Ready, Running, Paused, Needs attention, Done, Cancelled | Create task (project, agent, text, optional model/reasoning override) |
 | Card: title, project, agent, state, current activity, last update, duration, attempt count, PR number and checks state, usage so far | Open; steer; pause; resume; cancel; continue after idle expiry; recover after crash |
 | Filters: project, agent, state, period | Filter; search |
+| Compact release context for the selected project: repository/default branch, latest build/deployment status, short commit timeline | Open the full project release view; select a project when the filter is All |
 
 The board shows up to 100 newest matching tasks. Pull request, checks, and usage are marked "Not reported" until their data sources are connected; the board does not infer values.
+
+P8-34 (#369) implements the approved board/release-bar/right-details composition. Selecting a task opens its existing task detail data in the contextual right pane while retaining filters and board position; Open full task keeps the complete timeline available. The release bar uses the existing authenticated project release source, never mixes data between projects, and shows honest loading/empty/unavailable/stale states. The approved mockup uses illustrative data and is not live product evidence.
 
 #### Software Factory — task detail
 

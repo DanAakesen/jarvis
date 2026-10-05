@@ -57,6 +57,7 @@ Status as of 5 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Task board | See tasks in columns by state with live updates; filter and search | Screen | Task view | Built | P1-08 |
+| Factory release bar and task lens | Approved task-board composition with selected-project release/commit context and a closable right task-details pane; reuse existing controls and source data | Screen | Factory task view; contextual right panel | Planned; approved mockup | P8-34 |
 | Create task | Create a task (project, agent, text, optional model/reasoning) | Both | Task view; by voice once P4-10 lands | Built (screen) | P1-04, P1-08, P4-10 |
 | Task detail | See header, full event timeline, sandbox sessions, disk readings, usage | Screen | Task detail | Built | P1-09 |
 | Task controls | Steer, pause, resume, cancel, and continue after a completed turn's session expires | Both | Board, task detail; by voice once P4-10 lands | Built (screen) | P2-07, P2-14, P4-10 |
@@ -177,3 +178,18 @@ was selected, and no implementation was started by this planning change. Notes
 search remains #208 and is not a replacement for long-term conversational memory.
 The first video's project was described as open source; its repository and
 licence have not yet been inspected, so code reuse is not a dependency.
+
+## Accepted 3D visual follow-up (5 October 2026)
+
+The earlier shell/workspace/contracts remain implemented with their recorded live-verification limits. Dan's accepted centred stage supersedes the current aurora and voice-only large orb on Jarvis; the following presentation changes are planned, not built or deployed by this documentation handoff.
+
+| Feature | Behaviour | Surface | Status | Tasks |
+| --- | --- | --- | --- | --- |
+| Living mirrored 3D stage | Stable centred room with live mechanisms/atmosphere, actual floor reflection and light cast by the orb | Jarvis typing/voice only | Planned | P8-28 |
+| Persistent transparent orb | Dormant cyan exterior/open amber core in typing, awake in voice, driven by existing actual runtime/audio state | Jarvis, including phone | Planned | P8-29 |
+| Continuous scene/window transitions | Orb alone moves/scales for content; room stays fixed; preserve windows/drafts/focus and eliminate reported flicker | Jarvis typing/voice | Planned; prototype flicker unresolved | P8-30 |
+| Selected glass surfaces | Readable translucent shell/window surfaces using existing navigation, views and controls; no 3D on other routes | Current shared shell/pages | Planned | P8-31 |
+| Re-lit light appearance | Same room geometry/viewpoint re-lit for light mode; existing approved preferences/tokens persist | Jarvis stage and shared appearance | Planned; light prototype not yet built | P8-32 |
+| Resilient phone/GPU experience | Single-view docking/swipe, adaptive quality, hidden-tab lifecycle, reduced motion and usable WebGL failure handling | Jarvis phone/browser | Planned; physical hardware/live acceptance pending | P8-33 |
+
+[Requirements](../ui.md#accepted-centred-3d-stage--5-october-2026), [references](ui/centred-stage/README.md), [runnable prototype](reference/ui-stage-prototype/README.md). Reuse P8-14–P8-17 for data, tools, activity and preference logic; do not recreate those completed tasks. The latest persistent orb decision supersedes older phone-typing/voice-collapse visual requirements.

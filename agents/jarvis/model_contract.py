@@ -35,7 +35,7 @@ class StreamingModelClient(Protocol):
         settings: ModelSettings | None = None,
         reflex_note: str | None = None,
     ) -> AsyncIterator[str]:
-        """Yield ordered text-chat chunks."""
+        """Yield ordered text-chat chunks, loading current settings when omitted."""
         if False:
             yield ""
 

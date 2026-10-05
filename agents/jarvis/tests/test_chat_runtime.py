@@ -5,19 +5,25 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator, Sequence
+from types import SimpleNamespace
 
 import httpx
+import pytest
 from starlette.testclient import TestClient
 
 import chat_runtime
+import chat_telemetry
 from jarvis_tools import (
+    BackendToolClient,
     current_chat_phase_setter,
     current_chat_session_id,
     current_chat_turn_id,
     current_message_id,
     current_steering_fetcher,
 )
+from model_client import AzureOpenAIResponsesClient
 from state import ModelMessage, ModelSettings
 from voice_runtime import create_app
 
@@ -56,7 +62,7 @@ class FakeModel:
     ) -> AsyncIterator[str]:
         self.messages = tuple(messages)
         self.language = language
-        self.captured_settings = settings
+        self.captured_settings = settings or await self.session_settings()
         self.reflex_note = reflex_note
         self.message_id = current_message_id.get()
         yield "Hej"
@@ -215,6 +221,112 @@ def test_steered_invocation_uses_saved_language_and_authorized_round_boundary(mo
         ("POST", "https://backend.example/conversation/sessions/41/turns/42/phase:tools"),
         ("GET", "https://backend.example/conversation/sessions/41/turns/42/steering?after=42"),
     ]
+
+
+@pytest.mark.parametrize("disconnect", [False, True])
+async def test_responses_delta_reaches_sse_before_model_completion(disconnect, caplog) -> None:
+    finish = asyncio.Event()
+    disconnected = asyncio.Event()
+    first_delta = asyncio.Event()
+    frames: list[bytes] = []
+    stream_closed = False
+
+    class Stream:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            nonlocal stream_closed
+            stream_closed = True
+
+        def __aiter__(self):
+            async def events():
+                yield SimpleNamespace(type="response.output_text.delta", delta="Hi")
+                await finish.wait()
+                yield SimpleNamespace(
+                    type="response.completed",
+                    response=SimpleNamespace(output=[], usage=None),
+                )
+            return events()
+
+    class Responses:
+        async def create(self, **request):
+            assert request["stream"] is True
+            return Stream()
+
+    async def token():
+        return "agent-token"
+
+    def backend(request):
+        if request.url.path == "/tools":
+            return httpx.Response(200, json=[])
+        if request.url.path == "/agent/settings":
+            return httpx.Response(200, json={"model": "deployment", "reasoningEffort": "none"})
+        assert request.url.path == "/factory/context"
+        return httpx.Response(200, json={"runningTasks": [], "truncated": False})
+
+    model = AzureOpenAIResponsesClient(
+        client=SimpleNamespace(responses=Responses()),  # type: ignore[arg-type]
+        credential=None,
+        model_name="deployment",
+        server_address="example.test",
+        system_prompt="system",
+        max_output_tokens=32,
+        tools=BackendToolClient(
+            base_url="https://backend.example", token_provider=token,
+            http=httpx.AsyncClient(transport=httpx.MockTransport(backend)),
+        ),
+    )
+    app = create_app(model, configure_observability=None, chat_context_loader=lambda *_: _context())
+    body = json.dumps({
+        "messageId": "42", "text": "private-greeting", "language": "en",
+        "delegatedAuthorization": AUTHORIZATION,
+    }).encode()
+    request_sent = False
+
+    async def receive():
+        nonlocal request_sent
+        if not request_sent:
+            request_sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        await disconnected.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        if message["type"] == "http.response.body":
+            frames.append(message.get("body", b""))
+            if b"event: delta" in frames[-1]:
+                first_delta.set()
+
+    caplog.set_level("INFO", logger="chat_telemetry")
+    task = asyncio.create_task(app({
+        "type": "http", "asgi": {"version": "3.0", "spec_version": "2.0"},
+        "method": "POST", "scheme": "http", "path": "/invocations",
+        "raw_path": b"/invocations", "query_string": b"",
+        "headers": [(b"content-type", b"application/json")],
+        "server": ("localhost", 80), "client": ("localhost", 1234),
+        "http_version": "1.1",
+    }, receive, send))
+    try:
+        await asyncio.wait_for(first_delta.wait(), timeout=2)
+        assert frames[0] == b": connected\n\n"
+        assert b'data: {"text": "Hi"}' in b"".join(frames)
+        assert b"event: done" not in b"".join(frames)
+        assert not task.done() and not stream_closed
+        if disconnect:
+            disconnected.set()
+        else:
+            finish.set()
+        await asyncio.wait_for(task, timeout=2)
+        assert stream_closed
+        assert (b"event: done" in b"".join(frames)) is not disconnect
+        assert any("phase=first_delta_out " in message for message in caplog.messages)
+        assert "private-greeting" not in "\n".join(caplog.messages)
+        assert TOKEN not in "\n".join(caplog.messages)
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await model._tools.close()
 
 
 def test_chat_uses_screen_context_without_changing_the_verified_user_message() -> None:
@@ -472,7 +584,7 @@ def test_follow_up_keeps_cross_session_refusal_and_emits_content_free_context_te
         def __init__(self) -> None:
             self.spans = {}
 
-        def start_as_current_span(self, name):
+        def start_as_current_span(self, name, **_kwargs):
             span = Span()
             self.spans[name] = span
             return span
@@ -483,7 +595,7 @@ def test_follow_up_keeps_cross_session_refusal_and_emits_content_free_context_te
         lambda: ("https://backend.example", "scope"),
     )
     monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
-    monkeypatch.setattr(chat_runtime, "_tracer", tracer)
+    monkeypatch.setattr(chat_telemetry, "_tracer", tracer)
 
     result = asyncio.run(
         chat_runtime.load_verified_history(TOKEN, "16", "try again", "en")
