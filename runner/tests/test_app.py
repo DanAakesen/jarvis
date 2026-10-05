@@ -1,4 +1,5 @@
 import asyncio
+from io import BytesIO
 import json
 import os
 import shlex
@@ -7,9 +8,16 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from PIL import Image
 
 import app
 from starlette.requests import Request
+
+
+def encoded_image(format_name="PNG"):
+    output = BytesIO()
+    Image.new("RGB", (2, 2), color=(20, 40, 60)).save(output, format=format_name)
+    return output.getvalue()
 
 
 def test_required_string_rejects_missing_and_blank():
@@ -17,6 +25,238 @@ def test_required_string_rejects_missing_and_blank():
         app._required_string({}, "task")
     with pytest.raises(ValueError):
         app._required_string({"task": " "}, "task")
+
+
+@pytest.mark.parametrize(("format_name", "content_type"), [
+    ("PNG", "image/png"),
+    ("JPEG", "image/jpeg"),
+])
+def test_generated_image_validation_decodes_only_bounded_png_and_jpeg(format_name, content_type):
+    image = encoded_image(format_name)
+    assert app._validate_generated_image(image) == content_type
+    with pytest.raises(ValueError):
+        app._validate_generated_image(image[:-5])
+    with pytest.raises(ValueError):
+        app._validate_generated_image(b"not an image")
+    with pytest.raises(ValueError):
+        app._validate_generated_image(b"x" * (app.MAX_GENERATED_IMAGE_BYTES + 1))
+
+
+def test_codex_tool_runs_without_repository_and_uploads_only_validated_image(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path / "runner-state")
+    monkeypatch.setenv("JARVIS_BACKEND_URL", "https://backend.example")
+    monkeypatch.setenv("JARVIS_API_SCOPE", "api://00000000-0000-4000-8000-000000000000/.default")
+    image = encoded_image()
+    captured = {}
+    artifact_id = "8b92c4e7-48a4-4c8f-8df1-ef699d2c05d9"
+
+    class Input:
+        def write(self, value):
+            captured["prompt"] = value.decode("utf-8")
+
+        async def drain(self):
+            pass
+
+        def close(self):
+            pass
+
+    class Process:
+        returncode = 0
+
+        def __init__(self):
+            self.stdin = Input()
+            self.stdout = asyncio.StreamReader()
+            self.stderr = asyncio.StreamReader()
+            self.stdout.feed_eof()
+            self.stderr.feed_eof()
+
+        async def wait(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+            self.stdout.feed_eof()
+            self.stderr.feed_eof()
+
+    class Publisher:
+        async def upload_image(self, key, content_type, value):
+            captured["upload"] = (key, content_type, value)
+            return artifact_id
+
+        async def close(self):
+            captured["closed"] = True
+
+    async def create_process(*args, **kwargs):
+        captured["command"] = args
+        captured["cwd"] = Path(kwargs["cwd"])
+        captured["codex_home"] = Path(kwargs["env"]["CODEX_HOME"])
+        assert not list(captured["cwd"].iterdir())
+        auth_file = captured["codex_home"] / "auth.json"
+        assert auth_file.stat().st_mode & 0o777 == 0o600
+        (captured["cwd"] / "generated-image.png").write_bytes(image)
+        return Process()
+
+    async def credentials(agent, *, include_github_token=True):
+        assert agent == "codex"
+        assert not include_github_token
+        return {"codex_login": '{"tokens":{"access_token":"fixture"}}'}
+
+    publisher = Publisher()
+    monkeypatch.setattr(app, "RunnerEventPublisher", lambda *_args: publisher)
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    monkeypatch.setattr(app.asyncio, "create_subprocess_exec", create_process)
+    prompt = "A quiet sea at sunrise"
+    upload_key = "a" * 43
+    state = app.TaskState("image-invocation", "image-session", "codex", "", mode="codex-tool", model="gpt-5.5")
+
+    asyncio.run(app._run_codex_tool(state, prompt, upload_key))
+
+    assert state.status == "completed"
+    assert state.result == {
+        "artifact_id": artifact_id, "content_type": "image/png", "size_bytes": len(image),
+    }
+    assert captured["command"][:7] == (
+        "codex", "exec", "--skip-git-repo-check", "-s", "workspace-write", "--model", "gpt-5.5",
+    )
+    assert captured["command"][-1] == "-"
+    assert json.dumps(prompt) in captured["prompt"]
+    assert captured["upload"] == (upload_key, "image/png", image)
+    assert captured["closed"] is True
+    assert not captured["cwd"].exists()
+    saved = app._task_state_path(state.session_id, state.invocation_id).read_text()
+    assert prompt not in saved
+    assert upload_key not in saved
+    assert state.result["artifact_id"] in saved
+
+
+def test_codex_tool_reports_usage_limit_without_upload(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setenv("JARVIS_BACKEND_URL", "https://backend.example")
+    monkeypatch.setenv("JARVIS_API_SCOPE", "api://00000000-0000-4000-8000-000000000000/.default")
+    uploads = []
+
+    class Stream:
+        def __init__(self, value=b""):
+            self.reader = asyncio.StreamReader()
+            if value:
+                self.reader.feed_data(value)
+            self.reader.feed_eof()
+
+        async def read(self, size=-1):
+            return await self.reader.read(size)
+
+    class Process:
+        def __init__(self):
+            self.returncode = 1
+            self.stdin = SimpleNamespace(
+                write=lambda _value: None,
+                drain=lambda: asyncio.sleep(0),
+                close=lambda: None,
+            )
+            self.stdout = Stream()
+            self.stderr = Stream(b"Codex usage limit reached")
+
+        async def wait(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    class Publisher:
+        async def upload_image(self, *_args):
+            uploads.append(True)
+
+        async def close(self):
+            pass
+
+    async def credentials(_agent, *, include_github_token=True):
+        return {"codex_login": "{}"}
+
+    async def create_process(*_args, **_kwargs):
+        return Process()
+
+    monkeypatch.setattr(app, "RunnerEventPublisher", lambda *_args: Publisher())
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    monkeypatch.setattr(app.asyncio, "create_subprocess_exec", create_process)
+    state = app.TaskState("usage-limit", "session", "codex", "", mode="codex-tool")
+
+    asyncio.run(app._run_codex_tool(state, "draw something", "b" * 43))
+
+    assert state.status == "failed"
+    assert state.error == "Codex usage limit reached"
+    assert uploads == []
+
+
+def test_codex_tool_cancellation_terminates_process_and_cleans_workspace(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path / "state")
+    monkeypatch.setenv("JARVIS_BACKEND_URL", "https://backend.example")
+    monkeypatch.setenv("JARVIS_API_SCOPE", "api://00000000-0000-4000-8000-000000000000/.default")
+    running = asyncio.Event()
+    captured = {}
+
+    class Input:
+        def write(self, _value):
+            pass
+
+        async def drain(self):
+            pass
+
+        def close(self):
+            pass
+
+    class Process:
+        returncode = None
+
+        def __init__(self):
+            self.stdin = Input()
+            self.stdout = asyncio.StreamReader()
+            self.stderr = asyncio.StreamReader()
+
+        async def wait(self):
+            running.set()
+            while self.returncode is None:
+                await asyncio.sleep(0.001)
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+            self.stdout.feed_eof()
+            self.stderr.feed_eof()
+
+    class Publisher:
+        async def upload_image(self, *_args):
+            pytest.fail("Cancelled generation must not upload an artifact")
+
+        async def close(self):
+            pass
+
+    async def credentials(_agent, *, include_github_token=True):
+        return {"codex_login": "{}"}
+
+    async def create_process(*_args, **kwargs):
+        captured["cwd"] = Path(kwargs["cwd"])
+        return Process()
+
+    async def cancel():
+        task = asyncio.create_task(app._run_codex_tool(
+            app.TaskState("cancelled-image", "session", "codex", "", mode="codex-tool"),
+            "draw something",
+            "c" * 43,
+        ))
+        await running.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        return task
+
+    monkeypatch.setattr(app, "RunnerEventPublisher", lambda *_args: Publisher())
+    monkeypatch.setattr(app, "_credentials_for", credentials)
+    monkeypatch.setattr(app.asyncio, "create_subprocess_exec", create_process)
+    task = asyncio.run(cancel())
+
+    assert task.cancelled()
+    assert captured["cwd"] is not None
+    assert not captured["cwd"].exists()
 
 
 def test_needs_attention_marker_is_bounded_and_requires_a_question():
