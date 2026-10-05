@@ -42,7 +42,7 @@ Status as of 5 October 2026.
 | Live status by voice | Jarvis announces important task changes and answers "what's going on?" | Voice/chat | — | Built (offline) | P7-12 |
 | Long-term memory | Recall relevant stated preferences, project facts, decisions and unfinished tasks with Dan's source; inspect, correct or forget them | Voice/chat | — | In progress | P7-13 |
 | Live voice test | Dan's verdict on Danish and English voice | Voice/chat | — | In progress | P5-07 |
-| Reflex layer | Instant acknowledgement and fast routing of simple commands (Jev) | Voice/chat | — | Planned | P7-04 |
+| Reflex layer | End-of-turn Jev classification and fast routing of high-confidence safe actions; uncertainty and confirmation-required actions go to the main agent | Voice/chat | Main page | In progress (offline) | P7-04 |
 
 ## Main page overview
 

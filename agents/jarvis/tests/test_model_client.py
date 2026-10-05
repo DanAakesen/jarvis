@@ -289,7 +289,10 @@ async def test_chat_reflex_result_is_trusted_and_not_repeated_as_an_action() -> 
 
     instructions = transport.responses.request["instructions"]
     assert "Trusted backend reflex result for this turn: Task 12 was paused." in instructions
-    assert "Relay the result honestly and acknowledge briefly. Do not repeat the action." in instructions
+    assert (
+        "Relay the result honestly and acknowledge briefly. Do not repeat the action."
+        in instructions
+    )
 
 
 @pytest.mark.asyncio

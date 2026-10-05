@@ -97,7 +97,7 @@ export function createEnglishSessionUpdate(
         input: {
           format: { type: 'audio/pcm', rate: 24_000 },
           turn_detection: {
-            type: 'server_vad',
+            type: 'azure_semantic_vad_en',
             threshold: 0.5,
             prefix_padding_ms: 300,
             silence_duration_ms: 700,

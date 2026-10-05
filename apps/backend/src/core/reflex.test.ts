@@ -33,7 +33,7 @@ describe('Jev reflex classifier', () => {
   it('validates typed decisions and only offers registered reflex-safe targets', async () => {
     const tools = createToolRegistry([{ id: 'factory', tools: [tool(true), tool(false)] }]);
     const targets = createReflexTargets(tools.list(), ['12']);
-    const fetcher = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => response());
+    const fetcher = vi.fn<typeof fetch>(async () => response());
     const classifier = createJevReflexClassifier(async () => 'fake-key', fetcher);
 
     const decision = await classifier.classify('Jarvis, pause task 12', 'en', targets, new AbortController().signal);

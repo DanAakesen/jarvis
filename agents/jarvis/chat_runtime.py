@@ -152,7 +152,10 @@ def register_chat_invocation(
                     not isinstance(reflex_note, str)
                     or not reflex_note.strip()
                     or len(reflex_note) > 1_000
-                    or any(ord(character) < 32 or ord(character) == 127 for character in reflex_note)
+                    or any(
+                        ord(character) < 32 or ord(character) == 127
+                        for character in reflex_note
+                    )
                 )
             )
             or (
