@@ -13,6 +13,7 @@ import type { BackendModule } from '../modules.js';
 import type { ConversationMessage, ConversationRole } from '../core/conversation-store.js';
 import { defaultSettings, readSettings } from '../core/settings.js';
 import {
+  createBrowserUrlTargets,
   executeReflexAction,
   reflexTargets,
   undoPartialReflexAction,
@@ -78,33 +79,6 @@ function partialSafeTarget(target: ReflexTarget): boolean {
   } catch {
     return false;
   }
-}
-
-function browserUrlTargets(request: Parameters<typeof reflexTargets>[0], text: string): ReflexTarget[] {
-  const tool = request.server.jarvisTools.get('pc_open');
-  if (!tool) return [];
-  const targets: ReflexTarget[] = [];
-  if (/\b(?:open|launch)\s+(?:(?:my|the)\s+)?(?:browser|chrome)\b/iu.test(text) ||
-      /\b(?:åbn|start)\s+(?:(?:min|den)\s+)?(?:browser|chrome)\b/iu.test(text)) {
-    targets.push({
-      choice: 'partial_open_browser',
-      tool,
-      arguments: { target: 'app', value: 'edge' },
-    });
-  }
-  const destination = /(?:\b(?:go|navigate)\s+to\b|\b(?:gå|naviger)\s+til\b)\s+([^\s,;.!?]+)/iu.exec(text)?.[1];
-  if (destination) {
-    const host = destination.replace(/^https?:\/\//iu, '').replace(/\/.*$/u, '').toLowerCase();
-    const domain = host === 'google' ? 'www.google.com' : host.includes('.') ? host : undefined;
-    if (domain && /^[a-z0-9.-]{1,253}$/u.test(domain)) {
-      targets.push({
-        choice: `partial_navigate_${targets.length}`,
-        tool,
-        arguments: { target: 'url', value: `https://${domain}/` },
-      });
-    }
-  }
-  return targets;
 }
 
 function reflexSummary(target: ReflexTarget, outcome: ReflexActionResult['outcome']): string {
@@ -428,7 +402,7 @@ function registerVoiceRoute(
         const ledger = reflexLedger.get(itemId) ?? [];
         const targets = [
           ...await reflexTargets(request),
-          ...browserUrlTargets(request, text),
+          ...createBrowserUrlTargets(request.server.jarvisTools.get('pc_open'), text),
         ];
         const classification = await app.reflexClassifier.classify(
           text,
@@ -656,7 +630,7 @@ function registerVoiceRoute(
             language,
             [
               ...await reflexTargets(request, text),
-              ...browserUrlTargets(request, text),
+              ...createBrowserUrlTargets(request.server.jarvisTools.get('pc_open'), text),
             ],
             controller.signal,
             {

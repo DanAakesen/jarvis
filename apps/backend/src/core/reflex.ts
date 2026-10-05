@@ -522,3 +522,20 @@ export function createReflexTargets(
   }
   return targets;
 }
+
+export function createBrowserUrlTargets(tool: RegisteredTool | undefined, text: string): ReflexTarget[] {
+  if (!tool) return [];
+  const destination = /(?:\b(?:open|launch)\s+|\b(?:go|navigate)\s+to\s+|\b(?:åbn|start)\s+|\b(?:gå|naviger)\s+til\s+)([^\s,;!?]+)/iu
+    .exec(text)?.[1]?.replace(/[.!?]+$/u, '');
+  if (!destination) return [];
+
+  const host = destination.replace(/^https?:\/\//iu, '').replace(/\/.*$/u, '').toLowerCase();
+  const domain = host === 'google' ? 'www.google.com' : host.includes('.') ? host : undefined;
+  if (!domain || !/^[a-z0-9.-]{1,253}$/u.test(domain)) return [];
+
+  return [{
+    choice: 'open_url',
+    tool,
+    arguments: { target: 'url', value: `https://${domain}/` },
+  }];
+}
