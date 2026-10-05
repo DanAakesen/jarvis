@@ -188,7 +188,7 @@ The earlier shell/workspace/contracts remain implemented with their recorded liv
 | Living mirrored 3D stage | Stable centred room with live mechanisms/atmosphere, actual floor reflection and light cast by the orb | Jarvis typing/voice only | Planned | P8-28 |
 | Persistent transparent orb | Dormant cyan exterior/open amber core in typing, awake in voice, driven by existing actual runtime/audio state | Jarvis, including phone | Planned | P8-29 |
 | Continuous scene/window transitions | Orb alone moves/scales for content; room stays fixed; preserve windows/drafts/focus and eliminate reported flicker | Jarvis typing/voice | Planned; prototype flicker unresolved | P8-30 |
-| Selected glass surfaces | Readable translucent shell/window surfaces using existing navigation, views and controls; no 3D on other routes | Current shared shell/pages | Planned | P8-31 |
+| Selected glass surfaces | Readable translucent shell/window surfaces using existing navigation, views and controls; no 3D on other routes | Current shared shell/pages | Implemented offline; future-stage contrast remains unverified | P8-31 |
 | Re-lit light appearance | Same room geometry/viewpoint re-lit for light mode; existing approved preferences/tokens persist | Jarvis stage and shared appearance | Planned; light prototype not yet built | P8-32 |
 | Resilient phone/GPU experience | Single-view docking/swipe, adaptive quality, hidden-tab lifecycle, reduced motion and usable WebGL failure handling | Jarvis phone/browser | Planned; physical hardware/live acceptance pending | P8-33 |
 

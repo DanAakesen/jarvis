@@ -28,7 +28,10 @@ function parseColor(value: string): { color: Color; alpha: number } {
 }
 
 function composite(foreground: Color, alpha: number, background: Color): Color {
-  return foreground.map((channel, index) => channel * alpha + background[index] * (1 - alpha)) as Color;
+  const [red, green, blue] = foreground.map(
+    (channel, index) => channel * alpha + background[index]! * (1 - alpha),
+  ) as Color;
+  return [red, green, blue];
 }
 
 function luminance([red, green, blue]: Color): number {
@@ -36,12 +39,13 @@ function luminance([red, green, blue]: Color): number {
     const normalized = channel / 255;
     return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
   });
-  return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+  const [redLinear, greenLinear, blueLinear] = linear as Color;
+  return redLinear * 0.2126 + greenLinear * 0.7152 + blueLinear * 0.0722;
 }
 
 function contrast(first: Color, second: Color): number {
-  const values = [luminance(first), luminance(second)].sort((a, b) => b - a);
-  return (values[0] + 0.05) / (values[1] + 0.05);
+  const [lighter, darker] = [luminance(first), luminance(second)].sort((a, b) => b - a) as [number, number];
+  return (lighter + 0.05) / (darker + 0.05);
 }
 
 describe('shared glass tokens', () => {

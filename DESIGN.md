@@ -74,7 +74,7 @@ workspace consumers; those consumer windows remain owned by P8.
 - **Sleep switch:** the main page shows configured awake/asleep state (minimum replicas 1/0), pending and failure feedback, and explains a refusal while any task is Ready or Running. Settings links to the main-page control.
 - **Live updates:** cards and timeline entries change state without layout jumps; a visible marker for a disconnected or stale event stream. Only committed task updates are presented as current.
 
-## Accepted centred Jarvis stage (5 October 2026; planned)
+## Accepted centred Jarvis stage (5 October 2026)
 
 Dan approved the corrected [centred prototype](docs/reference/ui-stage-prototype/README.md) and selected [orb/stage image 3](docs/ui/centred-stage/selected-orb-and-stage.png) plus [glass-window image 2](docs/ui/centred-stage/selected-glass-window.png). [Corrected desktop and phone captures](docs/ui/centred-stage/README.md) define centring and continuity; generated stills guide materials, not pixel-identical rendering or product data.
 
@@ -84,7 +84,9 @@ Dan approved the corrected [centred prototype](docs/reference/ui-stage-prototype
 - **Content-aware placement:** centre the orb/rear mechanisms/platform with no views. Only the orb glides/resizes left when wide-screen content appears, or docks below phone content. Camera, room and platform stay fixed; current tabs/window lifecycle, draft/focus restoration and default-off minimise preference remain.
 - **Glass and readability:** selected image 2 defines restrained smoky translucent window chrome, generous spacing, sans typography and icons. Adapt it to each real view. Keep text legible over the moving/reflected room, accessible labels, focus and touch controls; avoid a solid brain, opaque orb backing and coarse crossing arcs.
 
-P8-28–P8-33 port this direction into the current app and reuse runtime/workspace/settings contracts. Dan reports transition flicker in the prototype; it remains unresolved and requires frame/video inspection of entry/exit, interrupted reversals and window cycles. Existing software-WebGL checks are not hardware, live-voice or flicker verification. Detailed requirements and superseded experiments are in [ui.md](ui.md#accepted-centred-3d-stage--5-october-2026). Canonical token values remain in code, not this document.
+P8-31 applies the shared glass treatment to the existing shell, temporary workspace, contextual panel, Factory and Settings using the canonical tokens in `apps/web/src/styles.css`. Both appearances use translucent smoky surfaces and sans headings; existing page content, shell controls and workspace behavior remain in place. A focused regression test checks text, muted text and focus contrast over black and white backdrops.
+
+The accepted 3D room and orb are not yet mounted in production; P8-28–P8-33 continue to port the rest of the direction while reusing runtime/workspace/settings contracts. The browser evidence for P8-31 checks the real existing app and does not establish contrast over the future moving/reflected stage, hardware performance, live voice or transition-flicker resolution. Dan reports transition flicker in the prototype; it remains unresolved and requires frame/video inspection of entry/exit, interrupted reversals and window cycles. Detailed requirements and superseded experiments are in [ui.md](ui.md#accepted-centred-3d-stage--5-october-2026). Canonical token values remain in code, not this document.
 
 ## Current implemented visual system (superseded on Jarvis by the planned stage)
 
