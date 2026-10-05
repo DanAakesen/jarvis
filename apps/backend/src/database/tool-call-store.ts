@@ -23,5 +23,15 @@ export function createToolCallStore(pool: sql.ConnectionPool): ToolCallStore {
         .query(`INSERT INTO dbo.tool_calls (message_id, tool, [arguments], result, outcome, at)
           VALUES (@messageId, @tool, @arguments, @result, @outcome, SYSUTCDATETIME());`);
     },
+    async listCodexToolCalls(from, to) {
+      const result = await pool.request()
+        .input('from', sql.DateTime2(7), from)
+        .input('to', sql.DateTime2(7), to)
+        .query<{ tool: 'web_research'; count: string }>(`SELECT tool, CONVERT(varchar(20), COUNT_BIG(1)) AS count
+          FROM dbo.tool_calls
+          WHERE tool = N'web_research' AND [at] >= @from AND [at] < @to
+          GROUP BY tool;`);
+      return result.recordset;
+    },
   };
 }

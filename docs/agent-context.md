@@ -208,7 +208,8 @@ Status, 4 October 2026: Dan registered the App, installed it on all repositories
 The repository uses npm workspaces for `apps/web`, `apps/backend`, and
 `packages/contracts`, one root lockfile, and shared strict TypeScript
 configuration. P8-14 keeps the versioned JSON Schema and browser/backend view
-types in the contracts workspace. P0-02 implements the web
+types in the contracts workspace; P7-14 adds the bounded typed web-research
+result contract there. P0-02 implements the web
 skeleton with React/Vite, routing, ESLint and Vitest; P0-03 adds the Fastify
 backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
 Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3), and P2-01 (#27) adds sandbox and operations groups 4 and 6.
@@ -239,6 +240,7 @@ Verified in Codex cloud for P0-02:
 | Focused P7-08 camera, shell, chat and voice checks | `npm test --workspace @jarvis/web -- --run src/camera-capture.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/App.test.tsx src/voice-client.test.tsx`; `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/vision/screen.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
 | Focused P7-13 memory-tool, embedding, and migration tests | `npm test --workspace @jarvis/backend -- --run src/core/memory.test.ts src/core/memory-embeddings.test.ts src/database/migrations.test.ts` |
+| Focused P7-14 research tests | `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- --run src/core/web-research.test.ts src/core/usage.test.ts src/foundry/client.test.mts src/config.test.ts src/database/tool-call-store.test.ts`; `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k codex_tool` |
 | Focused P7-04 reflex, chat and voice tests | `npm test --workspace @jarvis/backend -- --run src/core/reflex.test.ts src/core/conversation.test.ts src/voice/relay.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py` |
 | Focused P7-20 streaming voice reflex checks | `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/core/reflex.test.ts src/database/conversation-store.test.ts src/voice/realtime.test.ts src/logging.test.ts`; `npm run lint --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_voice_provisioning.py` |
 | P7-13 isolated SQL migration/store contracts | `npm run test:database --workspace @jarvis/backend` |
@@ -578,6 +580,19 @@ backend managed identity and `https://ai.azure.com/.default` scope. This setting
 is optional for local development: memory retrieval falls back to SQL full-text
 or substring search when embeddings are not configured or unavailable. No API
 key or browser credential is used.
+
+P7-14 uses the same configured Foundry runner and the existing `codex-login`
+Key Vault secret; there is no Bing resource, search API key, new paid API, or
+manual provider setup. Bicep's `codexToolModel` parameter configures the backend
+setting `JARVIS_CODEX_TOOL_MODEL` (default `gpt-5.5`); the backend passes that
+model to runner mode `codex-tool`, tool `web_research`. The runner uses a fresh
+temporary workspace without a repository, disables Codex's `shell_tool`, and
+deletes the workspace and auth file after the invocation. Do not enable the
+shell tool or treat the read-only sandbox as a credential-file boundary.
+Offline tests use fake provider processes. After merge, the coordinator checks
+one harmless live query, its source URLs, explicit no-source behavior when
+applicable, usage-limit handling if naturally available, and the daily count;
+the coding agent must not access Azure or run live Codex acceptance.
 
 Production runner calls use the optional paired `FOUNDRY_RUNTIME_ENDPOINT` and
 `FOUNDRY_ADMIN_ENDPOINT`, plus `FOUNDRY_RUNNER_AGENT_NAME`. Bicep supplies the

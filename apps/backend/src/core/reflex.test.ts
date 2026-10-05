@@ -17,6 +17,21 @@ function tool(reflexSafe: boolean) {
   };
 }
 
+function browserTool() {
+  return {
+    name: 'browser_do',
+    description: 'Work in Chrome.',
+    inputSchema: {
+      type: 'object',
+      properties: { goal: { type: 'string' } },
+      required: ['goal'],
+      additionalProperties: false,
+    },
+    reflexSafe: true,
+    execute: vi.fn(async () => ({})),
+  };
+}
+
 function response(
   route = 'target_0',
   confidence = 0.99,
@@ -57,6 +72,7 @@ describe('Jev reflex classifier', () => {
       needsConfirmation: false,
       target: { tool: { name: 'pause_task' }, arguments: { taskId: '12' } },
     });
+
     expect(fetcher).toHaveBeenCalledWith('https://api.typesafe.ai/v1/systemone', expect.objectContaining({
       method: 'POST',
       redirect: 'error',
@@ -115,6 +131,20 @@ describe('Jev reflex classifier', () => {
       none: 'No listed executed action is explicitly contradicted.',
       'action-1': 'pause task 12',
     });
+  });
+
+  it('offers the recognized browser clause as a fixed reflex-safe target', () => {
+    const tools = createToolRegistry([{ id: 'browser-agent', tools: [browserTool()] }]);
+
+    expect(createReflexTargets(tools.list(), [], 'Open the page and search for Jarvis')).toMatchObject([
+      {
+        choice: 'target_0',
+        tool: { name: 'browser_do' },
+        arguments: { goal: 'Open the page and search for Jarvis' },
+      },
+    ]);
+    expect(createReflexTargets(tools.list())).toEqual([]);
+    expect(createReflexTargets(tools.list(), [], 'x'.repeat(4_001))).toEqual([]);
   });
 
   it('falls through on low-confidence, malformed, missing-key, and rejected responses', async () => {

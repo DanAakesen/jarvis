@@ -452,7 +452,7 @@ function registerVoiceRoute(
             text,
             language,
             [
-              ...await reflexTargets(request),
+              ...await reflexTargets(request, text),
               ...browserUrlTargets(request, text),
             ],
             controller.signal,

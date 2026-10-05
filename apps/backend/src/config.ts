@@ -19,6 +19,7 @@ export interface BackendConfig {
   foundryChatAgentName?: string;
   foundryProjectEndpoint?: string;
   foundryMemoryEmbeddingDeploymentName?: string;
+  codexToolModel: string;
   githubAppId?: string;
   graphAppId?: string;
   graphTimeZone?: string;
@@ -135,6 +136,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (foundryRunnerAgentName !== undefined && !/^[A-Za-z0-9._-]{1,128}$/u.test(foundryRunnerAgentName)) {
     throw new ConfigurationError('FOUNDRY_RUNNER_AGENT_NAME must be a valid agent name');
   }
+  const codexToolModel = env.JARVIS_CODEX_TOOL_MODEL ?? 'gpt-5.5';
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/u.test(codexToolModel) || codexToolModel === 'gpt-6.1-sol') {
+    throw new ConfigurationError('JARVIS_CODEX_TOOL_MODEL must be a supported ChatGPT Codex model');
+  }
   const githubAppId = env.GITHUB_APP_ID;
   if (githubAppId !== undefined && !/^[1-9][0-9]{0,19}$/u.test(githubAppId)) {
     throw new ConfigurationError('GITHUB_APP_ID must be a positive decimal identifier');
@@ -227,6 +232,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
+    codexToolModel,
     ...(githubAppId === undefined ? {} : { githubAppId }),
     ...(graphAppId === undefined ? {} : { graphAppId: graphAppId.toLowerCase() }),
     ...(graphTimeZone === undefined ? {} : { graphTimeZone }),
