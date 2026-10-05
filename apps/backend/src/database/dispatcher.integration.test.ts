@@ -150,17 +150,28 @@ describe('dispatcher SQL coordination', () => {
       return { task, sandboxSessionId };
     };
 
-    const staleActive = await addRunningInvocation('Stale active invocation', 'Active', null, true, 'running');
-    const staleCompleted = await addRunningInvocation('Stale completed invocation', 'Ended', 'done', true, 'completed');
-    await addRunningInvocation('Fresh active invocation', 'Active', null, false, 'running');
+    const fixtures: Awaited<ReturnType<typeof addRunningInvocation>>[] = [];
+    try {
+      const staleActive = await addRunningInvocation('Stale active invocation', 'Active', null, true, 'running');
+      fixtures.push(staleActive);
+      const staleCompleted = await addRunningInvocation('Stale completed invocation', 'Ended', 'done', true, 'completed');
+      fixtures.push(staleCompleted);
+      const freshActive = await addRunningInvocation('Fresh active invocation', 'Active', null, false, 'running');
+      fixtures.push(freshActive);
 
-    const stale = await store.listStaleRunning(new Date(Date.now() - 5 * 60_000), 5);
-    expect(stale.map(({ taskId }) => taskId)).toEqual(expect.arrayContaining([
-      staleActive.task.id, staleCompleted.task.id,
-    ]));
-    expect(stale).toHaveLength(2);
-    expect(stale.find(({ taskId }) => taskId === staleActive.task.id)?.sessionStatus).toBe('Active');
-    expect(stale.find(({ taskId }) => taskId === staleCompleted.task.id)?.sessionStatus).toBe('Ended');
+      const stale = await store.listStaleRunning(new Date(Date.now() - 5 * 60_000), 5);
+      expect(stale.map(({ taskId }) => taskId)).toEqual(expect.arrayContaining([
+        staleActive.task.id, staleCompleted.task.id,
+      ]));
+      expect(stale).toHaveLength(2);
+      expect(stale.find(({ taskId }) => taskId === staleActive.task.id)?.sessionStatus).toBe('Active');
+      expect(stale.find(({ taskId }) => taskId === staleCompleted.task.id)?.sessionStatus).toBe('Ended');
+    } finally {
+      for (const { task } of fixtures) {
+        await taskStore.transition(task.id, 'NeedsAttention');
+        await store.endTaskSessions(task.id, 'NeedsAttention');
+      }
+    }
   });
 
   it('persists the workspace branch with the lease and retains it across deferred and rejected starts', async () => {
