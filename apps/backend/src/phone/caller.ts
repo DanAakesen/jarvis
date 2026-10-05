@@ -1,12 +1,9 @@
 export interface PhoneAllowlist {
-  readonly phoneNumbers: ReadonlySet<string>;
+  readonly entraObjectIds: ReadonlySet<string>;
 }
 
-export type TrustedPhoneCaller =
-  | { readonly kind: 'entra'; readonly id: string }
-  | { readonly kind: 'phone'; readonly id: string };
+export type TrustedPhoneCaller = { readonly kind: 'entra'; readonly id: string };
 
-const e164Pattern = /^\+[1-9]\d{7,14}$/u;
 const uuidPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu;
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -24,19 +21,19 @@ export function parsePhoneAllowlist(secret: string): PhoneAllowlist {
     throw new TypeError('Phone allow-list is invalid');
   }
   const root = record(value);
-  if (!root || Object.keys(root).length !== 1 || !Array.isArray(root.phoneNumbers) ||
-      root.phoneNumbers.length > 64) {
+  if (!root || Object.keys(root).length !== 1 || !Array.isArray(root.entraObjectIds) ||
+      root.entraObjectIds.length > 64) {
     throw new TypeError('Phone allow-list is invalid');
   }
-  const numbers = new Set<string>();
-  for (const number of root.phoneNumbers) {
-    if (typeof number !== 'string' || !e164Pattern.test(number)) {
+  const ids = new Set<string>();
+  for (const id of root.entraObjectIds) {
+    if (typeof id !== 'string' || !uuidPattern.test(id)) {
       throw new TypeError('Phone allow-list is invalid');
     }
-    numbers.add(number);
+    ids.add(id.toLowerCase());
   }
-  if (numbers.size === 0) throw new TypeError('Phone allow-list is empty');
-  return { phoneNumbers: numbers };
+  if (ids.size === 0) throw new TypeError('Phone allow-list is empty');
+  return { entraObjectIds: ids };
 }
 
 export function trustedPhoneCaller(
@@ -44,7 +41,9 @@ export function trustedPhoneCaller(
   ownerObjectId: string,
   allowlist: PhoneAllowlist,
 ): TrustedPhoneCaller | undefined {
-  if (!uuidPattern.test(ownerObjectId)) return undefined;
+  if (!uuidPattern.test(ownerObjectId) || !allowlist.entraObjectIds.has(ownerObjectId.toLowerCase())) {
+    return undefined;
+  }
   const identifier = record(value);
   if (!identifier) return undefined;
 
@@ -55,10 +54,5 @@ export function trustedPhoneCaller(
     return { kind: 'entra', id: ownerObjectId.toLowerCase() };
   }
 
-  const phone = record(identifier.phoneNumber);
-  if (phone && typeof phone.value === 'string' && e164Pattern.test(phone.value) &&
-      allowlist.phoneNumbers.has(phone.value)) {
-    return { kind: 'phone', id: phone.value };
-  }
   return undefined;
 }

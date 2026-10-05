@@ -30,6 +30,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | Area | Requirement |
 | --- | --- |
 | **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. Chat turns save the source message before invoking the hosted agent; only a completed reply is saved, and tool calls link to that source message. |
+| **Teams calling** | Dan can call Jarvis from the Teams app through ACS Call Automation and the Teams Phone resource account. Accept only Dan's verified Teams Entra object ID; reject unverified callers before answering or creating a session. Phone tool calls use the backend registry and require Dan's P7-03 Teams approval before reading personal data or taking actions. A Teams service number and ACS usage may incur charges; live use waits for Dan to purchase the number. |
 | **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
 | **Updates** | Events update state and progress live, without manual refresh. |
 | **Assignment** | One active coding agent per task. |
