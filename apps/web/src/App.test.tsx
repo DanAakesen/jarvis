@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 
@@ -39,6 +40,9 @@ const {
 });
 vi.mock('./auth', () => ({ createAuthClient, restoreProfile, signIn }));
 vi.mock('./conversation-history', () => ({ loadConversationHistory, createChatSession, sendChatTurn }));
+vi.mock('./JarvisStage', () => ({
+  JarvisStage: ({ children }: { children?: ReactNode }) => <div data-testid="jarvis-stage">{children}</div>,
+}));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
     constructor(private readonly options: {
@@ -157,27 +161,35 @@ describe('Jarvis routes', () => {
     expect(document.documentElement.dataset.documentVisibility).toBeUndefined();
   });
 
-  it('shows Dan only after Microsoft sign-in and the backend profile request succeed', async () => {
+  it('sends the page to Microsoft sign-in and waits while it navigates away', async () => {
     const user = userEvent.setup();
-    signIn.mockResolvedValue({ name: 'Dan Aakesen' });
+    signIn.mockResolvedValue(undefined);
     render(<MemoryRouter><App config={config} /></MemoryRouter>);
 
     const button = await screen.findByRole('button', { name: 'Sign in with Microsoft' });
     await user.click(button);
 
-    expect(await screen.findByRole('heading', { name: 'Welcome, Dan Aakesen' })).not.toBeNull();
     expect(signIn).toHaveBeenCalledWith(expect.anything(), config);
+    expect((await screen.findByRole('button', { name: 'Signing in…' })).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('status').textContent).toBe('Opening Microsoft sign-in…');
   });
 
   it('shows the backend refusal and does not show a name for an unauthorized account', async () => {
+    restoreProfile.mockRejectedValue(new Error("This Microsoft account isn't allowed to use Jarvis."));
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+
+    expect((await screen.findByRole('alert')).textContent).toBe("This Microsoft account isn't allowed to use Jarvis.");
+    expect(screen.queryByRole('heading', { name: /Welcome,/ })).toBeNull();
+  });
+
+  it('shows a sign-in start failure', async () => {
     const user = userEvent.setup();
-    signIn.mockRejectedValue(new Error("This Microsoft account isn't allowed to use Jarvis."));
+    signIn.mockRejectedValue(new Error('Microsoft sign-in did not complete. Try again.'));
     render(<MemoryRouter><App config={config} /></MemoryRouter>);
 
     await user.click(await screen.findByRole('button', { name: 'Sign in with Microsoft' }));
 
-    expect((await screen.findByRole('alert')).textContent).toBe("This Microsoft account isn't allowed to use Jarvis.");
-    expect(screen.queryByRole('heading', { name: /Welcome,/ })).toBeNull();
+    expect((await screen.findByRole('alert')).textContent).toBe('Microsoft sign-in did not complete. Try again.');
   });
 
   it('recovers from an unknown address through the home link', async () => {
@@ -268,6 +280,20 @@ describe('App shell', () => {
     await user.click(screen.getByRole('link', { name: 'Settings' }));
     await screen.findByRole('heading', { name: 'Settings' });
     await waitFor(() => expect(eventRequests()).toHaveLength(2));
+  });
+
+  it('mounts the 3D stage on Jarvis and not on other routes', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    expect(screen.getByTestId('jarvis-stage')).toBeTruthy();
+    await user.click(screen.getByRole('link', { name: 'Software Factory' }));
+    await screen.findByRole('heading', { name: 'Tasks' });
+    expect(screen.queryByTestId('jarvis-stage')).toBeNull();
+
+    await user.click(screen.getByRole('link', { name: 'Settings' }));
+    await screen.findByRole('heading', { name: 'Settings' });
+    expect(screen.queryByTestId('jarvis-stage')).toBeNull();
   });
 
   it('renders backend-reported waking in the shared signed-in shell', async () => {

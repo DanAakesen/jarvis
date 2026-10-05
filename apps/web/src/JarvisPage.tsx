@@ -5,9 +5,11 @@ import { useCallback } from 'react';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import { BackendSleepControl } from './BackendSleepControl';
 import { ConversationHistory } from './ConversationHistory';
+import { JarvisStage } from './JarvisStage';
 import { NowFeedPanel } from './NowFeedPanel';
 import { ScreenShareControls } from './ScreenShareControls';
 import { useScreenShare, type CameraController } from './screen-sharing';
+import { useThemePreference } from './theme-preference-context';
 import './ConversationHistory.css';
 import { useWorkspaceCommands } from './workspace-command-state';
 
@@ -24,6 +26,7 @@ export function JarvisPage({
   getAccessToken: () => Promise<string>;
   camera: CameraController;
 }) {
+  const { theme } = useThemePreference();
   const screenShare = useScreenShare(config, getAccessToken);
   const workspace = useWorkspaceCommands();
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
@@ -33,26 +36,28 @@ export function JarvisPage({
   }, [workspace]);
   return (
     <div className="jarvis-page">
-      <h1 className="visually-hidden">Welcome, {name}</h1>
-      <h2 id="conversation-heading" className="visually-hidden">Conversation</h2>
-      <ConversationHistory client={client} config={config} screenShare={screenShare} camera={camera}>
-        <details className="conversation-overview">
-          <summary>Activity, sharing and backend</summary>
-          <div className="jarvis-side">
-            <ScreenShareControls screenShare={screenShare} />
-            <NowFeedPanel
-              client={client}
-              config={config}
-              getAccessToken={getAccessToken}
-              applyWorkspaceCommand={applyWorkspaceCommand}
-            />
-            <section className="panel" aria-labelledby="backend-heading">
-              <h2 id="backend-heading">Backend</h2>
-              <BackendSleepControl client={client} config={config} />
-            </section>
-          </div>
-        </details>
-      </ConversationHistory>
+      <JarvisStage theme={theme}>
+        <h1 className="visually-hidden">Welcome, {name}</h1>
+        <h2 id="conversation-heading" className="visually-hidden">Conversation</h2>
+        <ConversationHistory client={client} config={config} screenShare={screenShare} camera={camera}>
+          <details className="conversation-overview">
+            <summary>Activity, sharing and backend</summary>
+            <div className="jarvis-side">
+              <ScreenShareControls screenShare={screenShare} />
+              <NowFeedPanel
+                client={client}
+                config={config}
+                getAccessToken={getAccessToken}
+                applyWorkspaceCommand={applyWorkspaceCommand}
+              />
+              <section className="panel" aria-labelledby="backend-heading">
+                <h2 id="backend-heading">Backend</h2>
+                <BackendSleepControl client={client} config={config} />
+              </section>
+            </div>
+          </details>
+        </ConversationHistory>
+      </JarvisStage>
     </div>
   );
 }

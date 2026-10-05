@@ -13,7 +13,14 @@ from typing import Any
 import httpx
 import pytest
 
-from jarvis_tools import BackendToolClient, BackendUnavailable, current_message_id
+from jarvis_tools import (
+    BackendToolClient,
+    BackendUnavailable,
+    current_chat_phase_setter,
+    current_chat_turn_id,
+    current_message_id,
+    current_steering_fetcher,
+)
 from model_client import (
     CHAT_INSTRUCTIONS,
     AzureOpenAIResponsesClient,
@@ -307,6 +314,64 @@ async def test_chat_reflex_result_is_trusted_and_not_repeated_as_an_action() -> 
         "Relay the result honestly and acknowledge briefly. Do not repeat the action."
         in instructions
     )
+
+
+@pytest.mark.asyncio
+async def test_chat_picks_up_steering_after_a_tool_round_without_repeating_the_tool() -> None:
+    tool_call = FakeItem(
+        type="function_call",
+        call_id="first",
+        name="create_task",
+        arguments='{"text":"Original action"}',
+    )
+    backend = FakeBackend()
+    model, transport = client(
+        [],
+        rounds=[
+            [completed(tool_call)],
+            [
+                SimpleNamespace(type="response.output_text.delta", delta="Continued."),
+                completed(),
+            ],
+        ],
+        backend=backend,
+    )
+    fetch_count = 0
+    phases: list[str] = []
+
+    async def fetch_steering():
+        nonlocal fetch_count
+        fetch_count += 1
+        return [("43", "Continue in English.", "en")] if fetch_count == 3 else []
+
+    async def set_phase(phase: str) -> None:
+        phases.append(phase)
+
+    fetch_token = current_steering_fetcher.set(fetch_steering)
+    phase_token = current_chat_phase_setter.set(set_phase)
+    turn_token = current_chat_turn_id.set("42")
+    message_token = current_message_id.set("42")
+    try:
+        chunks = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Original action")], "da"
+        )]
+    finally:
+        current_message_id.reset(message_token)
+        current_chat_turn_id.reset(turn_token)
+        current_chat_phase_setter.reset(phase_token)
+        current_steering_fetcher.reset(fetch_token)
+
+    assert chunks == ["Continued."]
+    assert phases == ["model", "tools", "model"]
+    assert transport.responses.requests[1]["input"][-1] == {
+        "role": "user",
+        "content": (
+            "Dan interrupted your previous reply with this message; continue accordingly. "
+            "Reply in English:\nContinue in English."
+        ),
+    }
+    tool_posts = [request for request in backend.requests if request.method == "POST"]
+    assert len(tool_posts) == 1
 
 
 @pytest.mark.asyncio

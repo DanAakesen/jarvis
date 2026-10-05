@@ -2,10 +2,12 @@ import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
 
 export interface ConversationAgentInput {
   readonly messageId: string;
+  readonly turnId?: string;
   readonly text: string;
   readonly language: 'da' | 'en';
   readonly screenContext?: string;
   readonly reflexNote?: string;
+  readonly steering?: boolean;
 }
 
 export interface ConversationAgent {

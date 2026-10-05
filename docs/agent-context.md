@@ -205,9 +205,9 @@ Status, 4 October 2026: Dan registered the App, installed it on all repositories
 
 ## Accepted visual reference handoff
 
-The read-only [centred stage prototype](reference/ui-stage-prototype/README.md) and [selected images/captures](ui/centred-stage/README.md) support P8-28–P8-33. Its isolated lockfile is not part of the root workspaces; follow its README to run it. The accepted standalone is copied unchanged. Prototype commands/check reports are historical evidence, not validation of the production app or its Node 22 toolchain. Port selected scene code into the current app; do not deploy demo replies, simulated states or comparison fixtures.
+The read-only [centred stage prototype](reference/ui-stage-prototype/README.md) and [selected images/captures](ui/centred-stage/README.md) support P8-28–P8-33. Its isolated lockfile is not part of the root workspaces; follow its README to run it. The accepted standalone is copied unchanged. Prototype commands/check reports are historical evidence, not validation of the production app or its Node 22 toolchain. The production scene is implemented offline in draft PR #375, lazily loaded on the Jarvis route only; do not ship the prototype, its demo replies, simulated states or comparison fixtures.
 
-The 3D stage/large orb are Jarvis-only, light mode re-lights the same room, and dormant visuals do not enable microphone capture. Dan reported transition flicker after the earlier browser checks; it is unresolved. Keep live-provider/device limitations distinct from local checks. Original reference snapshots stay read-only.
+The 3D stage/large orb are Jarvis-only, light mode re-lights the same room, and dormant visuals do not enable microphone capture. Reduced motion, hidden-tab pause, WebGL fallback/context-loss cleanup and route teardown are implemented. Labelled software-Chromium empty/typing/voice/window captures and three motion frames are in `ui/screenshots/p8-28-*`; three repeated route cycles reported no off-route canvas and lost each prior context. This run used scratch auth/API/voice fixtures; Factory's unconfigured API endpoints deliberately return 503. P8-31's separate draft PR #376 records shared-glass captures/contrast checks for current pages; review the combined PRs for text readability over the reflected stage. SwiftShader consumed several CPU cores, so hardware-GPU, physical-device, live-voice and reported transition-flicker acceptance remain unverified. Original reference snapshots stay read-only.
 
 ## Setup and commands
 
@@ -225,7 +225,9 @@ P7-19 reuses that existing key and P7-18's default-off Chrome toggle; it adds no
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
 and Python 3.12.14 (`.python-version`, for future Python work). Install from the
-repository root. Prototype dependencies are excluded from npm workspaces.
+repository root. The standalone reference prototype's dependencies remain
+outside npm workspaces; production `apps/web` uses `three@0.180.0` and dev-only
+`@types/three@0.180.0`.
 See [README.md](../README.md) for public web configuration and overrides.
 
 Verified in Codex cloud for P0-02:
@@ -239,12 +241,13 @@ Verified in Codex cloud for P0-02:
 | Shared generated-view contract | `npm test --workspace @jarvis/contracts`; `npm run lint --workspace @jarvis/contracts` |
 | Focused P8-16 activity tests | `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- --run src/core/activity.test.ts src/core/conversation-activity.test.ts src/core/now.test.ts src/voice/relay.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx src/activity-context.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/VoiceOrb.test.tsx src/Workspace.test.tsx src/NowFeedPanel.test.tsx src/now-feed.test.ts` |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
+| Focused P8-28 scene and route lifecycle checks | `npm test --workspace @jarvis/web -- --run src/JarvisStage.test.tsx src/App.test.tsx` |
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
 | Focused P8-17 settings/theme checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
-| Focused P8-26 queue and cancellation tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-abort.test.tsx` |
+| Focused P8-35 steering, queue, and control tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/backend -- --run src/core/conversation.test.ts src/database/conversation-store.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py` |
 | Focused P7-08 camera, shell, chat and voice checks | `npm test --workspace @jarvis/web -- --run src/camera-capture.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/App.test.tsx src/voice-client.test.tsx`; `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/vision/screen.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
 | Focused P7-13 memory-tool, embedding, and migration tests | `npm test --workspace @jarvis/backend -- --run src/core/memory.test.ts src/core/memory-embeddings.test.ts src/database/migrations.test.ts` |
@@ -324,6 +327,13 @@ permission denial, natural voice end, draft/focus restoration and reduced
 motion were exercised. Screenshots in `docs/ui/screenshots/p8-05-*` contain
 labelled local fixtures, not production conversations. A real phone keyboard,
 physical microphone/speakers and live Azure round-trip remain unverified.
+P8-35 Chromium screenshots at 1440×900 and 390×844 in dark/light capture a
+streaming reply with a queued message and editable next draft. The browser
+checks verified Ctrl+Enter queueing, language switching, enabled Send/language/
+voice controls, no Stop button, no horizontal overflow and no console/page
+errors. Steering and starting voice during streaming are covered by focused
+component/API tests. These screenshots use scratch-only auth/API fixtures, not
+live Entra or Foundry.
 P8-11 used scratch-only auth/API/voice fixtures and the real workspace at
 1440×900 and touch-emulated 390×844 in both appearances. Chromium CDP touch
 gestures verified foreground switching at 390, 320 and 280px, alongside named
@@ -456,8 +466,21 @@ fixtures, not live accounts or production data. Contrast tests calculate primary
 text, muted text, current-color icon and focus contrast on both glass surfaces
 against black and white backing extremes. The light muted-text token was darkened
 to meet AA, and conversation Markdown paragraphs now use the primary text role.
-Production does not yet mount the 3D room, so reflected-scene readability, live
-delivery and hardware behavior remain unverified.
+P8-29's signed-in browser checks used a scratch-only auth/API/WebSocket/SSE fixture
+and Chromium with SwiftShader. Captures in
+[`docs/ui/centred-stage/p8-29-browser/`](ui/centred-stage/p8-29-browser/) cover
+dormant dark/light at 1440×1000 and 390×844, plus dark desktop connecting, ready,
+decoded playback response, post-voice dormant and a schema-valid Now `thinking`
+event. The stage kept one canvas through voice entry and exit; `getUserMedia` was
+not called until the explicit Enable microphone action (one fake-device request).
+The browser observed listening→speaking→listening from fixture playback PCM and
+matched reduced motion. Phone had no horizontal overflow; there were no page or
+shader errors after the shader fix. Existing P8-31 contrast tests check text,
+muted text, icons and focus against black and white backdrops; the integrated
+scene/glass text was also visually checked. No live backend/provider, real audio
+device, hardware GPU, physical phone, Safari or transition-flicker acceptance is
+claimed. The fixtures and generated audio are local test data, not production
+simulated state controls.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

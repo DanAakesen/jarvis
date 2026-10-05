@@ -71,8 +71,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `backendFqdn` as the public URL. Backend connectivity is unverified until then.
 - The home page uses a tenant-specific MSAL Browser client with the public web
   client ID and API scope. MSAL stores its cache in session storage; sign-in
-  requests only the delegated API scope and sends the access token to `/me`.
-  Cached accounts use silent token acquisition. A missing backend URL disables
+  redirects the whole page to Entra (no popup, so embedded browsers and popup
+  blockers work) and returns to the registered site root, where
+  `handleRedirectPromise` completes it. It requests only the delegated API scope
+  and sends the access token to `/me`. Cached accounts use silent token
+  acquisition through the `/redirect.html` bridge. A missing backend URL disables
   sign-in instead of presenting a false success state.
 - P1-07 adds the app shell. `useSignIn` owns the MSAL session for the whole
   app, so navigation never repeats sign-in. Until `/me` succeeds, every shell
@@ -888,24 +891,35 @@ continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
 
-P8-26 keeps chat draft, turn state and a removable FIFO queue in
+P8-26/P8-35 keep chat draft, turn state and a removable FIFO queue in
 `ConversationHistory`. Each submission captures text and language and clears
-the draft locally. A synchronous in-flight guard permits only one active
-`sendChatTurn`; its promise settles (including stream cleanup) before the next
-queued submission starts. Later drafts survive completion/errors, and failed
-turn feedback remains visible while the queue advances. Stop reply passes an
-AbortSignal through session creation, token acquisition and the existing fetch/stream cancellation
-path; cancellable setup waits also prevent slow visual inspection from blocking
-the queue or sending the stopped message when inspection later finishes. Component
-unmount also aborts the active turn. Pending messages are in memory only and
-are not retained across navigation/reload.
-History pages and saved turn messages merge by ID in SQL's numeric-ID order;
-persisted entries replace optimistic metadata without removing absent entries.
-Older pagination retains its cursor across latest-page refreshes. These changes
-do not alter storage, SSE contracts, or the backend's first-byte latency.
-The backend retains its existing per-turn disconnect cancellation and does not
-reject overlapping turns; sequencing is owned by this client queue, not a new
-server-side queue or concurrency guard. Stop does not undo completed task actions.
+the draft locally; Ctrl+Enter stages a message in the queue, and its promise
+settles (including stream cleanup) before the next queued submission starts.
+Enter/Send steers the active turn. A backend registry keyed by chat session
+rejects parallel turn creation and allows the steer request to join the active
+turn. During model generation it aborts only that model round, persists the
+partial Jarvis message with `interrupted=true`, and streams an `interrupted`
+event before continuing with the steering message. The new message's captured
+language is used for the continuation.
+
+The authenticated `POST /conversation/sessions/{id}/steer` route shares the
+conversation authorization boundary. `POST
+/conversation/sessions/{id}/turns/{messageId}/phase` records whether the hosted
+agent is in a model or tool phase; `GET
+/conversation/sessions/{id}/turns/{messageId}/steering?after={id}` returns
+bounded Dan messages newer than the cursor to the agent. While a tool runs,
+steering does not cancel it; the agent picks up messages at the next model
+boundary and retains existing confirmation checks. The registry is in-process
+memory, not cross-replica coordination; steering must reach the process holding
+the active stream. Disconnect cancellation still applies to the owning turn.
+
+Send, language and voice entry remain usable during a reply. A voice session
+can start while the chat SSE stream continues and persists into history.
+Pending queue messages remain local to the mounted conversation and are not
+retained across navigation/reload. History pages and saved turn messages merge
+by ID in SQL's numeric-ID order; persisted entries replace optimistic metadata
+without removing absent entries. Older pagination retains its cursor across
+latest-page refreshes.
 
 When `JARVIS_CHAT_AGENT_NAME` is configured, the backend uses its managed
 identity to call
@@ -1448,7 +1462,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Area | Design | Evidence |
 | --- | --- | --- |
 | Browser connection | The composer orb explicitly connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. Readiness never opens capture: a separate Enable microphone action captures and sends mono 24 kHz PCM. Explicit active/muted protocol events start/stop parallel Speech recognition; reconnect returns to microphone-off readiness. Provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, explicit activation, mute signaling, permission denial, interruption, stop during activation, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
-| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | The client sends `session.start`, waits for readiness, warms the hosted agent with `/diag` without opening the microphone, then waits for explicit microphone activation. The hash-locked provisioner configures MAI Transcribe (`mai-transcribe`, `da`, phrase list) and Harper (`da-DK`); the backend uses `da-DK` Azure Speech interim hypotheses in parallel while unmuted. The Voice Live final message remains authoritative and reconciles the existing P7-20 ledger. Project names from bounded running-task context augment the default phrase hints. P7-20 briefly switched Danish to `gpt-4o-mini-transcribe`, which broke live Danish sessions on 5 October (L92); Voice Live now uses MAI for both final-transcript paths. Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
+| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | Every hosted `jarvis` version carries `voiceLiveCompatible: "true"` metadata, without which Foundry rejects the wrapper with `agent_not_voice_compatible`. The client connects to the voice wrapper (`/endpoint/protocols/voice`), waits for `session.created`, and then waits for explicit microphone activation. The wrapper owns its session configuration and greeting; the Bridge Protocol `session.start`/`/diag` warm-up applies only to direct hosted-agent connections. The hash-locked provisioner configures MAI Transcribe (`mai-transcribe`, `da`, phrase list) and Harper (`da-DK`); the backend uses `da-DK` Azure Speech interim hypotheses in parallel while unmuted. The Voice Live final message remains authoritative and reconciles the existing P7-20 ledger. Project names from bounded running-task context augment the default phrase hints. P7-20 briefly switched Danish to `gpt-4o-mini-transcribe`, which broke live Danish sessions on 5 October (L92); Voice Live now uses MAI for both final-transcript paths. Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
 | English session | The backend configures `gpt-realtime-2.1`, `mai-transcribe` input transcription, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. Parallel Azure Speech uses `en-GB` interim hypotheses while unmuted. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
 | Reflex (P7-04) | Chat turns and completed English Voice Live transcripts pass through the backend Jev client (`POST https://api.typesafe.ai/v1/systemone`, `jev-latest`) before the main responder. The client has a 1.2 s timeout, one 429 retry only when `Retry-After` is at most 500 ms, a 256 KiB response cap, and a 0.9 confidence threshold; unavailable or uncertain results fall through. The backend reads `jev-api-key` from Key Vault using its managed identity. A direct call requires Dan's authenticated request, an addressed high-confidence action, no confirmation flag, a registered `reflexSafe` tool, validated arguments, and available audit storage. Safe tool results become trusted handoff instructions so the main model acknowledges but does not repeat the action. | Fake-provider backend and hosted-agent tests cover classification, safe target filtering, fallback, retry, handoff, and final-transcript sequencing. Mock-provider classification measured 0.43 ms; final-transcript-to-response-request measured 1.04 ms offline. Both exclude Jev network latency and first generated audio. Live Jev/Key Vault, Danish voice routing, and Azure Voice Live remain unverified. |
 | Streaming clause reflex (P7-20/P7-24) | Voice Live deltas and parallel Azure Speech full interim hypotheses (Foundry AIServices custom subdomain; Entra managed identity; 24 kHz mono PCM) enter the same bounded stable-clause and per-turn Jev path (up to eight requests per turn), with prior executions attached. Speech recognition runs only while the mic is active and unmuted; `da-DK`/`en-GB` use fixed phrase hints plus up to 20 running-project names. Only high-confidence, complete partial actions (currently pause, allow-listed Edge launch, and HTTP(S) open/navigation) execute early. Unsafe and confirmation-requiring actions wait for the Voice Live final. That final remains the source of truth: it replaces an early message, reconciles the in-memory ledger and attempts supported undo on contradiction. No audio or interim hypotheses are stored; Speech failure logs `voice.partials_unavailable` and leaves final-transcript reflexes working. Browser launch/navigation uses the existing PC bridge `pc_open` executor pending P7-17. | Fake-recognizer and fake-stream tests cover action-before-final, duplicate suppression, confirmation gating, contradiction undo, final message replacement, Speech failure fallback and mute stop. `voice.reflex_metrics` records Voice Live delta count, Speech hypothesis count, stable-clause count, first-action latency, speech-stopped-to-first-transcript-word, and speech-stopped-to-first-output-audio. These are offline fake timings, not live acoustic measurements. Live account RBAC, Speech delivery, Jev latency, first spoken-word timing and Danish/English PC action timing remain coordinator acceptance. |
@@ -1628,10 +1642,18 @@ flowchart LR
 - GitHub Actions: [workflow triggers](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows), [OpenID Connect to Azure](https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-azure), [webhook events](https://docs.github.com/en/webhooks/webhook-events-and-payloads).
 - Background: [open-source research](open-source.md) (selective reuse; no foundation chosen); prototype code and reports in [reference/](reference/).
 
-## Planned Jarvis 3D presentation boundary (P8-28–P8-33)
+## Jarvis 3D presentation boundary (P8-28–P8-33)
 
-The accepted [stage reference](reference/ui-stage-prototype/README.md) uses Three.js, shaders, a planar floor reflector and HTML controls. P8-31 updates the existing React/CSS visual system for shared glass surfaces without adding runtime packages or changing deployment; the current production dependency versions in the stack table remain unchanged. P8-28 ports the selected scene into the web app using the production toolchain, with managed allocation/disposal and off-route/hidden-tab lifecycle. The scene is mounted only on Jarvis. Its geometry/viewpoint persist across typing/voice and dark/light; light appearance re-lights the same room.
+P8-31 (#376) applies the selected smoky glass through shared light/dark tokens and sans headings to the existing shell, conversation, temporary workspace, contextual panel, Factory and Settings. It changes no API, persistence, deployment or dependency version. Its existing contrast tests cover text, muted text, icons and focus on glass against black and white backdrops.
+The accepted [stage reference](reference/ui-stage-prototype/README.md) uses Three.js, shaders, a planar floor reflector and HTML controls. P8-28 (#375) ports the scene into the web app with managed allocation/disposal and off-route/hidden-tab lifecycle. The scene is mounted only on Jarvis. Its geometry/viewpoint persist across typing/voice and dark/light; light appearance re-lights the same room.
 
-Browser state owns scene placement, window geometry, theme application and animation. Reuse P8-14 typed declarative views, P8-15 authenticated workspace commands/acknowledgements, P8-16 transient observed runtime activity and decoded playback audio, and P8-17 validated preference persistence. Dormant/awake presentation does not start microphone capture or change backend sleep. No new backend view store, provider calls, generated-code execution or credential surface is needed. Phone quality adaptation, reduced motion and WebGL unavailable/lost recovery belong to P8-33; the HTML controls and actual chat/voice remain usable when 3D fails.
+The accepted [stage reference](reference/ui-stage-prototype/README.md) is reference-only. Production `apps/web` now depends on `three@0.180.0` and dev-only `@types/three@0.180.0`; the standalone prototype lockfile remains outside the root workspaces. The production Jarvis page lazy-loads `JarvisStage`, which dynamically imports the scene. Other routes do not mount the renderer or orb. The production bundle retains the Three.js MIT notice.
 
-The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. The production runtime integration, light appearance, hardware performance and transition-flicker correction remain planned; P8-31's CSS-token changes add no production Three.js dependency.
+The scene owns its renderer, geometry, materials, reflector target, animation frame, visibility/resize/context-loss listeners and disposal. It builds live room geometry and independently rotating rear mechanisms, renders the floor through Three.js `Reflector`, and positions room lights from the live orb. Theme changes apply a dark/light palette to the same geometry and reflector. The camera and platform remain stable across typing/voice and workspace changes; only the orb changes placement for content. Existing HTML chat/workspace/voice controls remain above the canvas.
+
+P8-29 (#362, implemented offline in draft PR #377) keeps the same scene mounted and wires its presentation to existing contracts. `JarvisStage` reads authenticated runtime activity through `useJarvisActivity` and observes explicit voice-active state; voice entry does not reconstruct the renderer. `VoiceControls` forwards the existing decoded response-playback level through `PlaybackAudioLevelContext` to the scene's stable setter. No microphone analysis, new activity producer, simulated production selector or extra DOM wrapper is introduced. Visual dormancy is independent of backend sleep and microphone/readiness state.
+
+Reduced motion stops continuous animation and fixes the current state; hidden tabs pause the render loop. Viewport sizing caps renderer pixel ratio and reduces the reflection target on phones. WebGL construction failure or context loss leaves the chat and voice controls available with a status message; route teardown disposes resources and forces context loss. These safeguards are not a substitute for physical-device/hardware-GPU verification. Dormant/awake presentation does not start microphone capture or change backend sleep. No backend view store, provider calls, generated-code execution or credential surface was added.
+
+P8-29's scratch-fixture Chromium captures cover dormant dark/light at 1440×1000 and 390×844, plus dark desktop connecting, ready, playback-response, post-voice dormant and a schema-valid Now `thinking` event. The same canvas remained before, during and after voice; `getUserMedia` was not called until explicit microphone enablement. Fixture audio observed listening→speaking→listening, reduced motion matched, the phone had no horizontal overflow, and the completed run reported no page or shader errors after a missing shader uniform was fixed. Existing P8-31 contrast tests verify AA text/focus thresholds over black and white backdrops; rendered foreground text/glass was visually checked over the stage. Evidence is in `docs/ui/centred-stage/p8-29-browser/`. Fixture activity/audio are not live-provider behavior. SwiftShader was used, so hardware performance, physical-device and real microphone/speaker behavior remain unverified. Reported transition flicker remains assigned to P8-30; P8-32 and P8-33 retain broader light/device acceptance.
+The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and transition-flicker correction remain unverified; P8-31 adds no production Three.js dependency.
