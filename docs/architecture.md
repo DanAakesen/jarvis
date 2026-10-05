@@ -52,6 +52,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   existing state ownership; P8-16 still owns tool-activity events. Motion reuses
   the P8-20 tokens and hidden-tab/reduced-motion rules. No event plumbing,
   persistence or service contract changes.
+- P8-31 applies the selected smoky glass to existing shell, conversation,
+  temporary-workspace, contextual-panel, Factory and Settings surfaces through
+  the light/dark semantic tokens in `apps/web/src/styles.css`. Shared headings
+  use the selected sans typography; the real page content and typed renderers
+  remain unchanged. No route, data flow, API, persistence or production
+  dependency version changes. The production Three.js scene is still owned by
+  P8-28, so reflected-stage readability remains to be checked there.
 - React mounts into `apps/web/index.html`. BrowserRouter renders the home page
   and a catch-all page with a return link. Production static hosting must fall
   back to `index.html` for client routes (P0-11).
@@ -933,14 +940,42 @@ bounded tool result, confirmation and an argument fingerprint, but is never
 logged or persisted. Disconnect cancellation reaches both streams. Voice relay
 partial handling is unchanged.
 
-The hosted agent loads the 60-second cached tool catalogue and live task context
-concurrently, and verifies the delegated profile and stored conversation history
-in parallel. OpenTelemetry spans measure catalogue/cache, context, memory search,
-prompt construction and model-call stages; the backend exports allowlisted
-durations for reflex targets, Jev and the first agent byte, plus memory embedding
-duration/outcome. These signals contain no message, prompt, memory, tool argument
-or result content. The issue's live acceptance target is at most 2.5 seconds to
-the first token and 4 seconds for a short greeting.
+The hosted agent verifies the delegated profile and stored conversation history
+in parallel before accessing agent-only resources. Chat then loads current model
+settings, the 60-second container-cached tool catalogue and live task context
+concurrently; none of these reads use stale settings or task data. Voice keeps
+its existing session settings snapshot. Memory retrieval/embedding is on demand
+through memory tools, never unconditional greeting preparation.
+
+`chat.latency` logs and OpenTelemetry spans/events measure history verification,
+context, settings, catalogue/cache, memory retrieval, prompt construction,
+Responses creation, model-call duration/first delta and the first SSE delta out
+(measured from handler entry). Embedding runs in the backend, which already logs
+`memory.embedding` duration/outcome. The backend exports reflex targets, Jev,
+`agent_first_byte` (first text delta, not headers/keepalive),
+`turn_first_token` (from turn-handler entry, including SQL setup) and
+`turn_complete` (through assistant persistence). These signals contain no
+message, prompt, memory, tool argument/result or exception content.
+
+Responses `output_text.delta` events flow immediately to SSE, before model
+completion. An initial SSE comment flushes the authorized stream before model
+preparation; it does not count as a token. Closing/cancelling the chat explicitly
+closes nested generators and the Responses transport; setup failure/cancellation
+cancels and joins sibling reads. Gated ASGI and backend-reader tests verify
+incremental delivery, while a real local Hypercorn/mock-model check observed a
+0.005 s first delta and 0.757 s completion with a deliberate 0.75 s model pause.
+These are not deployed timings. The live acceptance target remains at most
+2.5 seconds to the first token and 4 seconds for a short greeting.
+
+The deployed backend configuration has `minReplicas: 1` / `maxReplicas: 1`;
+this is not a Foundry hosted-agent replica setting. The Jarvis version definition
+in `.github/workflows/deploy.yml` sets a 120-second session idle timeout and
+routes all traffic to the active version. It does not establish an always-warm
+hosted container. The reported ~4.5 s gap before `invoke_agent` remains a gateway/
+container-routing hypothesis, not a confirmed cold-start diagnosis. Chat sends
+no caller-chosen `agent_session_id`: #344's reuse approach was reverted in #356
+after Foundry rejected it. Verify any future routing/replica change against the
+provider contract and live evidence before adopting it.
 
 The conversation store shares the process-owned SQL pool and uses the existing
 group-one schema; no migration or new service is required. Tool calls continue to
@@ -1138,6 +1173,45 @@ a build can exhaust disk. `disk_low` and the NeedsAttention transition commit
 together with reason `disk_low`; the deployment setting defaults to 1 GiB. The
 runner event, SQL Server integration, and task-detail display are locally covered;
 live Foundry disk measurement remains post-merge.
+
+### P7-15 image generation through the existing Codex login
+
+The authenticated Jarvis tool starts one `codex-tool` invocation on the existing
+Foundry runner. The runner checks out no repository, creates an empty temporary
+workspace and Codex home, sends the untrusted prompt as input data to
+`codex exec --skip-git-repo-check -s workspace-write`, and requests the built-in
+`image_generation` feature to write a fixed output file. Its 240-second subprocess
+timeout, bounded output, cancellation, temp cleanup and Codex login are runner
+owned. The model defaults to configurable `JARVIS_CODEX_TOOL_MODEL=gpt-5.5`.
+There is no paid image API or fallback; `Codex usage limit reached` is returned
+visibly, and this allowance is shared with coding tasks.
+
+The runner accepts only decoded PNG/JPEG images up to 5 MiB, 4096 pixels per
+side and 16 megapixels, then uploads through a runner-role-only backend route
+using a random five-minute one-use key. The backend persists owner, media type
+and size in `dbo.workspace_artifacts` and stores bytes under a UUID path in the
+existing private `artifacts` container. Blob upload is removed if metadata
+insertion fails. The temporary output workspace is deleted after the invocation.
+No generated image prompt or signed URL is written to the durable tool audit;
+only a validated artifact ID is retained to render the image in conversation
+history.
+
+Status reads are polled to terminal state with a 270-second job bound; only
+transient status reads get at most two retries. Generation itself is never
+retried. Failure, timeout and cancellation remain non-success outcomes. To view
+an artifact, the authenticated owner reads its metadata and receives an
+HTTPS-only, read-only, one-hour user-delegation SAS. The SAS is not persisted;
+the typed `image` workspace view and conversation preview use it only for
+display. Usage shows UTC daily per-tool invocation counts from `tool_calls`,
+including recorded `ok`, `refused` and `error` outcomes; this is not a measure
+of ChatGPT quota consumption or a per-image charge.
+
+Codex CLI 0.157.1 and ChatGPT login/model compatibility were verified locally by
+Dan on 5 October 2026; offline tests cover the runner, backend, Blob/SQL fakes,
+workspace contract and browser preview. Live hosted Codex generation, Azure
+role assignment, Blob upload and deployed rendering remain unverified. Video
+generation is deferred separately. Artifact retention is unresolved and no
+automatic deletion is implemented.
 
 P2-13 compares task-branch commits before and after each agent turn. An
 `end_turn` without a new task-branch commit emits `session_question` with the
@@ -1470,14 +1544,14 @@ call linkage remain the post-merge P4-09 acceptance check.
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (SSE, dispatcher, Teams audio, and Google pending confirmations use process-local state; more copies require shared state/Web PubSub); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `JARVIS_NOTES_FOLDER_PATH`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `JARVIS_CODEX_TOOL_MODEL`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, `SPEECH_REGION`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID`, `JARVIS_GOOGLE_TIME_ZONE`, `ENTRA_PC_BRIDGE_CLIENT_ID` |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (SSE, dispatcher, Teams audio, Google pending confirmations and P7-15 one-use upload keys use process-local state; more copies require shared state/Web PubSub); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `JARVIS_NOTES_FOLDER_PATH`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `JARVIS_CODEX_TOOL_MODEL`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, `SPEECH_REGION`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID`, `JARVIS_GOOGLE_TIME_ZONE`, `ENTRA_PC_BRIDGE_CLIENT_ID` |
 | Azure Bot Service | `bot-jarvis-{suffix}` | Global; F0; user-assigned managed identity; `MsTeamsChannel` enabled; endpoint `/api/messages` |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Azure Monitor action group | `jarvis-alerts` | Email receivers from required `budgetContactEmails`; no SMS/voice receivers |
 | Log alert rules | Deployment failure, sandbox crash, credential expiry | Stateful scheduled-query rules on `AppTraces`; group by hashed alert condition and send through `jarvis-alerts` |
 | Monthly budget | `jarvis-monthly` | Resource-group scoped; 300 in the subscription billing currency, monthly from 1 October 2026 (fixed start date; Azure rejects changing it), actual-cost alerts above 80 % and 100 % to `jarvis-alerts` |
 
-The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling and the Danish voice agent), **Cognitive Services User** on the Foundry account (P7-24 Speech recognition), **Cognitive Services Speech User** on the separate Speech F0 resource (Teams synthesis), **Cost Management Reader** at the resource group for budget reads, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. The Azure Bot uses the same identity as its single-tenant user-assigned MSI app. The separate P7-10 setup script can assign Graph `Files.Read.All`; this tenant-wide permission requires coordinator approval. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live role assignment and ARM behavior remain unverified until the change is deployed.
+The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** and **Storage Blob Delegator** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling, the Danish voice agent, and `codex-tool` invocations), **Cognitive Services User** on the Foundry account (P7-24 Speech recognition), **Cognitive Services Speech User** on the separate Speech F0 resource (Teams synthesis), **Cost Management Reader** at the resource group for budget reads, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. The Azure Bot uses the same identity as its single-tenant user-assigned MSI app. The separate P7-10 setup script can assign Graph `Files.Read.All`; this tenant-wide permission requires coordinator approval. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live role assignment and ARM behavior remain unverified until the change is deployed.
 
 Required deployment parameters are `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `foundryNameTimestamp`, and `budgetContactEmails`; the comma-separated email list comes from protected GitHub secret `JARVIS_BUDGET_CONTACT_EMAILS`. `backendImage` and `jarvisAgentObjectId` are optional. `JARVIS_GOOGLE_TIME_ZONE` is an optional GitHub variable set by [`infra/setup-google.ps1`](../infra/setup-google.ps1); when set, Bicep enables the Google tools. The OAuth client ID, client secret and refresh token are never deployment variables and stay in Key Vault. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed. `pcBridgeClientId` is optional: Main Deploy passes it from the nonsecret Actions variable `JARVIS_PC_BRIDGE_CLIENT_ID`, and Bicep omits `ENTRA_PC_BRIDGE_CLIENT_ID` until it is provisioned.
 
@@ -1501,6 +1575,7 @@ retrieval. Normal Bicep deployment is idempotent and does not require a portal s
 | Voice (Danish bridge) | ≈4 per 30-minute day | Estimated; billed meters to confirm |
 | Speech to speech | ≈11 per 30-minute day (`gpt-realtime-2.1`) or ≈3.4 (`-mini`) | List price |
 | Google Gmail and Calendar APIs | No additional charge expected | API quotas and Google's OAuth consent/verification policies apply; live account acceptance remains unverified |
+| Image generation | No per-image API charge | Uses Dan's existing ChatGPT/Codex subscription; allowance is shared with coding tasks, and actual quota/availability remain live-unverified |
 | Azure Bot Service Teams channel, Azure Speech F0 | 0 | F0 tiers only; voice falls back to text when free Speech capacity is unavailable; no paid tier |
 | Static Web Apps, SQL free offer | 0 | Free tiers; the database pauses when idle |
 
@@ -1556,6 +1631,7 @@ flowchart LR
 ## Jarvis 3D presentation boundary (P8-28–P8-33)
 
 P8-31 separately applies the selected smoky glass through shared light/dark tokens and sans headings to the existing shell, conversation, temporary workspace, contextual panel, Factory and Settings. Its offline browser captures and contrast tests are in draft PR #376; it adds no API, persistence, deployment or dependency-version change. Readability against the new reflected/moving P8-28 stage remains a combined-review item.
+The accepted [stage reference](reference/ui-stage-prototype/README.md) uses Three.js, shaders, a planar floor reflector and HTML controls. P8-31 updates the existing React/CSS visual system for shared glass surfaces without adding runtime packages or changing deployment; the current production dependency versions in the stack table remain unchanged. P8-28 ports the selected scene into the web app using the production toolchain, with managed allocation/disposal and off-route/hidden-tab lifecycle. The scene is mounted only on Jarvis. Its geometry/viewpoint persist across typing/voice and dark/light; light appearance re-lights the same room.
 
 The accepted [stage reference](reference/ui-stage-prototype/README.md) is reference-only. Production `apps/web` now depends on `three@0.180.0` and dev-only `@types/three@0.180.0`; the standalone prototype lockfile remains outside the root workspaces. The production Jarvis page lazy-loads `JarvisStage`, which dynamically imports the scene. Other routes do not mount the renderer or orb. The production bundle retains the Three.js MIT notice.
 
@@ -1564,3 +1640,4 @@ The scene owns its renderer, geometry, materials, reflector target, animation fr
 Reduced motion stops continuous animation and fixes the current state; hidden tabs pause the render loop. Viewport sizing caps renderer pixel ratio and reduces the reflection target on phones. WebGL construction failure or context loss leaves the chat and voice controls available with a status message; route teardown disposes resources and forces context loss. These safeguards are not a substitute for physical-device/hardware-GPU verification. Dormant/awake presentation does not start microphone capture or change backend sleep. No backend view store, provider calls, generated-code execution or credential surface was added.
 
 Offline validation covers focused scene/lifecycle and route tests plus web lint/build. Scratch-fixture Chromium captures cover empty, typing, voice-ready and window-open states in both appearances at 1440×900, 1987×1122 and 390×844, with a three-frame motion sequence. Three repeated route cycles showed no canvas on Factory/Settings and lost each previous context. The harness's unconfigured Factory APIs returned expected 503 responses; no JavaScript page errors occurred. SwiftShader consumed several CPU cores during capture, so hardware performance, physical-device and live voice remain unverified. Reported transition flicker remains assigned to P8-30; shared glass styling remains P8-31.
+The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. The production runtime integration, light appearance, hardware performance and transition-flicker correction remain planned; P8-31's CSS-token changes add no production Three.js dependency.

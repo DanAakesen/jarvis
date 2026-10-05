@@ -16,6 +16,7 @@ export interface BackendConfig {
     runtime: string;
   };
   foundryRunnerAgentName?: string;
+  codexImageModel: string;
   foundryChatAgentName?: string;
   foundryProjectEndpoint?: string;
   foundryMemoryEmbeddingDeploymentName?: string;
@@ -225,6 +226,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
     codexToolModel,
+    codexImageModel: codexToolModel,
     ...(githubAppId === undefined ? {} : { githubAppId }),
     ...(googleTimeZone === undefined ? {} : { googleTimeZone }),
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),

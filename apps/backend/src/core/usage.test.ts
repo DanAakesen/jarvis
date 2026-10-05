@@ -58,6 +58,7 @@ describe('usage report API', () => {
       codexToolCallsToday: null,
       entries: [entry],
       totalEntries: '1',
+      dailyToolUsage: { date: to.toISOString().slice(0, 10), tools: [] },
       truncated: false,
     });
     expect(store.list).toHaveBeenCalledWith(from, to);

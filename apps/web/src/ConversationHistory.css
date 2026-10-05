@@ -40,7 +40,7 @@
 .markdown-content { min-width: 0; color: var(--text); overflow-wrap: anywhere; }
 .markdown-content > :first-child { margin-top: 0; }
 .markdown-content > :last-child { margin-bottom: 0; }
-.markdown-content p { margin: var(--space-2) 0; white-space: normal; }
+.markdown-content p { margin: var(--space-2) 0; color: inherit; white-space: normal; }
 .markdown-content ul, .markdown-content ol { margin: var(--space-2) 0; padding-left: 1.4em; }
 .markdown-content li + li { margin-top: var(--space-1); }
 .markdown-content :not(pre) > code { padding: .12em .35em; border-radius: 5px; background: var(--code-surface); font-family: var(--font-mono); font-size: .9em; }
@@ -49,6 +49,9 @@
 .markdown-content a { text-decoration-thickness: .08em; text-underline-offset: .2em; }
 .message-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
 .message-tools > li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.message-artifact { flex-basis: 100%; min-width: 0; margin: 4px 0 0; }
+.message-artifact img { display: block; max-width: min(100%, 34rem); max-height: 28rem; border-radius: var(--radius-control); object-fit: contain; }
+.message-artifact figcaption { margin-top: var(--space-1); color: var(--text-muted); font-size: var(--type-small); }
 .tool-call { display: inline-block; padding: 4px 9px; border-radius: var(--radius-pill); background: var(--surface-muted); color: var(--text); font-size: 13px; overflow-wrap: anywhere; }
 .tool-call-running { background-image: linear-gradient(110deg, transparent 20%, var(--feedback-sheen) 48%, transparent 76%); background-size: 250% 100%; animation: tool-shimmer calc(var(--motion-panel) * 3) var(--ease-standard) infinite; }
 .task-reference { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 600; }

@@ -75,6 +75,7 @@ workspace consumers; those consumer windows remain owned by P8.
 - **Live updates:** cards and timeline entries change state without layout jumps; a visible marker for a disconnected or stale event stream. Only committed task updates are presented as current.
 
 ## Accepted centred Jarvis stage (5 October 2026; implemented offline in P8-28)
+## Accepted centred Jarvis stage (5 October 2026)
 
 Dan approved the corrected [centred prototype](docs/reference/ui-stage-prototype/README.md) and selected [orb/stage image 3](docs/ui/centred-stage/selected-orb-and-stage.png) plus [glass-window image 2](docs/ui/centred-stage/selected-glass-window.png). [Corrected desktop and phone captures](docs/ui/centred-stage/README.md) define centring and continuity; generated stills guide materials, not pixel-identical rendering or product data.
 
@@ -85,6 +86,9 @@ Dan approved the corrected [centred prototype](docs/reference/ui-stage-prototype
 - **Glass and readability:** selected image 2 defines restrained smoky translucent window chrome, generous spacing, sans typography and icons. Adapt it to each real view. Keep text legible over the moving/reflected room, accessible labels, focus and touch controls; avoid a solid brain, opaque orb backing and coarse crossing arcs.
 
 P8-28 mounts the production Three.js scene lazily on the Jarvis route only. It uses live room geometry, independently rotating rear mechanisms, the persistent transparent orb with open amber core, an actual planar floor reflector, and orb-positioned lights; theme changes re-light the same scene. Existing HTML chat, workspace and voice controls remain above it. Reduced motion, hidden-tab pause, WebGL fallback/context loss and teardown are handled by the scene owner. This implementation is in draft PR #375; selected software-Chromium screenshots and motion frames are in `docs/ui/screenshots/p8-28-*`.
+P8-31 applies the shared glass treatment to the existing shell, temporary workspace, contextual panel, Factory and Settings using the canonical tokens in `apps/web/src/styles.css`. Both appearances use translucent smoky surfaces and sans headings; existing page content, shell controls and workspace behavior remain in place. Regression tests calculate primary text, muted text, current-color icon and focus contrast on both translucent and muted surfaces over black and white backdrops. Conversation Markdown paragraphs use the primary text role rather than the generic muted paragraph color.
+
+The accepted 3D room and orb are not yet mounted in production; P8-28–P8-33 continue to port the rest of the direction while reusing runtime/workspace/settings contracts. The browser evidence for P8-31 checks the real existing app and does not establish contrast over the future moving/reflected stage, hardware performance, live voice or transition-flicker resolution. Dan reports transition flicker in the prototype; it remains unresolved and requires frame/video inspection of entry/exit, interrupted reversals and window cycles. Detailed requirements and superseded experiments are in [ui.md](ui.md#accepted-centred-3d-stage--5-october-2026). Canonical token values remain in code, not this document.
 
 Chromium captures cover empty, typing, voice-ready and window-open states at 1440×900, 1987×1122 and 390×844 in dark/light. Three repeated Jarvis→Factory→Settings→Jarvis cycles left no stage on Factory/Settings, lost every previous WebGL context and returned to one canvas and one animation frame. The scratch auth/API/voice fixtures include unconfigured Factory endpoints that intentionally return 503; there were no JavaScript page errors. SwiftShader consumed several CPU cores during capture, so these results do not establish hardware-GPU or physical-device performance or live provider behavior. P8-30 still owns transition-flicker verification. P8-31's shared smoky glass surfaces and sans headings are implemented offline in draft PR #376; its contrast and existing-page captures do not yet prove readability over this newly integrated moving/reflected stage. P8-29–P8-33 retain their follow-up responsibilities. Detailed requirements and superseded experiments are in [ui.md](ui.md#accepted-centred-3d-stage--5-october-2026). Canonical token values remain in code, not this document.
 
@@ -553,6 +557,18 @@ not part of P8-06. These structural choices reuse the shared Concept B/C surface
 and motion tokens in P8-20. Desktop voice-layout transitions are implemented in
 P8-10; phone view switching is implemented in P8-11.
 
+## Generated image delivery (P7-15)
+
+Jarvis opens a successfully generated image as the existing typed image view in
+the active workspace; the corresponding successful tool record also shows an
+owner-authorized preview in conversation history. The view and window
+arrangement are temporary, while the source image is saved as a private
+workspace artifact. Loading, failure, cancellation, and Codex usage-limit
+feedback stay truthful; a saved artifact is not described as visible unless the
+workspace command succeeds. The Usage page's UTC daily tool counts show recorded
+invocations, not remaining ChatGPT quota or an image cost. Video is deferred
+and is not shown as an enabled action. Artifact retention has not been decided.
+
 ## Window lifecycle and tabs (P8-07)
 
 Each temporary window has a title bar with labelled minimise, maximise, and
@@ -578,8 +594,10 @@ new sessions and active sessions keep their current settings; visual themes,
 model choice, and voice identity remain separate. P7-16 owns validated
 persistence and session application.
 
-Research and generated image/video results use the existing dynamic workspace,
-with source links or artifact references and honest progress/error states.
+Research results use source links in the existing dynamic workspace. Generated
+images use the fixed image renderer there and an inline chat-history preview;
+both show honest loading, failure, and interrupted states. Video generation is
+deferred and is not presented as an available action.
 Memory can be queried, corrected and forgotten through registered tools; a
 dedicated memory-management screen has not been selected. Reuse the agreed shell
 and view contracts rather than adding permanent rail/top-bar controls for each

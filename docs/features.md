@@ -38,6 +38,7 @@ Status as of 5 October 2026.
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built | P4-04 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built | P4-05 |
 | Software Factory tools | Ask Jarvis to list projects and tasks, create tasks, change the agent or model on a Ready task, and steer, pause, resume or cancel tasks | Voice/chat | Main page | Built | P4-10, P7-11 |
+| Image generation | Ask Jarvis to create an image with the existing ChatGPT/Codex subscription; open it in the workspace and inspect its saved artifact in chat history | Both | Main conversation and workspace | Built offline; live Codex and Blob acceptance pending | P7-15 |
 | Model switching by voice | Change Jarvis for the next session or a Ready task using verified provider options; running-task changes are refused | Voice/chat | Main page | Built (offline) | P7-11 |
 | Live status by voice | Jarvis announces important task changes and answers "what's going on?" | Voice/chat | — | Built (offline) | P7-12 |
 | Long-term memory | Recall relevant stated preferences, project facts, decisions and unfinished tasks with Dan's source; inspect, correct or forget them | Voice/chat | — | In progress | P7-13 |
@@ -169,10 +170,16 @@ This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell c
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Long-term memory | Recall preferences, decisions and unfinished work across sessions; inspect, correct and forget retained memories | Voice/chat | Existing conversation; dedicated management UI undecided | Planned (storage, capture and retention decisions open) | P7-13 |
-| Web research | Use live Codex web search through the existing ChatGPT subscription; return a bounded synthesis with retrieved source URLs, titles and receipt times; state when sources are missing or limitations apply | Both | Conversation; existing dynamic workspace consumers | Built offline; live Codex/Foundry acceptance pending | P7-14; existing P8-06/P8-14/P8-15 consumers |
-| Image and video generation | Generate visual assets, inspect truthful job status and view the resulting artifacts | Both | Conversation and dynamic workspace | Planned (providers, cost and retention decisions open) | P7-15; existing P8-06/P8-14/P8-15 consumers |
+| Web research | Use the existing ChatGPT/Codex subscription for bounded, source-linked research in chat/voice and dynamic views | Both | Conversation and dynamic workspace | Built offline; live Codex/Foundry acceptance pending | P7-14; existing P8-06/P8-14/P8-15 consumers |
+| Image generation | Generate with Dan's ChatGPT/Codex subscription, inspect truthful job status, and view the private artifact in chat and the workspace | Both | Conversation and dynamic workspace | Implemented offline; live subscription/Blob acceptance pending; retention unresolved | P7-15; existing P8-06/P8-14/P8-15 consumers |
 | Editable personality | Set tone/response-style and custom-instruction defaults for new sessions; reset to the current default | Screen | Settings → Jarvis → Personality | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 
+Dan accepted these features on 4 October 2026. On 5 October he selected the
+existing ChatGPT/Codex subscription for image generation. Its usage is shared
+with coding tasks; no pay-per-image API or fallback is used. Video is deferred
+indefinitely to a separate issue, and artifact retention remains unresolved.
+Notes search remains #208 and is not a replacement for long-term conversational
+memory.
 Dan accepted these features on 4 October 2026. No new provider or paid service
 was selected, and no implementation was started by this planning change. Notes
 search remains #208 and is not a replacement for long-term conversational memory.
@@ -191,5 +198,11 @@ The earlier shell/workspace/contracts remain implemented with their recorded liv
 | Selected glass surfaces | Readable translucent shell/window surfaces using existing navigation, views and controls; no 3D on other routes | Current shared shell/pages | Implemented offline in draft PR #376; contrast over the integrated stage still needs review | P8-31 |
 | Re-lit light appearance | Same room geometry/viewpoint re-lit for light mode; existing approved preferences/tokens persist | Jarvis stage and shared appearance | Light palette implemented in #375; broader acceptance remains tracked | P8-32 |
 | Resilient phone/GPU experience | Single-view docking/swipe, adaptive quality, hidden-tab lifecycle, reduced motion and usable WebGL failure handling | Jarvis phone/browser | Responsive quality, reduced motion, lifecycle and fallback implemented in #375; physical hardware acceptance pending | P8-33 |
+| Living mirrored 3D stage | Stable centred room with live mechanisms/atmosphere, actual floor reflection and light cast by the orb | Jarvis typing/voice only | Planned | P8-28 |
+| Persistent transparent orb | Dormant cyan exterior/open amber core in typing, awake in voice, driven by existing actual runtime/audio state | Jarvis, including phone | Planned | P8-29 |
+| Continuous scene/window transitions | Orb alone moves/scales for content; room stays fixed; preserve windows/drafts/focus and eliminate reported flicker | Jarvis typing/voice | Planned; prototype flicker unresolved | P8-30 |
+| Selected glass surfaces | Readable translucent shell/window surfaces using existing navigation, views and controls; no 3D on other routes | Current shared shell/pages | Implemented offline; future-stage contrast remains unverified | P8-31 |
+| Re-lit light appearance | Same room geometry/viewpoint re-lit for light mode; existing approved preferences/tokens persist | Jarvis stage and shared appearance | Planned; light prototype not yet built | P8-32 |
+| Resilient phone/GPU experience | Single-view docking/swipe, adaptive quality, hidden-tab lifecycle, reduced motion and usable WebGL failure handling | Jarvis phone/browser | Planned; physical hardware/live acceptance pending | P8-33 |
 
 [Requirements](../ui.md#accepted-centred-3d-stage--5-october-2026), [references](ui/centred-stage/README.md), [runnable prototype](reference/ui-stage-prototype/README.md). Reuse P8-14–P8-17 for data, tools, activity and preference logic; do not recreate those completed tasks. The latest persistent orb decision supersedes older phone-typing/voice-collapse visual requirements.

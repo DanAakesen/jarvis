@@ -1,0 +1,195 @@
+[
+  {
+    "file": "conversation-desktop-dark.png",
+    "page": "conversation",
+    "viewport": "1440x1000",
+    "expectedTheme": "dark",
+    "actualTheme": "dark",
+    "conversationRegion": 1,
+    "historyState": "populated"
+  },
+  {
+    "file": "conversation-phone-dark.png",
+    "page": "conversation",
+    "viewport": "390x844",
+    "expectedTheme": "dark",
+    "actualTheme": "dark",
+    "conversationRegion": 1,
+    "historyState": "populated"
+  },
+  {
+    "file": "conversation-desktop-light.png",
+    "page": "conversation",
+    "viewport": "1440x1000",
+    "expectedTheme": "light",
+    "actualTheme": "light",
+    "conversationRegion": 1,
+    "historyState": "populated"
+  },
+  {
+    "file": "conversation-phone-light.png",
+    "page": "conversation",
+    "viewport": "390x844",
+    "expectedTheme": "light",
+    "actualTheme": "light",
+    "conversationRegion": 1,
+    "historyState": "populated"
+  },
+  {
+    "file": "generated-view-desktop-dark.png",
+    "generatedView": true,
+    "panelTitle": "Stage reading notes",
+    "horizontalOverflow": false
+  },
+  {
+    "keyboardMove": "8% → 12%",
+    "keyboardResize": "72% → 77%",
+    "escapeClosesArrange": true
+  },
+  {
+    "workspaceArrangement": "layered",
+    "minimiseRestore": true
+  },
+  {
+    "contextPanel": "close/reopen interaction passed",
+    "longText": true
+  },
+  {
+    "contextPanelEmpty": "Context\n\nNo relevant information is available yet."
+  },
+  {
+    "firstKeyboardFocus": {
+      "label": "Settings",
+      "outlineStyle": "solid",
+      "outlineWidth": "3px"
+    }
+  },
+  {
+    "conversationState": "empty",
+    "viewport": "390x844",
+    "title": "What’s on your mind?\n\nMake a plan, explore an idea, or pick up where you left off.\n\n0 messages queued\n\nActivity, sharing and backend\n\nStart voice with the input",
+    "scrollWidth": 390,
+    "clientWidth": 390,
+    "alerts": []
+  },
+  {
+    "conversationState": "error",
+    "viewport": "390x844",
+    "title": "Jarvis could not load conversation history (HTTP 503).\n\nRetry\n\n0 messages queued\n\nActivity, sharing and backend\n\nStart voice with the input orb. Your microphone",
+    "scrollWidth": 390,
+    "clientWidth": 390,
+    "alerts": [
+      "Jarvis could not load conversation history (HTTP 503)."
+    ]
+  },
+  {
+    "conversationState": "long",
+    "viewport": "390x844",
+    "title": "Dan\n\nLong-content readability check. Long-content readability check. Long-content readability check. Long-content readability check. Long-content readability ch",
+    "scrollWidth": 390,
+    "clientWidth": 390,
+    "alerts": []
+  },
+  {
+    "factoryTask": "Glass shell verification\nProject\nJarvis\nAgent\nCopilot\nState\nRunning\nActivity\nReviewing UI states\nLast updated\nOct 5, 2026, 4:00 PM"
+  },
+  {
+    "factoryPhoneTheme": "light",
+    "horizontalOverflow": false,
+    "factoryPhoneDarkCapture": "factory-tasks-phone-dark.png",
+    "horizontalOverflowDark": false
+  },
+  {
+    "factoryError": [
+      "Task data is unavailable until the database is connected.Retry tasks"
+    ]
+  },
+  {
+    "factoryLoading": "Tasks\n\nFollow task state and progress, or create a task for an active project.\n\nCreate task\nRefresh tasks\n\nLoading projects before task creation is available.\n\nProject\nAll projects"
+  },
+  {
+    "settings": "loaded",
+    "settingsPhoneTheme": "dark",
+    "phoneCaptureMenuOpened": true
+  },
+  {
+    "phoneTargetMinimum": 41,
+    "phoneTargetsBelow44": [
+      {
+        "tag": "A",
+        "label": "Skip to content",
+        "width": 154,
+        "height": 41
+      }
+    ]
+  },
+  {
+    "settingsDesktopTheme": "light",
+    "pageWidth": {
+      "scrollWidth": 1440,
+      "innerWidth": 1440
+    }
+  },
+  {
+    "settingsError": [
+      "Settings are unavailable until the database is connected.Retry"
+    ]
+  },
+  {
+    "motionFrames": [
+      "motion-frame-01.png",
+      "motion-frame-02.png",
+      "motion-frame-03.png",
+      "motion-frame-04.png",
+      "motion-frame-05.png",
+      "motion-frame-06.png",
+      "motion-frame-07.png",
+      "motion-frame-08.png",
+      "motion-frame-09.png",
+      "motion-frame-10.png"
+    ],
+    "workspaceWindowCount": 1,
+    "sequenceDurationMs": 990
+  },
+  {
+    "reducedMotion": {
+      "transitionDuration": "0s",
+      "reducedMotionMatches": true,
+      "scrollWidth": 390,
+      "viewportWidth": 390
+    }
+  },
+  {
+    "darkCaptureSettlement": {
+      "waitFor": "computed topbar and rail backgrounds to equal dark token values",
+      "appearanceTransitionMs": 420,
+      "computedTokens": {
+        "--surface-translucent": "rgb(9 16 23 / 90%)",
+        "--surface-muted": "rgb(8 15 22 / 92%)",
+        "--text": "#f3fff9",
+        "--text-muted": "#c0d0cd",
+        "--focus": "#a5f2dc"
+      },
+      "renderedStyles": "dark-rendered-styles.json",
+      "captures": [
+        "conversation-desktop-dark.png",
+        "conversation-phone-dark.png",
+        "factory-tasks-desktop-dark.png",
+        "factory-tasks-phone-dark.png"
+      ]
+    }
+  },
+  {
+    "darkReferenceComparison": {
+      "file": "glass-reference-comparison-dark-desktop.png",
+      "reference": "selected image 2",
+      "actualPage": "Factory tasks",
+      "viewport": "1440x1000",
+      "actualAppearance": "dark",
+      "fixtureContent": true
+    }
+  },
+  {
+    "pageErrors": []
+  }
+]

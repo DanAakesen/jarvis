@@ -37,7 +37,7 @@ const tablesInSchema = [
   'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects', 'pull_requests', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks',
   'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage',
-  'webhook_deliveries', 'workflow_runs',
+  'webhook_deliveries', 'workflow_runs', 'workspace_artifacts',
 ];
 
 async function tables(): Promise<string[]> {

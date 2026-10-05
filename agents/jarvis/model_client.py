@@ -10,6 +10,7 @@ import logging
 import os
 import time
 from collections.abc import AsyncIterator, Sequence
+from contextlib import aclosing
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -18,6 +19,7 @@ from openai import AsyncOpenAI
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
+from chat_telemetry import latency_span, log_latency
 from jarvis_tools import (
     INSTRUCTIONS,
     BackendToolClient,
@@ -239,8 +241,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         self, messages: Sequence[ModelMessage], *, settings: ModelSettings | None = None
     ) -> AsyncIterator[str]:
         """Run the Jarvis tool loop and stream the spoken text of each model round."""
-        async for delta in self._complete(messages, self._system_prompt, settings):
-            yield delta
+        async with aclosing(self._complete(messages, self._system_prompt, settings)) as response:
+            async for delta in response:
+                yield delta
 
     async def complete_chat(
         self,
@@ -260,49 +263,53 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 + reflex_note
                 + " Relay the result honestly and acknowledge briefly. Do not repeat the action."
             )
-        async for delta in self._complete(
-            messages, instructions, settings
-        ):
-            yield delta
+        async with aclosing(self._complete(
+            messages, instructions, settings, load_settings=settings is None,
+        )) as response:
+            async for delta in response:
+                yield delta
 
     async def _complete(
         self,
         messages: Sequence[ModelMessage],
         instructions: str,
         settings: ModelSettings | None,
+        *,
+        load_settings: bool = False,
     ) -> AsyncIterator[str]:
-        model_name = settings.model if settings is not None else self.model_name
-        reasoning_effort = (
-            settings.reasoning_effort if settings is not None else self._reasoning_effort
-        )
         with _tracer.start_as_current_span(
             "chat",
             kind=SpanKind.CLIENT,
+            record_exception=False,
+            set_status_on_exception=False,
             attributes={
                 "gen_ai.operation.name": "chat",
                 "gen_ai.provider.name": "Azure OpenAI",
-                "gen_ai.request.model": model_name,
                 "server.address": self.server_address,
             },
         ) as span:
             try:
                 catalogue_task = asyncio.create_task(self._tools.tools())
                 context_task = asyncio.create_task(self._tools.context())
+                setup_tasks = [catalogue_task, context_task]
+                if load_settings:
+                    setup_tasks.append(asyncio.create_task(self.session_settings()))
                 try:
-                    catalogue, context = await asyncio.gather(
-                        catalogue_task,
-                        context_task,
-                    )
+                    prepared = await asyncio.gather(*setup_tasks)
+                    catalogue, context = prepared[:2]
+                    if load_settings:
+                        settings = prepared[2]
                 except BaseException:
-                    catalogue_task.cancel()
-                    context_task.cancel()
-                    await asyncio.gather(
-                        catalogue_task,
-                        context_task,
-                        return_exceptions=True,
-                    )
+                    for task in setup_tasks:
+                        task.cancel()
+                    await asyncio.gather(*setup_tasks, return_exceptions=True)
                     raise
-                with _tracer.start_as_current_span("prompt_build") as prompt_span:
+                model_name = settings.model if settings is not None else self.model_name
+                reasoning_effort = (
+                    settings.reasoning_effort if settings is not None else self._reasoning_effort
+                )
+                span.set_attribute("gen_ai.request.model", model_name)
+                with latency_span("prompt_build") as prompt_span:
                     instructions = personalize_instructions(instructions, settings)
                     model_input: list[Any] = []
                     if messages:
@@ -339,13 +346,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     if reasoning_effort and reasoning_effort != "none":
                         request["reasoning"] = {"effort": reasoning_effort}
                         request["include"] = ["reasoning.encrypted_content"]
-                    with _tracer.start_as_current_span("model_call") as model_span:
-                        create_started = time.monotonic()
-                        stream = await self._client.responses.create(**request)
-                        model_span.set_attribute(
-                            "response.create.duration_ms",
-                            (time.monotonic() - create_started) * 1000,
-                        )
+                    with latency_span("model_call") as model_span:
+                        with latency_span("responses_create"):
+                            stream = await self._client.responses.create(**request)
                         async with stream:
                             async for event in stream:
                                 if event.type == "response.output_text.delta" and event.delta:
@@ -354,6 +357,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                         model_span.set_attribute(
                                             "first_text.duration_ms", first_text_ms
                                         )
+                                        log_latency("model_first_delta", started)
                                     yield event.delta
                                 elif event.type == "response.completed":
                                     final = event.response
@@ -399,7 +403,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             }
                         )
                 raise RuntimeError("Jarvis tool loop exceeded its round limit")
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, GeneratorExit):
                 raise
             except BaseException as exc:
                 span.set_status(Status(StatusCode.ERROR))

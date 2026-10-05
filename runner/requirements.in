@@ -3,3 +3,4 @@ azure-identity>=1.24.0
 azure-keyvault-secrets>=4.9.0
 httpx>=0.28.1
 agent-client-protocol>=0.1.0
+Pillow>=12.3.0
