@@ -6,6 +6,39 @@
   pointer-events: none;
 }
 
+.jarvis-stage[data-failed="true"] {
+  background:
+    radial-gradient(ellipse at 50% 46%, color-mix(in srgb, var(--stage-orb) 12%, transparent), transparent 40%),
+    radial-gradient(ellipse at 50% 82%, color-mix(in srgb, var(--stage-orb) 13%, transparent), transparent 38%),
+    linear-gradient(to bottom, transparent 62%, color-mix(in srgb, var(--stage-floor) 48%, var(--stage-background)) 100%),
+    var(--stage-background);
+}
+
+.jarvis-stage[data-failed="true"]::before {
+  position: absolute;
+  inset: 10% 12% 9%;
+  background:
+    linear-gradient(90deg, transparent 49.8%, color-mix(in srgb, var(--stage-seam) 24%, transparent) 50%, transparent 50.2%),
+    linear-gradient(0deg, transparent 55%, color-mix(in srgb, var(--stage-seam) 18%, transparent) 55.2%, transparent 55.5%);
+  content: "";
+}
+
+.jarvis-stage[data-failed="true"]::after {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  width: clamp(150px, 28vw, 300px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 52% 56%, color-mix(in srgb, var(--stage-amber) 55%, transparent), transparent 18%),
+    radial-gradient(circle at 50% 50%, transparent 39%, color-mix(in srgb, var(--stage-orb) 56%, transparent) 40% 41%, transparent 42%),
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--stage-orb) 20%, transparent), transparent 68%);
+  box-shadow: 0 0 50px color-mix(in srgb, var(--stage-orb) 17%, transparent);
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
 .jarvis-stage canvas {
   display: block;
   width: 100%;
@@ -19,9 +52,9 @@
 .jarvis-stage-fallback {
   position: fixed;
   z-index: 5;
-  right: 16px;
-  bottom: 42px;
-  max-width: min(420px, calc(100vw - 32px));
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  max-width: min(420px, calc(100vw - 24px));
   margin: 0;
   padding: 10px 14px;
   border-radius: var(--radius-control);
@@ -34,5 +67,16 @@
 @media (prefers-reduced-motion: reduce) {
   .jarvis-stage-fallback {
     transition: none;
+  }
+}
+
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .jarvis-stage[data-failed="true"]::after { width: clamp(140px, 36vw, 240px); }
+  .jarvis-stage-fallback { right: 12px; left: 12px; width: auto; max-width: none; padding: 8px 10px; }
+  .app-shell[data-voice-active="true"] .jarvis-stage-fallback {
+    top: max(12px, env(safe-area-inset-top));
+    right: 12px;
+    bottom: auto;
+    left: 12px;
   }
 }

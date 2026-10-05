@@ -51,6 +51,18 @@ export function JarvisStage({
       };
       scene.current?.update(options.current);
     };
+    const markUnavailable = () => {
+      if (!active) return;
+      element.dataset.ready = 'false';
+      element.dataset.failed = 'true';
+      setFailure('The 3D room is unavailable. Chat and voice controls are still available.');
+    };
+    const markRestored = () => {
+      if (!active) return;
+      element.dataset.ready = 'true';
+      element.dataset.failed = 'false';
+      setFailure('');
+    };
 
     update();
 
@@ -70,26 +82,18 @@ export function JarvisStage({
     void import('./jarvis-stage-scene').then(({ createJarvisStageScene }) => {
       if (!active) return;
       try {
-        scene.current = createJarvisStageScene(element, () => {
-          if (active) {
-            scene.current = null;
-            element.dataset.ready = 'false';
-            setFailure('The 3D room is unavailable. Chat and voice controls are still available.');
-          }
-        }, options.current);
+        scene.current = createJarvisStageScene(element, markUnavailable, options.current, markRestored);
         element.dataset.ready = 'true';
+        element.dataset.failed = 'false';
       } catch {
         if (!active) return;
         scene.current?.dispose();
         scene.current = null;
         element.replaceChildren();
-        element.dataset.ready = 'false';
-        setFailure('The 3D room is unavailable. Chat and voice controls are still available.');
+        markUnavailable();
       }
     }).catch(() => {
-      if (!active) return;
-      element.dataset.ready = 'false';
-      setFailure('The 3D room is unavailable. Chat and voice controls are still available.');
+      markUnavailable();
     });
 
     return () => {
@@ -115,7 +119,7 @@ export function JarvisStage({
 
   return (
     <PlaybackAudioLevelContext.Provider value={setAudioLevel}>
-      <div ref={host} className="jarvis-stage" data-ready="false" aria-hidden="true" />
+      <div ref={host} className="jarvis-stage" data-ready="false" data-failed="false" aria-hidden="true" />
       {children}
       {failure && <p className="jarvis-stage-fallback" role="status">{failure}</p>}
     </PlaybackAudioLevelContext.Provider>

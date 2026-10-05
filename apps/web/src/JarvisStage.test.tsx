@@ -79,10 +79,46 @@ describe('JarvisStage', () => {
   it('keeps the Jarvis interface usable when WebGL scene creation fails', async () => {
     createScene.mockImplementation(() => { throw new Error('WebGL unavailable'); });
 
-    render(<JarvisStage theme="dark" />);
+    const { container } = render(
+      <JarvisStage theme="dark">
+        <button type="button">Send message</button>
+      </JarvisStage>,
+    );
 
     expect((await screen.findByRole('status')).textContent)
       .toBe('The 3D room is unavailable. Chat and voice controls are still available.');
+    expect(container.querySelector('.jarvis-stage')?.getAttribute('data-failed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Send message' })).not.toBeNull();
+  });
+
+  it('keeps a lost renderer available for context restoration and clears its fallback', async () => {
+    let loseContext = () => {};
+    let restoreContext = () => {};
+    createScene.mockImplementation((_element, onLost, _options, onRestored) => {
+      loseContext = onLost;
+      restoreContext = onRestored;
+      return { update, dispose, setAudioLevel };
+    });
+
+    const { container, unmount } = render(<JarvisStage theme="dark" />);
+    await waitFor(() => expect(createScene).toHaveBeenCalledTimes(1));
+    const stage = container.querySelector<HTMLElement>('.jarvis-stage')!;
+
+    act(() => loseContext());
+    expect(stage.dataset.ready).toBe('false');
+    expect(stage.dataset.failed).toBe('true');
+    expect(screen.getByRole('status').textContent)
+      .toBe('The 3D room is unavailable. Chat and voice controls are still available.');
+    expect(dispose).not.toHaveBeenCalled();
+
+    act(() => restoreContext());
+    expect(stage.dataset.ready).toBe('true');
+    expect(stage.dataset.failed).toBe('false');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(createScene).toHaveBeenCalledTimes(1);
+
+    unmount();
+    expect(dispose).toHaveBeenCalledOnce();
   });
 
   it('removes a partially attached canvas when scene creation fails', async () => {

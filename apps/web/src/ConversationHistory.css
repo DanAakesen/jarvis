@@ -202,7 +202,7 @@
   .conversation-greeting p { margin-top: var(--space-1); font-size: 12px; line-height: 1.2; }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .app-shell[data-voice-active="false"] .shell-main { display: flex; flex-direction: column; }
   .app-shell[data-voice-active="false"] .jarvis-page { flex: 1; height: auto; min-height: 0; }
   .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-shell-area { display: none; }
