@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
+import { PlaybackAudioLevelContext } from './playback-audio-context';
 import { VoiceControls } from './VoiceControls';
 
 const clients = vi.hoisted(() => ({
@@ -192,6 +193,32 @@ describe('VoiceControls', () => {
     expect(screen.getByLabelText('Jarvis work state').textContent).toBe('working');
     fireEvent.click(screen.getByRole('button', { name: 'Publish listening' }));
     expect(screen.getByLabelText('Jarvis work state').textContent).toBe('idle');
+  });
+
+  it('forwards the existing decoded playback level without enabling microphone capture', () => {
+    const setPlaybackAudioLevel = vi.fn();
+    render(
+      <PlaybackAudioLevelContext.Provider value={setPlaybackAudioLevel}>
+        <VoiceControls client={{} as PublicClientApplication} config={config} />
+      </PlaybackAudioLevelContext.Provider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+    const instance = clients.instances[0];
+    if (!instance) throw new Error('Voice client was not created.');
+    const options = instance.options as {
+      onAudioLevel: (level: number) => void;
+      onStatus: (status: 'ready', message: string) => void;
+    };
+
+    act(() => options.onStatus('ready', 'Microphone is off.'));
+    expect(instance.client.enableMicrophone).not.toHaveBeenCalled();
+    expect(setPlaybackAudioLevel).not.toHaveBeenCalled();
+
+    act(() => options.onAudioLevel(0.65));
+    expect(setPlaybackAudioLevel).toHaveBeenLastCalledWith(0.65);
+    act(() => options.onAudioLevel(0));
+    expect(setPlaybackAudioLevel).toHaveBeenLastCalledWith(0);
   });
 
   it('does not carry pending microphone permission into a new session', async () => {

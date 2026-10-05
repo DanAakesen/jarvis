@@ -505,16 +505,10 @@ export class BrowserVoiceClient {
           socket.addEventListener('message', this.receiveBound);
           await waitForSocketEvent(socket, 'open', signal, CONNECTION_TIMEOUT_MS);
           if (this.language === 'da') {
-            const ready = waitForVoiceEvent(socket, ['session.ready'], signal, WARMUP_TIMEOUT_MS);
-            socket.send(JSON.stringify({ type: 'session.start', protocol_version: '1.0' }));
-            await ready;
-            const warmed = waitForVoiceEvent(socket, ['response.done'], signal, WARMUP_TIMEOUT_MS);
-            socket.send(JSON.stringify({
-              type: 'conversation.item.create',
-              item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '/diag' }] },
-            }));
-            socket.send(JSON.stringify({ type: 'response.create' }));
-            await warmed;
+            // The Danish voice wrapper speaks the Voice Live realtime protocol and owns its own
+            // session configuration and greeting. `session.start`/`session.ready` and a `/diag`
+            // warm-up belong to the hosted agent's Bridge Protocol, not to this route (L98).
+            await waitForVoiceEvent(socket, ['session.created', 'session.updated'], signal, WARMUP_TIMEOUT_MS);
           } else {
             await waitForVoiceEvent(socket, ['session.updated'], signal, WARMUP_TIMEOUT_MS);
           }

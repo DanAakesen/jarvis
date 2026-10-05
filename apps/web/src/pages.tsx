@@ -15,7 +15,7 @@ export function SignInPage({ session }: { session: SignInSession }) {
       <p className="sign-in-status" role={state === 'error' ? 'alert' : 'status'} aria-live="polite">
         {state === 'checking' && 'Checking for an existing sign-in…'}
         {state === 'signed-out' && 'Not signed in.'}
-        {state === 'signing-in' && 'Waiting for Microsoft sign-in and backend verification…'}
+        {state === 'signing-in' && 'Opening Microsoft sign-in…'}
         {state === 'unavailable' && 'Sign-in is unavailable until the backend is deployed.'}
         {state === 'error' && message}
       </p>
