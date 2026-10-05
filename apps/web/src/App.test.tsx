@@ -39,6 +39,7 @@ const {
 });
 vi.mock('./auth', () => ({ createAuthClient, restoreProfile, signIn }));
 vi.mock('./conversation-history', () => ({ loadConversationHistory, createChatSession, sendChatTurn }));
+vi.mock('./JarvisStage', () => ({ JarvisStage: () => <div data-testid="jarvis-stage" /> }));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
     constructor(private readonly options: {
@@ -268,6 +269,20 @@ describe('App shell', () => {
     await user.click(screen.getByRole('link', { name: 'Settings' }));
     await screen.findByRole('heading', { name: 'Settings' });
     await waitFor(() => expect(eventRequests()).toHaveLength(2));
+  });
+
+  it('mounts the 3D stage on Jarvis and not on other routes', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    expect(screen.getByTestId('jarvis-stage')).toBeTruthy();
+    await user.click(screen.getByRole('link', { name: 'Software Factory' }));
+    await screen.findByRole('heading', { name: 'Tasks' });
+    expect(screen.queryByTestId('jarvis-stage')).toBeNull();
+
+    await user.click(screen.getByRole('link', { name: 'Settings' }));
+    await screen.findByRole('heading', { name: 'Settings' });
+    expect(screen.queryByTestId('jarvis-stage')).toBeNull();
   });
 
   it('renders backend-reported waking in the shared signed-in shell', async () => {
