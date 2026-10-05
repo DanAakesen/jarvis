@@ -278,6 +278,21 @@ async def test_personality_preferences_are_applied_per_chat_session_with_fixed_r
 
 
 @pytest.mark.asyncio
+async def test_chat_reflex_result_is_trusted_and_not_repeated_as_an_action() -> None:
+    model, transport = client([completed()])
+
+    _ = [chunk async for chunk in model.complete_chat(
+        [ModelMessage("user", "Pause task 12")],
+        "en",
+        reflex_note="Task 12 was paused.",
+    )]
+
+    instructions = transport.responses.request["instructions"]
+    assert "Trusted backend reflex result for this turn: Task 12 was paused." in instructions
+    assert "Relay the result honestly and acknowledge briefly. Do not repeat the action." in instructions
+
+
+@pytest.mark.asyncio
 async def test_adds_running_tasks_and_recent_events_before_the_current_message() -> None:
     snapshot = {
         "runningTasks": [{

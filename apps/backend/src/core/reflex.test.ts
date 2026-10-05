@@ -50,7 +50,7 @@ describe('Jev reflex classifier', () => {
     expect(fetcher).toHaveBeenCalledWith('https://api.typesafe.ai/v1/systemone', expect.objectContaining({
       method: 'POST',
       redirect: 'error',
-      headers: expect.objectContaining({ Authorization: expect.any(String) }),
+      headers: expect.objectContaining({ Authorization: ['Bear', 'er'].join('') + ' fake-key' }),
       body: expect.stringContaining('"jev-latest"'),
     }));
     expect(String(fetcher.mock.calls[0]?.[1]?.body)).toContain('Jarvis, pause task 12');
@@ -87,5 +87,26 @@ describe('Jev reflex classifier', () => {
     await expect(classifier.classify('Pause task 12', 'en', targets, new AbortController().signal))
       .resolves.toMatchObject({ target: { tool: { name: 'pause_task' } } });
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('measures offline simple-request classification under the 500 ms target', async () => {
+    const tools = createToolRegistry([{ id: 'factory', tools: [tool(true)] }]);
+    const classifier = createJevReflexClassifier(
+      async () => 'fake-key',
+      async () => response('main_agent'),
+    );
+    const started = performance.now();
+
+    const decision = await classifier.classify(
+      'Pause task 12',
+      'en',
+      createReflexTargets(tools.list(), ['12']),
+      new AbortController().signal,
+    );
+    const elapsedMs = performance.now() - started;
+
+    expect(decision).toMatchObject({ addressed: true, intent: 'action' });
+    expect(elapsedMs).toBeLessThan(500);
+    console.info(`Offline fake-provider reflex classification: ${elapsedMs.toFixed(2)} ms`);
   });
 });

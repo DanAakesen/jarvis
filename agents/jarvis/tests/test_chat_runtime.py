@@ -29,6 +29,7 @@ class FakeModel:
         self.message_id: str | None = None
         self.settings: ModelSettings | None = None
         self.captured_settings: ModelSettings | None = None
+        self.reflex_note: str | None = None
         self.closed = False
 
     async def session_settings(self) -> ModelSettings:
@@ -45,10 +46,12 @@ class FakeModel:
         language: str,
         *,
         settings: ModelSettings | None = None,
+        reflex_note: str | None = None,
     ) -> AsyncIterator[str]:
         self.messages = tuple(messages)
         self.language = language
         self.captured_settings = settings
+        self.reflex_note = reflex_note
         self.message_id = current_message_id.get()
         yield "Hej"
         yield " med dig."
@@ -133,6 +136,27 @@ def test_chat_uses_screen_context_without_changing_the_verified_user_message() -
             + screen_description,
         ),
     )
+
+
+def test_chat_passes_backend_reflex_result_to_the_model() -> None:
+    async def context(*_args):
+        return []
+
+    app, model = app_with(context)
+    with TestClient(app) as client:
+        response = client.post(
+            "/invocations",
+            json={
+                "messageId": "42",
+                "text": "Pause task 12",
+                "language": "en",
+                "reflexNote": "Task 12 was paused.",
+                "delegatedAuthorization": AUTHORIZATION,
+            },
+        )
+
+    assert response.status_code == 200
+    assert model.reflex_note == "Task 12 was paused."
 
 
 def test_chat_rejects_invalid_screen_context() -> None:
