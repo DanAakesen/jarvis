@@ -499,7 +499,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                     : <ul className="task-card-list">
                       {items.map((task) => (
                         <li key={task.id}>
-                          <article className="task-card" aria-labelledby={`task-title-${task.id}`}>
+                          <article className="task-card" data-state={task.state} aria-labelledby={`task-title-${task.id}`}>
                             <h3 id={`task-title-${task.id}`}><Link to={`/factory/tasks/${task.id}`}>{task.title}</Link></h3>
                             <dl className="task-card-details">
                               <div><dt>Project</dt><dd>{projectName(projects, task.projectId)}</dd></div>

@@ -1,30 +1,18 @@
 import { Navigate, Route, Routes, useParams } from 'react-router-dom';
-import { NotFoundPage, PendingPage } from '../pages';
+import { NotFoundPage } from '../pages';
 import type { AreaProps } from '../areas';
 import { ProjectSettingsPage, ProjectsPage } from './ProjectsPage';
 import { TasksPage } from './TasksPage';
 import { TaskDetailPage } from './TaskDetailPage';
+import { ReleasePage, ReleaseRedirectPage } from './ReleasePage';
 
 const idPattern = /^[1-9]\d{0,15}$/;
-
-function RecordPage({ param, title, children, back }: {
-  param: string;
-  title: string;
-  children: string;
-  back: { to: string; label: string };
-}) {
-  const id = useParams()[param];
-  if (!id || !idPattern.test(id)) return <NotFoundPage />;
-  return <PendingPage title={`${title} ${id}`} back={back}>{children}</PendingPage>;
-}
 
 function TaskPage({ backendUrl, getAccessToken }: AreaProps) {
   const taskId = useParams().taskId;
   if (!taskId || !idPattern.test(taskId)) return <NotFoundPage />;
   return <TaskDetailPage backendUrl={backendUrl} getAccessToken={getAccessToken} taskId={taskId} />;
 }
-
-const projectsLink = { to: '/factory/projects', label: 'Back to projects' };
 
 /** The Software Factory area owns its pages; the shell only mounts it under `/factory`. */
 export function FactoryArea({ backendUrl, getAccessToken }: AreaProps) {
@@ -38,8 +26,14 @@ export function FactoryArea({ backendUrl, getAccessToken }: AreaProps) {
         <Route path="projects/:projectId" element={
           <ProjectSettingsPage backendUrl={backendUrl} getAccessToken={getAccessToken} />
         } />
+        <Route path="projects/:projectId/releases" element={
+          <ReleasePage backendUrl={backendUrl} getAccessToken={getAccessToken} />
+        } />
+        <Route path="projects/:projectId/releases/:releaseId" element={
+          <ReleasePage backendUrl={backendUrl} getAccessToken={getAccessToken} />
+        } />
         <Route path="releases/:releaseId" element={
-          <RecordPage param="releaseId" title="Release" back={projectsLink}>Details for this release aren&apos;t available yet.</RecordPage>
+          <ReleaseRedirectPage backendUrl={backendUrl} getAccessToken={getAccessToken} />
         } />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

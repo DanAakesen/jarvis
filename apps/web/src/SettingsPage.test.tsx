@@ -21,7 +21,7 @@ const settings = {
   },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
-  global: { maxParallelTasks: 1 },
+  global: { maxParallelTasks: 1, screenShareDailyFrameCap: 300 },
   newProjects: {
     owner: 'DanAakesen',
     visibility: 'private' as 'private' | 'public',
@@ -105,7 +105,7 @@ describe('SettingsPage', () => {
         ...settings,
         jarvis: { ...settings.jarvis, reasoning: 'high' },
         voice: { ...settings.voice, defaultLanguage: 'en' },
-        global: { maxParallelTasks: 3 },
+        global: { maxParallelTasks: 3, screenShareDailyFrameCap: 240 },
       })));
     renderSettingsPage();
 
@@ -114,6 +114,8 @@ describe('SettingsPage', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Default language' }), 'en');
     await user.clear(screen.getByRole('spinbutton', { name: 'Maximum parallel tasks' }));
     await user.type(screen.getByRole('spinbutton', { name: 'Maximum parallel tasks' }), '3');
+    await user.clear(screen.getByRole('spinbutton', { name: 'Daily screen inspection limit' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Daily screen inspection limit' }), '240');
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
     expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
@@ -125,7 +127,7 @@ describe('SettingsPage', () => {
       settings: {
         jarvis: { reasoning: 'high' },
         voice: { defaultLanguage: 'en' },
-        global: { maxParallelTasks: 3 },
+        global: { maxParallelTasks: 3, screenShareDailyFrameCap: 240 },
       },
     });
 

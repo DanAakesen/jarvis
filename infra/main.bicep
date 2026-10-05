@@ -23,6 +23,14 @@ param notesFolderPath string = '/Jarvis/Notes'
 @description('The non-secret GitHub App ID used by the backend to mint installation tokens.')
 param githubAppId string = ''
 
+@description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')
+param pcBridgeClientId string = ''
+@description('The non-secret Outlook app registration ID. Empty disables Outlook tools.')
+param jarvisGraphAppId string = ''
+
+@description('Dan’s IANA time zone used for calendar-day boundaries.')
+param jarvisGraphTimeZone string = ''
+
 @description('The subscription currency amount for the monthly resource group budget (300 DKK).')
 param monthlyBudgetAmount int = 300
 
@@ -396,6 +404,25 @@ resource gptRealtime21Deployment 'Microsoft.CognitiveServices/accounts/deploymen
   }
 }
 
+resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'text-embedding-3-small'
+  dependsOn: [
+    gptRealtime21Deployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 1
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'text-embedding-3-small'
+      version: '1'
+    }
+  }
+}
+
 resource foundryAcrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(registry.id, foundryProject.id, acrPullRoleId)
   scope: registry
@@ -642,6 +669,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: 'jarvis'
             }
             {
+              name: 'JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME'
+              value: memoryEmbeddingDeployment.name
+            }
+            {
               name: 'BACKEND_CONTAINER_APP_RESOURCE_ID'
               value: resourceId('Microsoft.App/containerApps', 'ca-jarvis-backend-${suffix}')
             }
@@ -678,6 +709,20 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'GITHUB_APP_ID'
               value: githubAppId
+            }
+          ], empty(pcBridgeClientId) ? [] : [
+            {
+              name: 'ENTRA_PC_BRIDGE_CLIENT_ID'
+              value: pcBridgeClientId
+            }
+          ], empty(jarvisGraphAppId) ? [] : [
+            {
+              name: 'JARVIS_GRAPH_APP_ID'
+              value: jarvisGraphAppId
+            }
+            {
+              name: 'JARVIS_GRAPH_TIME_ZONE'
+              value: jarvisGraphTimeZone
             }
           ])
           // Startup applies migrations before listening and may wait for the serverless database to resume (300-second deadline).

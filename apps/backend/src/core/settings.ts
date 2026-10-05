@@ -28,6 +28,7 @@ export interface Settings {
   global: {
     maxParallelTasks: number;
     maxCheckAttempts: number;
+    screenShareDailyFrameCap: number;
   };
   newProjects: {
     owner: string;
@@ -66,7 +67,7 @@ export const defaultSettings: Settings = {
   },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
-  global: { maxParallelTasks: 1, maxCheckAttempts: 3 },
+  global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300 },
   newProjects: {
     owner: 'DanAakesen',
     visibility: 'private',
@@ -117,6 +118,7 @@ const settingKeys = {
   global: {
     maxParallelTasks: 'global.max_parallel_tasks',
     maxCheckAttempts: 'global.max_check_attempts',
+    screenShareDailyFrameCap: 'global.screen_share_daily_frame_cap',
   },
   newProjects: {
     owner: 'new_projects.owner',
@@ -167,6 +169,9 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
   }
   if (area === 'global' && key === 'maxCheckAttempts') {
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 10;
+  }
+  if (area === 'global' && key === 'screenShareDailyFrameCap') {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 300;
   }
   if (area === 'newProjects') {
     if (key === 'owner') {
@@ -250,6 +255,7 @@ const settingsPatchSchema = {
           properties: {
             maxParallelTasks: { type: 'integer', minimum: 1, maximum: 100 },
             maxCheckAttempts: { type: 'integer', minimum: 0, maximum: 10 },
+            screenShareDailyFrameCap: { type: 'integer', minimum: 1, maximum: 300 },
           },
         },
         newProjects: {
@@ -363,8 +369,9 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               required: ['tone', 'responseStyle', 'customInstructions'],
               additionalProperties: false,
             },
+            awayMode: { type: 'boolean' },
           },
-          required: ['model', 'reasoningEffort', 'personality'],
+          required: ['model', 'reasoningEffort', 'personality', 'awayMode'],
           additionalProperties: false,
         },
         403: {
@@ -385,10 +392,12 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const settings = await readSettings(app.settingsStore);
+    const awayMode = await app.awayModeStore?.read();
     return {
       model: settings.jarvis.model,
       reasoningEffort: settings.jarvis.reasoning,
       personality: settings.personality,
+      awayMode: awayMode?.away ?? false,
     };
   });
 

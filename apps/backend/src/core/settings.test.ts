@@ -4,6 +4,7 @@ import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { flattenSettings, type SettingsStore } from './settings.js';
 import type { CredentialStatusStore } from '../credentials/credential-status.js';
+import type { AwayModeStore } from './away-mode.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const authorization = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
@@ -26,11 +27,12 @@ function fixture(settingsStore?: SettingsStore, auth: TokenVerifier = async () =
   objectId: config.auth.ownerObjectId,
   tenantId: config.auth.tenantId,
   displayName: 'Dan',
-}), credentialStatusStore?: CredentialStatusStore) {
+}), credentialStatusStore?: CredentialStatusStore, awayModeStore?: AwayModeStore) {
   const app = buildApp(config, undefined, {
     auth,
     ...(settingsStore ? { settingsStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
+    ...(awayModeStore ? { awayModeStore } : {}),
   });
   apps.push(app);
   return app;
@@ -54,7 +56,7 @@ describe('settings API', () => {
         voice: { defaultLanguage: 'da' },
         codex: { model: 'default' },
         copilot: { model: 'default' },
-        global: { maxParallelTasks: 1, maxCheckAttempts: 3 },
+        global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300 },
         newProjects: {
           owner: 'DanAakesen',
           visibility: 'private',
@@ -80,7 +82,7 @@ describe('settings API', () => {
           appearance: { theme: 'dark' },
           jarvis: { reasoning: 'high' },
           voice: { defaultLanguage: 'en' },
-          global: { maxParallelTasks: 4, maxCheckAttempts: 2 },
+          global: { maxParallelTasks: 4, maxCheckAttempts: 2, screenShareDailyFrameCap: 270 },
         },
       },
     });
@@ -91,7 +93,7 @@ describe('settings API', () => {
         appearance: { theme: 'dark' },
         jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
         voice: { defaultLanguage: 'en' },
-        global: { maxParallelTasks: 4, maxCheckAttempts: 2 },
+        global: { maxParallelTasks: 4, maxCheckAttempts: 2, screenShareDailyFrameCap: 270 },
       },
     });
     expect(values).toEqual({
@@ -100,6 +102,7 @@ describe('settings API', () => {
       'voice.default_language': '"en"',
       'global.max_parallel_tasks': '4',
       'global.max_check_attempts': '2',
+      'global.screen_share_daily_frame_cap': '270',
     });
     const readBack = await app.inject({ url: '/settings', headers: authorization });
     expect(readBack.json().settings.appearance).toEqual({ theme: 'dark' });
@@ -257,11 +260,17 @@ describe('settings API', () => {
         customInstructions: 'Prefer plain language.',
       },
     });
+    const awayModeStore = {
+      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null })),
+      set: vi.fn(),
+      markPresent: vi.fn(),
+      observePresence: vi.fn(),
+    } as unknown as AwayModeStore;
     const app = fixture(store, async () => ({
       kind: 'jarvis-agent',
       objectId: '00000000-0000-0000-0000-000000000001',
       tenantId: config.auth.tenantId,
-    }));
+    }), undefined, awayModeStore);
 
     const response = await app.inject({ url: '/agent/settings', headers: authorization });
 
@@ -274,6 +283,7 @@ describe('settings API', () => {
         responseStyle: 'balanced',
         customInstructions: 'Prefer plain language.',
       },
+      awayMode: true,
     });
   });
 
@@ -303,6 +313,8 @@ describe('settings API', () => {
     { settings: { global: { maxParallelTasks: 101 } } },
     { settings: { global: { maxCheckAttempts: 11 } } },
     { settings: { global: { maxCheckAttempts: -1 } } },
+    { settings: { global: { screenShareDailyFrameCap: 0 } } },
+    { settings: { global: { screenShareDailyFrameCap: 301 } } },
     { settings: { voice: { unknown: 'value' } } },
     { settings: { newProjects: { owner: '-invalid' } } },
     { settings: { newProjects: { visibility: 'internal' } } },

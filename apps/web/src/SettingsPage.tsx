@@ -19,7 +19,7 @@ interface Settings {
   };
   codex: { model: string; reasoning: string };
   copilot: { model: string };
-  global: { maxParallelTasks: number };
+  global: { maxParallelTasks: number; screenShareDailyFrameCap: number };
   newProjects: {
     owner: string;
     visibility: 'private' | 'public';
@@ -146,6 +146,9 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     typeof settings.copilot.model === 'string' && typeof settings.global.maxParallelTasks === 'number' &&
     Number.isSafeInteger(settings.global.maxParallelTasks) &&
     settings.global.maxParallelTasks >= 1 && settings.global.maxParallelTasks <= 100 &&
+    typeof settings.global.screenShareDailyFrameCap === 'number' &&
+    Number.isSafeInteger(settings.global.screenShareDailyFrameCap) &&
+    settings.global.screenShareDailyFrameCap >= 1 && settings.global.screenShareDailyFrameCap <= 300 &&
     typeof settings.newProjects.owner === 'string' &&
     (settings.newProjects.visibility === 'private' || settings.newProjects.visibility === 'public') &&
     typeof settings.newProjects.templatesRepository === 'string' &&
@@ -527,6 +530,13 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
                 value={settings.global.maxParallelTasks} disabled={saving}
                 onChange={(event) => update('global', 'maxParallelTasks', Number(event.target.value))} />
               <p className="settings-explanation">Choose a whole number from 1 to 100.</p>
+            </div>
+            <div className="settings-field settings-number-field">
+              <label htmlFor="screen-share-daily-frame-cap">Daily screen inspection limit</label>
+              <input id="screen-share-daily-frame-cap" type="number" min="1" max="300" step="1"
+                value={settings.global.screenShareDailyFrameCap} disabled={saving}
+                onChange={(event) => update('global', 'screenShareDailyFrameCap', Number(event.target.value))} />
+              <p className="settings-explanation">Maximum screen frames sent to the vision model per UTC day (1–300).</p>
             </div>
             <p className="settings-explanation" id="sleep-switch-help">Manage backend sleep from the Jarvis main page.</p>
             <a className="home-link" href="/" aria-describedby="sleep-switch-help">Open the Jarvis main page</a>
