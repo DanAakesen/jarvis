@@ -40,6 +40,7 @@ Status as of 4 October 2026.
 | Software Factory tools | Ask Jarvis to list projects and tasks, create tasks, change the agent or model on a Ready task, and steer, pause, resume or cancel tasks | Voice/chat | Main page | Built | P4-10, P7-11 |
 | Model switching by voice | Change Jarvis for the next session or a Ready task using verified provider options; running-task changes are refused | Voice/chat | Main page | Built (offline) | P7-11 |
 | Live status by voice | Jarvis announces important task changes and answers "what's going on?" | Voice/chat | — | In progress | P7-12 |
+| Long-term memory | Recall relevant stated preferences, project facts, decisions and unfinished tasks with Dan's source; inspect, correct or forget them | Voice/chat | — | In progress | P7-13 |
 | Live voice test | Dan's verdict on Danish and English voice | Voice/chat | — | In progress | P5-07 |
 | Reflex layer | Instant acknowledgement and fast routing of simple commands (Jev) | Voice/chat | — | Planned | P7-04 |
 
@@ -47,7 +48,7 @@ Status as of 4 October 2026.
 
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
-| Now panel | See running tasks, tasks needing attention, releases, deployments and credential warnings; dismiss items | Screen | Main page | Built | P1-13 |
+| Now panel | See away/present mode, running tasks, tasks needing attention, releases, deployments and credential warnings; dismiss items | Screen | Main page | Built | P1-13, P7-02 |
 | Sleep switch | Put the backend to sleep or wake it; refused while tasks are active | Screen | Main page | Built | P1-12 |
 | Database waking | Pages wait and show "waking" while the paused database resumes | Screen | All pages | In progress | P1-14 |
 
@@ -107,12 +108,12 @@ Status as of 4 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Teams calling | Call Jarvis from the Teams app (no paid number at first) | Phone | Teams | Planned (needs decision) | P7-01 |
-| Away mode | "I'm leaving": updates and confirmations go to the phone | Both | Main page, Phone | Planned (needs decision) | P7-02 |
+| Away mode | Toggle by voice/chat, automatic Teams Away/Offline detection after ten minutes, and automatic return to present on active browser use; see mode in Now and route task updates and approvals to Teams while away, browser while present | Both | Main page, Phone | Built offline; Graph admin consent and live phone check pending | P7-02 |
 | Phone confirmations | Receive Dan-only Teams notifications and approve or reject actions with optional Speech F0 voice notes | Phone | Teams | Built offline; live Azure/phone check pending | P7-03 |
 | Screen sharing | Share a screen or window; request an in-memory vision description in chat or voice | Both | Main page | Built (live acceptance pending) | P7-05 |
-| Local PC bridge | Jarvis opens apps, URLs and allowed commands on Dan's PC | Voice/chat | PC companion | Planned (needs decision) | P7-06 |
+| Local PC bridge | Jarvis opens HTTP(S) URLs, allow-listed apps, and folders under `C:\Repo` in VS Code; reports the active window title; or focuses a window by exact title | Voice/chat | PC companion | Built (offline; live Windows/Entra check unverified) | P7-06 |
 | Computer use | Jarvis clicks and types on Dan's PC while he talks | Voice/chat | PC companion | Planned (needs decision) | P7-07 |
-| Camera | Jarvis sees through the webcam on request | Both | Main page | Planned | P7-08 |
+| Camera | Turn on the webcam from the shared shell and ask Jarvis by chat or voice to inspect a single frame; camera state times out and stops with the session | Both | Shared top bar, main conversation | Built offline; live camera/model check pending | P7-08 |
 | Calendar and mail | Agenda, free slots, create/move meetings, search and summarise mail, draft replies and send after exact confirmation | Voice/chat | Backend tools; no new page | Built offline; Graph/RBAC setup and live acceptance pending | P7-09 |
 | Second brain | Search Dan's configured OneDrive notes folder and quote snippets with links | Voice/chat | — | Implemented offline; Graph setup and live search pending | P7-10 |
 
@@ -121,7 +122,7 @@ Status as of 4 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Complete Jarvis front end | One designed UI for all features above | Screen | All pages | Planned | P8-01, P8-04–P8-13 |
-| Shared app shell and area navigation | Navigate areas from the rail/sidebar; open Settings from the top-right; see Screen sharing and Camera controls disabled until their capabilities are built | Screen | All pages | Built | P8-04 |
+| Shared app shell and area navigation | Navigate areas from the rail/sidebar; open Settings from the top-right; toggle the camera with an accessible on/off state | Screen | All pages | Built | P8-04, P7-08 |
 | Conversation opening and voice entry | See the conversation on arrival, type from the bottom-centred composer, and explicitly start voice from the small orb; separately enable the microphone, and restore the draft and typing focus on exit | Both | Main page | Built (offline/browser fixtures) | P8-05 |
 | Workspace composition | Arrange open temporary views as tiles or layers; move, resize, and reorder with pointer or keyboard; reflow on narrow screens | Screen | Main workspace | Built | P8-06 |
 | Dynamic workspace views | View accessible information in temporary, question-relevant windows and ask Jarvis to create or arrange them | Screen | Main workspace | In progress | P8-06, P8-14, P8-15 |

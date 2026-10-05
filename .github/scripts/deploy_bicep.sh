@@ -41,6 +41,13 @@ if [[ -n "${GITHUB_APP_ID:-}" ]]; then
   }
   parameters+=(githubAppId="$GITHUB_APP_ID")
 fi
+if [[ -n "${JARVIS_PC_BRIDGE_CLIENT_ID:-}" ]]; then
+  [[ "$JARVIS_PC_BRIDGE_CLIENT_ID" =~ ^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$ ]] || {
+    echo "::error::JARVIS_PC_BRIDGE_CLIENT_ID must be a UUID"
+    exit 1
+  }
+  parameters+=(pcBridgeClientId="$JARVIS_PC_BRIDGE_CLIENT_ID")
+fi
 if [[ -n "${JARVIS_GRAPH_APP_ID:-}" || -n "${JARVIS_GRAPH_TIME_ZONE:-}" ]]; then
   [[ "${JARVIS_GRAPH_APP_ID:-}" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]] || {
     echo "::error::JARVIS_GRAPH_APP_ID must be a UUID when Outlook is enabled."

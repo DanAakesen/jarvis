@@ -3,14 +3,21 @@ import type { PublicConfig } from '../config/public-config';
 import { backendFetch } from './backend-request';
 
 const MAX_FRAME_BYTES = 1_000_000;
+const CAMERA_TIMEOUT_MS = 5 * 60_000;
+const INSPECTION_TIMEOUT_MS = 30_000;
 
 export interface ScreenShareController {
   readonly sharing: boolean;
+  readonly starting: boolean;
+  readonly inspecting: boolean;
   readonly error: string;
   start(): Promise<void>;
   stop(): void;
   inspect(sessionId: string): Promise<string>;
 }
+
+export type CameraController = ScreenShareController;
+type VisionCaptureSource = 'screen' | 'camera';
 
 function encodeBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -20,66 +27,114 @@ function encodeBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function readBlob(video: HTMLVideoElement): Promise<Blob> {
+function readBlob(video: HTMLVideoElement, source: VisionCaptureSource): Promise<Blob> {
   const width = video.videoWidth;
   const height = video.videoHeight;
-  if (!width || !height) throw new Error('The shared screen is not ready yet.');
+  const label = source === 'camera' ? 'camera' : 'shared screen';
+  if (!width || !height) throw new Error(`The ${label} is not ready yet.`);
   const scale = Math.min(1, 1280 / width, 720 / height);
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(width * scale));
   canvas.height = Math.max(1, Math.round(height * scale));
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('The shared screen could not be captured.');
+  if (!context) throw new Error(`The ${label} frame could not be captured.`);
   context.drawImage(video, 0, 0, canvas.width, canvas.height);
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       canvas.width = 0;
       canvas.height = 0;
-      if (!blob) reject(new Error('The shared screen could not be captured.'));
-      else if (blob.size > MAX_FRAME_BYTES) reject(new Error('The screen frame is too large to inspect.'));
+      if (!blob) reject(new Error(`The ${label} frame could not be captured.`));
+      else if (blob.size > MAX_FRAME_BYTES) reject(new Error(`The ${label} frame is too large to inspect.`));
       else resolve(blob);
     }, 'image/jpeg', 0.65);
   });
 }
 
-export function useScreenShare(
+function useVisionCapture(
   config: PublicConfig,
   getAccessToken: () => Promise<string>,
+  source: VisionCaptureSource,
 ): ScreenShareController {
   const streamRef = useRef<MediaStream | null>(null);
+  const startRequestRef = useRef(0);
+  const startPendingRef = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inspectionRef = useRef<AbortController | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [inspecting, setInspecting] = useState(false);
   const [error, setError] = useState('');
+  const label = source === 'camera' ? 'camera' : 'screen';
 
   const stop = useCallback(() => {
+    startRequestRef.current += 1;
+    startPendingRef.current = false;
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+    inspectionRef.current?.abort();
+    inspectionRef.current = null;
     const stream = streamRef.current;
     streamRef.current = null;
     for (const track of stream?.getTracks() ?? []) track.stop();
     setSharing(false);
+    setStarting(false);
   }, []);
 
   const start = useCallback(async () => {
     setError('');
-    if (streamRef.current) return;
-    if (!navigator.mediaDevices?.getDisplayMedia) {
+    if (streamRef.current || startPendingRef.current) return;
+    if (source === 'camera' && !navigator.mediaDevices?.getUserMedia) {
+      setError('Camera access is not available in this browser.');
+      return;
+    }
+    if (source === 'screen' && !navigator.mediaDevices?.getDisplayMedia) {
       setError('Screen sharing is not available in this browser.');
       return;
     }
+
+    const requestId = ++startRequestRef.current;
+    startPendingRef.current = true;
+    setStarting(true);
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      if (streamRef.current) {
+      const stream = source === 'camera'
+        ? await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        })
+        : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      if (requestId !== startRequestRef.current) {
         for (const track of stream.getTracks()) track.stop();
         return;
       }
+      const track = stream.getVideoTracks().find(({ readyState }) => readyState === 'live');
+      if (!track) {
+        for (const streamTrack of stream.getTracks()) streamTrack.stop();
+        setError(`No live ${label} video is available.`);
+        return;
+      }
       streamRef.current = stream;
-      const track = stream.getVideoTracks()[0];
-      track?.addEventListener('ended', stop, { once: true });
+      track.addEventListener('ended', stop, { once: true });
+      if (source === 'camera') timeoutRef.current = setTimeout(stop, CAMERA_TIMEOUT_MS);
       setSharing(true);
     } catch {
-      setError('Screen sharing was not started. Choose a window or screen and try again.');
+      if (requestId === startRequestRef.current) {
+        setError(source === 'camera'
+          ? 'Camera access was not started. Allow camera access and try again.'
+          : 'Screen sharing was not started. Choose a window or screen and try again.');
+      }
+    } finally {
+      if (requestId === startRequestRef.current) {
+        startPendingRef.current = false;
+        setStarting(false);
+      }
     }
-  }, [stop]);
+  }, [label, source, stop]);
 
   useEffect(() => () => {
+    startRequestRef.current += 1;
+    startPendingRef.current = false;
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    inspectionRef.current?.abort();
     for (const track of streamRef.current?.getTracks() ?? []) track.stop();
     streamRef.current = null;
   }, []);
@@ -87,21 +142,26 @@ export function useScreenShare(
   const inspect = useCallback(async (sessionId: string) => {
     setError('');
     if (!/^[1-9]\d{0,18}$/u.test(sessionId) || BigInt(sessionId) > 9_223_372_036_854_775_807n) {
-      throw new Error('An active conversation is required to inspect the screen.');
+      throw new Error('An active conversation is required to inspect a visual frame.');
     }
     const stream = streamRef.current;
     if (!stream || stream.getVideoTracks().every((track) => track.readyState !== 'live')) {
-      throw new Error('Start screen sharing before asking Jarvis to inspect it.');
+      throw new Error(`Start ${label === 'camera' ? 'the camera' : 'screen sharing'} before asking Jarvis to inspect it.`);
     }
-    if (!config.backendUrl) throw new Error('Screen inspection is unavailable until the backend is configured.');
+    if (!config.backendUrl) throw new Error('Visual inspection is unavailable until the backend is configured.');
 
+    const controller = new AbortController();
+    inspectionRef.current?.abort();
+    inspectionRef.current = controller;
+    setInspecting(true);
     const video = document.createElement('video');
     video.muted = true;
     video.playsInline = true;
     video.srcObject = stream;
+    const timeout = setTimeout(() => controller.abort(), INSPECTION_TIMEOUT_MS);
     try {
       await video.play();
-      const blob = await readBlob(video);
+      const blob = await readBlob(video, source);
       const bytes = new Uint8Array(await blob.arrayBuffer());
       let frame: string;
       try {
@@ -117,10 +177,10 @@ export function useScreenShare(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ sessionId, frame }),
-        signal: AbortSignal.timeout(30_000),
+        signal: controller.signal,
       });
       if (!response.ok) {
-        let message = 'Jarvis could not inspect the shared screen. Try again.';
+        let message = `Jarvis could not inspect the ${label} frame. Try again.`;
         try {
           const value: unknown = await response.json();
           if (typeof value === 'object' && value !== null && 'error' in value &&
@@ -131,18 +191,31 @@ export function useScreenShare(
       const value: unknown = await response.json();
       if (typeof value !== 'object' || value === null || !('description' in value) ||
           typeof value.description !== 'string' || !value.description.trim() || value.description.length > 5_000) {
-        throw new Error('Jarvis returned an invalid screen description.');
+        throw new Error('Jarvis returned an invalid visual description.');
       }
       return value.description;
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : 'Jarvis could not inspect the shared screen.';
+      const message = reason instanceof Error && reason.name !== 'AbortError' && reason.name !== 'TimeoutError'
+        ? reason.message
+        : `Jarvis could not inspect the ${label} frame. Try again.`;
       setError(message);
-      throw reason instanceof Error ? reason : new Error(message);
+      throw new Error(message, { cause: reason });
     } finally {
+      clearTimeout(timeout);
+      if (inspectionRef.current === controller) inspectionRef.current = null;
+      setInspecting(false);
       video.pause();
       video.srcObject = null;
     }
-  }, [config.backendUrl, getAccessToken]);
+  }, [config.backendUrl, getAccessToken, label, source]);
 
-  return { sharing, error, start, stop, inspect };
+  return { sharing, starting, inspecting, error, start, stop, inspect };
+}
+
+export function useScreenShare(config: PublicConfig, getAccessToken: () => Promise<string>): ScreenShareController {
+  return useVisionCapture(config, getAccessToken, 'screen');
+}
+
+export function useCamera(config: PublicConfig, getAccessToken: () => Promise<string>): CameraController {
+  return useVisionCapture(config, getAccessToken, 'camera');
 }

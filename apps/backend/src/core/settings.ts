@@ -369,8 +369,9 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               required: ['tone', 'responseStyle', 'customInstructions'],
               additionalProperties: false,
             },
+            awayMode: { type: 'boolean' },
           },
-          required: ['model', 'reasoningEffort', 'personality'],
+          required: ['model', 'reasoningEffort', 'personality', 'awayMode'],
           additionalProperties: false,
         },
         403: {
@@ -391,10 +392,12 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const settings = await readSettings(app.settingsStore);
+    const awayMode = await app.awayModeStore?.read();
     return {
       model: settings.jarvis.model,
       reasoningEffort: settings.jarvis.reasoning,
       personality: settings.personality,
+      awayMode: awayMode?.away ?? false,
     };
   });
 

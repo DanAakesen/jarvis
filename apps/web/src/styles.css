@@ -312,11 +312,31 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
 .topbar-feature-button { width: 44px; min-width: 44px; padding: 0; cursor: not-allowed; }
 .topbar-feature-button svg, .settings-link svg { width: 19px; height: 19px; }
 .topbar-feature-button:disabled { background: var(--disabled-surface); color: var(--disabled-text); }
+.camera-control { position: relative; }
+.camera-control-button { width: auto; gap: 6px; padding-inline: 8px; cursor: pointer; }
+.camera-control-button:hover { background: var(--disabled-surface); }
+.camera-control-button[aria-pressed="true"] { background: var(--success-surface); color: var(--success); }
+.camera-control-label { font-size: 12px; }
+.camera-control-error {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 4;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--error-surface);
+  color: var(--error);
+  font-size: 13px;
+  box-shadow: var(--soft-shadow);
+}
 .settings-link { padding-inline: 10px; }
 .settings-link:hover { background: var(--disabled-surface); }
 .settings-link[aria-current="page"] { background: var(--disabled-surface); }
 .topbar-icon-button { border: 0; }
 .shell-main { grid-column: 3; grid-row: 2; min-width: 0; min-height: 0; padding: 36px clamp(24px, 4vw, 56px) var(--space-7); overflow: auto; outline: none; }
+.browser-presence-error { margin: 0 0 16px; color: var(--error); }
 .context-panel {
   grid-column: 4;
   grid-row: 2;
@@ -637,6 +657,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .activity-list > li + li { border-top: 1px solid var(--rule); }
 .activity-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .activity-item > div { min-width: 0; }
+.confirmation-summary { overflow-wrap: anywhere; }
 .activity-title { font-weight: 600; overflow-wrap: anywhere; }
 .activity-meta { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 6px 0 0; font-size: 14px; }
 .activity-meta dt { color: var(--text); }
@@ -1064,6 +1085,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .voice-orb-presentation { grid-template-columns: 76px minmax(0, 1fr); gap: 10px; }
   .voice-orb { width: 76px; }
   .release-details { grid-template-columns: minmax(0, 1fr); }
+  .camera-control-label { display: none; }
+  .camera-control-button { width: 44px; padding-inline: 0; }
 }
 
 :root[data-document-visibility="hidden"] *,

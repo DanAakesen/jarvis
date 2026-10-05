@@ -59,7 +59,7 @@ event timeline.
 ## Interactions to design
 
 - **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.
-- **Teams confirmation cards (P7-03):** one Adaptive Card headline names the action, body text gives its bounded summary, and ordinary supporting text states the five-minute expiry. Approve and Reject are explicit, distinct buttons; optional speech is a separate, non-autostarting audio attachment. This interaction lives in Teams and does not add browser UI.
+- **Confirmations (P7-02/P7-03):** while away, one Teams Adaptive Card headline names the action, body text gives its bounded summary, and ordinary supporting text states the five-minute expiry. Approve and Reject are explicit, distinct buttons; optional speech is a separate, non-autostarting audio attachment. While present, the Now panel lists expiring requests with the same summary and explicit Approve/Reject buttons. This queue appears only when requests are pending.
 - **Language toggle:** Danish ↔ English, visible wherever voice is active.
 - **Task controls:** steer, pause, resume, cancel, recover after a crash, and continue after a completed turn's session expires. Show a clear pending state (for example, "Continuing…" while a fresh session starts).
 - **Sleep switch:** the main page shows configured awake/asleep state (minimum replicas 1/0), pending and failure feedback, and explains a refusal while any task is Ready or Running. Settings links to the main-page control.
@@ -119,22 +119,35 @@ sign-in; the header wraps on narrow screens.
   Look at screen action for chat and voice. Keep the status and Stop action
   visible while sharing; reuse the shared button, focus, and narrow-screen
   wrapping conventions. This is the minimal P7 integration; P8-04 owns moving
-  the confirmed share control into the shared shell's top bar. Do not add camera
-  controls or continuous capture here.
+  the confirmed share control into the shared shell's top bar.
   Scratch-auth Chromium checks at 390 and 1280 px exercised Share, the visible
   status/Stop action, a mocked chat inspection, and stream cleanup; neither
   viewport overflowed or reported console errors. Real display capture and the
   live backend/model remain unverified.
+- **Camera (P7-08):** the shared top-bar control explicitly starts/stops browser
+  camera permission and shows an On/Off label on desktop; the pressed surface and
+  camera icon retain the state on the narrowest phones. Chat and voice expose a
+  separate Look at camera request. Capture one frame only when asked; do not
+  preview or stream images. Voice/session end, app teardown, and a five-minute
+  timeout release the camera track. Desktop and phone screenshots are in
+  `docs/ui/screenshots/p7-08-camera-*.png`; their browser camera is a fake device.
 - **Unavailable features:** each data area says what it will show. Each action
   stays visible but disabled, and is linked to that explanation with
   `aria-describedby`. No sample messages, tasks or states are shown.
 - **Activity panel:** Running tasks, Needs attention, Releases and deployments,
-  Credential warnings, and Alerts, each with an empty state. Item titles open their
+  Credential warnings, Alerts, and the current away/present mode, with an empty
+  state for each activity group. Item titles open their
   task, release or project. Dismiss shows "Dismissing…", keeps the item and
   explains a failure, and returns focus to the Now heading after removal.
   The panel loads its backend snapshot, offers retry when unavailable, and
   labels reconnecting or unavailable live updates while keeping the last
   snapshot visible.
+- **Away mode (P7-02):** The Now panel uses a labelled text status for present or
+  away and retains the existing list hierarchy. Mode-change entries appear as
+  ordinary activity rows; no color-only status or separate dashboard treatment.
+  An explicit, visible-browser activity request—not passive feed refresh—returns
+  Dan to present. Pending browser approvals use the panel's existing list and
+  button styles, with visible pending, failure, and recovery feedback.
 - **Alerts (P6-02):** Keep alerts in the existing Now activity panel as a
   separate, dismissible "Alerts" group; retain the condition title, timestamp,
   and task/release/project link where one exists. Budget alerts have no invented
@@ -321,11 +334,12 @@ proposals and eight static wireframes. P8-04 routes the existing pages through a
 thin left icon rail, expandable area navigation, top and bottom bars, and a
 toggleable contextual panel. The top bar spans edge to edge above the shell;
 its height matches the area rail's width, and the rail begins beneath it.
-Settings stays at the top-right. Screen sharing and Camera are the only
-confirmed feature controls in the top bar; each is an icon-only, disabled
-control with an accessible explanation and tooltip until its P7 capability is
-built. The top bar remains one line at phone and desktop widths. Other suggested
-top-bar controls remain out of scope.
+Settings stays at the top-right. Camera is a working toggle with an accessible
+pressed state, visible desktop On/Off label, and a narrow-phone state indicator;
+the browser prompts for camera permission only after the toggle is selected.
+Screen share remains disabled in the top bar because its active control remains
+in the conversation workflow. The top bar remains one line at phone and desktop
+widths. Other suggested top-bar controls remain out of scope.
 
 The bottom bar carries the existing database-wake status when configured. The
 context panel has an honest empty state until P8-08 supplies contextual content.

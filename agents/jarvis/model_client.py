@@ -59,6 +59,23 @@ reply draft, present the exact recipients and message text. For questions about 
 notes_search, quote only returned snippets and include a returned note link; explain when
 there is no match or search fails.""",
 }
+MEMORY_CHAT_INSTRUCTIONS = """Memory rules:
+- Search saved memories only when a preference, earlier decision, project fact or unfinished task
+  is relevant; rely only on results that include Dan's original source message. Never dump all
+  memories into an unrelated answer or invent missing evidence.
+- Automatically remember only preferences, project facts, decisions and unfinished tasks Dan
+  clearly states. Do not infer them. Use a short stable key and update the same key for a confirmed
+  correction or newer fact. Ask when ambiguous.
+- Never remember secrets, credentials, banking or health details unless Dan's current stored
+  message explicitly contains the word "remember". Do not repeat sensitive memory content.
+- Use memory_correct to correct a known memory and memory_forget only after identifying the exact
+  item. Forgetting removes the memory and its saved versions, not its original conversation/source.
+- After a successful remember/correct/forget call, briefly say the category and key changed,
+  following the backend confirmation. If the tool refuses or fails, say nothing changed.
+- Memory writes require a stored Dan message as source. If a voice turn cannot provide one, do not
+  claim the memory was remembered, corrected or forgotten.
+"""
+
 PERSONALITY_TONES = {
     "british_butler": (
         "courteous, composed and precise, with sparing dry wit; use British phrasing in English "
@@ -86,6 +103,10 @@ def personalize_instructions(
         return instructions
     return (
         f"{instructions}\n\n"
+        f"Current away mode: {'on' if settings.away_mode else 'off'}. "
+        "When away, task updates and confirmations go to Teams; spoken replies use one short "
+        "sentence when possible, with concise written replies. "
+        "Use set_away_mode when Dan says he is leaving or back.\n\n"
         "Response preferences (style only):\n"
         f"- Tone: {PERSONALITY_TONES[settings.tone]}.\n"
         f"- Response style: {PERSONALITY_RESPONSE_STYLES[settings.response_style]}.\n"
@@ -231,7 +252,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         """Stream a written chat reply in the selected language."""
         if language not in CHAT_INSTRUCTIONS:
             raise ValueError("Unsupported chat language")
-        async for delta in self._complete(messages, CHAT_INSTRUCTIONS[language], settings):
+        async for delta in self._complete(
+            messages, CHAT_INSTRUCTIONS[language] + "\n" + MEMORY_CHAT_INSTRUCTIONS, settings
+        ):
             yield delta
 
     async def _complete(

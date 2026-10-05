@@ -52,9 +52,13 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
 });
 
+const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  if (mediaDevicesDescriptor) Object.defineProperty(navigator, 'mediaDevices', mediaDevicesDescriptor);
+  else Reflect.deleteProperty(navigator, 'mediaDevices');
 });
 
 describe('Jarvis routes', () => {
@@ -155,6 +159,36 @@ describe('Jarvis routes', () => {
 
     expect(await screen.findByText('Please start the task.')).not.toBeNull();
   });
+
+  it('marks browser presence from active use, not background feed requests', async () => {
+    const visibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/now') {
+        return new Response(JSON.stringify({
+          awayMode: true, confirmations: [], updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [],
+        }));
+      }
+      return new Response('{}');
+    });
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+    await screen.findByRole('navigation', { name: 'Areas' });
+
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname === '/now/present')).toBe(false);
+
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    hasFocus.mockReturnValue(true);
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) =>
+      new URL(String(url)).pathname === '/now/present' && init?.method === 'POST')).toBe(true));
+
+    hasFocus.mockRestore();
+    if (visibility) Object.defineProperty(document, 'visibilityState', visibility);
+    else Reflect.deleteProperty(document, 'visibilityState');
+  });
 });
 
 describe('App shell', () => {
@@ -175,7 +209,9 @@ describe('App shell', () => {
     });
     await renderSignedIn();
     expect((await screen.findByText('Waking Jarvis…')).getAttribute('role')).toBe('status');
-    resolveFeed(new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] })));
+    resolveFeed(new Response(JSON.stringify({
+      awayMode: false, confirmations: [], updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [],
+    })));
     await screen.findByText('No tasks are running.');
     expect(screen.queryByText('Waking Jarvis…')).toBeNull();
   });
@@ -234,7 +270,9 @@ describe('App shell', () => {
         return new Response(JSON.stringify({ settings: { appearance: { theme: 'dark' } } }));
       }
       if (path === '/now') {
-        return new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }));
+        return new Response(JSON.stringify({
+          awayMode: false, confirmations: [], updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [],
+        }));
       }
       if (path === '/database/status') return new Response(JSON.stringify({ waking: false }));
       return new Response('{}');
@@ -263,15 +301,37 @@ describe('App shell', () => {
     expect(screen.getByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
   });
 
-  it('keeps Camera unavailable while screen sharing is available in the conversation', async () => {
+  it('turns the camera on and off from the shared shell', async () => {
+    const user = userEvent.setup();
+    let stopped = false;
+    const track = {
+      get readyState() { return stopped ? 'ended' : 'live'; },
+      stop: vi.fn(() => { stopped = true; }),
+      addEventListener: vi.fn(),
+    } as unknown as MediaStreamTrack;
+    const stream = {
+      getTracks: () => [track],
+      getVideoTracks: () => [track],
+    } as unknown as MediaStream;
+    const getUserMedia = vi.fn(async () => stream);
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
     await renderSignedIn();
 
-    const camera = screen.getByRole('button', { name: 'Camera' });
-    expect(camera).toHaveProperty('disabled', true);
-    expect(camera.getAttribute('aria-describedby')).not.toBeNull();
-    expect(document.getElementById(camera.getAttribute('aria-describedby')!)?.textContent)
-      .toBe('Unavailable until camera support is built.');
-    expect(camera.parentElement?.getAttribute('title')).toBe('Unavailable until camera support is built.');
+    const camera = screen.getByRole('button', { name: 'Camera off. Turn camera on.' });
+    expect(camera).toHaveProperty('disabled', false);
+    expect(camera.getAttribute('aria-pressed')).toBe('false');
+    await user.click(camera);
+    const activeCamera = await screen.findByRole('button', { name: 'Camera on. Turn camera off.' });
+    expect(activeCamera.getAttribute('aria-pressed')).toBe('true');
+    expect(getUserMedia).toHaveBeenCalledWith({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    await user.click(activeCamera);
+    expect(track.stop).toHaveBeenCalledOnce();
     expect(within(screen.getByRole('region', { name: 'Conversation' }))
       .getByRole('button', { name: 'Share screen' })).toHaveProperty('disabled', false);
   });
@@ -309,7 +369,9 @@ describe('App shell', () => {
       expect(screen.getByRole('heading', { level: 2, name })).not.toBeNull();
     }
     expect(screen.getByText(/Loading current activity/)).not.toBeNull();
-    resolveFeed(new Response(JSON.stringify({ updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [] }), {
+    resolveFeed(new Response(JSON.stringify({
+      awayMode: false, confirmations: [], updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [],
+    }), {
       status: 200, headers: { 'Content-Type': 'application/json' },
     }));
     expect(await screen.findByText('No tasks are running.')).not.toBeNull();

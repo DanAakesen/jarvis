@@ -68,6 +68,7 @@ function appFor(
     })),
     getSession: vi.fn(async () => null),
     endSession: vi.fn(async () => true),
+    getDanMessageIdBySourceItemId: vi.fn(async () => '42'),
     addMessage: vi.fn<ConversationStore['addMessage']>(async (input) => ({
       id: '42',
       sessionId: input.sessionId,

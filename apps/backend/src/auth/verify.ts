@@ -4,14 +4,18 @@ import type { AuthConfig } from './config.js';
 export interface UserPrincipal { objectId: string; tenantId: string; displayName: string }
 export interface AgentPrincipal { kind: 'jarvis-agent'; objectId: string; tenantId: string }
 export interface RunnerPrincipal { kind: 'jarvis-runner'; objectId: string; tenantId: string }
-export type TokenVerifier = (token: string) => Promise<UserPrincipal | AgentPrincipal | RunnerPrincipal>;
+export interface PcBridgePrincipal { kind: 'jarvis-pc-bridge'; objectId: string; tenantId: string }
+export type TokenVerifier = (token: string) => Promise<UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal>;
 export const agentToolsRole = 'Jarvis.Tools';
 export const runnerEventsRole = 'Jarvis.Runner.Events';
-export function isAgentPrincipal(principal: UserPrincipal | AgentPrincipal | RunnerPrincipal): principal is AgentPrincipal {
+export function isAgentPrincipal(principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal): principal is AgentPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-agent';
 }
-export function isRunnerPrincipal(principal: UserPrincipal | AgentPrincipal | RunnerPrincipal): principal is RunnerPrincipal {
+export function isRunnerPrincipal(principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal): principal is RunnerPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-runner';
+}
+export function isPcBridgePrincipal(principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal): principal is PcBridgePrincipal {
+  return 'kind' in principal && principal.kind === 'jarvis-pc-bridge';
 }
 export class AuthenticationDenied extends Error {
   constructor(public readonly statusCode: 401 | 403) { super('Authentication denied'); }
@@ -38,6 +42,14 @@ export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey):
       throw new AuthenticationDenied(401);
     }
     const objectId = payload.oid.toLowerCase();
+    if (config.pcBridgeClientId !== undefined && payload.azp === config.pcBridgeClientId) {
+      if (objectId !== config.ownerObjectId || typeof payload.scp !== 'string' ||
+          !payload.scp.split(' ').includes('access_as_user') ||
+          (payload.idtyp !== undefined && payload.idtyp !== 'user')) {
+        throw new AuthenticationDenied(403);
+      }
+      return { kind: 'jarvis-pc-bridge', objectId, tenantId: config.tenantId };
+    }
     if (Array.isArray(payload.roles) && payload.roles.includes(runnerEventsRole)) {
       if (payload.scp !== undefined || (payload.idtyp !== undefined && payload.idtyp !== 'app')) {
         throw new AuthenticationDenied(403);

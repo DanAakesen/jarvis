@@ -31,7 +31,21 @@ only for cancel/abort/drop, and resume_task for continue/resume. If an action ne
 it up first. Use set_jarvis_model to change Jarvis for the next session, and set_task_model to change
 the agent or verified model options of a Ready task. If a task is already running, explain that the
 change was refused and the task remains unchanged. Vary acknowledgements and do not announce routine
-actions.`;
+actions. Use set_away_mode when Dan says he is leaving or back. Current away mode: {awayMode}.
+When away, send task updates and confirmations through Teams and keep spoken replies to one short sentence unless clarity requires more.
+When present, task updates go to the browser.
+
+Memory:
+- Search relevant saved preferences, decisions, project facts or unfinished tasks before answering
+  from the past; use only results linked to Dan's original source message.
+- Automatically remember only those four kinds of fact when Dan clearly states them. Never infer
+  them. Use a short stable key, update the same key for a confirmed correction, and ask if unclear.
+- Never remember secrets, credentials, banking or health details unless Dan's current message
+  explicitly says "remember". Do not repeat sensitive memory content aloud.
+- Use memory_correct to correct a known item and memory_forget only after identifying it. Forgetting
+  removes the memory and its saved versions, not the original conversation/source.
+- After successful memory changes, briefly say the category and key, following the backend
+  confirmation. If a tool refuses or fails, say nothing changed.`;
 
 const MAX_TOOL_ARGUMENT_BYTES = 65_536;
 const MAX_TOOL_RESULT_BYTES = 1_048_576;
@@ -48,13 +62,13 @@ const responseStyleDescriptions: Record<Settings['personality']['responseStyle']
   detailed: 'include relevant explanation and context, avoiding repetition',
 };
 
-function englishPersonalityInstructions(personality: Settings['personality']): string {
+function englishPersonalityInstructions(personality: Settings['personality'], awayMode: boolean): string {
   if (personality.tone === defaultSettings.personality.tone &&
       personality.responseStyle === defaultSettings.personality.responseStyle &&
       personality.customInstructions === defaultSettings.personality.customInstructions) {
-    return ENGLISH_REALTIME_INSTRUCTIONS;
+    return ENGLISH_REALTIME_INSTRUCTIONS.replace('{awayMode}', awayMode ? 'away' : 'present');
   }
-  return `${ENGLISH_REALTIME_INSTRUCTIONS}
+  return `${ENGLISH_REALTIME_INSTRUCTIONS.replace('{awayMode}', awayMode ? 'away' : 'present')}
 
 Response preferences (style only):
 - Tone: ${toneDescriptions[personality.tone]}.
@@ -71,12 +85,13 @@ response constraints.`;
 export function createEnglishSessionUpdate(
   tools: ToolRegistry,
   personality: Settings['personality'] = defaultSettings.personality,
+  awayMode = false,
 ) {
   return {
     type: 'session.update',
     session: {
       type: 'realtime',
-      instructions: englishPersonalityInstructions(personality),
+      instructions: englishPersonalityInstructions(personality, awayMode),
       output_modalities: ['text', 'audio'],
       audio: {
         input: {
