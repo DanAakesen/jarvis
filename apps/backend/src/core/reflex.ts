@@ -506,6 +506,16 @@ export async function undoPartialReflexAction(
   messageId: string,
   signal: AbortSignal,
 ): Promise<ReflexActionResult | null> {
+  if (original.tool.name === 'workspace_command' && original.arguments.operation === 'close' &&
+      typeof original.arguments.viewId === 'string') {
+    return executeReflexAction({
+      addressed: true, intent: 'action', confidence: 1, needsConfirmation: false, completeCommand: true,
+      target: {
+        choice: `undo_${original.choice}`, tool: original.tool,
+        arguments: { commandId: randomUUID(), operation: 'restore', viewId: original.arguments.viewId },
+      },
+    }, request, messageId, signal);
+  }
   if (original.tool.name !== 'pause_task' || typeof original.arguments.taskId !== 'string') return null;
   const tool = request.server.jarvisTools.get('resume_task');
   if (!tool) return null;
@@ -578,9 +588,9 @@ export function createWorkspaceReflexTargets(
     add(`arrange Jarvis workspace windows ${arrangement}${arrangement === 'tiled' ? ' / side by side' : ''}`,
       { operation: 'layout', arrangement });
   }
-  add(`${snapshot.contextPanelOpen ? 'close' : 'open'} the Jarvis context panel`, {
-    operation: 'context-panel', action: snapshot.contextPanelOpen ? 'close' : 'toggle',
-  });
+  for (const action of ['open', 'close']) {
+    add(`${action} the Jarvis context panel`, { operation: 'context-panel', action });
+  }
   return targets;
 }
 

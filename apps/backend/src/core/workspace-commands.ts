@@ -301,7 +301,8 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
 export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown>>): boolean {
   return ['show', 'focus', 'minimise', 'restore', 'close', 'resize'].includes(String(args.operation)) ||
     args.operation === 'layout' ||
-    args.operation === 'context-panel' && (args.action === 'toggle' || args.action === 'close');
+    args.operation === 'context-panel' && (args.action === 'close' ||
+      args.action === 'open' && args.view === undefined);
 }
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
@@ -321,7 +322,7 @@ export const workspaceCommandTool: BackendModule['tools'][number] = {
     }
     await request.server.workspaceCommands.execute(request.server.ownerObjectId, input, signal);
     if (input.operation === 'create' || input.operation === 'update' ||
-        (input.operation === 'context-panel' && input.action === 'open')) {
+        (input.operation === 'context-panel' && input.action === 'open' && input.view !== undefined)) {
       return { type: 'generated-view', view: input.view };
     }
     return { applied: true, commandId: input.commandId, operation: input.operation };

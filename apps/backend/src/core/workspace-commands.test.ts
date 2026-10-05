@@ -5,7 +5,7 @@ import { coreModule } from './index.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
 import type { WorkspaceCommand } from '@jarvis/contracts';
-import { executeReflexAction, reflexTargets, registerChatReflex } from './reflex.js';
+import { executeReflexAction, reflexTargets, registerChatReflex, undoPartialReflexAction } from './reflex.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const ownerId = config.auth.ownerObjectId;
@@ -41,6 +41,30 @@ function fixture() {
 }
 
 describe('workspace command delivery', () => {
+  it('undoes a contradicted partial window close using the same restore contract', async () => {
+    const { app, broker } = fixture();
+    const commands: WorkspaceCommand[] = [];
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        const command = (data as { command: WorkspaceCommand }).command;
+        commands.push(command);
+        broker.acknowledge(ownerId, connection.sessionId, command.commandId, true);
+      }
+      return true;
+    });
+    broker.updateSnapshot(ownerId, connection.sessionId, {
+      windows: [{ viewId: 'board', title: 'Board' }], contextPanelOpen: false,
+    });
+    app.post('/test/undo', async (request) => {
+      const target = (await reflexTargets(request)).find(({ arguments: args }) => args.operation === 'close')!;
+      return undoPartialReflexAction(target, request, '101', new AbortController().signal);
+    });
+    const undo = await app.inject({ method: 'POST', url: '/test/undo', headers: userHeaders });
+    expect(undo.json()).toMatchObject({ outcome: 'ok' });
+    expect(commands).toEqual([expect.objectContaining({ operation: 'restore', viewId: 'board' })]);
+    connection.close();
+  });
+
   it('accepts bounded snapshots only from the active owner session and clears them on reconnect', async () => {
     const { app, broker } = fixture();
     const connection = broker.connect(ownerId, () => true);

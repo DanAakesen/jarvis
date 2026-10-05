@@ -506,7 +506,7 @@ wireframes remain structural references only.
 
 ## Temporary workspace composition (P8-06)
 
-P7-27 reuses these controls and states for Jev-directed chat/voice commands, without new chrome or styling. “Make the window bigger” uses a bounded large resize in layered mode and expands the existing row/column spans in tiled mode; command application never waits for animation.
+P7-27 reuses these controls and states for Jev-directed chat/voice commands, without new chrome or styling. “Make the window bigger” uses a bounded large resize in layered mode and expands the existing row/column spans in tiled mode; command application never waits for animation. Context-panel opening preserves existing content and is idempotent. Agent-closed windows can be restored from a bounded in-memory cache, including after a contradicted voice partial; manual closes retain their discard behavior.
 
 The main workspace accepts an in-memory set of typed views. Desktop opens in a
 tiled arrangement and can switch to overlapping layers; using a layered window

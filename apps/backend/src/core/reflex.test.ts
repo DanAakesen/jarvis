@@ -9,6 +9,7 @@ import {
   reflexActionSignature,
   workspaceReflexSafe,
   logReflexDecision,
+  reflexTargets,
 } from './reflex.js';
 import { workspaceCommandTool } from './workspace-commands.js';
 import { isWorkspaceCommand } from '@jarvis/contracts';
@@ -66,6 +67,30 @@ function response(
 }
 
 describe('Jev reflex classifier', () => {
+  it('does not let slow task discovery consume the workspace classification budget', async () => {
+    vi.useFakeTimers();
+    try {
+      const registry = createToolRegistry([{ id: 'test', tools: [tool(true), workspaceCommandTool] }]);
+      const request = {
+        principal: { objectId: 'owner' },
+        server: {
+          jarvisTools: registry,
+          workspaceCommands: { snapshot: () => ({ windows: [], contextPanelOpen: false }) },
+          taskStore: { list: () => new Promise(() => {}) },
+        },
+      } as unknown as FastifyRequest;
+      const pending = reflexTargets(request, 'tile my windows');
+      await vi.advanceTimersByTimeAsync(150);
+      const targets = await pending;
+      expect(targets).toContainEqual(expect.objectContaining({
+        arguments: expect.objectContaining({ operation: 'layout', arrangement: 'tiled' }),
+      }));
+      expect(targets.some(({ tool }) => tool.name === 'pause_task')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each([
     [0.4, '<0.5'], [0.5, '0.5–0.8'], [0.8, '0.5–0.8'], [0.9, '>0.8'],
   ])('logs confidence %s as %s and explains skipped decisions', (confidence, bucket) => {
@@ -102,7 +127,7 @@ describe('Jev reflex classifier', () => {
     };
     const targets = createReflexTargets([workspaceCommandTool], [], undefined, snapshot);
     expect(createReflexTargets([workspaceCommandTool])).toEqual([]);
-    expect(targets).toHaveLength(15);
+    expect(targets).toHaveLength(16);
     expect(targets.every((target) => isWorkspaceCommand(target.arguments) && workspaceReflexSafe(target))).toBe(true);
     expect(targets.filter(({ arguments: args }) => args.viewId === 'tasks').map(({ arguments: args }) => args.operation))
       .toEqual(['show', 'focus', 'minimise', 'restore', 'close', 'resize']);
@@ -110,7 +135,7 @@ describe('Jev reflex classifier', () => {
     expect(targets).toContainEqual(expect.objectContaining({ arguments: expect.objectContaining({
       operation: 'layout', arrangement: 'tiled',
     }) }));
-    expect(targets.at(-1)?.arguments).toMatchObject({ operation: 'context-panel', action: 'toggle' });
+    expect(targets.at(-2)?.arguments).toMatchObject({ operation: 'context-panel', action: 'open' });
     expect(createReflexTargets([workspaceCommandTool], [], undefined, { ...snapshot, contextPanelOpen: true })
       .at(-1)?.arguments).toMatchObject({ operation: 'context-panel', action: 'close' });
     const fetcher = vi.fn<typeof fetch>(async () => response(targets[0]!.choice));

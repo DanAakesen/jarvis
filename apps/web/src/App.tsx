@@ -144,12 +144,12 @@ function ShellLayout({ signedIn, config, session, camera }: {
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       if (command.operation === 'context-panel') {
         if (command.action === 'open') {
-          contextPanel.show({
+          contextPanel.show(command.view ? {
             title: command.view.title,
             status: 'view',
             view: command.view,
             ...(trustedBlobHost ? { trustedBlobHost } : {}),
-          });
+          } : contextPanel.content);
         } else if (command.action === 'close') {
           contextPanel.close();
         } else {

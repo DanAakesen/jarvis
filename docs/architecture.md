@@ -123,8 +123,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   active `/now/events` session and drops the snapshot on disconnect/reconnect;
   no view content or workspace state is persisted. Jev selects fixed
   `workspace_command` targets for show/focus/minimise/restore/close, a large
-  resize, tiled/layered layout and context-panel visibility. Opening the panel
-  reuses the existing toggle only when the snapshot says it is closed.
+  resize, tiled/layered layout and context-panel visibility. A context-panel
+  `open` command without a view opens existing content idempotently; an `open`
+  command with a generated view retains the original agent-only behavior.
   Creation/update and new generated panel content remain agent-only.
   Workspace operations are safe for stable voice partials as well as chat and
   finals, using the existing owner authentication, validation, audit and
@@ -134,6 +135,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   entire 800 ms classification budget. Chat replay and the voice ledger compare
   semantic arguments without the workspace delivery ID; the agent receives the
   recorded outcome/note rather than repeating the command.
+  Agent-closed generated windows retain up to eight view/geometry entries in
+  client memory for `restore`; a contradicted partial close uses that contract
+  to undo without generating content. Manual closes still discard the view,
+  and reusing a view ID invalidates its retained entry. Older evicted entries
+  cannot be restored and produce an honest refused result.
   Every attempted chat/voice classification emits an allowlisted
   `reflex.decision`: source, addressed, intent, tool (or `none`), confidence
   bucket, completeCommand, executed, bounded reason and latencyMs (0–600,000).

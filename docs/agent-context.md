@@ -272,6 +272,16 @@ Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
 returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
 P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised.
+
+P7-27 passed `npm test` (1,135 tests), `npm run lint`, and `npm run build`.
+Scratch-only auth/API fixtures in Chromium at 1440×1000 and 390×844 verified
+snapshot publication, tile/layer/enlarge, minimise/restore, context-panel
+open/close (including repeated idempotent opens), focus/close and restored
+agent-closed content. Reduced motion remained usable, with no phone overflow
+or page errors. Fake voice tests prove execution before the final transcript
+and no repeated final action. These checks do not prove live Jev/Foundry
+latency; the coordinator must measure “tile my windows” from chat send to
+visible layout change and verify it is under 1.5 seconds after deployment.
 P8-17 was inspected at 390 and 1280 px using a scratch-only signed-in auth stub
 and mock `/settings` and `/database/status` endpoints. The minimise-windows
 toggle was off initially, saved by PATCH, and still on after reload; neither

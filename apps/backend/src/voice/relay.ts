@@ -436,60 +436,60 @@ function registerVoiceRoute(
         let action: ReflexActionResult | null = null;
         let reason: string | undefined;
         try {
-        const ledger = reflexLedger.get(itemId) ?? [];
-        const targets = [
-          ...await reflexTargets(request),
-          ...browserUrlTargets(request, text),
-        ];
-        classification = await app.reflexClassifier.classify(
-          text,
-          language,
-          targets,
-          controller.signal,
-          {
-            executed: ledger.map(({ target, result }) => `${reflexSummary(target, result.outcome)}: ${result.note}`),
-            executedActions: ledger.map(({ id, target, result }) => ({
-              id,
-              summary: `${reflexSummary(target, result.outcome)}: ${result.note}`,
-            })),
-            partial: true,
-          },
-        );
-        const target = classification?.target;
-        if (!classification?.completeCommand) {
-          if (classification) reason = 'incomplete_command';
-          return;
-        }
-        if (!target || !partialSafeTarget(target)) return;
-        const signature = actionSignature(target);
-        if (ledger.some((entry) => entry.signature === signature)) {
-          reason = 'already_executed';
-          return;
-        }
-        const message = await savePartialMessage(itemId, text.trim());
-        action = await executeReflexAction(classification, request, message.id, controller.signal, 'partial');
-        if (!action) return;
-        const entry: VoiceReflexLedgerEntry = {
-          id: `action-${ledger.length + 1}`,
-          target,
-          signature,
-          result: action,
-          undone: false,
-          undoAttempted: false,
-        };
-        ledger.push(entry);
-        reflexLedger.set(itemId, ledger);
-        firstActionLatencyMs ??= performance.now() - receivedAt;
-        if (!english) {
-          sendUpstream({
-            type: 'conversation.item.create',
-            item: {
-              type: 'message',
-              role: 'assistant',
-              content: [{ type: 'input_text', text: `Reflex already did: ${reflexSummary(target, action.outcome)}. ${action.note}` }],
+          const ledger = reflexLedger.get(itemId) ?? [];
+          const targets = [
+            ...await reflexTargets(request),
+            ...browserUrlTargets(request, text),
+          ];
+          classification = await app.reflexClassifier.classify(
+            text,
+            language,
+            targets,
+            controller.signal,
+            {
+              executed: ledger.map(({ target, result }) => `${reflexSummary(target, result.outcome)}: ${result.note}`),
+              executedActions: ledger.map(({ id, target, result }) => ({
+                id,
+                summary: `${reflexSummary(target, result.outcome)}: ${result.note}`,
+              })),
+              partial: true,
             },
-          });
-        }
+          );
+          const target = classification?.target;
+          if (!classification?.completeCommand) {
+            if (classification) reason = 'incomplete_command';
+            return;
+          }
+          if (!target || !partialSafeTarget(target)) return;
+          const signature = actionSignature(target);
+          if (ledger.some((entry) => entry.signature === signature)) {
+            reason = 'already_executed';
+            return;
+          }
+          const message = await savePartialMessage(itemId, text.trim());
+          action = await executeReflexAction(classification, request, message.id, controller.signal, 'partial');
+          if (!action) return;
+          const entry: VoiceReflexLedgerEntry = {
+            id: `action-${ledger.length + 1}`,
+            target,
+            signature,
+            result: action,
+            undone: false,
+            undoAttempted: false,
+          };
+          ledger.push(entry);
+          reflexLedger.set(itemId, ledger);
+          firstActionLatencyMs ??= performance.now() - receivedAt;
+          if (!english) {
+            sendUpstream({
+              type: 'conversation.item.create',
+              item: {
+                type: 'message',
+                role: 'assistant',
+                content: [{ type: 'input_text', text: `Reflex already did: ${reflexSummary(target, action.outcome)}. ${action.note}` }],
+              },
+            });
+          }
         } finally {
           logReflexDecision(request, classification, 'voice-partial', startedAt, controller.signal, action, reason);
         }

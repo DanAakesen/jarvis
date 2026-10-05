@@ -109,7 +109,7 @@ export type WorkspaceCommand =
   | { commandId: string; operation: 'move'; viewId: string; x: number; y: number }
   | { commandId: string; operation: 'resize'; viewId: string; width: number; height: number; x?: number; y?: number }
   | { commandId: string; operation: 'layout'; arrangement: 'tiled' | 'layered' }
-  | { commandId: string; operation: 'context-panel'; action: 'open'; view: GeneratedView }
+  | { commandId: string; operation: 'context-panel'; action: 'open'; view?: GeneratedView }
   | { commandId: string; operation: 'context-panel'; action: 'close' | 'toggle' };
 
 export interface WebResearchSource {

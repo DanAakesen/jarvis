@@ -76,6 +76,7 @@ export const Workspace = forwardRef<WorkspaceController, {
 }>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange }, ref) {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
+  const closedAgentViews = useRef(new Map<string, { view: WorkspaceView; geometry: Geometry | undefined }>());
   const workspaceViews = useMemo(() => [...views, ...agentViews], [agentViews, views]);
   const [arrangement, setArrangement] = useState<Arrangement>('tiled');
   const [order, setOrder] = useState<string[]>([]);
@@ -217,7 +218,19 @@ export const Workspace = forwardRef<WorkspaceController, {
   }, [isViewOpen, minimizedViewIds, workspaceViews]);
 
   const restoreView = useCallback((id: string): boolean => {
-    if (!isViewOpen(id)) return false;
+    const retained = closedAgentViews.current.get(id);
+    if (retained) {
+      closedAgentViews.current.delete(id);
+      setAgentViews((current) => [...current, retained.view]);
+      if (retained.geometry) setGeometry((current) => ({ ...current, [id]: retained.geometry! }));
+      pendingFocus.current = { target: 'window', viewId: id };
+    } else if (!workspaceViews.some((view) => view.id === id)) return false;
+    setClosedViewIds((current) => {
+      if (!current.has(id)) return current;
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
     setForegroundViewId(id);
     if (document.activeElement === tabElements.current.get(id) || (phone && foreground?.id !== id)) {
       pendingFocus.current = { target: 'window', viewId: id };
@@ -228,11 +241,11 @@ export const Workspace = forwardRef<WorkspaceController, {
       next.delete(id);
       return next;
     });
-    setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} restored.`);
+    setAnnouncement(`${retained?.view.title ?? workspaceViews.find((view) => view.id === id)?.title} restored.`);
     return true;
-  }, [foreground?.id, isViewOpen, phone, workspaceViews]);
+  }, [foreground?.id, phone, workspaceViews]);
 
-  const closeView = useCallback((id: string): boolean => {
+  const closeView = useCallback((id: string, reversible = false): boolean => {
     const generated = agentViews.some((view) => view.id === id);
     if (!workspaceViews.some((view) => view.id === id)) return false;
     if (closedViewIds.has(id)) return true;
@@ -244,6 +257,15 @@ export const Workspace = forwardRef<WorkspaceController, {
         : { target: 'workspace' };
     }
     if (generated) {
+      const view = agentViews.find((view) => view.id === id)!;
+      if (reversible) {
+        closedAgentViews.current.set(id, { view, geometry: geometry[id] });
+        if (closedAgentViews.current.size > 8) {
+          closedAgentViews.current.delete(closedAgentViews.current.keys().next().value!);
+        }
+      } else {
+        closedAgentViews.current.delete(id);
+      }
       setAgentViews((current) => current.filter((view) => view.id !== id));
       setClosedViewIds((current) => {
         if (!current.has(id)) return current;
@@ -269,7 +291,7 @@ export const Workspace = forwardRef<WorkspaceController, {
     setMaximizedViewId((current) => current === id ? null : current);
     setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} closed.`);
     return true;
-  }, [agentViews, closedViewIds, minimizedViewIds, openViews, workspaceViews]);
+  }, [agentViews, closedViewIds, geometry, minimizedViewIds, openViews, workspaceViews]);
 
   const focusView = useCallback((id: string): boolean => {
     if (!isViewOpen(id)) return false;
@@ -331,6 +353,7 @@ export const Workspace = forwardRef<WorkspaceController, {
     switch (command.operation) {
       case 'create':
         if (workspaceViews.some((view) => view.id === command.viewId)) return false;
+        closedAgentViews.current.delete(command.viewId);
         setAgentViews((current) => [...current, {
           id: command.viewId,
           title: command.view.title,
@@ -363,7 +386,7 @@ export const Workspace = forwardRef<WorkspaceController, {
       case 'show':
         return focusView(command.viewId);
       case 'close':
-        return closeView(command.viewId);
+        return closeView(command.viewId, true);
       case 'minimise':
         return minimiseView(command.viewId);
       case 'restore':
