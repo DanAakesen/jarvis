@@ -13,6 +13,8 @@ session end reason (P2-14, #226).
 expiring confirmation records (P7-03, #201).
 `0015_screen_frame_usage.sql` adds the screen-frame usage metric and index
 (P7-05, #203).
+`0019_chat_message_steering.sql` adds per-message language overrides and the
+persisted interrupted-reply marker (P8-35).
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only

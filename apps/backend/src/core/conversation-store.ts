@@ -29,8 +29,15 @@ export interface ConversationToolCall {
 export interface ConversationHistoryMessage extends ConversationMessage {
   readonly channel: ConversationChannel;
   readonly language: ConversationLanguage;
+  readonly interrupted: boolean;
   readonly voiceMinutes: number | null;
   readonly toolCalls: readonly ConversationToolCall[];
+}
+
+export interface ConversationSteeringMessage {
+  readonly id: string;
+  readonly text: string;
+  readonly language: ConversationLanguage;
 }
 
 export interface ConversationHistoryPage {
@@ -50,6 +57,8 @@ export interface ConversationStore {
     readonly role: ConversationRole;
     readonly text: string;
     readonly model: string | null;
+    readonly language?: ConversationLanguage;
+    readonly interrupted?: boolean;
     readonly sourceItemId?: string;
   }): Promise<ConversationMessage | null>;
   updateMessage?(messageId: string, text: string): Promise<ConversationMessage | null>;
@@ -58,4 +67,9 @@ export interface ConversationStore {
     readonly limit: number;
     readonly before?: string;
   }): Promise<ConversationHistoryPage>;
+  getDanMessagesAfter(input: {
+    readonly sessionId: string;
+    readonly after: string;
+    readonly limit: number;
+  }): Promise<readonly ConversationSteeringMessage[]>;
 }
