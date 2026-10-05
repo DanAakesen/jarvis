@@ -8,6 +8,7 @@ import { coreModule } from '../core/index.js';
 import { createLogger } from '../logging.js';
 import type { BackendModule } from '../modules.js';
 import { createPcBridgeModule, PC_BRIDGE_SUBPROTOCOL } from './bridge.js';
+import type { PcActOptions, PcActPlanner } from './pc-act.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -34,6 +35,8 @@ afterEach(async () => {
 function fixture(options: {
   timeoutMs?: number;
   onStatusChange?: (online: boolean) => void;
+  pcActPlanner?: PcActPlanner;
+  onPcActStep?: PcActOptions['onStep'];
   runConfirmed?: <T>(summary: string, action: () => Promise<T>, signal: AbortSignal) => Promise<T>;
 } = {}) {
   const output = new Writable({ write(_chunk: Buffer, _encoding, done) { done(); } });
@@ -81,7 +84,7 @@ async function connectBridge(url: string, token = bridgeToken): Promise<WebSocke
 
 async function callTool(
   app: ReturnType<typeof buildApp>,
-  tool: 'pc_open' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act',
+  tool: 'pc_open' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
   payload: Record<string, unknown>,
 ) {
   return app.inject({
@@ -128,6 +131,51 @@ describe('authenticated PC bridge protocol', () => {
     expect(new Set(commands.map(({ id }) => id)).size).toBe(2);
     expect(record).toHaveBeenCalledTimes(2);
     expect(statuses).toEqual([false, true]);
+  });
+
+  it('runs pc_act through the authenticated bridge and redacts its audit and step activity', async () => {
+    const onPcActStep = vi.fn();
+    const planner: PcActPlanner = {
+      decide: vi.fn()
+        .mockResolvedValueOnce({ operation: 'click', confidence: 0.99, targetIndex: 0 })
+        .mockResolvedValueOnce({ operation: 'done', confidence: 0.99 }),
+    };
+    const { app, record } = fixture({ pcActPlanner: planner, onPcActStep });
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const commands: Array<Record<string, unknown>> = [];
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      commands.push(command);
+      const result = command.command === 'uia_snapshot'
+        ? {
+          snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+          application: 'vscode',
+          elements: [{ index: 0, role: 'button', name: 'Open project' }],
+        }
+        : { acted: true, action: 'click' };
+      bridge.send(JSON.stringify({ id: command.id, type: 'result', result }));
+    });
+
+    const response = await callTool(app, 'pc_act', { goal: 'Open the project' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      outcome: 'ok',
+      result: { status: 'completed', steps: 2 },
+    });
+    expect(commands.map(command => command.command)).toEqual([
+      'uia_snapshot', 'uia_act', 'uia_snapshot',
+    ]);
+    expect(planner.decide).toHaveBeenCalledTimes(2);
+    expect(onPcActStep.mock.calls.map(([event]) => event)).toEqual([
+      { step: 1, action: 'click', outcome: 'completed' },
+      { step: 2, action: 'done', outcome: 'completed' },
+    ]);
+    expect(record.mock.calls.map(([call]) => call.arguments)).toEqual([{ redacted: true }]);
+    expect(record.mock.calls.map(([call]) => call.result)).toEqual([{ redacted: true }]);
+    expect(JSON.stringify({ response: response.json(), activity: onPcActStep.mock.calls, commands }))
+      .not.toMatch(/Open project|Open the project|secret|screenshot/iu);
   });
 
   it('routes URL targets through the bridge and preserves its disconnected-extension fallback note', async () => {

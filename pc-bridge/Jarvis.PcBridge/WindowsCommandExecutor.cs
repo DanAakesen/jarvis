@@ -11,6 +11,7 @@ public sealed class WindowsCommandExecutor
     private const string RepoRoot = @"C:\Repo";
     private const string BrowserFallbackNote =
         "Opened in Chrome directly because the Jarvis Chrome extension isn't connected.";
+    private readonly UiAutomationExecutor _uiAutomation = new(new WindowsUiAutomationProvider());
 
     public Task<object> ExecuteAsync(BridgeCommand command, CancellationToken cancellationToken)
     {
@@ -25,12 +26,42 @@ public sealed class WindowsCommandExecutor
             "open_folder" => OpenFolder(command.Arguments.GetProperty("relativePath").GetString()!),
             "active_window" => ReadActiveWindow(),
             "focus_window" => FocusWindow(command.Arguments.GetProperty("title").GetString()!),
+            "uia_snapshot" => _uiAutomation.Observe(cancellationToken),
+            "uia_act" => ActOnUiAutomation(command.Arguments, cancellationToken),
             _ => throw new CommandRefusedException("not_allowed"),
         };
         return Task.FromResult(result);
     }
 
     // Dan uses Chrome only: never hand a website to the Windows default browser (Edge).
+    private object ActOnUiAutomation(JsonElement arguments, CancellationToken cancellationToken)
+    {
+        var actionName = arguments.GetProperty("action").GetString()!;
+        var action = actionName switch
+        {
+            "click" => UiAutomationAction.Click,
+            "type" => UiAutomationAction.Type,
+            "scroll_up" => UiAutomationAction.ScrollUp,
+            "scroll_down" => UiAutomationAction.ScrollDown,
+            _ => throw new CommandRefusedException("not_allowed"),
+        };
+        var acted = _uiAutomation.Act(
+            arguments.GetProperty("snapshotId").GetString()!,
+            arguments.GetProperty("elementIndex").GetInt32(),
+            action,
+            action == UiAutomationAction.Type ? arguments.GetProperty("text").GetString() : null,
+            action == UiAutomationAction.Click && arguments.GetProperty("confirmed").GetBoolean(),
+            cancellationToken);
+        return acted
+            ? new { acted = true, action = actionName }
+            : new
+            {
+                confirmationRequired = true,
+                actionKind = "computer_use",
+                summary = "Activate a potentially destructive Windows control.",
+            };
+    }
+
     public object OpenUrlInDefaultBrowser(string value)
     {
         if (!CommandPolicy.TryNormalizeUrl(value, out var url)) throw new CommandRefusedException("not_allowed");

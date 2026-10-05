@@ -1,0 +1,250 @@
+import type { FastifyRequest } from 'fastify';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  createJevPcActPlanner,
+  runPcAct,
+  type PcActBridge,
+  type PcActDecision,
+  type PcActSnapshot,
+} from './pc-act.js';
+
+const snapshot: PcActSnapshot = {
+  snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+  application: 'vscode',
+  elements: [{ index: 0, role: 'button', name: 'Open project' }],
+};
+
+function request(principal: 'agent' | 'other' = 'agent'): FastifyRequest {
+  return {
+    agentPrincipal: principal === 'agent' ? { objectId: 'jarvis' } : null,
+    principal: principal === 'other' ? { objectId: 'someone-else' } : null,
+    server: { ownerObjectId: 'dan' },
+  } as unknown as FastifyRequest;
+}
+
+function decision(operation: PcActDecision['operation'], targetIndex?: number, text?: string): PcActDecision {
+  return {
+    operation,
+    confidence: 0.99,
+    ...(targetIndex === undefined ? {} : { targetIndex }),
+    ...(text === undefined ? {} : { text }),
+  };
+}
+
+function bridge(overrides: Partial<PcActBridge> = {}): PcActBridge {
+  return {
+    observe: vi.fn(async () => snapshot),
+    act: vi.fn(async ({ action }) => ({ acted: true, action })),
+    ...overrides,
+  };
+}
+
+function jevResponse(answers: Record<string, unknown>): Response {
+  return new Response(JSON.stringify({ answers }), {
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+describe('pc_act Jev planner', () => {
+  it('sends one bounded Jev decision the observed Windows controls and exact user-quoted values', async () => {
+    const fetcher = vi.fn(async () => jevResponse({
+      operation: { type: 'choice', choice: 'type', confidence: 0.99 },
+      target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
+      text_value: { type: 'choice', choice: 'value_0', confidence: 0.99 },
+      confidence: { type: 'score', score: 0.99 },
+    }));
+    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+
+    const result = await planner.decide({
+      goal: 'Enter "Jarvis issue 205"',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal);
+
+    expect(result).toEqual({
+      operation: 'type', confidence: 0.99, targetIndex: 0, text: 'Jarvis issue 205',
+    });
+    expect(fetcher).toHaveBeenCalledOnce();
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe('https://api.typesafe.ai/v1/systemone');
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    expect(body.model).toBe('jev-latest');
+    expect(JSON.stringify(body)).toContain('Jarvis issue 205');
+    expect(JSON.stringify(body)).not.toContain('value:');
+    expect(init?.redirect).toBe('error');
+  });
+
+  it('refuses sensitive goals and missing Jev keys without making a request', async () => {
+    const fetcher = vi.fn();
+    const planner = createJevPcActPlanner(async () => undefined, fetcher);
+
+    await expect(planner.decide({
+      goal: 'Type my password into the field',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toBeNull();
+    await expect(planner.decide({
+      goal: 'Click the open button',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe('pc_act bounded Windows control loop', () => {
+  it('uses one Jev decision for each fresh snapshot and logs only redacted step metadata', async () => {
+    const pcBridge = bridge();
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+    const onStep = vi.fn();
+
+    const result = await runPcAct(
+      { goal: 'Open the project' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, onStep },
+    );
+
+    expect(result).toMatchObject({ status: 'completed', steps: 2 });
+    expect(pcBridge.observe).toHaveBeenCalledTimes(2);
+    expect(planner.decide).toHaveBeenCalledTimes(2);
+    expect(pcBridge.act).toHaveBeenCalledWith({
+      snapshotId: snapshot.snapshotId,
+      elementIndex: 0,
+      action: 'click',
+      confirmed: false,
+    }, expect.any(AbortSignal));
+    expect(onStep.mock.calls.map(([event]) => event)).toEqual([
+      { step: 1, action: 'click', outcome: 'completed' },
+      { step: 2, action: 'done', outcome: 'completed' },
+    ]);
+    expect(JSON.stringify(onStep.mock.calls)).not.toMatch(/Open project|Jarvis|goal|text/iu);
+  });
+
+  it('requires the existing approval flow for risky actions and retries the same observed target', async () => {
+    const pcBridge = bridge({
+      act: vi.fn()
+        .mockResolvedValueOnce({
+          confirmationRequired: true,
+          actionKind: 'computer_use',
+          summary: 'Activate a potentially destructive Windows control.',
+        })
+        .mockResolvedValueOnce({ acted: true, action: 'click' }),
+    });
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+
+    const result = await runPcAct(
+      { goal: 'Open this project' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, runConfirmed },
+    );
+
+    expect(result.status).toBe('completed');
+    expect(runConfirmed).toHaveBeenCalledWith(
+      'Activate a potentially destructive Windows control.',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+    expect(pcBridge.act).toHaveBeenNthCalledWith(1, expect.objectContaining({ confirmed: false }), expect.any(AbortSignal));
+    expect(pcBridge.act).toHaveBeenNthCalledWith(2, expect.objectContaining({ confirmed: true }), expect.any(AbortSignal));
+  });
+
+  it('never executes a risky action if the approval service is unavailable', async () => {
+    const pcBridge = bridge();
+    const planner = { decide: vi.fn().mockResolvedValue(decision('click', 0)) };
+
+    await expect(runPcAct(
+      { goal: 'Delete this project' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner },
+    )).rejects.toThrow(/approval service is unavailable/u);
+    expect(pcBridge.act).not.toHaveBeenCalled();
+  });
+
+  it('refuses injected text that was not explicitly quoted and refuses unverified callers', async () => {
+    const pcBridge = bridge();
+    const planner = { decide: vi.fn().mockResolvedValue(decision('type', 0, 'unquoted model text')) };
+
+    await expect(runPcAct(
+      { goal: 'Enter a value' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner },
+    )).rejects.toThrow(/quoted in the request/u);
+    expect(pcBridge.act).not.toHaveBeenCalled();
+
+    await expect(runPcAct(
+      { goal: 'Click the button' },
+      request('other'),
+      new AbortController().signal,
+      pcBridge,
+      { planner },
+    )).rejects.toThrow(/verified Dan session/u);
+    expect(pcBridge.observe).toHaveBeenCalledOnce();
+  });
+
+  it('stops before observing when cancelled', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const pcBridge = bridge();
+
+    await expect(runPcAct(
+      { goal: 'Open the project' },
+      request(),
+      controller.signal,
+      pcBridge,
+      { planner: { decide: vi.fn() } },
+    )).rejects.toThrow(/stopped before completion/u);
+    expect(pcBridge.observe).not.toHaveBeenCalled();
+  });
+
+  it('does not execute a decision returned after cancellation', async () => {
+    const controller = new AbortController();
+    const pcBridge = bridge();
+    const planner = {
+      decide: vi.fn(async () => {
+        controller.abort();
+        return decision('click', 0);
+      }),
+    };
+
+    await expect(runPcAct(
+      { goal: 'Open the project' },
+      request(),
+      controller.signal,
+      pcBridge,
+      { planner },
+    )).rejects.toThrow(/stopped before completion/u);
+    expect(pcBridge.act).not.toHaveBeenCalled();
+  });
+
+  it('stops after twenty actions without a completion decision', async () => {
+    const pcBridge = bridge();
+    const planner = { decide: vi.fn().mockResolvedValue(decision('click', 0)) };
+
+    await expect(runPcAct(
+      { goal: 'Open the project' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner },
+    )).rejects.toThrow(/stopped after 20 steps/u);
+    expect(pcBridge.observe).toHaveBeenCalledTimes(20);
+    expect(planner.decide).toHaveBeenCalledTimes(20);
+    expect(pcBridge.act).toHaveBeenCalledTimes(20);
+  });
+});
