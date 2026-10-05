@@ -99,9 +99,14 @@ public sealed class BridgeClient(
                 byte[] response;
                 try
                 {
-                    var value = command.Command.StartsWith("browser_", StringComparison.Ordinal)
-                        ? await browserExecutor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false)
-                        : await executor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
+                    var value = command.Command == "open_url"
+                        ? await browserExecutor.OpenUrlAsync(
+                            command.Arguments.GetProperty("url").GetString()!,
+                            executor.OpenUrlInDefaultBrowser,
+                            cancellationToken).ConfigureAwait(false)
+                        : command.Command.StartsWith("browser_", StringComparison.Ordinal)
+                            ? await browserExecutor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false)
+                            : await executor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
                     response = BridgeProtocol.Success(command.Id, value);
                 }
                 catch (CommandRefusedException exception)

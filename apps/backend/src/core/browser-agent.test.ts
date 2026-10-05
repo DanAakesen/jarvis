@@ -66,7 +66,7 @@ function fixture(
     actions.push(input as BrowserActionInput);
     return { acted: true, action: (input as BrowserActionInput).action };
   });
-  const openUrl = vi.fn(async () => ({ opened: true }));
+  const openUrl = vi.fn(async (): Promise<Record<string, unknown>> => ({ opened: true }));
   const tools = new Map([
     ['pc_browser_tabs', { execute: listTabs }],
     ['pc_browser_snapshot', { execute: getSnapshot }],
@@ -280,6 +280,15 @@ describe('Jev browser agent', () => {
       goal: 'Open unsafe content',
       url: 'javascript:alert(1)',
     }, env.request, new AbortController().signal)).rejects.toThrow(/HTTP or HTTPS/u);
+
+    const disconnected = fixture(fixedPlanner({ operation: 'done' }));
+    const fallbackNote = "Opened in your default browser because the Chrome extension isn't connected.";
+    disconnected.openUrl.mockResolvedValueOnce({ opened: true, note: fallbackNote });
+    await expect(disconnected.agent.runClause({
+      goal: 'Open the website',
+      url: 'https://example.test/',
+    }, disconnected.request, new AbortController().signal)).rejects.toThrow(fallbackNote);
+    expect(disconnected.listTabs).not.toHaveBeenCalled();
   });
 
   it('resolves the shared display title against Chrome tabs and runs the Jev agent on that match', async () => {

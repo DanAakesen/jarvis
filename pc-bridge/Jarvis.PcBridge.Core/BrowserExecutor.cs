@@ -85,6 +85,23 @@ public sealed class BrowserExecutor : IDisposable
         };
     }
 
+    public async Task<object> OpenUrlAsync(
+        string url,
+        Func<string, object> openInDefaultBrowser,
+        CancellationToken cancellationToken)
+    {
+        if (!CommandPolicy.TryNormalizeUrl(url, out var normalized))
+            throw new BrowserActionRefusedException("not_allowed");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var extension = _extensionPort;
+        if (extension?.IsConnected != true) return openInDefaultBrowser(normalized);
+        if (!_isEnabled()) throw new BrowserActionRefusedException("browser_off");
+
+        await extension.OpenUrlAsync(normalized, cancellationToken).ConfigureAwait(false);
+        return new { opened = true };
+    }
+
     private async Task<object> ListTabsAsync(int offset, CancellationToken cancellationToken)
     {
         if (_extensionPort?.IsConnected == true)

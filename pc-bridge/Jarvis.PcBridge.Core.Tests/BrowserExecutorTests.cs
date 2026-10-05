@@ -6,6 +6,55 @@ namespace Jarvis.PcBridge.Core.Tests;
 public sealed class BrowserExecutorTests
 {
     [Fact]
+    public async Task Opens_urls_in_the_connected_extension_and_only_falls_back_when_it_is_disconnected()
+    {
+        await using var target = await FakeCdpTarget.StartAsync();
+        await using var extension = new FakeExtensionBrowserPort(target);
+        using var executor = new BrowserExecutor(() => true, () => null, extensionPort: extension);
+
+        var opened = await executor.OpenUrlAsync(
+            "https://google.com",
+            _ => throw new InvalidOperationException("Shell fallback should not run for a connected extension."),
+            CancellationToken.None);
+
+        Assert.Equal(true, opened.GetType().GetProperty("opened")!.GetValue(opened));
+        Assert.Equal(["https://google.com/"], extension.OpenedUrls);
+
+        extension.IsConnected = false;
+        const string fallbackNote =
+            "Opened in your default browser because the Chrome extension isn't connected.";
+        var fallback = await executor.OpenUrlAsync(
+            "https://example.test/",
+            url => new { opened = true, note = fallbackNote, url },
+            CancellationToken.None);
+
+        Assert.Equal(fallbackNote, fallback.GetType().GetProperty("note")!.GetValue(fallback));
+        Assert.Equal("https://example.test/", fallback.GetType().GetProperty("url")!.GetValue(fallback));
+    }
+
+    [Fact]
+    public async Task Refuses_chrome_routing_when_the_extension_is_connected_but_automation_is_off()
+    {
+        await using var target = await FakeCdpTarget.StartAsync();
+        await using var extension = new FakeExtensionBrowserPort(target);
+        using var executor = new BrowserExecutor(() => false, () => null, extensionPort: extension);
+        var shellCalled = false;
+
+        var error = await Assert.ThrowsAsync<BrowserActionRefusedException>(() => executor.OpenUrlAsync(
+            "https://example.test/",
+            _ =>
+            {
+                shellCalled = true;
+                return new { opened = true };
+            },
+            CancellationToken.None));
+
+        Assert.Equal("browser_off", error.Code);
+        Assert.False(shellCalled);
+        Assert.Empty(extension.OpenedUrls);
+    }
+
+    [Fact]
     public async Task Lists_tabs_takes_a_node_bound_snapshot_and_acts_on_the_observed_index()
     {
         await using var target = await FakeCdpTarget.StartAsync();

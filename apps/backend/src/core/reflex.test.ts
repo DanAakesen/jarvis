@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createToolRegistry } from './tool-registry.js';
 import {
+  createBrowserUrlTargets,
   createJevReflexClassifier,
   createReflexTargets,
   findChatReflexReplay,
@@ -33,6 +34,23 @@ function browserTool() {
       additionalProperties: false,
     },
     reflexSafe: true,
+    execute: vi.fn(async () => ({})),
+  };
+}
+
+function pcOpenTool() {
+  return {
+    name: 'pc_open',
+    description: 'Open files and apps; websites open in Dan’s Chrome.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', enum: ['url', 'app', 'folder', 'window'] },
+        value: { type: 'string' },
+      },
+      required: ['target', 'value'],
+      additionalProperties: false,
+    },
     execute: vi.fn(async () => ({})),
   };
 }
@@ -171,6 +189,24 @@ describe('Jev reflex classifier', () => {
     ]);
     expect(createReflexTargets(tools.list())).toEqual([]);
     expect(createReflexTargets(tools.list(), [], 'x'.repeat(4_001))).toEqual([]);
+  });
+
+  it('offers URL reflexes as pc_open URL targets instead of choosing Edge for browser requests', () => {
+    const tools = createToolRegistry([{ id: 'pc-bridge', tools: [pcOpenTool()] }]);
+    const openUrl = tools.get('pc_open');
+
+    expect(createBrowserUrlTargets(openUrl, 'Open google.com')).toMatchObject([
+      {
+        choice: 'open_url',
+        tool: { name: 'pc_open' },
+        arguments: { target: 'url', value: 'https://google.com/' },
+      },
+    ]);
+    expect(createBrowserUrlTargets(openUrl, 'Go to google')).toMatchObject([
+      { arguments: { target: 'url', value: 'https://www.google.com/' } },
+    ]);
+    expect(createBrowserUrlTargets(openUrl, 'Open my browser')).toEqual([]);
+    expect(createBrowserUrlTargets(undefined, 'Open google.com')).toEqual([]);
   });
 
   it('falls through on low-confidence, malformed, missing-key, and rejected responses', async () => {

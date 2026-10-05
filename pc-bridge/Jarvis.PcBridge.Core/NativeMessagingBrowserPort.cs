@@ -31,6 +31,25 @@ public sealed class NativeMessagingBrowserPort : IExtensionBrowserPort, IAsyncDi
     public bool IsConnected => _connection?.IsConnected == true;
     public event Action<string>? TabRemoved;
 
+    public async Task OpenUrlAsync(string url, CancellationToken cancellationToken)
+    {
+        if (!CommandPolicy.TryNormalizeUrl(url, out var normalized))
+            throw new BrowserActionRefusedException("not_allowed");
+
+        using var response = await RequestAsync(new { type = "open_url", url = normalized }, cancellationToken)
+            .ConfigureAwait(false);
+        ThrowIfError(response.RootElement);
+        if (response.RootElement.GetProperty("type").GetString() != "result" ||
+            !response.RootElement.TryGetProperty("result", out var result) ||
+            result.ValueKind != JsonValueKind.Object ||
+            result.EnumerateObject().Count() != 2 ||
+            !result.TryGetProperty("opened", out var opened) || opened.ValueKind != JsonValueKind.True ||
+            !result.TryGetProperty("focused", out var focused) || focused.ValueKind != JsonValueKind.True)
+        {
+            throw new BrowserActionRefusedException("failed");
+        }
+    }
+
     public async Task<BrowserTabPage> ListTabsAsync(
         int offset,
         int limit,

@@ -1252,6 +1252,17 @@ describe('committed domain schema (groups 1-8)', () => {
     await expect(pool.request().query(statement)).rejects.toThrow(constraint);
   });
 
+  it('records refused tool calls (0018)', async () => {
+    const session = await scalar("INSERT dbo.jarvis_sessions (channel, language) VALUES (N'chat', N'en')");
+    const message = await scalar(`INSERT dbo.messages (jarvis_session_id, role, text)
+      VALUES (${String(session)}, N'dan', N'Show my tasks in a window')`);
+    const call = await scalar(`INSERT dbo.tool_calls (message_id, tool, arguments, result, outcome)
+      VALUES (${String(message)}, N'workspace_command', N'{"redacted":true}', N'{"redacted":true}', N'refused')`);
+    expect(call).toBeDefined();
+    // Remove the row so the revert-all test below can run 0018's guarded down script.
+    await pool.request().query(`DELETE dbo.tool_calls WHERE id = ${String(call)}`);
+  });
+
   it('refuses to revert a migration that is not the latest applied one and keeps state on failure', async () => {
     const committed = await readMigrations();
     const text = 'CREATE TABLE dbo.revert_fixture (id int);';

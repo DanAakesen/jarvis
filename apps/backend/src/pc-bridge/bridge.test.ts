@@ -130,6 +130,35 @@ describe('authenticated PC bridge protocol', () => {
     expect(statuses).toEqual([false, true]);
   });
 
+  it('routes URL targets through the bridge and preserves its disconnected-extension fallback note', async () => {
+    const { app } = fixture();
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const fallbackNote = "Opened in your default browser because the Chrome extension isn't connected.";
+    const commands: Array<Record<string, unknown>> = [];
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      commands.push(command);
+      bridge.send(JSON.stringify({
+        id: command.id,
+        type: 'result',
+        result: { opened: true, note: fallbackNote },
+      }));
+    });
+
+    const opened = await callTool(app, 'pc_open', { target: 'url', value: 'https://google.com' });
+
+    expect(opened.json()).toMatchObject({
+      outcome: 'ok',
+      result: { opened: true, note: fallbackNote },
+    });
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toMatchObject({
+      command: 'open_url',
+      arguments: { url: 'https://google.com/' },
+    });
+  });
+
     it('routes browser tabs, atomic snapshots and actions through the bridge and confirms risky clicks', async () => {
       const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
       const { app, record } = fixture({ runConfirmed });
