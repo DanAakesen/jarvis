@@ -569,7 +569,10 @@ function browserExecutor(request: FastifyRequest): BrowserExecutor {
     async openUrl(url, signal) {
       const safe = safeUrl(url);
       if (!safe) throw new ToolRefusal('Only valid HTTP or HTTPS browser URLs can be opened.');
-      await invoke('pc_open', { target: 'url', value: safe }, signal);
+      const result = await invoke('pc_open', { target: 'url', value: safe }, signal);
+      if (isRecord(result) && typeof result.note === 'string') {
+        throw new ToolRefusal(result.note);
+      }
     },
     async listTabs(signal) {
       const tabs: BrowserTab[] = [];
@@ -1098,7 +1101,7 @@ export function createBrowserAgentModule(agent: BrowserAgent): BackendModule {
     tools: [
       {
         name: 'browser_do',
-        description: 'Use Jev to complete a bounded task in Dan’s Chrome using only fresh, observed elements. High-impact clicks use Dan’s confirmation. Stops on unsafe input, low confidence, time or step limits.',
+        description: 'Use Jev for website navigation and bounded tasks in Dan’s Chrome, opening requested URLs in a foreground tab. Use only fresh, observed elements; high-impact clicks require Dan’s confirmation. Stops on unsafe input, low confidence, time or step limits.',
         inputSchema: {
           type: 'object',
           properties: {
