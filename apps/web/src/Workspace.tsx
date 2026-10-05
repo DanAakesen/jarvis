@@ -21,6 +21,8 @@ export type WorkspaceCommand = {
 
 export interface WorkspaceController {
   dispatch: (command: WorkspaceCommand) => boolean;
+  minimiseAll: () => void;
+  hasVisibleViews: () => boolean;
 }
 
 type Arrangement = 'tiled' | 'layered';
@@ -64,7 +66,10 @@ function defaultGeometry(index: number): Geometry {
   };
 }
 
-export const Workspace = forwardRef<WorkspaceController, { views: readonly WorkspaceView[] }>(function Workspace({ views }, ref) {
+export const Workspace = forwardRef<WorkspaceController, {
+  views: readonly WorkspaceView[];
+  onVisibleViewsChange?: (visible: boolean) => void;
+}>(function Workspace({ views, onVisibleViewsChange }, ref) {
   const workspaceId = useId();
   const [arrangement, setArrangement] = useState<Arrangement>('tiled');
   const [order, setOrder] = useState<string[]>([]);
@@ -117,6 +122,11 @@ export const Workspace = forwardRef<WorkspaceController, { views: readonly Works
   const activeMaximizedViewId = maximizedViewId && viewIds.has(maximizedViewId) ? maximizedViewId : null;
   const openViews = useMemo(() => orderedViews.filter((view) => !closedViewIds.has(view.id)), [closedViewIds, orderedViews]);
   const minimizedViews = useMemo(() => openViews.filter((view) => minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
+  const visibleViews = useMemo(() => openViews.filter((view) => !minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
+
+  useEffect(() => {
+    onVisibleViewsChange?.(visibleViews.length > 0);
+  }, [onVisibleViewsChange, visibleViews.length]);
 
   useLayoutEffect(() => {
     const next = pendingFocus.current;
@@ -210,6 +220,16 @@ export const Workspace = forwardRef<WorkspaceController, { views: readonly Works
     return true;
   }, [isViewOpen, orderedViews, reorder, restoreView]);
 
+  const minimiseAll = useCallback(() => {
+    const ids = visibleViews.map(({ id }) => id);
+    if (ids.length === 0) return;
+    const focusedId = ids.find((id) => windowElements.current.get(id)?.contains(document.activeElement));
+    if (focusedId) pendingFocus.current = { target: 'tab', viewId: focusedId };
+    setMaximizedViewId(null);
+    setMinimizedViewIds((current) => new Set([...current, ...ids]));
+    setAnnouncement(`${ids.length} ${ids.length === 1 ? 'window' : 'windows'} minimised.`);
+  }, [visibleViews]);
+
   useImperativeHandle(ref, () => ({
     dispatch(command) {
       switch (command.operation) {
@@ -223,7 +243,9 @@ export const Workspace = forwardRef<WorkspaceController, { views: readonly Works
           return closeView(command.viewId);
       }
     },
-  }), [closeView, focusView, minimiseView, restoreView]);
+    minimiseAll,
+    hasVisibleViews: () => visibleViews.length > 0,
+  }), [closeView, focusView, minimiseAll, minimiseView, restoreView, visibleViews.length]);
 
   function raiseView(event: { target: EventTarget }, id: string) {
     if (arrangement !== 'layered' || narrow) return;

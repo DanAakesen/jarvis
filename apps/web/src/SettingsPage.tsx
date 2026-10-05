@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { backendFetch } from './backend-request';
 import { useThemePreference } from './theme-preference-context';
+import { readVoiceWorkspacePreference, saveVoiceWorkspacePreference } from './voice-workspace-preference';
 
 interface Settings {
   appearance: { theme: 'light' | 'dark' };
@@ -218,6 +219,11 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState(backendUrl ? '' : 'Settings are unavailable until the backend is deployed.');
+  const [minimizeWindowsOnVoiceStart, setMinimizeWindowsOnVoiceStart] = useState(
+    () => readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart,
+  );
+  const [voicePreferenceMessage, setVoicePreferenceMessage] = useState('');
+  const [voicePreferenceError, setVoicePreferenceError] = useState('');
 
   const load = useCallback(async () => {
     if (!backendUrl) {
@@ -268,6 +274,18 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
       [area]: { ...current[area], [key]: value },
     }) : current);
     setMessage('');
+  };
+
+  const updateVoiceWorkspacePreference = (value: boolean) => {
+    try {
+      saveVoiceWorkspacePreference(value);
+      setMinimizeWindowsOnVoiceStart(value);
+      setVoicePreferenceMessage('Saved on this device.');
+      setVoicePreferenceError('');
+    } catch {
+      setVoicePreferenceError('This preference could not be saved on this device.');
+      setVoicePreferenceMessage('');
+    }
   };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
@@ -381,6 +399,16 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
                 options={options.languages} disabled={saving}
                 onChange={(value) => update('voice', 'defaultLanguage', value as 'da' | 'en')} />
             </div>
+            <label className="choice voice-window-preference" htmlFor="minimize-windows-on-voice-start">
+              <input id="minimize-windows-on-voice-start" type="checkbox"
+                checked={minimizeWindowsOnVoiceStart}
+                onChange={(event) => updateVoiceWorkspacePreference(event.target.checked)} />
+              Minimise all windows when starting voice
+            </label>
+            <p className="settings-explanation">Off by default. This preference is saved on this device until account settings persistence is available.</p>
+            {voicePreferenceError && <p className="settings-feedback" role="alert">{voicePreferenceError}</p>}
+            {!voicePreferenceError && voicePreferenceMessage &&
+              <p className="settings-feedback" role="status">{voicePreferenceMessage}</p>}
             <p className="settings-explanation" id="voice-sample-help">Voice samples will be available when voice playback is connected.</p>
             <div className="settings-actions">
               <button className="secondary-button" type="button" disabled aria-describedby="voice-sample-help">Play English sample</button>

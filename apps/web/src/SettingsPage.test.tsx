@@ -82,6 +82,7 @@ function renderSettingsPage(url: string | null = backendUrl) {
 beforeEach(() => {
   getAccessToken.mockClear();
   fetchMock.mockReset();
+  localStorage.clear();
   themePreference.saveTheme.mockClear();
   themePreference.retry.mockClear();
   vi.stubGlobal('fetch', fetchMock);
@@ -153,6 +154,21 @@ describe('SettingsPage', () => {
 
     await user.click(screen.getByRole('radio', { name: 'Dark' }));
     expect(themePreference.saveTheme).toHaveBeenCalledWith('dark');
+  });
+
+  it('saves the default-off voice window preference locally in the future settings shape', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()));
+    renderSettingsPage();
+
+    const toggle = await screen.findByRole('checkbox', { name: 'Minimise all windows when starting voice' });
+    expect(toggle).toHaveProperty('checked', false);
+    await user.click(toggle);
+
+    expect(JSON.parse(localStorage.getItem('jarvis.voice-workspace-preference') ?? '{}')).toEqual({
+      voice: { minimizeWindowsOnVoiceStart: true },
+    });
+    expect(screen.getByText('Saved on this device.').getAttribute('role')).toBe('status');
   });
 
   it('shows credential dates and status without exposing values', async () => {

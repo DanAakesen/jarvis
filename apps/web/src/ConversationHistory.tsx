@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { Link } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
 import type { CameraController, ScreenShareController } from './screen-sharing';
 import { VoiceControls } from './VoiceControls';
+import { useVoiceWorkspace } from './voice-workspace-state';
 import { useJarvisActivity } from './activity-context';
 import {
   createChatSession,
@@ -46,6 +47,7 @@ export function ConversationHistory({
   camera?: CameraController;
 }) {
   const { beginWorking } = useJarvisActivity();
+  const { onVoiceActiveChange } = useVoiceWorkspace();
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,6 +72,10 @@ export function ConversationHistory({
   const replyEnd = useRef<HTMLDivElement>(null);
   const wasBusy = useRef(false);
   const lastMessageId = messages.at(-1)?.id;
+  const updateVoiceActive = useCallback((active: boolean) => {
+    setVoiceActive(active);
+    onVoiceActiveChange(active);
+  }, [onVoiceActiveChange]);
 
   useEffect(() => {
     if (!voiceActive) replyEnd.current?.scrollIntoView?.({ block: 'end' });
@@ -363,7 +369,7 @@ export function ConversationHistory({
         {...(camera ? { camera } : {})}
         language={language}
         disabled={sending}
-        onActiveChange={setVoiceActive}
+        onActiveChange={updateVoiceActive}
         onSessionEnded={() => {
           screenShare?.stop();
           camera?.stop();

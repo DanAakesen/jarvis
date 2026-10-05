@@ -12,6 +12,7 @@ const {
   createChatSession,
   sendChatTurn,
   makeAuthClient,
+  voiceSessions,
 } = vi.hoisted(() => {
   const account = { homeAccountId: 'dan' };
   const makeAuthClient = () => ({
@@ -28,16 +29,42 @@ const {
     createChatSession: vi.fn(),
     sendChatTurn: vi.fn(),
     makeAuthClient,
+    voiceSessions: [] as Array<{
+      options: {
+        onStatus: (status: string, message: string) => void;
+        onSessionEnded?: () => void;
+      };
+    }>,
   };
 });
 vi.mock('./auth', () => ({ createAuthClient, restoreProfile, signIn }));
 vi.mock('./conversation-history', () => ({ loadConversationHistory, createChatSession, sendChatTurn }));
+vi.mock('./voice-client', () => ({
+  BrowserVoiceClient: class {
+    constructor(private readonly options: {
+      onStatus: (status: string, message: string) => void;
+      onSessionEnded?: () => void;
+    }) {
+      voiceSessions.push({ options });
+    }
+    start() { this.options.onStatus('ready', 'Microphone is off.'); }
+    stop() {
+      this.options.onStatus('stopped', 'Voice is off.');
+      this.options.onSessionEnded?.();
+    }
+    enableMicrophone = vi.fn(async () => {});
+    setMuted = vi.fn();
+    sendScreenContext = vi.fn();
+  },
+}));
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com' };
 const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  voiceSessions.length = 0;
+  localStorage.clear();
   createAuthClient.mockReturnValue(makeAuthClient());
   restoreProfile.mockResolvedValue(null);
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
@@ -207,6 +234,7 @@ describe('App shell', () => {
       if (path === '/now') return pendingFeed;
       return new Response(JSON.stringify({ state: 'awake' }));
     });
+
     await renderSignedIn();
     expect((await screen.findByText('Waking Jarvis…')).getAttribute('role')).toBe('status');
     resolveFeed(new Response(JSON.stringify({
@@ -214,6 +242,24 @@ describe('App shell', () => {
     })));
     await screen.findByText('No tasks are running.');
     expect(screen.queryByText('Waking Jarvis…')).toBeNull();
+  });
+
+  it('enters fullscreen voice immediately and restores the typing shell when voice ends', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    const shell = screen.getByRole('navigation', { name: 'Areas' }).closest('.app-shell');
+    expect(shell?.getAttribute('data-voice-active')).toBe('false');
+    await user.click(screen.getByRole('button', { name: 'Start voice' }));
+
+    expect(shell?.getAttribute('data-voice-active')).toBe('true');
+    expect(shell?.getAttribute('data-voice-has-windows')).toBe('false');
+    expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'End voice' })).not.toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'End voice' }));
+    expect(shell?.getAttribute('data-voice-active')).toBe('false');
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
   });
 
   it('shows the working indicator only while a real chat turn is pending', async () => {
