@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import type { WorkspaceCommand } from '@jarvis/contracts';
+import type { JarvisActivityEvent, WorkspaceCommand } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
@@ -24,6 +24,21 @@ import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { readVoiceWorkspacePreference } from './voice-workspace-preference';
 
 type ShellIconName = 'home' | 'factory' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close';
+
+function activityLabel(event: JarvisActivityEvent | null): string {
+  if (!event) return 'Jarvis is working';
+  if (event.type === 'tool-call-started') return `Using ${event.toolName}`;
+  if (event.type === 'tool-call-finished') return `${event.toolName} · ${event.outcome}`;
+  switch (event.type) {
+    case 'listening': return 'Listening';
+    case 'thinking': return 'Jarvis is thinking';
+    case 'speaking': return 'Jarvis is speaking';
+    case 'interrupted': return 'Jarvis was interrupted';
+    case 'reconnecting': return 'Reconnecting voice';
+    case 'failed': return 'Jarvis activity failed';
+    case 'ended': return 'Jarvis activity ended';
+  }
+}
 
 function ShellIcon({ name }: { name: ShellIconName }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -112,7 +127,8 @@ function ShellLayout({ signedIn, config, session, camera }: {
 }) {
   const { pathname } = useLocation();
   const getAccessToken = session.getAccessToken;
-  const { working } = useJarvisActivity();
+  const { working, latestActivity } = useJarvisActivity();
+  const activityText = activityLabel(latestActivity);
   const navigationToggle = useRef<HTMLButtonElement>(null);
   const workspaceController = useRef<WorkspaceController>(null);
   const contextPanel = useContextPanel();
@@ -295,11 +311,11 @@ function ShellLayout({ signedIn, config, session, camera }: {
         </div>
         {signedIn && (
           <div className="topbar-actions">
-            {working && (
-              <span className="topbar-working" role="status" aria-label="Jarvis is working" aria-live="polite">
+            {(working || latestActivity) && (
+              <span className={`topbar-working${working ? '' : ' topbar-activity-terminal'}`} role="status" aria-label={activityText} aria-live="polite">
                 <span className="topbar-working-mark" aria-hidden="true" />
-                <span className="topbar-working-wide" aria-hidden="true">Jarvis is working</span>
-                <span className="topbar-working-compact" aria-hidden="true">Working</span>
+                <span className="topbar-working-wide" aria-hidden="true">{activityText}</span>
+                <span className="topbar-working-compact" aria-hidden="true">{working ? 'Working' : activityText}</span>
               </span>
             )}
             {phone ? <details className="topbar-capture-menu" onKeyDown={(event) => {

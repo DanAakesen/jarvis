@@ -1,6 +1,7 @@
 import type { FastifyReply } from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import type { EventHub } from './event-hub.js';
+import type { JarvisActivityHub } from './activity.js';
 import { defaultAwayModeState } from './away-mode.js';
 import type { BrowserConfirmation } from '../teams/service.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
@@ -55,6 +56,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     nowFeedStore: NowFeedStore | null;
     nowEventHub: NowFeedEventHub;
+    jarvisActivityHub: JarvisActivityHub;
   }
 }
 
@@ -150,12 +152,14 @@ export function registerNowRoutes(app: FastifyInstance) {
     const response = reply.raw;
     let closed = false;
     let unsubscribe: () => void = () => {};
+    let unsubscribeActivity: () => void = () => {};
     let closeWorkspace = () => {};
     const cleanup = () => {
       if (closed) return;
       closed = true;
       clearInterval(heartbeat);
       unsubscribe();
+      unsubscribeActivity();
       closeWorkspace();
     };
     const end = () => {
@@ -176,6 +180,11 @@ export function registerNowRoutes(app: FastifyInstance) {
           : away ? null : 'event: now\ndata: {}\n\n';
         if (frame && !response.write(frame)) end();
       })();
+    });
+    unsubscribeActivity = app.jarvisActivityHub.subscribe((event) => {
+      if (closed) return;
+      const frame = `event: jarvis-activity\ndata: ${JSON.stringify(event)}\n\n`;
+      if (!response.write(frame)) end();
     });
     reply.hijack();
     const heartbeat = setInterval(() => {

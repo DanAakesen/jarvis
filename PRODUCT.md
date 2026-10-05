@@ -187,9 +187,9 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 
 The "Now" panel reads the persisted away/present mode, current running tasks and the latest non-dismissed task-attention, release/deployment, credential-warning, and alert activity. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes, and expiring credentials are emailed through stateful Azure Monitor rules; the monthly Azure budget sends its 80% threshold through the same email-only action group. The backend reads actual budget spend on a bounded 15-minute schedule for the Now item. These existing activity alerts remain email-only; while away, task-state updates and approval requests use Teams through P7-03. The browser feed shows only away-mode status/activity while away and suppresses ordinary refresh events; changing mode refreshes the status. Task changes, alerts, dismissals, and credential/budget alert writes refresh the full panel through authenticated server-sent events while Dan is present; reconnecting states identify when the displayed snapshot may be stale.
 
-The voice orb follows status transitions reported by the browser voice client and includes a text alternative. Unknown states are reported as unavailable, and motion is disabled when reduced motion is preferred. Tool-call activity remains explicitly unavailable until the runtime publishes that state (P8-16); the UI does not infer it from thinking or speech.
+The voice orb follows typed, transient runtime activity delivered over the authenticated event stream and includes a text alternative. Listening is shown only after the voice relay is ready and microphone audio is observed. Thinking, tool-call start and outcome, speaking, interruption, reconnect, and failure are shown only when reported by the runtime. Unknown states are unavailable, and motion is disabled when reduced motion is preferred.
 
-The shared top bar reports when an actual chat turn or voice response is running. The orb's audio response uses decoded playback samples, not microphone input or an estimated level. The shell and current pages share the light/dark visual system; unavailable tool-call and workspace-window events are never inferred.
+The shared top bar reports actual chat and voice runtime activity, including tool calls; it does not infer work from a local submit. Activity events contain no transcript, tool arguments or results, or secrets, and are not persisted. The orb's audio response uses decoded playback samples, not microphone input or an estimated level. Jarvis-updated workspace windows receive a brief tool-call shimmer; unrelated windows and thinking states do not.
 
 Temporary client windows support title dragging, edge resizing and icon lifecycle
 actions. Keyboard arrangement lives under Arrange: focus Move or Resize and use
@@ -365,7 +365,7 @@ setting is off by default; when enabled, windows return as workspace tabs. P8-10
 persists this preference through P8-17's account settings and mirrors it to
 device storage for immediate shell reads. P8-14 supplies the safe generated-list
 renderer; P8-15 supplies generated workspace windows and Jarvis-directed
-commands, and P8-16 supplies tool-call activity.
+commands; P8-16 supplies typed runtime activity.
 Voice is explicitly started; the always-available assistant does not continuously
 listen. Desktop and phone layouts follow the mode/window rules in ui.md. Theme
 variables can be changed on demand and persist until changed again. Banking and

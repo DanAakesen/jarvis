@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { generatedViewSchema, isGeneratedView } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
@@ -96,6 +97,18 @@ export const coreModule: BackendModule = {
         }
         if (validMessageId && !app.toolCallStore) return reply.code(503).send({ error: 'Tool execution unavailable' });
 
+        const activityId = randomUUID();
+        const source = voiceItemHeader === undefined ? 'chat' : 'voice';
+        const activity = (type: 'tool-call-started' | 'tool-call-finished' | 'failed', outcome?: ToolCallOutcome) => {
+          if (type === 'tool-call-started') {
+            app.jarvisActivityHub.publish({ type, activityId, source, toolName: tool.name });
+          } else if (type === 'tool-call-finished') {
+            app.jarvisActivityHub.publish({ type, activityId, source, toolName: tool.name, outcome: outcome ?? 'error' });
+          } else {
+            app.jarvisActivityHub.publish({ type, activityId, source });
+          }
+        };
+        if (validMessageId) activity('tool-call-started');
         const controller = new AbortController();
         const abortOnRequest = () => controller.abort();
         const abortOnClose = () => {
@@ -133,13 +146,19 @@ export const coreModule: BackendModule = {
           reply.raw.removeListener('close', abortOnClose);
         }
         if (validMessageId) {
-          await app.toolCallStore!.record({
-            messageId: messageId!,
-            tool: tool.name,
-            arguments: tool.sensitive ? { redacted: true } : auditToolArguments(tool.name, request.body),
-            result: tool.sensitive ? { redacted: true } : auditToolResult(tool.name, outcome, result),
-            outcome,
-          });
+          try {
+            await app.toolCallStore!.record({
+              messageId: messageId!,
+              tool: tool.name,
+              arguments: tool.sensitive ? { redacted: true } : auditToolArguments(tool.name, request.body),
+              result: tool.sensitive ? { redacted: true } : auditToolResult(tool.name, outcome, result),
+              outcome,
+            });
+          } catch (error) {
+            activity('failed');
+            throw error;
+          }
+          activity('tool-call-finished', outcome);
         }
         return { tool: tool.name, outcome, result, confirmation: confirmToolCall(tool.name, outcome, result) };
       });

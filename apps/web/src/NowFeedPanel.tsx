@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
+import { useJarvisActivity } from './activity-context';
 import type { PublicConfig } from '../config/public-config';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import { ActivityPanel } from './ActivityPanel';
@@ -23,6 +24,7 @@ export function NowFeedPanel({
   getAccessToken: () => Promise<string>;
   applyWorkspaceCommand: (command: WorkspaceCommand, trustedBlobHost?: string) => boolean;
 }) {
+  const { applyRuntimeActivity, clearRuntimeActivities } = useJarvisActivity();
   const [feed, setFeed] = useState<NowFeed>({ status: 'loading' });
   const [streamStatus, setStreamStatus] = useState<NowFeedStreamStatus>(
     config.backendUrl ? 'connecting' : 'unavailable',
@@ -66,7 +68,11 @@ export function NowFeedPanel({
         backendUrl: config.backendUrl,
         getAccessToken,
         onUpdate: () => { void refresh(); },
-        onStatus: setStreamStatus,
+        onStatus: (status) => {
+          setStreamStatus(status);
+          if (status === 'reconnecting') clearRuntimeActivities();
+        },
+        onActivity: applyRuntimeActivity,
         onWorkspaceReady: (sessionId, blobHost) => {
           workspaceSessionId = sessionId;
           trustedBlobHost = blobHost;
@@ -123,7 +129,7 @@ export function NowFeedPanel({
       controller.abort();
       refreshRef.current = null;
     };
-  }, [client, config, getAccessToken, retry]);
+  }, [applyRuntimeActivity, clearRuntimeActivities, client, config, getAccessToken, retry]);
 
   async function dismiss(id: string) {
     if (!config.backendUrl) throw new Error('Activity dismissal is unavailable.');

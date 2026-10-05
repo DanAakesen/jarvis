@@ -508,6 +508,17 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .workspace-window:focus-within { box-shadow: var(--panel-shadow), 0 0 0 2px var(--focus); }
 .workspace-canvas:not(.workspace-canvas-has-maximized) .workspace-window:has(.workspace-arrange-menu[open]) { z-index: 1001; }
 .workspace-window-dragging { user-select: none; box-shadow: var(--panel-shadow), 0 0 0 2px var(--focus); }
+.workspace-window-jarvis-updating::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(110deg, transparent 25%, var(--feedback-sheen) 50%, transparent 75%);
+  background-size: 250% 100%;
+  animation: activity-shimmer calc(var(--motion-panel) * 4) var(--ease-standard) 1;
+}
 @starting-style {
   .workspace-window { opacity: 0; transform: translateY(8px) scale(.98); }
 }
@@ -662,6 +673,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .voice-orb-thinking .voice-orb { --orb-tone: var(--state-thinking); }
 .voice-orb-speaking .voice-orb { --orb-tone: var(--state-speaking); }
 .voice-orb-tool-call .voice-orb { --orb-tone: var(--state-thinking); }
+.voice-orb-interrupted .voice-orb { --orb-tone: var(--state-reconnecting); }
 .voice-orb-reconnecting .voice-orb { --orb-tone: var(--state-reconnecting); }
 .voice-orb-unavailable .voice-orb { --orb-tone: var(--state-unavailable); }
 .voice-orb-connecting .voice-orb span, .voice-orb-listening .voice-orb span,
@@ -669,6 +681,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .voice-orb-reconnecting .voice-orb span { animation: orb-flow 7s var(--ease-standard) infinite alternate; }
 .voice-orb-speaking .voice-orb span { animation-duration: 1.25s; }
 .voice-orb-thinking .voice-orb span { animation-duration: 4s; }
+.voice-orb-interrupted .voice-orb span { animation: none; }
 .voice-orb-connecting .voice-orb span::before, .voice-orb-listening .voice-orb span::before,
 .voice-orb-thinking .voice-orb span::before, .voice-orb-speaking .voice-orb span::before,
 .voice-orb-reconnecting .voice-orb span::before,
@@ -1177,7 +1190,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
     --motion-state: var(--motion-fade);
     --motion-panel: var(--motion-fade);
   }
-  .app-shell::before, .topbar-working-mark, .activity-running::before, .voice-orb span,
+  .app-shell::before, .topbar-working-mark, .activity-running::before, .workspace-window-jarvis-updating::after, .voice-orb span,
   .voice-orb span::before, .voice-orb span::after { animation: none !important; }
   .workspace-tab { animation: none; transition: none; }
   .workspace-window { transition: none; transform: none; }

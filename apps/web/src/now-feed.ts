@@ -1,6 +1,11 @@
 import type { ActivityItem, NowFeed, ConfirmationActionKind } from './activity';
 import { backendFetch } from './backend-request';
-import { isWorkspaceCommand, type WorkspaceCommand } from '@jarvis/contracts';
+import {
+  isJarvisActivityEvent,
+  isWorkspaceCommand,
+  type JarvisActivityEvent,
+  type WorkspaceCommand,
+} from '@jarvis/contracts';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxSseFrameLength = 320 * 1024;
@@ -19,6 +24,7 @@ export interface NowFeedStreamOptions {
   onWorkspaceReady?: (sessionId: string, trustedBlobHost?: string) => void;
   onWorkspaceCommand?: (command: WorkspaceCommand, expiresAt: number, trustedBlobHost?: string) => void;
   onWorkspaceCancel?: (commandId: string) => void;
+  onActivity?: (event: JarvisActivityEvent) => void;
   signal: AbortSignal;
 }
 
@@ -232,6 +238,14 @@ async function readNowEvents(body: ReadableStream<Uint8Array>, signal: AbortSign
     if (!line) {
       if (event === 'now' || event === 'mode') {
         options.onUpdate();
+      } else if (event === 'jarvis-activity') {
+        let value: unknown;
+        try {
+          value = JSON.parse(data.join('\n'));
+        } catch {
+          value = undefined;
+        }
+        if (isJarvisActivityEvent(value)) options.onActivity?.(value);
       } else if (event === 'workspace-ready') {
         let value: unknown;
         try {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { BackendModule } from '../modules.js';
 import type {
@@ -122,6 +123,13 @@ export const conversationModule: BackendModule = {
       if (!userMessage) return reply.code(404).send({ error: 'Active chat session not found' });
 
       const controller = new AbortController();
+      const activityId = randomUUID();
+      let activityFinished = false;
+      const publishActivity = (type: 'thinking' | 'interrupted' | 'failed' | 'ended') => {
+        if (activityFinished) return;
+        app.jarvisActivityHub.publish({ type, activityId, source: 'chat' });
+        if (type !== 'thinking') activityFinished = true;
+      };
       const abortOnClose = () => {
         if (!reply.raw.writableEnded) controller.abort();
       };
@@ -133,6 +141,7 @@ export const conversationModule: BackendModule = {
       const stream = Readable.from((async function* () {
         yield streamEvent('user', userMessage);
         let answer = '';
+        publishActivity('thinking');
         try {
           for await (const delta of agent.stream({
             messageId: userMessage.id,
@@ -152,14 +161,19 @@ export const conversationModule: BackendModule = {
             model: null,
           });
           if (!assistantMessage) throw new Error('Chat session ended');
+          publishActivity('ended');
           yield streamEvent('done', assistantMessage);
         } catch {
-          if (!controller.signal.aborted) {
+          if (controller.signal.aborted) {
+            publishActivity('interrupted');
+          } else {
+            publishActivity('failed');
             yield streamEvent('error', {
               error: 'Jarvis could not finish the reply. A task action may still have completed; check its status before trying again.',
             });
           }
         } finally {
+          if (!activityFinished) publishActivity(controller.signal.aborted ? 'interrupted' : 'ended');
           request.raw.removeListener('aborted', abortOnClose);
           reply.raw.removeListener('close', abortOnClose);
         }

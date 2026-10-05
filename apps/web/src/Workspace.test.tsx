@@ -621,6 +621,7 @@ describe('Workspace', () => {
       })).toBe(true);
     });
     let article = screen.getByRole('article', { name: 'Research summary' });
+    expect(article.className).toContain('workspace-window-jarvis-updating');
     expect(article.textContent).toContain('<script>not executable</script>');
     expect(document.querySelector('script')).toBeNull();
 
@@ -661,6 +662,8 @@ describe('Workspace', () => {
       })).toBe(true);
     });
     expect(screen.getByRole('article', { name: 'Updated research' })).not.toBeNull();
+    expect(screen.getByRole('article', { name: 'Updated research' }).className)
+      .toContain('workspace-window-jarvis-updating');
     act(() => { dispatch({ commandId: 'minimise-view', operation: 'minimise', viewId: 'research' }); });
     expect(screen.getByRole('button', { name: 'Restore Updated research' })).not.toBeNull();
     act(() => { expect(dispatch({ commandId: 'show-view', operation: 'show', viewId: 'research' })).toBe(true); });

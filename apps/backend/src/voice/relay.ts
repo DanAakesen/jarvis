@@ -170,6 +170,24 @@ function registerVoiceRoute(
     let latestDanMessage: ConversationMessage | undefined;
     let userSpeaking = false;
     let assistantResponding = false;
+    let microphoneActive = false;
+    let activityState: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | null = null;
+    let activityFinished = false;
+    const activityId = randomUUID();
+    const activeToolActivities = new Set<(
+      type: 'tool-call-finished' | 'interrupted' | 'failed',
+      outcome?: 'ok' | 'refused' | 'error',
+    ) => void>();
+    const finishActiveToolActivities = () => {
+      for (const finish of activeToolActivities) finish('interrupted');
+    };
+    const publishActivity = (type: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | 'failed' | 'ended') => {
+      if (activityFinished && type !== 'reconnecting') return;
+      if (type === 'failed' || type === 'ended' || type === 'reconnecting') activityFinished = type !== 'reconnecting';
+      if (type === activityState) return;
+      activityState = type === 'failed' || type === 'ended' ? null : type;
+      app.jarvisActivityHub.publish({ type, activityId, source: 'voice' });
+    };
     let statusAnnouncer: ReturnType<typeof createVoiceStatusAnnouncer> | undefined;
     let transcriptQueue = Promise.resolve();
     let transcriptPersistenceFailed = false;
@@ -179,6 +197,12 @@ function registerVoiceRoute(
     const savedTranscripts = new Set<string>();
     const sessionReady = store.createSession({ channel: 'voice', language })
       .then((session) => { sessionId = session.id; });
+
+    const noteMicrophoneAudio = (data: RawData, binary: boolean) => {
+      if (parseVoiceEvent(data, binary)?.type !== 'input_audio_buffer.append' || microphoneActive) return;
+      microphoneActive = true;
+      publishActivity('listening');
+    };
 
     const persistTranscript = (event: Record<string, unknown>) => {
       const type = event.type;
@@ -256,6 +280,10 @@ function registerVoiceRoute(
     };
 
     const close = (code: number, reason: string) => {
+      finishActiveToolActivities();
+      if (!activityFinished) {
+        publishActivity(code === 1000 || activityState === 'reconnecting' ? 'ended' : 'failed');
+      }
       controller.abort();
       statusAnnouncer?.close();
       if (upstream) closeSocket(upstream, code, reason);
@@ -296,6 +324,7 @@ function registerVoiceRoute(
     const flushQueued = () => {
       configured = true;
       for (const message of queued) {
+        noteMicrophoneAudio(message.data, message.binary);
         upstream?.send(message.data, { binary: message.binary }, (error) => {
           if (error) close(1011, 'Voice connection failed');
         });
@@ -329,15 +358,52 @@ function registerVoiceRoute(
       seenCallIds.add(call.call_id);
       pendingToolCalls += 1;
       toolCallsInResponse = true;
+      const toolActivityId = randomUUID();
+      let toolActivityFinished = false;
+      const finishToolActivity = (
+        type: 'tool-call-finished' | 'interrupted' | 'failed',
+        outcome?: 'ok' | 'refused' | 'error',
+      ) => {
+        if (toolActivityFinished) return;
+        toolActivityFinished = true;
+        activeToolActivities.delete(finishToolActivity);
+        if (type === 'tool-call-finished') {
+          app.jarvisActivityHub.publish({
+            type, activityId: toolActivityId, source: 'voice', toolName: call.name, outcome: outcome ?? 'error',
+          });
+        } else {
+          app.jarvisActivityHub.publish({ type, activityId: toolActivityId, source: 'voice' });
+        }
+      };
+      activeToolActivities.add(finishToolActivity);
+      app.jarvisActivityHub.publish({
+        type: 'tool-call-started',
+        activityId: toolActivityId,
+        source: 'voice',
+        toolName: call.name,
+      });
       toolQueue = toolQueue.then(async () => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          finishToolActivity('interrupted');
+          return;
+        }
         await transcriptQueue;
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          finishToolActivity('interrupted');
+          return;
+        }
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]);
-        await transcriptQueue;
         if (latestDanMessage) request.jarvisConversationMessage = latestDanMessage;
         try {
           const output = await executeRealtimeToolCall(call, app.jarvisTools, request, signal);
+          let outcome: 'ok' | 'refused' | 'error' = 'error';
+          try {
+            const response = JSON.parse(output) as { outcome?: unknown };
+            if (response.outcome === 'ok' || response.outcome === 'refused' || response.outcome === 'error') {
+              outcome = response.outcome;
+            }
+          } catch { /* The fallback is an error outcome. */ }
+          finishToolActivity('tool-call-finished', outcome);
           sendUpstream({
             type: 'conversation.item.create',
             item: { type: 'function_call_output', call_id: call.call_id, output },
@@ -345,7 +411,10 @@ function registerVoiceRoute(
         } finally {
           delete request.jarvisConversationMessage;
         }
-      }).catch(() => close(1011, 'Voice connection failed')).finally(() => {
+      }).catch(() => {
+        finishToolActivity(controller.signal.aborted ? 'interrupted' : 'failed');
+        close(1011, 'Voice connection failed');
+      }).finally(() => {
         pendingToolCalls -= 1;
         resumeAfterTools();
       });
@@ -392,6 +461,9 @@ function registerVoiceRoute(
         return;
       }
       if (configured && upstream?.readyState === WebSocket.OPEN) {
+        if (event?.type === 'input_audio_buffer.append') {
+          noteMicrophoneAudio(data, binary);
+        }
         upstream.send(data, { binary }, (error) => {
           if (error) close(1011, 'Voice connection failed');
         });
@@ -404,13 +476,19 @@ function registerVoiceRoute(
       }
       queued.push({ data, binary });
     });
-    browser.once('close', () => {
+    browser.once('close', (code) => {
+      finishActiveToolActivities();
+      if (!activityFinished) {
+        publishActivity(code === 1000 || activityState === 'reconnecting' ? 'ended' : 'failed');
+      }
       controller.abort();
       statusAnnouncer?.close();
       if (upstream) closeSocket(upstream, 1000, 'Browser disconnected');
       void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
     });
     browser.once('error', () => {
+      finishActiveToolActivities();
+      publishActivity('failed');
       controller.abort();
       statusAnnouncer?.close();
       if (upstream) closeSocket(upstream, 1011, 'Voice connection failed');
@@ -445,13 +523,21 @@ function registerVoiceRoute(
         });
         upstream.on('message', (data, binary) => {
           const event = parseVoiceEvent(data, binary);
-          if (event?.type === 'input_audio_buffer.speech_started') userSpeaking = true;
+          if (event?.type === 'input_audio_buffer.speech_started') {
+            if (assistantResponding) publishActivity('interrupted');
+            userSpeaking = true;
+          }
           if (event?.type === 'input_audio_buffer.speech_stopped') {
             userSpeaking = false;
             statusAnnouncer?.flush();
           }
-          if (event?.type === 'response.created') assistantResponding = true;
+          if (event?.type === 'response.created') {
+            assistantResponding = true;
+            if (microphoneActive) publishActivity('thinking');
+          }
           if (event?.type === 'response.done') assistantResponding = false;
+          if (event?.type === 'response.audio.delta' ||
+              event?.type === 'response.output_audio.delta') publishActivity('speaking');
           if (english && event?.type === 'response.function_call_arguments.done') {
             runToolCall(event as unknown as RealtimeFunctionCall);
             return;
@@ -460,7 +546,10 @@ function registerVoiceRoute(
             responseDone = true;
             resumeAfterTools();
           }
-          if (event?.type === 'response.done') statusAnnouncer?.flush();
+          if (event?.type === 'response.done') {
+            statusAnnouncer?.flush();
+            if (microphoneActive && pendingToolCalls === 0) publishActivity('listening');
+          }
           if (event) persistTranscript(event);
           if (browser.readyState === WebSocket.OPEN) {
             browser.send(data, { binary }, (error) => {
@@ -470,12 +559,17 @@ function registerVoiceRoute(
         });
         upstream.once('close', (code) => {
           if (!endRequested && browser.readyState === WebSocket.OPEN) {
+            publishActivity(code === 1000 ? 'ended' : 'reconnecting');
             close(code === 1000 ? 1000 : 1011, 'Voice connection ended');
           }
         });
-        upstream.once('error', () => close(1011, 'Voice connection failed'));
+        upstream.once('error', () => {
+          publishActivity('failed');
+          close(1011, 'Voice connection failed');
+        });
       } catch {
         request.log.warn('voice.connection_failed');
+        publishActivity('failed');
         close(1011, 'Voice connection failed');
       }
     })();

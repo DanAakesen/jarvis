@@ -124,6 +124,13 @@ Repository task statuses and their GitHub issues are workflow metadata managed f
 
 P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. P7-05 adds `screen_frames` to the Jarvis-model usage metrics in migration `0015_screen_frame_usage.sql`; P7-08 camera requests reuse the same frame reservations, token rows and rate/day cap, with no new migration or usage metric. The matching down migration removes those rows before restoring the prior constraint. Realtime voice tool calls are not stored in `tool_calls`.
 
+P8-16 activity is a separate typed, in-memory contract published on the existing
+owner-authenticated `/now/events` stream. It is discarded on process restart or
+disconnect and creates no SQL rows, messages, transcript entries, or tool-call
+records. Its allowlisted fields are activity ID, source, state, and (for tool
+calls only) tool name and normalized outcome; transcript text, tool arguments
+and results, and secrets are never copied into activity events.
+
 P7-06 records only the bridge's current status in the existing `activity` table.
 The refresh is published after the status transaction commits. Commands, window
 titles, URLs, paths, access tokens, and message contents are not persisted as

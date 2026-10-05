@@ -201,7 +201,7 @@ const LANE_ORDER = Object.keys(LANES);
 const FLOWS = [
   {
     name: "Request",
-    summary: "Dan configures projects and asks for work on the board or by voice. The Projects page lists, edits, and archives managed projects, lists installed repositories for one-click registration, and shows New projects defaults in Settings. Jarvis can register existing repositories or create and scaffold new ones using those defaults; the sandbox can ask a clarification question through Needs attention. Running counts come from the task API and last-release data remains unavailable until release reads are connected. Chat and voice go to Jarvis; browser voice uses the authenticated backend relay. P8-20 shows only observed chat/voice work in the top bar and actual voice state plus decoded playback level in the labelled orb; tool-call and workspace-window signals are not inferred.",
+    summary: "Dan configures projects and asks for work on the board or by voice. The Projects page lists, edits, and archives managed projects, lists installed repositories for one-click registration, and shows New projects defaults in Settings. Jarvis can register existing repositories or create and scaffold new ones using those defaults; the sandbox can ask a clarification question through Needs attention. Running counts come from the task API and last-release data remains unavailable until release reads are connected. Chat and voice go to Jarvis; browser voice uses the authenticated backend relay. P8-16 publishes observed, ephemeral chat/voice activity over the authenticated Now stream; the top bar and orb consume those states, and P8-15 window create/update commands trigger their matching shimmer.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "context", badge: "Start", t: "Dan wants a change", d: "For example: add dark mode to Jarvis.", ev: "Start of the user flow." },
       { id: "card", lane: "board", col: 2, s: "assumed", t: "Add a card", d: "Project, agent and task text.", ev: "Board requirement in PRODUCT.md; the board is not built yet." },
@@ -308,6 +308,8 @@ const FLOWS = [
       { id: "messageRow", lane: "data", col: 4, s: "proven", t: "Store messages and tool calls", d: "The backend saves completed chat replies and voice transcripts; P4-02 records tool_calls against Dan's source message." },
       { id: "history", lane: "backend", col: 5, s: "proven", t: "Read a history page", d: "GET /conversation/history returns up to 50 messages, session voice minutes, and a message-ID cursor; maximum 100." },
       { id: "main", lane: "board", col: 6, s: "proven", t: "Show the conversation", d: "Chronological history, streaming replies, task-linked tool outcomes, voice minutes, loading/empty/error states, and older-history action.", ev: "Backend, agent and web contract tests pass offline; live Foundry access and browser sign-in remain unverified." },
+      { id: "activity", lane: "backend", col: 6, s: "proven", t: "Publish transient chat activity", d: "Thinking, terminal state and tool start/recorded outcome are published with only activity ID, source, state, tool name and normalized outcome.", ev: "Contract and mocked backend tests cover observed transitions and exclude transcript text, tool arguments/results and secrets. Nothing is persisted." },
+      { id: "activityUI", lane: "board", col: 7, s: "proven", t: "Show actual runtime activity", d: "The signed-in top bar and voice workspace consume strict activity events over authenticated `/now/events`; reconnect clears transient client state.", ev: "Web SSE and activity-provider tests pass offline; live Entra/Foundry delivery remains unverified." },
       { id: "voiceUsage", lane: "data", col: 6, s: "proven", t: "Store voice minutes", d: "On session end, atomically write connected relay minutes to usage, linked by jarvis_session_id; no migration." },
       { id: "origin", lane: "data", col: 5, s: "docs", t: "Keep task origin message", d: "Existing schema requires origin_message_id for non-board tasks; task creation remains P1-04/P4-01." },
     ],
@@ -320,6 +322,8 @@ const FLOWS = [
       ["message", "write", "proven", "bounded text + session ID"],
       ["write", "chat-agent", "proven", "stored source message + delegated token"],
       ["chat-agent", "messageRow", "proven", "text stream + tool calls"],
+      ["chat-agent", "activity", "proven", "observed turn/tool events"],
+      ["activity", "activityUI", "proven", "allowlisted SSE event"],
       ["write", "messageRow", "proven", "store the user message"],
       ["messageRow", "history", "proven", "messages + tool metadata"],
       ["voiceUsage", "history", "proven", "voice minutes by session"],
@@ -766,7 +770,7 @@ const FLOWS = [
   },
   {
     name: "English voice",
-    summary: "The backend configures the English realtime session, announces selected safe Now-feed updates when Dan is not speaking, and runs registered tools; the browser relays audio only.",
+    summary: "The backend configures the English realtime session, announces selected safe Now-feed updates when Dan is not speaking, runs registered tools and publishes observed voice activity; the browser relays audio and displays the same runtime state.",
     nodes: [
       { id: "start", lane: "user", col: 1, s: "proven", t: "Speak to Jarvis", d: "The small composer orb connects to the authenticated `/voice` WebSocket and immediately enters the fullscreen voice scene. The shell hides typing/history; natural end, failure, Escape, and End voice restore typing. The ready session keeps the microphone off until Dan explicitly enables it.", ev: "P5-04/P8-05/P8-10 web tests cover client event handling, microphone activation, immediate entry, terminal-state restoration, and focus. P8-10 screenshots document desktop/phone in both appearances. Real microphone/audio-device behavior and live Voice Live remain unverified." },
       { id: "relay", lane: "backend", col: 2, s: "proven", t: "Authenticate and configure", d: "Backend obtains a Voice Live token, pins `gpt-realtime-2.1` and Ryan HD, and snapshots personality preferences for the new relay.", ev: "P5-03/P7-16 mock tests cover configuration and saved preferences. Live Azure behavior remains unverified." },
@@ -776,6 +780,8 @@ const FLOWS = [
       { id: "tool", lane: "backend", col: 5, s: "unknown", t: "Execute registered tool", d: "Backend validates arguments, executes the tool and returns its result and confirmation to the model. `get_status_summary` returns Now-feed counts only.", ev: "P5-03 local mock verifies tool execution and P4-05 result/confirmation delivery. P5-06 stores completed transcripts and voice minutes; realtime tool-call rows remain unpersisted." },
       { id: "voice", lane: "voice", col: 6, s: "unknown", t: "Speak the result or update", d: "Ryan HD replies in British English using the backend tool result or a fixed status announcement.", ev: "Local tests verify the announcement queue and tool result continuation; live audio and Azure interoperability remain unverified." },
       { id: "done", lane: "user", col: 7, s: "proven", t: "Hear the reply", d: "Browser queues returned 24 kHz PCM and stops current playback when speech starts.", ev: "P5-04 tests verify interruption handling with a controlled audio adapter; actual browser playback and microphone remain unverified." },
+      { id: "activity", lane: "backend", col: 7, s: "proven", t: "Publish observed voice activity", d: "Readiness/audio, response, tool, output-audio, interruption, reconnect and failure events enter a volatile hub; tool events include only the name and normalized outcome. Speaking includes P7-12 announcements.", ev: "Mocked relay tests cover readiness gating, recorded tool outcome, disconnect cleanup and event privacy." },
+      { id: "activityUI", lane: "board", col: 8, s: "proven", t: "Show the matching state", d: "The voice orb, top bar and Jarvis-updated workspace windows consume activity/command events over the authenticated stream.", ev: "Local browser acceptance checks desktop/mobile layouts with a scratch relay and fixtures; live Entra, Foundry and physical audio remain unverified." },
     ],
     edges: [
       ["start", "relay", "unknown", "audio"],
@@ -787,6 +793,10 @@ const FLOWS = [
       ["tool", "model", "unknown", "tool result"],
       ["model", "voice", "unknown", "spoken response"],
       ["voice", "done", "unknown", "audio"],
+      ["relay", "activity", "proven", "observed relay state"],
+      ["tool", "activity", "proven", "tool name + normalized outcome"],
+      ["voice", "activity", "proven", "observed output audio"],
+      ["activity", "activityUI", "proven", "authenticated SSE event"],
     ],
   },
   {

@@ -7,7 +7,7 @@ type VoiceOrbState = {
   heading: string;
 };
 
-const voiceOrbStates: Record<VoiceStatus | 'tool_call', VoiceOrbState> = {
+const voiceOrbStates: Record<VoiceStatus | 'tool_call' | 'interrupted', VoiceOrbState> = {
   stopped: { className: 'off', heading: 'Voice off' },
   connecting: { className: 'connecting', heading: 'Connecting' },
   ready: { className: 'off', heading: 'Ready' },
@@ -18,6 +18,7 @@ const voiceOrbStates: Record<VoiceStatus | 'tool_call', VoiceOrbState> = {
   reconnecting: { className: 'reconnecting', heading: 'Reconnecting' },
   error: { className: 'unavailable', heading: 'Voice unavailable' },
   tool_call: { className: 'tool-call', heading: 'Using a tool' },
+  interrupted: { className: 'interrupted', heading: 'Interrupted' },
 };
 
 export function VoiceOrb({

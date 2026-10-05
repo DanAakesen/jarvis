@@ -1,38 +1,57 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { JarvisActivityContext, type ActivitySource } from './activity-context';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { JarvisActivityEvent } from '@jarvis/contracts';
+import { JarvisActivityContext } from './activity-context';
+
+function isWorkingEvent(event: JarvisActivityEvent): boolean {
+  return event.type === 'thinking' || event.type === 'speaking' || event.type === 'tool-call-started';
+}
 
 export function JarvisActivityProvider({ children }: { children: ReactNode }) {
-  const [activeSources, setActiveSources] = useState<ReadonlySet<ActivitySource>>(() => new Set());
-  const [activeOperations, setActiveOperations] = useState<ReadonlyMap<symbol, ActivitySource>>(() => new Map());
-  const setWorking = useCallback((source: ActivitySource, active: boolean) => {
-    setActiveSources((current) => {
-      if (current.has(source) === active) return current;
-      const next = new Set(current);
-      if (active) next.add(source);
-      else next.delete(source);
+  const [runtimeOperations, setRuntimeOperations] = useState<ReadonlyMap<string, JarvisActivityEvent>>(() => new Map());
+  const [voiceActivity, setVoiceActivity] = useState<JarvisActivityEvent | null>(null);
+  const [latestActivity, setLatestActivity] = useState<JarvisActivityEvent | null>(null);
+  const activityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const applyRuntimeActivity = useCallback((event: JarvisActivityEvent) => {
+    if (activityTimer.current) clearTimeout(activityTimer.current);
+    setLatestActivity(event);
+    setRuntimeOperations((current) => {
+      const next = new Map(current);
+      if (isWorkingEvent(event)) next.set(event.activityId, event);
+      else next.delete(event.activityId);
       return next;
     });
+    if (event.source === 'voice') {
+      setVoiceActivity(event.type === 'ended' ? null : event);
+    }
+    if (event.type === 'ended' || event.type === 'interrupted' || event.type === 'failed' ||
+        event.type === 'tool-call-finished') {
+      activityTimer.current = setTimeout(() => {
+        activityTimer.current = null;
+        setLatestActivity((current) => current === event ? null : current);
+        if (event.source === 'voice') {
+          setVoiceActivity((current) => current === event ? null : current);
+        }
+      }, 3_000);
+    }
   }, []);
-  const beginWorking = useCallback((source: ActivitySource) => {
-    const operation = Symbol(source);
-    setActiveOperations((current) => new Map(current).set(operation, source));
-    let active = true;
-    return () => {
-      if (!active) return;
-      active = false;
-      setActiveOperations((current) => {
-        if (!current.has(operation)) return current;
-        const next = new Map(current);
-        next.delete(operation);
-        return next;
-      });
-    };
+  const clearRuntimeActivities = useCallback(() => {
+    if (activityTimer.current) clearTimeout(activityTimer.current);
+    activityTimer.current = null;
+    setRuntimeOperations(new Map());
+    setVoiceActivity(null);
+    setLatestActivity(null);
+  }, []);
+  useEffect(() => () => {
+    if (activityTimer.current) clearTimeout(activityTimer.current);
   }, []);
   const value = useMemo(() => ({
-    working: activeSources.size > 0 || activeOperations.size > 0,
-    setWorking,
-    beginWorking,
-  }), [activeSources, activeOperations, setWorking, beginWorking]);
+    working: [...runtimeOperations.values()].some(isWorkingEvent),
+    voiceActivity,
+    latestActivity,
+    applyRuntimeActivity,
+    clearRuntimeActivities,
+  }), [runtimeOperations, voiceActivity, latestActivity,
+    applyRuntimeActivity, clearRuntimeActivities]);
 
   return <JarvisActivityContext.Provider value={value}>{children}</JarvisActivityContext.Provider>;
 }

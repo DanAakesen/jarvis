@@ -2,12 +2,14 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import cors from '@fastify/cors';
 import type { Logger } from 'pino';
+import type { JarvisActivityEvent } from '@jarvis/contracts';
 import { localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
 import type { TokenVerifier } from './auth/verify.js';
 import { coreModule } from './core/index.js';
 import { createEventHub } from './core/event-hub.js';
+import type { JarvisActivityHub } from './core/activity.js';
 import type { ToolCallStore } from './core/tool-calls.js';
 import { conversationModule } from './core/conversation.js';
 import type { ConversationStore } from './core/conversation-store.js';
@@ -49,6 +51,7 @@ export interface BuildAppOptions {
   readonly usageStore?: UsageStore;
   readonly nowFeedStore?: NowFeedStore;
   readonly nowEventHub?: NowFeedEventHub;
+  readonly jarvisActivityHub?: JarvisActivityHub;
   readonly conversationStore?: ConversationStore;
   readonly sandboxHeartbeat?: SandboxHeartbeat;
   readonly conversationAgent?: ConversationAgent;
@@ -77,6 +80,7 @@ declare module 'fastify' {
     usageStore: UsageStore | null;
     nowFeedStore: NowFeedStore | null;
     nowEventHub: NowFeedEventHub;
+    jarvisActivityHub: JarvisActivityHub;
     conversationStore: ConversationStore | null;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
@@ -145,6 +149,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
+  app.decorate('jarvisActivityHub', options.jarvisActivityHub ?? createEventHub<JarvisActivityEvent>());
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);
   app.addHook('onClose', async () => { workspaceCommands.dispose(); });

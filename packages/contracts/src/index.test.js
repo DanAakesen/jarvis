@@ -5,6 +5,7 @@ import {
   generatedViewRenderers,
   generatedViewSchema,
   isGeneratedView,
+  isJarvisActivityEvent,
   isWorkspaceCommand,
   generatedViewVersion,
   workspaceCommandSchema,
@@ -24,6 +25,38 @@ test('renderer and action identifiers match the JSON schema allowlists', () => {
   assert.deepEqual(generatedViewSchema.oneOf.map((schema) => schema.properties.renderer.const), generatedViewRenderers);
   assert.deepEqual(generatedViewActionTypes, ['open-route', 'open-link', 'call-tool', 'window']);
   assert.equal(new Set(generatedViewRenderers).size, generatedViewRenderers.length);
+});
+
+test('accepts only bounded Jarvis activity fields and known outcomes', () => {
+  const activityId = '12345678-1234-4234-8234-123456789abc';
+  assert.equal(isJarvisActivityEvent({ type: 'listening', activityId, source: 'voice' }), true);
+  assert.equal(isJarvisActivityEvent({
+    type: 'tool-call-started', activityId, source: 'chat', toolName: 'list_tasks',
+  }), true);
+  assert.equal(isJarvisActivityEvent({
+    type: 'tool-call-finished', activityId, source: 'voice', toolName: 'list_tasks', outcome: 'refused',
+  }), true);
+  assert.equal(isJarvisActivityEvent({
+    type: 'tool-call-finished', activityId, source: 'voice', toolName: 'list_tasks', outcome: 'error',
+  }), true);
+  assert.equal(isJarvisActivityEvent({
+    type: 'tool-call-finished', activityId, source: 'chat', toolName: 'list_tasks', outcome: 'ok',
+  }), true);
+});
+
+test('rejects malformed activity and any extra payload that could carry private data', () => {
+  const activity = { type: 'thinking', activityId: '12345678-1234-4234-8234-123456789abc', source: 'chat' };
+  assert.equal(isJarvisActivityEvent({ ...activity, message: 'private transcript' }), false);
+  assert.equal(isJarvisActivityEvent({ ...activity, activityId: 'not-an-id' }), false);
+  assert.equal(isJarvisActivityEvent({ ...activity, source: 'agent' }), false);
+  assert.equal(isJarvisActivityEvent({
+    type: 'tool-call-finished', activityId: activity.activityId, source: 'chat',
+    toolName: 'list_tasks', outcome: 'unknown',
+  }), false);
+  assert.equal(isJarvisActivityEvent({
+    type: 'tool-call-started', activityId: activity.activityId, source: 'chat',
+    toolName: 'list_tasks', arguments: { secret: 'must not pass' },
+  }), false);
 });
 
 test('accepts bounded declarative views from complete, partial and unavailable sources', () => {

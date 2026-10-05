@@ -107,6 +107,30 @@ export type WorkspaceCommand =
   | { commandId: string; operation: 'context-panel'; action: 'open'; view: GeneratedView }
   | { commandId: string; operation: 'context-panel'; action: 'close' | 'toggle' };
 
+export type JarvisActivitySource = 'chat' | 'voice';
+export type JarvisActivityOutcome = 'ok' | 'refused' | 'error';
+export type JarvisActivityEvent =
+  | {
+    type: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | 'failed' | 'ended';
+    activityId: string;
+    source: JarvisActivitySource;
+  }
+  | {
+    type: 'tool-call-started';
+    activityId: string;
+    source: JarvisActivitySource;
+    toolName: string;
+  }
+  | {
+    type: 'tool-call-finished';
+    activityId: string;
+    source: JarvisActivitySource;
+    toolName: string;
+    outcome: JarvisActivityOutcome;
+  };
+
+export function isJarvisActivityEvent(value: unknown): value is JarvisActivityEvent;
+
 export const generatedViewSchema: Readonly<Record<string, unknown>>;
 export function isGeneratedView(
   value: unknown,
