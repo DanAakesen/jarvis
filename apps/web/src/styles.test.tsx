@@ -10,6 +10,13 @@ function tokenValue(source: string, selector: string, name: string): string {
   return value;
 }
 
+function ruleDeclaration(source: string, selector: RegExp, name: string): string {
+  const rule = source.match(selector)?.[1];
+  const value = rule?.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1];
+  if (!value) throw new Error(`Missing ${name} in ${selector}`);
+  return value;
+}
+
 function parseColor(value: string): { color: Color; alpha: number } {
   const hex = value.match(/^#([a-f\d]{6})$/i)?.[1];
   if (hex) {
@@ -49,25 +56,58 @@ function contrast(first: Color, second: Color): number {
 }
 
 describe('shared glass tokens', () => {
-  it('keeps text and focus contrast over both bright and dark scene areas', () => {
+  it('keeps text, muted text, and icon contrast on glass surfaces in both appearances', () => {
     const source = readFileSync('src/styles.css', 'utf8');
+    const appSource = readFileSync('src/App.tsx', 'utf8');
     const appearances = [
-      { selector: ':root', background: [0, 0, 0] as Color },
-      { selector: ':root\\[data-theme="dark"\\]', background: [255, 255, 255] as Color },
+      { selector: ':root' },
+      { selector: ':root\\[data-theme="dark"\\]' },
     ];
+    const shellIconColor = ruleDeclaration(
+      source,
+      /\.rail-button, \.rail-link, \.sidebar-close, \.topbar-icon-button\s*\{([^}]*)\}/,
+      'color',
+    );
+    const sidebarTextColor = ruleDeclaration(
+      source,
+      /\.sidebar-link\s*\{([^}]*)\}/,
+      'color',
+    );
+    const topbarTextColor = ruleDeclaration(
+      source,
+      /\.topbar-context\s*\{([^}]*)\}/,
+      'color',
+    );
 
-    for (const { selector, background } of appearances) {
-      const surface = parseColor(tokenValue(source, selector, '--surface-translucent'));
+    expect(shellIconColor).toBe('var(--text-muted)');
+    expect(sidebarTextColor).toBe('var(--text-muted)');
+    expect(topbarTextColor).toBe('var(--text-muted)');
+    expect(appSource).toContain("stroke: 'currentColor'");
+
+    for (const { selector } of appearances) {
       const text = parseColor(tokenValue(source, selector, '--text'));
       const mutedText = parseColor(tokenValue(source, selector, '--text-muted'));
+      const icon = parseColor(tokenValue(source, selector, shellIconColor.slice(4, -1)));
       const focus = parseColor(tokenValue(source, selector, '--focus'));
-      const renderedSurface = composite(surface.color, surface.alpha, background);
 
-      expect(surface.alpha).toBeGreaterThanOrEqual(0.88);
-      expect(contrast(text.color, renderedSurface)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(mutedText.color, renderedSurface)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(focus.color, renderedSurface)).toBeGreaterThanOrEqual(3);
+      for (const surfaceName of ['--surface-translucent', '--surface-muted']) {
+        const surface = parseColor(tokenValue(source, selector, surfaceName));
+        expect(surface.alpha).toBeGreaterThanOrEqual(0.88);
+        for (const backdrop of [[0, 0, 0], [255, 255, 255]] as Color[]) {
+          const renderedSurface = composite(surface.color, surface.alpha, backdrop);
+          expect(contrast(text.color, renderedSurface)).toBeGreaterThanOrEqual(4.5);
+          expect(contrast(mutedText.color, renderedSurface)).toBeGreaterThanOrEqual(4.5);
+          expect(contrast(icon.color, renderedSurface)).toBeGreaterThanOrEqual(3);
+          expect(contrast(focus.color, renderedSurface)).toBeGreaterThanOrEqual(3);
+        }
+      }
     }
+  });
+
+  it('keeps rendered conversation paragraphs on the primary text role', () => {
+    const source = readFileSync('src/ConversationHistory.css', 'utf8');
+
+    expect(ruleDeclaration(source, /\.markdown-content p\s*\{([^}]*)\}/, 'color')).toBe('inherit');
   });
 
   it('uses the accepted sans typography for shared headings', () => {

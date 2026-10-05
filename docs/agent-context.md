@@ -440,15 +440,24 @@ and size, Escape closed the menu, and minimise/restore succeeded. At 390px there
 was no horizontal overflow; visible app controls met 44px sizing, except the
 keyboard-only skip link (41px high). Keyboard focus on Settings displayed a
 solid 3px ring. Reduced motion matched and set the workspace transition to 0s.
-Chromium reported no page exceptions. A ten-frame, 990ms PNG sequence records a
+Chromium reported no page exceptions. Follow-up review found the earlier dark
+captures were taken while the 420ms light-to-dark surface transition was still
+running; the conversation and Factory dark captures were regenerated after the
+computed shell backgrounds matched the dark tokens. The settled colors are
+recorded in
+[`dark-rendered-styles.json`](ui/centred-stage/p8-31-browser/dark-rendered-styles.json).
+A ten-frame, 990ms PNG sequence records a
 workspace window entering; evidence and fixture summaries are in
 [`docs/ui/centred-stage/p8-31-browser/`](ui/centred-stage/p8-31-browser/),
 including a [side-by-side comparison](ui/centred-stage/p8-31-browser/glass-reference-comparison-dark-desktop.png)
 with selected image 2.
 All displayed conversation, task and generated-view content came from local
-fixtures, not live accounts or production data. Contrast tests cover black/white
-backing extremes, but production does not yet mount the 3D room, so reflected-
-scene readability, live delivery and hardware behavior remain unverified.
+fixtures, not live accounts or production data. Contrast tests calculate primary
+text, muted text, current-color icon and focus contrast on both glass surfaces
+against black and white backing extremes. The light muted-text token was darkened
+to meet AA, and conversation Markdown paragraphs now use the primary text role.
+Production does not yet mount the 3D room, so reflected-scene readability, live
+delivery and hardware behavior remain unverified.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

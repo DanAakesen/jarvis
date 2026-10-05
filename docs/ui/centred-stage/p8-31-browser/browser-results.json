@@ -95,7 +95,9 @@
   },
   {
     "factoryPhoneTheme": "light",
-    "horizontalOverflow": false
+    "horizontalOverflow": false,
+    "factoryPhoneDarkCapture": "factory-tasks-phone-dark.png",
+    "horizontalOverflowDark": false
   },
   {
     "factoryError": [
@@ -155,6 +157,36 @@
       "reducedMotionMatches": true,
       "scrollWidth": 390,
       "viewportWidth": 390
+    }
+  },
+  {
+    "darkCaptureSettlement": {
+      "waitFor": "computed topbar and rail backgrounds to equal dark token values",
+      "appearanceTransitionMs": 420,
+      "computedTokens": {
+        "--surface-translucent": "rgb(9 16 23 / 90%)",
+        "--surface-muted": "rgb(8 15 22 / 92%)",
+        "--text": "#f3fff9",
+        "--text-muted": "#c0d0cd",
+        "--focus": "#a5f2dc"
+      },
+      "renderedStyles": "dark-rendered-styles.json",
+      "captures": [
+        "conversation-desktop-dark.png",
+        "conversation-phone-dark.png",
+        "factory-tasks-desktop-dark.png",
+        "factory-tasks-phone-dark.png"
+      ]
+    }
+  },
+  {
+    "darkReferenceComparison": {
+      "file": "glass-reference-comparison-dark-desktop.png",
+      "reference": "selected image 2",
+      "actualPage": "Factory tasks",
+      "viewport": "1440x1000",
+      "actualAppearance": "dark",
+      "fixtureContent": true
     }
   },
   {
