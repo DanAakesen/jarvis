@@ -68,6 +68,19 @@ function decodedMimeBody(raw: string): string {
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
 describe('Google Calendar and Gmail tools', () => {
+  it('makes read-only calendar tools reflex-safe and keeps their audit data sensitive', () => {
+    const module = createGoogleModule(
+      { request: vi.fn(async () => ({ items: [] })) },
+      { timeZone: 'Europe/Copenhagen' },
+    );
+    for (const name of ['calendar_today_agenda', 'calendar_list_events', 'calendar_next_event']) {
+      expect(module.tools.find((tool) => tool.name === name)).toMatchObject({
+        reflexSafe: true,
+        sensitive: true,
+      });
+    }
+  });
+
   it('shows a reconnect message when Google credentials have expired', async () => {
     const request = vi.fn(async () => { throw new GoogleApiError('credentials-expired'); });
     const { app } = appFor(request);
@@ -124,7 +137,7 @@ describe('Google Calendar and Gmail tools', () => {
             nextPageToken: 'next-page',
           };
     });
-    const { app } = appFor(request);
+    const { app, records } = appFor(request);
     const response = await app.inject({
       method: 'POST',
       url: '/tools/calendar_list_events',
@@ -148,6 +161,10 @@ describe('Google Calendar and Gmail tools', () => {
     expect(firstQuery.get('timeMax')).toBe('2026-10-11T22:00:00.000Z');
     expect(firstQuery.get('q')).toBe('dentist');
     expect(secondQuery.get('pageToken')).toBe('next-page');
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
   });
 
   it('returns no events for an empty range', async () => {

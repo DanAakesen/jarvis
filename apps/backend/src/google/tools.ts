@@ -451,24 +451,31 @@ async function findNextCalendarEvent(
 ): Promise<{ event: ReturnType<typeof eventSummary> | null; truncated: boolean }> {
   const seenTokens = new Set<string>();
   let pageToken: string | undefined;
+  let inspected = 0;
   for (let page = 0; page < 100; page += 1) {
+    const pageSize = Math.min(50, 100 - inspected);
     const payload = await google.request(
       'calendar',
-      calendarViewPath(after, until, 50, undefined, pageToken),
+      calendarViewPath(after, until, pageSize, undefined, pageToken),
       { signal },
     );
-    const events = calendarEvents(payload);
+    const rawItems = Array.isArray(payload.items) ? payload.items : undefined;
+    if (!rawItems) throw new ToolFailure('Google Calendar returned an invalid response.');
+    const events = calendarEvents(payload, pageSize);
+    inspected += events.length;
     for (const event of events) {
+      if (event.status === 'cancelled' || declinedByDan(event)) continue;
       const start = googleDateTime(event.start, timeZone);
       if (!start) throw new ToolFailure('Google Calendar returned an invalid event time.');
-      if (start.getTime() > after.getTime() && !declinedByDan(event)) {
+      if (start.getTime() > after.getTime()) {
         return { event: eventSummary(event, timeZone), truncated: false };
       }
     }
     const next = typeof payload.nextPageToken === 'string' && payload.nextPageToken
       ? payload.nextPageToken
       : undefined;
-    if (!next) return { event: null, truncated: false };
+    if (!next) return { event: null, truncated: rawItems.length > events.length };
+    if (inspected >= 100 || rawItems.length > events.length) return { event: null, truncated: true };
     if (seenTokens.has(next)) return { event: null, truncated: true };
     seenTokens.add(next);
     pageToken = next;
@@ -520,7 +527,7 @@ export function createGoogleModule(
     },
     {
       name: 'calendar_list_events',
-      description: 'Read Dan’s Google Calendar events in a date or date-time range. Resolve relative requests such as “this week”, “next Monday”, or “in October” to ISO dates in Dan’s configured time zone; date endpoints include both dates, while date-times use an exclusive end. Results are paged and capped at 100. Read-only and safe for a quick reflex answer.',
+      description: 'Read Dan’s Google Calendar events in a date or date-time range. Resolve relative requests such as “this week”, “next Monday”, or “in October” to ISO dates in Dan’s configured time zone; date endpoints include both dates, while date-times use an exclusive end. Use query for event text such as “dentist”. Results are paged and capped at 100. Read-only and safe for a quick reflex answer.',
       inputSchema: {
         type: 'object',
         properties: {
