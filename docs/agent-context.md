@@ -466,8 +466,21 @@ fixtures, not live accounts or production data. Contrast tests calculate primary
 text, muted text, current-color icon and focus contrast on both glass surfaces
 against black and white backing extremes. The light muted-text token was darkened
 to meet AA, and conversation Markdown paragraphs now use the primary text role.
-Production does not yet mount the 3D room, so reflected-scene readability, live
-delivery and hardware behavior remain unverified.
+P8-29's signed-in browser checks used a scratch-only auth/API/WebSocket/SSE fixture
+and Chromium with SwiftShader. Captures in
+[`docs/ui/centred-stage/p8-29-browser/`](ui/centred-stage/p8-29-browser/) cover
+dormant dark/light at 1440×1000 and 390×844, plus dark desktop connecting, ready,
+decoded playback response, post-voice dormant and a schema-valid Now `thinking`
+event. The stage kept one canvas through voice entry and exit; `getUserMedia` was
+not called until the explicit Enable microphone action (one fake-device request).
+The browser observed listening→speaking→listening from fixture playback PCM and
+matched reduced motion. Phone had no horizontal overflow; there were no page or
+shader errors after the shader fix. Existing P8-31 contrast tests check text,
+muted text, icons and focus against black and white backdrops; the integrated
+scene/glass text was also visually checked. No live backend/provider, real audio
+device, hardware GPU, physical phone, Safari or transition-flicker acceptance is
+claimed. The fixtures and generated audio are local test data, not production
+simulated state controls.
 P1-14 was inspected at 390 and 1440 px with scratch-only database-status and
 project API mocks: “Waking Jarvis…” appeared during a reported wait, disappeared
 when requests settled, and status polling stopped while idle. No horizontal

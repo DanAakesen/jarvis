@@ -1338,8 +1338,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
     await expect(audioReply).resolves.toBe(audio);
     expect(connectDanish).toHaveBeenCalledOnce();
     expect(authorization).toHaveBeenCalledWith(['Bearer', voiceToken].join(' '));
+    // `session.start` belongs to the Bridge Protocol and is not forwarded to the voice route.
     expect(forwarded.map((event) => JSON.parse(event).type)).toEqual([
-      'session.start',
       'input_audio_buffer.append',
     ]);
     expect(forwarded.some((event) => JSON.parse(event).type === 'session.update')).toBe(false);

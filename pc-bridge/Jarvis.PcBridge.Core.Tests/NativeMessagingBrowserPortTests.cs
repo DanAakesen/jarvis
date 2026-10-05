@@ -19,6 +19,7 @@ public sealed class NativeMessagingBrowserPortTests
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
         await extension.ConnectAsync(5000);
+        await WaitUntilConnectedAsync(port);
 
         var openTask = port.OpenUrlAsync("https://google.com", CancellationToken.None);
         using (var request = await ReadMessageAsync(extension))
@@ -45,6 +46,7 @@ public sealed class NativeMessagingBrowserPortTests
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
         await extension.ConnectAsync(5000);
+        await WaitUntilConnectedAsync(port);
 
         var tabsTask = port.ListTabsAsync(20, 20, CancellationToken.None);
         using (var request = await ReadMessageAsync(extension))
@@ -98,6 +100,7 @@ public sealed class NativeMessagingBrowserPortTests
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
         await extension.ConnectAsync(5000);
+        await WaitUntilConnectedAsync(port);
 
         var tabsTask = port.ListTabsAsync(0, 1, CancellationToken.None);
         using (var request = await ReadMessageAsync(extension))
@@ -120,6 +123,7 @@ public sealed class NativeMessagingBrowserPortTests
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
         await extension.ConnectAsync(5000);
+        await WaitUntilConnectedAsync(port);
         var removed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         port.TabRemoved += tabId => removed.TrySetResult(tabId);
 
@@ -135,14 +139,27 @@ public sealed class NativeMessagingBrowserPortTests
         Assert.Equal("tab_21", await removed.Task.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
+    // The server registers its connection after WaitForConnectionAsync resumes, which can lag the
+    // client's ConnectAsync (notably on Linux). Sending before that is refused, so wait for it.
+    private static async Task WaitUntilConnectedAsync(NativeMessagingBrowserPort port)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!port.IsConnected)
+        {
+            if (DateTime.UtcNow > deadline) throw new TimeoutException("The browser port did not register the connection.");
+            await Task.Delay(10);
+        }
+    }
+
     private static async Task<JsonDocument> ReadMessageAsync(Stream stream)
     {
         var header = new byte[sizeof(int)];
-        await stream.ReadExactlyAsync(header);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await stream.ReadExactlyAsync(header, timeout.Token);
         var length = BinaryPrimitives.ReadInt32LittleEndian(header);
         Assert.InRange(length, 1, BridgeProtocol.MaxMessageBytes);
         var payload = new byte[length];
-        await stream.ReadExactlyAsync(payload);
+        await stream.ReadExactlyAsync(payload, timeout.Token);
         return JsonDocument.Parse(payload);
     }
 

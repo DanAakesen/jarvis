@@ -1112,6 +1112,8 @@ function registerVoiceRoute(
         });
         return;
       }
+      // Bridge Protocol control messages from older clients are not valid on the voice route.
+      if (event?.type === 'session.start') return;
       if (event?.type === 'session.update' || isBrowserControlledToolOutput(event)) {
         close(1008, 'Voice session is configured by the server');
         return;
@@ -1182,8 +1184,20 @@ function registerVoiceRoute(
           if (english) sendUpstream(createEnglishSessionUpdate(app.jarvisTools, personality, awayMode), flushQueued);
           else flushQueued();
         });
+        const upstreamEventTypes = new Set<string>();
         upstream.on('message', (data, binary) => {
           const event = parseVoiceEvent(data, binary);
+          if (typeof event?.type === 'string' && upstreamEventTypes.size < 40 &&
+              /^[a-z_.]{1,80}$/u.test(event.type)) upstreamEventTypes.add(event.type);
+          if (event?.type === 'error') {
+            const detail = (event as { error?: { code?: unknown; message?: unknown; type?: unknown } }).error;
+            const text = [detail?.type, detail?.code, detail?.message]
+              .filter((part): part is string => typeof part === 'string').join(': ');
+            request.log.warn({
+              failure: text.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown',
+              language,
+            }, 'voice.upstream_event_error');
+          }
           if (event?.type === 'conversation.item.input_audio_transcription.delta') {
             partialTranscriptionDeltas += 1;
             receiveTranscriptionDelta(event);
@@ -1289,6 +1303,7 @@ function registerVoiceRoute(
         upstream.once('close', (code, reason) => {
           if (!endRequested) {
             request.log.warn({
+              events: [...upstreamEventTypes].join(',').slice(0, 400),
               closeCode: code,
               failure: reason.toString('utf8').replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'none',
               language,
