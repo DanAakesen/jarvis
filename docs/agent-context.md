@@ -359,6 +359,8 @@ P8-23 reused a scratch-only fixture with the real `VoiceControls`, `VoiceOrb`,
 `Workspace` and project CSS. Chromium captured desktop listening/thinking/
 speaking at 1440×900 in dark and light, and phone speaking at 390×844 in both
 appearances; the fixture used simulated voice state and labelled sample views.
+Four comparison captures pair the dark/light desktop and phone speaking images
+with their matching Concept B/C references.
 Checks covered the hidden Workspace heading/header Arrange, window menus, voice
 control names/tooltips, 320/280px overflow, hidden-document aurora pause,
 reduced-motion readability/static presentation, menu Escape with focus return,

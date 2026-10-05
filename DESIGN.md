@@ -379,6 +379,11 @@ speaking captures on phone in both appearances, are in
 [Concept C desktop](docs/ui/concepts/screenshots/concept-c-voice-speaking-desktop.png),
 [Concept B phone](docs/ui/concepts/screenshots/concept-b-voice-speaking-phone.png)
 and [Concept C phone](docs/ui/concepts/screenshots/concept-c-voice-speaking-phone.png).
+The [dark desktop](docs/ui/screenshots/p8-23-dark-desktop-comparison.png),
+[light desktop](docs/ui/screenshots/p8-23-light-desktop-comparison.png),
+[dark phone](docs/ui/screenshots/p8-23-dark-phone-comparison.png) and
+[light phone](docs/ui/screenshots/p8-23-light-phone-comparison.png) comparison
+images place each reference beside its speaking capture.
 The captures use a labelled local fixture with simulated state and sample
 windows; they are not evidence of live authentication, hardware audio/camera,
 generated-window delivery, or P8-16 tool activity.
