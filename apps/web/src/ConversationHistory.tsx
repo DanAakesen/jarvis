@@ -253,8 +253,8 @@ export function ConversationHistory({
           setStreamedText(partialReply);
         },
         () => {
+          if (!userMessageSaved) setDraft((current) => current === submittedDraft ? '' : current);
           userMessageSaved = true;
-          setDraft((current) => current === submittedDraft ? '' : current);
         },
         contextForTurn,
         sharedContextForTurn,

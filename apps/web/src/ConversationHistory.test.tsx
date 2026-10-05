@@ -346,6 +346,28 @@ describe('ConversationHistory', () => {
     expect(input).toHaveProperty('value', '');
   });
 
+  it('preserves an identical next draft when a stream error reports uncertain delivery after acceptance', async () => {
+    let fail!: () => void;
+    sendChatTurn.mockImplementation((_client, _config, _session, _text, onUser, _onDelta, onUncertain) => {
+      onUser(userMessage);
+      return new Promise((_resolve, reject) => {
+        fail = () => {
+          onUncertain();
+          reject(new Error('Stream interrupted'));
+        };
+      });
+    });
+    renderConversation();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(input).toHaveProperty('value', ''));
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    await act(async () => fail());
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Stream interrupted');
+    expect(input).toHaveProperty('value', userMessage.text);
+  });
+
   it('dedupes refreshed history and updates persisted metadata without reordering optimistic messages', async () => {
     const savedUser = { ...userMessage, channel: 'chat', language: 'da', toolCalls: message.toolCalls };
     const savedAssistant = { ...assistantMessage, channel: 'chat', language: 'da', toolCalls: [] };
