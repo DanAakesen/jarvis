@@ -444,22 +444,43 @@ surface, without decorative borders. Dan's messages remain plain text. While a
 reply streams, an unmatched `**` is temporarily closed for rendering so an open
 bold span does not flash as literal Markdown; persisted text is unchanged.
 
-P8-26 extends P8-25 with a local FIFO queue. Send/Enter clears the draft
-immediately into a Dan bubble; waiting bubbles sit below the current reply with
-a quiet “Queued · Danish/English” label and a labelled 44px remove control.
-A polite, atomic live region announces the queue count, including zero.
-Send and DA/EN remain available during replies; language is captured per
-submission. Voice entry stays disabled until chat finishes, with voice mode
-otherwise unchanged. Starting a queued turn keeps its bubble visible as
-“Sending” until the saved user message arrives. Success, error and Stop reply
-advance the queue; errors and any partial text stay beside the failed turn.
-Later drafts survive acceptance, success and interruption; a failed unsaved
-submission keeps its draft, while uncertain delivery warns against resending.
-Before the first delta, a labelled “Jarvis is thinking…” status uses a quiet
-opacity-pulsing dot, static under reduced motion. Once text arrives, the reply
-and caret render on the open transcript surface, never inside an input-like box.
-The input starts focused and the transcript opens at the bottom. History refresh
-merges by saved message ID without removing recent or previously loaded messages.
+P8-26 adds a local FIFO queue. P8-35 reserves Ctrl+Enter for that queue and
+keeps its Dan bubbles, “Queued · Danish/English” label, labelled 44px remove
+control and polite atomic count announcement. Waiting submissions start in
+order after success or error. Starting a queued turn keeps its bubble visible
+as “Sending” until the saved user message arrives. Later drafts survive
+acceptance, success and interruption; a failed unsaved submission keeps its
+draft, while uncertain delivery warns against resending. The queue is local to
+the mounted conversation and is not retained across navigation/reload.
+
+P8-35 makes Send/Enter steer the active turn instead of offering a Stop button.
+During model text generation the backend aborts that model round, saves its
+partial assistant reply as interrupted, then starts a continuation using the
+new Dan message. During tool execution the tool is allowed to finish; the hosted
+agent collects new Dan messages at the next model-round boundary and continues
+with them, retaining existing confirmation gates. Per-message language applies
+to the next submission. Send, language, and voice entry remain available while
+Jarvis replies; entering voice does not cancel the chat stream, which continues
+into conversation history. Ctrl+Enter is the explicit queue gesture. The
+thinking status remains labelled and reduced-motion-safe, and streamed text
+uses the open transcript surface with a live caret.
+
+P8-35 Chromium evidence at 1440×900 and 390×844 in both themes:
+`docs/ui/screenshots/p8-35-progress-{dark,light}-{desktop,phone}.png`.
+The in-progress captures show a draft, enabled Send/language/voice controls,
+and no Stop button. Chromium verified the streamed state, Ctrl+Enter queueing,
+language switching during streaming, enabled controls, no horizontal overflow
+and no page exceptions. Focused component/API tests cover steering and voice
+entry during streaming. Captures use scratch-only auth/API mocks, not live
+Foundry evidence.
+
+The P8-26 screenshots remain historical evidence for that queue implementation:
+`docs/ui/screenshots/p8-26-queued-{dark,light}-{desktop,phone}.png`.
+The captures show two queued messages at 1440×900 and 390×844. Queue removal,
+double Enter, per-message language, Stop/next and error/next were exercised
+before P8-35 replaced Stop with steering. Queue bubbles reuse the existing
+short entrance transition, static under reduced motion; controls do not wait for
+animation.
 Local Chromium evidence at 1440×900 and 390×844 in both themes:
 `docs/ui/screenshots/p8-25-{before,after,streaming,complete}-{dark,light}-{desktop,phone}.png`.
 The sequence is load → send “hi” → saved user message and thinking status →

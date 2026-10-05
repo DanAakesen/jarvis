@@ -247,7 +247,7 @@ Verified in Codex cloud for P0-02:
 | Focused P8-17 settings/theme checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
-| Focused P8-26 queue and cancellation tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-abort.test.tsx` |
+| Focused P8-35 steering, queue, and control tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/backend -- --run src/core/conversation.test.ts src/database/conversation-store.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py` |
 | Focused P7-08 camera, shell, chat and voice checks | `npm test --workspace @jarvis/web -- --run src/camera-capture.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/App.test.tsx src/voice-client.test.tsx`; `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/vision/screen.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py` |
 | Focused P6-01 usage API and SQL-store tests | `npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts src/database/usage-store.test.ts` |
 | Focused P7-13 memory-tool, embedding, and migration tests | `npm test --workspace @jarvis/backend -- --run src/core/memory.test.ts src/core/memory-embeddings.test.ts src/database/migrations.test.ts` |
@@ -327,6 +327,13 @@ permission denial, natural voice end, draft/focus restoration and reduced
 motion were exercised. Screenshots in `docs/ui/screenshots/p8-05-*` contain
 labelled local fixtures, not production conversations. A real phone keyboard,
 physical microphone/speakers and live Azure round-trip remain unverified.
+P8-35 Chromium screenshots at 1440×900 and 390×844 in dark/light capture a
+streaming reply with a queued message and editable next draft. The browser
+checks verified Ctrl+Enter queueing, language switching, enabled Send/language/
+voice controls, no Stop button, no horizontal overflow and no console/page
+errors. Steering and starting voice during streaming are covered by focused
+component/API tests. These screenshots use scratch-only auth/API fixtures, not
+live Entra or Foundry.
 P8-11 used scratch-only auth/API/voice fixtures and the real workspace at
 1440×900 and touch-emulated 390×844 in both appearances. Chromium CDP touch
 gestures verified foreground switching at 390, 320 and 280px, alongside named

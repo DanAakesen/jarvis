@@ -40,6 +40,7 @@ function fixture(agent: ConversationAgent) {
       at: new Date('2026-10-03T12:00:01Z'),
     })),
     getDanMessageIdBySourceItemId: vi.fn(async () => null),
+    getDanMessagesAfter: vi.fn(async () => []),
     getHistory: vi.fn(async () => ({ messages: [], nextCursor: null })),
   };
   const app = buildApp(config, undefined, {
