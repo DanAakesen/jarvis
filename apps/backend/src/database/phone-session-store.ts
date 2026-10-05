@@ -14,6 +14,7 @@ export interface PhoneSessionStore {
     readonly callId: string;
     readonly callerId: string;
   }): Promise<PhoneCallSession | null>;
+  isActive(sessionId: string, callerId: string): Promise<boolean>;
   activate(sessionId: string, callConnectionId: string): Promise<boolean>;
   finish(sessionId: string, status: 'ended' | 'failed'): Promise<void>;
   active(): Promise<readonly PhoneCallSession[]>;
@@ -81,6 +82,19 @@ export function createPhoneSessionStore(pool: sql.ConnectionPool): PhoneSessionS
         throw error;
       }
     },
+    async isActive(sessionId, callerId) {
+      if (!/^[1-9]\d{0,18}$/u.test(sessionId) ||
+          BigInt(sessionId) > 9_223_372_036_854_775_807n ||
+          !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(callerId)) return false;
+      const { recordset } = await pool.request()
+        .input('sessionId', sql.BigInt, BigInt(sessionId))
+        .input('callerId', sql.NVarChar(64), callerId.toLowerCase())
+        .query<{ active: number }>(`SELECT 1 AS active
+          FROM dbo.phone_sessions
+          WHERE jarvis_session_id = @sessionId AND caller_kind = 'entra'
+            AND caller_id = @callerId AND status = 'active';`);
+      return recordset.length === 1;
+    },
     async activate(sessionId, callConnectionId) {
       if (!/^[1-9]\d{0,18}$/u.test(sessionId) ||
           BigInt(sessionId) > 9_223_372_036_854_775_807n ||
@@ -117,7 +131,7 @@ export function createPhoneSessionStore(pool: sql.ConnectionPool): PhoneSessionS
           END CATCH;`);
     },
     async active() {
-      const { recordset } = await pool.request().query<PhoneCallSessionRow>(`SELECT
+      const { recordset } = await pool.request().query<PhoneCallSessionRow>(`SELECT TOP (51)
           CONVERT(varchar(20), jarvis_session_id) AS session_id, call_id, caller_id,
           call_connection_id, status
         FROM dbo.phone_sessions

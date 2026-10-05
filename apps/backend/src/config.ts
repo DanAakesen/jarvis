@@ -33,6 +33,7 @@ export interface BackendConfig {
   phone?: {
     acsEndpoint: string;
     acsResourceId: string;
+    teamsResourceAccountObjectId: string;
   };
   auth: AuthConfig;
 }
@@ -160,11 +161,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   }
   const phoneEndpoint = env.JARVIS_PHONE_ACS_ENDPOINT;
   const phoneResourceId = env.JARVIS_PHONE_ACS_RESOURCE_ID;
-  if ((phoneEndpoint === undefined) !== (phoneResourceId === undefined)) {
-    throw new ConfigurationError('JARVIS_PHONE_ACS_ENDPOINT and JARVIS_PHONE_ACS_RESOURCE_ID must be configured together');
+  const teamsResourceAccountObjectId = env.JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID;
+  const phoneValues = [phoneEndpoint, phoneResourceId, teamsResourceAccountObjectId];
+  if (phoneValues.some((value) => value !== undefined) &&
+      phoneValues.some((value) => value === undefined)) {
+    throw new ConfigurationError('ACS endpoint, resource ID, and Teams resource-account object ID must be configured together');
   }
   let phone: BackendConfig['phone'];
-  if (phoneEndpoint !== undefined && phoneResourceId !== undefined) {
+  if (phoneEndpoint !== undefined && phoneResourceId !== undefined &&
+      teamsResourceAccountObjectId !== undefined) {
     let endpoint: URL;
     try { endpoint = new URL(phoneEndpoint); }
     catch { throw new ConfigurationError('JARVIS_PHONE_ACS_ENDPOINT must be a secure ACS endpoint'); }
@@ -177,10 +182,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     if (!/^\/subscriptions\/[\da-f-]+\/resourceGroups\/[a-z\d._()-]+\/providers\/Microsoft\.Communication\/communicationServices\/[a-z\d-]+$/iu.test(phoneResourceId)) {
       throw new ConfigurationError('JARVIS_PHONE_ACS_RESOURCE_ID must be an Azure Communication Services resource ID');
     }
-    if (!keyVaultUri || !env.VOICE_LIVE_ENDPOINT || !env.TEAMS_BOT_APP_ID) {
-      throw new ConfigurationError('Phone calling requires Key Vault, Voice Live, and Teams bot configuration');
+    if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(teamsResourceAccountObjectId)) {
+      throw new ConfigurationError('JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID must be a UUID');
     }
-    phone = { acsEndpoint: endpoint.origin, acsResourceId: phoneResourceId.toLowerCase() };
+    if (!keyVaultUri || !foundryProjectEndpoint || !env.TEAMS_BOT_APP_ID ||
+        !env.ENTRA_PHONE_EVENT_GRID_OBJECT_ID) {
+      throw new ConfigurationError('Phone calling requires Key Vault, the Foundry project, Teams bot, and Event Grid identity configuration');
+    }
+    phone = {
+      acsEndpoint: endpoint.origin,
+      acsResourceId: phoneResourceId.toLowerCase(),
+      teamsResourceAccountObjectId: teamsResourceAccountObjectId.toLowerCase(),
+    };
   }
   const monthlyBudgetResourceId = env.JARVIS_MONTHLY_BUDGET_RESOURCE_ID;
   if (monthlyBudgetResourceId !== undefined &&

@@ -32,7 +32,7 @@ from azure.ai.agentserver.invocations.voice import (
 )
 
 from chat_runtime import ChatContextLoader, load_verified_history, register_chat_invocation
-from jarvis_tools import current_conversation, current_turn
+from jarvis_tools import current_conversation, current_phone_session_id, current_turn
 from model_contract import StreamingModelClient
 from response_coordinator import ResponseCoordinator
 from state import (
@@ -139,6 +139,24 @@ class VoiceRuntime:
                 )
             )
             return
+        caller = event.caller
+        phone_session_id = caller.get("phoneSessionId") if caller is not None else None
+        if phone_session_id is not None:
+            if (
+                set(caller) != {"phoneSessionId"}
+                or not isinstance(phone_session_id, str)
+                or not phone_session_id.isascii()
+                or not phone_session_id.isdecimal()
+                or phone_session_id.startswith("0")
+                or len(phone_session_id) > 19
+                or int(phone_session_id) > 9_223_372_036_854_775_807
+            ):
+                state.reject()
+                await session.send(
+                    SessionRejected(code="invalid_phone_context", retriable=False)
+                )
+                return
+            state.phone_session_id = phone_session_id
         try:
             state.model_settings = await self._model_client.session_settings()
         except asyncio.CancelledError:
@@ -162,6 +180,7 @@ class VoiceRuntime:
         # Response tasks copy these context variables, so tool-log entries carry them.
         current_conversation.set(f"{socket.gethostname()}-{id(session):x}")
         current_turn.set(event.item_id)
+        current_phone_session_id.set(state.phone_session_id)
         if not await self._claim_input(session, state, event.item_id, TargetTurnOrigin.USER):
             return
         text_parts: list[str] = []

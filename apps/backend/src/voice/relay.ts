@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import websocket from '@fastify/websocket';
+import type { FastifyInstance } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
 import {
   createEnglishSessionUpdate,
@@ -115,6 +116,7 @@ export interface VoiceRelayOptions {
   readonly connect?: VoiceConnectionFactory;
   readonly connectDanish?: VoiceConnectionFactory;
   readonly createPartialRecognizer?: PartialSpeechRecognizerFactory;
+  readonly registerPhoneMediaRoute?: (app: FastifyInstance) => void;
 }
 
 type SharedScreenContext = {
@@ -1337,6 +1339,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           handleProtocols: (protocols) => protocols.has(VOICE_SUBPROTOCOL) ? VOICE_SUBPROTOCOL : false,
         },
       });
+      options.registerPhoneMediaRoute?.(app);
       if (options.connect) {
         registerVoiceRoute(
           app,

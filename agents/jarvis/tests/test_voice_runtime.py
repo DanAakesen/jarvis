@@ -13,8 +13,10 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from azure.ai.agentserver.invocations.voice import InputTextPart
 from starlette.testclient import TestClient
 
+from jarvis_tools import current_phone_session_id
 from response_coordinator import ResponseCoordinator
 from scripts.smoke_test import ResponseValidator
 from state import (
@@ -102,6 +104,48 @@ class RecordingSession:
         self.sent.append(event)
         if event.__class__.__name__ == "ResponseDone" and self.state is not None:
             self.capacity_at_done = self.state.active_response_count
+
+
+async def test_phone_session_context_is_kept_on_the_hosted_voice_turn() -> None:
+    model = FakeModel([["ignored"]])
+    runtime = VoiceRuntime(model)
+    session = RecordingSession()
+    previous = current_phone_session_id.set(None)
+    try:
+        await runtime.on_session_start(
+            session,
+            SimpleNamespace(protocol_version="1.0", caller={"phoneSessionId": "42"}),
+        )
+        state = runtime._store.active(session)
+        assert state is not None
+        assert state.phone_session_id == "42"
+
+        await runtime.on_user_message(
+            session,
+            SimpleNamespace(item_id="item_phone", content=[InputTextPart(text="/none")]),
+        )
+        assert current_phone_session_id.get() == "42"
+    finally:
+        current_phone_session_id.reset(previous)
+        await runtime.close()
+
+
+async def test_invalid_phone_session_context_rejects_hosted_voice_session() -> None:
+    runtime = VoiceRuntime(FakeModel([["unused"]]))
+    session = RecordingSession()
+    await runtime.on_session_start(
+        session,
+        SimpleNamespace(
+            protocol_version="1.0",
+            caller={"phoneSessionId": "42", "caller": "spoofed"},
+        ),
+    )
+
+    state = runtime._store.get_or_create(session)
+    assert state.phone_session_id is None
+    assert not state.active
+    assert session.sent[-1].code == "invalid_phone_context"
+    await runtime.close()
 
 
 def frame(message_type: str, **fields: Any) -> dict[str, Any]:

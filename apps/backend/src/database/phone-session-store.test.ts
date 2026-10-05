@@ -55,6 +55,17 @@ describe('phone call session store', () => {
     await expect(store.activate('1', 'bad\nconnection')).resolves.toBe(false);
   });
 
+  it('validates an active phone session against the verified caller', async () => {
+    const { store, query, input } = fixture();
+    query.mockResolvedValueOnce({ recordset: [{ active: 1 }], rowsAffected: [1] });
+    query.mockResolvedValueOnce({ recordset: [], rowsAffected: [0] });
+    await expect(store.isActive('42', callerId)).resolves.toBe(true);
+    expect(input).toHaveBeenCalledWith('callerId', sql.NVarChar(64), callerId);
+    expect(query.mock.calls[0]?.[0]).toContain("caller_id = @callerId AND status = 'active'");
+    await expect(store.isActive('42', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')).resolves.toBe(false);
+    await expect(store.isActive('bad', callerId)).resolves.toBe(false);
+  });
+
   it('finishes phone and conversation sessions together and lists active calls', async () => {
     const activeRows = [{
       session_id: '42', call_id: 'call-1', caller_id: callerId,
