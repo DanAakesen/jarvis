@@ -712,6 +712,64 @@ folders below `C:\Repo` in VS Code, active-window title, and exact-title focus.
 Offline policy/protocol tests do not verify live Entra sign-in or Windows
 execution; those remain coordinator post-merge checks.
 
+### Chrome browser executor (P7-18)
+
+The tray menu includes a persisted **Chrome browser automation (off/on)**
+toggle; missing settings default to off. Do not enable it until Dan has chosen
+the Chrome profile and is present. The bridge never launches Chrome. CDP is
+read only from `http://127.0.0.1:9222/json/list`, and the companion rejects
+non-loopback WebSocket targets.
+
+On Dan's Windows PC, use a dedicated Chrome user-data directory and sign in to
+Dan's Chrome profile there. Do not copy a profile or attach remote debugging to
+a profile that is already in use. Close Chrome, then start it with the loopback
+debug endpoint:
+
+```powershell
+$chrome = Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'
+if (-not (Test-Path $chrome)) {
+  $chrome = Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'
+}
+$profile = Join-Path $env:LOCALAPPDATA 'Jarvis\ChromeProfile'
+New-Item -ItemType Directory -Force -Path $profile | Out-Null
+Start-Process -FilePath $chrome -ArgumentList @(
+  '--remote-debugging-address=127.0.0.1',
+  '--remote-debugging-port=9222',
+  "--user-data-dir=`"$profile`""
+)
+```
+
+Sign in to that Chrome profile as Dan. Start the local test page from the
+repository root:
+
+```powershell
+python -m http.server 8765 --bind 127.0.0.1 --directory pc-bridge/test-pages
+```
+
+Open `http://127.0.0.1:8765/browser-executor.html`. Right-click the Jarvis tray
+icon and explicitly turn on **Chrome browser automation**. With P7-17 available,
+ask Jarvis to list tabs and snapshot this local page, then test typing in
+**Ordinary text**, selecting **Two**, clicking **Safe click target**, and using
+**Toggle target cover** before attempting another click from the old snapshot.
+The covered click must be refused. Attempts to type in Password or One-time
+code must be blocked; **Send test message** must wait for Dan's P7-03
+confirmation and the local page must not send anything. Take a new snapshot
+after each page change. Then turn the tray toggle off and close the test server
+and Chrome.
+
+From the repository root, the offline checks are:
+
+```text
+dotnet test pc-bridge/Jarvis.PcBridge.Core.Tests/Jarvis.PcBridge.Core.Tests.csproj --configuration Release
+dotnet build pc-bridge/Jarvis.PcBridge/Jarvis.PcBridge.csproj --configuration Release
+npm test --workspace @jarvis/backend -- --run src/pc-bridge/bridge.test.ts
+```
+
+These fake-CDP tests do not prove Chrome version/profile behavior or the native
+tray interaction. Capture desktop evidence of the local page and covered/sensitive
+refusals in the PR after the Windows check; do not include unrelated personal
+tabs or page contents.
+
 ### Database access and migrations (#7)
 
 - Configure `SQL_SERVER=<host>.database.windows.net`, `SQL_DATABASE=jarvis` and

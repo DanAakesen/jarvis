@@ -6,7 +6,8 @@ public sealed record BridgeSettings(
     string BackendUrl,
     string TenantId,
     string ApiClientId,
-    string BridgeClientId)
+    string BridgeClientId,
+    bool BrowserEnabled = false)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -32,6 +33,15 @@ public sealed record BridgeSettings(
         }
 
         return settings with { BackendUrl = backendUri!.GetLeftPart(UriPartial.Authority) };
+    }
+
+    public void Save()
+    {
+        var directory = Path.GetDirectoryName(SettingsPath)!;
+        Directory.CreateDirectory(directory);
+        var temporaryPath = $"{SettingsPath}.tmp";
+        File.WriteAllText(temporaryPath, JsonSerializer.Serialize(this, JsonOptions));
+        File.Move(temporaryPath, SettingsPath, overwrite: true);
     }
 
     public static bool TryBackendUri(string? value, out Uri? uri)

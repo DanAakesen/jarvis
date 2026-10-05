@@ -392,6 +392,10 @@ try {
     }),
     createPcBridgeModule({
       ...(pcBridgeStatusStore ? { onStatusChange: (online) => pcBridgeStatusStore.setStatus(online) } : {}),
+      ...(teamsNotifications ? {
+        runConfirmed: (summary, action, signal) =>
+          teamsNotifications.runConfirmed('computer_use', summary, action, signal),
+      } : {}),
       onStatusError: () => logger.warn('pc_bridge.status_update_failed'),
     }),
   ];
