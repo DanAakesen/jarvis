@@ -24,7 +24,7 @@ const events = new Set([
   'server.listening', 'server.stopping', 'server.stopped', 'server.failed',
   'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
-  'sandbox_heartbeat.decision',
+  'sandbox_heartbeat.decision', 'voice.reflex_metrics', 'chat.latency', 'memory.embedding',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -37,6 +37,7 @@ const heartbeatDecisions = new Set([
   'paused', 'pause_unchanged', 'cancelled', 'cancelling', 'interrupted', 'unknown',
   'unchanged', 'confirm_failure', 'persistence_failed', 'poll_failed',
 ]);
+const chatLatencyPhases = new Set(['reflex_targets', 'jev', 'agent_first_byte']);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
@@ -46,6 +47,22 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (typeof input.reason === 'string' && authDenialReasons.has(input.reason)) fields.reason = input.reason;
   for (const key of ['statusCode', 'responseTime', 'port']) {
     if (typeof input[key] === 'number' && Number.isFinite(input[key])) fields[key] = input[key];
+  }
+  if (input.msg === 'chat.latency') {
+    if (typeof input.phase === 'string' && chatLatencyPhases.has(input.phase)) fields.phase = input.phase;
+    if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
+        input.durationMs >= 0 && input.durationMs <= 600_000) {
+      fields.durationMs = input.durationMs;
+    }
+  }
+  if (input.msg === 'memory.embedding') {
+    if (typeof input.outcome === 'string' && ['ok', 'fallback', 'cancelled'].includes(input.outcome)) {
+      fields.outcome = input.outcome;
+    }
+    if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
+        input.durationMs >= 0 && input.durationMs <= 600_000) {
+      fields.durationMs = input.durationMs;
+    }
   }
   if (input.msg === 'sandbox_heartbeat.decision') {
     if (typeof input.sandboxSessionId === 'string' && /^[1-9]\d{0,18}$/.test(input.sandboxSessionId)) {
@@ -60,6 +77,21 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     }
     if (typeof input.decision === 'string' && heartbeatDecisions.has(input.decision)) {
       fields.decision = input.decision;
+    }
+  }
+  if (input.msg === 'voice.reflex_metrics') {
+    if (input.language === 'da' || input.language === 'en') fields.language = input.language;
+    for (const key of ['partialTranscriptionDeltas', 'stablePartialClauses']) {
+      const value = input[key];
+      if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 1_000) {
+        fields[key] = value;
+      }
+    }
+    for (const key of ['firstActionLatencyMs', 'speechToFirstWordMs', 'speechToFirstAudioMs']) {
+      const value = input[key];
+      if (value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0)) {
+        fields[key] = value;
+      }
     }
   }
   return fields;

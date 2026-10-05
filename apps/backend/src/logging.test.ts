@@ -72,4 +72,63 @@ describe('structured log export', () => {
       message: 'sandbox_heartbeat.decision', properties: { service: 'jarvis-backend' },
     }));
   });
+  it('exports only allowlisted chat and memory timing fields', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    logger.info({
+      phase: 'jev', durationMs: 123.4, text: 'prompt-secret',
+    }, 'chat.latency');
+    logger.info({
+      outcome: 'ok', durationMs: 45.6, query: 'memory-secret',
+    }, 'memory.embedding');
+
+    expect(JSON.parse(records[0]!)).toMatchObject({
+      phase: 'jev', durationMs: 123.4, msg: 'chat.latency',
+    });
+    expect(JSON.parse(records[1]!)).toMatchObject({
+      outcome: 'ok', durationMs: 45.6, msg: 'memory.embedding',
+    });
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it('exports only bounded voice reflex metrics and never transcript content', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    logger.info({
+      language: 'en',
+      partialTranscriptionDeltas: 2,
+      stablePartialClauses: 1,
+      firstActionLatencyMs: 12.34,
+      speechToFirstWordMs: null,
+      speechToFirstAudioMs: 13.56,
+      transcript: 'transcript-secret',
+      userMessage: 'message-secret',
+    }, 'voice.reflex_metrics');
+    const metric = {
+      language: 'en',
+      partialTranscriptionDeltas: 2,
+      stablePartialClauses: 1,
+      firstActionLatencyMs: 12.34,
+      speechToFirstWordMs: null,
+      speechToFirstAudioMs: 13.56,
+      msg: 'voice.reflex_metrics',
+    };
+    expect(JSON.parse(records[0]!)).toMatchObject(metric);
+    expect(sdk.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'voice.reflex_metrics',
+      properties: {
+        service: 'jarvis-backend',
+        language: 'en',
+        partialTranscriptionDeltas: 2,
+        stablePartialClauses: 1,
+        firstActionLatencyMs: 12.34,
+        speechToFirstWordMs: null,
+        speechToFirstAudioMs: 13.56,
+      },
+    }));
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
 });

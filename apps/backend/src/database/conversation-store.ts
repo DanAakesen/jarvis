@@ -148,6 +148,20 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       return row ? messageFromRow(row) : null;
     },
 
+    async updateMessage(messageId, text) {
+      const result = await pool.request()
+        .input('messageId', sql.BigInt, BigInt(messageId))
+        .input('text', sql.NVarChar(sql.MAX), text)
+        .query<MessageRow>(`UPDATE dbo.messages
+          SET text = @text
+          OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
+            CONVERT(varchar(20), INSERTED.jarvis_session_id) AS session_id,
+            INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at
+          WHERE id = @messageId AND role = N'dan';`);
+      const row = result.recordset[0];
+      return row ? messageFromRow(row) : null;
+    },
+
     async getDanMessageIdBySourceItemId(sourceItemId) {
       const result = await databaseReadRequest(pool)
         .input('sourceItemId', sql.NVarChar(128), sourceItemId)

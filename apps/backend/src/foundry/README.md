@@ -7,7 +7,7 @@
 - `agentName`: deployed runner name; `apiVersion` defaults to `v1`.
 - `getToken(scope, signal)`: the backend's identity provider, returning the bearer token for `https://ai.azure.com/.default`. An Azure `TokenCredential` adapter can call `credential.getToken(scope, { abortSignal: signal })` and return its `token`. Credential caching and tenant/identity selection belong to that provider. This module never shells out to Azure CLI or stores credentials.
 
-`startTask(request)` and `startCodexRenewal()` return the accepted invocation and session IDs. A task request requires `agent`, `task`, `repository` (`owner/name`), `defaultBranch`, and `branch`; `taskId`, `model`, and Codex-only `reasoning` are optional client fields, but deployed task dispatch always supplies `taskId`. The dispatcher persists `jarvis/task-<id>` in `tasks.branch` and resolves provider overrides before settings defaults. This client validates and forwards those values. Renewal uses the runner's `mode=renew-codex` contract with a three-day threshold and needs no repository.
+`startTask(request)`, `startCodexRenewal()` and `startCodexTool(tool, query, model)` return the accepted invocation and session IDs. A task request requires `agent`, `task`, `repository` (`owner/name`), `defaultBranch`, and `branch`; `taskId`, `model`, and Codex-only `reasoning` are optional client fields, but deployed task dispatch always supplies `taskId`. The dispatcher persists `jarvis/task-<id>` in `tasks.branch` and resolves provider overrides before settings defaults. This client validates and forwards those values. Renewal uses the runner's `mode=renew-codex` contract with a three-day threshold and needs no repository. `startCodexTool` uses `agent=codex`, `mode=codex-tool`, and only the allowlisted `web_research` tool with a bounded query and explicit supported model; it needs no repository.
 
 `steer(sessionId, agent, message)`, `pause(sessionId)` and `resume(sessionId, request)` reuse the session through `agent_session_id`. Resume carries the same repository/default/task branch; the runner retains its original workspace and provider settings. Steering and pause ask the runner to cancel the current ACP turn. Pause reports `pausing` or `idle`; it does not assert that the running turn has stopped. The owner observes the original invocation before resuming.
 
@@ -18,6 +18,10 @@ Each HTTP call has a 30-second default deadline covering authentication, fetch a
 There are no retries in this client. The dispatcher owns retry policy and session lifetime; the renewal job owns bounded status polling and its SQL lease; the heartbeat polls registered active invocations immediately and about once a minute, updating `last_heartbeat_at` on a valid status response. The first HTTP 404, 424 or 5xx response gets a confirming poll after 30 seconds. A second qualifying response marks the sandbox crashed and the task NeedsAttention only if the matching invocation is still active; if it already completed, the sandbox ends as `Ended`/`idle_expired` without changing task state. Event gaps do not affect the rule. A timed-out create/control request may already have reached Foundry, so its owner must reconcile rather than resend blindly. Provider `completed` is not proof of delivery: the branch and PR still need GitHub evidence. Resume is for a clean pause/idle shutdown; crash recovery and idle-expiry continuation start new sessions from the task branch.
 
 The session owner calls `deleteSession` after delivery or cancellation and cleans probe sessions in `finally`. This client deliberately does not delete a paused session, so its files and conversation can survive idle shutdown.
+
+P7-14's web-research module owns a 305-second overall deadline and bounded polling
+of the isolated Codex-tool invocation. It cancels active work and deletes the
+temporary session on success, failure, timeout or caller cancellation.
 
 ## Offline verification
 

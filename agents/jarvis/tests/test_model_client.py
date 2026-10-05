@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
@@ -293,6 +294,38 @@ async def test_chat_reflex_result_is_trusted_and_not_repeated_as_an_action() -> 
         "Relay the result honestly and acknowledge briefly. Do not repeat the action."
         in instructions
     )
+
+
+@pytest.mark.asyncio
+async def test_fetches_tool_catalogue_and_live_context_concurrently() -> None:
+    model, transport = client([completed()])
+    started: set[str] = set()
+    both_started = asyncio.Event()
+
+    async def wait_for_both(name: str) -> None:
+        started.add(name)
+        if len(started) == 2:
+            both_started.set()
+        await asyncio.wait_for(both_started.wait(), timeout=1)
+
+    class ConcurrentBackend:
+        async def tools(self):
+            await wait_for_both("tools")
+            return ()
+
+        async def context(self):
+            await wait_for_both("context")
+            return {"runningTasks": [], "truncated": False}
+
+    model._tools = ConcurrentBackend()  # type: ignore[assignment]
+
+    chunks = [chunk async for chunk in model.complete_chat(
+        [ModelMessage("user", "Hi")], "en"
+    )]
+
+    assert chunks == []
+    assert started == {"tools", "context"}
+    assert transport.responses.request is not None
 
 
 @pytest.mark.asyncio

@@ -74,6 +74,16 @@ describe('GitHub webhook mapping', () => {
     });
   });
 
+  it('ignores deployment statuses from non-release workflow environments', () => {
+    for (const environment of ['project-board', 'copilot', 'Copilot']) {
+      expect(mapGithubWebhook('deployment_status', {
+        repository,
+        deployment: { id: 1_900_000_000_003, sha, environment },
+        deployment_status: { state: 'failure', created_at: timestamp },
+      })).toBeUndefined();
+    }
+  });
+
   it('ignores malformed, deleted-branch and unconfigured release event payloads', () => {
     expect(mapGithubWebhook('pull_request', { repository, pull_request: {} })).toBeUndefined();
     expect(mapGithubWebhook('push', {
