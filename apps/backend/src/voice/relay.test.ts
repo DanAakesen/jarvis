@@ -1243,7 +1243,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const projectEndpoint = 'https://resource.services.ai.azure.com/api/projects/jarvis';
     expect(normalizeFoundryProjectEndpoint(projectEndpoint)).toBe(projectEndpoint);
     expect(createDanishVoiceAgentEndpoint(projectEndpoint, 'session_1')).toBe(
-      `wss://resource.services.ai.azure.com/api/projects/jarvis/agents/${DANISH_VOICE_AGENT_NAME}/endpoint/protocols/invocations_ws?api-version=v1&agent_session_id=session_1`,
+      `wss://resource.services.ai.azure.com/api/projects/jarvis/agents/${DANISH_VOICE_AGENT_NAME}/endpoint/protocols/voice?api-version=v1&agent_session_id=session_1`,
     );
     expect(() => createDanishVoiceAgentEndpoint(projectEndpoint, 'bad session')).toThrow(TypeError);
   });

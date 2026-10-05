@@ -206,7 +206,8 @@ export function createDanishVoiceAgentEndpoint(projectEndpoint: string, sessionI
   }
   const target = new URL(normalizeFoundryProjectEndpoint(projectEndpoint));
   target.protocol = 'wss:';
-  target.pathname += `/agents/${DANISH_VOICE_AGENT_NAME}/endpoint/protocols/invocations_ws`;
+  // Voice agents (kind: voice) use the realtime voice route, as in azure-ai-projects `_to_ws_url` (L97).
+  target.pathname += `/agents/${DANISH_VOICE_AGENT_NAME}/endpoint/protocols/voice`;
   target.searchParams.set('api-version', 'v1');
   target.searchParams.set('agent_session_id', sessionId);
   return target.href;
@@ -218,7 +219,10 @@ export function createDanishVoiceConnector(projectEndpoint: string): VoiceConnec
       projectEndpoint,
       randomUUID().replaceAll('-', ''),
     ), {
-      headers: { Authorization: ['Bearer', token].join(' ') },
+      headers: {
+        Authorization: ['Bearer', token].join(' '),
+        'Foundry-Features': 'VoiceAgents=V1Preview',
+      },
       handshakeTimeout: CONNECTION_TIMEOUT_MS,
       maxPayload: MAX_MESSAGE_BYTES,
       perMessageDeflate: false,
