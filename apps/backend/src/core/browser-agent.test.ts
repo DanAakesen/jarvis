@@ -8,6 +8,7 @@ import {
   type BrowserActionInput,
   type BrowserJevPlanner,
   type BrowserSnapshot,
+  type BrowserTab,
   type BrowserTextModel,
 } from './browser-agent.js';
 import { ToolRefusal } from './tool-registry.js';
@@ -51,14 +52,16 @@ function fixture(
     generateText: vi.fn(async () => 'hello'),
     verifyCompletion: vi.fn(async () => true),
   },
+  tabs: readonly BrowserTab[] = [
+    { id: 'tab_1', title: 'Search', url: 'https://example.test/', focused: true },
+  ],
 ) {
   const actions: BrowserActionInput[] = [];
   const snapshots: unknown[] = [];
   const workspaceCalls: unknown[] = [];
-  const listTabs = vi.fn(async () => ({ tabs: [
-    { id: 'tab_1', title: 'Search', url: 'https://example.test/', focused: true },
-  ], nextOffset: null }));
-  const getSnapshot = vi.fn(async () => snapshots.shift() ?? snapshot);
+  const listTabs = vi.fn(async () => ({ tabs, nextOffset: null }));
+  const getSnapshot = vi.fn(async (input: unknown) => snapshots.shift() ??
+    { ...snapshot, tabId: (input as { tabId: string }).tabId });
   const act = vi.fn(async (input: unknown) => {
     actions.push(input as BrowserActionInput);
     return { acted: true, action: (input as BrowserActionInput).action };
@@ -92,6 +95,12 @@ function fixture(
     openUrl,
     textModel,
   };
+}
+
+function sharedTool(env: ReturnType<typeof fixture>) {
+  const tool = createBrowserAgentModule(env.agent).tools.find(({ name }) => name === 'browser_do_shared');
+  if (!tool) throw new Error('Shared browser tool is missing');
+  return tool;
 }
 
 function fixedPlanner(decision: {
@@ -265,6 +274,177 @@ describe('Jev browser agent', () => {
     }, env.request, new AbortController().signal)).rejects.toThrow(/HTTP or HTTPS/u);
   });
 
+  it('resolves the shared display title against Chrome tabs and runs the Jev agent on that match', async () => {
+    const tabs: BrowserTab[] = [
+      { id: 'tab_1', title: 'Travel search', url: 'https://travel.example.test/', focused: true },
+      { id: 'tab_2', title: 'Contact form', url: 'https://forms.example.test/contact', focused: false },
+    ];
+    const env = fixture(fixedPlanner({ operation: 'done' }), undefined, tabs);
+    const result = await sharedTool(env).execute({
+      goal: 'Fill in my name',
+      sharedWindowTitle: 'Contact form - Google Chrome',
+      screenDescription: 'A contact form with a name field and a submit button.',
+    }, env.request, new AbortController().signal);
+
+    expect(result).toMatchObject({ status: 'completed', tabId: 'tab_2' });
+    expect(env.listTabs).toHaveBeenCalledTimes(2);
+    expect(env.getSnapshot).toHaveBeenCalledWith(
+      { tabId: 'tab_2' }, env.request, expect.any(AbortSignal),
+    );
+    expect(env.actions).toEqual([]);
+  });
+
+  it('reads every paginated Chrome tab before resolving a shared-screen match', async () => {
+    const tab: BrowserTab = {
+      id: 'tab_later_page', title: 'Contact form', url: 'https://forms.example.test/', focused: false,
+    };
+    const env = fixture(fixedPlanner({ operation: 'done' }));
+    env.listTabs
+      .mockResolvedValueOnce({
+        tabs: [{ id: 'tab_1', title: 'Search', url: 'https://search.example.test/', focused: true }],
+        nextOffset: 20,
+      })
+      .mockResolvedValueOnce({ tabs: [tab], nextOffset: null })
+      .mockResolvedValueOnce({ tabs: [tab], nextOffset: null });
+
+    const result = await sharedTool(env).execute({
+      goal: 'Fill this in',
+      sharedWindowTitle: 'Contact form',
+      screenDescription: 'A contact form is shown.',
+    }, env.request, new AbortController().signal);
+
+    expect(result).toMatchObject({ status: 'completed', tabId: 'tab_later_page' });
+    expect(env.listTabs).toHaveBeenNthCalledWith(1, {}, env.request, expect.any(AbortSignal));
+    expect(env.listTabs).toHaveBeenNthCalledWith(2, { offset: 20 }, env.request, expect.any(AbortSignal));
+  });
+
+  it('routes a voice request back through shared-tab resolution instead of the focused tab', async () => {
+    const tabs: BrowserTab[] = [
+      { id: 'tab_1', title: 'Other page', url: 'https://other.example.test/', focused: true },
+      { id: 'tab_2', title: 'Contact form', url: 'https://forms.example.test/', focused: false },
+    ];
+    const env = fixture(fixedPlanner({ operation: 'done' }), undefined, tabs);
+    env.request.requireSharedScreenContext = true;
+    env.request.sharedScreenContext = {
+      sharedWindowTitle: 'Contact form - Chrome',
+      screenDescription: 'A contact form with a name field.',
+    };
+    const module = createBrowserAgentModule(env.agent);
+    const tool = module.tools.find(({ name }) => name === 'browser_do');
+    if (!tool) throw new Error('Browser tool is missing');
+
+    const result = await tool.execute({ goal: 'Fill this in' }, env.request, new AbortController().signal);
+
+    expect(result).toMatchObject({ status: 'completed', tabId: 'tab_2' });
+  });
+
+  it('asks Dan to choose when multiple tabs match and accepts his exact tab-title clarification', async () => {
+    const tabs: BrowserTab[] = [
+      { id: 'tab_1', title: 'Contact form', url: 'https://one.example.test/', focused: true },
+      { id: 'tab_2', title: 'Contact form copy', url: 'https://two.example.test/', focused: false },
+    ];
+    const ambiguous = fixture(fixedPlanner({ operation: 'done' }), undefined, tabs);
+    await expect(sharedTool(ambiguous).execute({
+      goal: 'Fill in the form',
+      sharedWindowTitle: 'Chrome',
+      screenDescription: 'A contact form with a name field.',
+    }, ambiguous.request, new AbortController().signal)).rejects.toThrow(
+      /Which one should I use: "Contact form" \(one\.example\.test\), "Contact form copy" \(two\.example\.test\)\?/u,
+    );
+    expect(ambiguous.getSnapshot).not.toHaveBeenCalled();
+
+    const clarified = fixture(fixedPlanner({ operation: 'done' }), undefined, tabs);
+    await clarified.agent.runSharedTask({
+      goal: 'Fill in the form',
+      sharedWindowTitle: 'Chrome',
+      screenDescription: 'A contact form with a name field.',
+      tabTitle: 'Contact form copy',
+    }, clarified.request, new AbortController().signal);
+    expect(clarified.getSnapshot).toHaveBeenCalledWith(
+      { tabId: 'tab_2' }, clarified.request, expect.any(AbortSignal),
+    );
+  });
+
+  it('offers a steps fallback when the local bridge is offline', async () => {
+    const env = fixture(fixedPlanner({ operation: 'done' }));
+    env.listTabs.mockRejectedValue(new ToolRefusal('The local PC bridge is offline.'));
+
+    await expect(sharedTool(env).execute({
+      goal: 'Fill in the form',
+      screenDescription: 'A form is visible.',
+    }, env.request, new AbortController().signal)).rejects.toThrow(
+      'Chrome is offline. I can send the steps instead.',
+    );
+    expect(env.getSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('keeps a risky click on the shared tab behind the Chrome executor confirmation', async () => {
+    const planner: BrowserJevPlanner = {
+      decide: vi.fn()
+        .mockResolvedValueOnce({ operation: 'click', confidence: 0.99, targetIndex: 1 })
+        .mockResolvedValueOnce({ operation: 'done', confidence: 0.99 }),
+    };
+    const env = fixture(planner);
+    let approve!: () => void;
+    let markRequested!: (summary: string) => void;
+    const approval = new Promise<void>((resolve) => { approve = resolve; });
+    const requested = new Promise<string>((resolve) => { markRequested = resolve; });
+    const runConfirmed = vi.fn(async (summary: string, action: () => Promise<unknown>) => {
+      markRequested(summary);
+      await approval;
+      return action();
+    });
+    env.act.mockImplementation(async (value: unknown) => {
+      const input = value as BrowserActionInput;
+      const result = await runConfirmed(
+        'Click "Send message" in Chrome.',
+        async () => ({ acted: true, action: input.action }),
+      );
+      env.actions.push(input);
+      return result;
+    });
+    const running = sharedTool(env).execute({
+      goal: 'Submit the form',
+      sharedWindowTitle: 'Search',
+      screenDescription: 'A form with a Send message button.',
+    }, env.request, new AbortController().signal);
+
+    await expect(requested).resolves.toBe('Click "Send message" in Chrome.');
+    expect(env.actions).toEqual([]);
+    approve();
+    await expect(running).resolves.toMatchObject({ status: 'completed', tabId: 'tab_1' });
+    expect(env.actions).toMatchObject([{
+      tabId: 'tab_1',
+      snapshotId: snapshot.snapshotId,
+      elementIndex: 1,
+      action: 'click',
+    }]);
+    expect(runConfirmed).toHaveBeenCalledOnce();
+  });
+
+  it('stops a shared-tab run when its caller aborts', async () => {
+    let enteredPlanner!: () => void;
+    const plannerStarted = new Promise<void>((resolve) => { enteredPlanner = resolve; });
+    const waitingPlanner: BrowserJevPlanner = {
+      decide: (_input, signal) => new Promise((resolve) => {
+        enteredPlanner();
+        signal.addEventListener('abort', () => resolve(null), { once: true });
+      }),
+    };
+    const env = fixture(waitingPlanner);
+    const controller = new AbortController();
+    const running = env.agent.runSharedTask({
+      goal: 'Fill in the form',
+      sharedWindowTitle: 'Search',
+      screenDescription: 'A search page.',
+    }, env.request, controller.signal);
+    await plannerStarted;
+    controller.abort();
+
+    await expect(running).rejects.toThrow(/stopped/u);
+    expect(env.actions).toEqual([]);
+  });
+
   it('independently verifies Jev completion against a fresh page snapshot', async () => {
     const textModel: BrowserTextModel = {
       generateText: vi.fn(async () => null),
@@ -344,6 +524,8 @@ describe('Jev browser agent', () => {
       verifyCompletion: vi.fn(async () => true),
     }));
     expect(module.tools[0]).toMatchObject({ name: 'browser_do', sensitive: true, reflexSafe: true });
+    expect(module.tools[1]).toMatchObject({ name: 'browser_do_shared', sensitive: true });
+    expect(module.tools[1]).not.toHaveProperty('reflexSafe', true);
   });
 
   it('uses the existing fast Foundry chat deployment with reasoning disabled and validates JSON text', async () => {

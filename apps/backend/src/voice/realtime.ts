@@ -165,10 +165,10 @@ export async function executeRealtimeToolCall(
       throw new Error('Invalid tool result');
     }
   } catch (error) {
-    if (error instanceof ToolRefusal && !signal.aborted) {
+    if (error instanceof ToolRefusal) {
       outcome = 'refused';
       result = { refused: error.message };
-    } else if (error instanceof ToolFailure && !signal.aborted) {
+    } else if (error instanceof ToolFailure) {
       outcome = 'error';
       result = { failure: error.message };
     } else {

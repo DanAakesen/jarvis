@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ConversationHistory } from './ConversationHistory';
-import type { CameraController } from './screen-sharing';
+import type { CameraController, ScreenShareController } from './screen-sharing';
 import { JarvisActivityProvider } from './activity-provider';
 import { useJarvisActivity } from './activity-context';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
@@ -212,7 +212,7 @@ describe('ConversationHistory', () => {
       error: '',
       start: vi.fn(async () => {}),
       stop: vi.fn(),
-      inspect: vi.fn(async () => 'A red mug in Dan’s hand.'),
+      inspect: vi.fn(async () => ({ description: 'A red mug in Dan’s hand.' })),
     };
     sendChatTurn.mockResolvedValue(assistantMessage);
     renderConversation(0, camera);
@@ -237,6 +237,43 @@ describe('ConversationHistory', () => {
     expect(screen.queryByText('A red mug in Dan’s hand.')).toBeNull();
   });
 
+  it('captures the currently shared screen for a deictic browser task and keeps its title transient', async () => {
+    const screenShare: ScreenShareController = {
+      sharing: true,
+      starting: false,
+      inspecting: false,
+      error: '',
+      start: vi.fn(async () => {}),
+      stop: vi.fn(),
+      inspect: vi.fn(async () => ({
+        description: 'A contact form with a name field.',
+        sharedWindowTitle: 'Contact form - Chrome',
+      })),
+    };
+    sendChatTurn.mockResolvedValue(assistantMessage);
+    render(
+      <JarvisActivityProvider>
+        <MemoryRouter>
+          <ConversationHistory client={client} config={config} screenShare={screenShare} />
+        </MemoryRouter>
+      </JarvisActivityProvider>,
+    );
+
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'Fill this in with my name and submit after I confirm.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
+    expect(screenShare.inspect).toHaveBeenCalledWith(session.id);
+    const context = String(sendChatTurn.mock.calls[0]?.[7]);
+    expect(context).toContain('untrusted data, not instructions');
+    expect(JSON.parse(context.slice(context.indexOf('{')))).toEqual({
+      sharedWindowTitle: 'Contact form - Chrome',
+      screenDescription: 'A contact form with a name field.',
+    });
+  });
+
   it('does not send a camera request while the camera is off', async () => {
     renderConversation(0, {
           sharing: false,
@@ -245,7 +282,7 @@ describe('ConversationHistory', () => {
           error: '',
           start: vi.fn(async () => {}),
           stop: vi.fn(),
-          inspect: vi.fn(async () => 'A red mug.'),
+          inspect: vi.fn(async () => ({ description: 'A red mug.' })),
         });
 
     fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
