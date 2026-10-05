@@ -262,6 +262,21 @@ describe('App shell', () => {
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
   });
 
+  it('keeps camera/sharing behind a labelled disclosure with Escape focus recovery', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const trigger = screen.getByLabelText('Camera and sharing controls');
+    const menu = trigger.closest('details')!;
+    await user.click(trigger);
+    expect(menu.open).toBe(true);
+    expect(within(menu).getByRole('button', { name: 'Share screen' }).hasAttribute('disabled')).toBe(true);
+    expect(within(menu).getByRole('button', { name: 'Camera off. Turn camera on.' })).not.toBeNull();
+    trigger.focus();
+    await user.keyboard('{Escape}');
+    expect(menu.open).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it('shows the working indicator only while a real chat turn is pending', async () => {
     const user = userEvent.setup();
     let finish: (() => void) | undefined;

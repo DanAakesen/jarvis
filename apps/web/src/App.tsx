@@ -252,8 +252,19 @@ function ShellLayout({ signedIn, config, session, camera }: {
                 <span className="topbar-working-compact" aria-hidden="true">Working</span>
               </span>
             )}
-            <UnavailableControl id="screen-share-status" label="Share screen" explanation="Share screen from Activity, sharing and backend in the conversation." icon="screen" />
-            <CameraControl camera={camera} />
+            <details className="topbar-capture-menu" onKeyDown={(event) => {
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector('summary')?.focus();
+            }}>
+              <summary aria-label="Camera and sharing controls"><ShellIcon name="camera" /></summary>
+              <div className="topbar-capture-controls">
+                <UnavailableControl id="screen-share-status" label="Share screen" explanation="Share screen from Activity, sharing and backend in the conversation." icon="screen" />
+                <CameraControl camera={camera} />
+                <p className="topbar-capture-guidance">Share screen from Activity, sharing and backend in the conversation. Camera turns off when the session ends.</p>
+              </div>
+            </details>
             <button
               id="context-panel-toggle"
               className="topbar-icon-button"

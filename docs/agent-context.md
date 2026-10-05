@@ -286,6 +286,23 @@ permission denial, natural voice end, draft/focus restoration and reduced
 motion were exercised. Screenshots in `docs/ui/screenshots/p8-05-*` contain
 labelled local fixtures, not production conversations. A real phone keyboard,
 physical microphone/speakers and live Azure round-trip remain unverified.
+P8-11 used scratch-only auth/API/voice fixtures and the real workspace at
+1440×900 and touch-emulated 390×844 in both appearances. Chromium CDP touch
+gestures verified foreground switching at 390, 320 and 280px, alongside named
+direct requests, retained input state, keyboard selection/focus, minimise/restore,
+orb docking/return, End voice and Escape. The overflow menu was opened and its
+bounds checked; foreground content ends above the dock, including reduced motion.
+Shrinking to 390×480 simulated keyboard-height pressure; 844×390 checked resize
+reflow. Neither substitutes for a physical phone keyboard or screen reader.
+All-minimised typing tabs stay visible above the transcript, without moving the
+composer offscreen; repeated start/end remains usable.
+Before/after screenshots use labelled local fixtures under
+`docs/ui/screenshots/p8-11-*`; they do not demonstrate live Entra, hardware audio
+or P8-15's generated-view/agent-command delivery. No production auth stub or
+browser package was added.
+Validation: `npm test --workspace @jarvis/web` passed 208 tests;
+`npm run lint --workspace @jarvis/web`, `npm run build --workspace @jarvis/web`
+and `git diff --check` passed (existing bundle-size warning).
 P8-21 used the same scratch-only auth/API fixture workflow with Chromium at
 1440×900 and touch-emulated 390×844 in dark/light appearances. Empty, history,
 streaming, Now and workspace states are captured under `docs/ui/screenshots/p8-21-*`.

@@ -78,6 +78,10 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [minimizedViewIdsState, setMinimizedViewIds] = useState<ReadonlySet<string>>(new Set());
   const [closedViewIdsState, setClosedViewIds] = useState<ReadonlySet<string>>(new Set());
   const [maximizedViewId, setMaximizedViewId] = useState<string | null>(null);
+  const [foregroundViewId, setForegroundViewId] = useState<string | null>(null);
+  const [phone, setPhone] = useState(() => (
+    typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 700px)').matches
+  ));
   const [announcement, setAnnouncement] = useState('');
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
   const [actionSuccess, setActionSuccess] = useState<Record<string, string>>({});
@@ -94,12 +98,21 @@ export const Workspace = forwardRef<WorkspaceController, {
   const windowHeadings = useRef(new Map<string, HTMLHeadingElement>());
   const tabElements = useRef(new Map<string, HTMLButtonElement>());
   const pendingFocus = useRef<PendingFocus | null>(null);
+  const swipe = useRef<{ pointerId: number; x: number; y: number } | null>(null);
 
   useEffect(() => {
     const media = window.matchMedia?.('(max-width: 900px)');
     if (!media) return;
     const update = () => setNarrow(media.matches);
     update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(max-width: 700px)');
+    if (!media) return;
+    const update = () => { swipe.current = null; setPhone(media.matches); };
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
@@ -125,6 +138,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   const openViews = useMemo(() => orderedViews.filter((view) => !closedViewIds.has(view.id)), [closedViewIds, orderedViews]);
   const minimizedViews = useMemo(() => openViews.filter((view) => minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
   const visibleViews = useMemo(() => openViews.filter((view) => !minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
+  const foreground = visibleViews.find((view) => view.id === foregroundViewId) ?? visibleViews[0];
 
   useEffect(() => {
     onVisibleViewsChange?.(visibleViews.length > 0);
@@ -141,7 +155,7 @@ export const Workspace = forwardRef<WorkspaceController, {
     } else {
       windowHeadings.current.get(next.viewId)?.focus();
     }
-  }, [closedViewIdsState, minimizedViewIdsState, openViews]);
+  }, [closedViewIdsState, minimizedViewIdsState, openViews, foreground?.id, phone]);
 
   function geometryFor(id: string, index: number): Geometry {
     return geometry[id] ?? defaultGeometry(index);
@@ -181,7 +195,8 @@ export const Workspace = forwardRef<WorkspaceController, {
 
   const restoreView = useCallback((id: string): boolean => {
     if (!isViewOpen(id)) return false;
-    if (document.activeElement === tabElements.current.get(id)) {
+    setForegroundViewId(id);
+    if (document.activeElement === tabElements.current.get(id) || (phone && foreground?.id !== id)) {
       pendingFocus.current = { target: 'window', viewId: id };
     }
     setMinimizedViewIds((current) => {
@@ -192,7 +207,7 @@ export const Workspace = forwardRef<WorkspaceController, {
     });
     setAnnouncement(`${views.find((view) => view.id === id)?.title} restored.`);
     return true;
-  }, [isViewOpen, views]);
+  }, [foreground?.id, isViewOpen, phone, views]);
 
   const closeView = useCallback((id: string): boolean => {
     if (!views.some((view) => view.id === id)) return false;
@@ -220,11 +235,39 @@ export const Workspace = forwardRef<WorkspaceController, {
     if (!isViewOpen(id)) return false;
     restoreView(id);
     const index = orderedViews.findIndex((view) => view.id === id);
-    if (index >= 0 && index !== orderedViews.length - 1) reorder(id, orderedViews.length - index - 1, 'brought forward');
-    if (minimizedViewIds.has(id)) pendingFocus.current = { target: 'window', viewId: id };
+    if (!phone && index >= 0 && index !== orderedViews.length - 1) reorder(id, orderedViews.length - index - 1, 'brought forward');
+    if (minimizedViewIds.has(id) || (phone && foreground?.id !== id)) pendingFocus.current = { target: 'window', viewId: id };
     else windowHeadings.current.get(id)?.focus();
+    if (phone) setAnnouncement(`${views.find((view) => view.id === id)?.title} foreground.`);
     return true;
-  }, [isViewOpen, minimizedViewIds, orderedViews, reorder, restoreView]);
+  }, [foreground?.id, isViewOpen, minimizedViewIds, orderedViews, phone, reorder, restoreView, views]);
+
+  function switchView(offset: number) {
+    const index = visibleViews.findIndex((view) => view.id === foreground?.id);
+    const next = visibleViews[index + offset];
+    if (next) focusView(next.id);
+  }
+
+  function beginSwipe(event: PointerEvent<HTMLDivElement>) {
+    if (!phone || event.pointerType !== 'touch' || !event.isPrimary || visibleViews.length < 2) return;
+    if (!(event.target instanceof Element) || event.target.closest('button, a, input, textarea, select, summary, [contenteditable="true"]')) return;
+    for (let element = event.target; element !== event.currentTarget; element = element.parentElement!) {
+      if (element.scrollWidth > element.clientWidth) return;
+    }
+    swipe.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function endSwipe(event: PointerEvent<HTMLDivElement>) {
+    const start = swipe.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    swipe.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (event.type === 'pointercancel') return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.5) switchView(dx < 0 ? 1 : -1);
+  }
 
   const minimiseAll = useCallback(() => {
     const ids = visibleViews.map(({ id }) => id);
@@ -300,6 +343,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   }
 
   function beginGesture(event: PointerEvent<HTMLElement>, id: string, kind: Gesture['kind'], index: number, edge?: Gesture['edge']) {
+    if (phone) return;
     if (event.button !== 0 && event.pointerType !== 'touch') return;
     if (activeMaximizedViewId === id) return;
     const bounds = canvas.current?.getBoundingClientRect();
@@ -448,10 +492,10 @@ export const Workspace = forwardRef<WorkspaceController, {
   }
 
   return (
-    <section className="workspace" aria-labelledby={`${workspaceId}-heading`}>
+    <section className="workspace" data-phone={phone} aria-labelledby={`${workspaceId}-heading`}>
       <header className="workspace-heading">
         <h2 ref={workspaceHeading} id={`${workspaceId}-heading`} tabIndex={-1}>Workspace</h2>
-        {openViews.length > 0 && (
+        {openViews.length > 0 && !phone && (
           <details className="workspace-arrangements" onKeyDown={arrangeKeyDown}>
             <summary>Arrange</summary>
             <div className="workspace-arrangement-options" role="group" aria-label="Workspace arrangement">
@@ -481,8 +525,26 @@ export const Workspace = forwardRef<WorkspaceController, {
         <p className="workspace-empty">All views are minimised. Select a tab to restore a view.</p>
       ) : (
         <p className="workspace-guidance">
-          {narrow ? 'Views stack on this screen. Drag a title to reorder, or use Arrange.' : 'Drag a title to move, drag an edge to resize, or use Arrange for keyboard controls.'}
+          {phone ? 'Swipe left or right to switch views, or select a view.' : narrow ? 'Views stack on this screen. Drag a title to reorder, or use Arrange.' : 'Drag a title to move, drag an edge to resize, or use Arrange for keyboard controls.'}
         </p>
+      )}
+      {phone && visibleViews.length > 1 && (
+        <nav className="workspace-view-switcher" aria-label="Switch foreground view">
+          {visibleViews.map((view, index) => (
+            <button className="workspace-tab" key={view.id} type="button"
+              aria-label={`Show ${view.title}`} aria-current={foreground?.id === view.id ? 'true' : undefined}
+              onClick={() => focusView(view.id)}
+              onKeyDown={(event) => {
+                const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? visibleViews.length - 1
+                  : event.key === 'ArrowLeft' ? Math.max(0, index - 1) : event.key === 'ArrowRight' ? Math.min(visibleViews.length - 1, index + 1) : null;
+                if (nextIndex === null) return;
+                event.preventDefault();
+                focusView(visibleViews[nextIndex]!.id);
+              }}>
+              {view.title}
+            </button>
+          ))}
+        </nav>
       )}
       {minimizedViews.length > 0 && (
         <nav className="workspace-tabs" aria-label="Minimised views">
@@ -510,11 +572,15 @@ export const Workspace = forwardRef<WorkspaceController, {
         role="region"
         aria-label="Temporary workspace views"
         data-arrangement={arrangement}
+        onPointerDown={beginSwipe}
+        onPointerUp={endSwipe}
+        onPointerCancel={endSwipe}
       >
         {openViews.map((view, index) => {
           const titleId = `${workspaceId}-view-${index}`;
           const currentGeometry = geometryFor(view.id, index);
           const minimized = minimizedViewIds.has(view.id);
+          const background = phone && foreground?.id !== view.id;
           const maximized = activeMaximizedViewId === view.id;
           const style = {
             '--workspace-x': percent(currentGeometry.x),
@@ -535,8 +601,9 @@ export const Workspace = forwardRef<WorkspaceController, {
               key={view.id}
               style={style}
               aria-labelledby={titleId}
-              aria-hidden={minimized || undefined}
-              inert={minimized}
+              hidden={background}
+              aria-hidden={minimized || background || undefined}
+              inert={minimized || background}
               ref={(element) => {
                 if (element) windowElements.current.set(view.id, element);
                 else windowElements.current.delete(view.id);
@@ -561,7 +628,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                   {view.title}
                 </h3>
                 <div className="workspace-window-actions">
-                  {!maximized && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
+                  {!maximized && !phone && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
                     <summary>Arrange</summary>
                     <div className="workspace-arrange-options">
                       <p id={`${titleId}-shortcuts`} className="workspace-shortcuts">
@@ -621,9 +688,9 @@ export const Workspace = forwardRef<WorkspaceController, {
                       </button>
                     </div>
                   </details>}
-                  <button className="workspace-icon-control" type="button" aria-label={`${maximized ? 'Restore size of' : 'Maximise'} ${view.title}`} onClick={() => setMaximizedViewId(maximized ? null : view.id)}>
+                  {!phone && <button className="workspace-icon-control" type="button" aria-label={`${maximized ? 'Restore size of' : 'Maximise'} ${view.title}`} onClick={() => setMaximizedViewId(maximized ? null : view.id)}>
                     <WindowIcon name={maximized ? 'restore' : 'maximise'} />
-                  </button>
+                  </button>}
                   <button className="workspace-icon-control" type="button" aria-label={`Minimise ${view.title}`} onClick={() => minimiseView(view.id)}>
                     <WindowIcon name="minimise" />
                   </button>
@@ -660,7 +727,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                 {actionSuccess[view.id] && <p role="status">{actionSuccess[view.id]}</p>}
                 {actionErrors[view.id] && <p role="alert">{actionErrors[view.id]}</p>}
               </div>
-              {!maximized && <>
+              {!maximized && !phone && <>
                 <div
                   className="workspace-resize-edge workspace-resize-edge-right"
                   aria-hidden="true"

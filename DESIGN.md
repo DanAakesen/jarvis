@@ -78,7 +78,7 @@ Canonical colour, type, spacing, radius, surface, elevation and motion values be
 
 ## Voice end (P8-12, decided 4 October 2026; implemented in P8-10)
 
-Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop and inside the bottom dock, right of the orb, on phone. Ending voice collapses the orb back into the composer's small orb. A natural spoken ending also ends voice; the small composer orb only starts voice.
+Escape ends voice; when a menu or dialog is open, the first Escape closes it. A visible **End voice** control (icon and label) sits directly below the orb on desktop and inside the bottom dock, right of the orb, on phone with foreground content. With no phone content, it sits below the central orb. Ending voice collapses the orb back into the composer's small orb. A natural spoken ending also ends voice; the small composer orb only starts voice.
 
 ## Foundation shell (P0-02)
 
@@ -328,7 +328,29 @@ composer without discarding the draft or language; stop, natural end and failure
 restore typing focus. The ready state says the microphone is off and offers a
 separate Enable microphone action. P8-10 implements the desktop shell/fullscreen
 transition, available-window carry-over and the selected end-control behavior;
-P8-11 owns phone view switching.
+P8-11 implements phone view switching on the existing client controller.
+
+### Phone workspace (P8-11)
+
+At 700px and below, one non-minimised view occupies the main space above the
+floating composer. Named view buttons switch foreground; left/right swipes on
+non-interactive content and Left/Right/Home/End on those buttons are alternatives.
+Selection focuses the view title and announces the change. Background views
+remain mounted, hidden and inert; desktop arrangements and geometry survive
+viewport changes. Phone windows keep only minimise and close title actions.
+
+During voice, the foreground window ends above the safe-area-aware orb dock;
+End voice sits inside the dock to the right. Microphone and inspection controls
+have their own top row, horizontally scrollable at very narrow widths. Long
+runtime status text scrolls within the dock without covering End voice. With no
+non-minimised content, the orb returns to the centre with End voice below it.
+Typing never shows the large orb. Camera and sharing move behind a labelled
+phone disclosure; Settings stays at the right of the one-line top bar. Escape
+closes the disclosure and returns focus before ending voice.
+
+Labelled local before/after screenshots are in `docs/ui/screenshots/p8-11-*`.
+Touch-emulated Chromium verifies interactions, not physical-phone keyboards,
+hardware audio or authenticated agent delivery.
 
 ### Concept polish (P8-21)
 
@@ -404,7 +426,7 @@ tiled arrangement and can switch to overlapping layers; using a layered window
 raises it, with explicit order controls as a keyboard alternative. Move and resize
 work with pointer gestures or focused arrow-key controls. At widths up to 900px,
 both arrangements reflow to a single-column view stack to keep content within the
-viewport.
+viewport; P8-11 uses one foreground view instead at 700px and below.
 
 Each view presents ready, empty, loading, error, or interrupted content. Retry and
 continue feedback stays with the view, including partial interrupted content.
@@ -413,7 +435,7 @@ currently empty until P8-14 provides generated-view data and P8-15 supplies
 Jarvis-directed workspace commands; those data and agent-control contracts are
 not part of P8-06. These structural choices reuse the shared Concept B/C surfaces
 and motion tokens in P8-20. Desktop voice-layout transitions are implemented in
-P8-10; phone view switching remains with P8-11.
+P8-10; phone view switching is implemented in P8-11.
 
 ## Window lifecycle and tabs (P8-07)
 
