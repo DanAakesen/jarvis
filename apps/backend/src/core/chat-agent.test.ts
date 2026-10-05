@@ -40,6 +40,45 @@ describe('Foundry Invocations chat agent', () => {
     );
   });
 
+  it('reuses the chat conversation agent session and falls back when Foundry rejects it', async () => {
+    const urls: string[] = [];
+    const fetch = vi.fn(async (target: URL | RequestInfo) => {
+      urls.push(String(target));
+      if (urls.length === 1) return new Response(null, { status: 404 });
+      return streamedResponse(['event: delta\ndata: {"text":"Hi"}\n\n', 'event: done\ndata: {}\n\n']);
+    });
+    const { agent } = createAgent(fetch as typeof globalThis.fetch);
+    const result: string[] = [];
+    for await (const text of agent.stream(
+      input, delegatedAuthorization, new AbortController().signal, { agentSessionId: 'chat-7' },
+    )) {
+      result.push(text);
+    }
+
+    expect(result).toEqual(['Hi']);
+    expect(urls[0]).toContain('agent_session_id=chat-7');
+    expect(urls[1]).not.toContain('agent_session_id');
+  });
+
+  it('sends a valid agent session ID once and ignores an invalid one', async () => {
+    const urls: string[] = [];
+    const fetch = vi.fn(async (target: URL | RequestInfo) => {
+      urls.push(String(target));
+      return streamedResponse(['event: delta\ndata: {"text":"Hi"}\n\n', 'event: done\ndata: {}\n\n']);
+    });
+    const { agent } = createAgent(fetch as typeof globalThis.fetch);
+    for await (const _text of agent.stream(
+      input, delegatedAuthorization, new AbortController().signal, { agentSessionId: 'chat-8' },
+    )) { /* drain */ }
+    for await (const _text of agent.stream(
+      input, delegatedAuthorization, new AbortController().signal, { agentSessionId: '../bad id' },
+    )) { /* drain */ }
+
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toContain('agent_session_id=chat-8');
+    expect(urls[1]).not.toContain('agent_session_id');
+  });
+
   it('authenticates to Foundry and parses split text events', async () => {
     const fetch = vi.fn(async () => streamedResponse([
       'event: delta\ndata: {"text":"Hell',
