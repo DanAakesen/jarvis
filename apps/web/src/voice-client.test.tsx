@@ -136,17 +136,17 @@ describe('BrowserVoiceClient', () => {
     expect(onSessionEnded).toHaveBeenCalledOnce();
   });
 
-  it('exposes the active voice session and forwards only bounded screen context requests', async () => {
+  it('routes requested camera and screen frames without forwarding unrelated transcripts', async () => {
     let socket: MockSocket | undefined;
     const onSessionReady = vi.fn();
-    const onScreenRequest = vi.fn();
+    const onVisionRequest = vi.fn();
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com',
       getAccessToken: async () => 'token',
       language: 'en',
       onStatus: () => {},
       onSessionReady,
-      onScreenRequest,
+      onVisionRequest,
       createAudio: () => audioAdapter(),
       createSocket: (url, protocols) => {
         socket = new MockSocket(url, protocols);
@@ -160,12 +160,28 @@ describe('BrowserVoiceClient', () => {
     socket?.receive({ type: 'jarvis.session.ready', sessionId: '41' });
     socket?.receive({
       type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'What am I holding?',
+    });
+    socket?.receive({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'Hvad holder jeg?',
+    });
+    socket?.receive({
+      type: 'conversation.item.input_audio_transcription.completed',
       transcript: 'Could you look at my screen?',
+    });
+    socket?.receive({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'How is the weather?',
     });
     client.sendScreenContext('A shared window shows a chart.');
 
     expect(onSessionReady).toHaveBeenCalledWith('41');
-    expect(onScreenRequest).toHaveBeenCalledWith('Could you look at my screen?');
+    expect(onVisionRequest.mock.calls).toEqual([
+      ['camera', 'What am I holding?'],
+      ['camera', 'Hvad holder jeg?'],
+      ['screen', 'Could you look at my screen?'],
+    ]);
     expect(socket?.sent.at(-1)).toEqual({
       type: 'jarvis.screen.context',
       description: 'A shared window shows a chart.',

@@ -25,7 +25,7 @@ export interface VoiceClientOptions {
   onAudioLevel?: (level: number) => void;
   onSessionEnded?: () => void;
   onSessionReady?: (sessionId: string) => void;
-  onScreenRequest?: (transcript: string) => void;
+  onVisionRequest?: (source: 'camera' | 'screen', transcript: string) => void;
   createSocket?: (url: string, protocols: string[]) => VoiceSocket;
   createAudio?: () => VoiceAudio;
   delay?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -49,6 +49,16 @@ function decodeEvent(data: unknown): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function requestedVisionSource(transcript: string): 'camera' | 'screen' | undefined {
+  if (/\b(?:what am i holding|what(?:'s| is) in my hand|look at (?:my|the) camera|what can you see|hvad holder jeg|hvad er det jeg holder|kig på (?:mit )?kamera(?:et)?|hvad kan du se)\b/iu.test(transcript)) {
+    return 'camera';
+  }
+  if (/\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen|kig på (?:min )?skærm(?:en)?|hvad (?:er der|kan du se) på (?:min )?skærm(?:en)?)\b/iu.test(transcript)) {
+    return 'screen';
+  }
+  return undefined;
 }
 
 function voiceUrl(backendUrl: string | null, language: VoiceLanguage): string {
@@ -542,9 +552,9 @@ export class BrowserVoiceClient {
     } else if (event.type === 'jarvis.session.ended') {
       this.finishStop(true);
     } else if (event.type === 'conversation.item.input_audio_transcription.completed' &&
-        typeof event.transcript === 'string' &&
-        /\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen)\b/iu.test(event.transcript)) {
-      this.options.onScreenRequest?.(event.transcript);
+        typeof event.transcript === 'string') {
+      const source = requestedVisionSource(event.transcript);
+      if (source) this.options.onVisionRequest?.(source, event.transcript);
     } else if (event.type === 'input_audio_buffer.speech_started' || event.type === 'speech_started') {
       this.audio.stopPlayback();
       this.options.onAudioLevel?.(0);

@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 4 October 2026 for P7-02, P7-03, P7-09 and P7-13. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, headless Outlook tools, and long-term memory. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 5 October 2026 for P7-02, P7-03, P7-08, P7-09 and P7-13. Scope: the Jarvis core, Software Factory, Teams notification and confirmation state, headless Outlook tools, and long-term memory. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -117,7 +117,7 @@ flowchart LR
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
-P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. P7-05 adds `screen_frames` to the Jarvis-model usage metrics in migration `0015_screen_frame_usage.sql`; the matching down migration removes those rows before restoring the prior constraint. Realtime voice tool calls are not stored in `tool_calls`.
+P5-03 and P5-04 do not create conversation rows; P5-06 creates voice `jarvis_sessions`, stores completed transcript events in `messages`, and records voice-minute `usage` rows. P7-05 adds `screen_frames` to the Jarvis-model usage metrics in migration `0015_screen_frame_usage.sql`; P7-08 camera requests reuse the same frame reservations, token rows and rate/day cap, with no new migration or usage metric. The matching down migration removes those rows before restoring the prior constraint. Realtime voice tool calls are not stored in `tool_calls`.
 
 P7-06 records only the bridge's current status in the existing `activity` table.
 The refresh is published after the status transaction commits. Commands, window

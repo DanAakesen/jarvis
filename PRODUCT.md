@@ -153,7 +153,9 @@ English voice sessions use Ryan HD and the British butler persona. The backend o
 
 Danish voice uses the authenticated backend `/voice/da` WebSocket to a provisioned Foundry Voice Live agent. The agent bridges to the hosted Jarvis agent, uses MAI Transcribe with language `da` and the Danish phrase list, and fixes Harper to `da-DK`.
 
-Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity. The vision description is separate, untrusted context for the active chat or voice reply; frames are held in memory only and never enter transcripts, logs, or task events. Stopping voice or leaving the page releases the shared stream.
+Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity.
+
+Camera access starts only after Dan turns it on from the shared top bar and grants browser permission. A visible on/off state and stop control stay available; Jarvis captures one frame only on a chat or voice request, using the same authenticated screen-vision upload, cap, usage records, and Foundry model path. Camera access stops when voice or the signed-in app session ends, when its owner unmounts, or after five minutes. Vision descriptions are separate, untrusted context for the active reply; frames remain in memory only and never enter transcripts, logs, or task events.
 
 ### Phone notifications and confirmations (P7-03)
 
@@ -324,12 +326,18 @@ The confirmed requirements and proposed feature placement are in [ui.md](ui.md).
 Jarvis has one typing shell with expandable navigation and context panels, and a
 fullscreen voice workspace with a runtime-state-driven orb. Jarvis can create and
 arrange temporary views of accessible data, while Dan can override layouts and
-move/resize windows. Tabs retain minimised views within the active workspace.
+move/resize windows. Window chrome can minimise, maximise, or close a view.
+Minimising retains the mounted view in memory and exposes a tab in the active
+workspace; Dan can restore it from the tab, and Jarvis can request restore
+through the workspace command interface. Authenticated Jarvis delivery remains
+P8-15. Closing a view changes only the temporary workspace and does not delete
+conversation or source records.
 Voice is explicitly started; the always-available assistant does not continuously
 listen. Desktop and phone layouts follow the mode/window rules in ui.md. Theme
 variables can be changed on demand and persist until changed again. Banking and
 Fitness and Health are future areas; their detailed integrations remain deferred.
-This is planned behaviour, not a claim that the existing frontend implements it.
+Implementation status and live-service limitations are tracked in PLAN.md and
+the UI coverage report.
 
 ## Accepted capability additions (4 October 2026; planned)
 

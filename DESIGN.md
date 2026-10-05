@@ -119,12 +119,18 @@ sign-in; the header wraps on narrow screens.
   Look at screen action for chat and voice. Keep the status and Stop action
   visible while sharing; reuse the shared button, focus, and narrow-screen
   wrapping conventions. This is the minimal P7 integration; P8-04 owns moving
-  the confirmed share control into the shared shell's top bar. Do not add camera
-  controls or continuous capture here.
+  the confirmed share control into the shared shell's top bar.
   Scratch-auth Chromium checks at 390 and 1280 px exercised Share, the visible
   status/Stop action, a mocked chat inspection, and stream cleanup; neither
   viewport overflowed or reported console errors. Real display capture and the
   live backend/model remain unverified.
+- **Camera (P7-08):** the shared top-bar control explicitly starts/stops browser
+  camera permission and shows an On/Off label on desktop; the pressed surface and
+  camera icon retain the state on the narrowest phones. Chat and voice expose a
+  separate Look at camera request. Capture one frame only when asked; do not
+  preview or stream images. Voice/session end, app teardown, and a five-minute
+  timeout release the camera track. Desktop and phone screenshots are in
+  `docs/ui/screenshots/p7-08-camera-*.png`; their browser camera is a fake device.
 - **Unavailable features:** each data area says what it will show. Each action
   stays visible but disabled, and is linked to that explanation with
   `aria-describedby`. No sample messages, tasks or states are shown.
@@ -328,11 +334,12 @@ proposals and eight static wireframes. P8-04 routes the existing pages through a
 thin left icon rail, expandable area navigation, top and bottom bars, and a
 toggleable contextual panel. The top bar spans edge to edge above the shell;
 its height matches the area rail's width, and the rail begins beneath it.
-Settings stays at the top-right. Screen sharing and Camera are the only
-confirmed feature controls in the top bar; each is an icon-only, disabled
-control with an accessible explanation and tooltip until its P7 capability is
-built. The top bar remains one line at phone and desktop widths. Other suggested
-top-bar controls remain out of scope.
+Settings stays at the top-right. Camera is a working toggle with an accessible
+pressed state, visible desktop On/Off label, and a narrow-phone state indicator;
+the browser prompts for camera permission only after the toggle is selected.
+Screen share remains disabled in the top bar because its active control remains
+in the conversation workflow. The top bar remains one line at phone and desktop
+widths. Other suggested top-bar controls remain out of scope.
 
 The bottom bar carries the existing database-wake status when configured. The
 context panel has an honest empty state until P8-08 supplies contextual content.
@@ -367,8 +374,23 @@ continue feedback stays with the view, including partial interrupted content.
 Window geometry, order, and the open view set remain in memory only. The host is
 currently empty until P8-14 provides generated-view data and P8-15 supplies
 Jarvis-directed workspace commands; those data and agent-control contracts are
-not part of P8-06. These structural choices reuse the neutral shell tokens and
-do not settle the deferred full visual system in P8-20.
+not part of P8-06. These structural choices reuse the shared Concept B/C surfaces
+and motion tokens in P8-20. Voice-layout transitions remain with P8-10 and P8-11.
+
+## Window lifecycle and tabs (P8-07)
+
+Each temporary window has a title bar with labelled minimise, maximise, and
+close icon actions. Minimise hides the mounted view and adds a compact,
+animated tab to the active workspace; restoring from the tab returns focus to
+the view title. The in-memory view and its local component state remain intact,
+and neither minimising nor closing saves or deletes source data. Maximise fills
+the workspace canvas and toggling it off returns to the existing arrangement.
+
+Workspace and per-window arrangement controls live behind an **Arrange**
+disclosure so the canvas and title bar stay compact; keyboard move and resize
+controls remain available there. The shell exposes the typed workspace command
+controller to page consumers; authenticated Jarvis delivery remains P8-15.
+Tab motion uses the P8-20 tokens and becomes static under reduced motion.
 
 ## Accepted capability surfaces
 
