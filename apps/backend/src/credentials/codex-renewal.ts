@@ -56,6 +56,7 @@ export async function runCodexRenewalOnce(
   store: CredentialStatusStore,
   client: Pick<FoundryClient, 'startCodexRenewal' | 'status' | 'deleteSession'>,
   onError: (details: RenewalDiagnostics) => void = () => {},
+  force = false,
 ): Promise<RenewalResult> {
   const owner = randomUUID();
   if (!await store.acquireCodexRenewalLease(owner, leaseSeconds)) return 'skipped';
@@ -79,7 +80,7 @@ export async function runCodexRenewalOnce(
   let result: RenewalResult = 'uncertain';
 
   try {
-    const accepted = await client.startCodexRenewal({ signal: controller.signal });
+    const accepted = await client.startCodexRenewal({ signal: controller.signal, force });
     sessionId = accepted.sessionId;
     for (;;) {
       const snapshot = await client.status(accepted.invocationId, { signal: controller.signal });
@@ -89,11 +90,13 @@ export async function runCodexRenewalOnce(
           const copilot = snapshot.result['copilot'];
           const copilotExpires = validDate(copilot['expires']) ? copilot['expires'] : null;
           const copilotRenewed = validDate(copilot['last_renewed']) ? copilot['last_renewed'] : null;
-          await store.updateCopilotStatus(
-            copilotExpires ? credentialStatus(copilotExpires, Date.now()) : 'unknown',
-            copilotExpires,
-            copilotRenewed,
-          );
+          if (copilotExpires) {
+            await store.updateCopilotStatus(
+              Date.parse(copilotExpires) <= Date.now() ? 'failed' : credentialStatus(copilotExpires, Date.now()),
+              copilotExpires,
+              copilotRenewed,
+            );
+          }
         }
         if (snapshot.status === 'completed' && snapshot.error === null && isObject(snapshot.result)) {
           const renewal = snapshot.result;

@@ -312,6 +312,12 @@ Goal: Jarvis runs reliably and transparently day to day.
 | P6-07 | [#68](https://github.com/DanAakesen/jarvis/issues/68) | Disk headroom: at session start the runner records total and free disk of the writable filesystem as a task event; when free disk drops below 1 GiB during a task, the runner reports it and the task moves to Needs attention with reason `disk_low` instead of failing in a build. Uses the documented budget (up to 20 GiB at ≥1 vCPU, about 20 % reserved) and the measured 6 GiB as the planning value | Disk figures visible on the task detail page; the low-disk path tested with a fake filesystem reading; the threshold is a setting | P2-03 | Complete |
 | P6-08 | [#173](https://github.com/DanAakesen/jarvis/issues/173) | Live parallel load test: Dan runs the [documented procedure](docs/agent-context.md#setup-and-commands) on the deployed system with several tasks across at least two projects, alternating Codex and Copilot, and watches Codex Pro usage | Maximum concurrency, Ready-to-Running time, Needs attention reasons, sandbox minutes/DKK and Codex allowance before and after recorded in [docs/decisions.md](docs/decisions.md) | P6-05, P2-07, P2-08 | In progress |
 
+P6-18 (#457) adds backend Copilot authentication health, GitHub App mint health
+and failure alerts, and Dan-only forced Codex repair through the existing lease.
+The UI contract is documented in `docs/architecture.md`; Settings wiring and
+live credential verification remain separate. SQL contracts are covered by the
+database CI suite, not a live database check in this implementation session.
+
 ### P7 — Jarvis everywhere
 
 Goal: Dan reaches Jarvis away from the browser, and Jarvis can see, act on his PC, and use his calendar, mail, GitHub vault, and approved existing subscriptions. P7-40 makes the vault the source of long-term knowledge and SQL its derived index/cache; P7-14–P7-16 add web research, media generation, and editable personality. Each task is headless (backend, Jarvis tool, tests, docs); its UI is P8. Tasks labelled `needs-decision` wait for Dan's answers in the issue. Prefer Microsoft services and existing approved subscriptions; do not infer approval for a new paid API. Costs and non-Microsoft parts are flagged in each issue (Jev is the agreed exception).

@@ -31,6 +31,7 @@ interface GitHubAppTokenIssuerOptions {
   getPrivateKey: () => Promise<string>;
   fetch?: typeof fetch;
   now?: () => number;
+  onTokenMint?: (status: 'ok' | 'failed', checkedAt: string) => Promise<void>;
 }
 
 const githubApi = 'https://api.github.com';
@@ -161,19 +162,41 @@ async function findInstallation(
   return matches[0]!;
 }
 
+async function trackTokenMint(
+  mint: () => Promise<string>,
+  now: () => number,
+  onTokenMint: GitHubAppTokenIssuerOptions['onTokenMint'],
+): Promise<string> {
+  let token: string;
+  try {
+    token = await mint();
+  } catch (error) {
+    await onTokenMint?.('failed', new Date(now()).toISOString()).catch(() => undefined);
+    throw error;
+  }
+  await onTokenMint?.('ok', new Date(now()).toISOString()).catch(() => undefined);
+  return token;
+}
+
 async function createInstallationToken(
   fetchImpl: typeof fetch,
-  appToken: string,
-  installation: string,
+  appId: string,
+  getPrivateKey: () => Promise<string>,
+  owner: string,
   now: () => number,
+  onTokenMint: GitHubAppTokenIssuerOptions['onTokenMint'],
 ): Promise<string> {
-  const value = await requestJson(
-    fetchImpl,
-    `/app/installations/${installation}/access_tokens`,
-    appToken,
-    { permissions: { contents: 'read' } },
-  );
-  return validInstallationToken(value, now);
+  return trackTokenMint(async () => {
+    const appToken = await createAppJwt(appId, await getPrivateKey(), now);
+    const installation = await findInstallation(fetchImpl, appToken, owner);
+    const value = await requestJson(
+      fetchImpl,
+      `/app/installations/${installation}/access_tokens`,
+      appToken,
+      { permissions: { contents: 'read' } },
+    );
+    return validInstallationToken(value, now);
+  }, now, onTokenMint);
 }
 
 function parseRepository(value: unknown, owner: string): GitHubRepository {
@@ -241,6 +264,7 @@ export function createGitHubAppTokenIssuer({
   getPrivateKey,
   fetch: fetchImpl = fetch,
   now = Date.now,
+  onTokenMint,
 }: GitHubAppTokenIssuerOptions): GitHubAppTokenIssuer {
   const issue = async (repository: string, permissions: Record<string, 'read' | 'write'>): Promise<string> => {
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
@@ -249,31 +273,27 @@ export function createGitHubAppTokenIssuer({
     const [owner, name] = repository.split('/');
     if (!owner || !name) throw new Error('GitHub repository is invalid');
 
-    const issuedAt = Math.floor(now() / 1000);
-    const appToken = await new SignJWT({})
-      .setProtectedHeader({ alg: 'RS256' })
-      .setIssuer(appId)
-      .setIssuedAt(issuedAt - 60)
-      .setExpirationTime(issuedAt + 9 * 60)
-      .sign(createPrivateKey(await getPrivateKey()));
+    return trackTokenMint(async () => {
+      const appToken = await createAppJwt(appId, await getPrivateKey(), now);
 
-    const installation = object(await requestJson(
-      fetchImpl,
-      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/installation`,
-      appToken,
-    ));
-    const id = installationId(installation?.id);
-    if (!id) {
-      throw new Error('GitHub installation response is invalid');
-    }
+      const installation = object(await requestJson(
+        fetchImpl,
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/installation`,
+        appToken,
+      ));
+      const id = installationId(installation?.id);
+      if (!id) {
+        throw new Error('GitHub installation response is invalid');
+      }
 
-    const token = await requestJson(
-      fetchImpl,
-      `/app/installations/${id}/access_tokens`,
-      appToken,
-      { repositories: [name], permissions },
-    );
-    return validInstallationToken(token, now);
+      const token = await requestJson(
+        fetchImpl,
+        `/app/installations/${id}/access_tokens`,
+        appToken,
+        { repositories: [name], permissions },
+      );
+      return validInstallationToken(token, now);
+    }, now, onTokenMint);
   };
 
   return {
@@ -289,14 +309,13 @@ export function createGitHubAppRepositoryCatalog({
   getPrivateKey,
   fetch: fetchImpl = fetch,
   now = Date.now,
+  onTokenMint,
 }: GitHubAppTokenIssuerOptions): GitHubRepositoryCatalog {
   const cache = new Map<string, { expiresAt: number; listing: GitHubRepositoryListing }>();
   const pending = new Map<string, Promise<GitHubRepositoryListing>>();
 
   const load = async (owner: string): Promise<GitHubRepositoryListing> => {
-    const appToken = await createAppJwt(appId, await getPrivateKey(), now);
-    const id = await findInstallation(fetchImpl, appToken, owner);
-    const token = await createInstallationToken(fetchImpl, appToken, id, now);
+    const token = await createInstallationToken(fetchImpl, appId, getPrivateKey, owner, now, onTokenMint);
     const repositories: GitHubRepository[] = [];
     let expectedCount: number | undefined;
     for (let page = 1; page <= 100; page += 1) {
@@ -362,9 +381,7 @@ export function createGitHubAppRepositoryCatalog({
       }
       const owner = match[1]!;
       const name = match[2]!;
-      const appToken = await createAppJwt(appId, await getPrivateKey(), now);
-      const id = await findInstallation(fetchImpl, appToken, owner);
-      const token = await createInstallationToken(fetchImpl, appToken, id, now);
+      const token = await createInstallationToken(fetchImpl, appId, getPrivateKey, owner, now, onTokenMint);
       let paths: string[] = [];
       try {
         const tree = object(await requestJson(

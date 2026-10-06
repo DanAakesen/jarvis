@@ -17,6 +17,7 @@ function fixture(status = 'completed', result: Record<string, unknown> | null = 
     acquireCodexRenewalLease: vi.fn(async () => true),
     refreshCodexRenewalLease: vi.fn(async () => true),
     updateCopilotStatus: vi.fn(async () => {}),
+    updateGitHubAppStatus: vi.fn(async () => {}),
     completeCodexRenewal: vi.fn(async () => {}),
   };
   const snapshot = {
@@ -61,6 +62,33 @@ describe('Codex renewal job', () => {
     await expect(runCodexRenewalOnce(store, client)).resolves.toBe('skipped');
     expect(client.startCodexRenewal).not.toHaveBeenCalled();
     expect(store.completeCodexRenewal).not.toHaveBeenCalled();
+  });
+
+  it('forces manual renewal but still respects the existing lease', async () => {
+    const { store, client } = fixture();
+    await expect(runCodexRenewalOnce(store, client, undefined, true)).resolves.toBe('fresh');
+    expect(client.startCodexRenewal).toHaveBeenCalledWith({ signal: expect.any(AbortSignal), force: true });
+    vi.mocked(client.startCodexRenewal).mockClear();
+    vi.mocked(store.acquireCodexRenewalLease).mockResolvedValue(false);
+    await expect(runCodexRenewalOnce(store, client, undefined, true)).resolves.toBe('skipped');
+    expect(client.startCodexRenewal).not.toHaveBeenCalled();
+  });
+
+  it('does not overwrite authenticated Copilot health with missing runner expiry', async () => {
+    const { store, client } = fixture('completed', {
+      renewed: false, expires: '2030-01-01T00:00:00.000Z', copilot: { expires: null },
+    });
+    await runCodexRenewalOnce(store, client);
+    expect(store.updateCopilotStatus).not.toHaveBeenCalled();
+  });
+
+  it('marks an expired Copilot credential as failed', async () => {
+    const { store, client } = fixture('completed', {
+      renewed: false, expires: '2030-01-01T00:00:00.000Z',
+      copilot: { expires: '2020-01-01T00:00:00.000Z' },
+    });
+    await runCodexRenewalOnce(store, client);
+    expect(store.updateCopilotStatus).toHaveBeenCalledWith('failed', '2020-01-01T00:00:00.000Z', null);
   });
 
   it('keeps the lease until expiry when invocation completion is uncertain', async () => {

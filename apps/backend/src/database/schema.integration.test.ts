@@ -620,6 +620,31 @@ describe('committed domain schema (groups 1-8)', () => {
       WHERE id = ${String(task)};`);
   });
 
+  it('records GitHub App mint health and alerts once per failure episode after commit', async () => {
+    const alertNotifier = vi.fn();
+    const onAlert = vi.fn();
+    const credentials = createCredentialStatusStore(pool, { alertNotifier, onAlert });
+    await credentials.updateGitHubAppStatus('ok', '2030-01-01T00:00:00.000Z');
+    await credentials.updateGitHubAppStatus('failed', '2030-01-01T01:00:00.000Z');
+    await credentials.updateGitHubAppStatus('failed', '2030-01-01T02:00:00.000Z');
+    expect((await credentials.list()).find((row) => row.name === 'github-app')).toEqual({
+      name: 'github-app', status: 'failed', expiresAt: null,
+      lastRenewedAt: '2030-01-01T00:00:00.000Z', lastCheckedAt: '2030-01-01T02:00:00.000Z',
+    });
+    expect(alertNotifier).toHaveBeenCalledOnce();
+    expect(onAlert).toHaveBeenCalledOnce();
+    const { recordset } = await pool.request().query<{ title: string }>(`SELECT title FROM dbo.activity
+      WHERE alert_key = N'credential:github-app:failed:2030-01-01T01:00:00.000Z';`);
+    expect(recordset[0]?.title).toContain('GitHub App token mint failed');
+    await credentials.updateGitHubAppStatus('ok', '2029-01-01T00:00:00.000Z');
+    expect((await credentials.list()).find((row) => row.name === 'github-app')?.status).toBe('failed');
+    await credentials.updateGitHubAppStatus('ok', '2030-01-01T03:00:00.000Z');
+    await credentials.updateGitHubAppStatus('failed', '2030-01-01T04:00:00.000Z');
+    expect(alertNotifier).toHaveBeenCalledTimes(2);
+    await pool.request().query(`UPDATE dbo.credential_status SET status = N'unknown',
+      last_checked_at = NULL, last_renewed_at = NULL WHERE name = N'github-app';`);
+  });
+
   it('serializes Codex starts against renewal acquisition and recovers expired leases', async () => {
     const project = await pool.request()
       .input('repo', sql.NVarChar(140), `DanAakesen/credentials-${randomUUID().slice(0, 8)}`)
@@ -660,11 +685,14 @@ describe('committed domain schema (groups 1-8)', () => {
       {
         name: 'codex-login', status: 'ok',
         expiresAt: '2030-01-01T00:00:00.000Z', lastRenewedAt: '2026-10-03T00:00:00.000Z',
+        lastCheckedAt: expect.any(String),
       },
       {
         name: 'copilot-token', status: 'renew_soon',
         expiresAt: '2026-10-05T12:00:00.000Z', lastRenewedAt: '2026-10-01T12:00:00.000Z',
+        lastCheckedAt: expect.any(String),
       },
+      { name: 'github-app', status: 'unknown', expiresAt: null, lastRenewedAt: null, lastCheckedAt: null },
     ]);
     expect((await tasks.transition(blockedCodex.id, 'PauseRequested')).kind).toBe('ok');
     expect((await tasks.transition(blockedCodex.id, 'Paused')).kind).toBe('ok');
