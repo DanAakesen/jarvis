@@ -92,6 +92,8 @@ import { createPhoneCallModule } from './phone/calls.js';
 import { parsePhoneAllowlist } from './phone/caller.js';
 import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
+import { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
+import { createHtmlViewModule } from './core/html-view.js';
 
 try {
   const config = loadConfig();
@@ -527,6 +529,7 @@ try {
       model: config.codexImageModel,
     }));
   }
+  if (database) modules.push(createHtmlViewModule(new WorkspaceHtmlArtifactStore(database.pool)));
   if (memoryStore) {
     modules.push(createMemoryModule({
       store: memoryStore,
