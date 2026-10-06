@@ -15,19 +15,10 @@ public sealed class WindowsUiAutomationProvider : IUiAutomationProvider
     public UiAutomationView? Observe(CancellationToken cancellationToken)
     {
         var started = Stopwatch.StartNew();
-        cancellationToken.ThrowIfCancellationRequested();
-        var handle = GetForegroundWindow();
-        if (handle == IntPtr.Zero) return null;
-
+        var window = ObserveWindow(cancellationToken);
+        if (window is null) return null;
+        var handle = new IntPtr(long.Parse(window.WindowId));
         var root = AutomationElement.FromHandle(handle);
-        var processId = root.Current.ProcessId;
-        var processName = Process.GetProcessById(processId).ProcessName.ToLowerInvariant();
-        var application = processName switch
-        {
-            "code" => "vscode",
-            "explorer" => "explorer",
-            _ => processName,
-        };
         var controls = new List<UiAutomationControl>();
         var queue = new Queue<(AutomationElement Element, int Depth)>();
         queue.Enqueue((root, 0));
@@ -43,7 +34,7 @@ public sealed class WindowsUiAutomationProvider : IUiAutomationProvider
                 if (depth > 0) AddControl(element, controls);
                 if (depth >= MaxTreeDepth) continue;
                 var child = Walker.GetFirstChild(element);
-                while (child is not null && queue.Count < MaxVisitedElements &&
+                while (child is not null && visited + queue.Count < MaxVisitedElements &&
                        started.Elapsed < ObservationLimit)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -56,7 +47,26 @@ public sealed class WindowsUiAutomationProvider : IUiAutomationProvider
             }
         }
 
-        return new UiAutomationView(application, handle.ToInt64().ToString(), controls);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (GetForegroundWindow() != handle) throw new UiAutomationRefusedException("stale");
+        return window with { Controls = controls };
+    }
+
+    public UiAutomationView? ObserveWindow(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var handle = GetForegroundWindow();
+        if (handle == IntPtr.Zero) return null;
+        _ = GetWindowThreadProcessId(handle, out var processId);
+        using var process = Process.GetProcessById((int)processId);
+        var processName = process.ProcessName.ToLowerInvariant();
+        var application = processName switch
+        {
+            "code" => "vscode",
+            "explorer" => "explorer",
+            _ => processName,
+        };
+        return new UiAutomationView(application, handle.ToInt64().ToString(), []);
     }
 
     public void Act(
@@ -73,11 +83,20 @@ public sealed class WindowsUiAutomationProvider : IUiAutomationProvider
         {
             case UiAutomationAction.Click:
                 if (element.TryGetCurrentPattern(InvokePattern.Pattern, out var invoke))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
                     ((InvokePattern)invoke).Invoke();
+                }
                 else if (element.TryGetCurrentPattern(TogglePattern.Pattern, out var toggle))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
                     ((TogglePattern)toggle).Toggle();
+                }
                 else if (element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out var selection))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
                     ((SelectionItemPattern)selection).Select();
+                }
                 else
                     throw new CommandRefusedException("blocked");
                 break;
@@ -86,12 +105,14 @@ public sealed class WindowsUiAutomationProvider : IUiAutomationProvider
                     throw new CommandRefusedException("blocked");
                 var valuePattern = (ValuePattern)pattern;
                 if (valuePattern.Current.IsReadOnly) throw new CommandRefusedException("blocked");
+                cancellationToken.ThrowIfCancellationRequested();
                 valuePattern.SetValue(value);
                 break;
             case UiAutomationAction.ScrollUp:
             case UiAutomationAction.ScrollDown:
                 if (!element.TryGetCurrentPattern(ScrollPattern.Pattern, out var scroll))
                     throw new CommandRefusedException("blocked");
+                cancellationToken.ThrowIfCancellationRequested();
                 ((ScrollPattern)scroll).ScrollVertical(action == UiAutomationAction.ScrollUp
                     ? ScrollAmount.SmallDecrement
                     : ScrollAmount.SmallIncrement);
@@ -162,4 +183,7 @@ public sealed class WindowsUiAutomationProvider : IUiAutomationProvider
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr handle, out uint processId);
 }

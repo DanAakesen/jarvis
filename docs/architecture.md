@@ -716,8 +716,10 @@ executable directly and identifies that fallback in the tool result. Websites
 are never handed to the Windows default browser. A connected extension with
 automation disabled is refused rather than silently bypassing the setting.
 Launched apps and VS Code folder opens use Windows `AllowSetForegroundWindow`
-to grant the new process foreground eligibility; no synthetic input or
-focus-stealing workaround is used. The bridge does not expose arbitrary command
+to grant the new process foreground eligibility. App/Chrome focus is best effort,
+with one cancellable poller; the synthetic Alt workaround and media/keyboard
+input are skipped or refused if Windows reports input within the last 500 ms.
+The bridge does not expose arbitrary command
 execution; its only direct executable launch for a URL is the Chrome fallback.
 Offline requests receive a clear refusal; other failures are sanitized. The
 companion never logs tokens, device codes, command arguments, URLs, paths, window
@@ -725,6 +727,25 @@ titles, or message content.
 The backend logs each WebSocket command's safe command name, normalized outcome
 and monotonic round-trip milliseconds as `pc_bridge.command_timing`; request
 arguments and returned data are excluded by the logger allowlist.
+
+P7-41 builds the installed-app index once on a background STA thread and
+refreshes it every ten minutes, or on a miss with a 30-second retry throttle.
+Reads use the last immutable snapshot immediately; initial discovery and failed
+or stuck refreshes never block commands. One actual scanner flight is retained
+until it exits. Start-menu discovery caps shortcut attempts, not just successful
+targets, and reuses one `WScript.Shell` instance per scan.
+
+All bridge commands enter a single bounded background worker, never the tray
+message thread. Its watchdog bounds caller waits to ten seconds (two seconds
+for UIA), cancels the operation on deadline/resource-budget breaches, and writes
+`pc_bridge.watchdog`. A noncooperative native call keeps its slot occupied;
+subsequent commands fail fast rather than spawning more workers. The native
+call itself may still need a bridge restart. The **Diagnostics** tray action
+writes a resource sample to
+`%LOCALAPPDATA%\Jarvis\PcBridge\diagnostics.log`. Command/watchdog entries contain
+only allowlisted names/outcomes, durations, CPU, threads and handles; log
+rotation bounds disk use. Shutdown cancels owned work and cleans up the
+extension pipe off the tray thread.
 
 Online/offline changes update one existing Now-feed activity row keyed by
 `pc_bridge_status`; the same row reports whether Jarvis control is active or
@@ -746,12 +767,7 @@ client is configured. It reuses the authenticated PC bridge and its bounded
 `uia_snapshot`/`uia_act` commands; no new route, credential, or migration is
 added. Any foreground Windows app is eligible; application names are bounded
 and validated but not allow-listed. The Windows provider traverses at most
-1,000 controls and depth 12, checking a one-second traversal budget and
-cancellation between traversal batches. The portable policy returns at most
-`uia_snapshot`/`uia_act` commands; no new route, credential, persistence, or
-migration is added. Any bounded foreground Windows process identifier is
-eligible. The Windows provider traverses at most 1,000
-controls and depth 12, checking a one-second traversal budget and cancellation
+1,000 controls and depth 12, checking a one-second traversal budget and cancellation
 between traversal batches. The portable policy returns at most
 100 enabled, visible, actionable controls with only role and accessible name.
 Password controls and names that look sensitive are omitted; field values are
@@ -792,7 +808,11 @@ and outcome—never goals, control labels, typed text, screenshots, or UIA
 values. Fake-tree and backend tests cover non-allow-listed-app control, pause/status,
 approval and the protocol; all 92 .NET core tests, 31 focused backend tests,
 backend lint/build and the Linux Windows-target build pass. A cancellation token cannot
-preempt an individual synchronous UI Automation COM call. Live Jev calls,
+preempt an individual synchronous UI Automation COM call. P7-41 bounds the
+caller's wait on a background command worker and retains the occupied slot until
+the native call exits, preventing replacement-worker growth. Keyboard snapshot
+validation checks foreground identity without another control-tree walk, and
+native process wrappers are disposed. Live Jev calls,
 Windows UIA responsiveness/cancellation, physical approval delivery, and Dan's
 end-to-end app task remain unverified.
 

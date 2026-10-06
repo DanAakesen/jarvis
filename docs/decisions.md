@@ -433,6 +433,35 @@ Mistakes made so far and the rule that prevents each one.
 | **L110** | A background bridge must bring what it opens to the front | Dan's test on 6 October: tv2.dk opened in Chrome behind other windows, "VS Code Insiders" did not match "Visual Studio Code - Insiders", and "close it" was refused because the bridge had no close command. Windows lets only the process that received the last input take the foreground. | After opening a URL or app, the bridge sends a synthetic Alt key and calls `SetForegroundWindow` on the new window (best effort). The app matcher expands spoken short forms (VS Code → Visual Studio Code) before scoring. `pc_close` sends `WM_CLOSE` so the app can still offer to save, without confirmation. |
 | **L111** | Live partial transcripts used a wrong Speech path | Every voice session since partials were added logged `voice.partials_unavailable`; the cause was hidden because the log allowlist dropped the `failure` field. A local Speech SDK probe on 6 October got HTTP 404 on `wss://<foundry>.cognitiveservices.azure.com/speech/universal/v2`; `/stt/speech/universal/v2` connects and streamed Danish partials ("åben youtube" at 2.31 s of a 3.56 s sentence). | The recognizer uses the `/stt` path, and `voice.partials_unavailable` keeps `failure` and `language`. Probe new Azure endpoints live before shipping, and check that new diagnostic fields survive the log allowlist. |
 | **L112** | Screen inspection had never worked | A live test on 6 October showed every screen-vision request failing with HTTP 400: `gpt-5.6-luna` and `gpt-6-luna` reject `max_tokens` and require `max_completion_tokens`, and only accept `reasoning_effort` none, low or medium. Measured on a 1280×720 test screen, `gpt-6-luna` at detail auto used 1136 input and 26 output tokens, returned in 1.4 s, cost ≈ USD 0.00013 per frame, and read a TypeScript error correctly. | Vision uses a dedicated `gpt-6-luna` deployment (Bicep plus capacity 50) with `max_completion_tokens`, `reasoning_effort: none` and `detail: auto`, so the chat model setting no longer affects vision cost. Dan chose continuous watching with frames only on change and a USD 1/day cap. Probe every new model call live before relying on it. |
+| **L113** | Cancellation cannot preempt synchronous UIA/COM | P7-41 found request-time app scans, overlapping focus pollers, an undisposed foreground `Process` and shutdown cancellation gaps. A native call can ignore tokens even when the tree has caps. The actual cause of Dan's desktop freezes remains unverified. | Cache discovery, bound caller waits off the tray thread, retain hung worker slots, gate synthetic input on idle time and collect content-free resource diagnostics. Keep autostart disabled pending live Windows stress acceptance. |
+
+## 6 October 2026 — PC bridge resource containment (P7-41, #446)
+
+**Implemented safeguards:** discovery uses a single background STA cache refresh,
+not request-time COM scans. Native commands run off the WinForms message thread
+with bounded caller waits and a process-resource watchdog. A hung call keeps its
+worker slot occupied until it actually exits; cancellation never starts a
+replacement worker. Focus polling is single-flight, and synthetic input requires
+at least 500 ms of input idle time. Diagnostics stay local, bounded and
+content-free. Shutdown does not synchronously wait for pipe cleanup on the tray
+thread.
+
+**Evidence and limitations:** cancellation tokens and tree-depth caps do not preempt a
+synchronous UI Automation/COM call. Before this change, every `open_app` scanned
+Start-menu shortcuts and AppsFolder, each launch created an independent
+five-second focus poller, foreground observations left a `Process` undisposed,
+and reconnect-delay cancellation could escape during shutdown. These are
+confirmed code risks, not a proven attribution of Dan's desktop freezes. Idle
+pipe reads and the extension's 30-second keepalive are expected behavior; the
+existing pipe-ownership retry already backs off.
+
+Controlled fake-provider stress results and opt-in Windows verification commands
+are recorded in `docs/agent-context.md`. Linux measurements do not establish
+Windows desktop responsiveness or reproduce the reported system freeze.
+Autostart must remain disabled until the coordinator verifies the bridge on
+Dan's Windows PC. A timed-out native operation cannot be forcefully stopped
+in-process and may require restarting the bridge; process isolation remains a
+future option if live diagnostics show that containment is insufficient.
 
 ## 5 October 2026 — Software Factory layout selected
 

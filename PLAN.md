@@ -4,6 +4,12 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P7-41 (#446):** Bridge freeze investigation and containment: background
+  cached app discovery, bounded command/UIA waits, a resource watchdog,
+  single-flight focus, input-idle gating and local tray diagnostics. Confirmed
+  code risks and controlled stress evidence are documented separately from
+  unverified Windows behavior. Next: finish offline validation, then coordinator
+  stress and responsiveness checks on Dan's PC. Autostart stays disabled.
 - **P7-35 (#425):** Implemented offline after merged P7-34. Value-free recipes reuse `dbo.settings` under `global` / `recipe.<hash>` (0020 is occupied; no new migration). Jev chooses among app/site candidates plus `none`, verifies uniquely re-located fresh targets, and falls back to planning on drift; pause, sensitive-input and irreversible-only approval gates remain authoritative. The list/delete tool and Settings view are implemented. Backend (1,049 tests), web (322 tests), lint/build, .NET (147 tests) and Windows-target build pass. Chromium fixtures cover desktop/mobile management states. P5-14 whole-run controlled timings: PC 220→65 ms, browser 234→79 ms, including selection. Next: coordinator live Windows/Chrome/Jev replay and approval acceptance; controlled timings are not live speed evidence.
 - **Voice UI hotfix (#435):** Implemented in PR #437: direct screen/camera sharing from More, bottom-right transient notifications, white projected orb status and livelier dormant/active core motion. Browser fixtures and relevant web checks pass. Preserve the approved wake sequence and real capture/playback lifecycle; coordinate shared conversation files with #418.
 

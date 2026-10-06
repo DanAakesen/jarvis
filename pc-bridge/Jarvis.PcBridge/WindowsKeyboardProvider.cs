@@ -78,6 +78,9 @@ public sealed class WindowsKeyboardProvider : IKeyboardProvider
             GetForegroundWindow() != foreground)
             throw new UiAutomationRefusedException("stale");
 
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!WindowsCommandExecutor.IsInputIdle())
+            throw new UiAutomationRefusedException("blocked");
         var sent = SendInput((uint)events.Count, events.ToArray(), Marshal.SizeOf<NativeInput>());
         if (sent == (uint)events.Count) return;
 

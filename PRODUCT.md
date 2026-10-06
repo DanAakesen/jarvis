@@ -331,6 +331,16 @@ The separate daily web-research count includes successful, refused, and failed c
 
 ## Constraints and integrations
 
+- **PC bridge resource safety (P7-41):** Installed-app discovery must run in a
+  single background cache refresh, never inline with commands. Commands have a
+  ten-second watchdog; UI Automation has a shorter deadline and bounded tree.
+  Timed-out native calls cannot spawn replacement workers. Focus polling is
+  single-flight, and synthetic input is blocked while the user is typing.
+  The tray **Diagnostics** action writes only command names, durations and
+  CPU/thread/handle measurements locally; no command or desktop content.
+  Keep bridge autostart disabled until Windows stress and responsiveness checks
+  pass on Dan's PC.
+
 - **Azure:** subscription "Dan Aakesen", tenant Novaro, region Sweden Central. Details in [docs/agent-context.md](docs/agent-context.md).
 - **GitHub:** Dan's private repositories only; a GitHub App provides per-task tokens, webhooks, and merges.
 - **Coding agents:** Codex (ChatGPT Pro, Jarvis-only login) and Copilot (work seat) over ACP; their usage limits are shared with Dan's own use.

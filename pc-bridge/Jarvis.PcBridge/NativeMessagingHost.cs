@@ -14,7 +14,8 @@ internal static class NativeMessagingHost
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
         using var stopping = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await pipe.ConnectAsync(stopping.Token).ConfigureAwait(false);
+        try { await pipe.ConnectAsync(stopping.Token).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested) { return; }
         stopping.CancelAfter(Timeout.InfiniteTimeSpan);
 
         var input = Console.OpenStandardInput();

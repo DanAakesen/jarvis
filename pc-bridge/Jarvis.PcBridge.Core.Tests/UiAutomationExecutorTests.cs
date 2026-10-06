@@ -5,6 +5,34 @@ namespace Jarvis.PcBridge.Core.Tests;
 public sealed class UiAutomationExecutorTests
 {
     [Fact]
+    public void Late_observation_is_discarded_when_provider_ignores_cancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1", []))
+        {
+            AfterObservation = cancellation.Cancel,
+        };
+
+        Assert.Throws<OperationCanceledException>(() =>
+            new UiAutomationExecutor(provider).Observe(cancellation.Token));
+    }
+
+    [Fact]
+    public void Keyboard_window_validation_does_not_walk_the_control_tree()
+    {
+        var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1", []));
+        var executor = new UiAutomationExecutor(provider);
+        var snapshot = executor.Observe(CancellationToken.None);
+
+        executor.EnsureCurrentWindow(snapshot.SnapshotId, CancellationToken.None);
+        Assert.Equal(1, provider.TreeObservations);
+        provider.View = provider.View with { WindowId = "window-2" };
+        Assert.Throws<UiAutomationRefusedException>(() =>
+            executor.EnsureCurrentWindow(snapshot.SnapshotId, CancellationToken.None));
+        Assert.Equal(1, provider.TreeObservations);
+    }
+
+    [Fact]
     public void Snapshot_exposes_only_allowed_visible_non_sensitive_controls_without_values()
     {
         var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1",
@@ -180,12 +208,22 @@ public sealed class UiAutomationExecutorTests
     private sealed class FakeUiAutomationProvider(UiAutomationView view) : IUiAutomationProvider
     {
         public UiAutomationView View { get; set; } = view;
+        public int TreeObservations { get; private set; }
+        public Action? AfterObservation { get; init; }
         public List<(string Id, UiAutomationAction Action, string? Value)> Actions { get; } = [];
 
         public UiAutomationView Observe(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            TreeObservations++;
+            AfterObservation?.Invoke();
             return View;
+        }
+
+        public UiAutomationView ObserveWindow(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return View with { Controls = [] };
         }
 
         public void Act(

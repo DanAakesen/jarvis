@@ -1021,6 +1021,59 @@ or tray interaction. Live Chrome, physical confirmation delivery, and Dan's
 acceptance remain coordinator checks. Do not include unrelated personal tabs or
 page contents in evidence.
 
+### PC bridge freeze verification (P7-41, #446)
+
+Keep autostart disabled. The changes do not install, deploy or re-enable the
+bridge. On Linux, use the portable .NET tests and Windows-target cross-build
+above; they do not exercise WinForms, UIA COM, `SendInput` or Windows handles.
+
+The portable stress harness models the old repeated discovery and overlapping
+focus workers, then exercises the production cache, focus and command-worker
+classes with fake providers. It reports wall time, CPU/core percentage,
+sampled thread/handle peaks, command latency and an independent responsiveness
+probe. It also injects noncooperative discovery, focus and UIA hangs to check
+that timeouts do not create replacement workers. These are controlled
+measurements, not a reproduction of Dan's system freezes.
+The command-loop benchmark uses an in-memory diagnostic sink; file writing,
+rotation and failure feedback have separate regression tests. Probe lateness is
+scheduler evidence, not WinForms responsiveness. The adversarial replacement
+worker scenario illustrates an unsafe timeout fix, not the old bridge's actual
+serial WebSocket behavior.
+
+From the repository root:
+
+```text
+dotnet run --project pc-bridge/Jarvis.PcBridge.Stress/Jarvis.PcBridge.Stress.csproj --configuration Release -- --iterations 48
+```
+
+Before enabling autostart, the coordinator must run the opt-in Windows harness
+and exercise the actual tray under the normal VS Code/Chrome workload:
+
+```text
+dotnet run --project pc-bridge/Jarvis.PcBridge.Stress.Windows/Jarvis.PcBridge.Stress.Windows.csproj --configuration Release -- --real-windows
+```
+
+This harness launches only its own WinForms child with a private handshake,
+uses a fixture-only app catalog, and closes only the verified child PID. It
+exercises real window, UIA and input-idle APIs without closing user applications.
+It measures the harness process and the owned target's message-loop response,
+not the tray or VS Code/Chrome responsiveness. Global media input is skipped
+unless `--interactive-media` is added explicitly. Cross-building this project
+on Linux is not Windows runtime verification.
+
+1. Check Diagnostics pending, success and write-failure feedback; confirm the
+   log at `%LOCALAPPDATA%\Jarvis\PcBridge\diagnostics.log` contains only safe
+   command names/outcomes, timings and CPU/thread/handle counts.
+2. Repeat app open/close, snapshot and media commands; observe CPU, threads,
+   handles and desktop/tray responsiveness. Verify resource use settles after
+   commands and that a hung command returns a timeout without worker growth.
+3. Type while requesting focus/media/keyboard input: recent user input must
+   suppress synthetic events rather than interfering with typing.
+4. Exit during idle extension pipe reads, a pending command and reconnect
+   delay. Confirm a prompt tray exit with no cancellation APPCRASH.
+5. Restart the bridge after a noncooperative native hang. Restore autostart only
+   after live results are reviewed; no offline result authorizes re-enabling it.
+
 ### Database access and migrations (#7)
 
 - Configure `SQL_SERVER=<host>.database.windows.net`, `SQL_DATABASE=jarvis` and

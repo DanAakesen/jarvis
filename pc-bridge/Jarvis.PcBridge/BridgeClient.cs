@@ -10,7 +10,8 @@ public sealed class BridgeClient(
     BridgeTokenProvider tokens,
     WindowsCommandExecutor executor,
     BrowserExecutor browserExecutor,
-    Func<bool> isControlPaused)
+    Func<bool> isControlPaused,
+    BoundedCommandWorker commandWorker) : IDisposable
 {
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
     private readonly SemaphoreSlim _sendGate = new(1, 1);
@@ -41,7 +42,8 @@ public sealed class BridgeClient(
                 statusChanged("Offline — reconnecting");
             }
 
-            await Task.Delay(ReconnectDelay, cancellationToken).ConfigureAwait(false);
+            try { await Task.Delay(ReconnectDelay, cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
         }
     }
 
@@ -113,23 +115,22 @@ public sealed class BridgeClient(
                 {
                     if (isControlPaused() && CommandPolicy.IsControlAction(command.Command))
                         throw new CommandRefusedException("paused");
-                    var value = command.Command == "open_url"
-                        ? await browserExecutor.OpenUrlAsync(
-                            command.Arguments.GetProperty("url").GetString()!,
-                            executor.OpenUrlInDefaultBrowser,
-                            cancellationToken).ConfigureAwait(false)
-                        : command.Command.StartsWith("browser_", StringComparison.Ordinal)
-                            ? await browserExecutor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false)
-                            : await executor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
-                    if (command.Command == "open_url")
+                    var value = await commandWorker.ExecuteAsync(command.Command, async token =>
                     {
-                        // Chrome cannot take focus from the background; bring it forward (L110).
-                        _ = Task.Run(async () =>
+                        if (isControlPaused() && CommandPolicy.IsControlAction(command.Command))
+                            throw new CommandRefusedException("paused");
+                        if (command.Command == "open_url")
                         {
-                            await Task.Delay(300).ConfigureAwait(false);
-                            WindowsCommandExecutor.BringChromeToFront();
-                        });
-                    }
+                            var opened = await browserExecutor.OpenUrlAsync(
+                                command.Arguments.GetProperty("url").GetString()!,
+                                executor.OpenUrlInDefaultBrowser, token);
+                            executor.ScheduleChromeFocus(token);
+                            return opened;
+                        }
+                        return command.Command.StartsWith("browser_", StringComparison.Ordinal)
+                            ? await browserExecutor.ExecuteAsync(command, token)
+                            : await executor.ExecuteAsync(command, token);
+                    }, cancellationToken).ConfigureAwait(false);
                     response = BridgeProtocol.Success(command.Id, value);
                 }
                 catch (CommandRefusedException exception)
@@ -143,6 +144,14 @@ public sealed class BridgeClient(
                 catch (UiAutomationRefusedException exception)
                 {
                     response = BridgeProtocol.Failure(command.Id, exception.Code);
+                }
+                catch (CommandWorkerRefusedException exception)
+                {
+                    response = BridgeProtocol.Failure(command.Id, exception.Code);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch
                 {
@@ -186,6 +195,7 @@ public sealed class BridgeClient(
         }
     }
 
+    public void Dispose() => commandWorker.Dispose();
 }
 
 public sealed class CommandRefusedException(string code) : Exception

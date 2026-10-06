@@ -207,6 +207,9 @@ sign-in; the header wraps on narrow screens.
   checked state means PC control is paused; failures to save or report the state
   remain visible in the tray status. This is a native companion control, not a
   new web page.
+- **PC bridge diagnostics (P7-41):** Use a **Diagnostics** action in the existing
+  native tray menu, not a web page. Disable it while writing the local,
+  content-free resource log and report success or failure with native feedback.
 - **Area pages:** the Software Factory has its own Tasks and Projects
   navigation. Unbuilt task and release pages explain what is unavailable.
   Project management is implemented below; record pages link back to their list.

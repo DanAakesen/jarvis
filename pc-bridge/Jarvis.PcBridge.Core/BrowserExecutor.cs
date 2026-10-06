@@ -112,7 +112,7 @@ public sealed class BrowserExecutor : IDisposable
         {
             try
             {
-                var extensionPage = await _extensionPort.ListTabsAsync(offset, TabsPerPage, cancellationToken).ConfigureAwait(false);
+                var extensionPage = await _extensionPort.ListTabsAsync(offset, TabsPerPage, cancellationToken);
                 var extensionForegroundTitle = _focusedWindowTitle();
                 return new
                 {
@@ -126,7 +126,7 @@ public sealed class BrowserExecutor : IDisposable
             catch { throw new BrowserActionRefusedException("not_found"); }
         }
 
-        var targets = await GetTargetsAsync(cancellationToken).ConfigureAwait(false);
+        var targets = await GetTargetsAsync(cancellationToken);
         var pageTargets = targets.Where(target => target.Type == "page").Take(5000).ToArray();
         RemoveClosedSessions(pageTargets);
         var foregroundTitle = _focusedWindowTitle();
@@ -236,8 +236,8 @@ public sealed class BrowserExecutor : IDisposable
         var action = arguments.GetProperty("action").GetString()!;
         var keyboardAction = action is "keys" or "type_focused";
         var index = keyboardAction ? -1 : arguments.GetProperty("elementIndex").GetInt32();
-        var target = await FindTargetAsync(tabId, cancellationToken).ConfigureAwait(false);
-        var session = await GetSessionAsync(target, cancellationToken).ConfigureAwait(false);
+        var target = await FindTargetAsync(tabId, cancellationToken);
+        var session = await GetSessionAsync(target, cancellationToken);
         var keepAttached = false;
         try
         {
@@ -254,7 +254,7 @@ public sealed class BrowserExecutor : IDisposable
                 if (!_isEnabled()) throw new BrowserActionRefusedException("browser_off");
                 if (_keyboardExecutor is null) throw new BrowserActionRefusedException("not_allowed");
                 if (!IsFocused(target.Title, _focusedWindowTitle()) ||
-                    await IsSensitiveFocusedAsync(session, cancellationToken).ConfigureAwait(false))
+                    await IsSensitiveFocusedAsync(session, cancellationToken))
                     throw new BrowserActionRefusedException("blocked");
                 return _keyboardExecutor.Execute(action, arguments, cancellationToken);
             }

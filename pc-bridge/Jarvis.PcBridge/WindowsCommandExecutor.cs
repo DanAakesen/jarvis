@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -7,13 +6,16 @@ using Jarvis.PcBridge.Core;
 
 namespace Jarvis.PcBridge;
 
-public sealed class WindowsCommandExecutor
+public sealed class WindowsCommandExecutor : IDisposable
 {
     private const string RepoRoot = @"C:\Repo";
     private const string BrowserFallbackNote =
         "Opened in Chrome directly because the Jarvis Chrome extension isn't connected.";
     private readonly UiAutomationExecutor _uiAutomation = new(new WindowsUiAutomationProvider());
     private readonly KeyboardExecutor _keyboard;
+    private readonly InstalledAppCache _installedApps = new(FindInstalledAppsOnSta);
+    private readonly SingleFlightFocusPoller _focusPoller = new();
+    private int _disposed;
 
     public WindowsCommandExecutor(KeyboardExecutor? keyboard = null)
     {
@@ -22,19 +24,20 @@ public sealed class WindowsCommandExecutor
 
     public Task<object> ExecuteAsync(BridgeCommand command, CancellationToken cancellationToken)
     {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         cancellationToken.ThrowIfCancellationRequested();
         if (!CommandPolicy.IsValid(command.Command, command.Arguments))
             throw new CommandRefusedException("not_allowed");
 
         object result = command.Command switch
         {
-            "open_url" => OpenUrlInDefaultBrowser(command.Arguments.GetProperty("url").GetString()!),
-            "open_app" => OpenApp(command.Arguments.GetProperty("app").GetString()!),
+            "open_url" => OpenUrlInDefaultBrowser(command.Arguments.GetProperty("url").GetString()!, cancellationToken),
+            "open_app" => OpenApp(command.Arguments.GetProperty("app").GetString()!, cancellationToken),
             "close_app" => CloseApp(command.Arguments.GetProperty("app").GetString()!),
             "media" => ControlMedia(command.Arguments.GetProperty("action").GetString()!),
-            "open_folder" => OpenFolder(command.Arguments.GetProperty("relativePath").GetString()!),
+            "open_folder" => OpenFolder(command.Arguments.GetProperty("relativePath").GetString()!, cancellationToken),
             "active_window" => ReadActiveWindow(),
-            "focus_window" => FocusWindow(command.Arguments.GetProperty("title").GetString()!),
+            "focus_window" => FocusWindow(command.Arguments.GetProperty("title").GetString()!, cancellationToken),
             "uia_snapshot" => _uiAutomation.Observe(cancellationToken),
             "uia_act" => ActOnUiAutomation(command.Arguments, cancellationToken),
             _ => throw new CommandRefusedException("not_allowed"),
@@ -77,21 +80,24 @@ public sealed class WindowsCommandExecutor
             };
     }
 
-    public object OpenUrlInDefaultBrowser(string value)
+    public object OpenUrlInDefaultBrowser(string value) => OpenUrlInDefaultBrowser(value, CancellationToken.None);
+
+    public object OpenUrlInDefaultBrowser(string value, CancellationToken cancellationToken)
     {
         if (!CommandPolicy.TryNormalizeUrl(value, out var url)) throw new CommandRefusedException("not_allowed");
         var chrome = FindExecutable("chrome");
         if (chrome is null) throw new CommandRefusedException("not_found");
         var start = new ProcessStartInfo(chrome) { UseShellExecute = false };
         start.ArgumentList.Add(url);
+        cancellationToken.ThrowIfCancellationRequested();
         using var process = Process.Start(start);
         AllowForeground(process);
         return new { opened = true, note = BrowserFallbackNote };
     }
 
-    private static object OpenApp(string app)
+    private object OpenApp(string app, CancellationToken cancellationToken)
     {
-        var matches = InstalledAppMatcher.FindBestMatches(app, FindInstalledApps());
+        var matches = _installedApps.FindBestMatches(app);
         if (matches.Count == 0) throw new CommandRefusedException("not_found");
         if (matches.Count > 1)
             return new { opened = false, candidates = matches.Select(match => match.Name).ToArray() };
@@ -106,37 +112,58 @@ public sealed class WindowsCommandExecutor
         // background bridge may not be allowed to grant it (L109).
         if (process is not null) _ = AllowSetForegroundWindow((uint)process.Id);
         var executable = Path.GetFileNameWithoutExtension(match.ExecutablePath ?? match.Target);
-        _ = Task.Run(() => BringNewWindowToFront(executable, match.Name));
+        _ = _focusPoller.ReplaceAsync(token => BringNewWindowToFrontAsync(executable, match.Name, token), cancellationToken);
         return new { opened = true, app = match.Name };
     }
 
     // Windows only lets the process that received the last input take the foreground, so the
-    // background bridge sends a synthetic Alt key first (L110). Best effort; failures are ignored.
-    public static void BringToFront(IntPtr window)
+    // background bridge sends Alt only after 500ms without user input. Best effort.
+    public static void BringToFront(IntPtr window) => BringToFront(window, CancellationToken.None);
+
+    private static void BringToFront(IntPtr window, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (window == IntPtr.Zero) return;
+        if (!IsInputIdle()) return;
         if (IsIconic(window)) ShowWindow(window, 9);
         var alt = new[] { KeyboardInputEvent(0x12, 0), KeyboardInputEvent(0x12, KeyEventKeyUp) };
-        _ = SendInput((uint)alt.Length, alt, Marshal.SizeOf<NativeInput>());
+        if (!IsInputIdle()) return;
+        cancellationToken.ThrowIfCancellationRequested();
+        var sent = SendInput((uint)alt.Length, alt, Marshal.SizeOf<NativeInput>());
+        if (sent == 1)
+            _ = SendInput(1, [KeyboardInputEvent(0x12, KeyEventKeyUp)], Marshal.SizeOf<NativeInput>());
         _ = SetForegroundWindow(window);
     }
 
     public static void BringChromeToFront() => BringToFront(FindTopWindow(processName => processName == "chrome", _ => false));
 
-    private static void BringNewWindowToFront(string executable, string appName)
+    public Task FocusBrowserAsync(CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        cancellationToken.ThrowIfCancellationRequested();
+        return _focusPoller.ReplaceAsync(
+            token => BringNewWindowToFrontAsync("chrome", string.Empty, token), cancellationToken);
+    }
+
+    public void ScheduleChromeFocus(CancellationToken cancellationToken) =>
+        _ = FocusBrowserAsync(cancellationToken);
+
+    private static async Task BringNewWindowToFrontAsync(string executable, string appName, CancellationToken cancellationToken)
     {
         var wanted = InstalledAppMatcher.Expand(InstalledAppMatcher.Normalize(appName));
         var process = InstalledAppMatcher.Normalize(executable);
         for (var attempt = 0; attempt < 25; attempt++)
         {
-            Thread.Sleep(200);
+            await Task.Delay(200, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             var window = FindTopWindow(
                 name => process.Length > 0 && InstalledAppMatcher.Normalize(name) == process,
                 title => wanted.Length > 0 &&
                     InstalledAppMatcher.Expand(InstalledAppMatcher.Normalize(title)).Contains(wanted, StringComparison.Ordinal));
             if (window != IntPtr.Zero)
             {
-                BringToFront(window);
+                cancellationToken.ThrowIfCancellationRequested();
+                BringToFront(window, cancellationToken);
                 return;
             }
         }
@@ -212,6 +239,7 @@ public sealed class WindowsCommandExecutor
     {
         if (!CommandPolicy.TryGetMediaVirtualKey(action, out var key))
             throw new CommandRefusedException("not_allowed");
+        if (!IsInputIdle()) throw new CommandRefusedException("user_active");
         var inputs = new[]
         {
             KeyboardInputEvent(key, 0),
@@ -226,10 +254,7 @@ public sealed class WindowsCommandExecutor
         return new { controlled = true, action };
     }
 
-    private static IReadOnlyList<InstalledApp> FindInstalledApps() =>
-        RunOnStaThread(FindInstalledAppsOnSta);
-
-    private static IReadOnlyList<InstalledApp> FindInstalledAppsOnSta()
+    private static IReadOnlyList<InstalledApp> FindInstalledAppsOnSta(CancellationToken cancellationToken)
     {
         var apps = new List<InstalledApp>();
         var roots = new[]
@@ -237,56 +262,71 @@ public sealed class WindowsCommandExecutor
             Environment.GetFolderPath(Environment.SpecialFolder.Programs),
             Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
         };
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var root in roots.Where(Directory.Exists))
+        var shortcutAttempts = 0;
+        object? shortcutShell = null;
+        try
         {
-            var pending = new Queue<(string Path, int Depth)>();
-            pending.Enqueue((root, 0));
-            while (pending.Count > 0 && visited.Count < 2_000 && apps.Count < 2_000)
+            cancellationToken.ThrowIfCancellationRequested();
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            try
             {
-                var (directory, depth) = pending.Dequeue();
-                string fullDirectory;
-                try
+                if (shellType is not null) shortcutShell = Activator.CreateInstance(shellType);
+            }
+            catch (COMException) { }
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var root in roots.Where(Directory.Exists))
+            {
+                var pending = new Queue<(string Path, int Depth)>();
+                pending.Enqueue((root, 0));
+                while (pending.Count > 0 && visited.Count < 2_000 && shortcutAttempts < 2_000)
                 {
-                    fullDirectory = Path.GetFullPath(directory);
-                    if (!visited.Add(fullDirectory) ||
-                        (File.GetAttributes(fullDirectory) & FileAttributes.ReparsePoint) != 0) continue;
-                    foreach (var shortcut in Directory.EnumerateFiles(fullDirectory, "*.lnk"))
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var (directory, depth) = pending.Dequeue();
+                    try
                     {
-                        if (apps.Count >= 2_000) break;
-                        var target = ReadShortcutTarget(shortcut);
-                        if (string.IsNullOrWhiteSpace(target)) continue;
-                        var name = Path.GetFileNameWithoutExtension(shortcut);
-                        if (name.Length > 128) name = name[..128];
-                        apps.Add(new InstalledApp(name, shortcut, ExecutablePath: target));
-                    }
-                    if (depth < 6)
-                    {
-                        foreach (var child in Directory.EnumerateDirectories(fullDirectory))
+                        var fullDirectory = Path.GetFullPath(directory);
+                        if (!visited.Add(fullDirectory) ||
+                            (File.GetAttributes(fullDirectory) & FileAttributes.ReparsePoint) != 0) continue;
+                        foreach (var shortcut in Directory.EnumerateFiles(fullDirectory, "*.lnk"))
                         {
-                            if (pending.Count >= 2_000) break;
-                            pending.Enqueue((child, depth + 1));
+                            cancellationToken.ThrowIfCancellationRequested();
+                            if (shortcutAttempts >= 2_000) break;
+                            shortcutAttempts++;
+                            var target = ReadShortcutTarget(shortcutShell, shortcut);
+                            if (string.IsNullOrWhiteSpace(target)) continue;
+                            var name = Path.GetFileNameWithoutExtension(shortcut);
+                            if (name.Length > 128) name = name[..128];
+                            apps.Add(new InstalledApp(name, shortcut, ExecutablePath: target));
+                        }
+                        if (depth < 6 && shortcutAttempts < 2_000)
+                        {
+                            foreach (var child in Directory.EnumerateDirectories(fullDirectory))
+                            {
+                                cancellationToken.ThrowIfCancellationRequested();
+                                if (pending.Count >= 2_000) break;
+                                pending.Enqueue((child, depth + 1));
+                            }
                         }
                     }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
                 }
-                catch (IOException) { }
-                catch (UnauthorizedAccessException) { }
             }
         }
+        finally
+        {
+            if (shortcutShell is not null && Marshal.IsComObject(shortcutShell)) Marshal.FinalReleaseComObject(shortcutShell);
+        }
 
-        apps.AddRange(FindAppsFolderApps());
+        apps.AddRange(FindAppsFolderApps(cancellationToken));
         return apps;
     }
 
-    private static string? ReadShortcutTarget(string path)
+    private static string? ReadShortcutTarget(object? shell, string path)
     {
-        object? shell = null;
         object? shortcut = null;
         try
         {
-            var shellType = Type.GetTypeFromProgID("WScript.Shell");
-            if (shellType is null) return null;
-            shell = Activator.CreateInstance(shellType);
             if (shell is null) return null;
             dynamic automation = shell;
             shortcut = automation.CreateShortcut(path);
@@ -300,11 +340,10 @@ public sealed class WindowsCommandExecutor
         finally
         {
             if (shortcut is not null && Marshal.IsComObject(shortcut)) Marshal.FinalReleaseComObject(shortcut);
-            if (shell is not null && Marshal.IsComObject(shell)) Marshal.FinalReleaseComObject(shell);
         }
     }
 
-    private static IReadOnlyList<InstalledApp> FindAppsFolderApps()
+    private static IReadOnlyList<InstalledApp> FindAppsFolderApps(CancellationToken cancellationToken)
     {
         object? shell = null;
         object? folder = null;
@@ -312,6 +351,7 @@ public sealed class WindowsCommandExecutor
         var apps = new List<InstalledApp>();
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var shellType = Type.GetTypeFromProgID("Shell.Application");
             if (shellType is null) return apps;
             shell = Activator.CreateInstance(shellType);
@@ -322,8 +362,12 @@ public sealed class WindowsCommandExecutor
             dynamic appFolder = folder;
             items = appFolder.Items();
             if (items is null) return apps;
-            foreach (var item in (IEnumerable)items)
+            dynamic collection = items;
+            var count = Math.Clamp((int)collection.Count, 0, 2_000);
+            for (var index = 0; index < count; index++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                var item = (object?)collection.Item(index);
                 if (item is null) continue;
                 object? entry = item;
                 try
@@ -341,6 +385,7 @@ public sealed class WindowsCommandExecutor
                 }
             }
         }
+        catch (OperationCanceledException) { throw; }
         catch { }
         finally
         {
@@ -351,23 +396,31 @@ public sealed class WindowsCommandExecutor
         return apps;
     }
 
-    private static T RunOnStaThread<T>(Func<T> action)
+    public static bool IsInputIdle()
     {
-        T? result = default;
-        Exception? failure = null;
-        var thread = new Thread(() =>
-        {
-            try { result = action(); }
-            catch (Exception exception) { failure = exception; }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-        if (failure is not null) throw failure;
-        return result!;
+        var info = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
+        return InputIdlePolicy.CanInject(GetLastInputInfo(ref info), unchecked((uint)Environment.TickCount), info.Tick);
     }
 
-    private static object OpenFolder(string relativePath)
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        _focusPoller.Dispose();
+        _installedApps.Dispose();
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LastInputInfo
+    {
+        public uint Size;
+        public uint Tick;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetLastInputInfo(ref LastInputInfo info);
+
+    private static object OpenFolder(string relativePath, CancellationToken cancellationToken)
     {
         if (!CommandPolicy.TryNormalizeRepoPath(relativePath, out var normalized))
             throw new CommandRefusedException("not_allowed");
@@ -387,6 +440,7 @@ public sealed class WindowsCommandExecutor
         if (code is null) throw new CommandRefusedException("not_found");
         var start = new ProcessStartInfo(code) { UseShellExecute = false };
         start.ArgumentList.Add(fullPath);
+        cancellationToken.ThrowIfCancellationRequested();
         using var process = Process.Start(start);
         AllowForeground(process);
         return new { opened = true };
@@ -418,11 +472,12 @@ public sealed class WindowsCommandExecutor
 
     public static string ReadActiveWindowTitle() => ReadTitle(GetForegroundWindow());
 
-    private static object FocusWindow(string title)
+    private static object FocusWindow(string title, CancellationToken cancellationToken)
     {
         var found = IntPtr.Zero;
         EnumWindows((handle, _) =>
         {
+            if (cancellationToken.IsCancellationRequested) return false;
             if (IsWindowVisible(handle) && string.Equals(ReadTitle(handle), title, StringComparison.Ordinal))
             {
                 found = handle;
@@ -431,6 +486,7 @@ public sealed class WindowsCommandExecutor
             return true;
         }, IntPtr.Zero);
 
+        cancellationToken.ThrowIfCancellationRequested();
         if (found == IntPtr.Zero) throw new CommandRefusedException("not_found");
         ShowWindow(found, 9);
         if (!SetForegroundWindow(found)) throw new CommandRefusedException("failed");

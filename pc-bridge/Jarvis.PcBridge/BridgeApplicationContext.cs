@@ -11,11 +11,16 @@ public sealed class BridgeApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem _status;
     private readonly ToolStripMenuItem _browserToggle;
     private readonly ToolStripMenuItem _controlToggle;
+    private readonly ToolStripMenuItem _diagnosticsItem;
     private BridgeSettings? _settings;
     private BrowserExecutor? _browserExecutor;
     private NativeMessagingBrowserPort? _extensionPort;
     private BridgeTokenProvider? _tokenProvider;
     private BridgeClient? _bridgeClient;
+    private readonly BridgeDiagnostics _diagnostics = new();
+    private BoundedCommandWorker? _commandWorker;
+    private bool _exiting;
+    private readonly Task _runTask;
 
     public BridgeApplicationContext()
     {
@@ -36,6 +41,8 @@ public sealed class BridgeApplicationContext : ApplicationContext
             Enabled = false,
         };
         menu.Items.Add(_controlToggle);
+        _diagnosticsItem = new ToolStripMenuItem("Diagnostics", null, WriteDiagnostics);
+        menu.Items.Add(_diagnosticsItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
         _icon = new NotifyIcon
@@ -45,17 +52,20 @@ public sealed class BridgeApplicationContext : ApplicationContext
             ContextMenuStrip = menu,
             Visible = true,
         };
-        _ = RunAsync();
+        _runTask = RunAsync();
     }
 
     protected override void ExitThreadCore()
     {
+        if (_exiting) return;
+        _exiting = true;
         _stopping.Cancel();
+        _bridgeClient?.Dispose();
+        _commandWorker?.Dispose();
         _icon.Visible = false;
         _icon.Dispose();
         _dispatcher.Dispose();
-        _extensionPort?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        _stopping.Dispose();
+        _ = _runTask.ContinueWith(_ => _stopping.Dispose(), TaskScheduler.Default);
         base.ExitThreadCore();
     }
 
@@ -77,15 +87,25 @@ public sealed class BridgeApplicationContext : ApplicationContext
                 WindowsCommandExecutor.ReadActiveWindowTitle,
                 extensionPort: _extensionPort,
                 keyboardExecutor: keyboardExecutor);
-            _tokenProvider = await BridgeTokenProvider.CreateAsync(settings, _stopping.Token);
+            var browserExecutor = _browserExecutor;
+            var extensionPort = _extensionPort;
+            var executor = new WindowsCommandExecutor(keyboardExecutor);
+            _commandWorker = new BoundedCommandWorker(_diagnostics, cleanup: async () =>
+            {
+                executor.Dispose();
+                browserExecutor.Dispose();
+                await extensionPort.DisposeAsync();
+            });
+            _tokenProvider = await BridgeTokenProvider.CreateAsync(settings, _stopping.Token).ConfigureAwait(false);
             var client = new BridgeClient(
                 settings,
                 _tokenProvider,
-                new WindowsCommandExecutor(keyboardExecutor),
+                executor,
                 _browserExecutor,
-                () => _settings?.ControlPaused == true);
+                () => _settings?.ControlPaused == true,
+                _commandWorker);
             _bridgeClient = client;
-            await client.RunAsync(SetStatus, _stopping.Token);
+            await client.RunAsync(SetStatus, _stopping.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
         {
@@ -96,7 +116,26 @@ public sealed class BridgeApplicationContext : ApplicationContext
         }
         finally
         {
-            _browserExecutor?.Dispose();
+            _bridgeClient?.Dispose();
+            _commandWorker?.Dispose();
+        }
+    }
+
+    private async void WriteDiagnostics(object? sender, EventArgs e)
+    {
+        if (_exiting || !_diagnosticsItem.Enabled) return;
+        _diagnosticsItem.Enabled = false;
+        try
+        {
+            var written = await _diagnostics.WriteSampleAsync();
+            if (!_exiting)
+                _icon.ShowBalloonTip(3000, "Diagnostics",
+                    written ? "Local resource diagnostics saved." : "Diagnostics could not be saved. Try again.",
+                    written ? ToolTipIcon.Info : ToolTipIcon.Warning);
+        }
+        finally
+        {
+            if (!_exiting) _diagnosticsItem.Enabled = true;
         }
     }
 
@@ -160,7 +199,7 @@ public sealed class BridgeApplicationContext : ApplicationContext
 
     private void SetStatus(string status)
     {
-        if (_stopping.IsCancellationRequested || _dispatcher.IsDisposed) return;
+        if (_exiting || _dispatcher.IsDisposed) return;
         _dispatcher.BeginInvoke(() =>
         {
             _status.Text = status;

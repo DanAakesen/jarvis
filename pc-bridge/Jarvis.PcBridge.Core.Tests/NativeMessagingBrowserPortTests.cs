@@ -9,6 +9,94 @@ namespace Jarvis.PcBridge.Core.Tests;
 public sealed class NativeMessagingBrowserPortTests
 {
     [Fact]
+    public async Task Disposal_closes_connected_idle_extension_without_waiting_for_another_frame()
+    {
+        var pipeName = $"Jarvis.PcBridge.Test.{Guid.NewGuid():N}";
+        var port = new NativeMessagingBrowserPort(pipeName);
+        Task? disposing = null;
+        await using var extension = new NamedPipeClientStream(
+            ".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        try
+        {
+            await extension.ConnectAsync(5000);
+            await WaitUntilConnectedAsync(port);
+            Assert.True(port.IsConnected);
+
+            // The healthy idle read has no artificial disconnect deadline.
+            disposing = port.DisposeAsync().AsTask();
+            await disposing.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(port.IsConnected);
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            Assert.Equal(0, await extension.ReadAsync(new byte[1], deadline.Token));
+        }
+        finally
+        {
+            extension.Dispose();
+            await (disposing ?? port.DisposeAsync().AsTask()).WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [Fact]
+    public async Task Disposal_completes_pending_request_when_connected_extension_stops_responding()
+    {
+        var pipeName = $"Jarvis.PcBridge.Test.{Guid.NewGuid():N}";
+        var port = new NativeMessagingBrowserPort(pipeName);
+        Task? disposing = null;
+        await using var extension = new NamedPipeClientStream(
+            ".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        try
+        {
+            await extension.ConnectAsync(5000);
+            await WaitUntilConnectedAsync(port);
+            var request = port.ListTabsAsync(0, 20, CancellationToken.None);
+            using var frame = await ReadMessageAsync(extension);
+            Assert.Equal("list_tabs", frame.RootElement.GetProperty("type").GetString());
+            disposing = port.DisposeAsync().AsTask();
+            await disposing.WaitAsync(TimeSpan.FromSeconds(5));
+            var failure = await Record.ExceptionAsync(() => request.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.True(failure is OperationCanceledException ||
+                failure is BrowserActionRefusedException { Code: "not_found" });
+        }
+        finally
+        {
+            extension.Dispose();
+            await (disposing ?? port.DisposeAsync().AsTask()).WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [Fact]
+    public async Task Competing_pipe_owner_backs_off_and_disposal_cancels_retry_without_disrupting_owner()
+    {
+        var pipeName = $"Jarvis.PcBridge.Test.{Guid.NewGuid():N}";
+        using var owner = new NamedPipeServerStream(
+            pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
+            OperatingSystem.IsWindows() ? PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly : PipeOptions.Asynchronous);
+        var creating = Task.Run(() => new NativeMessagingBrowserPort(pipeName));
+        NativeMessagingBrowserPort? competitor = null;
+        Task? disposing = null;
+        try
+        {
+            // Without the asynchronous backoff the constructor spins until the owner closes.
+            competitor = await creating.WaitAsync(TimeSpan.FromSeconds(5));
+            disposing = competitor.DisposeAsync().AsTask();
+            await disposing.WaitAsync(TimeSpan.FromSeconds(5));
+            await using var client = new NamedPipeClientStream(
+                ".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var accepting = owner.WaitForConnectionAsync(deadline.Token);
+            await client.ConnectAsync(deadline.Token);
+            await accepting;
+            Assert.True(owner.IsConnected);
+        }
+        finally
+        {
+            owner.Dispose();
+            competitor ??= await creating.WaitAsync(TimeSpan.FromSeconds(5));
+            await (disposing ?? competitor.DisposeAsync().AsTask()).WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [Fact]
     public async Task Requests_a_validated_active_foreground_extension_tab()
     {
         var pipeName = $"Jarvis.PcBridge.Test.{Guid.NewGuid():N}";

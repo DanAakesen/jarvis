@@ -43,6 +43,8 @@ public interface IUiAutomationProvider
 {
     UiAutomationView? Observe(CancellationToken cancellationToken);
 
+    UiAutomationView? ObserveWindow(CancellationToken cancellationToken) => Observe(cancellationToken);
+
     void Act(
         UiAutomationControl control,
         UiAutomationAction action,
@@ -60,6 +62,7 @@ public sealed class UiAutomationExecutor(IUiAutomationProvider provider)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var view = provider.Observe(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         if (view is null) throw new UiAutomationRefusedException("not_found");
         if (!UiAutomationPolicy.IsAllowedApplication(view.Application))
             throw new UiAutomationRefusedException("not_allowed");
@@ -87,7 +90,7 @@ public sealed class UiAutomationExecutor(IUiAutomationProvider provider)
             DateTimeOffset.UtcNow - snapshot.CreatedAt > SnapshotLifetime)
             throw new UiAutomationRefusedException("stale");
 
-        var current = provider.Observe(cancellationToken);
+        var current = provider.ObserveWindow(cancellationToken);
         if (current is null || current.Application != snapshot.View.Application ||
             current.WindowId != snapshot.View.WindowId)
             throw new UiAutomationRefusedException("stale");

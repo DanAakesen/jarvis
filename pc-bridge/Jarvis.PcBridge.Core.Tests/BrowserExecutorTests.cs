@@ -5,6 +5,51 @@ namespace Jarvis.PcBridge.Core.Tests;
 
 public sealed class BrowserExecutorTests
 {
+    [Fact]
+    public async Task Native_title_and_keyboard_callbacks_stay_on_the_bounded_worker_after_io()
+    {
+        await using var target = await FakeCdpTarget.StartAsync();
+        using var http = new HttpClient(new YieldingHttpHandler());
+        var directory = Path.Combine(Path.GetTempPath(), "Jarvis.PcBridge.Tests", Guid.NewGuid().ToString("N"));
+        var cleaned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var worker = new BoundedCommandWorker(new BridgeDiagnostics(directory),
+            sample: () => default, cleanup: () => { cleaned.TrySetResult(); return Task.CompletedTask; });
+        var workerThread = 0;
+        var titles = 0;
+        var keyboard = new FakeKeyboardProvider
+        {
+            OnSend = () => Assert.Equal(workerThread, Environment.CurrentManagedThreadId),
+        };
+        using var executor = new BrowserExecutor(() => true, () =>
+        {
+            Assert.Equal(workerThread, Environment.CurrentManagedThreadId);
+            titles++;
+            return "Search - Google Chrome";
+        }, httpClient: http, targetsUri: target.TargetsUri, keyboardExecutor: new KeyboardExecutor(keyboard));
+        try
+        {
+            await worker.ExecuteAsync("browser_tabs", _ =>
+            {
+                workerThread = Environment.CurrentManagedThreadId;
+                return Execute(executor, "browser_tabs", "{}");
+            }, CancellationToken.None);
+            var snapshot = await worker.ExecuteAsync("browser_snapshot",
+                _ => Execute(executor, "browser_snapshot", """{"tabId":"tab_1"}"""), CancellationToken.None);
+            var id = (string)snapshot.GetType().GetProperty("SnapshotId")!.GetValue(snapshot)!;
+            await worker.ExecuteAsync("browser_act", _ => Execute(executor, "browser_act",
+                $$"""{"tabId":"tab_1","snapshotId":"{{id}}","action":"keys","keys":["Ctrl+L"],"confirmed":false,"closeIntent":false}"""),
+                CancellationToken.None);
+            Assert.Equal(["Ctrl+L"], keyboard.Keys);
+            Assert.Equal(2, titles);
+        }
+        finally
+        {
+            worker.Dispose();
+            await cleaned.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("Send message")]
     [InlineData("Delete file")]
@@ -392,6 +437,7 @@ public sealed class BrowserExecutorTests
     private sealed class FakeKeyboardProvider : IKeyboardProvider
     {
         public List<string> Keys { get; } = [];
+        public Action? OnSend { get; init; }
 
         public bool IsSensitiveFieldFocused(CancellationToken cancellationToken)
         {
@@ -402,12 +448,23 @@ public sealed class BrowserExecutorTests
         public void SendKeys(IReadOnlyList<string> sequence, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            OnSend?.Invoke();
             Keys.AddRange(sequence);
         }
 
         public void TypeFocused(string text, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+        }
+    }
+
+    private sealed class YieldingHttpHandler() : DelegatingHandler(new HttpClientHandler())
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
     }
 }
