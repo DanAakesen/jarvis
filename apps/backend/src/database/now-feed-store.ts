@@ -51,7 +51,7 @@ export function createNowFeedStore(pool: sql.ConnectionPool, onNotificationCreat
           WHERE dismissed_at IS NULL AND alert_key IS NOT NULL
         )
         SELECT TOP (100) CAST(id AS varchar(19)) AS id, category, title, link, at
-        FROM visible ORDER BY at DESC, id DESC;`);
+        FROM visible ORDER BY visible.at DESC, visible.id DESC;`);
 
       return {
         running: running.recordset.map((task) => ({ ...task, startedAt: iso(task.startedAt) })),

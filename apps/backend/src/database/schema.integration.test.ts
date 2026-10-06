@@ -430,9 +430,9 @@ describe('committed domain schema (groups 1-8)', () => {
       UPDATE dbo.activity SET at = @attentionAt
       WHERE area = N'factory' AND link = N'task:${needsAttention.id}';`);
     const attentionActivity = await pool.request().query<{ id: string }>(`SELECT TOP (1)
-      CAST(id AS varchar(19)) AS id FROM dbo.activity
-      WHERE area = N'factory' AND link = N'task:${needsAttention.id}'
-      ORDER BY at DESC, id DESC;`);
+      CAST(a.id AS varchar(19)) AS id FROM dbo.activity AS a
+      WHERE a.area = N'factory' AND a.link = N'task:${needsAttention.id}'
+      ORDER BY a.at DESC, a.id DESC;`);
     const attentionActivityId = attentionActivity.recordset[0]?.id;
     if (!attentionActivityId) throw new Error('Now feed attention activity was not created');
 
@@ -445,11 +445,6 @@ describe('committed domain schema (groups 1-8)', () => {
     const store = createNowFeedStore(pool);
 
     const initial = await store.read();
-    // TEMP-DIAG P6-23: dump attention rows to diagnose a CI-only ordering mismatch.
-    console.log('TEMP-DIAG', JSON.stringify((await pool.request().query(`SELECT id, area, kind, title, link,
-      CONVERT(varchar(40), at, 126) AS at, dismissed_at, alert_key FROM dbo.activity
-      WHERE link = N'task:${needsAttention.id}' ORDER BY id;`)).recordset), 'selected', attentionActivityId,
-      'feed', JSON.stringify(initial.items.map((item) => [item.id, item.category, item.link, item.at])));
     expect((await tasks.transition(running.id, 'Cancelled')).kind).toBe('ok');
     expect((await tasks.transition(needsAttention.id, 'Running')).kind).toBe('ok');
     expect((await tasks.transition(needsAttention.id, 'Cancelled')).kind).toBe('ok');
