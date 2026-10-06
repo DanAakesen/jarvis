@@ -586,19 +586,6 @@ try {
     }));
   }
   if (database) modules.push(createHtmlViewModule(new WorkspaceHtmlArtifactStore(database.pool)));
-  if (memoryStore) {
-    modules.push(createMemoryModule({
-      store: memoryStore,
-      ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
-    }));
-  }
-  if (graphClient) {
-    modules.push(createNotesModule({
-      graph: graphClient,
-      ownerObjectId: config.auth.ownerObjectId,
-      folderPath: config.notesFolderPath,
-    }));
-  }
   let visionWatch: VisionWatchService | undefined;
   if (database && settingsStore && screenVisionModel) {
     const visionUsage = createScreenFrameUsageStore(database.pool);
