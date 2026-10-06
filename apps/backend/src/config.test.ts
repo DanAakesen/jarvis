@@ -7,16 +7,8 @@ describe('backend configuration', () => {
     expect(loadConfig({})).toEqual({
       port: 3000, logLevel: 'info', codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
-      awayModePresenceEnabled: false,
       auth: loadAuthConfig({}),
     });
-  });
-  it('keeps Graph presence monitoring opt-in', () => {
-    expect(loadConfig({ AWAY_MODE_PRESENCE: 'on' }).awayModePresenceEnabled).toBe(true);
-    expect(loadConfig({ AWAY_MODE_PRESENCE: 'off' }).awayModePresenceEnabled).toBe(false);
-    for (const AWAY_MODE_PRESENCE of ['', 'true', 'OFF', 'yes']) {
-      expect(() => loadConfig({ AWAY_MODE_PRESENCE })).toThrow('AWAY_MODE_PRESENCE');
-    }
   });
   it('does not configure an external OneDrive notes folder', () => {
     expect(loadConfig({ JARVIS_NOTES_FOLDER_PATH: '/obsolete/path' })).not.toHaveProperty('notesFolderPath');
@@ -49,7 +41,6 @@ describe('backend configuration', () => {
       foundryRunnerAgentName: 'jarvis-runner-node-1x2',
       codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
-      awayModePresenceEnabled: false,
     });
   });
   it('validates the configurable ChatGPT Codex tool model', () => {

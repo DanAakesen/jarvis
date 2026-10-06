@@ -1,5 +1,3 @@
-import { awayModePresenceUnavailableMessage } from './now.js';
-
 export interface Settings {
   appearance: {
     theme: 'light' | 'dark' | 'system';
@@ -413,9 +411,6 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       settings: await readSettings(app.settingsStore),
       options: settingsOptions,
       credentials,
-      ...(app.awayModePresenceStatus.unavailable ? {
-        awayModeNotice: awayModePresenceUnavailableMessage,
-      } : {}),
     };
   });
 
@@ -492,9 +487,6 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       settings: await readSettings(app.settingsStore),
       options: settingsOptions,
       credentials,
-      ...(app.awayModePresenceStatus.unavailable ? {
-        awayModeNotice: awayModePresenceUnavailableMessage,
-      } : {}),
     };
   });
 }

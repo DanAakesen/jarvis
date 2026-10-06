@@ -66,16 +66,6 @@ describe('Now feed API', () => {
     expect(store.read).toHaveBeenCalledOnce();
   });
 
-  it('reports when automatic away detection is unavailable', async () => {
-    const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
-    const { app } = fixture(store, undefined, undefined, { unavailable: true });
-
-    const response = await app.inject({ url: '/now', headers });
-
-    expect(response.json().awayModeNotice)
-      .toBe('Automatic away detection is off: no presence permission');
-  });
-
   it('marks explicit authenticated browser activity as present', async () => {
     let away = true;
     const awayModeStore = {
@@ -113,7 +103,7 @@ describe('Now feed API', () => {
     expect(awayModeStore.markPresent).toHaveBeenCalledOnce();
   });
 
-  it('shows mode activity but not tasks or notifications in the browser while away', async () => {
+  it('keeps the Now feed and approvals available in the browser while away', async () => {
     const modeActivity = {
       id: '8',
       category: 'mode' as const,
@@ -144,14 +134,14 @@ describe('Now feed API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       awayMode: true,
-      running: [],
-      items: [modeActivity],
+      running: feed.running,
+      items: [...feed.items, modeActivity],
       confirmations: [],
     });
   });
 
-  it('lists browser confirmations only while present and requires an authenticated approval', async () => {
-    let away = false;
+  it('lists browser confirmations and accepts an authenticated approval while away', async () => {
+    const away = true;
     const confirmation = {
       id: 'A'.repeat(43),
       actionKind: 'merge',
@@ -185,11 +175,6 @@ describe('Now feed API', () => {
     });
     apps.push(app);
 
-    away = true;
-    const hidden = await app.inject({ url: '/now', headers });
-    expect(hidden.json().confirmations).toEqual([]);
-
-    away = false;
     const shown = await app.inject({
       url: '/now',
       headers: { ...headers, origin: 'https://fixture.azurestaticapps.net' },
@@ -211,16 +196,6 @@ describe('Now feed API', () => {
     });
     expect(approved.statusCode).toBe(204);
     expect(resolveBrowserConfirmation).toHaveBeenCalledWith(confirmation.id, 'approve');
-
-    away = true;
-    const awayResponse = await app.inject({
-      method: 'POST',
-      url: `/now/confirmations/${confirmation.id}`,
-      headers,
-      payload: { decision: 'approve' },
-    });
-    expect(awayResponse.statusCode).toBe(409);
-    expect(resolveBrowserConfirmation).toHaveBeenCalledOnce();
 
     const invalid = await app.inject({
       method: 'POST',
@@ -267,7 +242,7 @@ describe('Now feed API', () => {
     expect(resolveBrowserConfirmation).not.toHaveBeenCalled();
   });
 
-  it('routes away task-state updates to Teams and withholds them from browser feeds', async () => {
+  it('routes away task-state updates through the browser notification service', async () => {
     const nowEventHub = createEventHub();
     const update = vi.fn();
     nowEventHub.subscribe(update);
@@ -399,7 +374,7 @@ describe('Now feed API', () => {
     }
   });
 
-  it('withholds Now refresh events while away but sends a mode-only update', async () => {
+  it('sends Now refresh events while away', async () => {
     let away = true;
     const nowEventHub: NowFeedEventHub = createEventHub();
     const app = buildApp(config, undefined, {
@@ -431,15 +406,11 @@ describe('Now feed API', () => {
       expect(new TextDecoder().decode((await reader.read()).value)).toContain('event: workspace-ready');
       const next = reader.read().then(({ value }) => new TextDecoder().decode(value));
       nowEventHub.publish({ type: 'refresh' });
-      const received = await Promise.race([
-        next.then(() => true),
-        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 50)),
-      ]);
-      expect(received).toBe(false);
+      expect(await next).toContain('event: now\ndata: {}');
 
-      away = false;
+      const mode = reader.read().then(({ value }) => new TextDecoder().decode(value));
       nowEventHub.publish({ type: 'mode_changed', away: false });
-      expect(await next).toContain('event: mode\ndata: {}');
+      expect(await mode).toContain('event: mode\ndata: {}');
     } finally {
       controller.abort();
       await reader.cancel().catch(() => {});

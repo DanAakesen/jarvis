@@ -27,30 +27,18 @@ function fixture(settingsStore?: SettingsStore, auth: TokenVerifier = async () =
   objectId: config.auth.ownerObjectId,
   tenantId: config.auth.tenantId,
   displayName: 'Dan',
-}), credentialStatusStore?: CredentialStatusStore, awayModeStore?: AwayModeStore,
-awayModePresenceStatus?: { unavailable: boolean }) {
+}), credentialStatusStore?: CredentialStatusStore, awayModeStore?: AwayModeStore) {
   const app = buildApp(config, undefined, {
     auth,
     ...(settingsStore ? { settingsStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
-    ...(awayModePresenceStatus ? { awayModePresenceStatus } : {}),
   });
   apps.push(app);
   return app;
 }
 
 describe('settings API', () => {
-  it('reports unavailable automatic away detection in settings', async () => {
-    const { store } = createStore();
-    const app = fixture(store, undefined, undefined, undefined, { unavailable: true });
-
-    const response = await app.inject({ url: '/settings', headers: authorization });
-
-    expect(response.json().awayModeNotice)
-      .toBe('Automatic away detection is off: no presence permission');
-  });
-
   it('requires authentication and reports unavailable persistence', async () => {
     const denied = fixture();
     expect((await denied.inject({ url: '/settings' })).statusCode).toBe(401);
