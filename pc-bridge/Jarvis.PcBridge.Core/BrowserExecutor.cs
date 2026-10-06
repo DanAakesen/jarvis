@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace Jarvis.PcBridge.Core;
 
@@ -530,7 +531,7 @@ public sealed class BrowserExecutor : IDisposable
         })()
         """;
 
-    private const string ActionFunction = """
+    private static readonly string ActionFunction = """
         function(expected, role, name, action, value, confirmed) {
           const roleFor = e => e.getAttribute('role') || (e.isContentEditable ? 'textbox' : '') ||
             ({BUTTON:'button',A:'link',INPUT:['button','submit','reset'].includes(e.type) ? 'button' :
@@ -564,8 +565,9 @@ public sealed class BrowserExecutor : IDisposable
           const top = document.elementFromPoint(x, y);
           if (!top || (top !== this && !this.contains(top))) return {status:'covered'};
           if (action === 'click') {
-            const irreversible = /\b(send|sending|delete|deletion|pay|paid|payment|purchase|post|posting|push|pushing|overwrite|overwriting)\b/i.test(name);
-            if (irreversible && !confirmed) return {status:'confirmation_required',summary:`Click "${name || role}" in Chrome.`};
+            const context = this.closest('form,[role="dialog"],[aria-modal="true"]')?.innerText || '';
+            const risky = /__IRREVERSIBLE_ACTION_PATTERN__/i.test(`${name} ${context}`);
+            if (risky && !confirmed) return {status:'confirmation_required',summary:`Click "${name || role}" in Chrome.`};
             this.click();
           } else if (action === 'type') {
             const sensitive = /password|one-time-code|cc-|card|cvc|cvv|security.?code|verification.?code|otp/i
@@ -582,6 +584,7 @@ public sealed class BrowserExecutor : IDisposable
               if (setter) setter.call(this, (this.value || '') + value);
               else this.value = (this.value || '') + value;
             }
+
             this.dispatchEvent(new InputEvent('input', {bubbles:true, inputType:'insertText', data:value}));
             this.dispatchEvent(new Event('change', {bubbles:true}));
           } else if (action === 'select') {
@@ -605,7 +608,10 @@ public sealed class BrowserExecutor : IDisposable
             return sum % 10 === 0;
           }
         }
-        """;
+        """.Replace(
+            "__IRREVERSIBLE_ACTION_PATTERN__",
+            BrowserActionPolicy.IrreversibleActionPattern,
+            StringComparison.Ordinal);
 
     private sealed record CdpTarget(
         string Id,
@@ -738,4 +744,16 @@ public sealed class BrowserExecutor : IDisposable
             _socket?.Dispose();
         }
     }
+}
+
+public static class BrowserActionPolicy
+{
+    public const string IrreversibleActionPattern =
+        @"\b(?:send|sending|delete|deletion|erase|overwrite|overwriting|purchase|buy|pay|paid|payment|post|posting|publish|push|pushing|transfer|donate)\b|\bclear\s+(?:all|history|data|account)\b";
+
+    public static bool RequiresConfirmation(string action, string name, string context = "") =>
+        action == "click" && Regex.IsMatch(
+            $"{name} {context}",
+            IrreversibleActionPattern,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 }

@@ -53,6 +53,15 @@ def test_notes_search_instructions_require_grounded_quotes_and_links() -> None:
     assert "returned note link" in INSTRUCTIONS
 
 
+def test_voice_instructions_explain_pc_app_media_and_confirmation_rules() -> None:
+    assert "open an installed app by name" in INSTRUCTIONS
+    assert "returned candidates" in INSTRUCTIONS
+    assert "always open in Chrome" in INSTRUCTIONS
+    assert "pc_media" in INSTRUCTIONS
+    assert "confirm irreversible actions only" in INSTRUCTIONS
+    assert "never type passwords" in INSTRUCTIONS
+
+
 class Backend:
     """Records requests and answers like the backend's tool routes."""
 

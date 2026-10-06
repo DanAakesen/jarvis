@@ -217,8 +217,7 @@ function validSnapshot(value: unknown): value is PcActSnapshot {
   return isRecord(value) && Object.keys(value).length === 3 &&
     typeof value.snapshotId === 'string' &&
     /^[\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu.test(value.snapshotId) &&
-    typeof value.application === 'string' && value.application.length > 0 && value.application.length <= 128 &&
-    !hasControlCharacters(value.application) &&
+    typeof value.application === 'string' && /^[\p{L}\p{N}_.-]{1,128}$/u.test(value.application) &&
     Array.isArray(value.elements) && value.elements.length <= 100 &&
     value.elements.every((element, index) => isRecord(element) &&
       Object.keys(element).length === 3 && element.index === index &&

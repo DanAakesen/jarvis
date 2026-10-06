@@ -61,6 +61,8 @@ public sealed class UiAutomationExecutor(IUiAutomationProvider provider)
         cancellationToken.ThrowIfCancellationRequested();
         var view = provider.Observe(cancellationToken);
         if (view is null) throw new UiAutomationRefusedException("not_found");
+        if (!UiAutomationPolicy.IsAllowedApplication(view.Application))
+            throw new UiAutomationRefusedException("not_allowed");
 
         var controls = view.Controls
             .Where(control => control.IsEnabled && !control.IsOffscreen && !control.IsSensitive &&
@@ -160,6 +162,12 @@ public static partial class UiAutomationPolicy
         @"\b(?:send|sending|delete|deletion|pay|paid|payment|purchase|post|posting|push|pushing|overwrite|overwriting)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DestructiveControlPattern();
+
+    [GeneratedRegex(@"^[\p{L}\p{N}_.-]{1,128}$", RegexOptions.CultureInvariant)]
+    private static partial Regex ApplicationNamePattern();
+
+    public static bool IsAllowedApplication(string application) =>
+        !string.IsNullOrWhiteSpace(application) && ApplicationNamePattern().IsMatch(application);
 
     public static bool IsSensitiveControl(string name) =>
         SensitiveControlPattern().IsMatch(name) ||

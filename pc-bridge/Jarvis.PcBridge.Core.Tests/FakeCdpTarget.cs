@@ -168,7 +168,7 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
         var action = arguments[3].GetProperty("value").GetString();
         var confirmed = arguments[5].GetProperty("value").GetBoolean();
         var status = ActionStatus ??
-            (Name.Contains("send", StringComparison.OrdinalIgnoreCase) && !confirmed
+        (BrowserActionPolicy.RequiresConfirmation(action ?? string.Empty, Name) && !confirmed
                 ? "confirmation_required"
                 : "acted");
         return new

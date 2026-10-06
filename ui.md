@@ -128,8 +128,8 @@ Latest visual decision: [Accepted centred 3D stage — 5 October 2026](#accepted
   - A thin top bar for contextual information and compact controls, including
     "Share my screen" and Camera as icons or pills. Exact styling and other contents are
     undecided.
-  - A very thin bottom bar; its contents and relationship to the previously
-    discussed chat-input component are undecided.
+  - No separate bottom app-shell/status bar (updated 6 October 2026). The
+    bottom-centred chat input and compact voice controls remain separate.
   - A right panel that can be opened and closed.
   - Small panel-toggle icons in the upper corners for opening/closing the left
     and right side panels. Their precise placement and appearance remain open.
@@ -292,8 +292,9 @@ already recorded above; their detailed design remains deferred.
 - A compact More menu for model/reasoning, light/dark appearance and sleep/wake.
 
 Keep detailed settings and task-specific actions in their own views. Connection,
-reconnection and database-waking status can use the very thin bottom bar instead
-of adding more permanent top-bar controls. The right panel's use for activity
+reconnection and database-waking feedback use compact existing status or relevant
+inline/context surfaces; the bottom shell bar was removed from the design on
+6 October 2026. Database-waking feedback moves into compact top-bar status. The right panel's use for activity
 and selected-item detail remains a proposal for specific content; its broader
 role as a Jarvis-controlled contextual panel is confirmed. These shell controls are
 not automatically assumed visible in voice mode, where the shell disappears;
@@ -318,8 +319,8 @@ voice-mode access and mobile overflow need separate design.
 | Live voice test | Manual verification work; no permanent dedicated shell control. |
 | Reflex layer | Background behaviour reflected in responsiveness; no dedicated shell control. |
 | Now panel | Proposed right-panel activity view, opened by the top-bar attention control. |
-| Sleep switch | Top-bar More menu or Settings; current state in the bottom status bar. |
-| Database waking | Bottom status bar and nearby pending-content feedback. |
+| Sleep switch | Top-bar More menu or Settings; current state in relevant compact status or context. |
+| Database waking | Compact top-bar status and nearby pending-content feedback; no separate bottom bar. |
 | Task board | Software Factory navigation in the left sidebar; board in the main workspace. |
 | Create task | Task-board action and global input/voice; creation UI in the workspace. |
 | Task detail | Main workspace; selected-detail previews can use the right panel. |
@@ -358,7 +359,7 @@ voice-mode access and mobile overflow need separate design.
 | Away mode | Top bar: compact present/away control; details in Settings. |
 | Phone confirmations | Teams approval cards and related attention items. |
 | Screen sharing | Confirmed top-bar control; active sharing/stop treatment still a proposal. |
-| Local PC bridge | Existing feature's connection status in the bottom bar or a requested status view; integration design deferred. |
+| Local PC bridge | Existing feature's connection status in a requested status view or relevant compact status; integration design deferred. |
 | Computer use | Voice/input action; progress and stop feedback in the relevant view; implementation design deferred. |
 | Camera | Confirmed top-bar control; active camera/stop treatment still to be designed. |
 | Calendar and mail | Requested/generated workspace views; future area navigation to be decided. |
@@ -566,7 +567,7 @@ Dan accepted the corrected live browser prototype as the implementation directio
 
 ### Scope and continuity
 
-- Keep the agreed typing/manual shell: thin left rail, expandable left navigation, thin top and bottom bars, contextual right panel, Settings top-right, central workspace/tabs and bottom-centred composer. Keep existing auth, chat, camera/sharing, voice, window and agent controls.
+- Keep the agreed typing/manual shell: thin left rail, expandable left navigation, thin top bar, contextual right panel, Settings top-right, central workspace/tabs and bottom-centred composer. The bottom shell bar requirement was removed on 6 October 2026; preserve truthful status elsewhere. Keep existing auth, chat, camera/sharing, voice, window and agent controls.
 - The live room and large persistent orb belong only on the Jarvis typing/voice page. Factory, Settings and other routes retain the shared shell and glass surface system without the stage or large orb. Future areas remain deferred.
 - Typing and voice run in the browser. The room and viewpoint remain continuous. Voice immediately hides the shell, history and input, wakes the same orb, and retains temporary windows. Ending voice restores typing/draft/focus and dims the orb without removing it.
 - Preserve the default-off minimise-all-windows-on-voice-entry preference, tabs/restore, natural spoken ending, the existing labelled End voice and dialog-first Escape behaviour. Do not persist generated windows or create a second window store.
@@ -607,3 +608,40 @@ P8-28's scene is lazy-loaded by the Jarvis page only. Its empty/typing/voice-rea
 P8-29's additional scratch-fixture Chromium evidence is in [`docs/ui/centred-stage/p8-29-browser/`](docs/ui/centred-stage/p8-29-browser/): dormant states at 1440×1000 and 390×844 in both appearances; connecting, ready, decoded playback-response, post-voice dormant, and schema-valid Now activity states at desktop dark. One canvas remained mounted through voice entry and exit. A fake media device was accessed only after the explicit Enable microphone action; merely displaying/waking the orb did not request capture. The intercepted Voice Live fixture recorded listening→speaking→listening, and a Now SSE fixture carried a validated thinking event. Reduced motion matched; phone had no horizontal overflow; completed browser runs reported no page or WebGL shader errors. Existing P8-31 contrast tests verify text, muted text, icons and focus against black and white backdrops, and rendered text/glass was visually checked over the actual scene. Fixture audio/activity are not live-provider data. SwiftShader was used; physical-phone/hardware-GPU performance, real audio devices, Safari and P8-30's transition-flicker acceptance remain unverified.
 
 P8-30 diagnosis and local verification: baseline Chromium recorded `document.startViewTransition` around the voice state update (`ready` about 348 ms; `finished` about 1.2 s). That transition snapshots the full Jarvis document, including the persistent live WebGL stage and mirror; it is the identified cause of transition-level snapshot flicker and delayed layout commit, although no distinct mirror flash was isolated. Removed the document-wide View Transition and the workspace FLIP overlay, which remained pending in the integrated browser and left a stale transform; voice state now commits directly while the persistent scene and existing orb spring remain. Scratch Chromium captured 73 desktop CDP frames across empty, two-window and minimize-on-voice fixtures, plus 32 frames for a one-window run at 390×844. The runs exercised natural/manual/failure exit, interruption/reversal, repeated minimize/restore/close/create, reduced motion and draft/focus retention. The same canvas remained mounted; composer/history hid before the click returned, focus returned to the message field, phone overflow stayed false, and all fixture workspace acknowledgements reported `applied: true`. The empty orb measured centred at scale about 2.41 versus x≈−4.45 and scale≈1.98 with visible windows; camera and platform probes stayed fixed. However, the integrated SwiftShader page delivered only about two animation frames per 500 ms, so these frames and state measurements do not prove flicker-free smooth motion at normal hardware frame rate. The browser run did not enable a real microphone or test live Foundry; video capture was unavailable because ffmpeg is absent. The exact no-flicker, hardware-GPU, live-voice and physical-device criteria remain unverified.
+
+## Approved luminous-glass chat and voice controls — 6 October 2026
+
+Dan selected the last Luminous Glass component-family concept and requested implementation issues. Use its compact voice bar, matching input and readable frosted message window. Remove the horizontal line above the messages and the orb/Jarvis title from the top-left window header; keep window controls at top right and the voice-start orb in the input. More contains an icon plus Language row and a Danish/English flyout with current selection, replacing the large toggle. Capture controls keep their existing placements.
+
+[Edited visual and full requirements](docs/ui/chat-voice/README.md). Implementation: [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399). These were the initial task allocations; #397 is now merged in PR #403, while #398 contains the remaining combined implementation. #399 was superseded, as recorded below. Preserve #371's steering, FIFO queue and available controls, existing workspace tools/lifecycle, explicit voice activation and temporary view lifetime.
+
+Dan also requested three styling proposals for the app shell around the new 3D background. His local computer's localhost was inaccessible from the cloud; he authorised capturing a copy of latest GitHub main instead. The shell structure is unchanged: thin full-width top bar, narrow left rail, collapsible left navigation, main tabs/workspace, closable right context panel, Settings top right. Only Jarvis uses the room and large orb. The subsequent selection below removes the bottom shell bar requirement.
+
+## Shell styling proposals — 6 October 2026
+
+[Actual local capture and the three generated concepts](docs/ui/shell-styling/README.md) are saved with their provenance. Display order: 1 Smoked Prism, 2 Floating Frost, 3 Architectural Glass. All use the accepted chat/voice glass family and agreed shell slots, with different surface weight and window emphasis. These were initially proposals; the following decision selects the third and refines it. Example content and generated extra affordances do not add requirements. The capture used latest main with local auth/API fixtures and software WebGL, not Dan's unpushed page or live services.
+
+## Selected Architectural Glass shell — 6 October 2026
+
+Dan selected the third/last shell concept for its dimensional 3D material feel. Keep that composition and styling. Remove the separate bottom app-shell/status bar; it can be reconsidered later if a specific need appears. This does not remove the bottom-centred input or the compact voice-session bar. Retain truthful database-waking feedback in compact top-bar status treatment rather than dropping it with the footer.
+
+His only additional visual removal is both avatar icons inside the chat window: human beside Dan's messages and Jarvis/orb beside assistant messages. Reclaim their gaps and keep the author roles accessible and visually distinguishable through alignment/text treatment. Keep the main room orb, small input voice-start orb, message text, window controls and all other selected elements.
+
+[Refined approved image and scope](docs/ui/shell-styling/README.md#refined-approved-reference). [#398](https://github.com/DanAakesen/jarvis/issues/398), P8-37, now implements the selected shell, bottom-bar removal, composer and avatar-free messages in one PR. #399/#401 were consolidated and closed as superseded; #397 is the completed voice-bar/shared-menu prerequisite, merged in PR #403. The combined issue is planned/unclaimed; this documentation does not start a worker or report implementation. The refined image was edited from the exact last displayed result, not a guessed alternative.
+
+## Consolidated chat and shell implementation — 6 October 2026
+
+Dan requested combining #398, #399 and #401 because the input, messages and shell are one connected change. Expand #398 (P8-37) to cover all three with one implementation PR and shared validation. Close #399/#401 as superseded (`not_planned`), retaining their task IDs and archived requirements; this is not completed implementation. Preserve every accepted visual/behavior requirement and prerequisite, including footer removal/status relocation, avatar removal, both retained orbs, steering/queue, safe Markdown and workspace/voice/theme continuity.
+
+#397's voice bar/shared-menu work was implemented by Copilot and merged in PR #403. The combined issue reuses its existing components and tokens. CI still runs for pushes/updates to the single combined PR; consolidation avoids three separate implementation PR pipelines. No worker was started by this planning update.
+
+## Voice feedback and expressive orb — 6 October 2026
+
+Dan supplied screenshots of Listening overlapping End voice/long language feedback and the unwanted Enable microphone button. He confirmed that all fixes belong in [#417](https://github.com/DanAakesen/jarvis/issues/417), P8-40; no separate prototype is required. These are approved requirements awaiting implementation.
+
+- Move session state and useful recovery text beneath the orb, following its centred, left-of-windows or phone-docked placement. Keep accessible HTML feedback with WebGL fallback. The compact glass bar contains controls; state and long language feedback cannot overlap End voice. Keep More → Language → Danish/English; show current-session versus next-session explanation in that flyout.
+- Explicit Start voice requests microphone permission and resumes audio as part of the same action. Capture starts once the authenticated session is ready, without a second Enable microphone click. The browser may prompt for permission. Preserve mute across reconnect, handle denied/revoked permission and pending-start cancellation, and release capture on end/navigation. Page load, typing, scene rendering and background activity never open capture. Exceptional retry belongs in More. This supersedes the earlier two-step microphone requirement; it does not claim that the running code has changed.
+- Make awakening substantial on the existing orb: ignite the open amber core, propagate energy through the transparent cyan shell, then expand/surge and settle with staged nonlinear motion. Start voice immediately; animation cannot gate connection or controls. Preserve room/camera/platform, responsive orb positioning and mirror continuity through reversals and rapid starts/ends.
+- Make states recognizably different through motion as well as color: subdued dormancy; attentive listening breath/ripples; inward/core-flow thinking; directed tool-work energy; stronger speech movement and light tied to audio actually playing. Use one reconciled transport/microphone/runtime/playback presentation state. Silence, interruption, stale events, muted/reconnecting and failed states must settle truthfully; no invented speech level or retained audio/transcript.
+
+Keep the selected material, scene and core identity, Jarvis-only mounting, shared themes, window/tab continuity, default-off minimise preference, drafts and steering/queue. Reduced motion retains a clear steady state; adaptive tiers and rendering fallback remain. #398 owns the separate shell/input/message-window work; coordinate shared files rather than duplicate it. #417 requires relevant behavior checks, desktop/narrow-phone layout evidence and an observed motion sequence; still images alone do not validate the animation. Live microphone/provider/device/GPU results must be distinguished from fixtures.
