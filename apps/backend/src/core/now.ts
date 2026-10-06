@@ -36,6 +36,13 @@ export interface NowFeed {
   confirmations: readonly BrowserConfirmation[];
 }
 
+export interface AwayModePresenceStatus {
+  unavailable: boolean;
+}
+
+export const awayModePresenceUnavailableMessage =
+  'Automatic away detection is off: no presence permission';
+
 export type NowFeedSnapshot = Omit<NowFeed, 'awayMode' | 'confirmations'>;
 
 export interface NowFeedStore {
@@ -57,6 +64,7 @@ declare module 'fastify' {
     nowFeedStore: NowFeedStore | null;
     nowEventHub: NowFeedEventHub;
     jarvisActivityHub: JarvisActivityHub;
+    awayModePresenceStatus: AwayModePresenceStatus;
   }
 }
 
@@ -95,7 +103,14 @@ export function registerNowRoutes(app: FastifyInstance) {
         items: feed.items.filter((item) => item.category === 'mode'),
       }
       : feed;
-    return sendBounded(reply, { ...snapshot, awayMode: awayMode.away, confirmations });
+    return sendBounded(reply, {
+      ...snapshot,
+      awayMode: awayMode.away,
+      confirmations,
+      ...(app.awayModePresenceStatus.unavailable
+        ? { awayModeNotice: awayModePresenceUnavailableMessage }
+        : {}),
+    });
   });
 
   app.post<{ Params: { id: string }; Body: { decision: 'approve' | 'reject' } }>('/now/confirmations/:id', {

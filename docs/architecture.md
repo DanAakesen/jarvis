@@ -13,7 +13,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Repository | One GitHub monorepo `jarvis`: `apps/web`, `apps/backend`, `packages/contracts`, `agents/jarvis`, `runner`, `infra`, `db`, and `pc-bridge`; npm workspaces for the two apps, one root lockfile | Implemented; P7-06 adds a .NET 10 Windows companion and portable protocol/policy project |
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
-| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions; P3-14 opens or reuses an App-token PR after completed task work and leaves policy completion to P3-06; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; P7-03 adds managed-identity Teams notifications, expiring confirmations and Speech F0 fallback; P7-22 adds Google OAuth-backed Gmail and Calendar tools; P7-02 adds persisted away state and a managed-identity Graph presence monitor; live Azure behavior remains unverified |
+| Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions; P3-14 opens or reuses an App-token PR after completed task work and leaves policy completion to P3-06; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; P7-03 adds managed-identity Teams notifications, expiring confirmations and Speech F0 fallback; P7-22 adds Google OAuth-backed Gmail and Calendar tools; P7-02 adds persisted away state and an opt-in managed-identity Graph presence monitor (off by default); live Azure behavior remains unverified |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0; `@microsoft/teams.apps` and `@microsoft/teams.cards` 2.1.0: schema validation, a plugin per area, SSE support, Bot Service adapter and Adaptive Cards | Skeleton, core/factory module registration and P1-03 projects API implemented; P7-03 adds the Teams module and fake-connector coverage; live Bot Service remains unverified |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
 | Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, group 5 in #42, heartbeat agent routing in #32, `idle_expired` session end reason in #226, group 8 conversation/confirmation state in P7-03, legacy group 9 in P7-13, and the derived vault index in P7-40; deployed heartbeat verification remains open |
@@ -627,13 +627,18 @@ to present. The route verifies Dan's owner identity; the app-only hosted-agent
 principal cannot call it. `GET /now` displays the current mode and, while present,
 the pending browser confirmations. The main-page status makes mode visible.
 
-The backend's managed identity reads
+Graph presence monitoring is opt-in through `AWAY_MODE_PRESENCE=on` and defaults
+to off, including in Bicep. Dan decided to keep away mode manual and not grant
+`Presence.Read.All`. When enabled, the backend's managed identity reads
 `GET /users/{DanObjectId}/presence` once per minute. Only continuous Graph
 `Away`/`Offline` observations count; the persisted timer turns away mode on after
 ten minutes. Available/busy presence clears a pending timer but never turns an
 already active away mode off; only Dan's explicit return command or browser use
-does that. Unknown or invalid provider results do not advance the timer. While
-away, task-state messages and new approval requests go through the existing
+does that. Unknown or invalid provider results do not advance the timer. A
+Graph 401/403 stops minute polling, logs `away_mode.presence_unavailable` once,
+and appears as `Automatic away detection is off: no presence permission` in
+`/now` and `/settings`; the monitor retries after one day or on backend restart.
+While away, task-state messages and new approval requests go through the existing
 P7-03 Teams notifier. The authenticated browser Now response contains only mode
 status/activity, and ordinary Now refresh events are suppressed; a mode-change
 event refreshes that status. While present, task updates and new approvals use
@@ -642,11 +647,9 @@ approval. Browser approval IDs and summaries are not written to logs or task
 events, and the existing SQL schema stores the channel marker and expiry
 without a migration.
 
-The permission is not part of Bicep or application startup. After merge, a tenant
-administrator must review and grant the Microsoft Graph application role
-`Presence.Read.All` to `id-jarvis-backend` with the idempotent
-`infra/setup-away-presence.ps1` script. Local tests cannot verify tenant consent,
-real presence timing, Teams installation or live phone delivery.
+No Graph permission grant or setup-script run is required for manual away mode.
+Local tests cannot verify tenant consent, real presence timing, Teams
+installation or live phone delivery.
 
 ## Database startup and migration ownership
 

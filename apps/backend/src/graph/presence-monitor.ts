@@ -2,6 +2,7 @@ import type { AwayModeStore } from '../core/away-mode.js';
 import type { GraphClient } from './client.js';
 
 const requestTimeoutMs = 10_000;
+const permissionRetryMs = 24 * 60 * 60_000;
 const presenceStatuses = new Set([
   'Available', 'AvailableIdle', 'Away', 'BeRightBack', 'Busy', 'BusyIdle',
   'DoNotDisturb', 'Offline', 'PresenceUnknown',
@@ -24,16 +25,39 @@ export function parseObservedPresence(value: unknown): ObservedPresence {
 }
 
 export function startGraphPresenceMonitor(
+  enabled: boolean,
   graph: GraphClient,
   ownerObjectId: string,
   store: AwayModeStore,
   onError: (error: unknown) => void,
+  onAvailabilityChange: (unavailable: boolean, statusCode?: number) => void,
   intervalMs = 60_000,
 ): () => Promise<void> {
+  if (!enabled) return async () => {};
   if (!ownerIdPattern.test(ownerObjectId)) throw new TypeError('Invalid Graph presence owner');
   let stopped = false;
   let controller: AbortController | undefined;
   let running: Promise<void> | undefined;
+  let pollTimer: ReturnType<typeof setInterval> | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let unavailable = false;
+
+  const schedulePolling = () => {
+    if (stopped || pollTimer) return;
+    pollTimer = setInterval(check, intervalMs);
+    pollTimer.unref();
+  };
+
+  const schedulePermissionRetry = () => {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = undefined;
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = setTimeout(() => {
+      retryTimer = undefined;
+      check();
+    }, permissionRetryMs);
+    retryTimer.unref();
+  };
 
   const check = () => {
     if (stopped || running) return;
@@ -41,23 +65,42 @@ export function startGraphPresenceMonitor(
     const activeController = controller;
     const signal = AbortSignal.any([activeController.signal, AbortSignal.timeout(requestTimeoutMs)]);
     running = graph.get(`users/${ownerObjectId}/presence`, signal)
-      .then((value) => parseObservedPresence(value))
-      .then((presence) => store.observePresence(
-        presence === null ? null : presence === 'away',
-      ))
-      .then(() => undefined)
-      .catch((error: unknown) => { if (!activeController.signal.aborted) onError(error); })
+      .then(async (value) => {
+        const presence = parseObservedPresence(value);
+        if (unavailable) {
+          unavailable = false;
+          onAvailabilityChange(false);
+          schedulePolling();
+        }
+        await store.observePresence(presence === null ? null : presence === 'away');
+      })
+      .catch((error: unknown) => {
+        if (activeController.signal.aborted) return;
+        const statusCode = typeof error === 'object' && error !== null
+          ? (error as { statusCode?: unknown }).statusCode
+          : undefined;
+        if (statusCode === 401 || statusCode === 403) {
+          if (!unavailable) {
+            unavailable = true;
+            onAvailabilityChange(true, statusCode);
+          }
+          schedulePermissionRetry();
+          return;
+        }
+        onError(error);
+        if (unavailable) schedulePermissionRetry();
+      })
       .finally(() => {
         if (controller === activeController) controller = undefined;
         running = undefined;
       });
   };
   check();
-  const timer = setInterval(check, intervalMs);
-  timer.unref();
+  schedulePolling();
   return async () => {
     stopped = true;
-    clearInterval(timer);
+    if (pollTimer) clearInterval(pollTimer);
+    if (retryTimer) clearTimeout(retryTimer);
     controller?.abort();
     await running;
   };

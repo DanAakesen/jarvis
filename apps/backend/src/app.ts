@@ -32,6 +32,7 @@ import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
 import type { TeamsNotificationService } from './teams/service.js';
 import type { AwayModeStore } from './core/away-mode.js';
+import type { AwayModePresenceStatus } from './core/now.js';
 import type { PhoneSessionStore } from './database/phone-session-store.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 
@@ -64,6 +65,7 @@ export interface BuildAppOptions {
   readonly containerAppScaler?: ContainerAppScaler | null;
   readonly teamsNotifications?: TeamsNotificationService | null;
   readonly awayModeStore?: AwayModeStore | null;
+  readonly awayModePresenceStatus?: AwayModePresenceStatus;
   readonly phoneSessionStore?: PhoneSessionStore | null;
   readonly workspaceCommands?: WorkspaceCommandBroker;
 }
@@ -96,6 +98,7 @@ declare module 'fastify' {
     browserAgent: BrowserAgent | null;
     teamsNotifications: TeamsNotificationService | null;
     awayModeStore: AwayModeStore | null;
+    awayModePresenceStatus: AwayModePresenceStatus;
     phoneSessionStore: PhoneSessionStore | null;
     workspaceCommands: WorkspaceCommandBroker;
   }
@@ -125,6 +128,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   installAuthentication(app, config, options.auth);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('awayModeStore', options.awayModeStore ?? null);
+  app.decorate('awayModePresenceStatus', options.awayModePresenceStatus ?? { unavailable: false });
   app.register(cors, {
     origin: (origin, callback) => callback(null, origin === undefined || origins.has(origin)),
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

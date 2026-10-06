@@ -19,6 +19,12 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P6-22 (6 October 2026): keep away mode manual for now. Do not grant Graph
+`Presence.Read.All`; disable presence polling by default and in production
+infrastructure. If explicitly enabled, stop polling after Graph 401/403, report
+the unavailable state, and retry no sooner than once a day. A backend restart
+starts a fresh attempt. No presence permission grant or setup script is needed.
+
 P6-21 (6 October 2026): project task summaries from existing PR, workflow,
 usage and PR-opened event records without live GitHub reads or a schema change.
 Unknown state, token metrics and costs stay null; recorded costs can be partial.

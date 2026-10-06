@@ -24,6 +24,7 @@ export interface BackendConfig {
   githubAppId?: string;
   googleTimeZone?: string;
   monthlyBudgetResourceId?: string;
+  awayModePresenceEnabled: boolean;
   teams?: {
     botAppId: string;
     tenantId: string;
@@ -48,6 +49,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   const logLevel = env.LOG_LEVEL ?? 'info';
   if (!['trace', 'debug', 'info', 'warn', 'error', 'fatal'].includes(logLevel)) {
     throw new ConfigurationError('LOG_LEVEL must be a supported Pino level');
+  }
+  const awayModePresence = env.AWAY_MODE_PRESENCE ?? 'off';
+  if (awayModePresence !== 'off' && awayModePresence !== 'on') {
+    throw new ConfigurationError('AWAY_MODE_PRESENCE must be off or on');
   }
   const origin = env.STATIC_WEB_APP_ORIGIN;
   if (origin !== undefined) {
@@ -255,6 +260,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
     codexToolModel,
     codexImageModel: codexToolModel,
+    awayModePresenceEnabled: awayModePresence === 'on',
     ...(githubAppId === undefined ? {} : { githubAppId }),
     ...(googleTimeZone === undefined ? {} : { googleTimeZone }),
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),

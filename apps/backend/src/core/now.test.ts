@@ -40,9 +40,12 @@ function fixture(
     displayName: 'Dan',
   }),
   awayModeStore?: AwayModeStore,
+  awayModePresenceStatus?: { unavailable: boolean },
 ) {
   const nowEventHub: NowFeedEventHub = createEventHub();
-  const app = buildApp(config, undefined, { auth, nowFeedStore: store, nowEventHub, awayModeStore });
+  const app = buildApp(config, undefined, {
+    auth, nowFeedStore: store, nowEventHub, awayModeStore, awayModePresenceStatus,
+  });
   apps.push(app);
   return { app, nowEventHub };
 }
@@ -61,6 +64,16 @@ describe('Now feed API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(feed);
     expect(store.read).toHaveBeenCalledOnce();
+  });
+
+  it('reports when automatic away detection is unavailable', async () => {
+    const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
+    const { app } = fixture(store, undefined, undefined, { unavailable: true });
+
+    const response = await app.inject({ url: '/now', headers });
+
+    expect(response.json().awayModeNotice)
+      .toBe('Automatic away detection is off: no presence permission');
   });
 
   it('marks explicit authenticated browser activity as present', async () => {

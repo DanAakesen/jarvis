@@ -128,6 +128,7 @@ try {
   const awayModeStore = database
     ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({ type: 'mode_changed', away: state.away }))
     : undefined;
+  const awayModePresenceStatus = { unavailable: !config.awayModePresenceEnabled };
   const alertNotifier = createAlertNotifier(telemetry);
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
     config.foundryEndpoints || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
@@ -647,6 +648,7 @@ try {
       usageStore: createUsageStore(database.pool),
     } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
+    awayModePresenceStatus,
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
     eventHub,
@@ -676,14 +678,20 @@ try {
     });
   }
   let stopPresenceMonitor: (() => Promise<void>) | undefined;
-  if (database && graphClient && awayModeStore) {
+  if (config.awayModePresenceEnabled && database && graphClient && awayModeStore) {
     app.addHook('onClose', async () => { await stopPresenceMonitor?.(); });
     app.addHook('onReady', async () => {
       stopPresenceMonitor = startGraphPresenceMonitor(
+        config.awayModePresenceEnabled,
         graphClient,
         config.auth.ownerObjectId,
         awayModeStore,
         (error) => logger.warn(safeErrorFields(error), 'away_mode.presence_poll_failed'),
+        (unavailable, statusCode) => {
+          awayModePresenceStatus.unavailable = unavailable;
+          if (unavailable) logger.warn({ statusCode }, 'away_mode.presence_unavailable');
+          nowEventHub.publish({ type: 'refresh' });
+        },
       );
     });
   }
