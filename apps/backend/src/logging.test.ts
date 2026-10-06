@@ -40,6 +40,29 @@ describe('structured log export', () => {
     expect(await createTelemetry()).toBeUndefined();
     expect(construct).not.toHaveBeenCalled();
   });
+  it('exports only bounded pc_act step metadata', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const step = { step: 4, action: 'type', outcome: 'completed' };
+    logger.info({
+      ...step,
+      goal: 'goal-secret',
+      target: 'target-secret',
+      text: 'typed-secret',
+      screenshot: 'image-secret',
+    }, 'pc_act.step');
+    logger.info({ step: 21, action: 'unknown-secret', outcome: 'unknown-secret' }, 'pc_act.step');
+
+    expect(JSON.parse(records[0]!)).toMatchObject({ ...step, msg: 'pc_act.step' });
+    expect(JSON.parse(records[1]!)).toMatchObject({ msg: 'pc_act.step' });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'pc_act.step', properties: { service: 'jarvis-backend', ...step },
+    }));
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+  });
   it('uses an isolated manual SDK client, disables disk persistence and initializes it', async () => {
     const client = await createTelemetry('offline-test-string');
     expect(client).toBe(sdk);

@@ -1,8 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import type { FastifyRequest } from 'fastify';
 import websocket from '@fastify/websocket';
 import WebSocket, { type RawData } from 'ws';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
+import {
+  runPcAct,
+  type PcActOptions,
+  type PcActPlanner,
+} from './pc-act.js';
 
 const MAX_MESSAGE_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -16,6 +22,18 @@ type PcCommand =
   | { name: 'open_folder'; arguments: { relativePath: string } }
   | { name: 'active_window'; arguments: Record<string, never> }
   | { name: 'focus_window'; arguments: { title: string } }
+  | { name: 'uia_snapshot'; arguments: Record<string, never> }
+  | {
+    name: 'uia_act';
+    arguments: {
+      snapshotId: string;
+      elementIndex: number;
+      action: 'click' | 'type' | 'scroll_up' | 'scroll_down';
+      confirmed?: boolean;
+      text?: string;
+    };
+  }
+
   | { name: 'browser_tabs'; arguments: { offset?: number } }
   | { name: 'browser_snapshot'; arguments: { tabId: string } }
   | {
@@ -49,6 +67,8 @@ export interface PcBridgeConnectionOptions {
 }
 
 export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
+  readonly pcActPlanner?: PcActPlanner;
+  readonly onPcActStep?: PcActOptions['onStep'];
   readonly runConfirmed?: <T>(
     summary: string,
     action: () => Promise<T>,
@@ -152,13 +172,25 @@ export class PcBridgeConnection {
       const error = response.error;
       if (error === 'not_allowed') this.finish(response.id, new ToolRefusal('The PC bridge refused that action.'));
       else if (error === 'browser_off') this.finish(response.id, new ToolRefusal('Chrome browser automation is off in the PC bridge settings.'));
-      else if (error === 'blocked') this.finish(response.id, new ToolRefusal('Typing into a password, payment-card, one-time-code, or other sensitive field is blocked.'));
-      else if (error === 'stale') this.finish(response.id, new ToolRefusal('That browser element is stale. Take a new snapshot before acting.'));
+      else if (error === 'blocked') this.finish(response.id, new ToolRefusal(
+        pending.command === 'uia_act'
+          ? 'That Windows control is sensitive or unsupported; no action was performed.'
+          : 'Typing into a password, payment-card, one-time-code, or other sensitive field is blocked.',
+      ));
+      else if (error === 'stale') this.finish(response.id, new ToolRefusal(
+        pending.command.startsWith('uia_')
+          ? 'That Windows control is stale. Take a new snapshot before acting.'
+          : 'That browser element is stale. Take a new snapshot before acting.',
+      ));
       else if (error === 'covered') this.finish(response.id, new ToolRefusal('That browser element is covered by another page element; it was not activated.'));
       else if (error === 'not_found' && pending.command.startsWith('browser_')) {
         this.finish(response.id, new ToolRefusal('Chrome or the requested local tab is unavailable.'));
       }
-      else if (error === 'not_found') this.finish(response.id, new ToolRefusal('The requested app, folder, or window was not found.'));
+      else if (error === 'not_found') this.finish(response.id, new ToolRefusal(
+        pending.command.startsWith('uia_')
+          ? 'The foreground Windows app or requested control was not found.'
+          : 'The requested app, folder, or window was not found.',
+      ));
       else this.finish(response.id, new Error('PC bridge command failed'));
       return;
     }
@@ -303,6 +335,33 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
         sensitive: true,
         execute: (input, _request, signal) => runBrowserAction(bridge, options.runConfirmed, input, signal),
       },
+      ...(options.pcActPlanner ? [{
+        name: 'pc_act',
+        description: 'Control allow-listed Windows apps with one Jev decision per fresh UI Automation snapshot. Use only for Windows app workflows; website tasks use Chrome through browser_do, never Edge. Types only explicit quoted, non-sensitive values. Risky actions require Dan’s approval.',
+        inputSchema: {
+          type: 'object',
+          properties: { goal: { type: 'string', minLength: 1, maxLength: 4_000 } },
+          required: ['goal'],
+          additionalProperties: false,
+        },
+        reflexSafe: true,
+        sensitive: true,
+        execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) =>
+          runPcAct(input, request, signal, {
+            observe: (commandSignal) => bridge.execute(
+              { name: 'uia_snapshot', arguments: {} },
+              commandSignal,
+            ),
+            act: (action, commandSignal) => bridge.execute(
+              { name: 'uia_act', arguments: action },
+              commandSignal,
+            ),
+          }, {
+            planner: options.pcActPlanner!,
+            ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
+            ...(options.onPcActStep ? { onStep: options.onPcActStep } : {}),
+          }),
+      }] : []),
     ],
     registerRoutes: async (app) => {
       await app.register(websocket, {
@@ -542,12 +601,33 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
     return Object.keys(value).length === 1 && typeof value.title === 'string' && value.title.length <= 200;
   }
   if (command === 'focus_window') return Object.keys(value).length === 1 && value.activated === true;
+  if (command === 'uia_snapshot') return validUiAutomationSnapshot(value);
+  if (command === 'uia_act') return validUiAutomationAction(value);
   if (command === 'browser_tabs') return validBrowserTabs(value);
   if (command === 'browser_snapshot') return validBrowserSnapshot(value);
   if (command === 'browser_act') {
     return validBrowserActionResult(value) || isConfirmationRequired(value);
   }
   return false;
+}
+
+function validUiAutomationSnapshot(value: Record<string, unknown>): boolean {
+  return Object.keys(value).length === 3 &&
+    typeof value.snapshotId === 'string' &&
+    /^[\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu.test(value.snapshotId) &&
+    (value.application === 'vscode' || value.application === 'explorer') &&
+    Array.isArray(value.elements) && value.elements.length <= 100 &&
+    value.elements.every((element, index) => isRecord(element) && Object.keys(element).length === 3 &&
+      element.index === index && typeof element.role === 'string' && element.role.length <= 64 &&
+      typeof element.name === 'string' && element.name.length <= 256 && !hasControlCharacters(element.name));
+}
+
+function validUiAutomationAction(value: Record<string, unknown>): boolean {
+  return (Object.keys(value).length === 2 && value.acted === true &&
+      ['click', 'type', 'scroll_up', 'scroll_down'].includes(String(value.action))) ||
+    (Object.keys(value).length === 3 && value.confirmationRequired === true &&
+      value.actionKind === 'computer_use' &&
+      value.summary === 'Activate a potentially destructive Windows control.');
 }
 
 function validBrowserActionResult(value: Record<string, unknown>): boolean {
