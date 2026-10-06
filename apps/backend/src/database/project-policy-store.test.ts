@@ -22,6 +22,7 @@ describe('SQL project policy store', () => {
       state: 'open',
       checks: 'passed',
       headSha: 'a'.repeat(40),
+      openedAt: '2026-10-04T12:00:00.000Z',
     };
     const { pool, input, query } = fakePool([row]);
 
@@ -30,6 +31,7 @@ describe('SQL project policy store', () => {
     expect(input).toHaveBeenNthCalledWith(1, 'repository', sql.NVarChar(140), row.repository);
     expect(input).toHaveBeenNthCalledWith(2, 'number', sql.Int, row.number);
     expect(query.mock.calls[0]?.[0]).toContain('INNER JOIN dbo.tasks AS t ON t.id = pr.task_id');
+    expect(query.mock.calls[0]?.[0]).toContain('pr.opened_at');
     expect(query.mock.calls[0]?.[0]).toContain('WHERE p.repo = @repository AND pr.number = @number');
   });
 
