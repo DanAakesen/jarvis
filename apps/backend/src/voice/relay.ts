@@ -26,6 +26,7 @@ import {
   type ReflexTarget,
 } from '../core/reflex.js';
 import { createVoiceStatusAnnouncer } from './status-updates.js';
+import { isJevFailure } from '../core/jev.js';
 import {
   VOICE_PHRASE_HINTS,
   type PartialSpeechRecognizer,
@@ -425,7 +426,7 @@ function registerVoiceRoute(
             ...await reflexTargets(request),
             ...createBrowserUrlTargets(request.server.jarvisTools.get('pc_open'), text),
           ];
-          classification = await app.reflexClassifier.classify(
+          const result = await app.reflexClassifier.classify(
             text,
             language,
             targets,
@@ -439,6 +440,11 @@ function registerVoiceRoute(
               partial: true,
             },
           );
+          if (isJevFailure(result)) {
+            reason = result.failure;
+            return;
+          }
+          classification = result;
           const target = classification?.target;
           if (!classification?.completeCommand) {
             if (classification) reason = 'incomplete_command';
@@ -661,7 +667,7 @@ function registerVoiceRoute(
         const ledger = reflexLedger.get(itemId) ?? [];
         if (message && app.reflexClassifier) {
           attempted = true;
-          classification = await app.reflexClassifier.classify(
+          const result = await app.reflexClassifier.classify(
             text,
             language,
             [
@@ -678,6 +684,11 @@ function registerVoiceRoute(
               final: true,
             },
           );
+          if (isJevFailure(result)) {
+            reason = result.failure;
+          } else {
+            classification = result;
+          }
           const contradictedEntry = ledger.find(({ id }) => id === classification?.contradictedAction);
           if (contradictedEntry) {
             contradictedEntry.undoAttempted = true;

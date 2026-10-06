@@ -4,13 +4,19 @@ import type { WorkspaceSnapshot } from '@jarvis/contracts';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { ToolFailure, ToolRefusal, type RegisteredTool } from './tool-registry.js';
 import { isWorkspaceReflexOperation } from './workspace-commands.js';
+import {
+  jevChoiceConfidenceThreshold,
+  jevFailureFromStatus,
+  reflexAddressedThreshold,
+  reflexCompleteCommandThreshold,
+  reflexConfirmationThreshold,
+  type JevFailure,
+} from './jev.js';
 
 const endpoint = 'https://api.typesafe.ai/v1/systemone';
 const model = 'jev-latest';
 const requestTimeoutMs = 1_200;
 const maxResponseBytes = 256 * 1024;
-const confidenceThreshold = 0.9;
-
 export interface ReflexTarget {
   readonly choice: string;
   readonly tool: RegisteredTool;
@@ -42,7 +48,7 @@ export interface ReflexClassifier {
     targets: readonly ReflexTarget[],
     signal: AbortSignal,
     context?: ReflexContext,
-  ): Promise<ReflexClassification | null>;
+  ): Promise<ReflexClassification | JevFailure | null>;
 }
 
 export interface ReflexActionResult {
@@ -245,11 +251,6 @@ export function createJevReflexClassifier(
           instructions: 'Choose one exact route. Use main_agent unless one listed safe action completely matches the request.',
           criteria: choices,
         },
-        confidence: {
-          type: 'score',
-          instructions: 'How confidently is the intent and requested action fully understood?',
-          criteria: ['uncertain', 'certain'],
-        },
         needs_confirmation: {
           type: 'noul',
           instructions: 'Would the requested action have an external effect or require explicit confirmation? Controlling Jarvis workspace windows and its context panel is reversible UI state and needs no confirmation.',
@@ -300,7 +301,10 @@ export function createJevReflexClassifier(
         if (response.status === 429) {
           const delay = retryDelay(response.headers.get('retry-after'));
           await response.body?.cancel().catch(() => {});
-          if (delay === undefined || delay >= requestTimeoutMs || requestSignal.aborted) return null;
+          if (delay === undefined || delay >= requestTimeoutMs) return jevFailureFromStatus(429);
+          if (requestSignal.aborted) {
+            return signal.aborted ? null : { failure: 'timeout' };
+          }
           await wait(delay, requestSignal);
           response = await fetcher(endpoint, {
             method: 'POST',
@@ -314,60 +318,71 @@ export function createJevReflexClassifier(
             signal: requestSignal,
           });
         }
-        if (!response.ok || !response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
-          await response.body?.cancel().catch(() => {});
-          return null;
-        }
-        const payload = record(await readBounded(response));
-        const answers = record(payload?.answers);
-        if (!answers) return null;
-        const addressed = answer(answers, 'addressed', 'noul')?.noul;
-        const intentAnswer = answer(answers, 'intent', 'choice');
-        const routeAnswer = answer(answers, 'target', 'choice');
-        const confidenceAnswer = answer(answers, 'confidence', 'score');
-        const confirmation = answer(answers, 'needs_confirmation', 'noul')?.noul;
-        const completeCommand = context
-          ? answer(answers, 'complete_command', 'noul')?.noul
-          : undefined;
-        const contradictionAnswer = context?.final && context.executed.length > 0
-          ? answer(answers, 'contradicted_action', 'choice')
-          : undefined;
-        const contradictedAction = contradictionAnswer?.choice;
-        const contradictedActionChoices = new Set([
-          'none',
-          ...(context?.executedActions ?? []).map(({ id }) => id),
-        ]);
-        const selectedContradiction = typeof contradictedAction === 'string' &&
-          contradictedActionChoices.has(contradictedAction) ? contradictedAction : undefined;
-        const intent = intentAnswer?.choice;
-        const choice = routeAnswer?.choice;
-        const routeConfidence = routeAnswer?.confidence;
-        const confidenceScore = confidenceAnswer?.score;
-        if (!validProbability(addressed) || !validProbability(confirmation) ||
-            (context && !validProbability(completeCommand)) ||
-            (context?.final && context.executed.length > 0 &&
-             selectedContradiction === undefined) ||
-            (intent !== 'action' && intent !== 'question' && intent !== 'other') ||
-            typeof intentAnswer?.confidence !== 'number' || !validProbability(intentAnswer.confidence) ||
-            typeof choice !== 'string' || !Object.hasOwn(choices, choice) ||
-            !validProbability(routeConfidence) || !validProbability(confidenceScore)) return null;
-
-        const completeCommandScore = validProbability(completeCommand) ? completeCommand : undefined;
-        const target = choice === 'main_agent' ? null : targets.find((item) => item.choice === choice) ?? null;
-        return {
-          addressed: addressed >= confidenceThreshold,
-          intent,
-          confidence: Math.min(intentAnswer.confidence, routeConfidence, confidenceScore),
-          needsConfirmation: confirmation >= 0.5,
-          ...(completeCommandScore === undefined ? {} : { completeCommand: completeCommandScore >= confidenceThreshold }),
-          ...(selectedContradiction === undefined ? {} : {
-            contradictedAction: selectedContradiction === 'none' ? null : selectedContradiction,
-          }),
-          target,
-        };
       } catch {
-        return null;
+        if (signal.aborted) return null;
+        return requestSignal.aborted ? { failure: 'timeout' } : { failure: 'network_error' };
       }
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => {});
+        return jevFailureFromStatus(response.status);
+      }
+      if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+        await response.body?.cancel().catch(() => {});
+        return { failure: 'invalid_answer' };
+      }
+      let payload: Record<string, unknown> | undefined;
+      try {
+        payload = record(await readBounded(response));
+      } catch {
+        if (signal.aborted) return null;
+        return requestSignal.aborted ? { failure: 'timeout' } : { failure: 'invalid_answer' };
+      }
+      const answers = record(payload?.answers);
+      if (!answers) return { failure: 'invalid_answer' };
+      const addressed = answer(answers, 'addressed', 'noul')?.noul;
+      const intentAnswer = answer(answers, 'intent', 'choice');
+      const routeAnswer = answer(answers, 'target', 'choice');
+      const confirmation = answer(answers, 'needs_confirmation', 'noul')?.noul;
+      const completeCommand = context
+        ? answer(answers, 'complete_command', 'noul')?.noul
+        : undefined;
+      const contradictionAnswer = context?.final && context.executed.length > 0
+        ? answer(answers, 'contradicted_action', 'choice')
+        : undefined;
+      const contradictedAction = contradictionAnswer?.choice;
+      const contradictedActionChoices = new Set([
+        'none',
+        ...(context?.executedActions ?? []).map(({ id }) => id),
+      ]);
+      const selectedContradiction = typeof contradictedAction === 'string' &&
+        contradictedActionChoices.has(contradictedAction) ? contradictedAction : undefined;
+      const intent = intentAnswer?.choice;
+      const choice = routeAnswer?.choice;
+      const routeConfidence = routeAnswer?.confidence;
+      if (!validProbability(addressed) || !validProbability(confirmation) ||
+          (context && !validProbability(completeCommand)) ||
+          (context?.final && context.executed.length > 0 &&
+           selectedContradiction === undefined) ||
+          (intent !== 'action' && intent !== 'question' && intent !== 'other') ||
+          !validProbability(intentAnswer?.confidence) ||
+          typeof choice !== 'string' || !Object.hasOwn(choices, choice) ||
+          !validProbability(routeConfidence)) {
+        return { failure: 'invalid_answer' };
+      }
+
+      const completeCommandScore = validProbability(completeCommand) ? completeCommand : undefined;
+      const target = choice === 'main_agent' ? null : targets.find((item) => item.choice === choice) ?? null;
+      return {
+        addressed: addressed >= reflexAddressedThreshold,
+        intent,
+        confidence: Math.min(intentAnswer.confidence, routeConfidence),
+        needsConfirmation: confirmation >= reflexConfirmationThreshold,
+        ...(completeCommandScore === undefined ? {} : { completeCommand: completeCommandScore >= reflexCompleteCommandThreshold }),
+        ...(selectedContradiction === undefined ? {} : {
+          contradictedAction: selectedContradiction === 'none' ? null : selectedContradiction,
+        }),
+        target,
+      };
     },
   };
 }
@@ -465,7 +480,7 @@ function reflexSkipReason(
   if (!classification.addressed) return 'not_addressed';
   if (classification.intent !== 'action') return 'not_action';
   if (classification.completeCommand === false) return 'incomplete_command';
-  if (classification.confidence < confidenceThreshold) return 'low_confidence';
+  if (classification.confidence < jevChoiceConfidenceThreshold) return 'low_confidence';
   if (classification.needsConfirmation) return 'confirmation_required';
   if (!target) return 'no_target';
   if (!modeSafe) return 'unsafe_target';

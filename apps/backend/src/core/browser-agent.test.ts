@@ -41,7 +41,6 @@ function jevResponse(
       target_scroll: answer(target),
       target_wait: answer(target),
       selection_value: answer(selection),
-      confidence: { type: 'score', score: confidence },
     },
   }), { headers: { 'content-type': 'application/json' } });
 }
@@ -67,6 +66,7 @@ function fixture(
     return { acted: true, action: (input as BrowserActionInput).action };
   });
   const openUrl = vi.fn(async (): Promise<Record<string, unknown>> => ({ opened: true }));
+  const log = { info: vi.fn() };
   const tools = new Map([
     ['pc_browser_tabs', { execute: listTabs }],
     ['pc_browser_snapshot', { execute: getSnapshot }],
@@ -75,6 +75,8 @@ function fixture(
   ]);
   const request = {
     principal: { objectId: 'dan' },
+    log,
+    routeOptions: { url: '/conversation/:sessionId/messages' },
     server: {
       ownerObjectId: 'dan',
       jarvisTools: { get: (name: string) => tools.get(name) },
@@ -94,6 +96,7 @@ function fixture(
     act,
     openUrl,
     textModel,
+    log,
   };
 }
 
@@ -153,6 +156,7 @@ describe('Jev browser agent', () => {
       target_scroll: { type: 'choice' },
       target_wait: { type: 'choice' },
     });
+    expect(request.questions).not.toHaveProperty('confidence');
     expect(String(fetcher.mock.calls[0]?.[1]?.headers && JSON.stringify(fetcher.mock.calls[0]?.[1]?.headers)))
       .toContain('fake-key');
   });
@@ -171,6 +175,48 @@ describe('Jev browser agent', () => {
       targetIndex: 2,
       selectionValue: 'Denmark',
     });
+  });
+
+  it.each([
+    [402, 'billing'],
+    [401, 'auth'],
+    [429, 'rate_limited'],
+    [503, 'http_503'],
+  ] as const)('returns typed Jev HTTP failure %s as %s', async (status, failure) => {
+    const planner = createJevBrowserPlanner(async () => 'fake-key', async () => new Response(null, { status }));
+
+    await expect(planner.decide({
+      goal: 'Click Send message',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ failure });
+  });
+
+  it('uses Choice confidence for the browser confidence gate', async () => {
+    const planner = createJevBrowserPlanner(async () => 'fake-key', async () =>
+      jevResponse('click', 'element_1', 'none', 0.89));
+
+    await expect(planner.decide({
+      goal: 'Click Send message',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ operation: 'click', confidence: 0.89 });
+  });
+
+  it('logs typed browser planner failures without the goal or Jev key', async () => {
+    const env = fixture({ decide: vi.fn(async () => ({ failure: 'billing' as const })) });
+
+    await expect(env.agent.runClause({
+      goal: 'open private transcript content',
+      tabId: 'tab_1',
+    }, env.request, new AbortController().signal)).rejects.toThrow(/valid browser decision/u);
+    expect(env.log.info).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'chat',
+      reason: 'billing',
+    }), 'reflex.decision');
+    expect(JSON.stringify(env.log.info.mock.calls)).not.toContain('private transcript content');
   });
 
   it.each([

@@ -51,7 +51,6 @@ describe('pc_act Jev planner', () => {
       operation: { type: 'choice', choice: 'type', confidence: 0.99 },
       target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
       text_value: { type: 'choice', choice: 'value_0', confidence: 0.99 },
-      confidence: { type: 'score', score: 0.99 },
     }));
     const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
 
@@ -72,7 +71,62 @@ describe('pc_act Jev planner', () => {
     expect(body.model).toBe('jev-latest');
     expect(JSON.stringify(body)).toContain('Jarvis issue 205');
     expect(JSON.stringify(body)).not.toContain('value:');
+    expect(body.questions).not.toHaveProperty('confidence');
     expect(init?.redirect).toBe('error');
+  });
+
+  it.each([
+    [402, 'billing'],
+    [401, 'auth'],
+    [429, 'rate_limited'],
+    [503, 'http_503'],
+  ] as const)('returns typed Jev HTTP failure %s as %s', async (status, failure) => {
+    const planner = createJevPcActPlanner(async () => 'fake-key', async () => new Response(null, { status }));
+
+    await expect(planner.decide({
+      goal: 'Click the open button',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ failure });
+  });
+
+  it('uses operation and target Choice confidence for the PC confidence gate', async () => {
+    const planner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+      operation: { type: 'choice', choice: 'click', confidence: 0.99 },
+      target: { type: 'choice', choice: 'element_0', confidence: 0.89 },
+    }));
+
+    await expect(planner.decide({
+      goal: 'Click the open button',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'click', confidence: 0.89,
+    });
+  });
+
+  it('logs typed PC planner failures without the goal or Jev key', async () => {
+    const log = { info: vi.fn() };
+    const req = {
+      ...request(),
+      log,
+      routeOptions: { url: '/conversation/:sessionId/messages' },
+    } as unknown as FastifyRequest;
+
+    await expect(runPcAct(
+      { goal: 'Open this private project' },
+      req,
+      new AbortController().signal,
+      bridge(),
+      { planner: { decide: vi.fn(async () => ({ failure: 'auth' as const })) } },
+    )).rejects.toThrow(/valid PC decision/u);
+    expect(log.info).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'chat',
+      reason: 'auth',
+    }), 'reflex.decision');
+    expect(JSON.stringify(log.info.mock.calls)).not.toContain('private project');
   });
 
   it('refuses sensitive goals and missing Jev keys without making a request', async () => {
