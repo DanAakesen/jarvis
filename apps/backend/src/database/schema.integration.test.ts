@@ -434,6 +434,7 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(after.map((event) => event.id)).toEqual(sorted);
     const detail = await store.get(task.id, 50, 0);
     expect(detail!.events.map((event) => event.id).filter((id) => recorded.includes(id))).toEqual(sorted);
+    expect((await store.transition(task.id, 'Cancelled')).kind).toBe('ok');
   });
   it('reads running tasks and categorized activity and persists dismissals', async () => {
     const projectId = await scalar(`INSERT dbo.projects
