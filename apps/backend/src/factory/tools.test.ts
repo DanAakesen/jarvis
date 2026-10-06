@@ -159,6 +159,8 @@ describe('Software Factory Jarvis tools', () => {
       projectId: '7',
       title: 'Fix the bug',
       request: 'Fix the bug\nMore details',
+      source: 'chat',
+      originMessageId: '45',
       agent: 'codex',
       modelOverride: 'default',
       reasoningOverride: 'default',
@@ -329,5 +331,21 @@ describe('Software Factory Jarvis tools', () => {
       result: { refused: 'Unsupported coding-agent model. Valid models: default.' },
     });
     expect(taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it('associates a chat-created task with its originating message', async () => {
+    const { app, taskStore } = fixture();
+
+    const response = await app.inject({
+      method: 'POST', url: '/tools/create_task', headers,
+      payload: { projectId: '7', prompt: 'Fix a bug', agent: 'codex' },
+    });
+
+    expect(response.json()).toMatchObject({ outcome: 'ok' });
+    expect(taskStore.create).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: '7',
+      source: 'chat',
+      originMessageId: '42',
+    }));
   });
 });

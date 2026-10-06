@@ -833,11 +833,25 @@ export function createTaskStore(
             WHERE id = @taskId;`);
         const task = updated.recordset[0];
         if (!task) throw new Error('Task update returned no row');
+        const pullRequest = ['Done', 'NeedsAttention', 'Cancelled'].includes(state)
+          ? await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(id))
+            .query<{ url: string | null }>(`SELECT TOP (1) JSON_VALUE(payload, N'$.url') AS url
+              FROM dbo.task_events
+              WHERE task_id = @taskId AND type = N'pull_request_opened'
+                AND source = N'backend' AND ISJSON(payload) = 1
+              ORDER BY id DESC;`)
+          : undefined;
         const event: RecordTaskEventInput = {
           taskId: id,
           type: 'state_changed',
           summary: eventSummary ?? 'Task state changed',
-          payload: { from: current, to: state, ...(eventReason ? { reason: eventReason } : {}) },
+          payload: {
+            from: current,
+            to: state,
+            ...(eventReason ? { reason: eventReason } : {}),
+            ...(pullRequest?.recordset[0]?.url ? { pullRequestUrl: pullRequest.recordset[0].url } : {}),
+          },
           source: 'backend',
         };
         const serializedPayload = validateEvent(event);
@@ -885,11 +899,23 @@ export function createTaskStore(
             .input('currentState', sql.NVarChar(32), currentState)
             .query(`UPDATE dbo.tasks SET state = N'NeedsAttention', lease_owner = NULL, lease_until = NULL
               WHERE id = @taskId AND state = @currentState;`);
+          const pullRequest = await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(event.taskId))
+            .query<{ url: string | null }>(`SELECT TOP (1) JSON_VALUE(payload, N'$.url') AS url
+              FROM dbo.task_events
+              WHERE task_id = @taskId AND type = N'pull_request_opened'
+                AND source = N'backend' AND ISJSON(payload) = 1
+              ORDER BY id DESC;`);
           const stateChanged: RecordTaskEventInput = {
             taskId: event.taskId,
             type: 'state_changed',
             summary: isQuestion ? 'Agent needs input; task needs attention' : 'Low sandbox disk; task needs attention',
-            payload: { from: currentState, to: 'NeedsAttention', reason: isQuestion ? 'session_question' : 'disk_low' },
+            payload: {
+              from: currentState,
+              to: 'NeedsAttention',
+              reason: isQuestion ? 'session_question' : 'disk_low',
+              ...(pullRequest.recordset[0]?.url ? { pullRequestUrl: pullRequest.recordset[0].url } : {}),
+            },
             source: 'backend',
           };
           stateChangedEvent = await insertTaskEvent(

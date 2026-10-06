@@ -370,6 +370,12 @@ confirms completion. The browser and hosted agent service identities do not rece
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
 
+Chat-created tasks retain their originating message ID. Committed Done,
+NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
+status message with the task ID, outcome, and validated GitHub PR link to that
+conversation. A SQL task/state key prevents repeat delivery across restarts;
+away mode routes through the existing Teams notification service, while active
+voice sessions speak the same status through the existing voice announcer.
 P6-21 adds the following fields to every task in `GET /factory/tasks` and to
 `GET /factory/tasks/:id`, independently of event pagination:
 

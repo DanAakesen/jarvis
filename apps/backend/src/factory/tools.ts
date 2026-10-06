@@ -194,6 +194,14 @@ export const factoryTools: readonly JarvisTool[] = [
     execute: async (input, request) => {
       const { projectId, prompt, agent, model, reasoning } = input as CreateTaskToolInput;
       assertSqlBigInt(projectId);
+      const originMessageId = request.jarvisMemorySourceMessageId ??
+        (typeof request.headers['x-jarvis-message-id'] === 'string'
+          ? request.headers['x-jarvis-message-id']
+          : undefined);
+      if (!originMessageId || !/^[1-9][0-9]{0,18}$/u.test(originMessageId) ||
+        BigInt(originMessageId) > 9_223_372_036_854_775_807n) {
+        throw new ToolRefusal('Task creation needs a valid conversation message.');
+      }
       if (agent !== undefined && !isOption(agent, settingsOptions.projectAgents)) {
         throw new ToolRefusal(`Unsupported coding agent. Valid agents: ${optionsList(settingsOptions.projectAgents)}.`);
       }
@@ -212,6 +220,8 @@ export const factoryTools: readonly JarvisTool[] = [
         projectId,
         title: taskTitle(prompt),
         request: prompt,
+        source: 'chat',
+        originMessageId,
         ...(agent ? { agent } : {}),
         ...(model ? { modelOverride: model } : {}),
         ...(reasoning ? { reasoningOverride: reasoning } : {}),
