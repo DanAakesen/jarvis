@@ -33,7 +33,9 @@ public static class InstalledAppMatcher
 
     private static int Score(string query, string name)
     {
-        if (query == name || Alias(query) == Alias(name)) return 100;
+        query = Expand(query);
+        name = Expand(name);
+        if (query == name) return 100;
         if (query.Length >= 3 && name.Contains(query, StringComparison.Ordinal))
             return 80 + Math.Min(query.Length, 20) / 2;
         if (name.Length >= 3 && query.Contains(name, StringComparison.Ordinal))
@@ -44,11 +46,26 @@ public static class InstalledAppMatcher
         return similarity >= 0.6 ? (int)(similarity * 75) : 0;
     }
 
-    private static string Alias(string value) => value switch
+    // Spoken short forms of app names, applied to normalized text ("VS Code Insiders" and
+    // "vscode-insiders" both become "visualstudiocodeinsiders").
+    private static readonly (string Short, string Full)[] Abbreviations =
+    [
+        ("vscode", "visualstudiocode"),
+        ("vsc", "visualstudiocode"),
+    ];
+
+    public static string Expand(string normalized)
     {
-        "vscode" or "visualstudiocode" => "vscode",
-        _ => value,
-    };
+        foreach (var (shortForm, full) in Abbreviations)
+        {
+            if (normalized.StartsWith(shortForm, StringComparison.Ordinal) &&
+                !normalized.StartsWith(full, StringComparison.Ordinal))
+            {
+                return full + normalized[shortForm.Length..];
+            }
+        }
+        return normalized;
+    }
 
     private static bool IsEdge(InstalledApp app)
     {
@@ -60,7 +77,7 @@ public static class InstalledAppMatcher
                 executable.Equals("msedge_proxy.exe", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string Normalize(string value) =>
+    public static string Normalize(string value) =>
         new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
     private static int EditDistance(string left, string right)

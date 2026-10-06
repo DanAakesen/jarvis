@@ -61,7 +61,9 @@ vi.mock('./voice-client', () => ({
       this.options.onStatus('stopped', 'Voice is off.');
       this.options.onSessionEnded?.();
     }
-    enableMicrophone = vi.fn(async () => {});
+    retryMicrophone = vi.fn(async () => {});
+    playbackLevel = () => 0;
+    inputLevel = () => 0;
     setMuted = vi.fn();
     sendScreenContext = vi.fn();
   },
@@ -555,7 +557,7 @@ describe('App shell', () => {
     expect(composer.value).toBe('Unsent draft');
   });
 
-  it('shows voice errors inside the composer and brings closed history back for a failed turn', async () => {
+  it('shows voice failures in a toast and brings closed history back for a failed chat turn', async () => {
     const user = userEvent.setup();
     loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
     sendChatTurn.mockRejectedValue(new Error('Jarvis could not finish the reply. Try again.'));
@@ -570,11 +572,10 @@ describe('App shell', () => {
     expect(screen.getByRole('article', { name: 'Conversation' }).contains(turnAlert)).toBe(true);
 
     await user.click(screen.getByRole('button', { name: 'Start voice' }));
-    await user.click(screen.getByRole('button', { name: 'End voice' }));
     act(() => voiceSessions.at(-1)!.options.onStatus('error', 'Audio could not start. Check your browser audio settings and try again.'));
     const voiceAlert = screen.getByText('Audio could not start. Check your browser audio settings and try again.');
     expect(voiceAlert.getAttribute('role')).toBe('alert');
-    expect(voiceAlert.closest('.conversation-input')).not.toBeNull();
+    expect(voiceAlert.closest('.conversation-input')).toBeNull();
     expect(screen.getByRole('article', { name: 'Conversation' }).contains(voiceAlert)).toBe(false);
   });
 
@@ -822,7 +823,7 @@ describe('App shell', () => {
 
     expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', false);
     expect(screen.queryByRole('group', { name: 'Voice controls' })).toBeNull();
-    expect(screen.getByText(/microphone stays off until you enable it/)).not.toBeNull();
+    expect(screen.getByText(/Your browser asks for microphone access when voice starts/)).not.toBeNull();
     expect(await screen.findByText('The backend is awake.')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Put the backend to sleep' })).toHaveProperty('disabled', false);
   });

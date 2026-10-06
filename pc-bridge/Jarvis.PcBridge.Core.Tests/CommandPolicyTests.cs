@@ -13,6 +13,8 @@ public sealed class CommandPolicyTests
     [InlineData("focus_window", true)]
     [InlineData("uia_act", true)]
     [InlineData("browser_act", true)]
+    [InlineData("media", true)]
+    [InlineData("close_app", true)]
     [InlineData("active_window", false)]
     [InlineData("uia_snapshot", false)]
     [InlineData("browser_snapshot", false)]
@@ -61,6 +63,11 @@ public sealed class CommandPolicyTests
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"click","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"Hello, Dan","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"scroll_down"}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+P","Enter"],"confirmed":false,"closeIntent":false}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Alt+F4"],"confirmed":false,"closeIntent":true}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"type_focused","text":"search for Jarvis"}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+L"],"confirmed":false,"closeIntent":false}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"type_focused","text":"Jarvis"}""")]
     public void Accepts_allow_list_commands(string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);
@@ -97,6 +104,13 @@ public sealed class CommandPolicyTests
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"Hello, Dan"}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"123456","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"execute_script","text":"alert(1)"}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Win+L"],"confirmed":false,"closeIntent":true}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+Alt+Delete"],"confirmed":false,"closeIntent":true}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Alt+F4"],"confirmed":false,"closeIntent":false}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+P","Enter","Tab","Escape","Delete"],"confirmed":false,"closeIntent":false}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+P","unknown"],"confirmed":false,"closeIntent":false}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"type_focused","text":"123456"}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Alt+F4"],"confirmed":false,"closeIntent":false}""")]
     public void Rejects_commands_outside_the_policy(string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);

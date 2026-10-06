@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
-import type { JarvisActivityEvent } from '@jarvis/contracts';
 import type { ThemeMode } from './theme-preference-context';
 import { createJarvisStageOrb } from './JarvisStageOrb';
+import { createOrbMotion } from './jarvis-orb-motion';
+import type { JarvisOrbState } from './voice-presentation';
+import type { VoiceSignals } from './voice-stage-context';
 import {
   nextJarvisStageQualityLevel,
   resolveJarvisStageQuality,
@@ -15,9 +17,8 @@ export type JarvisStageOptions = {
   reducedMotion: boolean;
   voiceActive: boolean;
   hasWindows: boolean;
-  working: boolean;
-  activityState: JarvisActivityEvent['type'] | null;
-  audioLevel: number;
+  /** Real voice or chat state driving the orb's distinct behaviour. */
+  orbState: JarvisOrbState;
 };
 
 export type JarvisStageScene = ReturnType<typeof createJarvisStageScene>;
@@ -87,9 +88,7 @@ export function createJarvisStageScene(
     reducedMotion: false,
     voiceActive: false,
     hasWindows: false,
-    working: false,
-    activityState: null,
-    audioLevel: 0,
+    orbState: 'idle',
   },
   onContextRestored: () => void = () => {},
 ) {
@@ -134,6 +133,9 @@ function createJarvisStageSceneWithRenderer(
   let animationFrame = 0;
   let animating = false;
   let elapsed = 0;
+  let dockMix = 0;
+  let dockBottom = 0;
+  let dockRadius = 0;
   let previous = performance.now();
   let current = initialOptions;
   let qualityLevel: JarvisStageQualityLevel = renderer.capabilities.maxTextureSize < 4096 ? 1 : 0;
@@ -141,12 +143,11 @@ function createJarvisStageSceneWithRenderer(
   let qualityFrameTime = 0;
   let qualityWindowStarted = performance.now();
   let smoothQualityWindows = 0;
-  let voicePosition = 0;
-  let voiceVelocity = 0;
   let windowPosition = 0;
   let windowVelocity = 0;
-  let activityPosition = 0;
-  let activityVelocity = 0;
+  let signals: VoiceSignals | null = null;
+  const motion = createOrbMotion();
+  const orbGeometry = { x: '', y: '', radius: '' };
 
   let palette = readStagePalette();
   const themeMaterials: { material: THREE.MeshStandardMaterial; role: ThemeColor }[] = [];
@@ -472,62 +473,87 @@ function createJarvisStageSceneWithRenderer(
     architecture.quaternion.copy(camera.quaternion);
 
     if (current.reducedMotion) {
-      voicePosition = Number(current.voiceActive);
-      voiceVelocity = 0;
       windowPosition = Number(current.hasWindows);
       windowVelocity = 0;
-      activityPosition = current.working ? 0.72 : current.activityState ? 0.28 : 0;
-      activityVelocity = 0;
     } else {
       const factor = Math.max(0, Math.min(delta, 0.12));
       const steps = Math.max(1, Math.ceil(factor / (1 / 90)));
       const step = factor / steps;
-      const activityTarget = current.working ? 0.72 : current.activityState ? 0.28 : 0;
-      const targets = [
-        { value: () => voicePosition, velocity: () => voiceVelocity, set: (value: number, velocity: number) => { voicePosition = value; voiceVelocity = velocity; }, destination: Number(current.voiceActive), frequency: 6.6 },
-        { value: () => windowPosition, velocity: () => windowVelocity, set: (value: number, velocity: number) => { windowPosition = value; windowVelocity = velocity; }, destination: Number(current.hasWindows), frequency: 7.8 },
-        { value: () => activityPosition, velocity: () => activityVelocity, set: (value: number, velocity: number) => { activityPosition = value; activityVelocity = velocity; }, destination: activityTarget, frequency: 5.4 },
-      ];
+      const frequency = 7.8;
       for (let index = 0; index < steps; index += 1) {
-        for (const target of targets) {
-          const acceleration = (target.frequency ** 2) * (target.destination - target.value()) -
-            2 * target.frequency * target.velocity();
-          const velocity = target.velocity() + acceleration * step;
-          target.set(target.value() + velocity * step, velocity);
-        }
+        const acceleration = (frequency ** 2) * (Number(current.hasWindows) - windowPosition) -
+          2 * frequency * windowVelocity;
+        windowVelocity += acceleration * step;
+        windowPosition += windowVelocity * step;
       }
     }
     const layout = THREE.MathUtils.clamp(windowPosition, 0, 1);
     const screenX = mobile ? 0.5 : 0.5 - 0.22 * layout;
-    const screenY = mobile ? THREE.MathUtils.lerp(0.46, 0.78, layout) : 0.46;
+    let screenY = mobile ? THREE.MathUtils.lerp(0.46, 0.78, layout) : 0.46;
+    let pixelRadius = mobile
+      ? Math.min(width * 0.28, height * 0.16)
+      : Math.min(width * 0.18, height * 0.18) * (1 - 0.2 * layout);
+    // During phone voice with a window, the shell publishes a compact dock between the window and
+    // the controls so the HTML status can sit beneath the orb without covering it.
+    const dock = mobile ? readOrbDock() : null;
+    if (dock) {
+      dockBottom = dock.bottom;
+      dockRadius = dock.radius;
+    }
+    const dockTarget = dock ? 1 : 0;
+    dockMix = current.reducedMotion
+      ? dockTarget
+      : dockMix + (dockTarget - dockMix) * (1 - Math.exp(-Math.max(0, Math.min(delta, 0.12)) * 9));
+    const docked = mobile && dockRadius > 0 ? dockMix * layout : 0;
+    if (docked > 0.001) {
+      pixelRadius = THREE.MathUtils.lerp(pixelRadius, dockRadius, docked);
+      screenY = THREE.MathUtils.lerp(screenY, (height - dockBottom - dockRadius) / height, docked);
+    }
     cameraRay.set(screenX * 2 - 1, 1 - screenY * 2, 0.5).unproject(camera).sub(camera.position).normalize();
     orbWorld.copy(camera.position).addScaledVector(cameraRay, -camera.position.z / cameraRay.z);
     orbRig.position.copy(orbWorld);
-    const pixelRadius = mobile
-      ? Math.min(width * 0.28, height * 0.16)
-      : Math.min(width * 0.18, height * 0.18) * (1 - 0.2 * layout);
+    publishOrbGeometry(screenX * width, screenY * height, pixelRadius);
+
+    const awakeTarget = current.voiceActive ? 1 : current.orbState !== 'idle' ? 0.72 : 0;
+    const readLevel = (read: (() => number) | undefined) => {
+      const level = read ? read() : 0;
+      return Number.isFinite(level) ? THREE.MathUtils.clamp(level, 0, 1) : 0;
+    };
+    const live = motion.step(delta, {
+      awake: awakeTarget,
+      state: current.orbState,
+      playback: readLevel(signals ? () => signals!.playbackLevel() : undefined),
+      input: readLevel(signals ? () => signals!.inputLevel() : undefined),
+      reducedMotion: current.reducedMotion,
+    });
+    const time = current.reducedMotion ? 0 : elapsed;
+    const breath = current.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(time * 1.7);
+    const speechLight = live.speak * live.speech;
     const cameraDepth = orbWorld.clone().applyMatrix4(camera.matrixWorldInverse).z;
     const scale = pixelRadius * (-cameraDepth) * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) /
       height / 1.12;
-    orbRig.scale.setScalar(scale);
+    // The surge expands then settles; listening breathes and speech swells the shell slightly.
+    const pulse = 1 + (1 - live.awake) * (breath - 0.5) * 0.012 + live.surge * 0.085 + live.listen * (breath - 0.5) * 0.022 + speechLight * 0.04 -
+      live.think * 0.012;
+    orbRig.scale.setScalar(scale * pulse);
     orbLight.position.copy(orbWorld);
     amberLight.position.copy(orbWorld);
     wallLight.position.copy(orbWorld);
     wallLight.target.position.set(orbWorld.x * 0.72, orbWorld.y * 0.8 + 0.7, -14.5);
 
-    const audioLevel = THREE.MathUtils.clamp(current.audioLevel, 0, 1);
-    const awake = THREE.MathUtils.clamp(Math.max(voicePosition, activityPosition), 0, 1);
-    const power = (0.26 + 0.74 * awake + audioLevel * 0.06) * palette.glow;
+    const toolFlicker = current.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(time * 9.5);
+    const power = (0.34 + (1 - live.awake) * 0.04 * breath + 0.58 * live.awake + live.surge * 0.75 + live.waveStrength * 0.18 +
+      live.listen * (0.04 + 0.06 * breath + live.input * 0.12) + live.think * 0.03 +
+      live.tool * (0.06 + 0.08 * toolFlicker) + live.speak * 0.08 + speechLight * 0.55) * palette.glow;
     themeColors.current.copy(themeColors.orb);
     orbVisual.uniforms.uColor.value.lerp(themeColors.current, current.reducedMotion ? 1 : 0.16);
-    orbVisual.uniforms.uEnergy.value = audioLevel;
-    orbVisual.update(current.reducedMotion ? 0 : elapsed, awake, audioLevel);
+    orbVisual.update(time, live);
     orbLight.color.copy(orbVisual.uniforms.uColor.value);
     orbLight.intensity = 100 * power;
-    amberLight.intensity = 4 + 18 * awake;
+    amberLight.intensity = 5 + (1 - live.awake) * 1.5 * breath + 14 * live.ignite + 14 * live.surge + 7 * live.think + 16 * speechLight;
     wallLight.color.copy(orbVisual.uniforms.uColor.value);
     wallLight.intensity = 100 * power;
-    particleUniforms.uTime.value = current.reducedMotion ? 0 : elapsed;
+    particleUniforms.uTime.value = time;
     particleUniforms.uOrb.value.copy(orbWorld);
     particleUniforms.uColor.value.copy(orbVisual.uniforms.uColor.value);
     particleUniforms.uPower.value = power;
@@ -540,6 +566,25 @@ function createJarvisStageSceneWithRenderer(
     seam.emissiveIntensity = 0.13 + power * 0.16;
     wallLight.target.updateMatrixWorld();
     renderer.render(scene, camera);
+  }
+
+  /** Lets the HTML voice status sit beneath the orb wherever the layout places it. */
+  function readOrbDock(): { bottom: number; radius: number } | null {
+    const style = window.getComputedStyle(host);
+    const bottom = Number.parseFloat(style.getPropertyValue('--jarvis-orb-dock-bottom'));
+    const radius = Number.parseFloat(style.getPropertyValue('--jarvis-orb-dock-radius'));
+    return Number.isFinite(bottom) && Number.isFinite(radius) && bottom > 0 && radius > 0 ? { bottom, radius } : null;
+  }
+
+  function publishOrbGeometry(x: number, y: number, radius: number) {
+    const page = host.parentElement;
+    if (!page) return;
+    const next = { x: `${Math.round(x)}px`, y: `${Math.round(y)}px`, radius: `${Math.round(radius)}px` };
+    for (const key of ['x', 'y', 'radius'] as const) {
+      if (orbGeometry[key] === next[key]) continue;
+      orbGeometry[key] = next[key];
+      page.style.setProperty(`--jarvis-orb-${key}`, next[key]);
+    }
   }
 
   function startAnimation() {
@@ -657,6 +702,7 @@ function createJarvisStageSceneWithRenderer(
         for (const material of materials) material.dispose();
       }
     });
+    for (const key of ['x', 'y', 'radius']) host.parentElement?.style.removeProperty(`--jarvis-orb-${key}`);
     reflection.dispose();
     renderer.dispose();
     renderer.forceContextLoss();
@@ -680,10 +726,9 @@ function createJarvisStageSceneWithRenderer(
         startAnimation();
       }
     },
-    setAudioLevel(level: number) {
-      if (disposed) return;
-      current = { ...current, audioLevel: THREE.MathUtils.clamp(level, 0, 1) };
-      if (current.reducedMotion && !document.hidden) draw(0);
+    /** Live audio levels are pulled once per frame; null resets the speech and input envelopes. */
+    setSignals(next: VoiceSignals | null) {
+      signals = next;
     },
     dispose,
   };

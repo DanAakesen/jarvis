@@ -121,6 +121,15 @@ public sealed class BridgeClient(
                         : command.Command.StartsWith("browser_", StringComparison.Ordinal)
                             ? await browserExecutor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false)
                             : await executor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
+                    if (command.Command == "open_url")
+                    {
+                        // Chrome cannot take focus from the background; bring it forward (L110).
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(300).ConfigureAwait(false);
+                            WindowsCommandExecutor.BringChromeToFront();
+                        });
+                    }
                     response = BridgeProtocol.Success(command.Id, value);
                 }
                 catch (CommandRefusedException exception)
