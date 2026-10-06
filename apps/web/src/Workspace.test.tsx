@@ -339,10 +339,9 @@ describe('Workspace', () => {
     const styles = readFileSync('src/ConversationHistory.css', 'utf8');
     const phone = styles.slice(styles.indexOf('@media (max-width: 700px)'));
     expect(phone).toContain('bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + 12px)');
-    expect(phone).toContain('[data-voice-has-windows="true"] .voice-orb-presentation');
-    expect(phone).toContain('[data-voice-has-windows="true"] .voice-end-control');
-    expect(phone).toContain('.voice-orb { width: clamp(160px, 55vw, 240px); }');
-    expect(phone).not.toContain('[data-voice-active="true"] .voice-orb-presentation { top: auto;');
+    expect(phone).toContain('--phone-dock-height: var(--voice-bar-height, 60px);');
+    expect(phone).toContain('[data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom);');
+    expect(phone).not.toContain('voice-orb');
     const workspaceStyles = readFileSync('src/styles.css', 'utf8');
     expect(workspaceStyles).toContain('.workspace-window[hidden] { display: none; transition: none; }');
     expect(workspaceStyles).toContain('.workspace[data-phone="true"] .workspace-view-content { touch-action: pan-y pinch-zoom; }');

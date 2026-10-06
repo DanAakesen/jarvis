@@ -149,16 +149,35 @@ describe('shared glass tokens', () => {
     expect(jarvisMessage).toBe('var(--surface-translucent)');
   });
 
-  it('keeps fallback and voice status readable over the stage on narrow screens', () => {
+  it('keeps fallback and the compact voice bar readable over the stage on narrow screens', () => {
     const stageStyles = readFileSync('src/JarvisStage.css', 'utf8');
     const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');
 
     expect(ruleDeclaration(stageStyles, /\.jarvis-stage-fallback\s*\{([^}]*)\}/, 'position')).toBe('relative');
-    expect(stageStyles).toContain('@media (max-height: 500px) and (pointer: coarse)');
-    expect(stageStyles).toContain('.app-shell[data-voice-active="true"] .voice-orb-copy');
-    expect(stageStyles).toContain('background: var(--surface-translucent);');
-    expect(historyStyles).toContain('@media (max-width: 360px) {\n  .composer-language button { min-width: 24px; padding-inline: 0; font-size: 11px; }');
-    expect(historyStyles).not.toContain('.composer-language { grid-row: 2;');
+    expect(stageStyles).not.toContain('voice-orb');
+    expect(historyStyles).not.toContain('voice-orb');
+    expect(historyStyles).not.toContain('.composer-language');
+    expect(historyStyles).toContain('@media (max-width: 360px) {\n  .voice-bar { gap: 4px; padding: 6px; }');
+    expect(ruleDeclaration(historyStyles, /\.voice-bar-detail\s*\{([^}]*)\}/, 'color')).toBe('var(--text-muted)');
+    expect(ruleDeclaration(historyStyles, /\.voice-bar-action, \.voice-end-control\s*\{([^}]*)\}/, 'min-height'))
+      .toBe('44px');
+    const voiceInput = /\.app-shell\[data-voice-active="true"\] \.conversation-input\[data-voice-active="true"\]\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(historyStyles, voiceInput, 'backdrop-filter')).toBe('none');
+  });
+
+  it('defines luminous glass once as a shared surface built from canonical tokens', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');
+
+    expect(tokenValue(source, ':root', '--glass-edge-cool')).toBe('var(--stage-orb)');
+    expect(tokenValue(source, ':root', '--glass-edge-warm')).toBe('var(--stage-amber)');
+    expect(ruleDeclaration(source, /\.luminous-glass\s*\{([^}]*)\}/, 'background')).toBe('var(--surface-translucent)');
+    expect(ruleDeclaration(source, /\.luminous-glass::before\s*\{([^}]*)\}/, 'background')).toBe('var(--glass-refraction)');
+    expect(ruleDeclaration(source, /\.more-menu-trigger\s*\{([^}]*)\}/, 'width')).toBe('44px');
+    expect(ruleDeclaration(source, /\.more-menu-item\s*\{([^}]*)\}/, 'min-height')).toBe('44px');
+    expect(historyStyles).not.toContain('.luminous-glass');
+    expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.more-menu-list, \.more-menu-flyout, \.voice-bar-glyph \* \{ animation: none !important; \}/u);
+    expect(source).toContain(':root[data-motion="reduced"] .voice-bar-glyph *');
   });
 
   it('keeps theme-aware stage materials in the shared semantic CSS source', () => {

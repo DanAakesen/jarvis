@@ -84,7 +84,7 @@ describe('VoiceControls', () => {
     );
 
     expect(clients.instances).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: 'Mute' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Voice controls' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
     const instance = clients.instances[0];
     if (!instance) throw new Error('Voice client was not created.');
@@ -99,17 +99,24 @@ describe('VoiceControls', () => {
     };
     act(() => options.onStatus('ready', 'Microphone is off.'));
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'End voice' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Ready' })).not.toBeNull();
+    expect(document.getElementById('voice-status')?.textContent).toBe('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.queryByRole('menuitem', { name: 'Mute microphone' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     expect(instance.client.enableMicrophone).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Enable microphone' }));
     expect(instance.client.enableMicrophone).toHaveBeenCalledOnce();
     act(() => options.onStatus('listening', 'Listening for your voice.'));
     expect(screen.getByLabelText('Jarvis work state').textContent).toBe('idle');
-    const mute = screen.getByRole('button', { name: 'Mute' });
-    expect(mute).toHaveProperty('disabled', false);
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    const mute = screen.getByRole('menuitem', { name: 'Mute microphone' });
+    expect(mute.getAttribute('aria-disabled')).toBeNull();
     fireEvent.click(mute);
     expect(instance.client.setMuted).toHaveBeenCalledWith(true);
-    expect(screen.getByRole('button', { name: 'Unmute' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('Microphone muted')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByRole('menuitem', { name: 'Unmute microphone' })).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'End voice' }));
     expect(instance.client.stop).toHaveBeenCalledOnce();
@@ -118,7 +125,7 @@ describe('VoiceControls', () => {
     expect(screen.getByLabelText('Jarvis work state').textContent).toBe('idle');
   });
 
-  it('groups labelled icon controls and End voice beneath the state orb', () => {
+  it('renders one compact bar with More, the runtime status and End voice, keeping vision in More', () => {
     const screenShare = {
       sharing: true,
       starting: false,
@@ -129,7 +136,7 @@ describe('VoiceControls', () => {
       inspect: vi.fn(async () => ({ description: 'A desk.' })),
     };
     const camera = {
-      sharing: true,
+      sharing: false,
       starting: false,
       inspecting: false,
       error: '',
@@ -158,18 +165,101 @@ describe('VoiceControls', () => {
       options.onStatus('listening', 'Listening for your voice.');
     });
 
-    const heading = screen.getByRole('heading', { level: 1, name: 'Listening' });
-    const presentation = heading.closest('.voice-orb-presentation');
-    expect(presentation).not.toBeNull();
-    const controls = screen.getByRole('group', { name: 'Voice controls' });
-    expect(controls.parentElement?.parentElement).toBe(presentation);
-    for (const name of ['Mute', 'Look at screen', 'Look at camera']) {
-      const button = screen.getByRole('button', { name });
-      expect(button.querySelector('svg')).not.toBeNull();
-      expect(button.getAttribute('title')).toMatch(/.+/u);
-      expect(button.parentElement).toBe(controls);
-    }
-    expect(screen.getByRole('button', { name: 'End voice' }).parentElement).toBe(controls.parentElement);
+    const bar = screen.getByRole('group', { name: 'Voice controls' });
+    expect(bar.classList.contains('luminous-glass')).toBe(true);
+    expect(bar.getAttribute('data-state')).toBe('listening');
+    expect(screen.queryByRole('heading')).toBeNull();
+    const buttons = Array.from(bar.querySelectorAll('button')).map((button) => button.getAttribute('aria-label') ?? button.textContent);
+    expect(buttons).toEqual(['More options', 'End voice']);
+    expect(screen.getByRole('status').textContent).toContain('Listening');
+
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Language', 'Mute microphone', 'Look at screen', 'Look at camera',
+    ]);
+    expect(screen.getByRole('menuitem', { name: 'Look at screen' }).getAttribute('aria-disabled')).toBeNull();
+    const cameraItem = screen.getByRole('menuitem', { name: 'Look at camera' });
+    expect(cameraItem.getAttribute('aria-disabled')).toBe('true');
+    expect(cameraItem.getAttribute('title')).toBe('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Look at screen' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screenShare.inspect).toHaveBeenCalledWith('42');
+  });
+
+  it('closes an open menu with Escape before Escape ends voice', () => {
+    render(<VoiceControls client={{} as PublicClientApplication} config={config} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+    const instance = clients.instances[0];
+    if (!instance) throw new Error('Voice client was not created.');
+    const options = instance.options as { onStatus: (status: 'listening', message: string) => void };
+    act(() => options.onStatus('listening', 'Listening for your voice.'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Language' }));
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: 'Language' })).toBeNull();
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(instance.client.stop).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(instance.client.stop).toHaveBeenCalledOnce();
+  });
+
+  it('never shows listening while the transport is reconnecting', () => {
+    render(
+      <JarvisActivityProvider>
+        <VoiceControls client={{} as PublicClientApplication} config={config} />
+        <WorkingProbe />
+      </JarvisActivityProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+    const instance = clients.instances[0];
+    if (!instance) throw new Error('Voice client was not created.');
+    const options = instance.options as {
+      onStatus: (status: 'listening' | 'reconnecting' | 'ready', message: string) => void;
+    };
+    act(() => options.onStatus('listening', 'Listening for your voice.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish listening' }));
+    act(() => options.onStatus('reconnecting', 'Voice connection ended. Reconnecting…'));
+
+    const bar = screen.getByRole('group', { name: 'Voice controls' });
+    expect(bar.getAttribute('data-state')).toBe('reconnecting');
+    expect(screen.getByText('Reconnecting')).not.toBeNull();
+    expect(screen.queryByText('Listening')).toBeNull();
+    expect(screen.getByRole('button', { name: 'End voice' })).toHaveProperty('disabled', false);
+
+    act(() => options.onStatus('ready', 'Voice is ready. Microphone is off; enable it when you want to speak.'));
+    expect(bar.getAttribute('data-state')).toBe('ready');
+    expect(screen.queryByText('Listening')).toBeNull();
+  });
+
+  it('applies a language change to the next session and says the active session keeps its language', () => {
+    const onLanguageChange = vi.fn();
+    const { rerender } = render(
+      <VoiceControls client={{} as PublicClientApplication} config={config} language="da" onLanguageChange={onLanguageChange} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+    const first = clients.instances[0];
+    if (!first) throw new Error('Voice client was not created.');
+    const options = first.options as { onStatus: (status: 'listening' | 'stopped', message: string) => void };
+    act(() => options.onStatus('listening', 'Listening for your voice.'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Language' }));
+    expect(screen.getByRole('menuitemradio', { name: 'Danish' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'English' }));
+    expect(onLanguageChange).toHaveBeenCalledWith('en');
+    rerender(
+      <VoiceControls client={{} as PublicClientApplication} config={config} language="en" onLanguageChange={onLanguageChange} />,
+    );
+    expect(screen.getByText('English is selected for chat and your next voice session. This session continues in Danish.'))
+      .not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'End voice' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+    expect(clients.instances[1]?.options).toMatchObject({ language: 'en' });
+    expect(screen.queryByText(/This session continues in/u)).toBeNull();
   });
 
   it('marks actual thinking and speaking states as active work, then clears on listening', () => {
