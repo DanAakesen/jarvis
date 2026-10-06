@@ -1759,7 +1759,6 @@ describe('backend-relayed Voice Live WebSocket', () => {
       read: vi.fn(async () => presence),
       set: vi.fn(async () => presence),
       markPresent: vi.fn(async () => presence),
-      observePresence: vi.fn(async () => presence),
     };
     const settingsStore = {
       read: vi.fn(async () => ({

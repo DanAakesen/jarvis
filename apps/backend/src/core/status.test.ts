@@ -90,12 +90,11 @@ describe('get_status_summary', () => {
     expect(invalid.statusCode).toBe(400);
   });
 
-  it('applies away mode visibility before summarizing status', async () => {
+  it('summarizes the full feed while away', async () => {
     const awayModeStore: AwayModeStore = {
       read: async () => ({ mode: 'away', source: 'manual', changedAt: null }),
       markPresent: async () => ({ mode: 'present', source: 'browser', changedAt: null }),
       set: async () => ({ mode: 'away', source: 'manual', changedAt: null }),
-      observePresence: async () => ({ mode: 'away', source: 'jarvis', changedAt: null }),
     };
     const { app } = fixture({ read: async () => feed, dismiss: vi.fn(async () => true) }, awayModeStore);
     const response = await app.inject({
@@ -104,7 +103,7 @@ describe('get_status_summary', () => {
 
     expect(response.json()).toMatchObject({
       result: {
-        summary: 'The Now feed shows 0 running tasks, 0 tasks needing attention, 0 release or deployment updates, 0 credential warnings, 0 alerts, 1 mode update.',
+        summary: 'The Now feed shows 1 running task, 1 task needing attention, 1 release or deployment update, 1 credential warning, 1 alert, 1 mode update.',
       },
     });
   });

@@ -372,7 +372,6 @@ describe('settings API', () => {
       read: vi.fn(async () => ({ mode: 'on_the_move', source: 'manual', changedAt: '2026-10-06T12:30:00.000Z' })),
       set: vi.fn(),
       markPresent: vi.fn(),
-      observePresence: vi.fn(),
     } as unknown as AwayModeStore;
     const app = fixture(store, async () => ({
       kind: 'jarvis-agent',

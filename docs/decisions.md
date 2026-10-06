@@ -19,17 +19,25 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
+365 or Teams. Keep away mode manual and do not read Graph presence. Route
+notifications and confirmations through the web app and active browser voice
+sessions; do not provision Teams Bot, Teams channel, or separate Speech F0
+resources in production. This supersedes earlier P7 Teams-call, Graph-presence,
+and Teams-routing choices. Retain optional Teams code only as dormant integration
+code.
+
 P6-23 (6 October 2026): replace boolean away mode with Present, Away, and On
 the move (`present`, `away`, `on_the_move`), with green, yellow, and blue as the
 UI colour contract. Keep the existing JSON settings row and read legacy booleans
-as Away/Present; retain the Teams observation timer separately. Persist base
-instructions under the unchanged `personality.customInstructions` key and
+as Away/Present; normalize removed `teams_presence` values to manual. Persist
+base instructions under the unchanged `personality.customInstructions` key and
 individual 2,000-character mode instructions under
 `personality.modeInstructions.<mode>`. Dan-only presence changes are manual;
 Jarvis changes are announced and require no confirmation. Preserve the derived
 `away` boolean and one-release `set_away_mode` alias for existing consumers.
 Evidence: API, tool, settings, state migration, and agent-awareness regression
-tests; live Teams, Voice Live, and UI integration remain unverified.
+tests; live Voice Live and UI integration remain unverified.
 
 P6-21 (6 October 2026): project task summaries from existing PR, workflow,
 usage and PR-opened event records without live GitHub reads or a schema change.
@@ -234,6 +242,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-06 | P6-19 posts committed Done, NeedsAttention, Cancelled, and PR-opened updates into the task's originating conversation. Persist one claim per task/state; include the verified PR URL when available, speak through the active voice status announcer, and use the existing Teams route while away. | `create_task` now records its source message. A dedicated SQL key avoids mixing notification deduplication with user-visible activity; event subscribers run after task-event commits. Focused tests cover conversation routing, voice wording, away routing and claim survival across store recreation. Live voice and Teams delivery remain unverified. | Implemented offline; live acceptance pending |
 | 2026-10-04 | P7-10 searched Dan's configured OneDrive notes folder with Microsoft Graph keyword search. | Superseded on 6 October by P7-40; OneDrive configuration, setup script and `notes_search` were removed. | Superseded |
 | 2026-10-06 | Dan's private `DanAakesen/vault` GitHub repository on `master` is the source of truth for durable knowledge. Jarvis automatically captures clearly stated preferences, people, project facts, decisions and unfinished tasks; SQL is an index/cache, not a second memory. Writes commit directly to `master` with a reason and Jarvis co-author trailer. | Reuses the existing GitHub App with Contents read/write on the vault, signed push webhooks, existing embedding deployment and SQL memory infrastructure. Writes verify stored Dan messages, enforce routing and size bounds, refuse secrets/credentials, and require the literal “remember” for banking/health details. Fake API tests cover indexing, search, retry, refusals and webhook signatures; App installation/live access remain unverified. | Implemented offline; Dan must install the existing App on the private vault before live acceptance |
+| 2026-10-06 | P7-42 exposes the existing durable memories and GitHub vault notes through a Dan-only Settings API; no web UI changes or migration. Vault-note corrections commit to `master`; irreversible forget requests require the existing browser confirmation while Jarvis is present. | Issue #469 authorizes read/correct/forget for Settings, reuses the SQL history and vault index, and preserves GitHub App access. Bounded API tests cover pagination, source links, correction commits, browser approval gating and status. | Implemented offline; live GitHub and browser acceptance pending |
 | 2026-10-04 | Autopilot decisions by the coordinator at Dan's request ("take decisions as you think I would"; only truly Dan-only items stay in Needs Dan). P8-12: Escape ends voice and a labelled End voice control sits by the orb (DESIGN.md). P8-18: initial renderer, action and theme-token allowlists (ui.md); no generated code runs. P3-08 waits for the new shell and visual system | Unblocks the UI track; recorded on each issue for Dan's review | Decided on autopilot; Dan to review |
 | 2026-10-04 | P8-14 keeps the version-1 generated-view JSON Schema, TypeScript union, and runtime validator together in `@jarvis/contracts`. The authorized tool route validates tagged view results before returning or recording them; the signed-in Now panel uses the same contract for its bounded list fixture. Views and their source metadata stay transient; renderers receive data as React text/approved links, never executable markup. | One shared package prevents backend and browser allowlists from drifting. The 256 KiB envelope, per-renderer bounds, source/page status, registered-tool references, and configured Blob host are checked offline; no persistence or new data integration is needed. | Contract, backend route, and signed-in UI tests pass; live Entra and Azure source behavior remain unverified |
 | 2026-10-04 | Autopilot decisions for P7 (Microsoft paths first): away mode by voice plus Teams presence (Graph); Teams bot confirmations with Speech F0 and a fixed confirmation list (merge, delete, send mail, calendar changes, repository creation, computer use outside the browser, spending money); screen/camera vision on the existing Foundry account with a 300-frame daily cap; .NET 10 tray PC bridge with an allow-list; Windows UI Automation for computer use; Google Gmail and Calendar APIs using OAuth for Dan's personal account; notes folder and SQL memory were initial implementations. | Each choice is on its issue. Vision and embeddings are pay-as-you-go Foundry usage like chat, with caps. P7-14's separate provider decision is recorded above; it uses the existing subscription, not a new API service. | Google mail/calendar confirmed in P7-22; P7-40 supersedes notes-folder search and SQL as the durable knowledge source |

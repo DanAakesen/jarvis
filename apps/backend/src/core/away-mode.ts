@@ -15,7 +15,6 @@ export interface AwayModeStore {
   read(): Promise<AwayModeState>;
   set(mode: PresenceMode, source?: AwayModeSource, at?: Date): Promise<AwayModeState>;
   markPresent(at?: Date): Promise<AwayModeState>;
-  observePresence(away: boolean | null, at?: Date): Promise<AwayModeState>;
 }
 
 export const defaultAwayModeState: AwayModeState = {
@@ -23,8 +22,6 @@ export const defaultAwayModeState: AwayModeState = {
   source: 'manual',
   changedAt: null,
 };
-
-export const presenceAwayThresholdMs = 10 * 60_000;
 
 function validDate(candidate: unknown): candidate is string | null {
   return candidate === null || (typeof candidate === 'string' && Number.isFinite(Date.parse(candidate)));
@@ -45,9 +42,7 @@ export function parseAwayModeState(value: unknown): AwayModeState {
     return { mode: state.mode, source: state.source, changedAt: state.changedAt };
   }
   if (typeof state.away === 'boolean' && validDate(state.changedAt)) {
-    const source = state.source === 'manual' || state.source === 'browser'
-      ? state.source
-      : state.source === 'teams_presence' ? 'jarvis' : 'manual';
+    const source = state.source === 'browser' ? 'browser' : state.source === 'jarvis' ? 'jarvis' : 'manual';
     return { mode: state.away ? 'away' : 'present', source, changedAt: state.changedAt };
   }
   return { ...defaultAwayModeState };
@@ -57,8 +52,10 @@ export function isLegacyAwayModeState(value: unknown): boolean {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const state = value as Record<string, unknown>;
   return typeof state.away === 'boolean' && validDate(state.changedAt) &&
-    (state.source === null || state.source === 'manual' || state.source === 'teams_presence' || state.source === 'browser') &&
-    validDate(state.presenceAwaySince);
+    (state.source === undefined || state.source === null || state.source === 'manual' ||
+      state.source === 'teams_presence' || state.source === 'browser') &&
+    (!Object.hasOwn(state, 'presenceAwaySince') || validDate(state.presenceAwaySince)) &&
+    Object.keys(state).every((key) => ['away', 'source', 'changedAt', 'presenceAwaySince'].includes(key));
 }
 
 function iso(at: Date): string {
@@ -78,30 +75,6 @@ export function setPresenceMode(
     mode,
     source: changed ? source : previous.source,
     changedAt: changed ? iso(at) : previous.changedAt,
-  };
-}
-
-export interface AwayPresenceObservation {
-  state: AwayModeState;
-  presenceAwaySince: string | null;
-}
-
-export function observeAwayPresence(
-  previous: AwayModeState,
-  away: boolean | null,
-  at: Date,
-  previousPresenceAwaySince: string | null = null,
-): AwayPresenceObservation {
-  if (away === null) return { state: previous, presenceAwaySince: previousPresenceAwaySince };
-  if (!away) return { state: previous, presenceAwaySince: null };
-
-  const presenceAwaySince = previousPresenceAwaySince ?? iso(at);
-  if (previous.mode !== 'present' || at.getTime() - Date.parse(presenceAwaySince) < presenceAwayThresholdMs) {
-    return { state: previous, presenceAwaySince };
-  }
-  return {
-    state: setPresenceMode(previous, 'away', 'jarvis', at),
-    presenceAwaySince,
   };
 }
 

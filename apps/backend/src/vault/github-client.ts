@@ -20,6 +20,12 @@ export interface VaultFile {
   readonly content: string;
 }
 
+export interface VaultCommit {
+  readonly sha: string;
+  readonly updatedAt: Date;
+  readonly message: string;
+}
+
 export class VaultAppNotInstalledError extends Error {
   constructor() {
     super('The GitHub App is not installed on DanAakesen/vault with Contents access.');
@@ -123,10 +129,11 @@ export function createGitHubVaultClient(options: {
     signal: AbortSignal,
     body?: unknown,
     limit = maxContentsResponseBytes,
+    method?: 'GET' | 'PUT' | 'DELETE',
   ): Promise<{ readonly response: Response; readonly value?: unknown }> {
     const accessToken = await getToken();
     const response = await fetcher(`${apiOrigin}${path}`, {
-      method: body === undefined ? 'GET' : 'PUT',
+      method: method ?? (body === undefined ? 'GET' : 'PUT'),
       headers: {
         Accept: 'application/vnd.github+json',
         Authorization: `${['Bear', 'er'].join('')} ${accessToken}`,
@@ -163,9 +170,9 @@ export function createGitHubVaultClient(options: {
       });
     },
 
-    async read(path: string, signal: AbortSignal): Promise<VaultFile | null> {
+    async read(path: string, signal: AbortSignal, ref = VAULT_BRANCH): Promise<VaultFile | null> {
       const { response, value } = await request(
-        `/repos/${VAULT_REPOSITORY}/contents/${encodedPath(path)}?ref=${VAULT_BRANCH}`,
+        `/repos/${VAULT_REPOSITORY}/contents/${encodedPath(path)}?ref=${encodeURIComponent(ref)}`,
         signal,
       );
       if (response.status === 404) return null;
@@ -177,6 +184,30 @@ export function createGitHubVaultClient(options: {
         throw new Error('GitHub file response is invalid');
       }
       return { path: file.path, sha: file.sha.toLowerCase(), content: decodeContent(file.content) };
+    },
+
+    async history(path: string, limit: number, signal: AbortSignal): Promise<VaultCommit[]> {
+      const query = new URLSearchParams({ path, sha: VAULT_BRANCH, per_page: String(limit) });
+      const { response, value } = await request(
+        `/repos/${VAULT_REPOSITORY}/commits?${query}`,
+        signal,
+      );
+      if (!response.ok || !Array.isArray(value) || value.length > limit) {
+        throw new Error('Could not read vault note history');
+      }
+      return value.flatMap((entry): VaultCommit[] => {
+        const commit = object(entry);
+        const commitDetails = object(commit?.commit);
+        const committer = object(commitDetails?.committer);
+        const author = object(commitDetails?.author);
+        const sha = commit?.sha;
+        const updatedAt = typeof committer?.date === 'string' ? committer.date : author?.date;
+        const message = commitDetails?.message;
+        if (typeof sha !== 'string' || !/^[\da-f]{40}$/iu.test(sha) ||
+            typeof updatedAt !== 'string' || !Number.isFinite(Date.parse(updatedAt)) ||
+            typeof message !== 'string') return [];
+        return [{ sha: sha.toLowerCase(), updatedAt: new Date(updatedAt), message: message.slice(0, 500) }];
+      });
     },
 
     async write(
@@ -198,6 +229,24 @@ export function createGitHubVaultClient(options: {
       );
       if (response.status === 409 || response.status === 422) throw new VaultWriteConflictError();
       if (!response.ok) throw new Error('Could not commit the vault note');
+      const commitSha = object(object(value)?.commit)?.sha;
+      if (typeof commitSha !== 'string' || !/^[\da-f]{40}$/iu.test(commitSha)) {
+        throw new Error('GitHub commit response is invalid');
+      }
+      return commitSha.toLowerCase();
+    },
+
+    async delete(path: string, sha: string, message: string, signal: AbortSignal): Promise<string> {
+      if (!/^[\da-f]{40}$/iu.test(sha)) throw new TypeError('Invalid vault note version');
+      const { response, value } = await request(
+        `/repos/${VAULT_REPOSITORY}/contents/${encodedPath(path)}`,
+        signal,
+        { message, sha, branch: VAULT_BRANCH },
+        maxContentsResponseBytes,
+        'DELETE',
+      );
+      if (response.status === 409 || response.status === 422) throw new VaultWriteConflictError();
+      if (!response.ok) throw new Error('Could not delete the vault note');
       const commitSha = object(object(value)?.commit)?.sha;
       if (typeof commitSha !== 'string' || !/^[\da-f]{40}$/iu.test(commitSha)) {
         throw new Error('GitHub commit response is invalid');

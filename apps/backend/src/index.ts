@@ -74,7 +74,6 @@ import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
 import { createMemoryStore, createVaultIndexStore } from './database/memory-store.js';
 import { createFoundryMemoryEmbedder } from './core/memory-embeddings.js';
-import { createGraphClient } from './graph/client.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './vault/github-client.js';
 import { createVaultModule } from './vault/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
@@ -93,7 +92,6 @@ import { createTeamsBotModule, createTeamsConnector } from './teams/bot.js';
 import { createTeamsNotificationService } from './teams/service.js';
 import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
-import { startGraphPresenceMonitor } from './graph/presence-monitor.js';
 import { createPhoneCallModule } from './phone/calls.js';
 import { parsePhoneAllowlist } from './phone/caller.js';
 import { createImageGenerationModule } from './core/image-generation.js';
@@ -124,6 +122,9 @@ try {
     : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const nowEventHub = createEventHub<NowFeedUpdate>();
+  const nowFeedStore = database
+    ? createNowFeedStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
+    : undefined;
   const alertActivityStore = database
     ? createAlertActivityStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
     : undefined;
@@ -144,15 +145,6 @@ try {
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
-    : undefined;
-  const graphClient = credential
-    ? createGraphClient({
-      getToken: async (signal) => {
-        const token = await credential.getToken('https://graph.microsoft.com/.default', { abortSignal: signal });
-        if (!token) throw new Error('Microsoft Graph credentials are unavailable');
-        return token.token;
-      },
-    })
     : undefined;
   const projectRepositoryCreator = config.keyVaultUri && credential
     ? createRepoAdminRepositoryCreator(
@@ -329,6 +321,7 @@ try {
       client: createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer }),
       indexStore: vaultIndexStore,
       memoryStore,
+      apiMemoryStore: memoryStore,
       ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
       log: (event, fields) => logger.info({ msg: event, ...fields }, event),
     })
@@ -415,19 +408,23 @@ try {
       },
     )
     : undefined;
-  const teamsNotifications = config.teams && database && credential && teamsAudioStore
+  const teamsNotifications = database && nowFeedStore
     ? createTeamsNotificationService({
       ownerObjectId: config.auth.ownerObjectId,
       tenantId: config.auth.tenantId,
-      publicOrigin: config.teams.audioOrigin,
       store: createTeamsNotificationStore(database.pool),
-      connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
-      audioStore: teamsAudioStore,
-      isAway: async () => {
-        if (!awayModeStore) throw new Error('Away mode is unavailable');
-        return (await awayModeStore.read()).mode !== 'present';
+      ...(config.teams && credential && teamsAudioStore ? {
+        publicOrigin: config.teams.audioOrigin,
+        connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
+        audioStore: teamsAudioStore,
+      } : {}),
+      ...(awayModeStore ? { isAway: async () => (await awayModeStore.read()).mode !== 'present' } : {}),
+      onWebNotification: async (kind, text) => {
+        if (!nowFeedStore.recordNotification) throw new Error('Now feed notifications are unavailable');
+        await nowFeedStore.recordNotification(kind, text);
       },
       onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
+      onConfirmationPending: () => nowEventHub.publish({ type: 'status', kind: 'approval_pending' }),
       ...(teamsSpeech ? { speech: teamsSpeech } : {}),
     })
     : undefined;
@@ -648,7 +645,7 @@ try {
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(releaseViewStore ? { releaseViewStore } : {}),
     ...(releaseGraphReader ? { releaseGraphReader } : {}),
-    ...(database && taskStore && settingsStore ? {
+    ...(database && taskStore && settingsStore && nowFeedStore ? {
       ...(projectStore ? { projectStore } : {}),
       ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
       toolCallStore: createToolCallStore(database.pool),
@@ -660,7 +657,7 @@ try {
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
       ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),
       ...(dispatcher ? { taskController: dispatcher } : {}),
-      nowFeedStore: createNowFeedStore(database.pool),
+      nowFeedStore,
       usageStore: createUsageStore(database.pool),
     } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
@@ -697,18 +694,6 @@ try {
         budgetReader,
         budgetAlertStore,
         (error) => logger.warn(safeErrorFields(error), 'budget_alert.check_failed'),
-      );
-    });
-  }
-  let stopPresenceMonitor: (() => Promise<void>) | undefined;
-  if (database && graphClient && awayModeStore) {
-    app.addHook('onClose', async () => { await stopPresenceMonitor?.(); });
-    app.addHook('onReady', async () => {
-      stopPresenceMonitor = startGraphPresenceMonitor(
-        graphClient,
-        config.auth.ownerObjectId,
-        awayModeStore,
-        (error) => logger.warn(safeErrorFields(error), 'away_mode.presence_poll_failed'),
       );
     });
   }

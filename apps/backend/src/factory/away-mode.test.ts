@@ -29,7 +29,6 @@ describe('away-mode task stream', () => {
         return { mode: 'present', source: 'browser', changedAt: null };
       }),
       set: vi.fn(),
-      observePresence: vi.fn(),
     } as unknown as AwayModeStore;
     const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
     const taskStore = {

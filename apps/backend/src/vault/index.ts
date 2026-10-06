@@ -2,12 +2,15 @@ import type { FastifyRequest } from 'fastify';
 import {
   VectorSearchUnavailableError,
   type MemoryStore,
+  type MemoryRecord,
+  type MemoryVersion,
   type VaultIndexStore,
   type VaultIndexedChunk,
 } from '../database/memory-store.js';
 import type { MemoryEmbedder } from '../core/memory-embeddings.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
+import type { TeamsNotificationService } from '../teams/service.js';
 import {
   MAX_VAULT_FILE_BYTES,
   VAULT_BRANCH,
@@ -29,6 +32,10 @@ const maxMarkdownFiles = 10_000;
 const maxRoutingBytes = 512 * 1024;
 const maxInstructionFiles = 32;
 const maxVaultChunks = 512;
+const maxMemoryApiResults = 50;
+const maxMemoryApiOffset = 10_000;
+const maxMemoryApiHistory = 10;
+const maxMemoryApiHistoryBytes = 512 * 1024;
 const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
 const sensitivePattern = /\b(?:bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b/iu;
 const secretPattern = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{20,})\b|(?:password|client[_ -]?secret|api[_ -]?key|access[_ -]?token)\s*[:=]\s*["']?[^\s"']{8,}/iu;
@@ -48,6 +55,25 @@ export interface VaultModule extends BackendModule {
   synchronize(signal: AbortSignal): Promise<{ readonly added: number; readonly changed: number; readonly removed: number }>;
 }
 
+interface MemoryApiItem {
+  readonly id: string;
+  readonly type: 'memory' | 'vault_note';
+  readonly folder: string;
+  readonly title: string;
+  readonly snippet: string;
+  readonly updatedAt: string;
+  readonly source: { readonly type: 'conversation' | 'github'; readonly url: string; readonly messageId?: string };
+  readonly path?: string;
+}
+
+interface VaultIndexOutcome {
+  readonly outcome: 'pending' | 'ok' | 'error';
+  readonly at: string;
+  readonly added?: number;
+  readonly changed?: number;
+  readonly removed?: number;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -62,6 +88,14 @@ function hasControlCharacters(value: string): boolean {
 function safeFolder(path: string): string | undefined {
   const folder = path.split('/')[0];
   return folderNames.has(folder ?? '') ? folder : undefined;
+}
+
+function isRoutedNotePath(path: string): boolean {
+  try {
+    return safeFolder(validatePath(path)) !== undefined && !shouldRedact(path);
+  } catch {
+    return false;
+  }
 }
 
 function validatePath(value: unknown, requireRoutedFolder = true): string {
@@ -152,8 +186,85 @@ function commitUrl(sha: string): string {
   return `https://github.com/${VAULT_REPOSITORY}/commit/${sha}`;
 }
 
+function vaultItemId(path: string): string {
+  return `vault_${Buffer.from(path, 'utf8').toString('base64url')}`;
+}
+
+function vaultPathFromId(id: string): string | undefined {
+  if (!/^vault_[A-Za-z0-9_-]{1,256}$/u.test(id)) return undefined;
+  try {
+    const encoded = id.slice('vault_'.length);
+    const path = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(encoded, 'base64url'));
+    if (Buffer.from(path, 'utf8').toString('base64url') !== encoded) return undefined;
+    return isRoutedNotePath(path) ? validatePath(path) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function conversationUrl(messageId: string): string {
+  return `/conversation/history?before=${BigInt(messageId) + 1n}&limit=100`;
+}
+
+function memoryApiItem(record: MemoryRecord): MemoryApiItem {
+  const redacted = shouldRedact(`${record.key}\n${record.content}`);
+  return {
+    id: record.id,
+    type: 'memory',
+    folder: 'General',
+    title: redacted ? '[redacted]' : record.key,
+    snippet: redacted ? '[redacted]' : snippet(record.content),
+    updatedAt: record.updatedAt.toISOString(),
+    source: {
+      type: 'conversation',
+      messageId: record.sourceMessageId,
+      url: conversationUrl(record.sourceMessageId),
+    },
+  };
+}
+
+function memoryHistoryItem(version: MemoryVersion) {
+  const redacted = shouldRedact(`${version.key}\n${version.content}`);
+  return {
+    id: version.id,
+    category: version.category,
+    key: redacted ? '[redacted]' : version.key,
+    content: redacted ? '[redacted]' : version.content,
+    revision: version.revision,
+    changedAt: version.changedAt.toISOString(),
+    source: {
+      type: 'conversation' as const,
+      messageId: version.sourceMessageId,
+      url: conversationUrl(version.sourceMessageId),
+    },
+  };
+}
+
+function vaultApiItem(path: string, content: string, updatedAt: Date): MemoryApiItem {
+  const redacted = shouldRedact(content);
+  const filename = path.slice(path.lastIndexOf('/') + 1);
+  return {
+    id: vaultItemId(path),
+    type: 'vault_note',
+    path,
+    folder: safeFolder(path) ?? 'General',
+    title: redacted ? '[redacted]' : filename.replace(/\.md$/iu, ''),
+    snippet: redacted ? '[redacted]' : snippet(content),
+    updatedAt: updatedAt.toISOString(),
+    source: { type: 'github', url: noteUrl(path) },
+  };
+}
+
+function shouldRedact(value: string): boolean {
+  return credentialPattern.test(value) || secretPattern.test(value);
+}
+
 function queryTerms(value: string): string[] {
   return [...new Set(value.match(/[\p{L}\p{N}]{2,}/gu)?.map((term) => term.toLowerCase()) ?? [])].slice(0, 12);
+}
+
+function memorySearchTerms(value: string): string[] {
+  return [...new Set(value.match(/[\p{L}\p{N}]{2,}/gu)?.map((term) => term.toLowerCase()) ?? [])].slice(0, 8);
 }
 
 function snippet(value: string): string {
@@ -173,6 +284,7 @@ export function createVaultModule(options: {
   readonly client: ReturnType<typeof createGitHubVaultClient>;
   readonly indexStore: VaultIndexStore;
   readonly memoryStore: Pick<MemoryStore, 'getSourceMessage'>;
+  readonly apiMemoryStore?: MemoryStore;
   readonly embedder?: MemoryEmbedder;
   readonly log?: (event: 'vault.index' | 'vault.write', fields: VaultLogFields) => void;
 }): VaultModule {
@@ -184,6 +296,9 @@ export function createVaultModule(options: {
   let synchronization: Promise<{ readonly added: number; readonly changed: number; readonly removed: number }> | undefined;
   let indexStatus: 'pending' | 'ready' | 'failed' = 'pending';
   let appMissing = false;
+  let lastVaultSyncAt: string | null = null;
+  let lastIndexOutcome: VaultIndexOutcome = { outcome: 'pending', at: new Date().toISOString() };
+  const pendingVaultDeletions = new Set<string>();
 
   async function loadRoutingRules(signal: AbortSignal): Promise<{
     readonly text: string;
@@ -294,11 +409,15 @@ export function createVaultModule(options: {
       .then((summary) => {
         indexStatus = 'ready';
         appMissing = false;
+        lastVaultSyncAt = new Date().toISOString();
+        lastIndexOutcome = { outcome: 'ok', at: lastVaultSyncAt, ...summary };
         return summary;
       })
       .catch((error: unknown) => {
         indexStatus = 'failed';
         appMissing = error instanceof VaultAppNotInstalledError;
+        lastVaultSyncAt = new Date().toISOString();
+        lastIndexOutcome = { outcome: 'error', at: lastVaultSyncAt };
         throw error;
       })
       .finally(() => { synchronization = undefined; });
@@ -321,13 +440,14 @@ export function createVaultModule(options: {
     readonly content?: string;
     readonly append?: string;
     readonly reason: string;
-  }, source: string, signal: AbortSignal): Promise<{ path: string; commit: string }> {
+  }, source: string, signal: AbortSignal, requireExisting = false): Promise<{ path: string; commit: string }> {
     const rules = await loadRoutingRules(signal);
     if (!rules.folders.has(safeFolder(path) ?? '')) {
       throw new ToolRefusal('That folder is not allowed by the vault routing rules. Nothing was written.');
     }
     let current = await options.client.read(path, signal);
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (requireExisting && !current) throw new ToolRefusal('The vault note no longer exists. Nothing was written.');
       const next = value.content !== undefined
         ? value.content
         : `${current?.content ?? ''}${current?.content && !current.content.endsWith('\n') ? '\n' : ''}${value.append ?? ''}`;
@@ -520,6 +640,340 @@ export function createVaultModule(options: {
     id: 'vault',
     tools,
     synchronize,
-    registerRoutes: async () => {},
+    registerRoutes: async (app) => {
+      const ownerOnly = (request: FastifyRequest, reply: import('fastify').FastifyReply): boolean => {
+        if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+          void reply.code(403).send({ error: 'Forbidden' });
+          return false;
+        }
+        reply.header('Cache-Control', 'no-store');
+        return true;
+      };
+      const apiStore = (reply: import('fastify').FastifyReply): MemoryStore | undefined => {
+        if (!options.apiMemoryStore) {
+          void reply.code(503).send({ error: 'Memory storage unavailable' });
+          return undefined;
+        }
+        return options.apiMemoryStore;
+      };
+      const apiQuerySchema = {
+        type: 'object',
+        properties: {
+          query: { type: 'string', minLength: 1, maxLength: maxQueryLength, pattern: '\\S' },
+          folder: { type: 'string', enum: [...folderNames] },
+          limit: { type: 'integer', minimum: 1, maximum: maxMemoryApiResults },
+          offset: { type: 'integer', minimum: 0, maximum: maxMemoryApiOffset },
+        },
+        additionalProperties: false,
+      };
+      const apiError = {
+        type: 'object',
+        properties: { error: { type: 'string' } },
+        required: ['error'],
+        additionalProperties: false,
+      };
+
+      app.get('/memory/status', async (request, reply) => {
+        if (!ownerOnly(request, reply) || !apiStore(reply)) return;
+        const counts: Record<string, number> = Object.fromEntries([...folderNames].map((folder) => [folder, 0]));
+        for (const file of await options.indexStore.files(AbortSignal.timeout(10_000))) {
+          const folder = isRoutedNotePath(file.path) ? safeFolder(file.path) : undefined;
+          if (folder) counts[folder] = (counts[folder] ?? 0) + 1;
+        }
+        return {
+          lastVaultSyncAt,
+          notesByFolder: counts,
+          lastIndexOutcome,
+        };
+      });
+
+      app.get<{
+        Querystring: { query?: string; folder?: string; limit?: number; offset?: number };
+      }>('/memory', {
+        schema: { querystring: apiQuerySchema, response: { 400: apiError, 403: apiError, 503: apiError } },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        const store = apiStore(reply);
+        if (!store) return;
+        const { query, folder } = request.query;
+        const limit = request.query.limit ?? 25;
+        const offset = request.query.offset ?? 0;
+        const signal = AbortSignal.timeout(30_000);
+        const fetchLimit = Math.min(maxMemoryApiOffset + maxMemoryApiResults + 1, offset + limit + 1);
+        let memories: MemoryRecord[] = [];
+        let vaultHits: Array<{ path: string; content: string }> = [];
+        let searchMethod: 'vector' | 'fulltext' | 'substring' | undefined;
+
+        if (query !== undefined) {
+          const terms = memorySearchTerms(query);
+          if (terms.length > 0) {
+            let embedding: readonly number[] | undefined;
+            if (options.embedder &&
+                (store.supportsVectorSearch() || options.indexStore.supportsVectorSearch())) {
+              try {
+                embedding = await options.embedder.embed(query, signal);
+              } catch (error) {
+                if (signal.aborted) throw error;
+              }
+            }
+            if (embedding) {
+              try {
+                memories = await store.searchByVector(embedding, fetchLimit, signal);
+                if (memories.length > 0) searchMethod = 'vector';
+              } catch (error) {
+                if (!(error instanceof VectorSearchUnavailableError)) throw error;
+              }
+            }
+            if (memories.length === 0) {
+              const result = await store.searchByFullText(terms, fetchLimit, signal);
+              memories = result.memories;
+              searchMethod = result.method;
+            }
+            if (indexStatus !== 'ready') {
+              return reply.code(503).send({ error: 'Vault index is not ready' });
+            }
+            if (embedding && options.indexStore.supportsVectorSearch()) {
+              try {
+                vaultHits = await options.indexStore.searchByVector(embedding, fetchLimit, signal);
+              } catch (error) {
+                if (!(error instanceof VectorSearchUnavailableError)) throw error;
+              }
+            }
+            if (vaultHits.length === 0) {
+              vaultHits = await options.indexStore.searchByTerms(queryTerms(query), fetchLimit, signal);
+            }
+          }
+        } else {
+          const page = await store.list(fetchLimit, signal);
+          memories = page.memories;
+          const noteFiles = await options.indexStore.files(signal);
+          const notes = noteFiles.filter(({ path }) => isRoutedNotePath(path) &&
+            (folder === undefined || safeFolder(path) === folder));
+          const eligibleMemories = folder === undefined || folder === 'General' ? memories : [];
+          const memoryItems = eligibleMemories.slice(offset, offset + limit + 1).map(memoryApiItem);
+          const pageItems: MemoryApiItem[] = [...memoryItems];
+          const noteOffset = Math.max(0, offset - eligibleMemories.length);
+          const noteLimit = Math.max(0, limit + 1 - memoryItems.length);
+          const notePage = notes.slice(noteOffset, noteOffset + noteLimit);
+          for (const file of notePage) {
+            const note = await options.client.read(file.path, signal);
+            if (!note) continue;
+            const [commit] = await options.client.history(file.path, 1, signal);
+            pageItems.push(vaultApiItem(note.path, note.content, commit?.updatedAt ?? new Date(0)));
+          }
+          const items = pageItems.slice(0, limit + 1);
+          return {
+            items: items.slice(0, limit),
+            count: Math.min(items.length, limit),
+            limit,
+            offset,
+            hasMore: items.length > limit ||
+              (page.hasMore && (folder === undefined || folder === 'General')) ||
+              notes.length > noteOffset + notePage.length,
+          };
+        }
+
+        const filteredMemories = (folder === undefined || folder === 'General' ? memories : [])
+          .map(memoryApiItem);
+        const uniqueHits = [...new Map(vaultHits.filter((hit) => isRoutedNotePath(hit.path) &&
+          (folder === undefined || safeFolder(hit.path) === folder)).map((hit) => [hit.path, hit])).values()];
+        const vaultItems: MemoryApiItem[] = [];
+        for (const hit of uniqueHits) {
+          const [commit] = await options.client.history(hit.path, 1, signal);
+          if (commit) vaultItems.push(vaultApiItem(hit.path, hit.content, commit.updatedAt));
+        }
+        const combined = [...filteredMemories, ...vaultItems];
+        const items = combined.slice(offset, offset + limit + 1);
+        return {
+          items: items.slice(0, limit),
+          count: Math.min(items.length, limit),
+          limit,
+          offset,
+          hasMore: items.length > limit,
+          ...(searchMethod ? { method: searchMethod } : {}),
+        };
+      });
+
+      app.get<{ Params: { id: string } }>('/memory/:id', {
+        schema: {
+          params: {
+            type: 'object',
+            properties: { id: { type: 'string', pattern: '^(?:[1-9][0-9]{0,18}|vault_[A-Za-z0-9_-]{1,256})$', maxLength: 263 } },
+            required: ['id'],
+            additionalProperties: false,
+          },
+          response: { 400: apiError, 403: apiError, 404: apiError, 503: apiError },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply) || !apiStore(reply)) return;
+        const { id } = request.params;
+        const signal = AbortSignal.timeout(30_000);
+        if (/^[1-9][0-9]{0,18}$/u.test(id)) {
+          if (BigInt(id) > maxSqlMessageId) return reply.code(400).send({ error: 'Invalid memory ID' });
+          const versions = await options.apiMemoryStore!.history(id, maxMemoryApiHistory + 1, signal);
+          if (versions.length === 0) return reply.code(404).send({ error: 'Memory not found' });
+          const current = versions[0]!;
+          return {
+            ...memoryApiItem(current),
+            category: current.category,
+            key: shouldRedact(`${current.key}\n${current.content}`) ? '[redacted]' : current.key,
+            content: shouldRedact(`${current.key}\n${current.content}`) ? '[redacted]' : current.content,
+            history: versions.slice(0, maxMemoryApiHistory).map(memoryHistoryItem),
+            mayHaveMore: versions.length > maxMemoryApiHistory,
+          };
+        }
+        const path = vaultPathFromId(id);
+        if (!path) return reply.code(400).send({ error: 'Invalid vault note ID' });
+        const note = await options.client.read(path, signal);
+        if (!note) return reply.code(404).send({ error: 'Memory not found' });
+        const commits = await options.client.history(path, maxMemoryApiHistory, signal);
+        const history = [];
+        let historyBytes = 0;
+        for (const commit of commits) {
+          const version = await options.client.read(path, signal, commit.sha);
+          if (!version) continue;
+          const contentBytes = Buffer.byteLength(version.content, 'utf8');
+          if (historyBytes + contentBytes > maxMemoryApiHistoryBytes) break;
+          historyBytes += contentBytes;
+          const redacted = shouldRedact(version.content);
+          history.push({
+            updatedAt: commit.updatedAt.toISOString(),
+            message: shouldRedact(commit.message) ? '[redacted]' : commit.message,
+            url: commitUrl(commit.sha),
+            content: redacted ? '[redacted]' : version.content,
+          });
+        }
+        const [latest] = commits;
+        return {
+          ...vaultApiItem(path, note.content, latest?.updatedAt ?? new Date(0)),
+          content: shouldRedact(note.content) ? '[redacted]' : note.content,
+          history,
+          mayHaveMore: history.length < commits.length || commits.length === maxMemoryApiHistory,
+        };
+      });
+
+      app.patch<{ Params: { id: string }; Body: { text: string } }>('/memory/:id', {
+        schema: {
+          params: {
+            type: 'object',
+            properties: { id: { type: 'string', pattern: '^(?:[1-9][0-9]{0,18}|vault_[A-Za-z0-9_-]{1,256})$', maxLength: 263 } },
+            required: ['id'],
+            additionalProperties: false,
+          },
+          body: {
+            type: 'object',
+            properties: { text: { type: 'string', minLength: 1, maxLength: MAX_VAULT_FILE_BYTES } },
+            required: ['text'],
+            additionalProperties: false,
+          },
+          response: { 400: apiError, 403: apiError, 404: apiError, 503: apiError },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply) || !apiStore(reply)) return;
+        const text = request.body.text.trim();
+        if (!text || Buffer.byteLength(text, 'utf8') > MAX_VAULT_FILE_BYTES ||
+            credentialPattern.test(text) || secretPattern.test(text) || sensitivePattern.test(text)) {
+          return reply.code(400).send({ error: 'Memory text is invalid or contains restricted sensitive content' });
+        }
+        const signal = AbortSignal.timeout(30_000);
+        const id = request.params.id;
+        if (/^[1-9][0-9]{0,18}$/u.test(id)) {
+          if (BigInt(id) > maxSqlMessageId) return reply.code(400).send({ error: 'Invalid memory ID' });
+          if (text.length > 2_000) return reply.code(400).send({ error: 'Durable memory text exceeds 2,000 characters' });
+          const versions = await options.apiMemoryStore!.history(id, 1, signal);
+          const current = versions[0];
+          if (!current) return reply.code(404).send({ error: 'Memory not found' });
+          const embedding = options.embedder && options.apiMemoryStore!.supportsVectorSearch()
+            ? await options.embedder.embed(text, signal).catch((error: unknown) => {
+              if (signal.aborted) throw error;
+              return null;
+            })
+            : null;
+          const corrected = await options.apiMemoryStore!.correct(id, {
+            category: current.category,
+            key: current.key,
+            content: text,
+            sourceMessageId: current.sourceMessageId,
+            embedding,
+          }, signal);
+          return { item: memoryApiItem(corrected.memory), commitUrl: null };
+        }
+        const path = vaultPathFromId(id);
+        if (!path) return reply.code(400).send({ error: 'Invalid vault note ID' });
+        if (Buffer.byteLength(text, 'utf8') > MAX_VAULT_FILE_BYTES) {
+          return reply.code(400).send({ error: 'Vault note exceeds the supported size' });
+        }
+        const current = await options.client.read(path, signal);
+        if (!current) return reply.code(404).send({ error: 'Memory not found' });
+        const result = await write(path, { content: text, reason: 'correct memory note' }, '', signal, true);
+        const [latestCommit] = await options.client.history(path, 1, signal);
+        return {
+          item: vaultApiItem(path, text, latestCommit?.updatedAt ?? new Date()),
+          commitUrl: commitUrl(result.commit),
+        };
+      });
+
+      app.delete<{ Params: { id: string } }>('/memory/:id', {
+        schema: {
+          params: {
+            type: 'object',
+            properties: { id: { type: 'string', pattern: '^(?:[1-9][0-9]{0,18}|vault_[A-Za-z0-9_-]{1,256})$', maxLength: 263 } },
+            required: ['id'],
+            additionalProperties: false,
+          },
+          response: { 400: apiError, 403: apiError, 404: apiError, 503: apiError },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply) || !apiStore(reply)) return;
+        const id = request.params.id;
+        const signal = AbortSignal.timeout(30_000);
+        if (/^[1-9][0-9]{0,18}$/u.test(id)) {
+          if (BigInt(id) > maxSqlMessageId) return reply.code(400).send({ error: 'Invalid memory ID' });
+          const versions = await options.apiMemoryStore!.history(id, 1, signal);
+          if (!versions[0]) return reply.code(404).send({ error: 'Memory not found' });
+          const forgotten = await options.apiMemoryStore!.forget(id, versions[0].sourceMessageId, signal);
+          if (!forgotten) return reply.code(404).send({ error: 'Memory not found' });
+          return reply.code(204).send();
+        }
+        const path = vaultPathFromId(id);
+        if (!path) return reply.code(400).send({ error: 'Invalid vault note ID' });
+        const note = await options.client.read(path, signal);
+        if (!note) return reply.code(404).send({ error: 'Memory not found' });
+        const service: TeamsNotificationService | null = app.teamsNotifications;
+        if (!service) return reply.code(503).send({ error: 'Web approval unavailable' });
+        try {
+          if (app.awayModeStore && (await app.awayModeStore.read()).mode !== 'present') {
+            return reply.code(409).send({ error: 'Web approval is unavailable while Jarvis is away' });
+          }
+        } catch {
+          return reply.code(503).send({ error: 'Web approval unavailable' });
+        }
+        if (pendingVaultDeletions.has(path)) {
+          return reply.code(202).send({ status: 'approval_pending', message: 'approval pending in Jarvis' });
+        }
+        pendingVaultDeletions.add(path);
+        void service.runConfirmed('delete', `Permanently delete vault note ${path}.`, async () => {
+          const latest = await options.client.read(path, AbortSignal.timeout(15_000));
+          if (!latest) return;
+          if (latest.sha !== note.sha) throw new VaultWriteConflictError();
+          const commit = await options.client.delete(
+            path,
+            latest.sha,
+            'jarvis: forget vault note',
+            AbortSignal.timeout(15_000),
+          );
+          await options.indexStore.deleteFiles([path], AbortSignal.timeout(10_000));
+          const folder = safeFolder(path);
+          log('vault.write', {
+            outcome: 'ok',
+            ...(folder ? { folder } : {}),
+          });
+          return commit;
+        }, AbortSignal.timeout(6 * 60_000)).catch(() => {
+          app.log.warn('memory.vault_forget_failed');
+        }).finally(() => { pendingVaultDeletions.delete(path); });
+        return reply.code(202).send({ status: 'approval_pending', message: 'approval pending in Jarvis' });
+      });
+    },
   };
 }

@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 6 October 2026 for P7-01, P7-02, P7-03, P7-08, P7-15, P7-22 and P7-40. Scope: the Jarvis core, Software Factory, Teams calling, notification and confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, and generated workspace image metadata. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 6 October 2026 for P6-22 and P7-01, P7-02, P7-03, P7-08, P7-15, P7-22 and P7-40. Scope: the Jarvis core, Software Factory, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, and generated workspace image metadata. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -153,7 +153,7 @@ flowchart LR
 | 5 | GitHub and release | Pull requests, checks, the release view (commits fetched from GitHub on demand) | `pull_requests`, `workflow_runs`, `releases`, `deployments` |
 | 6 | Operations | Safe webhook handling, credential expiry warnings | `webhook_deliveries`, `credential_status` |
 | 7 | Usage and cost | Transparency per task/project and current UTC-day web-research calls; the latter reuses group-one `tool_calls` | `usage` |
-| 8 | Phone, notifications and confirmations | Phone-call sessions plus Dan's validated Teams conversation and expiring approvals for Teams or browser delivery | `phone_sessions`, `teams_conversations`, `teams_confirmations` |
+| 8 | Phone, notifications and confirmations | Phone-call sessions plus expiring browser approvals; `teams_conversations` remains dormant optional-integration storage, not used in production | `phone_sessions`, `teams_conversations`, `teams_confirmations` |
 | 9 | Legacy SQL memory | Historical source-linked memory rows, retained for compatibility but superseded as the durable knowledge source | `memories`, `memory_history`, `memory_deletions` |
 | 10 | Workspace artifacts | Owner-scoped image metadata for generated workspace/chat previews; image bytes are private Blob objects | `workspace_artifacts` |
 | 11 | GitHub vault index | Derived heading chunks and optional vectors keyed by vault path and blob SHA; vault content remains authoritative in GitHub | `vault_chunks` |
@@ -294,8 +294,8 @@ erDiagram
   session, the agent keeps the effective model and reasoning effort in memory for
   that session; the snapshot is not persisted.
 - P7-02 stores one validated JSON state object at global setting key
-  `away.mode.state`: `away`, transition source/time and the start time of a
-  pending Teams Away/Offline interval. The existing key/value schema needs no
+  `away.mode.state`: `away` and transition source/time. Legacy Teams-presence
+  metadata is ignored when read; manual mode remains available without a schema
   migration. A confirmed mode transition also inserts a `core/away_mode` activity
   row in the same SQL transaction; the Now feed displays these rows and reads the
   current value directly from the setting.

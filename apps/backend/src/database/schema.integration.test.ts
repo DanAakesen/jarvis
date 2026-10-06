@@ -12,7 +12,6 @@ import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
 import { createAlertActivityStore } from './alert-store.js';
 import { createAwayModeStore } from './away-mode-store.js';
-import { presenceAwayThresholdMs } from '../core/away-mode.js';
 import { createDispatcherStore } from './dispatcher-store.js';
 import { createConversationStore } from './conversation-store.js';
 import { createMemoryStore } from './memory-store.js';
@@ -146,32 +145,28 @@ describe('committed domain schema (groups 1-8)', () => {
     await expect(createTaskStore(pool, createEventHub<TaskEventMessage>())
       .transition(task.id, 'Cancelled')).resolves.toMatchObject({ kind: 'ok' });
   });
-  it('persists presence modes and an in-progress Teams presence timer across store recreation', async () => {
-    const startedAt = new Date('2026-10-04T12:00:00.000Z');
+  it('persists presence modes across store recreation and publishes each transition once', async () => {
+    const changedAt = new Date('2026-10-04T12:00:00.000Z');
     const firstStore = createAwayModeStore(pool);
-    await firstStore.observePresence(true, startedAt);
+    await firstStore.set('away', 'manual', changedAt);
 
     const onModeChanged = vi.fn();
     const restartedStore = createAwayModeStore(pool, onModeChanged);
     expect(await restartedStore.read()).toEqual({
-      mode: 'present',
+      mode: 'away',
       source: 'manual',
-      changedAt: null,
+      changedAt: changedAt.toISOString(),
     });
 
-    expect(await restartedStore.observePresence(
-      true,
-      new Date(startedAt.getTime() + presenceAwayThresholdMs),
-    )).toMatchObject({
-      mode: 'away',
-      source: 'jarvis',
-    });
-    await restartedStore.set('present', 'manual', new Date(startedAt.getTime() + presenceAwayThresholdMs + 1));
+    await restartedStore.set('on_the_move', 'jarvis', new Date(changedAt.getTime() + 1));
+    expect(await createAwayModeStore(pool).read()).toMatchObject({ mode: 'on_the_move', source: 'jarvis' });
+    await restartedStore.set('present', 'manual', new Date(changedAt.getTime() + 2));
     expect(await createAwayModeStore(pool).read()).toMatchObject({ mode: 'present', source: 'manual' });
     expect((await pool.request().query<{ kind: string; title: string }>(
       `SELECT kind, title FROM dbo.activity WHERE area = N'core' ORDER BY id;`,
     )).recordset).toEqual([
       { kind: 'away_mode', title: 'Away mode is on' },
+      { kind: 'away_mode', title: 'On the move mode is on' },
       { kind: 'away_mode', title: 'Present mode is on' },
     ]);
     expect(onModeChanged).toHaveBeenCalledTimes(2);

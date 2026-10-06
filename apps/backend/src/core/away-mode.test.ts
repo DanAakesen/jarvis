@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   defaultAwayModeState,
-  observeAwayPresence,
   parseAwayModeState,
-  presenceAwayThresholdMs,
   setPresenceMode,
   setPresenceModeTool,
   setAwayModeTool,
@@ -14,43 +12,19 @@ import type { FastifyRequest } from 'fastify';
 const at = new Date('2026-10-04T12:00:00.000Z');
 
 describe('presence mode state', () => {
-  it('migrates persisted boolean state and retains the derived-away semantics', () => {
+  it('migrates persisted boolean state and normalizes removed Teams presence data', () => {
     expect(parseAwayModeState({
       away: true,
       source: 'teams_presence',
       changedAt: at.toISOString(),
       presenceAwaySince: null,
-    })).toEqual({ mode: 'away', source: 'jarvis', changedAt: at.toISOString() });
+    })).toEqual({ mode: 'away', source: 'manual', changedAt: at.toISOString() });
     expect(parseAwayModeState({
       away: false,
       source: null,
       changedAt: null,
       presenceAwaySince: null,
     })).toEqual({ mode: 'present', source: 'manual', changedAt: null });
-  });
-
-  it('requires ten uninterrupted minutes of Away or Offline before switching to away', () => {
-    const first = observeAwayPresence(defaultAwayModeState, true, at);
-    expect(first).toEqual({
-      state: defaultAwayModeState,
-      presenceAwaySince: at.toISOString(),
-    });
-    expect(observeAwayPresence(first.state, true, new Date(at.getTime() + presenceAwayThresholdMs - 1), first.presenceAwaySince).state)
-      .toBe(first.state);
-    expect(observeAwayPresence(first.state, true, new Date(at.getTime() + presenceAwayThresholdMs), first.presenceAwaySince))
-      .toEqual({
-        state: { mode: 'away', source: 'jarvis', changedAt: new Date(at.getTime() + presenceAwayThresholdMs).toISOString() },
-        presenceAwaySince: at.toISOString(),
-      });
-  });
-
-  it('clears an interrupted presence timer without undoing an active non-present mode', () => {
-    const observed = observeAwayPresence(defaultAwayModeState, true, at);
-    expect(observeAwayPresence(observed.state, false, new Date(at.getTime() + 30_000), observed.presenceAwaySince))
-      .toEqual({ state: defaultAwayModeState, presenceAwaySince: null });
-
-    const manual = setPresenceMode(defaultAwayModeState, 'on_the_move', 'manual', at);
-    expect(observeAwayPresence(manual, false, new Date(at.getTime() + 30_000)).state).toBe(manual);
   });
 
   it('changes source and timestamp only when the selected mode changes', () => {

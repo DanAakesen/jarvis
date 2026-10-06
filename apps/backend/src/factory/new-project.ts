@@ -69,7 +69,7 @@ export const createProjectTool: JarvisTool = {
     const repo = `${defaults.owner}/${cleanName}`;
     const notifications = request.server.teamsNotifications;
     if (!notifications) {
-      throw new ToolRefusal('A Teams confirmation is required before creating a repository.');
+      throw new ToolRefusal('Jarvis approval is unavailable; no repository was created.');
     }
     let repositoryUrl: string;
     try {

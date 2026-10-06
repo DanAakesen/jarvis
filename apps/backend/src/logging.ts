@@ -20,7 +20,7 @@ export async function createTelemetry(connectionString?: string): Promise<Teleme
 }
 
 const failureEvents = new Set([
-  'away_mode.presence_poll_failed', 'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
+  'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
   'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',
   'project_policy.recheck_failed',
   'dispatcher.operation_failed', 'github.checks_loop_recovery_failed', 'pc_bridge.status_update_failed',

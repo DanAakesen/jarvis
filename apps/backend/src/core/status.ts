@@ -1,7 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import type { NowFeedSnapshot } from './now.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
-import { defaultAwayModeState } from './away-mode.js';
 
 const inputSchema = {
   type: 'object',
@@ -14,10 +13,8 @@ function countPhrase(count: number, singular: string, plural: string): string {
   return `${amount} ${count === 1 ? singular : plural}`;
 }
 
-export function summarizeNowFeed(feed: NowFeedSnapshot, awayMode = false): string {
-  const visible = awayMode
-    ? { ...feed, running: [], items: feed.items.filter((item) => item.category === 'mode') }
-    : feed;
+export function summarizeNowFeed(feed: NowFeedSnapshot): string {
+  const visible = feed;
   const counts = [
     countPhrase(visible.running.length, 'running task', 'running tasks'),
     countPhrase(visible.items.filter((item) => item.category === 'attention').length, 'task needing attention', 'tasks needing attention'),
@@ -46,10 +43,6 @@ export const getStatusSummaryTool: JarvisTool = {
     }
     const store = request.server.nowFeedStore;
     if (!store) throw new ToolRefusal('The Now feed is unavailable.');
-    const [feed, awayMode] = await Promise.all([
-      store.read(),
-      request.server.awayModeStore?.read() ?? Promise.resolve(defaultAwayModeState),
-    ]);
-    return { summary: summarizeNowFeed(feed, awayMode.mode !== 'present') };
+    return { summary: summarizeNowFeed(await store.read()) };
   },
 };
