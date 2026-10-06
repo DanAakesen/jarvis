@@ -4,9 +4,13 @@ import type { ScreenVisionModel, ScreenVisionResult } from './screen.js';
 
 const MAX_RESPONSE_BYTES = 1_048_576;
 const REQUEST_TIMEOUT_MS = 30_000;
+// USD list prices (Sweden Central, Global Standard) converted at the existing 6.5785 DKK/USD.
 const MODEL_RATES_DKK_PER_MILLION_TOKENS = new Map([
   ['gpt-5.6-luna', { input: 1.3157, output: 7.8941 }],
+  ['gpt-6-luna', { input: 0.6579, output: 3.2893 }],
 ]);
+// Screen and camera vision use their own cheap deployment, not the chat model (Dan, 6 October).
+export const VISION_MODEL_DEPLOYMENT = 'gpt-6-luna';
 
 interface JsonObject {
   readonly [key: string]: unknown;
@@ -99,11 +103,13 @@ export function createFoundryScreenVisionModel(
               },
               {
                 type: 'image_url',
-                image_url: { url: `data:image/jpeg;base64,${image.toString('base64')}` },
+                image_url: { url: `data:image/jpeg;base64,${image.toString('base64')}`, detail: 'auto' },
               },
             ],
           }],
-          max_tokens: 500,
+          // These models reject max_tokens with HTTP 400, so screen inspection never worked (L112).
+          max_completion_tokens: 500,
+          reasoning_effort: 'none',
         }),
         signal: requestSignal,
       });

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
 import { readSettings } from '../core/settings.js';
+import { VISION_MODEL_DEPLOYMENT } from './foundry-model.js';
 
 export const MAX_SCREEN_FRAME_BYTES = 1_000_000;
 const MAX_SCREEN_FRAME_BASE64_BYTES = Math.ceil(MAX_SCREEN_FRAME_BYTES / 3) * 4;
@@ -201,7 +202,7 @@ export function createScreenVisionModule(service: ScreenVisionService): BackendM
           const result = await service.describe({
             sessionId,
             image,
-            model: settings.jarvis.model,
+            model: VISION_MODEL_DEPLOYMENT,
             dailyCap: settings.global.screenShareDailyFrameCap,
             signal: controller.signal,
           });
