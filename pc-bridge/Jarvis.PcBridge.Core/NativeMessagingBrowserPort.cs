@@ -62,6 +62,32 @@ public sealed class NativeMessagingBrowserPort : IExtensionBrowserPort, IAsyncDi
         }
     }
 
+    // Activates Dan's open Jarvis tab (same origin as webUrl) or opens webUrl; returns whether a tab was opened.
+    public async Task<bool> FocusJarvisTabAsync(string webUrl, CancellationToken cancellationToken)
+    {
+        if (!Uri.TryCreate(webUrl, UriKind.Absolute, out var uri) ||
+            !(uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback) ||
+            uri.UserInfo.Length > 0)
+        {
+            throw new BrowserActionRefusedException("not_allowed");
+        }
+
+        using var response = await RequestAsync(new { type = "focus_jarvis_tab", url = uri.AbsoluteUri }, cancellationToken)
+            .ConfigureAwait(false);
+        ThrowIfError(response.RootElement);
+        if (response.RootElement.GetProperty("type").GetString() != "result" ||
+            !response.RootElement.TryGetProperty("result", out var result) ||
+            result.ValueKind != JsonValueKind.Object ||
+            result.EnumerateObject().Count() != 2 ||
+            !result.TryGetProperty("opened", out var opened) ||
+            opened.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
+            !result.TryGetProperty("focused", out var focused) || focused.ValueKind != JsonValueKind.True)
+        {
+            throw new BrowserActionRefusedException("failed");
+        }
+        return opened.GetBoolean();
+    }
+
     public async Task<BrowserTabPage> ListTabsAsync(
         int offset,
         int limit,

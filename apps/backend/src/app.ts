@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import cors from '@fastify/cors';
 import type { Logger } from 'pino';
-import type { JarvisActivityEvent } from '@jarvis/contracts';
+import type { JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
 import { localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
@@ -160,7 +160,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
-  app.decorate('jarvisActivityHub', options.jarvisActivityHub ?? createEventHub<JarvisActivityEvent>());
+  app.decorate('jarvisActivityHub', options.jarvisActivityHub ?? createEventHub<JarvisActivityEvent | JarvisVoiceWakeEvent>());
   app.decorate('onConversationSessionEnded', options.onConversationSessionEnded ?? (() => {}));
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);

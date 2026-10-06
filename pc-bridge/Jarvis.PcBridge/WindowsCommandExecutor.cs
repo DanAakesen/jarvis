@@ -260,6 +260,26 @@ public sealed class WindowsCommandExecutor : IWindowCaptureProvider
 
     public static void BringChromeToFront() => BringToFront(FindTopWindow(processName => processName == "chrome", _ => false));
 
+    // Without the extension, a Chrome window whose active tab is the Jarvis page is titled "Jarvis - …".
+    public static bool BringJarvisChromeWindowToFront()
+    {
+        var found = IntPtr.Zero;
+        EnumWindows((handle, _) =>
+        {
+            if (!IsWindowVisible(handle)) return true;
+            var title = ReadTitle(handle);
+            if (title.StartsWith("Jarvis - ", StringComparison.Ordinal) && ProcessName(handle) == "chrome")
+            {
+                found = handle;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        if (found == IntPtr.Zero) return false;
+        BringToFront(found);
+        return true;
+    }
+
     private static void BringNewWindowToFront(string executable, string appName)
     {
         var wanted = InstalledAppMatcher.Expand(InstalledAppMatcher.Normalize(appName));

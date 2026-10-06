@@ -1021,6 +1021,47 @@ or tray interaction. Live Chrome, physical confirmation delivery, and Dan's
 acceptance remain coordinator checks. Do not include unrelated personal tabs or
 page contents in evidence.
 
+### Offline wake word (P7-39)
+
+The bridge detects "Wake up Jarvis" on Dan's PC with the Speech SDK
+`KeywordRecognizer` and a custom keyword model. Agents cannot create the model;
+the coordinator creates it in Dan's signed-in Speech Studio session:
+
+1. Open Speech Studio → **Custom keyword** (`https://speech.microsoft.com/portal/customkeyword`)
+   with the existing Jarvis Speech/AI Services resource. Select **Create a new
+   project**, name it `jarvis-wake-word`, and choose **English (United States)**
+   (one of the two supported languages).
+2. Open the project and select **Create a new model**. Enter the keyword
+   exactly as `Wake up Jarvis`, keep only the candidate pronunciations that match
+   Dan's speech, and select the **Basic** model type. Training can take several
+   hours. Wait for **Succeeded**.
+3. Under **Tune**, download the model `.zip` and extract it. Copy the `.table`
+   file to `%LOCALAPPDATA%\Jarvis\PcBridge\wake-up-jarvis.table` on Dan's PC.
+   Do not commit it.
+4. Add the absolute path to `%LOCALAPPDATA%\Jarvis\PcBridge\settings.json`,
+   escaping backslashes:
+
+   ```json
+   "WakeWordModelPath": "C:\\Users\\<user>\\AppData\\Local\\Jarvis\\PcBridge\\wake-up-jarvis.table"
+   ```
+
+   The installer keeps this field. Optional fields: `WakeWordEnabled` (missing
+   means on once the model exists) and `WebUrl` (Jarvis web origin; defaults to
+   the production Static Web App origin). Restart the bridge from the tray.
+
+Without a valid `.table` path, the tray's **Wake word** item is disabled and
+explains the missing model. With it, the item shows listening, paused during
+voice, or microphone unavailable, and toggling it is saved. Reload the unpacked
+Chrome extension after installing (extension 1.0.3 adds `focus_jarvis_tab`).
+
+Live acceptance (coordinator with Dan, after the page reacts to `voice-wake`):
+say "Wake up Jarvis" with the Jarvis tab in the background, then with no
+Jarvis tab open. Expect one chime, the existing Jarvis Chrome tab (or a new one,
+never Edge) in front, and voice starting. During the voice session the tray
+should show it is paused; after the session ends it should listen again. Turn
+the toggle off and confirm the phrase does nothing. Offline tests use a fake
+recognizer and do not prove microphone, model accuracy, or Chrome focus.
+
 ### Database access and migrations (#7)
 
 - Configure `SQL_SERVER=<host>.database.windows.net`, `SQL_DATABASE=jarvis` and
