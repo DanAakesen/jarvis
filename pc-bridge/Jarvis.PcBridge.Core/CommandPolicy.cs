@@ -7,6 +7,7 @@ public static class CommandPolicy
     private static readonly HashSet<string> Apps = new(StringComparer.Ordinal)
     {
         "vscode",
+        "codex",
         "edge",
         "explorer",
         "terminal",
@@ -30,6 +31,10 @@ public static class CommandPolicy
                 arguments.TryGetProperty("relativePath", out var folder) &&
                 folder.ValueKind == JsonValueKind.String &&
                 TryNormalizeRepoPath(folder.GetString(), out _),
+            "open_file" => HasOnly(arguments, "relativePath") &&
+                arguments.TryGetProperty("relativePath", out var file) &&
+                file.ValueKind == JsonValueKind.String &&
+                TryNormalizeRepoPath(file.GetString(), out _),
             "active_window" => !arguments.EnumerateObject().Any(),
             "focus_window" => HasOnly(arguments, "title") &&
                 arguments.TryGetProperty("title", out var title) &&

@@ -14,12 +14,13 @@ const MAX_MESSAGE_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 15_000;
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
-const allowedApps = new Set(['vscode', 'edge', 'explorer', 'terminal']);
+const allowedApps = new Set(['vscode', 'codex', 'edge', 'explorer', 'terminal']);
 
 type PcCommand =
   | { name: 'open_url'; arguments: { url: string } }
   | { name: 'open_app'; arguments: { app: string } }
   | { name: 'open_folder'; arguments: { relativePath: string } }
+  | { name: 'open_file'; arguments: { relativePath: string } }
   | { name: 'active_window'; arguments: Record<string, never> }
   | { name: 'focus_window'; arguments: { title: string } }
   | { name: 'uia_snapshot'; arguments: Record<string, never> }
@@ -171,6 +172,7 @@ export class PcBridgeConnection {
     if (response.type === 'error') {
       const error = response.error;
       if (error === 'not_allowed') this.finish(response.id, new ToolRefusal('The PC bridge refused that action.'));
+      else if (error === 'not_installed') this.finish(response.id, new ToolRefusal('Codex desktop app is not installed on Dan’s PC.'));
       else if (error === 'browser_off') this.finish(response.id, new ToolRefusal('Chrome browser automation is off in the PC bridge settings.'));
       else if (error === 'blocked') this.finish(response.id, new ToolRefusal(
         pending.command === 'uia_act'
@@ -249,17 +251,31 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
     tools: [
       {
         name: 'pc_open',
-        description: 'Open files and allow-listed apps on Dan’s PC; websites open in Dan’s Chrome. Use browser_do for work on a website.',
+        description: 'Open files and allow-listed apps, including VS Code and Codex, on Dan’s PC; websites open in Dan’s Chrome. Use browser_do for work on a website.',
         inputSchema: {
           type: 'object',
           properties: {
-            target: { type: 'string', enum: ['url', 'app', 'folder', 'window'] },
+            target: { type: 'string', enum: ['url', 'app', 'folder', 'file', 'window'] },
             value: { type: 'string', minLength: 1, maxLength: 2048 },
           },
           required: ['target', 'value'],
           additionalProperties: false,
         },
         execute: (input, _request, signal) => runPcOpen(bridge, input, signal),
+      },
+      {
+        name: 'codex_prompt',
+        description: 'Open the Codex desktop app, enter Dan’s prompt through Windows UI Automation, and submit it. Typing is not confirmed; irreversible submission requires Dan’s approval. Use create_task for longer repository work.',
+        inputSchema: {
+          type: 'object',
+          properties: { prompt: { type: 'string', minLength: 1, maxLength: 3800 } },
+          required: ['prompt'],
+          additionalProperties: false,
+        },
+        sensitive: true,
+        execute: (input, request, signal) => runCodexPrompt(
+          bridge, options.pcActPlanner, options.runConfirmed, input, request, signal,
+        ),
       },
       {
         name: 'pc_active_window',
@@ -532,6 +548,12 @@ async function runPcOpen(
       command = { name: 'open_folder', arguments: { relativePath } };
       break;
     }
+    case 'file': {
+      const relativePath = validateRepoPath(input.value);
+      if (!relativePath) throw new ToolRefusal('Choose a file under C:\\Repo using a relative path.');
+      command = { name: 'open_file', arguments: { relativePath } };
+      break;
+    }
     case 'window':
       if (!isValidWindowTitle(input.value)) throw new ToolRefusal('Provide an exact window title no longer than 200 characters.');
       command = { name: 'focus_window', arguments: { title: input.value } };
@@ -541,6 +563,49 @@ async function runPcOpen(
   }
 
   return bridge.execute(command, signal);
+}
+
+async function runCodexPrompt(
+  bridge: PcBridgeConnection,
+  planner: PcActPlanner | undefined,
+  runConfirmed: PcBridgeModuleOptions['runConfirmed'],
+  input: unknown,
+  request: FastifyRequest,
+  signal: AbortSignal,
+): Promise<unknown> {
+  if (!planner) throw new ToolRefusal('Local Codex prompting is unavailable because Windows UI Automation is not configured.');
+  if (!isRecord(input) || Object.keys(input).length !== 1 ||
+      typeof input.prompt !== 'string' || !input.prompt.trim() ||
+      input.prompt.length > 3_800 || hasControlCharacters(input.prompt)) {
+    throw new ToolRefusal('Provide a non-empty, single-line Codex prompt no longer than 3,800 characters.');
+  }
+
+  await bridge.execute({ name: 'open_app', arguments: { app: 'codex' } }, signal);
+  const prompt = input.prompt;
+  return runPcAct(
+    { goal: `Enter this prompt in Codex and submit it: ${prompt}` },
+    request,
+    signal,
+    {
+      observe: async (commandSignal) => {
+        const result = await bridge.execute({ name: 'uia_snapshot', arguments: {} }, commandSignal);
+        if (result.application !== 'codex') {
+          throw new ToolRefusal('Codex is not the active Windows app; no prompt was entered.');
+        }
+        return result;
+      },
+      act: (action, commandSignal) => bridge.execute(
+        { name: 'uia_act', arguments: action },
+        commandSignal,
+      ),
+    },
+    {
+      planner,
+      ...(runConfirmed ? { runConfirmed } : {}),
+      typedText: prompt,
+      confirmTyping: false,
+    },
+  );
 }
 
 function validateUrl(value: string): string | undefined {
@@ -594,7 +659,7 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
     // Accept the note from older bridges too; installed bridges update separately from the backend.
     return value.opened === true && typeof value.note === 'string' && BROWSER_FALLBACK_NOTES.has(value.note);
   }
-  if (['open_url', 'open_app', 'open_folder'].includes(command)) {
+  if (['open_url', 'open_app', 'open_folder', 'open_file'].includes(command)) {
     return Object.keys(value).length === 1 && value.opened === true;
   }
   if (command === 'active_window') {
@@ -615,7 +680,7 @@ function validUiAutomationSnapshot(value: Record<string, unknown>): boolean {
   return Object.keys(value).length === 3 &&
     typeof value.snapshotId === 'string' &&
     /^[\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu.test(value.snapshotId) &&
-    (value.application === 'vscode' || value.application === 'explorer') &&
+    (value.application === 'vscode' || value.application === 'codex' || value.application === 'explorer') &&
     Array.isArray(value.elements) && value.elements.length <= 100 &&
     value.elements.every((element, index) => isRecord(element) && Object.keys(element).length === 3 &&
       element.index === index && typeof element.role === 'string' && element.role.length <= 64 &&

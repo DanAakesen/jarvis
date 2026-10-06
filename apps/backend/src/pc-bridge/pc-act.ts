@@ -45,6 +45,7 @@ export interface PcActDecisionInput {
   readonly step: number;
   readonly previousActions: readonly string[];
   readonly snapshot: PcActSnapshot;
+  readonly textOptions?: readonly string[];
 }
 
 export interface PcActPlanner {
@@ -75,6 +76,8 @@ export interface PcActOptions {
     action: () => Promise<T>,
     signal: AbortSignal,
   ) => Promise<T>;
+  readonly typedText?: string;
+  readonly confirmTyping?: boolean;
   readonly onStep?: (activity: PcActStepActivity) => void;
 }
 
@@ -216,7 +219,7 @@ function validSnapshot(value: unknown): value is PcActSnapshot {
   return isRecord(value) && Object.keys(value).length === 3 &&
     typeof value.snapshotId === 'string' &&
     /^[\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu.test(value.snapshotId) &&
-    (value.application === 'vscode' || value.application === 'explorer') &&
+    (value.application === 'vscode' || value.application === 'codex' || value.application === 'explorer') &&
     Array.isArray(value.elements) && value.elements.length <= 100 &&
     value.elements.every((element, index) => isRecord(element) &&
       Object.keys(element).length === 3 && element.index === index &&
@@ -240,7 +243,7 @@ function approvalSummary(
   application: PcActSnapshot['application'],
   target: PcActElement,
 ): string {
-  const appName = application === 'vscode' ? 'VS Code' : 'File Explorer';
+  const appName = application === 'vscode' ? 'VS Code' : application === 'codex' ? 'Codex' : 'File Explorer';
   const targetName = target.name.replace(/[^\p{L}\p{N} .,:'/-]/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, 80);
   const description = targetName ? `${target.role} "${targetName}"` : target.role;
   return operation === 'type'
@@ -284,7 +287,7 @@ export function createJevPcActPlanner(
       if (!apiKey || !apiKey.trim() || apiKey.length > 10_000 || /[\r\n]/u.test(apiKey) ||
           requestSignal.aborted) return null;
 
-      const values = quotedValues(input.goal).filter(value => !sensitiveText(value));
+      const values = (input.textOptions ?? quotedValues(input.goal)).filter(value => !sensitiveText(value));
       const body = JSON.stringify({
         model,
         state: {
@@ -408,6 +411,10 @@ export async function runPcAct(
       hasControlCharacters(input.goal)) {
     throw new ToolRefusal(`Provide a PC goal between 1 and ${maxGoalLength} characters.`);
   }
+  if (options.typedText !== undefined &&
+      (options.typedText.length > 4_096 || hasControlCharacters(options.typedText) || sensitiveText(options.typedText))) {
+    throw new ToolRefusal('Jarvis will not type control characters or sensitive values into a Windows app.');
+  }
   if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for PC actions.');
   if (sensitiveGoal(input.goal)) {
     throw new ToolRefusal('Jarvis will not handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.');
@@ -428,6 +435,7 @@ export async function runPcAct(
         step,
         previousActions,
         snapshot,
+        ...(options.typedText !== undefined ? { textOptions: [options.typedText] } : {}),
       }, deadline);
       if (deadline.aborted) throw deadline.reason;
       if (!decision || !validProbability(decision.confidence) ||
@@ -464,8 +472,12 @@ export async function runPcAct(
       if (operation === 'type' && (!decision.text || sensitiveText(decision.text))) {
         throw new ToolRefusal('Provide one explicit, non-sensitive value in quotation marks before asking Jarvis to type.');
       }
-      if (operation === 'type' && !quotedValues(goal).includes(decision.text!)) {
-        throw new ToolRefusal('Jarvis can type only a non-sensitive value quoted in the request.');
+      if (operation === 'type' && (options.typedText !== undefined
+        ? decision.text !== options.typedText
+        : !quotedValues(goal).includes(decision.text!))) {
+        throw new ToolRefusal(options.typedText === undefined
+          ? 'Jarvis can type only a non-sensitive value quoted in the request.'
+          : 'Jarvis can type only the exact prompt provided to Codex.');
       }
 
       const action = async (confirmed: boolean): Promise<void> => {
@@ -488,7 +500,8 @@ export async function runPcAct(
       };
 
       try {
-        if ((operation === 'click' || operation === 'type') && needsApproval(goal, target)) {
+        if ((operation === 'click' || (operation === 'type' && options.confirmTyping !== false)) &&
+            needsApproval(goal, target)) {
           if (!options.runConfirmed) {
             throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
           }

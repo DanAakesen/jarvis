@@ -150,6 +150,7 @@ public static partial class UiAutomationPolicy
     private static readonly HashSet<string> AllowedApplications = new(StringComparer.Ordinal)
     {
         "vscode",
+        "codex",
         "explorer",
     };
 

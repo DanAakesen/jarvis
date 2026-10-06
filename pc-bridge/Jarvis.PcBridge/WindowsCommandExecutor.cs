@@ -24,6 +24,7 @@ public sealed class WindowsCommandExecutor
             "open_url" => OpenUrlInDefaultBrowser(command.Arguments.GetProperty("url").GetString()!),
             "open_app" => OpenApp(command.Arguments.GetProperty("app").GetString()!),
             "open_folder" => OpenFolder(command.Arguments.GetProperty("relativePath").GetString()!),
+            "open_file" => OpenFile(command.Arguments.GetProperty("relativePath").GetString()!),
             "active_window" => ReadActiveWindow(),
             "focus_window" => FocusWindow(command.Arguments.GetProperty("title").GetString()!),
             "uia_snapshot" => _uiAutomation.Observe(cancellationToken),
@@ -78,27 +79,25 @@ public sealed class WindowsCommandExecutor
     private static object OpenApp(string app)
     {
         var executable = FindExecutable(app);
-        if (executable is null) throw new CommandRefusedException("not_found");
+        if (executable is null)
+            throw new CommandRefusedException(app == "codex" ? "not_installed" : "not_found");
         using var process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false });
         AllowForeground(process);
         return new { opened = true };
     }
 
-    private static object OpenFolder(string relativePath)
+    private static object OpenFolder(string relativePath) => OpenRepoPath(relativePath, expectFile: false);
+
+    private static object OpenFile(string relativePath) => OpenRepoPath(relativePath, expectFile: true);
+
+    private static object OpenRepoPath(string relativePath, bool expectFile)
     {
         if (!CommandPolicy.TryNormalizeRepoPath(relativePath, out var normalized))
             throw new CommandRefusedException("not_allowed");
         var root = Path.GetFullPath(RepoRoot);
-        var fullPath = Path.GetFullPath(Path.Combine(root, normalized));
-        var relativeToRoot = Path.GetRelativePath(root, fullPath);
-        if (relativeToRoot == "." || relativeToRoot == ".." ||
-            relativeToRoot.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-            Path.IsPathRooted(relativeToRoot) ||
-            !Directory.Exists(fullPath) ||
+        if (!RepoPathResolver.TryResolve(root, normalized, expectFile, out var fullPath) ||
             ContainsReparsePoint(root, fullPath))
-        {
             throw new CommandRefusedException("not_found");
-        }
 
         var code = FindExecutable("vscode");
         if (code is null) throw new CommandRefusedException("not_found");
@@ -175,6 +174,13 @@ public sealed class WindowsCommandExecutor
                 Path.Combine(local, "Programs", "Microsoft VS Code", "Code.exe"),
                 Path.Combine(programFiles, "Microsoft VS Code", "Code.exe"),
                 Path.Combine(programFilesX86, "Microsoft VS Code", "Code.exe"),
+            ],
+            "codex" =>
+            [
+                Path.Combine(local, "Programs", "Codex", "Codex.exe"),
+                Path.Combine(local, "Programs", "OpenAI Codex", "Codex.exe"),
+                Path.Combine(local, "Microsoft", "WindowsApps", "Codex.exe"),
+                Path.Combine(programFiles, "Codex", "Codex.exe"),
             ],
             "chrome" =>
             [

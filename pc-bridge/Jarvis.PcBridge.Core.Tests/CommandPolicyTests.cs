@@ -9,8 +9,10 @@ public sealed class CommandPolicyTests
     [Theory]
     [InlineData("open_url", """{"url":"https://example.com/repo"}""")]
     [InlineData("open_app", """{"app":"vscode"}""")]
+    [InlineData("open_app", """{"app":"codex"}""")]
     [InlineData("open_app", """{"app":"terminal"}""")]
     [InlineData("open_folder", """{"relativePath":"jarvis\\apps\\backend"}""")]
+    [InlineData("open_file", """{"relativePath":"jarvis\\apps\\backend\\src\\index.ts"}""")]
     [InlineData("active_window", "{}")]
     [InlineData("focus_window", """{"title":"Jarvis - Visual Studio Code"}""")]
     [InlineData("browser_tabs", "{}")]
@@ -41,6 +43,7 @@ public sealed class CommandPolicyTests
     [InlineData("open_folder", """{"relativePath":"C:\\Repo\\jarvis"}""")]
     [InlineData("open_folder", """{"relativePath":"jarvis\\..\\secrets"}""")]
     [InlineData("open_folder", """{"relativePath":"jarvis\\CON"}""")]
+    [InlineData("open_file", """{"relativePath":"..\\secrets.txt"}""")]
     [InlineData("active_window", """{"title":"ignored"}""")]
     [InlineData("focus_window", """{"title":"window\ninjection"}""")]
     [InlineData("open_app", """{"app":"vscode","path":"C:\\secret"}""")]
@@ -62,6 +65,31 @@ public sealed class CommandPolicyTests
         using var document = JsonDocument.Parse(arguments);
 
         Assert.False(CommandPolicy.IsValid(name, document.RootElement));
+    }
+
+    [Fact]
+    public void Resolves_existing_repo_files_and_folders_and_refuses_paths_outside_the_root()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(root, "jarvis", "src");
+        Directory.CreateDirectory(folder);
+        var file = Path.Combine(folder, "index.ts");
+        File.WriteAllText(file, "export {};");
+
+        try
+        {
+            Assert.True(RepoPathResolver.TryResolve(root, @"jarvis\src", expectFile: false, out var resolvedFolder));
+            Assert.Equal(Path.GetFullPath(folder), resolvedFolder);
+            Assert.True(RepoPathResolver.TryResolve(root, @"jarvis\src\index.ts", expectFile: true, out var resolvedFile));
+            Assert.Equal(Path.GetFullPath(file), resolvedFile);
+            Assert.False(RepoPathResolver.TryResolve(root, @"..\outside", expectFile: false, out _));
+            Assert.False(RepoPathResolver.TryResolve(root, @"jarvis\src", expectFile: true, out _));
+            Assert.False(RepoPathResolver.TryResolve(root, @"jarvis\missing.ts", expectFile: true, out _));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [Fact]

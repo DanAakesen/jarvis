@@ -84,7 +84,7 @@ async function connectBridge(url: string, token = bridgeToken): Promise<WebSocke
 
 async function callTool(
   app: ReturnType<typeof buildApp>,
-  tool: 'pc_open' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
+  tool: 'pc_open' | 'codex_prompt' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
   payload: Record<string, unknown>,
 ) {
   return app.inject({
@@ -131,6 +131,100 @@ describe('authenticated PC bridge protocol', () => {
     expect(new Set(commands.map(({ id }) => id)).size).toBe(2);
     expect(record).toHaveBeenCalledTimes(2);
     expect(statuses).toEqual([false, true]);
+  });
+
+  it('opens repo files and folders through VS Code and refuses paths outside the repo root', async () => {
+    const { app } = fixture();
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const commands: Array<Record<string, unknown>> = [];
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      commands.push(command);
+      bridge.send(JSON.stringify({ id: command.id, type: 'result', result: { opened: true } }));
+    });
+
+    const folder = await callTool(app, 'pc_open', { target: 'folder', value: 'jarvis\\apps\\backend' });
+    const file = await callTool(app, 'pc_open', { target: 'file', value: 'jarvis\\apps\\backend\\src\\index.ts' });
+    const outside = await callTool(app, 'pc_open', { target: 'file', value: '..\\secrets.txt' });
+
+    expect(folder.json()).toMatchObject({ outcome: 'ok', result: { opened: true } });
+    expect(file.json()).toMatchObject({ outcome: 'ok', result: { opened: true } });
+    expect(outside.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'Choose a file under C:\\Repo using a relative path.' },
+    });
+    expect(commands.map(command => command.command)).toEqual(['open_folder', 'open_file']);
+    expect(commands[1]!.arguments).toEqual({ relativePath: 'jarvis\\apps\\backend\\src\\index.ts' });
+  });
+
+  it('types a Codex prompt without confirmation and confirms its submission', async () => {
+    const prompt = 'Delete the generated file only after reviewing the diff.';
+    const planner: PcActPlanner = {
+      decide: vi.fn()
+        .mockResolvedValueOnce({ operation: 'type', confidence: 0.99, targetIndex: 0, text: prompt })
+        .mockResolvedValueOnce({ operation: 'click', confidence: 0.99, targetIndex: 1 })
+        .mockResolvedValueOnce({ operation: 'done', confidence: 0.99 }),
+    };
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const { app, record } = fixture({ pcActPlanner: planner, runConfirmed });
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const commands: Array<Record<string, unknown>> = [];
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      commands.push(command);
+      const arguments_ = command.arguments as Record<string, unknown>;
+      const result = command.command === 'open_app'
+        ? { opened: true }
+        : command.command === 'uia_snapshot'
+          ? {
+            snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+            application: 'codex',
+            elements: [
+              { index: 0, role: 'edit', name: 'Prompt' },
+              { index: 1, role: 'button', name: 'Send' },
+            ],
+          }
+          : { acted: true, action: arguments_.action };
+      bridge.send(JSON.stringify({ id: command.id, type: 'result', result }));
+    });
+
+    const response = await callTool(app, 'codex_prompt', { prompt });
+
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(commands.map(command => command.command)).toEqual([
+      'open_app', 'uia_snapshot', 'uia_act', 'uia_snapshot', 'uia_act', 'uia_snapshot',
+    ]);
+    expect(commands[0]!.arguments).toEqual({ app: 'codex' });
+    expect(commands[2]!.arguments).toMatchObject({ action: 'type', text: prompt, confirmed: false });
+    expect(commands[4]!.arguments).toMatchObject({ action: 'click', confirmed: true });
+    expect(runConfirmed).toHaveBeenCalledWith(
+      'Click the button "Send" in Codex.',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+    expect(record.mock.calls.map(([call]) => call.arguments)).toEqual([{ redacted: true }]);
+    expect(record.mock.calls.map(([call]) => call.result)).toEqual([{ redacted: true }]);
+  });
+
+  it('clearly refuses a Codex prompt when the desktop app is not installed', async () => {
+    const planner: PcActPlanner = { decide: vi.fn() };
+    const { app } = fixture({ pcActPlanner: planner });
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      bridge.send(JSON.stringify({ id: command.id, type: 'error', error: 'not_installed' }));
+    });
+
+    const response = await callTool(app, 'codex_prompt', { prompt: 'Review the current task.' });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'Codex desktop app is not installed on Dan’s PC.' },
+    });
+    expect(planner.decide).not.toHaveBeenCalled();
   });
 
   it('runs pc_act through the authenticated bridge and redacts its audit and step activity', async () => {
