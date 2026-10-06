@@ -7,6 +7,8 @@ import {
 } from './workspace-artifact-store.js';
 
 const ownerId = 'd5b41c2f-33f4-4b4f-9a52-09346e50c8dd';
+const htmlId = '56a2b0bd-af47-46b5-8e15-c6e9a718ae93';
+const htmlSources = [{ title: 'Jarvis', url: 'https://example.com/research' }];
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5wAAAABJRU5ErkJggg==',
   'base64',
@@ -108,6 +110,58 @@ describe('workspace artifact store', () => {
     await expect(store.readUrl(uploadId, ownerId, new AbortController().signal))
       .rejects.toBeInstanceOf(WorkspaceArtifactNotFound);
   });
+
+  it('keeps generated HTML transient until pinning and owner-scopes artifact reads', async () => {
+    const { store, query } = fixture();
+    const artifact = store.createTransientHtml(ownerId, 'create-html', 'Research', '<h1>Findings</h1>', htmlSources);
+    expect(artifact).toMatchObject({ kind: 'html', title: 'Research', pinned: false, sources: htmlSources });
+    await expect(store.getHtml(artifact.id, ownerId, new AbortController().signal)).resolves.toEqual(artifact);
+    await expect(store.getHtml(artifact.id, 'd5b41c2f-33f4-4b4f-9a52-09346e50c8de', new AbortController().signal))
+      .rejects.toBeInstanceOf(WorkspaceArtifactNotFound);
+    expect(query.mock.calls.every(([statement]) => !String(statement).includes('INSERT dbo.workspace_html_artifacts'))).toBe(true);
+  });
+
+  it('pins validated HTML metadata in SQL and lists only pinned artifact summaries', async () => {
+    const { store, input, query } = fixture();
+    const artifact = store.createTransientHtml(ownerId, 'pin-html', 'Research', '<h1>Findings</h1>', htmlSources);
+    query.mockResolvedValueOnce({ recordset: [] });
+    query.mockResolvedValueOnce({ recordset: [{ created_at: new Date('2026-10-06T10:00:00.000Z') }] });
+    await expect(store.pinHtml(artifact.id, ownerId, new AbortController().signal))
+      .resolves.toMatchObject({ id: artifact.id, pinned: true, title: 'Research' });
+    expect(input).toHaveBeenCalledWith('html', sql.NVarChar(sql.MAX), '<h1>Findings</h1>');
+    expect(input).toHaveBeenCalledWith('sources', sql.NVarChar(sql.MAX), JSON.stringify(htmlSources));
+    expect(input).toHaveBeenCalledWith('size', sql.Int, Buffer.byteLength('<h1>Findings</h1>', 'utf8'));
+    expect(query.mock.calls[1]?.[0]).toContain('INSERT dbo.workspace_html_artifacts');
+
+    query.mockResolvedValueOnce({ recordset: [{
+      id: artifact.id,
+      title: 'Research',
+      sources_json: JSON.stringify(htmlSources),
+      created_at: new Date('2026-10-06T10:00:00.000Z'),
+      pinned: true,
+    }] });
+    await expect(store.listPinnedHtml(ownerId, new AbortController().signal))
+      .resolves.toEqual([{ id: artifact.id, kind: 'html', title: 'Research', sources: htmlSources,
+        createdAt: '2026-10-06T10:00:00.000Z', pinned: true }]);
+  });
+
+  it('unpins an artifact by deleting its durable row while keeping it available transiently', async () => {
+    const { store, query } = fixture();
+    const pinnedRow = {
+      id: htmlId,
+      title: 'Research',
+      html: '<h1>Findings</h1>',
+      sources_json: JSON.stringify(htmlSources),
+      created_at: new Date('2026-10-06T10:00:00.000Z'),
+      pinned: true,
+    };
+    query.mockResolvedValueOnce({ recordset: [pinnedRow] });
+    query.mockResolvedValueOnce({ recordset: [] });
+    await store.unpinHtml(htmlId, ownerId, new AbortController().signal);
+    expect(query.mock.calls[1]?.[0]).toContain('DELETE dbo.workspace_html_artifacts');
+    await expect(store.getHtml(htmlId, ownerId, new AbortController().signal))
+      .resolves.toMatchObject({ id: htmlId, pinned: false, html: '<h1>Findings</h1>' });
+  });
 });
 
-const uploadId = '56a2b0bd-af47-46b5-8e15-c6e9a718ae93';
+const uploadId = htmlId;

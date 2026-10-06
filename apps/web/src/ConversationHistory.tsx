@@ -244,9 +244,9 @@ export function ConversationHistory({
     }
   }
 
-  const submitText = useCallback((value: string, queueOnly = false) => {
+  const submitText = useCallback((value: string, queueOnly = false, fromWorkspace = false) => {
     const text = value.trim();
-    if (!text || voiceActive) return;
+    if (!text || (voiceActive && !fromWorkspace)) return;
     const currentCameraContext = session !== null && visionContext?.source === 'camera' &&
       visionContext.sessionId === session.id && session.language === language;
     if (isCameraRequest(text) && !camera?.sharing && !currentCameraContext) {
@@ -279,6 +279,17 @@ export function ConversationHistory({
     }
     setQueue((current) => [...current, queued]);
   }, [camera?.sharing, client, config, language, sending, session, visionContext, voiceActive]);
+
+  useEffect(() => {
+    const receiveWorkspaceAsk = (event: Event) => {
+      const text = (event as CustomEvent<{ text?: unknown }>).detail?.text;
+      if (typeof text === 'string' && text.trim().length > 0 && text.length <= 2_000) {
+        submitText(text, false, true);
+      }
+    };
+    window.addEventListener('jarvis-workspace-ask', receiveWorkspaceAsk);
+    return () => window.removeEventListener('jarvis-workspace-ask', receiveWorkspaceAsk);
+  }, [submitText]);
 
   useEffect(() => {
     const intent = conversationIntents.pending[0];

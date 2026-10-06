@@ -1,6 +1,8 @@
 import { isGeneratedView, type GeneratedView } from '@jarvis/contracts';
 import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
+import { HtmlAppFrame } from './HtmlAppFrame';
+import type { WorkspaceHtmlArtifact } from './workspace-html-artifacts';
 
 function ViewAction({ view, title }: { view: GeneratedView; title: string }) {
   const action = view.actions?.find((candidate) => candidate.type === 'open-route' || candidate.type === 'open-link');
@@ -13,10 +15,18 @@ export function GeneratedViewRenderer({
   view,
   className,
   trustedBlobHost,
+  htmlApp,
 }: {
   view: GeneratedView;
   className?: string;
   trustedBlobHost?: string;
+  htmlApp?: {
+    loadArtifact: (artifactId: string, signal: AbortSignal) => Promise<WorkspaceHtmlArtifact>;
+    onOpenUrl: (url: string) => void;
+    onAsk: (text: string) => void;
+    onPinChange: (artifactId: string, pinned: boolean) => void | Promise<void>;
+    onResize: (height: number) => void;
+  };
 }) {
   if (!isGeneratedView(view, trustedBlobHost ? { trustedBlobHost } : undefined)) {
     return <p role="alert">This generated view is invalid.</p>;
@@ -117,6 +127,19 @@ export function GeneratedViewRenderer({
             </figure>
           ))}
         </div>
+      );
+    case 'html-app':
+      if (!htmlApp) return <p role="alert">The HTML app is unavailable in this view.</p>;
+      return (
+        <HtmlAppFrame
+          artifactId={view.data.artifactId}
+          title={view.title}
+          loadArtifact={htmlApp.loadArtifact}
+          onOpenUrl={htmlApp.onOpenUrl}
+          onAsk={htmlApp.onAsk}
+          onPinChange={(pinned) => htmlApp.onPinChange(view.data.artifactId, pinned)}
+          onResize={htmlApp.onResize}
+        />
       );
   }
 }

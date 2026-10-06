@@ -12,6 +12,7 @@ import { setAwayModeTool } from './away-mode.js';
 import { getStatusSummaryTool } from './status.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspace-commands.js';
+import { registerWorkspaceHtmlArtifactRoutes } from './workspace-html-artifacts.js';
 import { findChatReflexReplay } from './reflex.js';
 import { executePhoneTool } from '../phone/approval.js';
 
@@ -52,6 +53,7 @@ export const coreModule: BackendModule = {
     registerNowRoutes(app);
     await registerUsageRoutes(app);
     registerWorkspaceCommandRoutes(app);
+    registerWorkspaceHtmlArtifactRoutes(app);
     app.get('/database/status', {
       schema: { response: { 200: { type: 'object', properties: { waking: { type: 'boolean' } }, required: ['waking'], additionalProperties: false } } },
     }, async (_request, reply) => {
@@ -86,7 +88,11 @@ export const coreModule: BackendModule = {
       name, description, inputSchema,
     })));
     for (const tool of app.jarvisTools.list()) {
-      app.post(`/tools/${tool.name}`, { config: { jarvisAgent: true }, schema: { body: tool.inputSchema } }, async (request, reply) => {
+      app.post(`/tools/${tool.name}`, {
+        config: { jarvisAgent: true },
+        schema: { body: tool.inputSchema },
+        ...(tool.name === 'workspace_command' ? { bodyLimit: 2 * 1024 * 1024 } : {}),
+      }, async (request, reply) => {
         const messageHeader = request.headers['x-jarvis-message-id'];
         const voiceItemHeader = request.headers['x-jarvis-voice-item-id'];
         const phoneSessionHeader = request.headers['x-jarvis-phone-session-id'];

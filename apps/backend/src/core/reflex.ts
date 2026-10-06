@@ -617,9 +617,20 @@ export function createWorkspaceReflexTargets(
     for (const operation of ['show', 'focus', 'minimise', 'restore', 'close']) {
       add(`${operation} the Jarvis workspace window ${JSON.stringify(title)} (${viewId})`, { operation, viewId });
     }
+    const window = snapshot.windows.find((candidate) => candidate.viewId === viewId);
+    if (window?.artifactId) {
+      const operation = window.pinned ? 'unpin' : 'pin';
+      add(`${operation} the Jarvis HTML app ${JSON.stringify(title)} (${viewId})`, { operation, viewId });
+    }
     add(`make the Jarvis workspace window ${JSON.stringify(title)} bigger`, {
       operation: 'resize', viewId, width: 0.9, height: 0.9, x: 0.05, y: 0.05,
     });
+    add(`move the Jarvis workspace window ${JSON.stringify(title)} to the upper left`, {
+      operation: 'move', viewId, x: 0.04, y: 0.04,
+    });
+  }
+  for (const direction of ['next', 'previous'] as const) {
+    add(`cycle to the ${direction} Jarvis workspace window`, { operation: 'cycle', direction });
   }
   for (const arrangement of ['tiled', 'layered']) {
     add(`arrange Jarvis workspace windows ${arrangement}${arrangement === 'tiled' ? ' / side by side' : ''}`,

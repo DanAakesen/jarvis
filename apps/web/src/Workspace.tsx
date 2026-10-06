@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useLayo
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import { isWorkspaceCommand, type GeneratedView, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
+import type { WorkspaceHtmlArtifact } from './workspace-html-artifacts';
 export type { WorkspaceCommand } from '@jarvis/contracts';
 
 export type WorkspaceViewContent =
@@ -16,6 +17,7 @@ export interface WorkspaceView {
   id: string;
   title: string;
   content: WorkspaceViewContent;
+  pinned?: boolean;
 }
 
 export interface WorkspaceController {
@@ -41,7 +43,7 @@ type Gesture = {
 const clamp = (value: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, value)) * 1000) / 1000;
 const percent = (value: number) => `${Number((value * 100).toFixed(2))}%`;
 
-function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'close' | 'view' | 'more' }) {
+function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'close' | 'view' | 'more' | 'pin' | 'unpin' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'minimise':
@@ -56,6 +58,10 @@ function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'clo
       return <svg {...common}><rect x="4" y="5" width="16" height="14" rx="2" /><path d="M4 9h16" /></svg>;
     case 'more':
       return <svg {...common}><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>;
+    case 'pin':
+      return <svg {...common}><path d="M8 4h8l-1 6 3 3v2H6v-2l3-3-1-6ZM12 15v5" /></svg>;
+    case 'unpin':
+      return <svg {...common}><path d="M8 4h8l-1 6 3 3v2H6v-2l3-3-1-6ZM12 15v5M4 4l16 16" /></svg>;
   }
 }
 
@@ -70,11 +76,33 @@ function defaultGeometry(index: number): Geometry {
   };
 }
 
+function htmlArtifactId(view: WorkspaceView): string | undefined {
+  return view.content.status === 'generated' && view.content.view.renderer === 'html-app'
+    ? view.content.view.data.artifactId
+    : undefined;
+}
+
 export const Workspace = forwardRef<WorkspaceController, {
   views: readonly WorkspaceView[];
   onVisibleViewsChange?: (visible: boolean) => void;
   onOpenWindowsChange?: (windows: WorkspaceSnapshot['windows']) => void;
-}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange }, ref) {
+  loadHtmlArtifact?: (artifactId: string, signal: AbortSignal) => Promise<WorkspaceHtmlArtifact>;
+  setHtmlArtifactPinned?: (artifactId: string, pinned: boolean) => Promise<void>;
+  onHtmlAppAsk?: (text: string) => void;
+  onHtmlAppOpenUrl?: (url: string) => void;
+  pinnedArtifactsError?: string;
+  onRetryPinnedArtifacts?: () => void;
+}>(function Workspace({
+  views,
+  onVisibleViewsChange,
+  onOpenWindowsChange,
+  loadHtmlArtifact,
+  setHtmlArtifactPinned,
+  onHtmlAppAsk,
+  onHtmlAppOpenUrl,
+  pinnedArtifactsError,
+  onRetryPinnedArtifacts,
+}, ref) {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
   const closedAgentViews = useRef(new Map<string, { view: WorkspaceView; geometry: Geometry | undefined }>());
@@ -84,6 +112,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [geometry, setGeometry] = useState<Record<string, Geometry>>({});
   const [minimizedViewIdsState, setMinimizedViewIds] = useState<ReadonlySet<string>>(new Set());
   const [closedViewIdsState, setClosedViewIds] = useState<ReadonlySet<string>>(new Set());
+  const [pinnedOverrides, setPinnedOverrides] = useState<Record<string, boolean>>({});
   const [maximizedViewId, setMaximizedViewId] = useState<string | null>(null);
   const [foregroundViewId, setForegroundViewId] = useState<string | null>(null);
   const [phone, setPhone] = useState(() => (
@@ -159,11 +188,25 @@ export const Workspace = forwardRef<WorkspaceController, {
   const openViews = useMemo(() => orderedViews.filter((view) => !closedViewIds.has(view.id)), [closedViewIds, orderedViews]);
   const minimizedViews = useMemo(() => openViews.filter((view) => minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
   const visibleViews = useMemo(() => openViews.filter((view) => !minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
+  const isPinned = useCallback((view: WorkspaceView) => pinnedOverrides[view.id] ?? view.pinned ?? false, [pinnedOverrides]);
+  const pinnedViews = useMemo(
+    () => workspaceViews.filter((view) => htmlArtifactId(view) && isPinned(view)),
+    [isPinned, workspaceViews],
+  );
+  const minimizedTabs = useMemo(() => minimizedViews.filter((view) => !isPinned(view)), [isPinned, minimizedViews]);
   const foreground = visibleViews.find((view) => view.id === foregroundViewId) ?? visibleViews[0];
 
   useEffect(() => {
-    onOpenWindowsChange?.(openViews.slice(0, 32).map(({ id, title }) => ({ viewId: id, title })));
-  }, [onOpenWindowsChange, openViews]);
+    const snapshotViews = workspaceViews.filter((view) => !closedViewIds.has(view.id) || isPinned(view));
+    onOpenWindowsChange?.(snapshotViews.slice(0, 32).map((view) => {
+      const artifactId = htmlArtifactId(view);
+      return {
+        viewId: view.id,
+        title: view.title,
+        ...(artifactId ? { artifactId, pinned: isPinned(view) } : {}),
+      };
+    }));
+  }, [closedViewIds, isPinned, onOpenWindowsChange, workspaceViews]);
 
   useLayoutEffect(() => {
     onVisibleViewsChange?.(visibleViews.length > 0);
@@ -248,7 +291,8 @@ export const Workspace = forwardRef<WorkspaceController, {
 
   const closeView = useCallback((id: string, reversible = false): boolean => {
     const generated = agentViews.some((view) => view.id === id);
-    if (!workspaceViews.some((view) => view.id === id)) return false;
+    const view = workspaceViews.find((candidate) => candidate.id === id);
+    if (!view && !closedAgentViews.current.has(id)) return false;
     if (closedViewIds.has(id)) return true;
     if (windowElements.current.get(id)?.contains(document.activeElement)) {
       const remaining = openViews.filter((view) => view.id !== id);
@@ -257,7 +301,7 @@ export const Workspace = forwardRef<WorkspaceController, {
         ? { target: minimizedViewIds.has(next.id) ? 'tab' : 'window', viewId: next.id }
         : { target: 'workspace' };
     }
-    if (generated) {
+    if (generated && !view?.pinned && !pinnedOverrides[id]) {
       const view = agentViews.find((view) => view.id === id)!;
       if (reversible) {
         closedAgentViews.current.set(id, { view, geometry: geometry[id] });
@@ -292,10 +336,10 @@ export const Workspace = forwardRef<WorkspaceController, {
     setMaximizedViewId((current) => current === id ? null : current);
     setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} closed.`);
     return true;
-  }, [agentViews, closedViewIds, geometry, minimizedViewIds, openViews, workspaceViews]);
+  }, [agentViews, closedViewIds, geometry, minimizedViewIds, openViews, pinnedOverrides, workspaceViews]);
 
   const focusView = useCallback((id: string): boolean => {
-    if (!isViewOpen(id)) return false;
+    if (!workspaceViews.some((view) => view.id === id) && !closedAgentViews.current.has(id)) return false;
     restoreView(id);
     const index = orderedViews.findIndex((view) => view.id === id);
     if (!phone && index >= 0 && index !== orderedViews.length - 1) reorder(id, orderedViews.length - index - 1, 'brought forward');
@@ -303,13 +347,36 @@ export const Workspace = forwardRef<WorkspaceController, {
     else windowHeadings.current.get(id)?.focus();
     if (phone) setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} foreground.`);
     return true;
-  }, [foreground?.id, isViewOpen, minimizedViewIds, orderedViews, phone, reorder, restoreView, workspaceViews]);
+  }, [foreground?.id, minimizedViewIds, orderedViews, phone, reorder, restoreView, workspaceViews]);
 
   function switchView(offset: number) {
     const index = visibleViews.findIndex((view) => view.id === foreground?.id);
     const next = visibleViews[index + offset];
     if (next) focusView(next.id);
   }
+
+  const persistPin = useCallback(async (view: WorkspaceView, pinned: boolean) => {
+    const artifactId = htmlArtifactId(view);
+    if (!artifactId || !setHtmlArtifactPinned) throw new Error('HTML app pinning is unavailable.');
+    await setHtmlArtifactPinned(artifactId, pinned);
+    setPinnedOverrides((current) => ({ ...current, [view.id]: pinned }));
+    setAnnouncement(`${view.title} ${pinned ? 'pinned' : 'unpinned'}.`);
+  }, [setHtmlArtifactPinned]);
+
+  const resizeHtmlApp = useCallback((id: string, requestedHeight: number) => {
+    const bounds = canvas.current?.getBoundingClientRect();
+    if (!bounds?.height) return;
+    const index = orderedViews.findIndex((view) => view.id === id);
+    if (index < 0) return;
+    const height = clamp(requestedHeight / bounds.height, 0.34, 0.92);
+    setGeometry((current) => {
+      const prior = current[id] ?? defaultGeometry(index);
+      return {
+        ...current,
+        [id]: { ...prior, height, y: clamp(prior.y, 0, 1 - height), rows: height > 0.72 ? 2 : 1 },
+      };
+    });
+  }, [orderedViews]);
 
   function beginSwipe(event: PointerEvent<HTMLDivElement>) {
     if (!phone || event.pointerType !== 'touch' || !event.isPrimary || visibleViews.length < 2) return;
@@ -365,9 +432,35 @@ export const Workspace = forwardRef<WorkspaceController, {
           },
         }]);
         setGeometry((current) => ({ ...current, [command.viewId]: defaultGeometry(workspaceViews.length) }));
+        setOrder([...orderedViews.map((view) => view.id), command.viewId]);
+        setArrangement('layered');
+        setForegroundViewId(command.viewId);
         setAnnouncement(`${command.view.title} created.`);
         shimmerUpdatedView(command.viewId);
         return true;
+      case 'create-html': {
+        if (workspaceViews.some((view) => view.id === command.viewId) || !command.artifactId) return false;
+        const view: GeneratedView = {
+          version: 1,
+          title: command.title,
+          renderer: 'html-app',
+          source: { id: 'workspace.html', status: 'complete' },
+          data: { artifactId: command.artifactId },
+        };
+        closedAgentViews.current.delete(command.viewId);
+        setAgentViews((current) => [...current, {
+          id: command.viewId,
+          title: command.title,
+          content: { status: 'generated', view },
+        }]);
+        setGeometry((current) => ({ ...current, [command.viewId]: defaultGeometry(workspaceViews.length) }));
+        setOrder([...orderedViews.map((view) => view.id), command.viewId]);
+        setArrangement('layered');
+        setForegroundViewId(command.viewId);
+        setAnnouncement(`${command.title} created.`);
+        shimmerUpdatedView(command.viewId);
+        return true;
+      }
       case 'update':
         if (!agentViews.some((view) => view.id === command.viewId) || closedViewIds.has(command.viewId)) return false;
         setAgentViews((current) => current.map((view) => view.id === command.viewId
@@ -394,6 +487,21 @@ export const Workspace = forwardRef<WorkspaceController, {
         return restoreView(command.viewId);
       case 'focus':
         return focusView(command.viewId);
+      case 'pin':
+      case 'unpin': {
+        const view = workspaceViews.find((candidate) => candidate.id === command.viewId);
+        if (!view || !htmlArtifactId(view)) return false;
+        setPinnedOverrides((current) => ({ ...current, [view.id]: command.operation === 'pin' }));
+        setAnnouncement(`${view.title} ${command.operation === 'pin' ? 'pinned' : 'unpinned'}.`);
+        return true;
+      }
+      case 'cycle': {
+        if (visibleViews.length < 2) return false;
+        const index = visibleViews.findIndex((view) => view.id === foreground?.id);
+        const offset = command.direction === 'next' ? 1 : -1;
+        const next = visibleViews[(index + offset + visibleViews.length) % visibleViews.length];
+        return next ? focusView(next.id) : false;
+      }
       case 'move': {
         if (!isViewOpen(command.viewId) || viewIndex < 0) return false;
         const current = geometry[command.viewId] ?? defaultGeometry(viewIndex);
@@ -429,7 +537,7 @@ export const Workspace = forwardRef<WorkspaceController, {
         return false;
     }
   }, [agentViews, closeView, closedViewIds, focusView, geometry, isViewOpen, jarvisUpdateTimers, minimiseView,
-    orderedViews, restoreView, workspaceViews]);
+    orderedViews, restoreView, visibleViews, foreground?.id, workspaceViews]);
 
   const minimiseAll = useCallback(() => {
     const ids = visibleViews.map(({ id }) => id);
@@ -671,13 +779,42 @@ export const Workspace = forwardRef<WorkspaceController, {
         )}
       </header>
       {openViews.length === 0 ? (
-        <p className="workspace-empty">No temporary views are open. Views created during this session will appear here.</p>
+        <p className="workspace-empty">
+          {pinnedViews.length > 0
+            ? 'No views are open. Select a pinned tab to restore one.'
+            : 'No temporary views are open. Views created during this session will appear here.'}
+        </p>
       ) : openViews.length === minimizedViews.length ? (
         <p className="workspace-empty">All views are minimised. Select a tab to restore a view.</p>
       ) : (
         <p className="workspace-guidance">
           {phone ? 'Swipe left or right to switch views, or select a view.' : narrow ? 'Views stack on this screen. Drag a title to reorder, or use Arrange.' : 'Drag a title to move, drag an edge to resize, or use Arrange for keyboard controls.'}
         </p>
+      )}
+      {pinnedArtifactsError && (
+        <div className="workspace-artifact-error">
+          <p role="alert">{pinnedArtifactsError}</p>
+          {onRetryPinnedArtifacts && (
+            <button className="secondary-button" type="button" onClick={onRetryPinnedArtifacts}>Retry pinned views</button>
+          )}
+        </div>
+      )}
+      {pinnedViews.length > 0 && (
+        <nav className="workspace-tabs workspace-pinned-tabs" aria-label="Pinned views">
+          {pinnedViews.map((view) => (
+            <button
+              className="workspace-tab"
+              key={view.id}
+              type="button"
+              aria-label={`Open pinned ${view.title}`}
+              aria-current={foreground?.id === view.id && !minimizedViewIds.has(view.id) ? 'true' : undefined}
+              onClick={() => focusView(view.id)}
+            >
+              <WindowIcon name="pin" />
+              <span>{view.title}</span>
+            </button>
+          ))}
+        </nav>
       )}
       {phone && visibleViews.length > 1 && (
         <nav className="workspace-view-switcher" aria-label="Switch foreground view">
@@ -697,9 +834,9 @@ export const Workspace = forwardRef<WorkspaceController, {
           ))}
         </nav>
       )}
-      {minimizedViews.length > 0 && (
+      {minimizedTabs.length > 0 && (
         <nav className="workspace-tabs" aria-label="Minimised views">
-          {minimizedViews.map((view) => (
+          {minimizedTabs.map((view) => (
             <button
               className="workspace-tab"
               key={view.id}
@@ -745,6 +882,8 @@ export const Workspace = forwardRef<WorkspaceController, {
           const actionPending = pendingActions.has(view.id);
           const retry = view.content.status === 'error' ? view.content.retry : undefined;
           const resume = view.content.status === 'interrupted' ? view.content.resume : undefined;
+          const artifactId = htmlArtifactId(view);
+          const pinned = isPinned(view);
 
           return (
             <article
@@ -779,6 +918,19 @@ export const Workspace = forwardRef<WorkspaceController, {
                   {view.title}
                 </h3>
                 <div className="workspace-window-actions">
+                  {artifactId && setHtmlArtifactPinned && (
+                    <button
+                      className="workspace-icon-control"
+                      type="button"
+                      aria-label={`${pinned ? 'Unpin' : 'Pin'} ${view.title}`}
+                      title={`${pinned ? 'Unpin' : 'Pin'} ${view.title}`}
+                      disabled={actionPending || pendingActions.has(`${view.id}-pin`)}
+                      onClick={() => void runAction(`${view.id}-pin`, () => persistPin(view, !pinned),
+                        `${view.title} ${pinned ? 'unpinned' : 'pinned'}.`)}
+                    >
+                      <WindowIcon name={pinned ? 'unpin' : 'pin'} />
+                    </button>
+                  )}
                   {!maximized && !phone && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
                     <summary className="workspace-arrange-trigger" role="button" aria-label={`Arrange ${view.title}`} title={`Arrange ${view.title}`}>
                       <WindowIcon name="more" />
@@ -881,6 +1033,15 @@ export const Workspace = forwardRef<WorkspaceController, {
                   <GeneratedViewRenderer
                     view={view.content.view}
                     {...(view.content.trustedBlobHost ? { trustedBlobHost: view.content.trustedBlobHost } : {})}
+                    {...(loadHtmlArtifact ? {
+                      htmlApp: {
+                        loadArtifact: loadHtmlArtifact,
+                        onOpenUrl: (url: string) => onHtmlAppOpenUrl?.(url),
+                        onAsk: (text: string) => onHtmlAppAsk?.(text),
+                        onPinChange: (_artifactId: string, nextPinned: boolean) => persistPin(view, nextPinned),
+                        onResize: (height: number) => resizeHtmlApp(view.id, height),
+                      },
+                    } : {})}
                   />
                 )}
                 {actionSuccess[view.id] && <p role="status">{actionSuccess[view.id]}</p>}

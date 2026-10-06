@@ -9,7 +9,7 @@ import {
 } from '@jarvis/contracts';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
-const maxSseFrameLength = 320 * 1024;
+const maxSseFrameLength = 1_200 * 1024;
 const confirmationIdPattern = /^[A-Za-z0-9_-]{43}$/;
 const workspaceCommandIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
 const workspaceSessionIdPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;

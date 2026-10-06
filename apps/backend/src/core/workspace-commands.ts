@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { isWorkspaceCommand, workspaceCommandSchema, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
+import { isWorkspaceCommand, workspaceCommandSchema, type GeneratedView, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import { WorkspaceArtifactNotFound } from '../database/workspace-artifact-store.js';
 
 const commandTimeoutMs = 10_000;
 const maxPendingCommands = 8;
@@ -148,7 +149,7 @@ export class WorkspaceCommandBroker {
 
     const expiresAt = Date.now() + commandTimeoutMs;
     const frame = JSON.stringify({ command, expiresAt });
-    if (Buffer.byteLength(frame) > 300 * 1024 ||
+    if (Buffer.byteLength(frame) > 1_200 * 1024 ||
         !connection.send('workspace-command', { command, expiresAt })) {
       settleError(new ToolFailure('The workspace could not accept the command for delivery.'), 'error');
     }
@@ -238,6 +239,8 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
               properties: {
                 viewId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$' },
                 title: { type: 'string', minLength: 1, maxLength: 200 },
+                artifactId: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
+                pinned: { type: 'boolean' },
               },
               required: ['viewId', 'title'], additionalProperties: false,
             },
@@ -303,7 +306,7 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
 }
 
 export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown>>): boolean {
-  return ['show', 'focus', 'minimise', 'restore', 'close', 'resize'].includes(String(args.operation)) ||
+  return ['show', 'focus', 'minimise', 'restore', 'close', 'move', 'resize', 'pin', 'unpin', 'cycle'].includes(String(args.operation)) ||
     args.operation === 'layout' ||
     args.operation === 'context-panel' && (args.action === 'close' ||
       args.action === 'open' && args.view === undefined);
@@ -311,7 +314,7 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
-  description: 'Create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary view in Dan’s active workspace, or change its context panel.',
+  description: 'Create and arrange views in Dan’s active workspace. Create a temporary interactive HTML app with create-html (HTML is sandboxed); pin or unpin an HTML app, cycle the stacked windows, or show, close, minimise, restore, focus, move and resize windows.',
   inputSchema: workspaceCommandSchema,
   sensitive: true,
   async execute(input, request, signal) {
@@ -324,7 +327,52 @@ export const workspaceCommandTool: BackendModule['tools'][number] = {
     if (!isWorkspaceCommand(input, generatedViewValidationOptions(request.server))) {
       throw new ToolRefusal('The workspace command or generated view is invalid.');
     }
-    await request.server.workspaceCommands.execute(request.server.ownerObjectId, input, signal);
+    let command = input as WorkspaceCommand;
+    let generatedHtmlView: GeneratedView | undefined;
+    if (command.operation === 'create-html') {
+      const artifactStore = request.server.workspaceArtifacts;
+      if (!artifactStore) throw new ToolRefusal('Generated HTML views are temporarily unavailable.');
+      let artifact;
+      try {
+        artifact = artifactStore.createTransientHtml(
+          request.server.ownerObjectId,
+          command.commandId,
+          command.title,
+          command.html,
+          command.sources,
+        );
+      } catch (error) {
+        throw new ToolRefusal(error instanceof Error ? error.message : 'The generated HTML view is invalid.');
+      }
+      generatedHtmlView = {
+        version: 1,
+        title: artifact.title,
+        renderer: 'html-app',
+        source: { id: 'workspace.html', status: 'complete' },
+        data: { artifactId: artifact.id },
+      };
+      command = { ...command, artifactId: artifact.id };
+    }
+    if (command.operation === 'pin' || command.operation === 'unpin') {
+      const artifactStore = request.server.workspaceArtifacts;
+      const artifactId = request.server.workspaceCommands.snapshot(request.server.ownerObjectId)
+        ?.windows.find(({ viewId }) => viewId === command.viewId)?.artifactId;
+      if (!artifactStore || !artifactId) throw new ToolRefusal('That window does not contain a pinnable HTML app.');
+      try {
+        if (command.operation === 'pin') {
+          await artifactStore.pinHtml(artifactId, request.server.ownerObjectId, signal);
+        } else {
+          await artifactStore.unpinHtml(artifactId, request.server.ownerObjectId, signal);
+        }
+      } catch (error) {
+        if (error instanceof WorkspaceArtifactNotFound) throw new ToolRefusal('That HTML app is no longer available.');
+        throw new ToolFailure('The HTML app could not be updated.');
+      }
+    }
+    await request.server.workspaceCommands.execute(request.server.ownerObjectId, command, signal);
+    if (command.operation === 'create-html' && generatedHtmlView) {
+      return { type: 'generated-view', view: generatedHtmlView };
+    }
     if (input.operation === 'create' || input.operation === 'update' ||
         (input.operation === 'context-panel' && input.action === 'open' && input.view !== undefined)) {
       return { type: 'generated-view', view: input.view };

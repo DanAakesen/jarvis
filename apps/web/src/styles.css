@@ -649,6 +649,12 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .workspace-resize-edge-corner { bottom: 0; right: 0; width: 24px; height: 24px; cursor: nwse-resize; }
 .workspace-resize-edge-corner::after { position: absolute; right: 7px; bottom: 7px; width: 7px; height: 7px; border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted); content: ""; }
 .workspace-view-content { min-width: 0; min-height: 0; flex: 1; overflow: auto; overflow-wrap: anywhere; }
+.workspace-view-content:has(.workspace-html-app) { display: flex; flex-direction: column; }
+.workspace-html-app { display: block; width: 100%; min-height: 260px; flex: 1 1 auto; border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface); }
+.html-app-feedback { display: grid; justify-items: start; gap: var(--space-2); }
+.html-app-feedback p { margin: 0; }
+.workspace-artifact-error { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.workspace-artifact-error p { margin: 0; color: var(--error); font-size: var(--type-small); }
 .workspace-view-content p { font-size: var(--type-small); }
 .workspace-view-content .secondary-button { margin-top: var(--space-3); }
 .workspace-view-content [role="alert"] { color: var(--error); }
@@ -1207,8 +1213,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .workspace-heading { align-items: flex-start; }
   .workspace-window-heading { align-items: flex-start; }
   .workspace-window-heading h3 { flex-basis: 100%; }
-  .workspace-window-actions { display: grid; width: 100%; grid-template-columns: repeat(4, 44px); justify-content: end; gap: 4px; }
-  .workspace-window-actions:not(:has(.workspace-arrange-menu)) { grid-template-columns: repeat(3, 44px); justify-content: end; }
+  .workspace-window-actions { display: grid; width: 100%; grid-template-columns: repeat(5, 44px); justify-content: end; gap: 4px; }
+  .workspace-window-actions:not(:has(.workspace-arrange-menu)) { grid-template-columns: repeat(4, 44px); justify-content: end; }
   .workspace-arrange-menu > summary { width: 44px; padding: 0; }
   .workspace-resize-edge-right { display: none; }
   .workspace-resize-edge-corner { cursor: ns-resize; }

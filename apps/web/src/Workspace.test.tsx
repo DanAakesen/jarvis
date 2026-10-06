@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRef, useMemo, useRef, useState } from 'react';
@@ -73,6 +73,89 @@ describe('Workspace', () => {
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(screen.getByRole('navigation', { name: 'Switch foreground view' })).not.toBeNull();
     expect(matchMedia).toHaveBeenCalledWith(PHONE_LAYOUT_MEDIA_QUERY);
+  });
+
+  it('layers newly created views on top and cycles focus through the stack', () => {
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={[]} />);
+    const create = (viewId: string, title: string) => act(() => {
+      expect(controller.current?.dispatch({
+        commandId: `create-${viewId}`, operation: 'create', viewId,
+        view: {
+          version: 1, title, renderer: 'list',
+          source: { id: 'factory.tasks', status: 'complete' },
+          data: { items: [{ title }] },
+        },
+      })).toBe(true);
+    });
+    create('first', 'First');
+    create('second', 'Second');
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    expect(canvas.getAttribute('data-arrangement')).toBe('layered');
+    expect(screen.getByRole('article', { name: 'First' }).style.getPropertyValue('--workspace-depth')).toBe('1');
+    expect(screen.getByRole('article', { name: 'Second' }).style.getPropertyValue('--workspace-depth')).toBe('2');
+    act(() => {
+      expect(controller.current?.dispatch({ commandId: 'cycle-next', operation: 'cycle', direction: 'next' })).toBe(true);
+    });
+    expect(screen.getByRole('article', { name: 'First' }).style.getPropertyValue('--workspace-depth')).toBe('2');
+    expect(screen.getByRole('article', { name: 'Second' }).style.getPropertyValue('--workspace-depth')).toBe('1');
+  });
+
+  it('pins HTML apps into persistent tabs and applies chat pin commands without reloading the iframe', async () => {
+    const controller = createRef<WorkspaceController>();
+    const user = userEvent.setup();
+    const artifactId = '12345678-1234-4234-8234-123456789abc';
+    const loadHtmlArtifact = vi.fn(async () => ({
+      id: artifactId, kind: 'html' as const, title: 'Research app', html: '<h1>Research</h1>',
+      sources: [], createdAt: '2026-10-06T10:00:00.000Z', pinned: false,
+    }));
+    const setHtmlArtifactPinned = vi.fn(async () => {});
+    render(<Workspace ref={controller} views={[]} loadHtmlArtifact={loadHtmlArtifact}
+      setHtmlArtifactPinned={setHtmlArtifactPinned} />);
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'create-research-app', operation: 'create-html', viewId: 'research-app',
+        title: 'Research app', artifactId, html: '<h1>Research</h1>', sources: [],
+      })).toBe(true);
+    });
+    const iframe = await screen.findByTitle('Research app');
+    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(iframe.getAttribute('srcdoc')).toContain('Content-Security-Policy');
+    await user.click(screen.getByRole('button', { name: 'Pin Research app' }));
+    await waitFor(() => expect(setHtmlArtifactPinned).toHaveBeenCalledWith(artifactId, true));
+    expect(screen.getByRole('navigation', { name: 'Pinned views' })).not.toBeNull();
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'unpin-research-app', operation: 'unpin', viewId: 'research-app',
+      })).toBe(true);
+    });
+    expect(screen.queryByRole('navigation', { name: 'Pinned views' })).toBeNull();
+    expect(screen.getByTitle('Research app')).toBe(iframe);
+  });
+
+  it('keeps pinned HTML views as tabs while phones show one foreground view', async () => {
+    phoneViewport();
+    const controller = createRef<WorkspaceController>();
+    const artifactId = '12345678-1234-4234-8234-123456789abc';
+    render(<Workspace ref={controller} views={[{
+      id: 'saved-research', title: 'Saved research', pinned: true,
+      content: { status: 'generated', view: {
+        version: 1, title: 'Saved research', renderer: 'html-app',
+        source: { id: 'workspace.html', status: 'complete' }, data: { artifactId },
+      } },
+    }]} loadHtmlArtifact={async () => ({
+      id: artifactId, kind: 'html', title: 'Saved research', html: '<p>Saved</p>',
+      sources: [], createdAt: '2026-10-06T10:00:00.000Z', pinned: true,
+    })} setHtmlArtifactPinned={async () => {}} />);
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.getByRole('navigation', { name: 'Pinned views' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Open pinned Saved research' })).not.toBeNull();
+    act(() => {
+      expect(controller.current?.dispatch({ commandId: 'close-saved', operation: 'close', viewId: 'saved-research' })).toBe(true);
+    });
+    expect(screen.queryByRole('article')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Open pinned Saved research' }));
+    expect(screen.getAllByRole('article')).toHaveLength(1);
   });
 
   it('bounds retained agent-closed windows and invalidates retained content when an ID is reused', () => {
@@ -543,7 +626,8 @@ describe('Workspace', () => {
     expect(workspaceStyles).toContain('width: min(300px, 100%); min-width: 0; max-width: 100%;');
     const mobile = workspaceStyles.slice(workspaceStyles.indexOf('@media (max-width: 900px)'));
     expect(mobile).toContain('.workspace-window-heading h3 { flex-basis: 100%; }');
-    expect(mobile).toContain('grid-template-columns: repeat(4, 44px); justify-content: end; gap: 4px;');
+    expect(mobile).toContain('grid-template-columns: repeat(5, 44px); justify-content: end; gap: 4px;');
+    expect(mobile).toContain('grid-template-columns: repeat(4, 44px); justify-content: end;');
     expect(mobile).toContain('.workspace-arrange-menu > summary { width: 44px; padding: 0; }');
   });
 

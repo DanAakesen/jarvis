@@ -132,6 +132,18 @@ test('accepts each allowlisted renderer and action without interpreting its cont
   }), { registeredTools: ['list_tasks'] }), false);
 });
 
+test('accepts only an artifact reference for sandboxed HTML app views', () => {
+  const view = {
+    ...listView(),
+    renderer: 'html-app',
+    source: { id: 'workspace.html', status: 'complete' },
+    data: { artifactId: '12345678-1234-4234-8234-123456789abc' },
+  };
+  assert.equal(isGeneratedView(view), true);
+  assert.equal(isGeneratedView({ ...view, data: { artifactId: 'not-an-id' } }), false);
+  assert.equal(isGeneratedView({ ...view, data: { artifactId: view.data.artifactId, html: '<script/>' } }), false);
+});
+
 test('rejects malformed, unsupported, extra-field, and invalid-action payloads', () => {
   assert.equal(isGeneratedView(listView({ data: { items: [{ title: 42 }] } })), false);
   assert.equal(isGeneratedView(listView({ version: 2 })), false);
@@ -186,9 +198,12 @@ test('defines and validates bounded workspace commands for the approved operatio
   const commands = [
     { ...base, operation: 'create', viewId: 'research', view: listView() },
     { ...base, operation: 'update', viewId: 'research', view: listView() },
-    ...['show', 'close', 'minimise', 'restore', 'focus'].map((operation) => ({
+    { ...base, operation: 'create-html', viewId: 'research', title: 'Research', html: '<h1>Findings</h1>',
+      sources: [{ title: 'Source', url: 'https://example.com/source' }] },
+    ...['show', 'close', 'minimise', 'restore', 'focus', 'pin', 'unpin'].map((operation) => ({
       ...base, operation, viewId: 'research',
     })),
+    { ...base, operation: 'cycle', direction: 'next' },
     { ...base, operation: 'move', viewId: 'research', x: 0.1, y: 0.2 },
     { ...base, operation: 'resize', viewId: 'research', width: 0.6, height: 0.5, x: 0.1, y: 0.2 },
     { ...base, operation: 'layout', arrangement: 'layered' },
@@ -197,8 +212,23 @@ test('defines and validates bounded workspace commands for the approved operatio
     ...['close', 'toggle'].map((action) => ({ ...base, operation: 'context-panel', action })),
   ];
 
-  assert.equal(workspaceCommandSchema.oneOf.length, 13);
+  assert.equal(workspaceCommandSchema.oneOf.length, 17);
   for (const command of commands) assert.equal(isWorkspaceCommand(command), true, command.operation);
+});
+
+test('bounds transient HTML commands by UTF-8 size and validates HTTPS sources', () => {
+  const command = {
+    commandId: 'html-1', operation: 'create-html', viewId: 'research', title: 'Research',
+    html: '<h1>Findings</h1>', sources: [{ title: 'Source', url: 'https://example.com/source' }],
+  };
+  assert.equal(isWorkspaceCommand({
+    ...command, artifactId: '12345678-1234-4234-8234-123456789abc',
+  }), true);
+  assert.equal(isWorkspaceCommand({ ...command, html: 'é'.repeat(262_145) }), false);
+  assert.equal(isWorkspaceCommand({ ...command, sources: [{ title: 'Local', url: 'http://localhost' }] }), false);
+  assert.equal(isWorkspaceCommand({ ...command, sources: Array.from({ length: 51 }, () => command.sources[0]) }), false);
+  assert.equal(isWorkspaceCommand({ ...command, html: '<script/>\u0000' }), false);
+  assert.equal(isWorkspaceCommand({ ...command, artifactId: '../wrong' }), false);
 });
 
 test('rejects invalid workspace IDs, geometry, operations, and generated-view allowlists', () => {

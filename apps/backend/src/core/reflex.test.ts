@@ -161,10 +161,10 @@ describe('Jev reflex classifier', () => {
     };
     const targets = createReflexTargets([workspaceCommandTool], [], undefined, snapshot);
     expect(createReflexTargets([workspaceCommandTool])).toEqual([]);
-    expect(targets).toHaveLength(16);
+    expect(targets).toHaveLength(20);
     expect(targets.every((target) => isWorkspaceCommand(target.arguments) && workspaceReflexSafe(target))).toBe(true);
     expect(targets.filter(({ arguments: args }) => args.viewId === 'tasks').map(({ arguments: args }) => args.operation))
-      .toEqual(['show', 'focus', 'minimise', 'restore', 'close', 'resize']);
+      .toEqual(['show', 'focus', 'minimise', 'restore', 'close', 'resize', 'move']);
     expect(targets.some(({ arguments: args }) => ['create', 'update'].includes(String(args.operation)))).toBe(false);
     expect(targets).toContainEqual(expect.objectContaining({ arguments: expect.objectContaining({
       operation: 'layout', arrangement: 'tiled',
@@ -183,6 +183,30 @@ describe('Jev reflex classifier', () => {
     expect(workspaceReflexSafe({
       choice: 'unsafe', tool: workspaceCommandTool, arguments: { operation: 'create' },
     })).toBe(false);
+  });
+
+  it('offers pin state and stack cycling only for the current workspace snapshot', () => {
+    const targets = createReflexTargets([workspaceCommandTool], [], undefined, {
+      windows: [
+        { viewId: 'research', title: 'Research', artifactId: '12345678-1234-4234-8234-123456789abc', pinned: false },
+        { viewId: 'saved', title: 'Saved', artifactId: '12345678-1234-4234-8234-123456789abd', pinned: true },
+      ],
+      contextPanelOpen: false,
+    });
+    expect(targets).toContainEqual(expect.objectContaining({
+      description: expect.stringContaining('pin the Jarvis HTML app "Research"'),
+      arguments: expect.objectContaining({ operation: 'pin', viewId: 'research' }),
+    }));
+    expect(targets).toContainEqual(expect.objectContaining({
+      description: expect.stringContaining('unpin the Jarvis HTML app "Saved"'),
+      arguments: expect.objectContaining({ operation: 'unpin', viewId: 'saved' }),
+    }));
+    expect(targets.some(({ arguments: args }) => args.operation === 'cycle' && args.direction === 'next')).toBe(true);
+    expect(targets).toContainEqual(expect.objectContaining({
+      description: expect.stringContaining('move the Jarvis workspace window "Research" to the upper left'),
+      arguments: expect.objectContaining({ operation: 'move', viewId: 'research', x: 0.04, y: 0.04 }),
+    }));
+    expect(targets.every((target) => isWorkspaceCommand(target.arguments))).toBe(true);
   });
 
   it('replays a completed chat action only for the same registered tool arguments', async () => {

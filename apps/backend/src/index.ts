@@ -629,6 +629,7 @@ try {
     ...(conversationAgent ? { conversationAgent } : {}),
     ...(teamsNotifications ? { teamsNotifications } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
+    ...(workspaceArtifacts ? { workspaceArtifacts } : {}),
   });
   if (checksLoop) app.addHook('onClose', async () => { await checksLoop.stop(); });
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });

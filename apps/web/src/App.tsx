@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import type { JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot } from '@jarvis/contracts';
+import type { GeneratedView, JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
@@ -19,10 +19,16 @@ import { SettingsPage } from './SettingsPage';
 import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
 import { backendFetch } from './backend-request';
-import { Workspace, PHONE_LAYOUT_MEDIA_QUERY, type WorkspaceController } from './Workspace';
+import { Workspace, PHONE_LAYOUT_MEDIA_QUERY, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { WorkspaceCommandContext } from './workspace-command-state';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { readVoiceWorkspacePreference } from './voice-workspace-preference';
+import {
+  loadPinnedHtmlArtifacts,
+  loadWorkspaceHtmlArtifact,
+  setWorkspaceHtmlPinned,
+  type WorkspaceHtmlArtifact,
+} from './workspace-html-artifacts';
 
 type ShellIconName = 'home' | 'factory' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close';
 
@@ -39,6 +45,22 @@ function activityLabel(event: JarvisActivityEvent | null): string {
     case 'failed': return 'Jarvis activity failed';
     case 'ended': return 'Jarvis activity ended';
   }
+}
+
+function pinnedArtifactView(artifact: WorkspaceHtmlArtifact): WorkspaceView {
+  const view: GeneratedView = {
+    version: 1,
+    title: artifact.title,
+    renderer: 'html-app',
+    source: { id: 'workspace.html', status: 'complete' },
+    data: { artifactId: artifact.id },
+  };
+  return {
+    id: `html-${artifact.id}`,
+    title: artifact.title,
+    pinned: true,
+    content: { status: 'generated', view },
+  };
 }
 
 function ShellIcon({ name }: { name: ShellIconName }) {
@@ -136,12 +158,52 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const workspaceController = useRef<WorkspaceController>(null);
   const contextPanel = useContextPanel();
   const [openWindows, setOpenWindows] = useState<WorkspaceSnapshot['windows']>([]);
+  const [pinnedHtmlViews, setPinnedHtmlViews] = useState<WorkspaceView[]>([]);
+  const [pinnedArtifactsError, setPinnedArtifactsError] = useState('');
+  const [pinnedArtifactsRefresh, setPinnedArtifactsRefresh] = useState(0);
   const onOpenWindowsChange = useCallback((windows: WorkspaceSnapshot['windows']) => {
     setOpenWindows((current) => JSON.stringify(current) === JSON.stringify(windows) ? current : windows);
   }, []);
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false);
+  useEffect(() => {
+    if (!signedIn || !config.backendUrl) {
+      setPinnedHtmlViews([]);
+      setPinnedArtifactsError('');
+      return;
+    }
+    const controller = new AbortController();
+    let active = true;
+    setPinnedArtifactsError('');
+    void loadPinnedHtmlArtifacts(config.backendUrl, getAccessToken, controller.signal).then((artifacts) => {
+      if (active) setPinnedHtmlViews(artifacts.map(pinnedArtifactView));
+    }).catch((error: unknown) => {
+      if (active && !controller.signal.aborted) {
+        setPinnedArtifactsError(error instanceof Error ? error.message : 'Pinned HTML apps could not be loaded.');
+      }
+    });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [config.backendUrl, getAccessToken, pinnedArtifactsRefresh, signedIn]);
+  const retryPinnedArtifacts = useCallback(() => setPinnedArtifactsRefresh((value) => value + 1), []);
+  const loadHtmlArtifact = useCallback((artifactId: string, signal: AbortSignal) => {
+    if (!config.backendUrl) return Promise.reject(new Error('Workspace artifacts are unavailable.'));
+    return loadWorkspaceHtmlArtifact(config.backendUrl, artifactId, getAccessToken, signal);
+  }, [config.backendUrl, getAccessToken]);
+  const setHtmlArtifactPinned = useCallback((artifactId: string, pinned: boolean) => {
+    if (!config.backendUrl) return Promise.reject(new Error('Workspace artifacts are unavailable.'));
+    return setWorkspaceHtmlPinned(config.backendUrl, artifactId, pinned, getAccessToken);
+  }, [config.backendUrl, getAccessToken]);
+  const askFromHtmlApp = useCallback((text: string) => {
+    if (pathname !== '/') return;
+    window.dispatchEvent(new CustomEvent('jarvis-workspace-ask', { detail: { text } }));
+  }, [pathname]);
+  const openUrlFromHtmlApp = useCallback((url: string) => {
+    askFromHtmlApp(`Open this URL in Chrome using pc_open: ${url}`);
+  }, [askFromHtmlApp]);
   const workspaceCommands = useMemo(() => ({
     snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen },
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
@@ -362,7 +424,18 @@ function ShellLayout({ signedIn, config, session, camera }: {
             <Outlet />
             {signedIn && (
               <div className="workspace-shell-area" hidden={pathname !== '/'}>
-                <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} />
+                <Workspace
+                  ref={workspaceController}
+                  views={pinnedHtmlViews}
+                  onVisibleViewsChange={setVoiceHasWindows}
+                  onOpenWindowsChange={onOpenWindowsChange}
+                  loadHtmlArtifact={loadHtmlArtifact}
+                  setHtmlArtifactPinned={setHtmlArtifactPinned}
+                  onHtmlAppAsk={askFromHtmlApp}
+                  onHtmlAppOpenUrl={openUrlFromHtmlApp}
+                  pinnedArtifactsError={pinnedArtifactsError}
+                  onRetryPinnedArtifacts={retryPinnedArtifacts}
+                />
               </div>
             )}
             {signedIn && pathname !== '/' && (

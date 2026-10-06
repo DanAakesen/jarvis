@@ -1,6 +1,6 @@
 export const generatedViewVersion = 1;
 export const generatedViewRenderers = Object.freeze([
-  'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image',
+  'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
 ]);
 export const generatedViewActionTypes = Object.freeze(['open-route', 'open-link', 'call-tool', 'window']);
 
@@ -11,6 +11,10 @@ const dateTime = { type: 'string', format: 'date-time' };
 const string = (maxLength, minLength = 0) => ({ type: 'string', maxLength, ...(minLength ? { minLength } : {}) });
 const object = (properties, required = Object.keys(properties)) => ({
   type: 'object', properties, required, additionalProperties: false,
+});
+const htmlArtifactSourceSchema = object({
+  title: string(200, 1),
+  url: { type: 'string', format: 'uri', maxLength: 2_048, pattern: '^https://' },
 });
 const array = (items, maxItems, minItems = 0) => ({
   type: 'array', items, maxItems, ...(minItems ? { minItems } : {}),
@@ -72,7 +76,7 @@ const listItem = object({
   action: { oneOf: [routeActionSchema, externalLinkActionSchema] },
 }, ['title']);
 const sourceSchema = object({
-  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation'] },
+  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'workspace.html'] },
   status: { type: 'string', enum: ['complete', 'partial', 'unavailable'] },
   updatedAt: dateTime,
   reason: string(500),
@@ -134,6 +138,7 @@ const dataSchemas = {
       alt: string(500, 1),
     }), 10),
   }),
+  'html-app': object({ artifactId: { type: 'string', format: 'uuid' } }),
 };
 
 export const generatedViewSchema = Object.freeze({
@@ -161,8 +166,11 @@ const workspaceOperation = (operation, required = []) => ({
 });
 const workspaceCommandVariants = [
   ...['create', 'update'].map((operation) => workspaceOperation(operation, ['viewId', 'view'])),
+  workspaceOperation('create-html', ['viewId', 'title', 'html', 'sources']),
   ...['show', 'close', 'minimise', 'restore', 'focus'].map((operation) =>
     workspaceOperation(operation, ['viewId'])),
+  ...['pin', 'unpin'].map((operation) => workspaceOperation(operation, ['viewId'])),
+  workspaceOperation('cycle', ['direction']),
   workspaceOperation('move', ['viewId', 'x', 'y']),
   workspaceOperation('resize', ['viewId', 'width', 'height']),
   workspaceOperation('layout', ['arrangement']),
@@ -179,9 +187,14 @@ export const workspaceCommandSchema = Object.freeze({
   type: 'object',
   properties: {
     commandId: workspaceCommandId,
-    operation: { enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel'] },
+    operation: { enum: ['create', 'update', 'create-html', 'show', 'close', 'minimise', 'restore', 'focus', 'pin', 'unpin', 'cycle', 'move', 'resize', 'layout', 'context-panel'] },
     viewId: workspaceViewId,
     view: generatedViewSchema,
+    title: string(200, 1),
+    html: string(524_288, 1),
+    sources: array(htmlArtifactSourceSchema, 50),
+    artifactId: { type: 'string', format: 'uuid' },
+    direction: { enum: ['next', 'previous'] },
     x: { type: 'number', minimum: 0, maximum: 1 },
     y: { type: 'number', minimum: 0, maximum: 1 },
     width: { type: 'number', minimum: 0.32, maximum: 0.92 },
@@ -263,7 +276,7 @@ function validAction(value, registeredTools) {
 }
 
 function validSource(source) {
-  if (!isObject(source) || !['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation'].includes(source.id) ||
+  if (!isObject(source) || !['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'workspace.html'].includes(source.id) ||
     !['complete', 'partial', 'unavailable'].includes(source.status) ||
     Object.keys(source).some((key) => !['id', 'status', 'updatedAt', 'reason', 'page'].includes(key))) return false;
   if (source.updatedAt !== undefined && (typeof source.updatedAt !== 'string' || Number.isNaN(Date.parse(source.updatedAt)))) return false;
@@ -351,6 +364,10 @@ function validData(renderer, data, trustedBlobHost) {
         data.images.length <= 10 && data.images.every((image) => isObject(image) &&
           Object.keys(image).every((key) => ['url', 'alt'].includes(key)) &&
           safeHttpsUrl(image.url, imageHosts, trustedBlobHost) && boundedString(image.alt, 500, 1));
+    case 'html-app':
+      return Object.keys(data).every((key) => key === 'artifactId') &&
+        typeof data.artifactId === 'string' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(data.artifactId);
     default:
       return false;
   }
@@ -416,6 +433,32 @@ export function isWorkspaceCommand(value, options = {}) {
       return hasOnly('viewId', 'view') &&
         typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId) &&
         isGeneratedView(value.view, options);
+    case 'create-html': {
+      const hasArtifactId = typeof value.artifactId === 'string' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value.artifactId);
+      const sourcesValid = Array.isArray(value.sources) && value.sources.length <= 50 &&
+        value.sources.every((source) => isObject(source) &&
+          Object.keys(source).every((key) => ['title', 'url'].includes(key)) &&
+          boundedString(source.title, 200, 1) && source.title === source.title.trim() &&
+          boundedString(source.url, 2_048, 1) && source.url === source.url.trim() &&
+          (() => {
+            try {
+              const url = new URL(source.url);
+              return url.protocol === 'https:' && Boolean(url.hostname) && !url.username && !url.password;
+            } catch {
+              return false;
+            }
+          })());
+      return hasOnly('viewId', 'title', 'html', 'sources', 'artifactId') &&
+        typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId) &&
+        boundedString(value.title, 200, 1) &&
+        typeof value.html === 'string' && value.html.length > 0 &&
+        new TextEncoder().encode(value.html).byteLength <= 512 * 1024 &&
+        !Array.from(value.html).some((character) => {
+          const code = character.charCodeAt(0);
+          return code === 0 || (code < 0x20 && ![0x09, 0x0a, 0x0d].includes(code)) || code === 0x7f;
+        }) && sourcesValid && (value.artifactId === undefined || hasArtifactId);
+    }
     case 'show':
     case 'close':
     case 'minimise':
@@ -423,6 +466,12 @@ export function isWorkspaceCommand(value, options = {}) {
     case 'focus':
       return hasOnly('viewId') &&
         typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId);
+    case 'pin':
+    case 'unpin':
+      return hasOnly('viewId') &&
+        typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId);
+    case 'cycle':
+      return hasOnly('direction') && ['next', 'previous'].includes(value.direction);
     case 'move':
       return hasOnly('viewId', 'x', 'y') &&
         typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId) &&

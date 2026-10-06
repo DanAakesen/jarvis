@@ -6,11 +6,14 @@ import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import { executeReflexAction, reflexTargets, registerChatReflex, undoPartialReflexAction } from './reflex.js';
+import type { WorkspaceArtifactStore } from '../database/workspace-artifact-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const ownerId = config.auth.ownerObjectId;
 const agentHeaders = { authorization: ['Bearer', 'header.agent.signature'].join(' '), 'x-jarvis-message-id': '101' };
 const userHeaders = { authorization: ['Bearer', 'header.user.signature'].join(' ') };
+const htmlArtifactId = '12345678-1234-4234-8234-123456789abc';
+const htmlSources = [{ title: 'Source', url: 'https://example.com/research' }];
 const view = {
   version: 1,
   title: 'Research summary',
@@ -28,6 +31,15 @@ afterEach(async () => {
 function fixture() {
   const broker = new WorkspaceCommandBroker();
   const records: unknown[] = [];
+  const workspaceArtifacts = {
+    dispose: vi.fn(),
+    createTransientHtml: vi.fn(() => ({
+      id: htmlArtifactId, kind: 'html' as const, title: 'Research app', html: '<h1>Findings</h1>',
+      sources: htmlSources, createdAt: '2026-10-06T10:00:00.000Z', pinned: false,
+    })),
+    pinHtml: vi.fn(async () => {}),
+    unpinHtml: vi.fn(async () => {}),
+  } as unknown as WorkspaceArtifactStore;
   const app = buildApp(config, undefined, {
     modules: [coreModule],
     auth: async (token) => token === 'header.user.signature'
@@ -35,9 +47,10 @@ function fixture() {
       : { kind: 'jarvis-agent', objectId: 'b331004a-777a-4e53-b7b0-40bf9ab3b9ef', tenantId: config.auth.tenantId },
     toolCallStore: { record: async (call) => { records.push(call); } },
     workspaceCommands: broker,
+    workspaceArtifacts,
   });
   apps.push(app);
-  return { app, broker, records };
+  return { app, broker, records, workspaceArtifacts };
 }
 
 describe('workspace command delivery', () => {
@@ -165,6 +178,7 @@ describe('workspace command delivery', () => {
       }
       return true;
     });
+
     const command: WorkspaceCommand = {
       commandId: 'create-research',
       operation: 'create',
@@ -206,6 +220,87 @@ describe('workspace command delivery', () => {
     expect(duplicate.json()).toEqual(first.json());
     expect(records).toHaveLength(2);
     expect(records.every((record) => JSON.stringify(record).includes('"redacted":true'))).toBe(true);
+    connection.close();
+  });
+
+  it('creates a transient HTML app through workspace_command and exposes only its artifact reference', async () => {
+    const { app, broker, records, workspaceArtifacts } = fixture();
+    let delivered!: { command: WorkspaceCommand; expiresAt: number };
+    let onDelivery!: () => void;
+    const deliveredPromise = new Promise<void>((resolve) => { onDelivery = resolve; });
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        delivered = data as typeof delivered;
+        onDelivery();
+      }
+      return true;
+    });
+    const request = app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+      payload: {
+        commandId: 'html-create', operation: 'create-html', viewId: 'research',
+        title: 'Research app', html: '<h1>Findings</h1>', sources: htmlSources,
+      },
+    });
+    await deliveredPromise;
+    expect(workspaceArtifacts.createTransientHtml).toHaveBeenCalledWith(
+      ownerId, 'html-create', 'Research app', '<h1>Findings</h1>', htmlSources,
+    );
+    expect(delivered.command).toMatchObject({
+      operation: 'create-html', artifactId: htmlArtifactId, title: 'Research app',
+    });
+    const ack = await app.inject({
+      method: 'POST', url: `/now/workspace/commands/${delivered.command.commandId}/ack`,
+      headers: userHeaders, payload: { sessionId: connection.sessionId, applied: true },
+    });
+    expect(ack.statusCode).toBe(204);
+    expect((await request).json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        type: 'generated-view',
+        view: {
+          renderer: 'html-app', title: 'Research app',
+          data: { artifactId: htmlArtifactId },
+        },
+      },
+    });
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true }, result: { redacted: true },
+    });
+    connection.close();
+  });
+
+  it('pins and unpins the HTML artifact identified by the authenticated workspace snapshot', async () => {
+    const { app, broker, workspaceArtifacts } = fixture();
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        const command = (data as { command: WorkspaceCommand }).command;
+        broker.acknowledge(ownerId, connection.sessionId, command.commandId, true);
+      }
+      return true;
+    });
+    broker.updateSnapshot(ownerId, connection.sessionId, {
+      windows: [{ viewId: 'research', title: 'Research app', artifactId: htmlArtifactId, pinned: false }],
+      contextPanelOpen: false,
+    });
+    const pin = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+      payload: { commandId: 'pin-research', operation: 'pin', viewId: 'research' },
+    });
+    expect(pin.json()).toMatchObject({ outcome: 'ok', result: { applied: true, operation: 'pin' } });
+    expect(workspaceArtifacts.pinHtml).toHaveBeenCalledWith(htmlArtifactId, ownerId, expect.any(AbortSignal));
+
+    broker.updateSnapshot(ownerId, connection.sessionId, {
+      windows: [{ viewId: 'research', title: 'Research app', artifactId: htmlArtifactId, pinned: true }],
+      contextPanelOpen: false,
+    });
+    const unpin = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+      payload: { commandId: 'unpin-research', operation: 'unpin', viewId: 'research' },
+    });
+    expect(unpin.json()).toMatchObject({ outcome: 'ok', result: { applied: true, operation: 'unpin' } });
+    expect(workspaceArtifacts.unpinHtml).toHaveBeenCalledWith(htmlArtifactId, ownerId, expect.any(AbortSignal));
     connection.close();
   });
 

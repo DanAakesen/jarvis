@@ -1,6 +1,6 @@
 export const generatedViewVersion: 1;
 export const generatedViewRenderers: readonly [
-  'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image',
+  'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
 ];
 export const generatedViewActionTypes: readonly ['open-route', 'open-link', 'call-tool', 'window'];
 
@@ -15,7 +15,7 @@ export interface GeneratedViewPage {
 }
 
 export interface GeneratedViewSource {
-  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation';
+  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation' | 'workspace.html';
   status: 'complete' | 'partial' | 'unavailable';
   updatedAt?: string;
   reason?: string;
@@ -96,16 +96,25 @@ export type GeneratedView =
     renderer: 'status';
     data: { label: string; value?: string; state: 'ok' | 'warning' | 'error' | 'unknown' };
   })
-  | (GeneratedViewBase & { renderer: 'image'; data: { images: { url: string; alt: string }[] } });
+  | (GeneratedViewBase & { renderer: 'image'; data: { images: { url: string; alt: string }[] } })
+  | (GeneratedViewBase & { renderer: 'html-app'; data: { artifactId: string } });
+
+export interface HtmlArtifactSource {
+  title: string;
+  url: string;
+}
 
 export interface WorkspaceSnapshot {
-  windows: readonly { viewId: string; title: string }[];
+  windows: readonly { viewId: string; title: string; artifactId?: string; pinned?: boolean }[];
   contextPanelOpen: boolean;
 }
 
 export type WorkspaceCommand =
   | { commandId: string; operation: 'create' | 'update'; viewId: string; view: GeneratedView }
+  | { commandId: string; operation: 'create-html'; viewId: string; title: string; html: string; sources: HtmlArtifactSource[]; artifactId?: string }
   | { commandId: string; operation: 'show' | 'close' | 'minimise' | 'restore' | 'focus'; viewId: string }
+  | { commandId: string; operation: 'pin' | 'unpin'; viewId: string }
+  | { commandId: string; operation: 'cycle'; direction: 'next' | 'previous' }
   | { commandId: string; operation: 'move'; viewId: string; x: number; y: number }
   | { commandId: string; operation: 'resize'; viewId: string; width: number; height: number; x?: number; y?: number }
   | { commandId: string; operation: 'layout'; arrangement: 'tiled' | 'layered' }

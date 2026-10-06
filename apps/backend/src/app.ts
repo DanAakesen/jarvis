@@ -33,6 +33,7 @@ import { createSleepModule } from './operations/sleep.js';
 import type { TeamsNotificationService } from './teams/service.js';
 import type { AwayModeStore } from './core/away-mode.js';
 import type { PhoneSessionStore } from './database/phone-session-store.js';
+import type { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 
 export interface BuildAppOptions {
@@ -65,6 +66,7 @@ export interface BuildAppOptions {
   readonly awayModeStore?: AwayModeStore | null;
   readonly phoneSessionStore?: PhoneSessionStore | null;
   readonly workspaceCommands?: WorkspaceCommandBroker;
+  readonly workspaceArtifacts?: WorkspaceArtifactStore;
 }
 
 declare module 'fastify' {
@@ -96,6 +98,7 @@ declare module 'fastify' {
     awayModeStore: AwayModeStore | null;
     phoneSessionStore: PhoneSessionStore | null;
     workspaceCommands: WorkspaceCommandBroker;
+    workspaceArtifacts: WorkspaceArtifactStore | null;
   }
 }
 
@@ -162,6 +165,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);
   app.addHook('onClose', async () => { workspaceCommands.dispose(); });
+  app.decorate('workspaceArtifacts', options.workspaceArtifacts ?? null);
+  app.addHook('onClose', async () => { app.workspaceArtifacts?.dispose(); });
   const unsubscribeTaskEvents = app.eventHub.subscribe((event) => {
     void (async () => {
       let state: Awaited<ReturnType<AwayModeStore['read']>> | undefined;
