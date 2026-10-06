@@ -61,6 +61,7 @@ export interface ConversationStore {
     readonly language?: ConversationLanguage;
     readonly interrupted?: boolean;
     readonly sourceItemId?: string;
+    readonly allowEndedSession?: boolean;
   }): Promise<ConversationMessage | null>;
   updateMessage?(messageId: string, text: string): Promise<ConversationMessage | null>;
   getDanMessageIdBySourceItemId(sourceItemId: string): Promise<string | null>;

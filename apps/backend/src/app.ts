@@ -33,7 +33,9 @@ import { createSleepModule } from './operations/sleep.js';
 import type { TeamsNotificationService } from './teams/service.js';
 import type { AwayModeStore } from './core/away-mode.js';
 import type { PhoneSessionStore } from './database/phone-session-store.js';
+import type { TaskStatusNotificationStore } from './database/task-status-notification-store.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
+import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
 
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
@@ -65,6 +67,7 @@ export interface BuildAppOptions {
   readonly teamsNotifications?: TeamsNotificationService | null;
   readonly awayModeStore?: AwayModeStore | null;
   readonly phoneSessionStore?: PhoneSessionStore | null;
+  readonly taskStatusNotificationStore?: TaskStatusNotificationStore | null;
   readonly workspaceCommands?: WorkspaceCommandBroker;
 }
 
@@ -97,6 +100,7 @@ declare module 'fastify' {
     teamsNotifications: TeamsNotificationService | null;
     awayModeStore: AwayModeStore | null;
     phoneSessionStore: PhoneSessionStore | null;
+    taskStatusNotificationStore: TaskStatusNotificationStore | null;
     workspaceCommands: WorkspaceCommandBroker;
   }
 }
@@ -165,20 +169,44 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);
   app.addHook('onClose', async () => { workspaceCommands.dispose(); });
+  app.decorate('settingsStore', options.settingsStore ?? null);
+  app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
+  app.decorate('usageStore', options.usageStore ?? null);
+  app.decorate('conversationStore', options.conversationStore ?? null);
+  app.decorate('sandboxHeartbeat', options.sandboxHeartbeat ?? null);
+  if (options.sandboxHeartbeat) {
+    app.addHook('onClose', async () => { await options.sandboxHeartbeat!.stop(); });
+  }
+  app.decorate('conversationAgent', options.conversationAgent ?? null);
+  app.decorate('reflexClassifier', options.reflexClassifier ?? null);
+  app.decorate('browserAgent', options.browserAgent ?? null);
+  app.decorate('teamsNotifications', options.teamsNotifications ?? null);
+  app.decorate('phoneSessionStore', options.phoneSessionStore ?? null);
+  app.decorate('taskStatusNotificationStore', options.taskStatusNotificationStore ?? null);
+  const notifyTaskStatus = app.taskStatusNotificationStore && app.taskStore &&
+    app.conversationStore && app.awayModeStore
+    ? createTaskStatusNotificationHandler({
+      tasks: app.taskStore,
+      conversations: app.conversationStore,
+      awayMode: app.awayModeStore,
+      teams: app.teamsNotifications,
+      notifications: app.taskStatusNotificationStore,
+      onError: () => app.log.warn('task_status_notification.failed'),
+    })
+    : undefined;
   const unsubscribeTaskEvents = app.eventHub.subscribe((event) => {
     void (async () => {
-      let state: Awaited<ReturnType<AwayModeStore['read']>> | undefined;
+      let away: boolean;
       try {
-        state = await app.awayModeStore?.read();
+        away = (await app.awayModeStore?.read())?.away ?? false;
       } catch {
         app.log.warn('away_mode.task_route_failed');
         return;
       }
-      const away = state?.away ?? false;
-      if (!away) {
-        app.nowEventHub.publish({ type: 'refresh' });
-        return;
-      }
+      if (!away) app.nowEventHub.publish({ type: 'refresh' });
+
+      const handled = await notifyTaskStatus?.(event, away) ?? false;
+      if (!away || handled) return;
 
       const payload = event.payload;
       const nextState = typeof payload === 'object' && payload !== null && !Array.isArray(payload)
@@ -196,19 +224,6 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     })();
   });
   app.addHook('onClose', async () => { unsubscribeTaskEvents(); });
-  app.decorate('settingsStore', options.settingsStore ?? null);
-  app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
-  app.decorate('usageStore', options.usageStore ?? null);
-  app.decorate('conversationStore', options.conversationStore ?? null);
-  app.decorate('sandboxHeartbeat', options.sandboxHeartbeat ?? null);
-  if (options.sandboxHeartbeat) {
-    app.addHook('onClose', async () => { await options.sandboxHeartbeat!.stop(); });
-  }
-  app.decorate('conversationAgent', options.conversationAgent ?? null);
-  app.decorate('reflexClassifier', options.reflexClassifier ?? null);
-  app.decorate('browserAgent', options.browserAgent ?? null);
-  app.decorate('teamsNotifications', options.teamsNotifications ?? null);
-  app.decorate('phoneSessionStore', options.phoneSessionStore ?? null);
   registerModules(app, options.modules ?? [
     coreModule,
     conversationModule,

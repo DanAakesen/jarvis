@@ -362,6 +362,13 @@ confirms completion. The browser and hosted agent service identities do not rece
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
 
+Chat-created tasks retain their originating message ID. Committed Done,
+NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
+status message with the task ID, outcome, and validated GitHub PR link to that
+conversation. A SQL task/state key prevents repeat delivery across restarts;
+away mode routes through the existing Teams notification service, while active
+voice sessions speak the same status through the existing voice announcer.
+
 `POST /factory/tasks/:id/controls` accepts only `steer`, `pause`, `resume`, `recover`, or
 `cancel`; it uses the default Dan-only authentication and never accepts a requested
 task state. The dispatcher validates the current state, uses the Foundry client for

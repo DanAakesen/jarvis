@@ -15,6 +15,7 @@ import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createPhoneSessionStore } from './database/phone-session-store.js';
 import { createTaskStore } from './database/task-store.js';
+import { createTaskStatusNotificationStore } from './database/task-status-notification-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
 import { createTaskRecoveryStore } from './database/recovery-store.js';
 import { createCredentialStatusStore } from './database/credential-status-store.js';
@@ -392,6 +393,7 @@ try {
     : null;
   const projectStore = database ? createProjectStore(database.pool, trackedRepositories) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
+  const taskStatusNotificationStore = database ? createTaskStatusNotificationStore(database.pool) : undefined;
   const teamsAudioStore = config.teams ? createEphemeralAudioStore() : undefined;
   const teamsSpeech = config.teams && credential
     ? createAzureSpeechSynthesizer(
@@ -642,6 +644,7 @@ try {
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
+      ...(taskStatusNotificationStore ? { taskStatusNotificationStore } : {}),
       ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),

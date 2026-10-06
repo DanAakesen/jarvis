@@ -494,7 +494,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     upstream!.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
     await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
     expect(received.find((event) => event.type === 'response.create')).toMatchObject({
-      response: { instructions: 'Speak this exact status update to Dan, verbatim: A task has finished.' },
+      response: { instructions: 'Speak this exact status update to Dan, verbatim: Task 1 is done.' },
     });
   });
 
@@ -595,7 +595,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
   });
 
   it.each(['session.created', 'session.updated'])(
-    'delivers watch notifications on the Danish hosted fallback after %s without status subscriptions',
+    'delivers Danish watch notifications after %s and tracks away mode with task status',
     async (readyType) => {
       const received: Record<string, unknown>[] = [];
       let upstream!: WebSocket;
@@ -633,8 +633,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
       await upstreamEvent(readyType);
       expect(connectDanish).toHaveBeenCalledOnce();
       expect(visionWatch.registerVoice).toHaveBeenCalledExactlyOnceWith('41', expect.any(Function));
-      expect(taskSubscription).not.toHaveBeenCalled();
-      expect(nowSubscription).not.toHaveBeenCalled();
+      expect(taskSubscription).toHaveBeenCalledOnce();
+      expect(nowSubscription).toHaveBeenCalledOnce();
       expect(received).toEqual([]);
 
       app.nowEventHub.publish({ type: 'status', kind: 'pull_request_ready' });
