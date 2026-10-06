@@ -17,7 +17,7 @@ const sensitiveRequestPattern =
 const sensitiveIdentifierPattern = /(?<!\d)\d{3}[- ]?\d{2}[- ]?\d{4}(?!\d)/u;
 const sensitiveNumericPattern = /(?<!\d)\d{4,8}(?!\d)/u;
 const riskyActionPattern =
-  /\b(?:send|submit|delete|remove|erase|overwrite|replace|discard|reset|clear|format|reformat|drop|revert|pay|payment|purchase|post|transfer|system settings|settings|confirm)\b/iu;
+  /\b(?:send|submit|delete|remove|erase|overwrite|replace|discard|reset|clear|format|reformat|drop|pay|payment|purchase|post|push|transfer)\b/iu;
 
 export interface PcActElement {
   readonly index: number;
@@ -216,7 +216,7 @@ function validSnapshot(value: unknown): value is PcActSnapshot {
   return isRecord(value) && Object.keys(value).length === 3 &&
     typeof value.snapshotId === 'string' &&
     /^[\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu.test(value.snapshotId) &&
-    (value.application === 'vscode' || value.application === 'explorer') &&
+    typeof value.application === 'string' && /^[\p{L}\p{N}_.-]{1,128}$/u.test(value.application) &&
     Array.isArray(value.elements) && value.elements.length <= 100 &&
     value.elements.every((element, index) => isRecord(element) &&
       Object.keys(element).length === 3 && element.index === index &&
@@ -240,7 +240,7 @@ function approvalSummary(
   application: PcActSnapshot['application'],
   target: PcActElement,
 ): string {
-  const appName = application === 'vscode' ? 'VS Code' : 'File Explorer';
+  const appName = application === 'vscode' ? 'VS Code' : application === 'explorer' ? 'File Explorer' : application;
   const targetName = target.name.replace(/[^\p{L}\p{N} .,:'/-]/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, 80);
   const description = targetName ? `${target.role} "${targetName}"` : target.role;
   return operation === 'type'

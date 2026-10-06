@@ -7,9 +7,29 @@ namespace Jarvis.PcBridge.Core.Tests;
 public sealed class CommandPolicyTests
 {
     [Theory]
+    [InlineData("play_pause", 0xB3)]
+    [InlineData("next", 0xB0)]
+    [InlineData("previous", 0xB1)]
+    [InlineData("volume_up", 0xAF)]
+    [InlineData("volume_down", 0xAE)]
+    [InlineData("mute", 0xAD)]
+    public void Maps_media_actions_to_the_windows_media_virtual_key(string action, ushort expectedKey)
+    {
+        Assert.True(CommandPolicy.TryGetMediaVirtualKey(action, out var actualKey));
+        Assert.Equal(expectedKey, actualKey);
+    }
+
+    [Theory]
     [InlineData("open_url", """{"url":"https://example.com/repo"}""")]
     [InlineData("open_app", """{"app":"vscode"}""")]
-    [InlineData("open_app", """{"app":"terminal"}""")]
+    [InlineData("open_app", """{"app":"Spotify"}""")]
+    [InlineData("open_app", """{"app":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}""")]
+    [InlineData("media", """{"action":"play_pause"}""")]
+    [InlineData("media", """{"action":"next"}""")]
+    [InlineData("media", """{"action":"previous"}""")]
+    [InlineData("media", """{"action":"volume_up"}""")]
+    [InlineData("media", """{"action":"volume_down"}""")]
+    [InlineData("media", """{"action":"mute"}""")]
     [InlineData("open_folder", """{"relativePath":"jarvis\\apps\\backend"}""")]
     [InlineData("active_window", "{}")]
     [InlineData("focus_window", """{"title":"Jarvis - Visual Studio Code"}""")]
@@ -36,7 +56,11 @@ public sealed class CommandPolicyTests
     [InlineData("open_url", """{"url":"javascript:alert(1)"}""")]
     [InlineData("open_url", """{"url":"https://user@example.com"}""")]
     [InlineData("open_url", """{"url":"file:///C:/secret.txt"}""")]
-    [InlineData("open_app", """{"app":"powershell"}""")]
+    [InlineData("open_app", """{"app":""}""")]
+    [InlineData("open_app", """{"app":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}""")]
+    [InlineData("open_app", """{"app":"spotify\n"}""")]
+    [InlineData("media", """{"action":"launch"}""")]
+    [InlineData("media", """{"action":"mute","confirmed":true}""")]
     [InlineData("open_folder", """{"relativePath":"..\\secrets"}""")]
     [InlineData("open_folder", """{"relativePath":"C:\\Repo\\jarvis"}""")]
     [InlineData("open_folder", """{"relativePath":"jarvis\\..\\secrets"}""")]

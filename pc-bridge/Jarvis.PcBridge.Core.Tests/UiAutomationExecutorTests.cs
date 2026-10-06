@@ -77,7 +77,7 @@ public sealed class UiAutomationExecutorTests
     }
 
     [Fact]
-    public void Refuses_stale_controls_and_disallowed_foreground_apps()
+    public void Refuses_stale_controls_and_accepts_any_safe_foreground_app_identifier()
     {
         var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1",
         [
@@ -92,8 +92,24 @@ public sealed class UiAutomationExecutorTests
         Assert.Equal("stale", stale.Code);
 
         provider.View = provider.View with { Application = "chrome" };
+        Assert.Equal("chrome", executor.Observe(CancellationToken.None).Application);
+        provider.View = provider.View with { Application = "chrome browser" };
         var blocked = Assert.Throws<UiAutomationRefusedException>(() => executor.Observe(CancellationToken.None));
         Assert.Equal("not_allowed", blocked.Code);
+    }
+
+    [Fact]
+    public void Clicking_a_settings_control_does_not_require_confirmation()
+    {
+        var provider = new FakeUiAutomationProvider(new UiAutomationView("settings", "window-1",
+        [
+            Control("settings", "button", "Settings"),
+        ]));
+        var executor = new UiAutomationExecutor(provider);
+        var snapshot = executor.Observe(CancellationToken.None);
+
+        Assert.True(executor.Act(snapshot.SnapshotId, 0, UiAutomationAction.Click, null, false, CancellationToken.None));
+        Assert.Single(provider.Actions);
     }
 
     [Theory]

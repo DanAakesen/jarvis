@@ -84,7 +84,7 @@ async function connectBridge(url: string, token = bridgeToken): Promise<WebSocke
 
 async function callTool(
   app: ReturnType<typeof buildApp>,
-  tool: 'pc_open' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
+  tool: 'pc_open' | 'pc_media' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
   payload: Record<string, unknown>,
 ) {
   return app.inject({
@@ -133,6 +133,74 @@ describe('authenticated PC bridge protocol', () => {
     expect(statuses).toEqual([false, true]);
   });
 
+  it('opens a named installed app and refuses ambiguous or unknown names clearly', async () => {
+    const { app, record } = fixture();
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const commands: Array<Record<string, unknown>> = [];
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      commands.push(command);
+      const appName = (command.arguments as Record<string, unknown>).app;
+      const response = appName === 'does-not-exist'
+        ? { id: command.id, type: 'error', error: 'not_found' }
+        : {
+          id: command.id,
+          type: 'result',
+          result: appName === 'Spotify'
+            ? { opened: true, app: 'Spotify' }
+            : { opened: false, candidates: ['Visual Studio Code', 'Visual Studio Code Insiders'] },
+        };
+      bridge.send(JSON.stringify(response));
+    });
+
+    const opened = await callTool(app, 'pc_open', { target: 'app', value: 'Spotify' });
+    expect(opened.json()).toMatchObject({ outcome: 'ok', result: { opened: true, app: 'Spotify' } });
+
+    const ambiguous = await callTool(app, 'pc_open', { target: 'app', value: 'Visual Studio' });
+    expect(ambiguous.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'More than one installed app matches. Choose one: "Visual Studio Code", "Visual Studio Code Insiders".' },
+    });
+
+    const missing = await callTool(app, 'pc_open', { target: 'app', value: 'does-not-exist' });
+    expect(missing.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'No installed app matched that name; nothing was launched.' },
+    });
+    const edge = await callTool(app, 'pc_open', { target: 'app', value: 'Microsoft Edge' });
+    expect(edge.json()).toMatchObject({ outcome: 'refused' });
+    expect(commands).toHaveLength(3);
+    expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['ok', 'refused', 'refused', 'refused']);
+  });
+
+  it.each(['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const)(
+    'routes pc_media %s through the authenticated bridge without confirmation',
+    async (action) => {
+      const runConfirmed = vi.fn(async (_summary: string, operation: () => Promise<unknown>) => operation());
+      const { app, record } = fixture({ runConfirmed });
+      const url = await listen(app);
+      const bridge = await connectBridge(url);
+      const commands: Array<Record<string, unknown>> = [];
+      bridge.on('message', (data) => {
+        const command = JSON.parse(data.toString()) as Record<string, unknown>;
+        commands.push(command);
+        bridge.send(JSON.stringify({
+          id: command.id,
+          type: 'result',
+          result: { controlled: true, action },
+        }));
+      });
+
+      const response = await callTool(app, 'pc_media', { action });
+
+      expect(response.json()).toMatchObject({ outcome: 'ok', result: { controlled: true, action } });
+      expect(commands).toMatchObject([{ command: 'media', arguments: { action } }]);
+      expect(runConfirmed).not.toHaveBeenCalled();
+      expect(record.mock.calls[0]?.[0]).toMatchObject({ tool: 'pc_media', outcome: 'ok' });
+    },
+  );
+
   it('runs pc_act through the authenticated bridge and redacts its audit and step activity', async () => {
     const onPcActStep = vi.fn();
     const planner: PcActPlanner = {
@@ -150,7 +218,7 @@ describe('authenticated PC bridge protocol', () => {
       const result = command.command === 'uia_snapshot'
         ? {
           snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
-          application: 'vscode',
+          application: 'spotify',
           elements: [{ index: 0, role: 'button', name: 'Open project' }],
         }
         : { acted: true, action: 'click' };
@@ -390,7 +458,7 @@ describe('authenticated PC bridge protocol', () => {
       });
     });
 
-  it('reports offline and refuses inputs outside the backend allow-list', async () => {
+  it('reports offline and refuses invalid URLs, app names, and folder paths', async () => {
     const { app } = fixture();
     await app.ready();
 
@@ -410,6 +478,12 @@ describe('authenticated PC bridge protocol', () => {
       outcome: 'refused',
       result: { refused: 'Choose a folder under C:\\Repo using a relative path.' },
     });
+    const invalidApp = await callTool(app, 'pc_open', { target: 'app', value: 'x'.repeat(129) });
+    expect(invalidApp.statusCode).toBe(400);
+    expect(invalidApp.json()).toMatchObject({ error: 'Invalid request' });
+    const invalidMedia = await callTool(app, 'pc_media', { action: 'execute' });
+    expect(invalidMedia.statusCode).toBe(400);
+    expect(invalidMedia.json()).toMatchObject({ error: 'Invalid request' });
   });
 
   it('waits for the final status write before backend shutdown completes', async () => {
