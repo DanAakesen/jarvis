@@ -19,6 +19,8 @@ export function createAwayModeStore(
   pool: sql.ConnectionPool,
   onModeChanged: (state: AwayModeState) => void = () => {},
 ): AwayModeStore {
+  let cachedState: AwayModeState | undefined;
+
   async function read(request: sql.Request | sql.Transaction): Promise<AwayModeState> {
     const result = await (request instanceof sql.Transaction ? new sql.Request(request) : request)
       .input('scope', sql.NVarChar(64), 'global')
@@ -76,6 +78,7 @@ export function createAwayModeStore(
       try { await transaction.rollback(); } catch { /* Preserve the sanitized store error. */ }
       throw new Error('Away mode could not be saved');
     }
+    cachedState = next;
     if (modeChanged) onModeChanged(next);
     return next;
   }
@@ -84,7 +87,8 @@ export function createAwayModeStore(
     async read() {
       try {
         const request = databaseReadRequest(pool);
-        return await read(request);
+        cachedState = await read(request);
+        return cachedState;
       } catch {
         throw new Error('Away mode is unavailable');
       }
@@ -98,6 +102,9 @@ export function createAwayModeStore(
     },
     observePresence(away, at = new Date()) {
       if (away !== null && typeof away !== 'boolean') throw new TypeError('Presence state is invalid');
+      if (cachedState && observeAwayPresence(cachedState, away, at) === cachedState) {
+        return Promise.resolve(cachedState);
+      }
       return update((state) => observeAwayPresence(state, away, at));
     },
   };

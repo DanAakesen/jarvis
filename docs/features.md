@@ -69,7 +69,7 @@ Status as of 5 October 2026.
 | Repository workspace | Sandbox clones the project repo and works on `jarvis/task-…`; agent questions surface in Needs attention | Background | — | In progress | P2-13 |
 | Frequent pushes | Agents push work in progress after each step | Background | — | Built | P2-09 |
 | GitHub App tokens | Sandboxes push with one-hour tokens scoped to the task's repository | Background | — | Built (enabled; live push check after P2-13) | P3-02 |
-| Heartbeat and crash detection | Active invocation failures move the task to Needs attention; completed-turn expiry preserves task state, including first-poll and cleanup races; every poll logs a secret-safe state decision | Background | Backend logs | Built (offline; regression fix) | P2-06, P2-14 |
+| Heartbeat and crash detection | Active invocation failures move the task to Needs attention; completed-turn expiry preserves task state, including first-poll and cleanup races; only tracked sandboxes are polled, so idle does not cause recurring SQL heartbeats | Background | Backend logs | Built offline | P2-06, P2-14, P5-13 |
 | Disk headroom | Low disk moves a task to Needs attention instead of failing | Background | Task detail | Built | P6-07 |
 | Codex limit handling | A Codex usage-limit stop is reported clearly; other tasks continue | Background | Task detail | Built | P6-05 |
 | Parallel tasks | Several tasks run within global and per-project limits | Background | Settings | Built (offline load test) | P2-05, P6-05, P6-08 |
@@ -82,7 +82,7 @@ Status as of 5 October 2026.
 | All repositories | See every repository and "Manage with Jarvis" | Both | Projects | In progress | P3-13 |
 | New project by voice | Give a name and description; Jarvis creates and scaffolds the repo from the templates | Voice/chat | — | In progress | P3-12 |
 | New projects defaults | Owner, visibility, templates, agent, policy, limits for new projects | Screen | Settings | Built | P3-11 |
-| Webhook receiver | GitHub events are verified and recorded once | Background | — | Built (live webhook setup pending) | P3-03 |
+| Webhook receiver | Verify GitHub signatures; persist mapped events only for active managed repositories, acknowledging unsupported or untracked events without SQL | Background | — | Built offline; live webhook setup pending | P3-03, P5-13 |
 | PR, run, release and deploy records | Webhook events stored as pull requests, workflow runs, releases, deployments | Background | — | Built (live webhook setup pending) | P3-04 |
 | Checks loop | A failed task-PR check is stored in private Blob and sent to the same task; bounded repairs move to Needs attention when exhausted | Background | Task detail | Built | P3-05 |
 | Project policy and merge | On task completion, open or reuse an App-backed PR only when the task branch is ahead of the default branch; record refusals as Needs attention, then stop at a verified green PR or squash-merge via the GitHub App when checks, branch freshness and protection rules pass | Background | Project settings; task detail | Built offline with fake GitHub coverage; coordinator live test-repository acceptance pending | P3-06, P3-14 |
@@ -100,7 +100,7 @@ Status as of 5 October 2026.
 | Credentials status | See credential expiry and renewal status (never values) | Screen | Settings | Built | P2-08 |
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |
 | Usage and cost | Sandbox, model, voice, Codex and Copilot usage per task, project, period, plus the current UTC-day web-research call count | Screen | Usage | Built offline | P2-12, P6-01, P7-14 |
-| Event archive | Old task events move to Blob and load on demand | Background | Task detail | Built | P6-03 |
+| Event archive | Old task events move to Blob and load on demand; idle checks skip SQL until a sandbox is active | Background | Task detail | Built offline | P6-03, P5-13 |
 | Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Now + email | Main page; email-only Azure Monitor action group | Built (offline; live Azure delivery unverified) | P6-02 |
 | Backup drill | Database restore documented | Background | — | Planned | P6-04 |
 | Runbook | Deploy, rollback, key rotation, task recovery, sleep, and temporary SQL access | — | [Operations runbook](runbook.md) | In progress | P6-06 |
