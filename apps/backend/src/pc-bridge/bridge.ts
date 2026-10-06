@@ -328,7 +328,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           required: ['app'],
           additionalProperties: false,
         },
-        execute: (input, _request, signal) => runPcClose(bridge, input, signal),
+        execute: (input, request, signal) => runPcClose(bridge, input, signal, request.log),
       },
       {
         name: 'pc_media',
@@ -656,12 +656,13 @@ async function runPcClose(
   bridge: PcBridgeConnection,
   input: unknown,
   signal: AbortSignal,
+  logger: PcBridgeTimingLogger,
 ): Promise<Record<string, unknown>> {
   if (!isRecord(input) || Object.keys(input).length !== 1 || typeof input.app !== 'string' ||
       !input.app.trim() || input.app.length > 128 || hasControlCharacters(input.app)) {
     throw new ToolRefusal('Name the app to close (1 to 128 characters).');
   }
-  return bridge.execute({ name: 'close_app', arguments: { app: input.app.trim() } }, signal);
+  return bridge.execute({ name: 'close_app', arguments: { app: input.app.trim() } }, signal, logger);
 }
 
 async function runPcMedia(
