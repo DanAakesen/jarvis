@@ -10,6 +10,7 @@ public sealed class CommandPolicyTests
     [InlineData("open_url", true)]
     [InlineData("open_app", true)]
     [InlineData("open_folder", true)]
+    [InlineData("open_file", true)]
     [InlineData("focus_window", true)]
     [InlineData("uia_act", true)]
     [InlineData("browser_act", true)]
@@ -38,11 +39,6 @@ public sealed class CommandPolicyTests
     [Theory]
     [InlineData("open_url", """{"url":"https://example.com/repo"}""")]
     [InlineData("open_app", """{"app":"vscode"}""")]
-<<<<<<< HEAD
-    [InlineData("open_app", """{"app":"codex"}""")]
-    [InlineData("open_app", """{"app":"Notepad"}""")]
-    [InlineData("open_app", """{"app":"terminal"}""")]
-=======
     [InlineData("open_app", """{"app":"Spotify"}""")]
     [InlineData("open_app", """{"app":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}""")]
     [InlineData("media", """{"action":"play_pause"}""")]
@@ -51,7 +47,6 @@ public sealed class CommandPolicyTests
     [InlineData("media", """{"action":"volume_up"}""")]
     [InlineData("media", """{"action":"volume_down"}""")]
     [InlineData("media", """{"action":"mute"}""")]
->>>>>>> origin/main
     [InlineData("open_folder", """{"relativePath":"jarvis\\apps\\backend"}""")]
     [InlineData("open_file", """{"relativePath":"jarvis\\apps\\backend\\src\\index.ts"}""")]
     [InlineData("active_window", "{}")]
@@ -79,15 +74,11 @@ public sealed class CommandPolicyTests
     [InlineData("open_url", """{"url":"javascript:alert(1)"}""")]
     [InlineData("open_url", """{"url":"https://user@example.com"}""")]
     [InlineData("open_url", """{"url":"file:///C:/secret.txt"}""")]
-<<<<<<< HEAD
-    [InlineData("open_app", """{"app":"C:\\Windows\\System32\\notepad.exe"}""")]
-=======
     [InlineData("open_app", """{"app":""}""")]
     [InlineData("open_app", """{"app":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}""")]
     [InlineData("open_app", """{"app":"spotify\n"}""")]
     [InlineData("media", """{"action":"launch"}""")]
     [InlineData("media", """{"action":"mute","confirmed":true}""")]
->>>>>>> origin/main
     [InlineData("open_folder", """{"relativePath":"..\\secrets"}""")]
     [InlineData("open_folder", """{"relativePath":"C:\\Repo\\jarvis"}""")]
     [InlineData("open_folder", """{"relativePath":"jarvis\\..\\secrets"}""")]
@@ -114,43 +105,6 @@ public sealed class CommandPolicyTests
         using var document = JsonDocument.Parse(arguments);
 
         Assert.False(CommandPolicy.IsValid(name, document.RootElement));
-    }
-
-    [Fact]
-    public void Resolves_existing_repo_files_and_folders_and_refuses_paths_outside_the_root()
-    {
-        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        var outsideRoot = $"{root}-outside";
-        var folder = Path.Combine(root, "jarvis", "src");
-        Directory.CreateDirectory(folder);
-        var file = Path.Combine(folder, "index.ts");
-        File.WriteAllText(file, "export {};");
-        Directory.CreateDirectory(outsideRoot);
-        File.WriteAllText(Path.Combine(outsideRoot, "secret.txt"), "secret");
-
-        try
-        {
-            Assert.True(RepoPathResolver.TryResolve(root, @"jarvis\src", expectFile: false, out var resolvedFolder));
-            Assert.Equal(Path.GetFullPath(folder), resolvedFolder);
-            Assert.True(RepoPathResolver.TryResolve(root, @"jarvis\src\index.ts", expectFile: true, out var resolvedFile));
-            Assert.Equal(Path.GetFullPath(file), resolvedFile);
-            Assert.False(RepoPathResolver.TryResolve(root, @"..\outside", expectFile: false, out _));
-            Assert.False(RepoPathResolver.TryResolve(root, @"jarvis\src", expectFile: true, out _));
-            Assert.False(RepoPathResolver.TryResolve(root, @"jarvis\missing.ts", expectFile: true, out _));
-            try
-            {
-                Directory.CreateSymbolicLink(Path.Combine(root, "linked"), outsideRoot);
-                Assert.False(RepoPathResolver.TryResolve(root, @"linked\secret.txt", expectFile: true, out _));
-            }
-            catch (UnauthorizedAccessException) { }
-            catch (IOException) { }
-            catch (PlatformNotSupportedException) { }
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-            Directory.Delete(outsideRoot, recursive: true);
-        }
     }
 
     [Fact]

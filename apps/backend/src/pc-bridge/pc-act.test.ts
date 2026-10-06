@@ -75,6 +75,26 @@ describe('pc_act Jev planner', () => {
     expect(init?.redirect).toBe('error');
   });
 
+  it('preserves escaped quotes in the exact prompt value for Codex', async () => {
+    const prompt = 'Review "jarvis" and keep the string verbatim.';
+    const fetcher = vi.fn(async () => jevResponse({
+      operation: { type: 'choice', choice: 'type', confidence: 0.99 },
+      target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
+      text_value: { type: 'choice', choice: 'value_0', confidence: 0.99 },
+      confidence: { type: 'score', score: 0.99 },
+    }));
+    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+
+    const result = await planner.decide({
+      goal: `Enter the exact prompt ${JSON.stringify(prompt)} in Codex.`,
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal);
+
+    expect(result).toEqual({ operation: 'type', confidence: 0.99, targetIndex: 0, text: prompt });
+  });
+
   it('refuses sensitive goals and missing Jev keys without making a request', async () => {
     const fetcher = vi.fn();
     const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);

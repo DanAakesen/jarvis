@@ -19,20 +19,31 @@ public static class RepoPathResolver
         resolvedPath = string.Empty;
         if (!CommandPolicy.TryNormalizeRepoPath(relativePath, out var normalized)) return false;
 
-        var canonicalRoot = Path.GetFullPath(root);
-        var candidate = Resolve(canonicalRoot, normalized);
-        var relativeToRoot = Path.GetRelativePath(canonicalRoot, candidate);
-        if (relativeToRoot is "." or ".." ||
-            relativeToRoot.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-            Path.IsPathRooted(relativeToRoot) ||
-            (expectFile ? !File.Exists(candidate) : !Directory.Exists(candidate)) ||
-            ContainsReparsePoint(canonicalRoot, candidate))
+        try
+        {
+            var canonicalRoot = Path.GetFullPath(root);
+            var candidate = Resolve(canonicalRoot, normalized);
+            var relativeToRoot = Path.GetRelativePath(canonicalRoot, candidate);
+            if (relativeToRoot is "." or ".." ||
+                relativeToRoot.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+                Path.IsPathRooted(relativeToRoot) ||
+                (expectFile ? !File.Exists(candidate) : !Directory.Exists(candidate)) ||
+                ContainsReparsePoint(canonicalRoot, candidate))
+            {
+                return false;
+            }
+
+            resolvedPath = candidate;
+            return true;
+        }
+        catch (IOException)
         {
             return false;
         }
-
-        resolvedPath = candidate;
-        return true;
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static bool ContainsReparsePoint(string root, string path)

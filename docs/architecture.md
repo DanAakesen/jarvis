@@ -665,19 +665,6 @@ to `/pc-bridge/connect` with subprotocol `jarvis.pc.v1`; it opens no listener or
 firewall port and retries after disconnect. Entra app-only identities, other
 delegated apps, and users other than Dan are rejected at the route boundary.
 
-<<<<<<< HEAD
-The backend registers `pc_open` and `pc_active_window` in its existing tool
-registry. Protocol messages are bounded to 64 KiB, correlate UUID command IDs,
-cap in-flight work, and time out after 15 seconds. Both backend validation and
-the companion's portable core validate app display names; the Windows companion
-resolves known apps or exact Start Menu shortcut names and launches no arbitrary
-command line. VS Code file and folder paths are resolved below `C:\Repo`, and
-traversal, missing targets, and reparse-point escapes are refused. `pc_open`
-persists tool outcomes while redacting its paths, URLs, and results from the
-generic audit. Active-window
-title reads and exact-title window focus remain available. URL commands are
-routed through the browser executor: if the extension is connected and
-=======
 The backend registers `pc_open`, `pc_media`, and `pc_active_window` in its
 existing tool registry. Protocol messages are bounded to 64 KiB, correlate UUID
 command IDs, cap in-flight work, and time out after 15 seconds. Both backend
@@ -693,7 +680,6 @@ raw shell or arbitrary command execution tool. `pc_media` accepts only
 play/pause, next, previous, volume up/down, and mute, and sends the corresponding
 fixed Windows media virtual key. URL commands are routed through the browser
 executor: if the extension is connected and
->>>>>>> origin/main
 Chrome automation is enabled, it opens the URL in Dan's normal Chrome; if the
 extension is disconnected, the current companion launches the installed Chrome
 executable directly and identifies that fallback in the tool result. Websites
@@ -706,6 +692,13 @@ execution; its only direct executable launch for a URL is the Chrome fallback.
 Offline requests receive a clear refusal; other failures are sanitized. The
 companion never logs tokens, device codes, command arguments, URLs, paths, window
 titles, or message content.
+
+`pc_open` accepts repo-relative folder and file targets under `C:\Repo` and
+opens them in VS Code. The portable `RepoPathResolver` checks the requested
+file/folder kind, canonical containment and every path segment for reparse
+points; invalid, missing, traversing or linked-out paths are refused. This
+reuses the P7-31 `open_app`/`InstalledAppMatcher` implementation for app
+launching and adds no second launcher.
 
 Online/offline changes update one existing Now-feed activity row keyed by
 `pc_bridge_status`; the same row reports whether Jarvis control is active or
@@ -730,11 +723,7 @@ and validated but not allow-listed. The Windows provider traverses at most
 1,000 controls and depth 12, checking a one-second traversal budget and
 cancellation between traversal batches. The portable policy returns at most
 `uia_snapshot`/`uia_act` commands; no new route, credential, persistence, or
-<<<<<<< HEAD
-migration is added. Any foreground Windows app with a valid process name is
-=======
 migration is added. Any bounded foreground Windows process identifier is
->>>>>>> origin/main
 eligible. The Windows provider traverses at most 1,000
 controls and depth 12, checking a one-second traversal budget and cancellation
 between traversal batches. The portable policy returns at most
@@ -748,11 +737,6 @@ element's runtime ID, role, name, visibility, enabled state, sensitivity, and
 supported control pattern. Only fixed click, type, and small-scroll operations
 are exposed. Jev makes one decision per fresh snapshot, for at most 20 steps or
 30 seconds, with a 1.2-second request timeout; cancellation reaches both the
-<<<<<<< HEAD
-planner and bridge. In `pc_act`, typed content must be an exact, non-sensitive
-value quoted in Dan's request; `codex_prompt` types only the exact supplied
-non-sensitive prompt. Risky intents and destructive control names use the existing
-=======
 planner and bridge. Typed content must be an exact, non-sensitive value quoted
 in Dan's request. Send, delete, pay/payment, purchase, post, push, and overwrite
 actions use the existing P7-03 `computer_use` approval flow and retry the same
@@ -763,7 +747,6 @@ bounded app/control label, without including the goal or typed text. Website
 tasks remain on P7-17–P7-19's Chrome-only path, and this tool does not use
 Foundry computer-use.
 in Dan's request. Risky intents and destructive control names use the existing
->>>>>>> origin/main
 P7-03 `computer_use` approval flow and retry the same observed element only
 after approval; only irreversible actions require approval, and missing
 approval refuses the action. The approval identifies
@@ -781,16 +764,15 @@ preempt an individual synchronous UI Automation COM call. Live Jev calls,
 Windows UIA responsiveness/cancellation, physical approval delivery, and Dan's
 end-to-end app task remain unverified.
 
-The sensitive `codex_prompt` tool opens the Codex desktop app and uses the same
-bounded UI Automation loop to enter Dan's exact, non-sensitive prompt. It
-exposes only text-entry and Send/Submit controls, stops after one submission,
-and refuses to report success if it only typed the prompt. Typing needs no
-confirmation; the ensuing send/submit action uses the existing `runConfirmed`
-flow. Missing Codex returns a clear refusal. The prompt and UI snapshot remain
-redacted from tool-call audit and step telemetry. Voice guidance routes longer
-tracked repository work to `create_task` and quick local requests to
-`codex_prompt`. Website tasks remain on the Chrome-only path; there is no
-Foundry computer-use or raw shell/command tool.
+When the configured Jev planner is available, the sensitive `codex_prompt`
+tool opens Codex through `open_app` and delegates UI interaction to this same
+`runPcAct` loop and the existing `uia_snapshot`/`uia_act` bridge commands. It
+passes the exact prompt as one JSON-quoted value; password, payment-card,
+one-time-code and other sensitive text remain refused. Codex prompts are audited
+as redacted data. Typing does not request approval; irreversible controls or
+intent reuse the existing `runConfirmed` flow. The tool returns success only
+after a completed text-entry action, submission action and `pc_act` completion;
+an unavailable Codex app or an incomplete submission is a refusal.
 
 ### Chrome browser executor (P7-18, P7-25, P7-26)
 

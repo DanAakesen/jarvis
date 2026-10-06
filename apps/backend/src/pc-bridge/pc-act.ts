@@ -16,14 +16,9 @@ const sensitiveRequestPattern =
   /\b(?:pass(?:word|phrase|code)s?|one[- ]time (?:code|password)|verification code|security code|otp|(?:credit|debit)[ -]card(?: number)?|card number|cvv|cvc|ssn|social security(?: number)?|passport(?: number)?|national id(?:entification)?(?: number)?|driver'?s? license(?: number)?|tax(?:payer)? id(?:entification)?(?: number)?)\b/iu;
 const sensitiveIdentifierPattern = /(?<!\d)\d{3}[- ]?\d{2}[- ]?\d{4}(?!\d)/u;
 const sensitiveNumericPattern = /(?<!\d)\d{4,8}(?!\d)/u;
-<<<<<<< HEAD
-const riskyActionPattern =
-  /\b(?:send|submit|delete|remove|erase|overwrite|replace|discard|reset|clear|format|reformat|drop|revert|pay|payment|purchase|post|push|transfer)\b/iu;
-=======
 const irreversibleActionPattern =
   /\b(?:send|sending|delete|deletion|pay|paid|payment|purchase|post|posting|push|pushing|overwrite|overwriting)\b/iu;
 const overwritePattern = /\b(?:overwrite|overwriting)\b/iu;
->>>>>>> origin/main
 
 export interface PcActElement {
   readonly index: number;
@@ -51,7 +46,6 @@ export interface PcActDecisionInput {
   readonly step: number;
   readonly previousActions: readonly string[];
   readonly snapshot: PcActSnapshot;
-  readonly textOptions?: readonly string[];
 }
 
 export interface PcActPlanner {
@@ -77,14 +71,12 @@ export interface PcActBridge {
 
 export interface PcActOptions {
   readonly planner: PcActPlanner;
+  readonly confirmOverwrites?: boolean;
   readonly runConfirmed?: <T>(
     summary: string,
     action: () => Promise<T>,
     signal: AbortSignal,
   ) => Promise<T>;
-  readonly typedText?: string;
-  readonly confirmTyping?: boolean;
-  readonly stopAfterAction?: () => boolean;
   readonly onStep?: (activity: PcActStepActivity) => void;
 }
 
@@ -181,10 +173,17 @@ async function readBoundedJson(response: Response): Promise<unknown> {
 }
 
 function quotedValues(goal: string): string[] {
-  return [...new Set([...goal.matchAll(/["“]([^"”\r\n]{1,512})["”]/gu)]
-    .map(match => match[1]!.trim())
-    .filter(value => value.length > 0 && !hasControlCharacters(value)))]
-    .slice(0, 8);
+  const quoted = [...goal.matchAll(/"(?:[^"\\]|\\.){1,4096}"|“[^”\r\n]{1,4096}”/gu)]
+    .flatMap(([token]) => {
+      try {
+        return token.startsWith('"')
+          ? [JSON.parse(token) as string]
+          : [token.slice(1, -1).trim()];
+      } catch {
+        return [];
+      }
+    });
+  return [...new Set(quoted.filter(value => value.length > 0 && !hasControlCharacters(value)))].slice(0, 8);
 }
 
 function hasLuhnCardNumber(value: string): boolean {
@@ -218,10 +217,6 @@ function sensitiveGoal(value: string): boolean {
   return sensitiveLabel(value) || sensitiveNumericPattern.test(value);
 }
 
-export function isSensitivePcGoal(value: string): boolean {
-  return sensitiveGoal(value);
-}
-
 function sensitiveText(value: string): boolean {
   return sensitiveGoal(value);
 }
@@ -245,9 +240,15 @@ function validActed(value: unknown, action: string): boolean {
     value.acted === true && value.action === action;
 }
 
-function needsApproval(operation: 'click' | 'type', goal: string, target: PcActElement): boolean {
-  return irreversibleActionPattern.test(`${target.role} ${target.name}`) ||
-    (operation === 'type' && overwritePattern.test(goal));
+function needsApproval(
+  operation: 'click' | 'type',
+  goal: string,
+  target: PcActElement,
+  confirmOverwrites: boolean,
+): boolean {
+  return operation === 'click'
+    ? irreversibleActionPattern.test(`${goal} ${target.role} ${target.name}`)
+    : confirmOverwrites && overwritePattern.test(goal);
 }
 
 function approvalSummary(
@@ -255,17 +256,11 @@ function approvalSummary(
   application: PcActSnapshot['application'],
   target: PcActElement,
 ): string {
-<<<<<<< HEAD
-  const appName = application === 'vscode' ? 'VS Code' :
-    application === 'codex' ? 'Codex' :
-      application === 'explorer' ? 'File Explorer' : application;
-=======
   const appName = application === 'vscode'
     ? 'VS Code'
     : application === 'explorer'
       ? 'File Explorer'
       : application.replace(/[^\p{L}\p{N} ._-]/gu, ' ').slice(0, 80);
->>>>>>> origin/main
   const targetName = target.name.replace(/[^\p{L}\p{N} .,:'/-]/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, 80);
   const description = targetName ? `${target.role} "${targetName}"` : target.role;
   return operation === 'type'
@@ -309,7 +304,7 @@ export function createJevPcActPlanner(
       if (!apiKey || !apiKey.trim() || apiKey.length > 10_000 || /[\r\n]/u.test(apiKey) ||
           requestSignal.aborted) return null;
 
-      const values = (input.textOptions ?? quotedValues(input.goal)).filter(value => !sensitiveText(value));
+      const values = quotedValues(input.goal).filter(value => !sensitiveText(value));
       const body = JSON.stringify({
         model,
         state: {
@@ -433,10 +428,6 @@ export async function runPcAct(
       hasControlCharacters(input.goal)) {
     throw new ToolRefusal(`Provide a PC goal between 1 and ${maxGoalLength} characters.`);
   }
-  if (options.typedText !== undefined &&
-      (options.typedText.length > 4_096 || hasControlCharacters(options.typedText) || sensitiveText(options.typedText))) {
-    throw new ToolRefusal('Jarvis will not type control characters or sensitive values into a Windows app.');
-  }
   if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for PC actions.');
   if (sensitiveGoal(input.goal)) {
     throw new ToolRefusal('Jarvis will not handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.');
@@ -457,7 +448,6 @@ export async function runPcAct(
         step,
         previousActions,
         snapshot,
-        ...(options.typedText !== undefined ? { textOptions: [options.typedText] } : {}),
       }, deadline);
       if (deadline.aborted) throw deadline.reason;
       if (!decision || !validProbability(decision.confidence) ||
@@ -494,12 +484,8 @@ export async function runPcAct(
       if (operation === 'type' && (!decision.text || sensitiveText(decision.text))) {
         throw new ToolRefusal('Provide one explicit, non-sensitive value in quotation marks before asking Jarvis to type.');
       }
-      if (operation === 'type' && (options.typedText !== undefined
-        ? decision.text !== options.typedText
-        : !quotedValues(goal).includes(decision.text!))) {
-        throw new ToolRefusal(options.typedText === undefined
-          ? 'Jarvis can type only a non-sensitive value quoted in the request.'
-          : 'Jarvis can type only the exact prompt provided to Codex.');
+      if (operation === 'type' && !quotedValues(goal).includes(decision.text!)) {
+        throw new ToolRefusal('Jarvis can type only a non-sensitive value quoted in the request.');
       }
 
       const action = async (confirmed: boolean): Promise<void> => {
@@ -522,12 +508,8 @@ export async function runPcAct(
       };
 
       try {
-<<<<<<< HEAD
-        if ((operation === 'click' || (operation === 'type' && options.confirmTyping !== false)) &&
-            needsApproval(goal, target)) {
-=======
-        if ((operation === 'click' || operation === 'type') && needsApproval(operation, goal, target)) {
->>>>>>> origin/main
+        if ((operation === 'click' || operation === 'type') &&
+            needsApproval(operation, goal, target, options.confirmOverwrites !== false)) {
           if (!options.runConfirmed) {
             throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
           }
@@ -548,13 +530,6 @@ export async function runPcAct(
       }
 
       logStep(options.onStep, step, operation, 'completed');
-      if (options.stopAfterAction?.()) {
-        return {
-          status: 'completed',
-          steps: step,
-          result: 'The requested PC action completed.',
-        };
-      }
       previousActions.push(operation === 'type'
         ? 'entered the user-provided text'
         : `${operation} on observed ${target.role}`);

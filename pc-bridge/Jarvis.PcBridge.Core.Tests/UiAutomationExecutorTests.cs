@@ -64,15 +64,6 @@ public sealed class UiAutomationExecutorTests
     }
 
     [Theory]
-<<<<<<< HEAD
-    [InlineData("Confirm search")]
-    [InlineData("Save settings")]
-    public void Reversible_controls_do_not_require_confirmation(string name)
-    {
-        var provider = new FakeUiAutomationProvider(new UiAutomationView("settings", "window-1",
-        [
-            Control("action", "button", name),
-=======
     [InlineData("Submit")]
     [InlineData("Remove file")]
     [InlineData("Replace text")]
@@ -82,7 +73,6 @@ public sealed class UiAutomationExecutorTests
         var provider = new FakeUiAutomationProvider(new UiAutomationView("spotify", "window-1",
         [
             Control("control", "button", name),
->>>>>>> origin/main
         ]));
         var executor = new UiAutomationExecutor(provider);
         var snapshot = executor.Observe(CancellationToken.None);
@@ -108,11 +98,7 @@ public sealed class UiAutomationExecutorTests
     }
 
     [Fact]
-<<<<<<< HEAD
-    public void Refuses_stale_controls_but_allows_UI_Automation_in_any_valid_foreground_app()
-=======
     public void Refuses_stale_controls_and_accepts_any_safe_foreground_app_identifier()
->>>>>>> origin/main
     {
         var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1",
         [
@@ -135,11 +121,7 @@ public sealed class UiAutomationExecutorTests
         Assert.True(executor.Act(spotify.SnapshotId, 0, UiAutomationAction.Type, "Daft Punk", false, CancellationToken.None));
         provider.View = provider.View with { Application = "chrome" };
         Assert.Equal("chrome", executor.Observe(CancellationToken.None).Application);
-<<<<<<< HEAD
-        provider.View = provider.View with { Application = "bad process!" };
-=======
         provider.View = provider.View with { Application = "chrome browser" };
->>>>>>> origin/main
         var blocked = Assert.Throws<UiAutomationRefusedException>(() => executor.Observe(CancellationToken.None));
         Assert.Equal("not_allowed", blocked.Code);
     }
