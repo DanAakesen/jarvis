@@ -53,6 +53,7 @@ describe('committed SQL manifest', () => {
       '0022_task_notification_deduplication.sql',
       '0023_github_app_credential_health.sql',
       '0024_dismiss_board_deployment_failures.sql',
+      '0025_workspace_html_artifacts.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

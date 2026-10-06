@@ -1,6 +1,6 @@
 export const generatedViewVersion: 1;
 export const generatedViewRenderers: readonly [
-  'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image',
+  'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
 ];
 export const generatedViewActionTypes: readonly ['open-route', 'open-link', 'call-tool', 'window'];
 
@@ -15,7 +15,7 @@ export interface GeneratedViewPage {
 }
 
 export interface GeneratedViewSource {
-  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation';
+  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation' | 'html_generation';
   status: 'complete' | 'partial' | 'unavailable';
   updatedAt?: string;
   reason?: string;
@@ -96,7 +96,8 @@ export type GeneratedView =
     renderer: 'status';
     data: { label: string; value?: string; state: 'ok' | 'warning' | 'error' | 'unknown' };
   })
-  | (GeneratedViewBase & { renderer: 'image'; data: { images: { url: string; alt: string }[] } });
+  | (GeneratedViewBase & { renderer: 'image'; data: { images: { url: string; alt: string }[] } })
+  | (GeneratedViewBase & { renderer: 'html-app'; data: { artifactId: string } });
 
 export interface WorkspaceSnapshot {
   windows: readonly { viewId: string; title: string }[];
