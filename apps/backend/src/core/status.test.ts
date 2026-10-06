@@ -28,7 +28,6 @@ const feed: NowFeedSnapshot = {
     { id: '3', category: 'release', title: 'Private release log', link: null, at: '2026-10-04T11:31:00.000Z' },
     { id: '4', category: 'credential', title: 'Private credential', link: null, at: '2026-10-04T11:32:00.000Z' },
     { id: '5', category: 'alert', title: 'Private alert', link: null, at: '2026-10-04T11:33:00.000Z' },
-    { id: '6', category: 'mode', title: 'Private mode detail', link: null, at: '2026-10-04T11:34:00.000Z' },
   ],
 };
 
@@ -62,11 +61,11 @@ describe('get_status_summary', () => {
       tool: 'get_status_summary',
       outcome: 'ok',
       result: {
-        summary: 'The Now feed shows 1 running task, 1 task needing attention, 1 release or deployment update, 1 credential warning, 1 alert, 1 mode update.',
+        summary: 'The Now feed shows 1 running task, 1 task needing attention, 1 release or deployment update, 1 credential warning, 1 alert.',
       },
       confirmation: 'Done: get_status_summary succeeded.',
     });
-    expect(JSON.stringify(response.json())).not.toMatch(/Secret task title|Private project|Full private log|Private question|Private release log|Private credential|Private alert|Private mode detail/u);
+    expect(JSON.stringify(response.json())).not.toMatch(/Secret task title|Private project|Full private log|Private question|Private release log|Private credential|Private alert/u);
     expect(read).toHaveBeenCalledOnce();
     expect(record).toHaveBeenCalledWith(expect.objectContaining({
       messageId: '42',
@@ -92,9 +91,9 @@ describe('get_status_summary', () => {
 
   it('summarizes the full feed while away', async () => {
     const awayModeStore: AwayModeStore = {
-      read: async () => ({ away: true, source: 'manual', changedAt: null }),
-      markPresent: async () => ({ away: false, source: 'browser', changedAt: null }),
-      set: async () => ({ away: true, source: 'manual', changedAt: null }),
+      read: async () => ({ mode: 'away', source: 'manual', changedAt: null }),
+      markPresent: async () => ({ mode: 'present', source: 'browser', changedAt: null }),
+      set: async () => ({ mode: 'away', source: 'manual', changedAt: null }),
     };
     const { app } = fixture({ read: async () => feed, dismiss: vi.fn(async () => true) }, awayModeStore);
     const response = await app.inject({
@@ -103,7 +102,7 @@ describe('get_status_summary', () => {
 
     expect(response.json()).toMatchObject({
       result: {
-        summary: 'The Now feed shows 1 running task, 1 task needing attention, 1 release or deployment update, 1 credential warning, 1 alert, 1 mode update.',
+        summary: 'The Now feed shows 1 running task, 1 task needing attention, 1 release or deployment update, 1 credential warning, 1 alert.',
       },
     });
   });

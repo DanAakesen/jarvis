@@ -942,7 +942,7 @@ export function createVaultModule(options: {
         const service: TeamsNotificationService | null = app.teamsNotifications;
         if (!service) return reply.code(503).send({ error: 'Web approval unavailable' });
         try {
-          if (app.awayModeStore && (await app.awayModeStore.read()).away) {
+          if (app.awayModeStore && (await app.awayModeStore.read()).mode !== 'present') {
             return reply.code(409).send({ error: 'Web approval is unavailable while Jarvis is away' });
           }
         } catch {

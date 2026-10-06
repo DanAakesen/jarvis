@@ -445,8 +445,9 @@ instead of inferring them. No backend route or persistence change is required.
 
 The main page's authenticated `GET /now` returns up to 100 running tasks with
 their project, agent, current activity and start time, plus up to 100
-non-dismissed attention, release/deployment, credential and mode activity
-records, along with the current away/present state.
+non-dismissed attention, release/deployment, credential and alert activity
+records, along with the current presence state. Presence transition audit rows
+are excluded from the bounded feed; read the current mode through `/presence`.
 The read derives attention from the latest activity for each task in
 `NeedsAttention`; other categories use their `activity.kind`. The
 `POST /now/activity/:id/dismiss` route updates `activity.dismissed_at`, returns
@@ -593,24 +594,36 @@ operation expires and fails closed after five minutes if Dan does not approve.
 Teams/Bot Service and Speech F0 code is not live-verified because those
 integrations are not part of the personal-tenant deployment.
 
-## Away mode (P7-02)
+## Presence modes (P6-23; replaces P7-02 away mode)
 
-`createAwayModeStore` persists one validated JSON state under the existing global
-`dbo.settings` key `away.mode.state`; no migration is needed. A mode transition
-and its `core/away_mode` activity row commit together, then refresh Now. The
-authenticated `set_away_mode` tool handles voice/chat commands. The signed-in
-browser sends `POST /now/present` only while visible and focused on startup,
-focus, tab visibility, or user input; passive API/feed requests do not return Dan
-to present. The route verifies Dan's owner identity; the app-only hosted-agent
-principal cannot call it. `GET /now` displays the current mode and, while present,
-the pending browser confirmations. The main-page status makes mode visible.
+`createAwayModeStore` persists `{ mode, source, changedAt }` as JSON in the
+existing global `dbo.settings` key `away.mode.state`; old `{ away: true }` values
+read as `away`, and false values read as `present`. Removed `teams_presence`
+sources normalize to `manual`. No database migration is needed. State
+transitions and their `core/away_mode` activity rows commit together. The store
+publishes one mode-change callback after each committed mode transition.
+Existing routing derives its boolean as `mode !== 'present'`.
 
-Away mode is persisted manually through the voice/chat `set_away_mode` tool or
-browser UI. Authenticated active browser use marks Dan present; passive feed
-requests do not. The backend does not poll Graph or require `Presence.Read.All`.
-While away, the full Now feed and browser confirmations remain available.
-Notifications update the feed and active browser voice sessions announce short
-task-status or pending-approval messages. Local tests do not verify a live
+The modes and UI colour contract are Present (`present`, green), Away (`away`,
+yellow), and On the move (`on_the_move`, blue). `GET /presence` returns the
+current state; owner-only `PUT /presence` accepts `{ mode }` and records a manual
+change. The signed-in browser still uses `POST /now/present` only while visible
+and focused on startup, focus, tab visibility, or user input; passive
+API/feed requests do not return Dan to Present. The owner-authenticated
+`set_presence_mode` tool records Jarvis-originated changes without confirmation;
+`set_away_mode` remains a compatibility alias for one release. `GET /agent/settings`
+provides the active mode and timestamp alongside the base
+`personality.customInstructions` and bounded per-mode instructions. Realtime
+voice receives those instructions initially and sends a new `session.update`
+when a mode-change event arrives.
+
+The backend does not poll Graph or require `Presence.Read.All`; away mode is
+manual, Jarvis-commanded, or set to Present by authenticated browser activity.
+The Now feed and pending browser confirmations remain available while away.
+The Now event hub publishes `mode_changed` with both `mode` and the
+backward-compatible derived `away` boolean. Away task notifications continue
+through the configured browser notification path, and existing task-stream and
+voice suppression use the derived away value. Local tests do not verify a live
 browser session or speech delivery.
 
 ## Database startup and migration ownership

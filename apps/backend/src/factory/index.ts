@@ -329,7 +329,7 @@ export const factoryModule: BackendModule = {
         }
         eventDelivery = eventDelivery.then(async () => {
           try {
-            if ((await app.awayModeStore?.read())?.away) return;
+            if (((await app.awayModeStore?.read())?.mode ?? 'present') !== 'present') return;
             if (closed) return;
             writeEvent(event);
           } catch {
@@ -365,7 +365,7 @@ export const factoryModule: BackendModule = {
         }
         if (closed) return;
         while (pending.length) {
-          const away = (await app.awayModeStore?.read())?.away ?? false;
+          const away = ((await app.awayModeStore?.read())?.mode ?? 'present') !== 'present';
           const buffered = pending.sort((left, right) =>
             BigInt(left.id) < BigInt(right.id) ? -1 : BigInt(left.id) > BigInt(right.id) ? 1 : 0);
           pending = [];

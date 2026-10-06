@@ -172,10 +172,18 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
     backend = Backend(settings={
         "model": "gpt-5.6-luna",
         "reasoningEffort": "high",
+        "mode": "on_the_move",
+        "awayMode": True,
+        "changedAt": "2026-10-06T12:00:00.000Z",
         "personality": {
             "tone": "warm",
             "responseStyle": "detailed",
             "customInstructions": "Use plain language.",
+            "modeInstructions": {
+                "present": "Be available.",
+                "away": "Use Teams.",
+                "on_the_move": "Keep it brief.",
+            },
         },
     })
     client = make_client(backend)
@@ -190,6 +198,10 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
     assert (settings.tone, settings.response_style, settings.custom_instructions) == (
         "warm", "detailed", "Use plain language."
     )
+    assert settings.mode == "on_the_move"
+    assert settings.away_mode
+    assert settings.changed_at == "2026-10-06T12:00:00.000Z"
+    assert settings.mode_instructions["on_the_move"] == "Keep it brief."
 
 
 @pytest.mark.parametrize(
@@ -201,6 +213,8 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
         {"model": "", "reasoningEffort": "none"},
         {"model": "x" * 101, "reasoningEffort": "none"},
         {"model": "deployment", "reasoningEffort": "unsupported"},
+        {"model": "deployment", "reasoningEffort": "none", "mode": "driving"},
+        {"model": "deployment", "reasoningEffort": "none", "changedAt": 42},
         {"model": "deployment", "reasoningEffort": "none", "personality": {"tone": "unknown"}},
         {
             "model": "deployment",
@@ -211,6 +225,17 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
             "model": "deployment",
             "reasoningEffort": "none",
             "personality": {"customInstructions": "x" * 2_001},
+        },
+        {
+            "model": "deployment",
+            "reasoningEffort": "none",
+            "personality": {
+                "modeInstructions": {
+                    "present": "",
+                    "away": "x" * 2_001,
+                    "on_the_move": "",
+                }
+            },
         },
     ],
 )

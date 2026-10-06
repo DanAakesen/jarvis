@@ -129,7 +129,11 @@ try {
     ? createAlertActivityStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
     : undefined;
   const awayModeStore = database
-    ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({ type: 'mode_changed', away: state.away }))
+    ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({
+      type: 'mode_changed',
+      mode: state.mode,
+      away: state.mode !== 'present',
+    }))
     : undefined;
   const alertNotifier = createAlertNotifier(telemetry);
   const credentialStatusStore = database ? createCredentialStatusStore(database.pool, {
@@ -414,7 +418,7 @@ try {
         connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
         audioStore: teamsAudioStore,
       } : {}),
-      ...(awayModeStore ? { isAway: async () => (await awayModeStore.read()).away } : {}),
+      ...(awayModeStore ? { isAway: async () => (await awayModeStore.read()).mode !== 'present' } : {}),
       onWebNotification: async (kind, text) => {
         if (!nowFeedStore.recordNotification) throw new Error('Now feed notifications are unavailable');
         await nowFeedStore.recordNotification(kind, text);

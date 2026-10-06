@@ -2,10 +2,13 @@ import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
 import {
   defaultAwayModeState,
+  isLegacyAwayModeState,
   parseAwayModeState,
-  setAwayMode,
+  setPresenceMode,
+  type AwayModeSource,
   type AwayModeState,
   type AwayModeStore,
+  type PresenceMode,
 } from '../core/away-mode.js';
 
 const settingKey = 'away.mode.state';
@@ -18,29 +21,24 @@ export function createAwayModeStore(
   pool: sql.ConnectionPool,
   onModeChanged: (state: AwayModeState) => void = () => {},
 ): AwayModeStore {
-  async function read(request: sql.Request | sql.Transaction): Promise<AwayModeState> {
+  async function read(request: sql.Request | sql.Transaction): Promise<{ state: AwayModeState; legacy: boolean }> {
     const result = await (request instanceof sql.Transaction ? new sql.Request(request) : request)
       .input('scope', sql.NVarChar(64), 'global')
       .input('key', sql.NVarChar(128), settingKey)
       .query<StoredStateRow>('SELECT value FROM dbo.settings WHERE scope = @scope AND [key] = @key;');
-    if (!result.recordset[0]) return { ...defaultAwayModeState };
+    if (!result.recordset[0]) return { state: { ...defaultAwayModeState }, legacy: false };
     let value: unknown;
     try { value = JSON.parse(result.recordset[0].value) as unknown; }
-    catch { throw new Error('Away mode state is invalid'); }
+    catch { throw new Error('Presence mode state is invalid'); }
     const state = parseAwayModeState(value);
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      throw new Error('Away mode state is invalid');
-    }
-    const persistedState = { ...value as Record<string, unknown> };
-    delete persistedState.presenceAwaySince;
-    if (persistedState.source === 'teams_presence') persistedState.source = null;
-    if (JSON.stringify(persistedState) !== JSON.stringify(state)) throw new Error('Away mode state is invalid');
-    return state;
+    const legacy = isLegacyAwayModeState(value);
+    const validCurrent = typeof value === 'object' && value !== null && !Array.isArray(value) &&
+      JSON.stringify(value) === JSON.stringify(state);
+    if (!legacy && !validCurrent) throw new Error('Presence mode state is invalid');
+    return { state, legacy };
   }
 
-  async function update(
-    transition: (state: AwayModeState) => AwayModeState,
-  ): Promise<AwayModeState> {
+  async function update(transition: (state: AwayModeState) => AwayModeState): Promise<AwayModeState> {
     const transaction = new sql.Transaction(pool);
     let modeChanged: boolean;
     let next: AwayModeState;
@@ -56,9 +54,9 @@ export function createAwayModeStore(
       if ((lock.recordset[0]?.result ?? -999) < 0) throw new Error('Away mode lock unavailable');
 
       const previous = await read(transaction);
-      next = transition(previous);
-      modeChanged = previous.away !== next.away;
-      if (JSON.stringify(previous) !== JSON.stringify(next)) {
+      next = transition(previous.state);
+      modeChanged = previous.state.mode !== next.mode;
+      if (previous.legacy || JSON.stringify(previous.state) !== JSON.stringify(next)) {
         await new sql.Request(transaction)
           .input('scope', sql.NVarChar(64), 'global')
           .input('key', sql.NVarChar(128), settingKey)
@@ -73,7 +71,9 @@ export function createAwayModeStore(
         await new sql.Request(transaction)
           .input('area', sql.NVarChar(32), 'core')
           .input('kind', sql.NVarChar(64), 'away_mode')
-          .input('title', sql.NVarChar(400), next.away ? 'Away mode is on' : 'Away mode is off')
+          .input('title', sql.NVarChar(400), next.mode === 'present'
+            ? 'Present mode is on'
+            : next.mode === 'on_the_move' ? 'On the move mode is on' : 'Away mode is on')
           .query(`INSERT dbo.activity (area, kind, title) VALUES (@area, @kind, @title);`);
       }
       await transaction.commit();
@@ -89,17 +89,16 @@ export function createAwayModeStore(
     async read() {
       try {
         const request = databaseReadRequest(pool);
-        return read(request);
+        return (await read(request)).state;
       } catch {
         throw new Error('Away mode is unavailable');
       }
     },
-    set(away, at = new Date()) {
-      if (typeof away !== 'boolean') throw new TypeError('Away mode must be a boolean');
-      return update((state) => setAwayMode(state, away, 'manual', at));
+    set(mode: PresenceMode, source: AwayModeSource = 'manual', at = new Date()) {
+      return update((state) => setPresenceMode(state, mode, source, at));
     },
     markPresent(at = new Date()) {
-      return update((state) => setAwayMode(state, false, 'browser', at));
+      return update((state) => setPresenceMode(state, 'present', 'browser', at));
     },
   };
 }

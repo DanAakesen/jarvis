@@ -27,6 +27,18 @@ resources in production. This supersedes earlier P7 Teams-call, Graph-presence,
 and Teams-routing choices. Retain optional Teams code only as dormant integration
 code.
 
+P6-23 (6 October 2026): replace boolean away mode with Present, Away, and On
+the move (`present`, `away`, `on_the_move`), with green, yellow, and blue as the
+UI colour contract. Keep the existing JSON settings row and read legacy booleans
+as Away/Present; normalize removed `teams_presence` values to manual. Persist
+base instructions under the unchanged `personality.customInstructions` key and
+individual 2,000-character mode instructions under
+`personality.modeInstructions.<mode>`. Dan-only presence changes are manual;
+Jarvis changes are announced and require no confirmation. Preserve the derived
+`away` boolean and one-release `set_away_mode` alias for existing consumers.
+Evidence: API, tool, settings, state migration, and agent-awareness regression
+tests; live Voice Live and UI integration remain unverified.
+
 P6-21 (6 October 2026): project task summaries from existing PR, workflow,
 usage and PR-opened event records without live GitHub reads or a schema change.
 Unknown state, token metrics and costs stay null; recorded costs can be partial.
