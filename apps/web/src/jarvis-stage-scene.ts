@@ -44,7 +44,18 @@ type ThemeColor = Exclude<keyof ThemePalette, 'reflector' | 'exposure' | 'glow'>
 
 function readStagePalette(): ThemePalette {
   const style = window.getComputedStyle(document.documentElement);
-  const color = (role: ThemeColor | 'reflector') => style.getPropertyValue(`--stage-${role}`).trim();
+  const colorContext = document.createElement('canvas').getContext('2d');
+  const color = (role: ThemeColor | 'reflector') => {
+    const value = style.getPropertyValue(`--stage-${role}`).trim();
+    if (!colorContext || !CSS.supports('color', value)) return value;
+    colorContext.fillStyle = '#000000';
+    colorContext.fillStyle = value;
+    const resolved = colorContext.fillStyle;
+    const channels = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*[\d.]+)?\)$/i.exec(resolved);
+    if (!channels) return resolved;
+    return `#${channels.slice(1, 4).map((channel) => Math.round(Number(channel) * 255)
+      .toString(16).padStart(2, '0')).join('')}`;
+  };
   const number = (role: 'exposure' | 'glow', fallback: number) => {
     const value = Number.parseFloat(style.getPropertyValue(`--stage-${role}`));
     return Number.isFinite(value) ? value : fallback;
@@ -128,6 +139,7 @@ function createJarvisStageSceneWithRenderer(
   let qualityLevel: JarvisStageQualityLevel = renderer.capabilities.maxTextureSize < 4096 ? 1 : 0;
   let qualityFrameCount = 0;
   let qualityFrameTime = 0;
+  let qualityWindowStarted = performance.now();
   let smoothQualityWindows = 0;
   let voicePosition = 0;
   let voiceVelocity = 0;
@@ -534,6 +546,9 @@ function createJarvisStageSceneWithRenderer(
     if (disposed || contextLost || animating || current.reducedMotion || document.hidden) return;
     animating = true;
     previous = performance.now();
+    qualityWindowStarted = previous;
+    qualityFrameCount = 0;
+    qualityFrameTime = 0;
     animationFrame = window.requestAnimationFrame(frame);
   }
 
@@ -551,13 +566,14 @@ function createJarvisStageSceneWithRenderer(
       if (!contextLost && !document.hidden) draw(0);
       return;
     }
-    const delta = Math.max(0, Math.min((now - previous) / 1000, 0.12));
+    const frameInterval = Math.max(0, now - previous);
+    const delta = Math.max(0, Math.min(frameInterval / 1000, 0.12));
     previous = now;
     elapsed += delta;
     draw(delta);
     qualityFrameCount += 1;
-    qualityFrameTime += Math.min(delta * 1000, 100);
-    if (qualityFrameCount >= 90) {
+    qualityFrameTime += Math.min(frameInterval, 1000);
+    if (now - qualityWindowStarted >= 1000 && qualityFrameCount > 0) {
       const nextQuality = nextJarvisStageQualityLevel(qualityLevel, qualityFrameTime / qualityFrameCount);
       if (nextQuality > qualityLevel) {
         qualityLevel = nextQuality;
@@ -575,6 +591,7 @@ function createJarvisStageSceneWithRenderer(
       }
       qualityFrameCount = 0;
       qualityFrameTime = 0;
+      qualityWindowStarted = now;
     }
     animationFrame = window.requestAnimationFrame(frame);
   }
