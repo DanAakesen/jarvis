@@ -31,6 +31,16 @@ vi.mock('mssql', async (importOriginal) => {
 });
 
 describe('PC bridge status store', () => {
+  it('reports whether Jarvis control is active or paused in the existing activity row', async () => {
+    transactionEvents.values.length = 0;
+    const query = vi.fn().mockResolvedValue({ rowsAffected: [1] });
+    const store = createPcBridgeStatusStore({ query } as unknown as sql.ConnectionPool, vi.fn());
+
+    await store.setStatus(true, true);
+
+    expect(JSON.stringify(query.mock.calls[0]?.[1])).toContain('Local PC bridge is online — Jarvis control is paused');
+  });
+
   it('serializes status writes and publishes only after each commit', async () => {
     transactionEvents.values.length = 0;
     const query = vi.fn().mockResolvedValue({ rowsAffected: [1] });

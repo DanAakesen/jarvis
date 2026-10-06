@@ -47,11 +47,13 @@ afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close(
 function fixture(
   getSecret: () => Promise<string | undefined> = async () => secret,
   onMapping?: (mapping: NonNullable<WebhookDeliveryInput['mapping']>) => Promise<void>,
+  isTrackedRepository?: (repository: string) => boolean,
 ) {
   const deliveries = new Map<string, WebhookDeliveryInput>();
   const module: BackendModule = createGithubWebhookModule({
     getSecret,
     ...(onMapping ? { onMapping } : {}),
+    ...(isTrackedRepository ? { isTrackedRepository } : {}),
     deliveryStore: {
       async record(input) {
         if (deliveries.has(input.deliveryId)) return false;
@@ -266,8 +268,18 @@ describe('GitHub webhook receiver', () => {
   it('records valid but unsupported events as ignored', async () => {
     const { app, deliveries } = fixture();
     const response = await deliver(app, 'delivery-1', 'ping');
-    expect(response.json()).toEqual({ status: 'accepted' });
-    expect(deliveries.get('delivery-1')).toMatchObject({ event: 'ping', outcome: 'ignored' });
+    expect(response.json()).toEqual({ status: 'ignored' });
+    expect(deliveries.size).toBe(0);
+  });
+
+  it('does not write or process events for untracked repositories', async () => {
+    const onMapping = vi.fn();
+    const { app, deliveries } = fixture(async () => secret, onMapping, () => false);
+    const response = await deliver(app, 'untracked-delivery');
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({ status: 'ignored' });
+    expect(deliveries.size).toBe(0);
+    expect(onMapping).not.toHaveBeenCalled();
   });
 
   it('fails closed when the Key Vault secret is unavailable', async () => {

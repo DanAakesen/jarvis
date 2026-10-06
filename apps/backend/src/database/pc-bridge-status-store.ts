@@ -1,7 +1,7 @@
 import sql from 'mssql';
 
 export interface PcBridgeStatusStore {
-  setStatus(online: boolean): Promise<void>;
+  setStatus(online: boolean, controlPaused?: boolean): Promise<void>;
 }
 
 export function createPcBridgeStatusStore(
@@ -10,9 +10,11 @@ export function createPcBridgeStatusStore(
 ): PcBridgeStatusStore {
   let precedingWrite: Promise<void> = Promise.resolve();
   return {
-    setStatus(online) {
+    setStatus(online, controlPaused = false) {
       const write = precedingWrite.then(async () => {
-        const title = `Local PC bridge is ${online ? 'online' : 'offline'}`;
+        const title = online
+          ? `Local PC bridge is online — Jarvis control is ${controlPaused ? 'paused' : 'active'}`
+          : 'Local PC bridge is offline';
         const transaction = new sql.Transaction(pool);
         await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
         try {

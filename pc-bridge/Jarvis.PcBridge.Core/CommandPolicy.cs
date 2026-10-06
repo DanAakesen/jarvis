@@ -4,14 +4,6 @@ namespace Jarvis.PcBridge.Core;
 
 public static class CommandPolicy
 {
-    private static readonly HashSet<string> Apps = new(StringComparer.Ordinal)
-    {
-        "vscode",
-        "edge",
-        "explorer",
-        "terminal",
-    };
-
     public static bool IsValid(string command, JsonElement arguments)
     {
         if (arguments.ValueKind != JsonValueKind.Object) return false;
@@ -25,7 +17,11 @@ public static class CommandPolicy
             "open_app" => HasOnly(arguments, "app") &&
                 arguments.TryGetProperty("app", out var app) &&
                 app.ValueKind == JsonValueKind.String &&
-                Apps.Contains(app.GetString() ?? string.Empty),
+                HasBoundedString(arguments, "app", 128),
+            "media" => HasOnly(arguments, "action") &&
+                arguments.TryGetProperty("action", out var mediaAction) &&
+                mediaAction.ValueKind == JsonValueKind.String &&
+                IsMediaAction(mediaAction.GetString()),
             "open_folder" => HasOnly(arguments, "relativePath") &&
                 arguments.TryGetProperty("relativePath", out var folder) &&
                 folder.ValueKind == JsonValueKind.String &&
@@ -47,6 +43,26 @@ public static class CommandPolicy
             "uia_act" => IsUiAutomationAction(arguments),
             _ => false,
         };
+    }
+
+    public static bool IsControlAction(string command) => command is
+        "open_url" or "open_app" or "open_folder" or "focus_window" or "uia_act" or "browser_act";
+
+    public static bool IsMediaAction(string? action) => TryGetMediaVirtualKey(action, out _);
+
+    public static bool TryGetMediaVirtualKey(string? action, out ushort virtualKey)
+    {
+        virtualKey = action switch
+        {
+            "play_pause" => 0xB3,
+            "next" => 0xB0,
+            "previous" => 0xB1,
+            "volume_up" => 0xAF,
+            "volume_down" => 0xAE,
+            "mute" => 0xAD,
+            _ => 0,
+        };
+        return virtualKey != 0;
     }
 
     private static bool IsUiAutomationAction(JsonElement arguments)

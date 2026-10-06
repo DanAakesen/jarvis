@@ -23,8 +23,9 @@ const sensitiveRequestPattern =
   /\b(?:pass(?:word|phrase|code)s?|one[- ]time (?:code|password)|verification code|security code|otp|(?:credit|debit)[ -]card(?: number)?|card number|cvv|cvc|ssn|social security(?: number)?|passport(?: number)?|national id(?:entification)?(?: number)?|driver'?s? license(?: number)?|tax(?:payer)? id(?:entification)?(?: number)?)\b/iu;
 const sensitiveIdentifierPattern = /(?<!\d)\d{3}[- ]?\d{2}[- ]?\d{4}(?!\d)/u;
 const sensitiveNumericPattern = /(?<!\d)\d{4,8}(?!\d)/u;
-const riskyActionPattern =
-  /\b(?:send|submit|delete|remove|erase|overwrite|replace|discard|reset|clear|format|reformat|drop|revert|pay|payment|purchase|post|transfer|system settings|settings|confirm)\b/iu;
+const irreversibleActionPattern =
+  /\b(?:send|sending|delete|deletion|pay|paid|payment|purchase|post|posting|push|pushing|overwrite|overwriting)\b/iu;
+const overwritePattern = /\b(?:overwrite|overwriting)\b/iu;
 
 export interface PcActElement {
   readonly index: number;
@@ -217,7 +218,7 @@ function validSnapshot(value: unknown): value is PcActSnapshot {
   return isRecord(value) && Object.keys(value).length === 3 &&
     typeof value.snapshotId === 'string' &&
     /^[\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu.test(value.snapshotId) &&
-    (value.application === 'vscode' || value.application === 'explorer') &&
+    typeof value.application === 'string' && /^[\p{L}\p{N}_.-]{1,128}$/u.test(value.application) &&
     Array.isArray(value.elements) && value.elements.length <= 100 &&
     value.elements.every((element, index) => isRecord(element) &&
       Object.keys(element).length === 3 && element.index === index &&
@@ -232,8 +233,9 @@ function validActed(value: unknown, action: string): boolean {
     value.acted === true && value.action === action;
 }
 
-function needsApproval(goal: string, target: PcActElement): boolean {
-  return riskyActionPattern.test(goal) || riskyActionPattern.test(`${target.role} ${target.name}`);
+function needsApproval(operation: 'click' | 'type', goal: string, target: PcActElement): boolean {
+  return irreversibleActionPattern.test(`${target.role} ${target.name}`) ||
+    (operation === 'type' && overwritePattern.test(goal));
 }
 
 function approvalSummary(
@@ -241,7 +243,11 @@ function approvalSummary(
   application: PcActSnapshot['application'],
   target: PcActElement,
 ): string {
-  const appName = application === 'vscode' ? 'VS Code' : 'File Explorer';
+  const appName = application === 'vscode'
+    ? 'VS Code'
+    : application === 'explorer'
+      ? 'File Explorer'
+      : application.replace(/[^\p{L}\p{N} ._-]/gu, ' ').slice(0, 80);
   const targetName = target.name.replace(/[^\p{L}\p{N} .,:'/-]/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, 80);
   const description = targetName ? `${target.role} "${targetName}"` : target.role;
   return operation === 'type'
@@ -511,7 +517,7 @@ export async function runPcAct(
       };
 
       try {
-        if ((operation === 'click' || operation === 'type') && needsApproval(goal, target)) {
+        if ((operation === 'click' || operation === 'type') && needsApproval(operation, goal, target)) {
           if (!options.runConfirmed) {
             throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
           }

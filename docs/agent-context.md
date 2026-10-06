@@ -261,6 +261,7 @@ Verified in Codex cloud for P0-02:
 | Focused P7-04 reflex, chat and voice tests | `npm test --workspace @jarvis/backend -- --run src/core/reflex.test.ts src/core/conversation.test.ts src/voice/relay.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py` |
 | Focused P7-15 image generation and artifact tests | `npm test --workspace @jarvis/backend -- --run src/core/image-generation.test.ts src/core/image-generation-routes.test.ts src/database/workspace-artifact-store.test.ts src/database/conversation-store.test.ts src/database/usage-store.test.ts src/core/usage.test.ts src/database/migrations.test.ts`; `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts src/usage/UsagePage.test.tsx`; `npm test --workspace @jarvis/contracts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py -k 'codex_tool or image'` |
 | Focused P7-27 workspace reflex checks | `npm test --workspace @jarvis/backend -- --run src/core/reflex.test.ts src/core/workspace-commands.test.ts src/core/conversation.test.ts src/voice/relay.test.ts src/logging.test.ts`; `npm test --workspace @jarvis/web -- --run src/Workspace.test.tsx src/NowFeedPanel.test.tsx src/now-feed.test.ts src/App.test.tsx` |
+| Focused P7-31 PC app, media, UI Automation and reflex checks | `npm test --workspace @jarvis/backend -- --run src/pc-bridge/bridge.test.ts src/pc-bridge/pc-act.test.ts src/core/reflex.test.ts src/core/browser-agent.test.ts src/voice/realtime.test.ts`; `dotnet test pc-bridge/Jarvis.PcBridge.Core.Tests/Jarvis.PcBridge.Core.Tests.csproj`; `dotnet build pc-bridge/Jarvis.PcBridge/Jarvis.PcBridge.csproj -p:EnableWindowsTargeting=true`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_jarvis_tools.py` |
 | Focused P7-23 chat latency checks | `npm test --workspace @jarvis/backend -- --run src/core/conversation.test.ts src/core/chat-agent.test.ts src/core/reflex.test.ts src/voice/relay.test.ts src/core/memory.test.ts src/core/memory-embeddings.test.ts src/logging.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_telemetry.py agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py agents/jarvis/tests/test_jarvis_tools.py` |
 | Focused P7-30 cross-session follow-up checks | `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py agents/jarvis/tests/test_model_client.py`; `cd agents/jarvis && .venv/bin/python -m ruff check chat_runtime.py model_client.py tests/test_chat_runtime.py tests/test_model_client.py` |
 | Focused P7-20 streaming voice reflex checks | `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/core/reflex.test.ts src/database/conversation-store.test.ts src/voice/realtime.test.ts src/logging.test.ts`; `npm run lint --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_voice_provisioning.py` |
@@ -873,10 +874,15 @@ the companion on Dan's PC:
    enabled, or the direct Chrome executable fallback when disconnected, never
    Edge. Open an allow-listed app as a separate check. Check the authenticated Now
    feed for online/offline status; verify active-window reads and exact-title
-   focus with Dan present at the PC.
+   focus with Dan present at the PC. Verify **Pause Jarvis control (on)** blocks
+   PC actions and the same Now row reports paused; turn the toggle off and confirm
+   actions resume and the row reports active.
 
 The app allows only HTTP(S) URLs, VS Code, Edge, File Explorer, Windows Terminal,
 folders below `C:\Repo` in VS Code, active-window title, and exact-title focus.
+`pc_act` separately controls any foreground Windows app through UI Automation.
+Pause Jarvis control is saved in the bridge settings and reported over the
+authenticated socket; no shell or arbitrary command execution is exposed.
 Offline policy/protocol tests do not verify live Entra sign-in or Windows
 execution; those remain coordinator post-merge checks.
 
