@@ -17,8 +17,8 @@ public sealed class WindowsUiAutomationProvider : IUiAutomationProvider
         try
         {
             var focused = AutomationElement.FocusedElement;
-            return focused is not null &&
-                (focused.Current.IsPassword || UiAutomationPolicy.IsSensitiveControl(focused.Current.Name ?? string.Empty));
+            return focused is null ||
+                UiAutomationPolicy.IsSensitiveFocusedControl(focused.Current.IsPassword, focused.Current.Name);
         }
         catch
         {

@@ -333,11 +333,6 @@ function validActed(value: unknown, action: string): boolean {
     value.acted === true && value.action === action;
 }
 
-function validPointActed(value: unknown, action: string): boolean {
-  return isRecord(value) && Object.keys(value).length === 2 &&
-    value.acted === true && value.action === action;
-}
-
 function needsApproval(operation: 'click' | 'type', goal: string, target: PcActElement): boolean {
   return irreversibleActionPattern.test(`${target.role} ${target.name}`) ||
     (operation === 'type' && overwritePattern.test(goal));
@@ -577,6 +572,9 @@ export async function runPcAct(
         if (!validVisionElements(candidates)) {
           throw new ToolFailure('The visual controls could not be safely identified.');
         }
+        if (candidates.length === 0) {
+          throw new ToolRefusal('No safe visual controls were found. Please clarify the target or change the window.');
+        }
         snapshot = {
           snapshotId: capture.snapshotId,
           application: rawSnapshot.application,
@@ -652,7 +650,7 @@ export async function runPcAct(
             action: operation,
             ...(operation === 'click' ? { confirmed } : {}),
           }, deadline);
-          if (validPointActed(result, operation)) return;
+          if (validActed(result, operation)) return;
           throw new ToolFailure('The visual Windows control action did not complete.');
         }
         const result = await bridge.act({

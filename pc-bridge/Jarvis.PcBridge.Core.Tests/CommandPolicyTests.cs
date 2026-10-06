@@ -41,6 +41,16 @@ public sealed class CommandPolicyTests
     }
 
     [Theory]
+    [InlineData(true, "", true)]
+    [InlineData(false, "Password", true)]
+    [InlineData(false, "One-time code", true)]
+    [InlineData(false, "Search", false)]
+    public void Detects_sensitive_focused_controls(bool isPassword, string name, bool expected)
+    {
+        Assert.Equal(expected, UiAutomationPolicy.IsSensitiveFocusedControl(isPassword, name));
+    }
+
+    [Theory]
     [InlineData("open_url", """{"url":"https://example.com/repo"}""")]
     [InlineData("open_app", """{"app":"vscode"}""")]
     [InlineData("open_app", """{"app":"Spotify"}""")]

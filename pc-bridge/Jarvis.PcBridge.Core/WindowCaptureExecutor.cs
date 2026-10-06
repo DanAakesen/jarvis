@@ -48,6 +48,7 @@ public sealed class WindowCaptureExecutor(IWindowCaptureProvider provider)
     public WindowCaptureResult Capture(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        _snapshot = null;
         var frame = provider.Capture(cancellationToken);
         if (frame is null) throw new WindowCaptureRefusedException("not_found");
 

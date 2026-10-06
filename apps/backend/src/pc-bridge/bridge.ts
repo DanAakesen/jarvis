@@ -416,7 +416,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
       },
       ...(options.pcActPlanner ? [{
         name: 'pc_act',
-        description: 'Control any foreground Windows app with one Jev decision per fresh UI Automation snapshot. Website tasks use Chrome through browser_do, never Edge. Types only explicit quoted, non-sensitive values. Confirm irreversible actions only.',
+        description: 'Control any foreground Windows app with one Jev decision per fresh snapshot. Sparse UI Automation trees use transient visual targets for clicks or scrolling, never typing; UI Automation typing is limited to explicit quoted, non-sensitive values. Website tasks use Chrome through browser_do, never Edge. Confirm irreversible actions only.',
         inputSchema: {
           type: 'object',
           properties: { goal: { type: 'string', minLength: 1, maxLength: 4_000 } },
@@ -431,41 +431,41 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
               { name: 'uia_snapshot', arguments: {} },
               commandSignal,
             ),
-          capture: (commandSignal) => bridge.execute(
-            { name: 'window_capture', arguments: {} },
+            capture: (commandSignal) => bridge.execute(
+              { name: 'window_capture', arguments: {} },
               commandSignal,
             ),
-          act: (action, commandSignal) => bridge.execute(
-            { name: 'uia_act', arguments: action },
-            commandSignal,
-          ),
-          actPoint: (action, commandSignal) => bridge.execute(
-            action.action === 'click'
-              ? {
-                name: 'click_point',
-                arguments: {
-                  snapshotId: action.snapshotId,
-                  x: action.x,
-                  y: action.y,
-                  confirmed: action.confirmed ?? false,
+            act: (action, commandSignal) => bridge.execute(
+              { name: 'uia_act', arguments: action },
+              commandSignal,
+            ),
+            actPoint: (action, commandSignal) => bridge.execute(
+              action.action === 'click'
+                ? {
+                  name: 'click_point',
+                  arguments: {
+                    snapshotId: action.snapshotId,
+                    x: action.x,
+                    y: action.y,
+                    confirmed: action.confirmed ?? false,
+                  },
+                }
+                : {
+                  name: 'scroll_point',
+                  arguments: {
+                    snapshotId: action.snapshotId,
+                    x: action.x,
+                    y: action.y,
+                    direction: action.action === 'scroll_up' ? 'up' : 'down',
+                  },
                 },
-              }
-              : {
-                name: 'scroll_point',
-                arguments: {
-                  snapshotId: action.snapshotId,
-                  x: action.x,
-                  y: action.y,
-                  direction: action.action === 'scroll_up' ? 'up' : 'down',
-                },
-              },
-            commandSignal,
-          ),
-        }, {
-          planner: options.pcActPlanner!,
-          ...(options.pcActVisionModel ? { visionModel: options.pcActVisionModel } : {}),
-          ...(options.pcActVisionDeployment ? { visionDeployment: options.pcActVisionDeployment } : {}),
-          ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
+              commandSignal,
+            ),
+          }, {
+            planner: options.pcActPlanner!,
+            ...(options.pcActVisionModel ? { visionModel: options.pcActVisionModel } : {}),
+            ...(options.pcActVisionDeployment ? { visionDeployment: options.pcActVisionDeployment } : {}),
+            ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
             ...(options.onPcActStep ? { onStep: options.onPcActStep } : {}),
           }),
       }] : []),

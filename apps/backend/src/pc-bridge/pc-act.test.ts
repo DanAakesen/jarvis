@@ -355,6 +355,31 @@ describe('pc_act bounded Windows control loop', () => {
     expect(JSON.stringify(onStep.mock.calls)).not.toContain('Private target');
   });
 
+  it('asks Dan when vision finds no safe actionable candidates', async () => {
+    const planner = { decide: vi.fn() };
+    const pcBridge = bridge({
+      observe: vi.fn(async () => ({ ...snapshot, elements: [] })),
+      capture: vi.fn(async () => ({
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        application: 'vscode',
+        width: 1280,
+        height: 720,
+        png: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'),
+      })),
+      actPoint: vi.fn(),
+    });
+
+    await expect(runPcAct(
+      { goal: 'Open the game menu' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, visionModel: { locateElements: vi.fn(async () => []) } },
+    )).rejects.toThrow(/No safe visual controls were found/u);
+
+    expect(planner.decide).not.toHaveBeenCalled();
+  });
+
   it('controls any bounded foreground app and does not confirm reversible settings actions', async () => {
     const appSnapshot: PcActSnapshot = { ...snapshot, application: 'SystemSettings' };
     const pcBridge = bridge({ observe: vi.fn(async () => appSnapshot) });
