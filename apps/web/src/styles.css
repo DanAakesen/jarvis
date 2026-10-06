@@ -195,7 +195,7 @@
 :root[data-motion="reduced"] .workspace-window-jarvis-updating::after,
 :root[data-motion="reduced"] .more-menu-list,
 :root[data-motion="reduced"] .more-menu-flyout,
-:root[data-motion="reduced"] .voice-bar-glyph * {
+:root[data-motion="reduced"] .voice-status-glyph * {
   animation: none !important;
 }
 
@@ -1365,7 +1365,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
     --motion-panel: var(--motion-fade);
   }
   .app-shell::before, .topbar-working-mark, .activity-running::before, .workspace-window-jarvis-updating::after,
-  .more-menu-list, .more-menu-flyout, .voice-bar-glyph * { animation: none !important; }
+  .more-menu-list, .more-menu-flyout, .voice-status-glyph * { animation: none !important; }
   .workspace-tab { animation: none; transition: none; }
   .workspace-window { transition: none; transform: none; }
   .task-card-list > li, .task-usage-table tbody > tr, .usage-table tbody > tr {
