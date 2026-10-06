@@ -233,10 +233,10 @@ Existing chat, voice, safe Markdown, queue/steering, workspace tools and shared 
 
 ## Approved voice/orb follow-up (6 October 2026)
 
-These accepted changes are planned together in P8-40 [#417](https://github.com/DanAakesen/jarvis/issues/417); the current two-step microphone activation and in-bar state remain until implementation. No separate prototype is required. P8-37 (#398) retains the separate shell/composer/messages scope.
+These accepted changes are implemented offline together in P8-40 [#417](https://github.com/DanAakesen/jarvis/issues/417), [PR #419](https://github.com/DanAakesen/jarvis/pull/419). They replace two-step microphone activation and in-bar status. No separate prototype is required. P8-37 (#398) retains the separate shell/composer/messages scope. Live microphone/provider, physical-device and hardware-GPU acceptance remain unverified.
 
 | Feature | Behaviour | Surface | Status | Tasks |
 | --- | --- | --- | --- | --- |
-| Under-orb voice status | Accessible session state/recovery follows the orb; compact More/End voice controls have no overlapping state or long language note | Jarvis browser voice | Planned | P8-40 (#417) |
-| Microphone on voice start | Explicit voice start requests native permission and begins capture after session readiness; no normal Enable microphone button; preserve mute, recovery and cleanup | Jarvis browser voice | Planned | P8-40 (#417) |
-| Expressive awakening and live orb | Pronounced core/shell wake, distinct listening/thinking/tool-work motion and audible-playback-driven speech/light/reflection; interruptible and reduced-motion safe | Same Jarvis scene in typing/voice | Planned | P8-40 (#417) |
+| Under-orb voice status | Accessible session state/recovery follows the orb; compact More/End voice controls have no overlapping state or long language note | Jarvis browser voice | Implemented offline; fixture layout checks reported in PR #419 | P8-40 (#417) |
+| Microphone on voice start | Explicit voice start requests native permission and begins capture after session readiness; no normal Enable microphone button; preserve mute, recovery and cleanup | Jarvis browser voice | Implemented offline; lifecycle tests pass, real audio unverified | P8-40 (#417) |
+| Expressive awakening and live orb | Pronounced core/shell wake, distinct listening/thinking/tool-work motion and audible-playback-driven speech/light/reflection; interruptible and reduced-motion safe | Same Jarvis scene in typing/voice | Implemented offline; motion-model tests and software-WebGL observations, hardware acceptance pending | P8-40 (#417) |
