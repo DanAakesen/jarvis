@@ -746,6 +746,7 @@ Linux Windows-target build run in backend CI. Real device-code sign-in, Windows
 process/window behavior, SQL production writes and the live PC opening flow
 remain unverified.
 
+### Windows UI Automation app control (P7-07, expanded by P7-31, P7-32, P7-34, P7-36)
 ### Offline wake word (P7-39)
 
 The tray app listens for "Wake up Jarvis" with the Speech SDK
@@ -794,16 +795,11 @@ backend logs the content-free, allowlisted `pc_bridge.wake_word`.
 
 The backend registers the sensitive `pc_act` tool only when the existing Jev
 client is configured. It reuses the authenticated PC bridge and its bounded
-`uia_snapshot`/`uia_act` commands; no new route, credential, or migration is
-added. Any foreground Windows app is eligible; application names are bounded
-and validated but not allow-listed. The Windows provider traverses at most
-1,000 controls and depth 12, checking a one-second traversal budget and
-cancellation between traversal batches. The portable policy returns at most
 `uia_snapshot`/`uia_act` commands; no new route, credential, persistence, or
-migration is added. Any bounded foreground Windows process identifier is
-eligible. The Windows provider traverses at most 1,000
-controls and depth 12, checking a one-second traversal budget and cancellation
-between traversal batches. The portable policy returns at most
+migration is added. Any foreground Windows app is eligible; the Windows
+provider traverses at most 1,000 controls and depth 12, checking a one-second
+traversal budget and cancellation between traversal batches. The portable
+policy returns at most
 100 enabled, visible, actionable controls with only role and accessible name.
 Password controls and names that look sensitive are omitted; field values are
 never observed.
@@ -836,6 +832,27 @@ uses the minimum returned Choice confidence and requires at least 0.9. There is 
 self-rated confidence Score question. Jev billing/auth/rate-limit/timeout/status,
 invalid-answer, and network failures are returned as typed outcomes and recorded
 in `reflex.decision` without the goal, API key, or control data.
+
+When a fresh UI Automation snapshot has fewer than three actionable elements,
+`pc_act` can use the same bridge to request `window_capture`. The tray pause blocks
+capture and point actions; capture also fails closed when the focused UI Automation
+control is password-like or has a sensitive label. The foreground window is copied
+to a transient PNG bounded to 1,280×720 and 750 KB. The bridge retains only a
+30-second, one-use capture ID and window geometry; point clicks and scrolls are
+pixel coordinates relative to that capture, checked against its dimensions and
+the still-foreground window before `SendInput`.
+
+The backend sends that PNG to the existing managed-identity Foundry vision client
+using the `gpt-5.6-luna` deployment and requests structured JSON with normalized
+candidate boxes. Jev receives only the bounded labels and boxes, chooses one
+target/action for the step using the existing 0.9 Choice-confidence threshold,
+and can click or scroll but cannot type through a visual-only target. Irreversible
+candidate clicks use the existing `runConfirmed` path. Capture byte buffers are
+held in memory only and cleared after use; captures are excluded from tool audit
+and step activity, and the existing sensitive-tool audit records only redacted
+metadata. There is no
+Foundry computer-use, raw shell, new persistence, or migration; website tasks
+remain on the Chrome path and never launch Edge.
 
 Generic tool auditing records only the outcome for this sensitive tool. The
 `pc_act.step` telemetry allow-list exports only step number, fixed action name,

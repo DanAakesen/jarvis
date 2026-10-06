@@ -162,6 +162,10 @@ public sealed class BridgeClient(
                 {
                     response = BridgeProtocol.Failure(command.Id, exception.Code);
                 }
+                catch (WindowCaptureRefusedException exception)
+                {
+                    response = BridgeProtocol.Failure(command.Id, exception.Code);
+                }
                 catch
                 {
                     response = BridgeProtocol.Failure(command.Id, "failed");

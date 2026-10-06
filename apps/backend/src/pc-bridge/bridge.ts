@@ -15,15 +15,17 @@ import {
   type PcActOptions,
   type PcActOperation,
   type PcActPlanner,
+  type PcActVisionModel,
 } from './pc-act.js';
 
 const MAX_MESSAGE_BYTES = 64 * 1024;
+const MAX_CAPTURE_RESPONSE_BYTES = 1_050_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
 const controlActions = new Set<PcCommand['name']>([
   'open_url', 'open_app', 'close_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
-  'open_file',
+  'window_capture', 'click_point', 'scroll_point', 'open_file',
 ]);
 // Voice session states that mean Dan is talking to Jarvis; `ended` and `failed` end the session.
 const activeVoiceStates = new Set<JarvisActivityEvent['type']>(['listening', 'thinking', 'speaking', 'reconnecting']);
@@ -63,6 +65,15 @@ type PcCommand =
         action: 'type_focused';
         text: string;
       };
+  }
+  | { name: 'window_capture'; arguments: Record<string, never> }
+  | {
+    name: 'click_point';
+    arguments: { snapshotId: string; x: number; y: number; confirmed: boolean };
+  }
+  | {
+    name: 'scroll_point';
+    arguments: { snapshotId: string; x: number; y: number; direction: 'up' | 'down' };
   }
 
   | { name: 'browser_tabs'; arguments: { offset?: number } }
@@ -170,6 +181,8 @@ export interface PcBridgeConnectionOptions {
 
 export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
   readonly pcActPlanner?: PcActPlanner;
+  readonly pcActVisionModel?: PcActVisionModel;
+  readonly pcActVisionDeployment?: string;
   readonly recipes?: PcActOptions['recipes'];
   readonly onPcActStep?: PcActOptions['onStep'];
   readonly runConfirmed?: <T>(
@@ -298,7 +311,7 @@ export class PcBridgeConnection {
   private receive(socket: WebSocket, data: RawData, isBinary: boolean): void {
     if (socket !== this.socket) return;
     const payload = Array.isArray(data) ? Buffer.concat(data) : Buffer.isBuffer(data) ? data : Buffer.from(data);
-    if (isBinary || payload.byteLength > MAX_MESSAGE_BYTES) {
+    if (isBinary || payload.byteLength > MAX_CAPTURE_RESPONSE_BYTES) {
       socket.close(1009, 'Invalid bridge response');
       this.detach(socket);
       return;
@@ -343,6 +356,11 @@ export class PcBridgeConnection {
 
     const pending = this.pending.get(response.id);
     if (!pending) return;
+    if (payload.byteLength > MAX_MESSAGE_BYTES && pending.command !== 'window_capture') {
+      socket.close(1009, 'Invalid bridge response');
+      this.detach(socket);
+      return;
+    }
     if (response.type === 'error') {
       const error = response.error;
       if (error === 'not_allowed') this.finish(response.id, new ToolRefusal('The PC bridge refused that action.'));
@@ -353,10 +371,12 @@ export class PcBridgeConnection {
       else if (error === 'blocked') this.finish(response.id, new ToolRefusal(
         pending.command === 'uia_act'
           ? 'That Windows control is sensitive or unsupported; no action was performed.'
-          : 'Typing into a password, payment-card, one-time-code, or other sensitive field is blocked.',
+          : pending.command === 'window_capture' || pending.command === 'click_point' || pending.command === 'scroll_point'
+            ? 'Screen capture or visual control is blocked while a sensitive field is focused.'
+            : 'Typing into a password, payment-card, one-time-code, or other sensitive field is blocked.',
       ));
       else if (error === 'stale') this.finish(response.id, new ToolRefusal(
-        pending.command.startsWith('uia_')
+        pending.command.startsWith('uia_') || pending.command === 'click_point' || pending.command === 'scroll_point'
           ? 'That Windows control is stale. Take a new snapshot before acting.'
           : 'That browser element is stale. Take a new snapshot before acting.',
       ));
@@ -371,7 +391,9 @@ export class PcBridgeConnection {
         this.finish(response.id, new ToolRefusal('No installed app matched that name; nothing was launched.'));
       }
       else if (error === 'not_found') this.finish(response.id, new ToolRefusal(
-        pending.command.startsWith('uia_')
+        pending.command === 'window_capture'
+          ? 'The foreground Windows window is unavailable.'
+          : pending.command.startsWith('uia_')
           ? 'The foreground Windows app or requested control was not found.'
           : 'The requested app, folder, or window was not found.',
       ));
@@ -577,7 +599,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
       },
       ...(options.pcActPlanner ? [{
         name: 'pc_act',
-        description: 'Control any foreground Windows app with one Jev decision per fresh UI Automation snapshot. Website tasks use Chrome through browser_do, never Edge. Types only explicit quoted, non-sensitive values. Confirm irreversible actions only.',
+        description: 'Control any foreground Windows app with one Jev decision per fresh snapshot. Sparse UI Automation trees use transient visual targets for clicks or scrolling, never typing; UI Automation typing is limited to explicit quoted, non-sensitive values. Website tasks use Chrome through browser_do, never Edge. Confirm irreversible actions only.',
         inputSchema: {
           type: 'object',
           properties: { goal: { type: 'string', minLength: 1, maxLength: 4_000 } },
@@ -593,13 +615,43 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
               commandSignal,
               request.log,
             ),
+            capture: (commandSignal) => bridge.execute(
+              { name: 'window_capture', arguments: {} },
+              commandSignal,
+              request.log,
+            ),
             act: (action, commandSignal) => bridge.execute(
               { name: 'uia_act', arguments: action },
               commandSignal,
               request.log,
             ),
+            actPoint: (action, commandSignal) => bridge.execute(
+              action.action === 'click'
+                ? {
+                  name: 'click_point',
+                  arguments: {
+                    snapshotId: action.snapshotId,
+                    x: action.x,
+                    y: action.y,
+                    confirmed: action.confirmed ?? false,
+                  },
+                }
+                : {
+                  name: 'scroll_point',
+                  arguments: {
+                    snapshotId: action.snapshotId,
+                    x: action.x,
+                    y: action.y,
+                    direction: action.action === 'scroll_up' ? 'up' : 'down',
+                  },
+                },
+              commandSignal,
+              request.log,
+            ),
           }, {
             planner: options.pcActPlanner!,
+            ...(options.pcActVisionModel ? { visionModel: options.pcActVisionModel } : {}),
+            ...(options.pcActVisionDeployment ? { visionDeployment: options.pcActVisionDeployment } : {}),
             ...(options.recipes ? { recipes: options.recipes } : {}),
             ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
             ...(options.onPcActStep ? { onStep: options.onPcActStep } : {}),
@@ -622,7 +674,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
     registerRoutes: async (app) => {
       await app.register(websocket, {
         options: {
-          maxPayload: MAX_MESSAGE_BYTES,
+          maxPayload: MAX_CAPTURE_RESPONSE_BYTES,
           perMessageDeflate: false,
           handleProtocols: (protocols) => protocols.has(PC_BRIDGE_SUBPROTOCOL) ? PC_BRIDGE_SUBPROTOCOL : false,
         },
@@ -1063,12 +1115,32 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
   if (command === 'focus_window') return Object.keys(value).length === 1 && value.activated === true;
   if (command === 'uia_snapshot') return validUiAutomationSnapshot(value);
   if (command === 'uia_act') return validUiAutomationAction(value);
+  if (command === 'window_capture') return validWindowCapture(value);
+  if (command === 'click_point') return validPointActionResult(value, 'click');
+  if (command === 'scroll_point') return validPointActionResult(value, 'scroll');
   if (command === 'browser_tabs') return validBrowserTabs(value);
   if (command === 'browser_snapshot') return validBrowserSnapshot(value);
   if (command === 'browser_act') {
     return validBrowserActionResult(value) || isConfirmationRequired(value);
   }
   return false;
+}
+
+function validWindowCapture(value: Record<string, unknown>): boolean {
+  return Object.keys(value).length === 5 &&
+    typeof value.snapshotId === 'string' &&
+    /^[\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu.test(value.snapshotId) &&
+    typeof value.application === 'string' && /^[\p{L}\p{N}_.-]{1,128}$/u.test(value.application) &&
+    Number.isInteger(value.width) && (value.width as number) >= 1 && (value.width as number) <= 1280 &&
+    Number.isInteger(value.height) && (value.height as number) >= 1 && (value.height as number) <= 720 &&
+    typeof value.png === 'string' && value.png.length >= 12 && value.png.length <= 1_000_000 &&
+    value.png.length % 4 === 0 &&
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value.png);
+}
+
+function validPointActionResult(value: Record<string, unknown>, action: 'click' | 'scroll'): boolean {
+  return Object.keys(value).length === 2 && value.acted === true &&
+    (action === 'click' ? value.action === 'click' : ['scroll_up', 'scroll_down'].includes(String(value.action)));
 }
 
 function validUiAutomationSnapshot(value: Record<string, unknown>): boolean {

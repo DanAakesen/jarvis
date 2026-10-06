@@ -20,6 +20,9 @@ public sealed class CommandPolicyTests
     [InlineData("uia_snapshot", false)]
     [InlineData("browser_snapshot", false)]
     [InlineData("browser_tabs", false)]
+    [InlineData("window_capture", true)]
+    [InlineData("click_point", true)]
+    [InlineData("scroll_point", true)]
     public void Identifies_actions_blocked_when_control_is_paused(string command, bool expected)
     {
         Assert.Equal(expected, CommandPolicy.IsControlAction(command));
@@ -36,6 +39,16 @@ public sealed class CommandPolicyTests
     {
         Assert.True(CommandPolicy.TryGetMediaVirtualKey(action, out var actualKey));
         Assert.Equal(expectedKey, actualKey);
+    }
+
+    [Theory]
+    [InlineData(true, "", true)]
+    [InlineData(false, "Password", true)]
+    [InlineData(false, "One-time code", true)]
+    [InlineData(false, "Search", false)]
+    public void Detects_sensitive_focused_controls(bool isPassword, string name, bool expected)
+    {
+        Assert.Equal(expected, UiAutomationPolicy.IsSensitiveFocusedControl(isPassword, name));
     }
 
     [Theory]
@@ -65,6 +78,9 @@ public sealed class CommandPolicyTests
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"click","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"Hello, Dan","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"scroll_down"}""")]
+    [InlineData("window_capture", "{}")]
+    [InlineData("click_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20,"confirmed":false}""")]
+    [InlineData("scroll_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20,"direction":"down"}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+P","Enter"],"confirmed":false,"closeIntent":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Alt+F4"],"confirmed":false,"closeIntent":true}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"type_focused","text":"search for Jarvis"}""")]
@@ -107,6 +123,10 @@ public sealed class CommandPolicyTests
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"Hello, Dan"}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"123456","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"execute_script","text":"alert(1)"}""")]
+    [InlineData("window_capture", """{"window":"other"}""")]
+    [InlineData("click_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":2048,"y":20,"confirmed":false}""")]
+    [InlineData("click_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20}""")]
+    [InlineData("scroll_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20,"direction":"left"}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Win+L"],"confirmed":false,"closeIntent":true}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+Alt+Delete"],"confirmed":false,"closeIntent":true}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Alt+F4"],"confirmed":false,"closeIntent":false}""")]
@@ -154,6 +174,6 @@ public sealed class CommandPolicyTests
     {
         Assert.Throws<InvalidDataException>(() =>
             BridgeProtocol.Success("1730aa51-f380-4df9-a345-1feb862cb1c4",
-                new { text = new string('x', BridgeProtocol.MaxMessageBytes) }));
+                new { text = new string('x', BridgeProtocol.MaxResponseBytes) }));
     }
 }

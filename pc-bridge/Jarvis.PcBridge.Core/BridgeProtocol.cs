@@ -20,6 +20,7 @@ public static class BridgeProtocol
 {
     public const string Subprotocol = "jarvis.pc.v1";
     public const int MaxMessageBytes = 64 * 1024;
+    public const int MaxResponseBytes = 1_050_000;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -51,7 +52,7 @@ public static class BridgeProtocol
     public static byte[] Success(string id, object result)
     {
         var response = JsonSerializer.SerializeToUtf8Bytes(new BridgeResponse(id, "result", result), JsonOptions);
-        if (response.Length > MaxMessageBytes) throw new InvalidDataException("Bridge response is too large.");
+        if (response.Length > MaxResponseBytes) throw new InvalidDataException("Bridge response is too large.");
         return response;
     }
 

@@ -188,6 +188,9 @@ public static partial class UiAutomationPolicy
         SensitiveIdentifierPattern().IsMatch(name) ||
         SensitiveNumericPattern().IsMatch(name);
 
+    public static bool IsSensitiveFocusedControl(bool isPassword, string? name) =>
+        isPassword || IsSensitiveControl(name ?? string.Empty);
+
     public static bool IsDestructiveControl(string name) => DestructiveControlPattern().IsMatch(name);
 
     public static bool IsSafeText(string value) =>
