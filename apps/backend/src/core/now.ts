@@ -183,7 +183,9 @@ export function registerNowRoutes(app: FastifyInstance) {
     });
     unsubscribeActivity = app.jarvisActivityHub.subscribe((event) => {
       if (closed) return;
-      const frame = `event: jarvis-activity\ndata: ${JSON.stringify(event)}\n\n`;
+      const frame = event.type === 'voice.wake'
+        ? `event: voice-wake\ndata: ${JSON.stringify(event)}\n\n`
+        : `event: jarvis-activity\ndata: ${JSON.stringify(event)}\n\n`;
       if (!response.write(frame)) end();
     });
     reply.hijack();

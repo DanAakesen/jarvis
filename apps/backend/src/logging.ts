@@ -30,7 +30,7 @@ const events = new Set([
   'reflex.decision',
   'vision.watch',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
-  'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing',
+  'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.

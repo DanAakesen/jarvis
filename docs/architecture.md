@@ -746,6 +746,50 @@ Linux Windows-target build run in backend CI. Real device-code sign-in, Windows
 process/window behavior, SQL production writes and the live PC opening flow
 remain unverified.
 
+### Offline wake word (P7-39)
+
+The tray app listens for "Wake up Jarvis" with the Speech SDK
+(`Microsoft.CognitiveServices.Speech` 1.52.0) on-device `KeywordRecognizer` and
+a Speech Studio custom keyword model loaded from `WakeWordModelPath` (an
+absolute path to a `.table` file) in the bridge settings. Keyword spotting needs
+no Speech key or network connection. The default microphone is opened only for
+the current recognition and released when listening stops. Audio is neither
+stored nor sent, and the recognizer's result audio is never read. Listening runs only while
+the persisted tray **Wake word** toggle is on (`WakeWordEnabled`; a missing value
+means on once the model file exists). Without a model, the toggle is disabled
+and explains that `WakeWordModelPath` must be set. The portable
+`WakeWordListener` owns the state: off, listening, paused during voice, or
+microphone unavailable (retried after 5 s). It reports a detection once and
+ignores repeats within 3 s.
+
+While listening, the bridge adds `wakeWord: true` to its `status` message. The
+backend then sends `{ "type": "voice_state", "active": boolean }` on connect and
+whenever any voice session starts (`listening`, `thinking`, `speaking`,
+`reconnecting`) or ends (`ended`, `failed`) on the activity hub. The bridge
+pauses listening while it is active and resumes when it ends or the backend
+disconnects. A bridge without the toggle on sends the earlier two-field status
+and receives no `voice_state`.
+
+On detection the bridge plays the Windows "Speech On" chime (or the asterisk
+system sound) and sends `{ "type": "wake_word", "at": "<ISO UTC ms>" }` over the
+authenticated bridge WebSocket. In parallel it focuses Dan's Jarvis tab. With
+the extension connected, the native-messaging request `focus_jarvis_tab`
+activates an existing tab on the Jarvis origin and focuses its window, or opens
+the configured `WebUrl` (default: the production Static Web App origin). The
+bridge then brings Chrome forward. Without the extension, it brings forward a
+Chrome window titled `Jarvis - …` or launches the Chrome executable with the URL.
+Edge and the Windows default browser are never used. This focus is the wake
+word's own consent, so it does not depend on the Chrome automation toggle.
+
+The backend accepts `wake_word` only on `/pc-bridge/connect`, which admits only
+the PC bridge principal. Any other field, or a timestamp that is not a canonical
+millisecond UTC ISO string, closes the socket with 1007. A valid event
+publishes `{ type: 'voice.wake', at }` on the existing Jarvis activity hub (type
+`JarvisVoiceWakeEvent` / `isJarvisVoiceWakeEvent` in `@jarvis/contracts`).
+`GET /now/events` streams it as the separate SSE event `voice-wake`, which the
+current web client ignores until Dan's UI work makes the page start voice. The
+backend logs the content-free, allowlisted `pc_bridge.wake_word`.
+
 ### Windows UI Automation app control (P7-07, expanded by P7-32)
 
 The backend registers the sensitive `pc_act` tool only when the existing Jev
