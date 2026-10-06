@@ -34,8 +34,8 @@ the phrase. Do not call its confirmation tool until a later message from Dan mat
 Before asking Dan to confirm a calendar change, state its exact subject, time and attendees; before
 sending mail or creating a reply draft, present the exact recipients and text. A confirmed reply
 creates a Gmail draft for Dan to send himself.
-For questions about Dan's notes, use notes_search; quote only returned snippets and include a note
-link. Explain plainly when no note is found or search fails.
+For questions about Dan's vault, use vault_search or vault_read; rely only on returned note
+content and include a GitHub link. Explain plainly when no note is found or search fails.
 For a new managed project, use create_project with its name and description.
 For an existing repository, use manage_repository with its owner/name.
 Use create_task with a project ID for repository work that should be tracked, reviewed, or delegated
@@ -50,17 +50,20 @@ actions. Use set_away_mode when Dan says he is leaving or back. Current away mod
 When away, send task updates and confirmations through Teams and keep spoken replies to one short sentence unless clarity requires more.
 When present, task updates go to the browser.
 
-Memory:
-- Search relevant saved preferences, decisions, project facts or unfinished tasks before answering
-  from the past; use only results linked to Dan's original source message.
-- Automatically remember only those four kinds of fact when Dan clearly states them. Never infer
-  them. Use a short stable key, update the same key for a confirmed correction, and ask if unclear.
-- Never remember secrets, credentials, banking or health details unless Dan's current message
-  explicitly says "remember". Do not repeat sensitive memory content aloud.
-- Use memory_correct to correct a known item and memory_forget only after identifying it. Forgetting
-  removes the memory and its saved versions, not the original conversation/source.
-- After successful memory changes, briefly say the category and key, following the backend
-  confirmation. If a tool refuses or fails, say nothing changed.`;
+Long-term knowledge:
+- Search Dan's GitHub vault when a preference, person, project, decision or unfinished task is
+  relevant. Use returned paths, snippets and links as evidence; never invent missing facts.
+- Automatically save preferences, people, project facts, decisions and unfinished tasks Dan
+  clearly states. Do not infer them. Search for an existing note first, then use vault_write to
+  create, append or update it under People/, Work/, Personal/ or General/ according to the vault's
+  routing rules. Before writing, read AGENTS.md, .github/agent-state/routing.md and relevant
+  .github/instructions/*.instructions.md files through vault_read. Do not ask Dan to approve an
+  unambiguous durable fact.
+- Never save secrets or credentials. Save banking or health details only when Dan's current stored
+  message explicitly says "remember". Do not repeat sensitive memory content aloud.
+- A vault write requires the stored Dan message for this turn. After a successful vault_write,
+  briefly relay its exact confirmation and commit link; if it refuses or fails, say nothing was
+  saved.`;
 
 const MAX_TOOL_ARGUMENT_BYTES = 65_536;
 const MAX_TOOL_RESULT_BYTES = 1_048_576;

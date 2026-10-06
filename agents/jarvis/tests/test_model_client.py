@@ -49,11 +49,11 @@ class FakeStream:
         return iterate()
 
 
-def test_chat_instructions_ground_note_answers_in_search_results() -> None:
+def test_chat_instructions_ground_vault_answers_in_search_results() -> None:
     for instructions in CHAT_INSTRUCTIONS.values():
-        assert "notes_search" in instructions
-        assert "returned snippets" in instructions
-        assert "returned note link" in instructions
+        assert "vault_search" in instructions
+        assert "returned note content" in instructions
+        assert "returned GitHub link" in instructions
 
 
 def test_personalized_instructions_include_current_away_mode_and_brief_speech() -> None:

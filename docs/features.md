@@ -22,7 +22,7 @@ The complete list of what Jarvis does or will do, for UI design and planning. Ea
 | **Phone** | Away from the browser: Teams app or phone |
 | **Background** | Runs without Dan; shows only its effects |
 
-Status as of 5 October 2026.
+Status as of 6 October 2026.
 
 ## Jarvis: conversation and voice
 
@@ -42,6 +42,7 @@ Status as of 5 October 2026.
 | Image generation | Ask Jarvis to create an image with the existing ChatGPT/Codex subscription; open it in the workspace and inspect its saved artifact in chat history | Both | Main conversation and workspace | Built offline; live Codex and Blob acceptance pending | P7-15 |
 | Model switching by voice | Change Jarvis for the next session or a Ready task using verified provider options; running-task changes are refused | Voice/chat | Main page | Built (offline) | P7-11 |
 | Live status by voice | Jarvis announces important task changes and answers "what's going on?" | Voice/chat | — | Built (offline) | P7-12 |
+| Long-term knowledge | Recall relevant facts from Dan's GitHub vault and save clearly stated durable information there with a commit link | Voice/chat | — | Implemented offline; App installation on the vault and live access pending | P7-40 |
 | Continuous screen/camera watching | Independently share screen/camera and ask “tell me when…”; Jarvis comments only on useful observations, dedupes repeats, and stops at the shared USD 1/day budget | Both | Main conversation; backend `/vision/watch` and watch tools | Backend built offline; separate UI and live model/delivery acceptance pending | P7-38 (#440) |
 | Long-term memory | Recall relevant stated preferences, project facts, decisions and unfinished tasks with Dan's source; inspect, correct or forget them | Voice/chat | — | In progress | P7-13 |
 | Live voice test | Dan's verdict on Danish and English voice | Voice/chat | — | In progress | P5-07 |
@@ -145,7 +146,7 @@ Status as of 5 October 2026.
 | Media controls | Play/pause, skip tracks and adjust or mute volume with fixed Windows media keys. These reversible actions work through chat, voice and Jev reflexes without confirmation | Voice/chat | Backend `pc_media`; PC companion | Built offline; live Windows/media-device acceptance pending | P7-31 |
 | Camera | Turn on the webcam from the shared shell and ask Jarvis by chat or voice to inspect a single frame; camera state times out and stops with the session | Both | Shared top bar, main conversation | Built offline; live camera/model check pending | P7-08 |
 | Calendar and mail | Google Calendar agenda, date-range search and next appointment, free slots, create/move meetings, Gmail search and summaries, reply drafts and sending after exact confirmation | Voice/chat | Backend tools; no new page | Built offline; Google OAuth setup and live range/next-event acceptance pending | P7-09, P7-22, P7-28 |
-| Second brain | Search Dan's configured OneDrive notes folder and quote snippets with links | Voice/chat | — | Implemented offline; Graph setup and live search pending | P7-10 |
+| Long-term knowledge | Search and read Dan's private GitHub vault, and automatically save durable facts there with a commit link | Voice/chat | — | Implemented offline; GitHub App installation on the vault and live search/write pending | P7-40 |
 
 ## Jarvis UI enabling logic (P8-03)
 
@@ -194,7 +195,7 @@ This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell c
 
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
-| Long-term memory | Recall preferences, decisions and unfinished work across sessions; inspect, correct and forget retained memories | Voice/chat | Existing conversation; dedicated management UI undecided | Planned (storage, capture and retention decisions open) | P7-13 |
+| Long-term knowledge | Search and read Dan's private GitHub vault, and automatically save clearly stated preferences, people, project facts, decisions and unfinished tasks | Voice/chat | Existing conversation; dedicated management UI undecided | Implemented offline; GitHub App installation and live access pending | P7-40 |
 | Web research | Use the existing ChatGPT/Codex subscription for bounded, source-linked research in chat/voice and dynamic views | Both | Conversation and dynamic workspace | Built offline; live Codex/Foundry acceptance pending | P7-14; existing P8-06/P8-14/P8-15 consumers |
 | Image generation | Generate with Dan's ChatGPT/Codex subscription, inspect truthful job status, and view the private artifact in chat and the workspace | Both | Conversation and dynamic workspace | Implemented offline; live subscription/Blob acceptance pending; retention unresolved | P7-15; existing P8-06/P8-14/P8-15 consumers |
 | Editable personality | Set tone/response-style and custom-instruction defaults for new sessions; reset to the current default | Screen | Settings → Jarvis → Personality | Built offline; live Azure behavior unverified | P7-16, P8-19 |

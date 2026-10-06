@@ -252,7 +252,8 @@ describe('GitHub webhook receiver', () => {
   });
 
   it('rejects a signature for different raw bytes before writing a delivery', async () => {
-    const { app, deliveries } = fixture();
+    const onMapping = vi.fn(async () => {});
+    const { app, deliveries } = fixture(async () => secret, onMapping);
     const response = await deliver(
       app,
       'delivery-1',
@@ -263,6 +264,36 @@ describe('GitHub webhook receiver', () => {
     expect(response.statusCode).toBe(401);
     expect(response.json()).toEqual({ error: 'Invalid webhook signature' });
     expect(deliveries.size).toBe(0);
+    expect(onMapping).not.toHaveBeenCalled();
+  });
+
+  it('processes a signed push to the vault repository only after signature verification', async () => {
+    const onMapping = vi.fn(async () => {});
+    const { app, deliveries } = fixture(
+      async () => secret,
+      onMapping,
+      (name) => name === 'DanAakesen/vault',
+    );
+    const body = Buffer.from(JSON.stringify({
+      repository: { full_name: 'DanAakesen/vault', pushed_at: timestamp },
+      ref: 'refs/heads/master',
+      after: sha,
+    }));
+
+    const accepted = await deliver(app, 'vault-push', 'push', body);
+    expect(accepted.statusCode).toBe(202);
+    expect(onMapping).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'push',
+      repository: 'DanAakesen/vault',
+      ref: 'refs/heads/master',
+      sha,
+    }));
+    expect(deliveries.size).toBe(1);
+
+    const rejected = await deliver(app, 'bad-vault-push', 'push', body, Buffer.from(JSON.stringify(payloadFor('push'))));
+    expect(rejected.statusCode).toBe(401);
+    expect(onMapping).toHaveBeenCalledOnce();
+    expect(deliveries.size).toBe(1);
   });
 
   it('records valid but unsupported events as ignored', async () => {

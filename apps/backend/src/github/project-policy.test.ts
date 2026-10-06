@@ -117,7 +117,12 @@ function fixture(
   const recordEvent = vi.fn(async () => ({ id: '1' } as never));
   const tasks = { transition, recordEvent } as unknown as Pick<TaskStore, 'transition' | 'recordEvent'>;
   const issue = vi.fn(async () => 'installation-token');
-  const tokenIssuer: GitHubAppTokenIssuer = { issue };
+  const tokenIssuer: GitHubAppTokenIssuer = {
+    issue,
+    issueForActions: vi.fn(async () => 'actions-token'),
+    issueForContents: vi.fn(async () => 'contents-token'),
+    issueForContentsWrite: vi.fn(async () => 'contents-write-token'),
+  };
   const api = github(githubOptions, onBaseBranchRead);
   const runConfirmed = confirmationEnabled
     ? vi.fn(<T>(_summary: string, action: () => Promise<T>) => action())
