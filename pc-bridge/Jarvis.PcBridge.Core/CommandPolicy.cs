@@ -7,7 +7,7 @@ public static class CommandPolicy
     private static readonly HashSet<string> Apps = new(StringComparer.Ordinal)
     {
         "vscode",
-        "edge",
+        "chrome",
         "explorer",
         "terminal",
     };
