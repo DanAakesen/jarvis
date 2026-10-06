@@ -94,7 +94,6 @@ export class HtmlArtifactStore {
     title: string,
     html: string,
     sources: HtmlArtifactSource[],
-    viewId: string,
     signal: AbortSignal,
   ): Promise<HtmlArtifact> {
     validate(ownerObjectId, title, html, sources);
@@ -102,16 +101,15 @@ export class HtmlArtifactStore {
     const request = this.pool.request()
       .input('id', sql.UniqueIdentifier, id)
       .input('owner', sql.UniqueIdentifier, ownerObjectId.toLowerCase())
-      .input('viewId', sql.NVarChar(64), viewId)
       .input('title', sql.NVarChar(200), title.trim())
       .input('html', sql.NVarChar(sql.MAX), html)
       .input('size', sql.Int, Buffer.byteLength(html, 'utf8'))
       .input('sources', sql.NVarChar(sql.MAX), JSON.stringify(sources));
     const { recordset } = await query<HtmlArtifactRow>(request, `INSERT dbo.workspace_html_artifacts
-      (id, owner_object_id, view_id, title, html, size_bytes, sources_json)
+      (id, owner_object_id, title, html, size_bytes, sources_json)
       OUTPUT inserted.id, inserted.title, inserted.html, inserted.size_bytes, inserted.sources_json,
         inserted.created_at, inserted.pinned
-      VALUES (@id, @owner, @viewId, @title, @html, @size, @sources);`, signal);
+      VALUES (@id, @owner, @title, @html, @size, @sources);`, signal);
     const artifact = artifactFromRow(recordset[0]);
     if (!artifact) throw new Error('HTML artifact insert returned no row');
     return artifact;

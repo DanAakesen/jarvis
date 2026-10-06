@@ -50,6 +50,7 @@ describe('committed SQL manifest', () => {
       '0015_screen_frame_usage.sql', '0016_long_term_memory.sql', '0017_phone_call_sessions.sql',
       '0018_tool_call_refused_outcome.sql', '0019_workspace_artifacts.sql',
       '0020_chat_message_steering.sql', '0021_workspace_html_artifacts.sql',
+      '0022_workspace_html_artifact_history.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
