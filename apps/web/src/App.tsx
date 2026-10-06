@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import type { HtmlArtifactFrame, JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot } from '@jarvis/contracts';
+import type { JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
@@ -17,7 +17,6 @@ import { NotFoundPage, SignInPage } from './pages';
 import { NowFeedPanel } from './NowFeedPanel';
 import { SettingsPage } from './SettingsPage';
 import { ThemePreferenceProvider } from './theme-preference';
-import { useThemePreference } from './theme-preference-context';
 import { useSignIn, type SignInSession } from './useSignIn';
 import { backendFetch } from './backend-request';
 import { Workspace, PHONE_LAYOUT_MEDIA_QUERY, type WorkspaceController } from './Workspace';
@@ -40,43 +39,6 @@ function activityLabel(event: JarvisActivityEvent | null): string {
     case 'failed': return 'Jarvis activity failed';
     case 'ended': return 'Jarvis activity ended';
   }
-}
-
-function readWorkspaceFrame(
-  theme: 'dark' | 'light',
-  density: 'compact' | 'comfortable',
-  motionPreference: 'full' | 'calm' | 'reduced' | undefined,
-  phone: boolean,
-  layout: 'tiled' | 'layered',
-): HtmlArtifactFrame {
-  const root = document.documentElement;
-  const styles = getComputedStyle(root);
-  const designTokens: Record<string, string> = {};
-  for (const name of [
-    '--page', '--surface', '--surface-muted', '--surface-translucent', '--text',
-    '--text-muted', '--primary-action', '--line-body', '--radius-control',
-  ]) {
-    const value = styles.getPropertyValue(name).trim();
-    if (value) designTokens[name] = value.slice(0, 200);
-  }
-  const reducedMotion = motionPreference === 'reduced' ||
-    (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
-  return {
-    widthPx: Math.max(1, Math.min(8192, Math.round(window.innerWidth))),
-    heightPx: Math.max(1, Math.min(8192, Math.round(window.innerHeight))),
-    device: phone ? 'phone' : 'desktop',
-    theme,
-    reducedMotion,
-    density,
-    designTokens,
-    fonts: {
-      body: styles.getPropertyValue('--font-body').trim().slice(0, 120) || 'system-ui, sans-serif',
-      heading: styles.getPropertyValue('--font-heading').trim().slice(0, 120) || 'system-ui, sans-serif',
-      mono: styles.getPropertyValue('--font-mono').trim().slice(0, 120) || 'ui-monospace, monospace',
-    },
-    layout,
-    pinned: false,
-  };
 }
 
 function ShellIcon({ name }: { name: ShellIconName }) {
@@ -173,42 +135,15 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const navigationToggle = useRef<HTMLButtonElement>(null);
   const workspaceController = useRef<WorkspaceController>(null);
   const contextPanel = useContextPanel();
-  const themePreference = useThemePreference();
   const [openWindows, setOpenWindows] = useState<WorkspaceSnapshot['windows']>([]);
-  const [workspaceLayout, setWorkspaceLayout] = useState<'tiled' | 'layered'>('tiled');
-  const [workspaceFrame, setWorkspaceFrame] = useState<HtmlArtifactFrame>(() =>
-    readWorkspaceFrame('light', 'comfortable', undefined, false, 'tiled'));
   const onOpenWindowsChange = useCallback((windows: WorkspaceSnapshot['windows']) => {
     setOpenWindows((current) => JSON.stringify(current) === JSON.stringify(windows) ? current : windows);
   }, []);
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false);
-  useEffect(() => {
-    const update = () => setWorkspaceFrame(readWorkspaceFrame(
-      themePreference.resolvedTheme,
-      themePreference.appearance.density === 'compact' ? 'compact' : 'comfortable',
-      themePreference.appearance.motion,
-      phone,
-      workspaceLayout,
-    ));
-    update();
-    window.addEventListener('resize', update);
-    const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    motion?.addEventListener?.('change', update);
-    return () => {
-      window.removeEventListener('resize', update);
-      motion?.removeEventListener?.('change', update);
-    };
-  }, [
-    phone,
-    themePreference.appearance.density,
-    themePreference.appearance.motion,
-    themePreference.resolvedTheme,
-    workspaceLayout,
-  ]);
   const workspaceCommands = useMemo(() => ({
-    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen, frame: workspaceFrame },
+    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen },
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       if (command.operation === 'context-panel') {
         if (command.action === 'open') {
@@ -229,7 +164,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
     },
     minimiseAll: () => workspaceController.current?.minimiseAll(),
     hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
-  }), [contextPanel, openWindows, workspaceFrame]);
+  }), [contextPanel, openWindows]);
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
@@ -427,8 +362,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
             <Outlet />
             {signedIn && (
               <div className="workspace-shell-area" hidden={pathname !== '/'}>
-                <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows}
-                  onOpenWindowsChange={onOpenWindowsChange} onArrangementChange={setWorkspaceLayout} />
+                <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} />
               </div>
             )}
             {signedIn && pathname !== '/' && (

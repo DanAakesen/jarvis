@@ -74,8 +74,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   views: readonly WorkspaceView[];
   onVisibleViewsChange?: (visible: boolean) => void;
   onOpenWindowsChange?: (windows: WorkspaceSnapshot['windows']) => void;
-  onArrangementChange?: (layout: 'tiled' | 'layered') => void;
-}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange, onArrangementChange }, ref) {
+}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange }, ref) {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
   const closedAgentViews = useRef(new Map<string, { view: WorkspaceView; geometry: Geometry | undefined }>());
@@ -165,10 +164,6 @@ export const Workspace = forwardRef<WorkspaceController, {
   useEffect(() => {
     onOpenWindowsChange?.(openViews.slice(0, 32).map(({ id, title }) => ({ viewId: id, title })));
   }, [onOpenWindowsChange, openViews]);
-
-  useEffect(() => {
-    onArrangementChange?.(arrangement);
-  }, [arrangement, onArrangementChange]);
 
   useLayoutEffect(() => {
     onVisibleViewsChange?.(visibleViews.length > 0);
