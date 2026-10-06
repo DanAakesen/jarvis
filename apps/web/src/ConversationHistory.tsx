@@ -247,10 +247,6 @@ export function ConversationHistory({
   const submitText = useCallback((value: string, queueOnly = false) => {
     const text = value.trim();
     if (!text || voiceActive) return;
-    if (isSharedBrowserRequest(text) && !screenShare?.sharing) {
-      setTurnError('Share the Chrome tab you want Jarvis to use, then ask again.');
-      return;
-    }
     const currentCameraContext = session !== null && visionContext?.source === 'camera' &&
       visionContext.sessionId === session.id && session.language === language;
     if (isCameraRequest(text) && !camera?.sharing && !currentCameraContext) {
@@ -316,9 +312,6 @@ export function ConversationHistory({
     let contextForTurn: string | undefined;
     let sharedContextForTurn: { screenDescription: string; sharedWindowTitle?: string } | undefined;
     try {
-      if (isSharedBrowserRequest(text) && !screenShare?.sharing) {
-        throw new Error('Share the Chrome tab you want Jarvis to use, then ask again.');
-      }
       const cameraContextReady = session?.language === language && visionContext?.source === 'camera' &&
         visionContext.sessionId === session.id;
       if (isCameraRequest(text) && !camera?.sharing && !cameraContextReady) {
