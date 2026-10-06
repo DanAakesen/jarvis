@@ -56,7 +56,9 @@ vi.mock('./voice-client', () => ({
       this.options.onStatus('stopped', 'Voice is off.');
       this.options.onSessionEnded?.();
     }
-    enableMicrophone = vi.fn(async () => {});
+    retryMicrophone = vi.fn(async () => {});
+    playbackLevel = () => 0;
+    inputLevel = () => 0;
     setMuted = vi.fn();
     sendScreenContext = vi.fn();
   },
@@ -563,7 +565,7 @@ describe('App shell', () => {
 
     expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', false);
     expect(screen.queryByRole('group', { name: 'Voice controls' })).toBeNull();
-    expect(screen.getByText(/microphone stays off until you enable it/)).not.toBeNull();
+    expect(screen.getByText(/Your browser asks for microphone access when voice starts/)).not.toBeNull();
     expect(await screen.findByText('The backend is awake.')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Put the backend to sleep' })).toHaveProperty('disabled', false);
   });

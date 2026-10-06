@@ -158,9 +158,9 @@ describe('shared glass tokens', () => {
     expect(historyStyles).not.toContain('voice-orb');
     expect(historyStyles).not.toContain('.composer-language');
     expect(historyStyles).toContain('@media (max-width: 360px) {\n  .voice-bar { gap: 4px; padding: 6px; }');
-    expect(ruleDeclaration(historyStyles, /\.voice-bar-detail\s*\{([^}]*)\}/, 'color')).toBe('var(--text-muted)');
-    expect(ruleDeclaration(historyStyles, /\.voice-bar-action, \.voice-end-control\s*\{([^}]*)\}/, 'min-height'))
-      .toBe('44px');
+    expect(historyStyles).not.toContain('.voice-bar-status');
+    expect(historyStyles).not.toContain('.voice-bar-action');
+    expect(ruleDeclaration(historyStyles, /\.voice-end-control\s*\{([^}]*)\}/, 'min-height')).toBe('44px');
     const voiceInput = /\.app-shell\[data-voice-active="true"\] \.conversation-input\[data-voice-active="true"\]\s*\{([^}]*)\}/;
     expect(ruleDeclaration(historyStyles, voiceInput, 'backdrop-filter')).toBe('none');
   });
@@ -176,8 +176,8 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.more-menu-trigger\s*\{([^}]*)\}/, 'width')).toBe('44px');
     expect(ruleDeclaration(source, /\.more-menu-item\s*\{([^}]*)\}/, 'min-height')).toBe('44px');
     expect(historyStyles).not.toContain('.luminous-glass');
-    expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.more-menu-list, \.more-menu-flyout, \.voice-bar-glyph \* \{ animation: none !important; \}/u);
-    expect(source).toContain(':root[data-motion="reduced"] .voice-bar-glyph *');
+    expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.more-menu-list, \.more-menu-flyout, \.voice-status-glyph \* \{ animation: none !important; \}/u);
+    expect(source).toContain(':root[data-motion="reduced"] .voice-status-glyph *');
   });
 
   it('keeps theme-aware stage materials in the shared semantic CSS source', () => {
