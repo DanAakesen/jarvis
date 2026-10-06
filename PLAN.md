@@ -278,7 +278,7 @@ Goal: Dan talks to Jarvis in Danish or English in the browser.
 | P5-05 | [#59](https://github.com/DanAakesen/jarvis/issues/59) | Language toggle and voice settings on the main page and the settings page | Toggle switches voice agent for the next session | P5-02, P5-03, P1-11 | Complete |
 | P5-06 | [#60](https://github.com/DanAakesen/jarvis/issues/60) | Voice sessions stored as `jarvis_sessions` with transcripts and usage (voice minutes) | Transcript and usage visible | P4-03, P2-12 | Complete |
 | P5-07 | [#61](https://github.com/DanAakesen/jarvis/issues/61) | Dan's live test (V8 of the voice prototype) in Danish and English; record the verdict in [docs/decisions.md](docs/decisions.md) | Verdict recorded | P5-04, P5-05 | In progress |
-| P5-13 | [#411](https://github.com/DanAakesen/jarvis/issues/411) | Stop idle webhook and timer traffic from keeping Azure SQL awake; retain tracked task/PR updates | Source-level before/after SQL path inventory; tests prove irrelevant webhook and idle timer paths skip SQL | P2-06, P3-03, P6-03 | In progress |
+| P5-13 | [#411](https://github.com/DanAakesen/jarvis/issues/411) | Stop idle webhook and timer traffic from keeping Azure SQL awake; retain tracked task/PR updates | Source-level before/after SQL path inventory; tests prove irrelevant webhook and idle timer paths skip SQL | P2-06, P3-03, P6-03 | Complete |
 
 ### P6 — Hardening
 
