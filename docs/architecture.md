@@ -1415,8 +1415,9 @@ Key Vault response, or runner result is returned.
   within three days; expired credentials and HTTP 401/403 are `failed`.
   Tokens without expiry can be `ok` with `expiresAt: null`. Secret lookup,
   transport, rate-limit (429 or rate-limit headers on 403), and server failures preserve the previous
-  status and log only a fixed diagnostic. Runner-reported expiry also updates
-  health, but absent/invalid expiry no longer overwrites it with `unknown`.
+  status and log only a fixed diagnostic. The authenticated check is the sole
+  owner of Copilot health: Codex renewal no longer copies runner expiry metadata
+  into health, which could overwrite an authentication failure with `ok`.
 - GitHub App: all repository-scoped and catalog installation-token mint
   paths record `ok` or `failed` and `lastCheckedAt`; successful mints also
   update `lastRenewedAt`. `expiresAt` remains null because an installation

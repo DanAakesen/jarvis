@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CredentialStatusStore } from './credential-status.js';
+import type { CredentialStatusStore, CredentialStatusValue } from './credential-status.js';
+import type { FoundryClient, InvocationSnapshot } from '../foundry/client.js';
 import { checkCopilotStatus, startDailyCopilotStatusJob } from './copilot-status.js';
+import { runCodexRenewalOnce } from './codex-renewal.js';
 
 function fixture(status = 200, expiresAt: string | null = null) {
   const updateCopilotStatus = vi.fn<CredentialStatusStore['updateCopilotStatus']>();
@@ -18,6 +20,33 @@ function fixture(status = 200, expiresAt: string | null = null) {
 afterEach(() => { vi.useRealTimers(); });
 
 describe('Copilot credential health', () => {
+  it('retains a confirmed authentication failure after Codex returns a future Copilot expiry', async () => {
+    const { store, options, updateCopilotStatus } = fixture(401, '2030-01-01T00:00:00.000Z');
+    let health: CredentialStatusValue = 'unknown';
+    updateCopilotStatus.mockImplementation(async (status) => { health = status; });
+    store.acquireCodexRenewalLease = async () => true;
+    store.refreshCodexRenewalLease = async () => true;
+    store.completeCodexRenewal = async () => {};
+    const client: Pick<FoundryClient, 'startCodexRenewal' | 'status' | 'deleteSession'> = {
+      startCodexRenewal: async () => ({
+        invocationId: 'invocation', sessionId: 'session', agent: 'codex', status: 'queued',
+      }),
+      status: async () => ({
+        status: 'completed', error: null,
+        result: {
+          renewed: false, expires: '2030-01-01T00:00:00.000Z',
+          copilot: { expires: '2030-01-01T00:00:00.000Z' },
+        },
+      } as InvocationSnapshot),
+      deleteSession: async () => {},
+    };
+    await checkCopilotStatus(store, options);
+    expect(health).toBe('failed');
+    await runCodexRenewalOnce(store, client, undefined, true);
+    expect(health).toBe('failed');
+    expect(updateCopilotStatus).toHaveBeenCalledOnce();
+  });
+
   it.each([
     [200, null, 'ok'],
     [200, '2026-11-01T00:00:00.000Z', 'ok'],

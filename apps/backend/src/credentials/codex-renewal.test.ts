@@ -50,9 +50,7 @@ describe('Codex renewal job', () => {
     expect(store.completeCodexRenewal).toHaveBeenCalledWith(
       expect.any(String), 'ok', '2030-01-01T00:00:00.000Z', null, true,
     );
-    expect(store.updateCopilotStatus).toHaveBeenCalledWith(
-      'ok', '2030-01-01T00:00:00.000Z', '2026-10-03T00:00:00.000Z',
-    );
+    expect(store.updateCopilotStatus).not.toHaveBeenCalled();
     expect(client.deleteSession).toHaveBeenCalledWith('session');
   });
 
@@ -74,22 +72,15 @@ describe('Codex renewal job', () => {
     expect(client.startCodexRenewal).not.toHaveBeenCalled();
   });
 
-  it('does not overwrite authenticated Copilot health with missing runner expiry', async () => {
+  it.each([null, '2020-01-01T00:00:00.000Z', '2030-01-01T00:00:00.000Z'])(
+    'does not overwrite authenticated Copilot health with runner expiry %s', async (expires) => {
     const { store, client } = fixture('completed', {
-      renewed: false, expires: '2030-01-01T00:00:00.000Z', copilot: { expires: null },
+      renewed: false, expires: '2030-01-01T00:00:00.000Z', copilot: { expires },
     });
     await runCodexRenewalOnce(store, client);
     expect(store.updateCopilotStatus).not.toHaveBeenCalled();
-  });
-
-  it('marks an expired Copilot credential as failed', async () => {
-    const { store, client } = fixture('completed', {
-      renewed: false, expires: '2030-01-01T00:00:00.000Z',
-      copilot: { expires: '2020-01-01T00:00:00.000Z' },
-    });
-    await runCodexRenewalOnce(store, client);
-    expect(store.updateCopilotStatus).toHaveBeenCalledWith('failed', '2020-01-01T00:00:00.000Z', null);
-  });
+    },
+  );
 
   it('keeps the lease until expiry when invocation completion is uncertain', async () => {
     const { store, client } = fixture('running', null);

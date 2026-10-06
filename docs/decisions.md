@@ -484,6 +484,8 @@ single-flight exclusion. Uncertain completion remains distinct from failure.
 
 Copilot health uses a bounded authenticated GitHub check plus available Key
 Vault expiry; it establishes token authentication, not seat entitlement.
+That check owns Copilot status exclusively, so runner expiry-only metadata
+cannot clear a confirmed authentication failure during Codex renewal.
 GitHub App health follows actual installation-token mints, including catalog
 operations, rather than an extra polling request. Failed mint transitions
 raise one transactional activity alert per failure episode. Check timestamps
