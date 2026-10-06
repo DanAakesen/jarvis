@@ -1464,8 +1464,11 @@ describe('committed domain schema (groups 1-8)', () => {
     const message = await scalar(`INSERT dbo.messages
       (jarvis_session_id, role, text, language, interrupted)
       VALUES (${String(session)}, N'jarvis', N'Partial reply', N'en', 1)`);
-    const latest = await readDownMigration('0021_vault_memory_index.sql');
-    expect(await revertMigration(pool, committed, latest)).toBe(latest.name);
+    const newer = committed.filter((migration) => migration.name > '0020_chat_message_steering.sql').reverse();
+    for (const migration of newer) {
+      const script = await readDownMigration(migration.name);
+      expect(await revertMigration(pool, committed, script)).toBe(script.name);
+    }
     const down = await readDownMigration('0020_chat_message_steering.sql');
 
     await expect(revertMigration(pool, committed, down))
@@ -1478,7 +1481,7 @@ describe('committed domain schema (groups 1-8)', () => {
       `UPDATE dbo.messages SET language = NULL, interrupted = 0 WHERE id = ${String(message)}`,
     );
     expect(await revertMigration(pool, committed, down)).toBe(down.name);
-    expect(await applyMigrations(pool, committed)).toEqual([down.name, latest.name]);
+    expect(await applyMigrations(pool, committed)).toEqual([down.name, ...[...newer].reverse().map((migration) => migration.name)]);
   });
 
   it('refuses to revert a migration that is not the latest applied one and keeps state on failure', async () => {
