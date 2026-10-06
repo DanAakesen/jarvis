@@ -142,15 +142,12 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
           SET @runChanged = 1;
         END;
         IF @releaseId IS NOT NULL AND @status = N'completed' AND @runChanged = 1
-          AND @conclusion <> N'cancelled'
-          AND (@deploymentWorkflow = 1 OR (
-            @workflow = N'Release' AND @trigger = N'push'
-            AND EXISTS (SELECT 1 FROM dbo.projects WHERE id = @projectId AND default_branch = @branch)
-          ))
+          AND @workflow = N'Release' AND @trigger = N'push'
+          AND EXISTS (SELECT 1 FROM dbo.projects WHERE id = @projectId AND default_branch = @branch)
+          UPDATE dbo.releases SET version = CONVERT(nvarchar(100), @runNumber) WHERE id = @releaseId;
+        IF @releaseId IS NOT NULL AND @status = N'completed' AND @runChanged = 1
+          AND @conclusion <> N'cancelled' AND @deploymentWorkflow = 1
           UPDATE dbo.releases SET
-            version = CASE WHEN @workflow = N'Release' AND @trigger = N'push'
-              AND EXISTS (SELECT 1 FROM dbo.projects WHERE id = @projectId AND default_branch = @branch)
-              THEN CONVERT(nvarchar(100), @runNumber) ELSE version END,
             status = CASE WHEN status = N'released' THEN status
               WHEN @conclusion = N'failure' THEN N'failed' ELSE N'building' END
           WHERE id = @releaseId;
@@ -165,7 +162,20 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
     .input('status', sql.NVarChar(16), mapping.status)
     .input('workflowRunId', sql.BigInt, mapping.workflowRunId ?? null)
     .input('at', sql.DateTime2, new Date(mapping.at));
-  await request.query(`DECLARE @projectId bigint = (SELECT id FROM dbo.projects WHERE repo = @repository);
+  const previous = await request.query<{ alreadyFailed: boolean }>(
+    `DECLARE @alreadyFailed bit = CASE WHEN EXISTS (
+      SELECT 1 FROM dbo.deployments WITH (UPDLOCK, HOLDLOCK)
+      WHERE github_deployment_id = @deploymentId AND status = N'failure'
+    ) OR EXISTS (
+      SELECT 1 FROM dbo.deployment_failure_receipts WITH (UPDLOCK, HOLDLOCK)
+      WHERE github_deployment_id = @deploymentId
+    ) THEN 1 ELSE 0 END;
+    DECLARE @projectId bigint = (SELECT id FROM dbo.projects WHERE repo = @repository);
+    IF @projectId IS NOT NULL AND @status = N'failure' AND @alreadyFailed = 0 AND NOT EXISTS (
+      SELECT 1 FROM dbo.workflow_runs
+      WHERE project_id = @projectId AND github_run_id = @workflowRunId AND conclusion = N'cancelled'
+    )
+      INSERT dbo.deployment_failure_receipts (github_deployment_id) VALUES (@deploymentId);
     DECLARE @releaseId bigint = (
       SELECT id FROM dbo.releases WHERE project_id = @projectId AND sha = @sha);
     IF @releaseId IS NOT NULL AND NOT EXISTS (
@@ -192,8 +202,9 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
           WHEN @status = N'failure' THEN N'failed' ELSE N'deploying' END,
         released_at = CASE WHEN @status = N'success' THEN @at ELSE released_at END
       WHERE id = @releaseId;
-  END;`);
-  if (mapping.status !== 'failure') return undefined;
+  END;
+  SELECT @alreadyFailed AS alreadyFailed;`);
+  if (mapping.status !== 'failure' || previous.recordset?.[0]?.alreadyFailed) return undefined;
   const project = await new sql.Request(transaction)
     .input('repository', sql.NVarChar(140), mapping.repository)
     .input('deploymentId', sql.BigInt, mapping.id)
@@ -216,7 +227,7 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
       LEFT JOIN dbo.workflow_runs ON project_id = @projectId AND github_run_id = @workflowRunId;`);
   const projectId = project.recordset[0]?.projectId;
   if (!projectId || project.recordset[0]?.conclusion === 'cancelled' || project.recordset[0]?.alerted) return undefined;
-  const workflow = project.recordset[0]?.workflow ?? mapping.environment;
+  const workflow = mapping.workflowId ? `workflow:${mapping.workflowId}` : `environment:${mapping.environment}`;
   const dedupePrefix = `deployment:${projectId}:${createHash('sha256').update(workflow).digest('hex')}:`;
   const alert: ActivityAlert = {
     type: 'deployment_failure',

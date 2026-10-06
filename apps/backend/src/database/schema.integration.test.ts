@@ -34,7 +34,7 @@ const administrator = new sql.ConnectionPool({ ...configuration, database: 'mast
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
-  'activity', 'artifacts', 'credential_status', 'deployments', 'jarvis_sessions', 'memories',
+  'activity', 'artifacts', 'credential_status', 'deployment_failure_receipts', 'deployments', 'jarvis_sessions', 'memories',
   'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects', 'pull_requests', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks',
   'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks',
@@ -480,7 +480,7 @@ describe('committed domain schema (groups 1-8)', () => {
     });
     expect(alertNotifier).toHaveBeenCalledExactlyOnceWith({
       type: 'deployment_failure',
-      dedupeKey: `deployment:${projectId}:${createHash('sha256').update('production').digest('hex')}:${failedDeployment.id}`,
+      dedupeKey: `deployment:${projectId}:${createHash('sha256').update('environment:production').digest('hex')}:${failedDeployment.id}`,
       title: 'Deployment failed: production',
       link: `release:${releaseId}`,
     });
@@ -543,6 +543,7 @@ describe('committed domain schema (groups 1-8)', () => {
       ['project-board.yml', 'failure', 'deploying', 'deploying'],
       ['plan-status.yml', 'failure', 'deploying', 'deploying'],
       ['ci.yml', 'failure', 'deploying', 'deploying'],
+      ['release.yml', 'failure', 'deploying', 'deploying'],
       ['deploy.yml', 'cancelled', 'deploying', 'deploying'],
       ['deploy.yml', 'cancelled', 'failed', 'failed'],
       ['deploy.yml', 'failure', 'deploying', 'failed'],
@@ -552,7 +553,8 @@ describe('committed domain schema (groups 1-8)', () => {
       const mapping = mapGithubWebhook('workflow_run', {
         repository: { full_name: repo },
         workflow_run: {
-          id: ++id, name: file, path: `.github/workflows/${file}`, event: 'push', head_branch: 'main',
+          id: ++id, name: file === 'release.yml' ? 'Release' : file,
+          path: `.github/workflows/${file}`, event: 'push', head_branch: 'main',
           head_sha: sha, run_number: 1, status: 'completed', conclusion: result,
         },
       });
@@ -562,7 +564,7 @@ describe('committed domain schema (groups 1-8)', () => {
         .toEqual([{ status: expected }]);
     }
     expect((await pool.request().query(`SELECT COUNT(*) AS count FROM dbo.workflow_runs
-      WHERE project_id = ${projectId}`)).recordset).toEqual([{ count: 6 }]);
+      WHERE project_id = ${projectId}`)).recordset).toEqual([{ count: 7 }]);
     expect(notifier).not.toHaveBeenCalled();
   });
 
@@ -590,11 +592,11 @@ describe('committed domain schema (groups 1-8)', () => {
     const recordDeployment = async (id: number, workflowRunId = workflow.id) => {
       await store.record({
         deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok',
-        mapping: { ...deployment, id, workflowRunId },
+        mapping: { ...deployment, id, workflowRunId, workflowId: workflowRunId === workflow.id + 1 ? 200 : 100 },
       });
     };
-    await store.record({ deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok', mapping: workflow });
     await recordDeployment(deployment.id);
+    await store.record({ deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok', mapping: workflow });
     await pool.request().query(`UPDATE dbo.activity SET at = DATEADD(minute, -59, SYSUTCDATETIME()),
       dismissed_at = SYSUTCDATETIME() WHERE link = N'release:${releaseId}'`);
     await store.record({
@@ -605,6 +607,8 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(notifier).toHaveBeenCalledTimes(1);
     await pool.request().query(`UPDATE dbo.activity SET at = DATEADD(minute, -61, SYSUTCDATETIME())
       WHERE link = N'release:${releaseId}'`);
+    await recordDeployment(deployment.id + 1, workflow.id + 10);
+    expect(notifier).toHaveBeenCalledTimes(1);
     await Promise.all([recordDeployment(deployment.id + 2), recordDeployment(deployment.id + 3)]);
     expect(notifier).toHaveBeenCalledTimes(2);
     await store.record({
@@ -641,7 +645,21 @@ describe('committed domain schema (groups 1-8)', () => {
     });
     await store.record({
       deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok',
-      mapping: { ...deployment, repository: otherRepo, id: deployment.id + 20, workflowRunId: workflow.id + 20 },
+      mapping: {
+        ...deployment, repository: otherRepo, id: deployment.id + 20, workflowRunId: workflow.id + 20, workflowId: 100,
+      },
+    });
+    expect(notifier).toHaveBeenCalledTimes(4);
+    const suppressedWithoutRelease = {
+      ...deployment, repository: otherRepo, id: deployment.id + 21, workflowRunId: workflow.id + 20, workflowId: 100,
+    };
+    await store.record({
+      deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok', mapping: suppressedWithoutRelease,
+    });
+    await pool.request().query(`UPDATE dbo.activity SET at = DATEADD(minute, -61, SYSUTCDATETIME())
+      WHERE link LIKE N'project:%' AND title = N'Deployment failed: production'`);
+    await store.record({
+      deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok', mapping: suppressedWithoutRelease,
     });
     expect(notifier).toHaveBeenCalledTimes(4);
   });
@@ -657,9 +675,9 @@ describe('committed domain schema (groups 1-8)', () => {
     const cleanup = (await readMigrations()).find((migration) =>
       migration.name === '0022_dismiss_board_deployment_failures.sql');
     if (!cleanup) throw new Error('Cleanup migration missing');
-    await pool.request().batch(cleanup.sql);
-    await pool.request().batch(cleanup.sql);
-    await pool.request().batch((await readDownMigration(cleanup.name)).sql);
+    const dismissal = cleanup.sql.slice(cleanup.sql.indexOf('UPDATE dbo.activity'));
+    await pool.request().batch(dismissal);
+    await pool.request().batch(dismissal);
     const { recordset } = await pool.request().input('link', sql.NVarChar(100), link)
       .query<{ dismissedAt: Date | null }>(`SELECT dismissed_at AS dismissedAt FROM dbo.activity
         WHERE link = @link ORDER BY id`);

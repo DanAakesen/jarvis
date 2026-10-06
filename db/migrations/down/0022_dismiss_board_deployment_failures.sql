@@ -1,2 +1,2 @@
 -- Dismissals cannot be distinguished from owner dismissals after cleanup; preserve history.
-SELECT 1;
+DROP TABLE dbo.deployment_failure_receipts;

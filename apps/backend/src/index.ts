@@ -507,6 +507,9 @@ try {
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
       getSecret: getWebhookSecret,
+      ...(githubAppTokenIssuer ? {
+        readWorkflowRun: createGitHubActionsLogClient(githubAppTokenIssuer).readWorkflowRun,
+      } : {}),
       isTrackedRepository: (repository) => repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() ||
         trackedRepositories.has(repository.toLowerCase()),
       ...(checksLoop || projectPolicyEvaluator || vaultModule ? {

@@ -52,6 +52,7 @@ type DeploymentStatusMapping = {
   readonly status: 'queued' | 'in_progress' | 'success' | 'failure';
   readonly at: string;
   readonly workflowRunId?: number;
+  readonly workflowId?: number;
 };
 
 export type GithubWebhookMapping =

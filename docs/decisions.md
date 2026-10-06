@@ -22,9 +22,14 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 P6-20 (6 October 2026): maintenance workflow cancellations are not failed
 deployments. Match deploy workflows by file (`deploy*.yml`/`deploy*.yaml`), retain
 real GitHub release deployments, and collapse same-project/workflow failures over
-a rolling hour, including dismissed alerts. Preserve workflow history and dismiss
+a rolling hour, including dismissed alerts.
+Resolve workflow IDs and cancellation with a bounded Actions-read App request
+when a run URL is supplied, so grouping does not depend on webhook arrival order.
+Preserve workflow history and dismiss
 historical board alerts with migration 0022; its down batch must not resurrect
-owner dismissals. Evidence: webhook mapping and SQL schema regression tests.
+owner dismissals. Durable deployment failure receipts keep collapsed failures
+idempotent even before a release exists. Evidence: webhook mapping and SQL schema
+regression tests.
 
 P7-35 (6 October 2026): reuse the existing global JSON settings store for bounded,
 value-free task recipes rather than add a table or rewrite occupied migration

@@ -111,7 +111,7 @@ describe('webhook delivery store', () => {
     expect(workflowRunSql).toContain('VALUES (@projectId, CONVERT(nvarchar(100), @runNumber), @headSha');
     expect(workflowRunSql).toContain('release_id = COALESCE(@releaseId, release_id)');
     expect(workflowRunSql).toContain("@conclusion <> N'cancelled'");
-    expect(workflowRunSql).toContain('@deploymentWorkflow = 1 OR');
+    expect(workflowRunSql).toContain('@deploymentWorkflow = 1');
 
     const pushSql = query.mock.calls[3]?.[0];
     expect(pushSql).toContain('WHERE project_id = @projectId AND sha = @sha');

@@ -48,12 +48,14 @@ function fixture(
   getSecret: () => Promise<string | undefined> = async () => secret,
   onMapping?: (mapping: NonNullable<WebhookDeliveryInput['mapping']>) => Promise<void>,
   isTrackedRepository?: (repository: string) => boolean,
+  readWorkflowRun?: (repository: string, runId: number) => Promise<{ workflowId: number; cancelled: boolean }>,
 ) {
   const deliveries = new Map<string, WebhookDeliveryInput>();
   const module: BackendModule = createGithubWebhookModule({
     getSecret,
     ...(onMapping ? { onMapping } : {}),
     ...(isTrackedRepository ? { isTrackedRepository } : {}),
+    ...(readWorkflowRun ? { readWorkflowRun } : {}),
     deliveryStore: {
       async record(input) {
         if (deliveries.has(input.deliveryId)) return false;
@@ -95,6 +97,37 @@ async function deliver(
 }
 
 describe('GitHub webhook receiver', () => {
+  it.each([false, true])('resolves deployment workflow identity before persistence (cancelled=%s)', async (cancelled) => {
+    const readWorkflowRun = vi.fn(async () => ({ workflowId: 42, cancelled }));
+    const { app, deliveries } = fixture(undefined, undefined, undefined, readWorkflowRun);
+    const payload = {
+      ...payloadFor('deployment_status'),
+      deployment_status: {
+        state: 'failure', created_at: timestamp,
+        log_url: `https://github.com/${repository.full_name}/actions/runs/987/job/123`,
+      },
+    };
+    const response = await deliver(app, 'deployment-identity', 'deployment_status', Buffer.from(JSON.stringify(payload)));
+    expect(response.statusCode).toBe(202);
+    expect(readWorkflowRun).toHaveBeenCalledWith(repository.full_name, 987);
+    if (cancelled) expect(deliveries.size).toBe(0);
+    else expect(deliveries.get('deployment-identity')?.mapping).toMatchObject({ workflowId: 42, workflowRunId: 987 });
+  });
+
+  it('fails visibly without persisting an unstable alert when workflow lookup fails', async () => {
+    const { app, deliveries } = fixture(undefined, undefined, undefined, async () => { throw new Error('Unavailable'); });
+    const payload = {
+      ...payloadFor('deployment_status'),
+      deployment_status: {
+        state: 'failure', created_at: timestamp,
+        target_url: `https://github.com/${repository.full_name}/actions/runs/987`,
+      },
+    };
+    const response = await deliver(app, 'deployment-unavailable', 'deployment_status', Buffer.from(JSON.stringify(payload)));
+    expect(response.statusCode).toBe(503);
+    expect(deliveries.size).toBe(0);
+  });
+
   it.each(['pull_request', 'check_run', 'workflow_run', 'deployment_status', 'push'])(
     'accepts a correctly signed %s delivery without Entra authentication',
     async (event) => {
