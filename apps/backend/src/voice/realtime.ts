@@ -83,44 +83,69 @@ the backend confirmation. Preserve English as the selected language and the exis
 response constraints.`;
 }
 
-export function createEnglishSessionUpdate(
+export const DANISH_REALTIME_VOICE = 'da-DK-JeppeNeural';
+const DANISH_PHRASE_LIST = [
+  'Jarvis', 'Codex', 'Copilot', 'YouTube', 'Chrome', 'GitHub', 'pull request', 'README', 'Teams', 'Gmail',
+];
+
+// Danish speech in Danish; tool, memory and safety rules are shared with English.
+function danishInstructions(personality: Settings['personality'], awayMode: boolean): string {
+  const rules = englishPersonalityInstructions(personality, awayMode)
+    .split('\n\n').slice(1).join('\n\n')
+    .replace('Preserve English as the selected language', 'Preserve Danish as the selected language');
+  return `You are Jarvis, Dan's personal AI butler, running his software factory.
+Always speak natural, modern Danish (rigsdansk) like a well-spoken Dane: courteous, calm, precise,
+with dry, understated wit used sparingly. Call him Dan, never "sir". Sound like a real person
+talking: short spoken sentences, no lists or markdown, and at most two or three sentences. Only
+switch to English if Dan speaks English to you.
+
+${rules}`;
+}
+
+// Voice Live (api-version 2026-07-15) accepts only its flat session shape; `session.type`,
+// `output_modalities` and `audio.input` are rejected as extra fields (L103).
+export function createRealtimeSessionUpdate(
   tools: ToolRegistry,
   personality: Settings['personality'] = defaultSettings.personality,
   awayMode = false,
+  language: 'da' | 'en' = 'en',
 ) {
+  const danish = language === 'da';
   return {
     type: 'session.update',
     session: {
-      type: 'realtime',
-      instructions: englishPersonalityInstructions(personality, awayMode),
-      output_modalities: ['text', 'audio'],
-      audio: {
-        input: {
-          format: { type: 'audio/pcm', rate: 24_000 },
-          turn_detection: {
-            type: 'azure_semantic_vad_en',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 700,
-            create_response: false,
-          },
-        },
-        output: {
-          format: { type: 'audio/pcm', rate: 24_000 },
-          voice: ENGLISH_REALTIME_VOICE,
-          voice_type: 'azure-standard',
-          voice_locale: 'en-GB',
-        },
-      },
-      input_audio_transcription: { model: 'mai-transcribe' },
+      instructions: danish
+        ? danishInstructions(personality, awayMode)
+        : englishPersonalityInstructions(personality, awayMode),
+      modalities: ['text', 'audio'],
+      input_audio_sampling_rate: 24_000,
+      input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },
+      input_audio_echo_cancellation: { type: 'server_echo_cancellation' },
+      // Semantic end-of-turn detection has no Danish model, so Danish uses server VAD.
+      turn_detection: danish
+        ? { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 600, create_response: false }
+        : { type: 'azure_semantic_vad_en', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 500, create_response: false },
+      input_audio_transcription: danish
+        ? { model: 'mai-transcribe', language: 'da', phrase_list: DANISH_PHRASE_LIST }
+        : { model: 'mai-transcribe' },
+      voice: { name: danish ? DANISH_REALTIME_VOICE : ENGLISH_REALTIME_VOICE, type: 'azure-standard' },
       tools: tools.list().map(({ name, description, inputSchema }) => ({
         type: 'function',
         name,
         description,
         parameters: structuredClone(inputSchema),
       })),
+      tool_choice: 'auto',
     },
   };
+}
+
+export function createEnglishSessionUpdate(
+  tools: ToolRegistry,
+  personality: Settings['personality'] = defaultSettings.personality,
+  awayMode = false,
+) {
+  return createRealtimeSessionUpdate(tools, personality, awayMode, 'en');
 }
 
 export interface RealtimeFunctionCall {

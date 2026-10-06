@@ -1301,7 +1301,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(() => createDanishVoiceAgentEndpoint(projectEndpoint, 'bad session')).toThrow(TypeError);
   });
 
-  it('relays Danish sessions to the hosted voice agent without sending English settings', async () => {
+  it('relays Danish sessions through gpt-realtime with a Danish session update', async () => {
     const forwarded: string[] = [];
     const authorization = vi.fn();
     const upstreamUrl = await echoServer((socket, request) => {
@@ -1311,24 +1311,18 @@ describe('backend-relayed Voice Live WebSocket', () => {
         if (data.toString().includes('input_audio_buffer.append')) socket.send(data);
       });
     });
-    const connectDanish = vi.fn((token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+    const connect = vi.fn((token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
       headers: { Authorization: ['Bearer', token].join(' ') }, signal,
     }));
+    const connectDanish = vi.fn(() => { throw new Error('The hosted-agent wrapper must not be used'); });
     const getToken = vi.fn(async (scope: string) => {
       expect(scope).toBe(VOICE_LIVE_SCOPE);
       return voiceToken;
     });
-    const { app } = appFor(
-      () => { throw new Error('English voice must not connect'); },
-      getToken,
-      [],
-      [],
-      connectDanish,
-    );
+    const { app } = appFor(connect, getToken, [], [], connectDanish);
     await app.listen({ host: '127.0.0.1', port: 0 });
     const address = app.server.address() as AddressInfo;
     const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice/da`);
-    browser.send(JSON.stringify({ type: 'session.start', protocol_version: '1.0' }));
     const audio = JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' });
     const audioReply = new Promise<string>((resolve) => browser.on('message', (data) => {
       if (data.toString() === audio) resolve(data.toString());
@@ -1336,15 +1330,18 @@ describe('backend-relayed Voice Live WebSocket', () => {
     browser.send(audio);
 
     await expect(audioReply).resolves.toBe(audio);
-    expect(connectDanish).toHaveBeenCalledOnce();
+    expect(connect).toHaveBeenCalledOnce();
+    expect(connectDanish).not.toHaveBeenCalled();
     expect(authorization).toHaveBeenCalledWith(['Bearer', voiceToken].join(' '));
-    // `session.start` belongs to the Bridge Protocol and is not forwarded to the voice route.
-    expect(forwarded.map((event) => JSON.parse(event).type)).toEqual([
-      'input_audio_buffer.append',
-    ]);
-    expect(forwarded.some((event) => JSON.parse(event).type === 'session.update')).toBe(false);
+    const update = JSON.parse(forwarded[0] ?? '{}') as { type?: string; session?: Record<string, unknown> };
+    expect(update.type).toBe('session.update');
+    expect(update.session).toMatchObject({
+      voice: { name: 'da-DK-JeppeNeural', type: 'azure-standard' },
+      turn_detection: { type: 'server_vad', create_response: false },
+      input_audio_transcription: { model: 'mai-transcribe', language: 'da' },
+    });
+    expect(String(update.session?.instructions)).toContain('modern Danish');
   });
-
   it.each(['ok', 'refused', 'error'] as const)(
     'publishes the recorded %s realtime tool outcome without exposing tool data',
     async (outcome) => {
@@ -1422,16 +1419,11 @@ describe('backend-relayed Voice Live WebSocket', () => {
       const session = await sessionSent;
       expect(activityEvents).toEqual([]);
       expect(session).toMatchObject({
-        type: 'realtime',
-        output_modalities: ['text', 'audio'],
-        audio: {
-          output: {
-            voice: 'en-GB-Ryan:DragonHDLatestNeural',
-            voice_type: 'azure-standard',
-            voice_locale: 'en-GB',
-          },
-        },
+        modalities: ['text', 'audio'],
+        voice: { name: 'en-GB-Ryan:DragonHDLatestNeural', type: 'azure-standard' },
       });
+      expect(session).not.toHaveProperty('type');
+
       expect(session.tools).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: 'function', name: 'greet' }),
         ...factoryModule.tools.map(({ name }) => expect.objectContaining({ type: 'function', name })),
