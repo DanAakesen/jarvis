@@ -673,7 +673,7 @@ describe('committed domain schema (groups 1-8)', () => {
       (N'operations', N'deployment_failure', N'Deployment failed: production', @link, NULL),
       (N'factory', N'task_event', N'Deployment failed: project-board', @link, NULL)`);
     const cleanup = (await readMigrations()).find((migration) =>
-      migration.name === '0022_dismiss_board_deployment_failures.sql');
+      migration.name === '0024_dismiss_board_deployment_failures.sql');
     if (!cleanup) throw new Error('Cleanup migration missing');
     const dismissal = cleanup.sql.slice(cleanup.sql.indexOf('UPDATE dbo.activity'));
     await pool.request().batch(dismissal);

@@ -22,7 +22,7 @@ constraint while refused rows exist, preserving their truthful outcomes.
 P7-15; private image bytes remain in the existing `artifacts` Blob container.
 `0020_chat_message_steering.sql` adds per-message language overrides and the
 persisted interrupted-reply marker (P8-35).
-`0022_dismiss_board_deployment_failures.sql` adds deployment failure receipts
+`0024_dismiss_board_deployment_failures.sql` adds deployment failure receipts
 for permanent replay protection, including collapsed failures without a release,
 and dismisses historical board-sync
 deployment failure activity (P6-20). It retains rows and existing owner dismissal

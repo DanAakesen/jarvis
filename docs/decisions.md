@@ -26,7 +26,8 @@ a rolling hour, including dismissed alerts.
 Resolve workflow IDs and cancellation with a bounded Actions-read App request
 when a run URL is supplied, so grouping does not depend on webhook arrival order.
 Preserve workflow history and dismiss
-historical board alerts with migration 0022; its down batch must not resurrect
+historical board alerts with migration 0024 (renumbered to avoid #462's 0022 and
+#459's 0023); its down batch must not resurrect
 owner dismissals. Durable deployment failure receipts keep collapsed failures
 idempotent even before a release exists. Evidence: webhook mapping and SQL schema
 regression tests.
