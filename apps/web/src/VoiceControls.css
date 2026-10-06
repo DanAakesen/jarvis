@@ -89,3 +89,5 @@
 @media (prefers-reduced-motion: reduce) {
   .voice-status-label { animation: none; }
 }
+
+:root[data-motion="reduced"] .voice-status-label { animation: none; }

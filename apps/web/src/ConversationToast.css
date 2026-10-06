@@ -17,7 +17,7 @@
 .conversation-toast p { flex: 1; min-width: 0; margin: 0; font-size: var(--type-small); line-height: 1.5; overflow-wrap: anywhere; }
 .conversation-toast button { flex: 0 0 44px; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-control); color: var(--text); background: transparent; cursor: pointer; }
 .conversation-toast button:hover { background: var(--surface); }
-.conversation-toast button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.conversation-toast button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .conversation-toast svg { width: 18px; height: 18px; }
 @keyframes conversation-toast-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 700px) {
@@ -25,3 +25,5 @@
   .conversation-toast { bottom: calc(max(20px, env(safe-area-inset-bottom)) + 88px); }
 }
 @media (prefers-reduced-motion: reduce) { .conversation-toast { animation: none; } }
+
+:root[data-motion="reduced"] .conversation-toast { animation: none; }
