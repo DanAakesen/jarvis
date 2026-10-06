@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { backendFetch } from './backend-request';
 import { useThemePreference } from './theme-preference-context';
 import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
+import { TaskRecipesSettings } from './TaskRecipesSettings';
 
 interface Settings {
   appearance: { theme: 'light' | 'dark' | 'system' };
@@ -651,6 +652,7 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
           </div>
         </form>
       )}
+      {backendUrl && <TaskRecipesSettings key={backendUrl} backendUrl={backendUrl} getAccessToken={getAccessToken} />}
     </section>
   );
 }
