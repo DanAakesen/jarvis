@@ -6,7 +6,10 @@ import { ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import {
   runPcAct,
+  isSensitivePcGoal,
+  type PcActElement,
   type PcActOptions,
+  type PcActSnapshot,
   type PcActPlanner,
 } from './pc-act.js';
 
@@ -14,7 +17,6 @@ const MAX_MESSAGE_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 15_000;
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
-const allowedApps = new Set(['vscode', 'codex', 'edge', 'explorer', 'terminal']);
 
 type PcCommand =
   | { name: 'open_url'; arguments: { url: string } }
@@ -251,7 +253,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
     tools: [
       {
         name: 'pc_open',
-        description: 'Open files and allow-listed apps, including VS Code and Codex, on Dan’s PC; websites open in Dan’s Chrome. Use browser_do for work on a website.',
+        description: 'Open installed apps, VS Code repo files and folders, and windows on Dan’s PC; websites open in Dan’s Chrome. Use browser_do for work on a website.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -261,6 +263,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           required: ['target', 'value'],
           additionalProperties: false,
         },
+        sensitive: true,
         execute: (input, _request, signal) => runPcOpen(bridge, input, signal),
       },
       {
@@ -353,7 +356,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
       },
       ...(options.pcActPlanner ? [{
         name: 'pc_act',
-        description: 'Control allow-listed Windows apps with one Jev decision per fresh UI Automation snapshot. Use only for Windows app workflows; website tasks use Chrome through browser_do, never Edge. Types only explicit quoted, non-sensitive values. Risky actions require Dan’s approval.',
+        description: 'Control the foreground Windows app with one Jev decision per fresh UI Automation snapshot. Use only for PC workflows; website tasks use Chrome through browser_do, never Edge. Types only explicit quoted, non-sensitive values. Irreversible actions require Dan’s approval.',
         inputSchema: {
           type: 'object',
           properties: { goal: { type: 'string', minLength: 1, maxLength: 4_000 } },
@@ -539,7 +542,9 @@ async function runPcOpen(
       break;
     }
     case 'app':
-      if (!allowedApps.has(input.value)) throw new ToolRefusal('That app is not on the PC bridge allow-list.');
+      if (!/^[\p{L}\p{N} ._()+&-]{1,128}$/u.test(input.value) || input.value !== input.value.trim()) {
+        throw new ToolRefusal('Provide the exact name of an installed app.');
+      }
       command = { name: 'open_app', arguments: { app: input.value } };
       break;
     case 'folder': {
@@ -579,10 +584,16 @@ async function runCodexPrompt(
       input.prompt.length > 3_800 || hasControlCharacters(input.prompt)) {
     throw new ToolRefusal('Provide a non-empty, single-line Codex prompt no longer than 3,800 characters.');
   }
+  if (isSensitivePcGoal(input.prompt)) {
+    throw new ToolRefusal('Jarvis will not handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.');
+  }
 
   await bridge.execute({ name: 'open_app', arguments: { app: 'codex' } }, signal);
   const prompt = input.prompt;
-  return runPcAct(
+  let controls: Array<PcActElement & { readonly sourceIndex: number }> = [];
+  let promptEntered = false;
+  let promptSubmitted = false;
+  const result = await runPcAct(
     { goal: `Enter this prompt in Codex and submit it: ${prompt}` },
     request,
     signal,
@@ -592,20 +603,51 @@ async function runCodexPrompt(
         if (result.application !== 'codex') {
           throw new ToolRefusal('Codex is not the active Windows app; no prompt was entered.');
         }
-        return result;
+        if (!validUiAutomationSnapshot(result)) return result;
+        controls = result.elements
+          .filter(({ role, name }) =>
+            (['edit', 'combobox'].includes(role) && /\b(prompt|message|ask|composer)\b/iu.test(name)) ||
+            (['button', 'control'].includes(role) && /\b(send|submit)\b/iu.test(name)))
+          .map((element, index) => ({ ...element, sourceIndex: element.index, index }));
+        return {
+          ...result,
+          elements: controls.map(({ index, role, name }) => ({ index, role, name })),
+        };
       },
-      act: (action, commandSignal) => bridge.execute(
-        { name: 'uia_act', arguments: action },
-        commandSignal,
-      ),
+      act: async (action, commandSignal) => {
+        const control = controls[action.elementIndex];
+        if (!control ||
+            (action.action === 'type' &&
+              (!['edit', 'combobox'].includes(control.role) ||
+               !/\b(prompt|message|ask|composer)\b/iu.test(control.name))) ||
+            (action.action === 'click' &&
+              (!['button', 'control'].includes(control.role) || !/\b(send|submit)\b/iu.test(control.name)))) {
+          throw new ToolRefusal('Codex prompting is limited to its text field and send or submit control.');
+        }
+        const uiaAction = action.action === 'type' ? { ...action, confirmed: true } : action;
+        const actionResult = await bridge.execute({
+          name: 'uia_act',
+          arguments: { ...uiaAction, elementIndex: control.sourceIndex },
+        }, commandSignal);
+        if (isRecord(actionResult) && actionResult.acted === true) {
+          if (action.action === 'type') promptEntered = true;
+          if (action.action === 'click') promptSubmitted = true;
+        }
+        return actionResult;
+      },
     },
     {
       planner,
       ...(runConfirmed ? { runConfirmed } : {}),
       typedText: prompt,
       confirmTyping: false,
+      stopAfterAction: () => promptSubmitted,
     },
   );
+  if (!promptEntered || !promptSubmitted) {
+    throw new ToolRefusal('Codex did not complete the prompt entry and submission.');
+  }
+  return result;
 }
 
 function validateUrl(value: string): string | undefined {
@@ -676,11 +718,14 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
   return false;
 }
 
-function validUiAutomationSnapshot(value: Record<string, unknown>): boolean {
+function validUiAutomationSnapshot(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> & PcActSnapshot {
   return Object.keys(value).length === 3 &&
     typeof value.snapshotId === 'string' &&
     /^[\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu.test(value.snapshotId) &&
-    (value.application === 'vscode' || value.application === 'codex' || value.application === 'explorer') &&
+    typeof value.application === 'string' &&
+    /^[\p{L}\p{N}_.-]{1,128}$/u.test(value.application) &&
     Array.isArray(value.elements) && value.elements.length <= 100 &&
     value.elements.every((element, index) => isRecord(element) && Object.keys(element).length === 3 &&
       element.index === index && typeof element.role === 'string' && element.role.length <= 64 &&

@@ -78,12 +78,44 @@ public sealed class WindowsCommandExecutor
 
     private static object OpenApp(string app)
     {
-        var executable = FindExecutable(app);
+        var executable = FindExecutable(app.ToLowerInvariant()) ?? FindStartMenuShortcut(app);
         if (executable is null)
-            throw new CommandRefusedException(app == "codex" ? "not_installed" : "not_found");
-        using var process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false });
+            throw new CommandRefusedException(app.Equals("codex", StringComparison.OrdinalIgnoreCase) ? "not_installed" : "not_found");
+        var isShortcut = Path.GetExtension(executable).Equals(".lnk", StringComparison.OrdinalIgnoreCase);
+        using var process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = isShortcut });
         AllowForeground(process);
         return new { opened = true };
+    }
+
+    private static string? FindStartMenuShortcut(string app)
+    {
+        var roots = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
+        };
+        var options = new EnumerationOptions
+        {
+            IgnoreInaccessible = true,
+            RecurseSubdirectories = true,
+            MaxRecursionDepth = 8,
+            AttributesToSkip = FileAttributes.ReparsePoint | FileAttributes.System,
+        };
+
+        foreach (var root in roots.Where(Directory.Exists))
+        {
+            try
+            {
+                foreach (var shortcut in Directory.EnumerateFiles(root, "*.lnk", options).Take(5_000))
+                {
+                    if (string.Equals(Path.GetFileNameWithoutExtension(shortcut), app, StringComparison.OrdinalIgnoreCase))
+                        return shortcut;
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return null;
     }
 
     private static object OpenFolder(string relativePath) => OpenRepoPath(relativePath, expectFile: false);
@@ -95,8 +127,7 @@ public sealed class WindowsCommandExecutor
         if (!CommandPolicy.TryNormalizeRepoPath(relativePath, out var normalized))
             throw new CommandRefusedException("not_allowed");
         var root = Path.GetFullPath(RepoRoot);
-        if (!RepoPathResolver.TryResolve(root, normalized, expectFile, out var fullPath) ||
-            ContainsReparsePoint(root, fullPath))
+        if (!RepoPathResolver.TryResolve(root, normalized, expectFile, out var fullPath))
             throw new CommandRefusedException("not_found");
 
         var code = FindExecutable("vscode");
@@ -112,18 +143,6 @@ public sealed class WindowsCommandExecutor
     {
         if (process is null || !AllowSetForegroundWindow((uint)process.Id))
             throw new CommandRefusedException("failed");
-    }
-
-    private static bool ContainsReparsePoint(string root, string fullPath)
-    {
-        var current = root;
-        if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return true;
-        foreach (var segment in Path.GetRelativePath(root, fullPath).Split(Path.DirectorySeparatorChar))
-        {
-            current = Path.Combine(current, segment);
-            if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return true;
-        }
-        return false;
     }
 
     private static object ReadActiveWindow()

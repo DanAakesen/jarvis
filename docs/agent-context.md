@@ -871,14 +871,20 @@ the companion on Dan's PC:
 4. Confirm the tray reports Online, then ask Jarvis to open an HTTP(S) URL and
    verify it opens in foreground Chrome—through the extension when connected and
    enabled, or the direct Chrome executable fallback when disconnected, never
-   Edge. Open an allow-listed app as a separate check. Check the authenticated Now
-   feed for online/offline status; verify active-window reads and exact-title
-   focus with Dan present at the PC.
+   Edge. Open an installed app by its exact Start Menu name as a separate check.
+   Check the authenticated Now feed for online/offline status; verify
+   active-window reads and exact-title focus with Dan present at the PC.
+5. Verify that a repo folder and file open in VS Code, an outside-root path is
+   refused, the Codex desktop app receives a prompt through UI Automation, and
+   irreversible submission uses the existing approval flow. If Codex is absent,
+   confirm Jarvis explains that plainly. These Windows checks need Dan at the PC.
 
-The app allows only HTTP(S) URLs, VS Code, Edge, File Explorer, Windows Terminal,
-folders below `C:\Repo` in VS Code, active-window title, and exact-title focus.
-Offline policy/protocol tests do not verify live Entra sign-in or Windows
-execution; those remain coordinator post-merge checks.
+The app allows HTTP(S) URLs, installed apps resolved by exact Start Menu shortcut
+name, files and folders below `C:\Repo` in VS Code, active-window title, and
+exact-title focus. UI Automation is available for the foreground Windows app;
+websites always use Chrome, and no raw shell/command tool is exposed. Offline
+policy/protocol tests do not verify live Entra sign-in or Windows execution;
+those remain coordinator post-merge checks.
 
 ### Chrome browser executor (P7-18, P7-25)
 

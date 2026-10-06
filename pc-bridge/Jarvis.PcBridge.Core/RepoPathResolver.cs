@@ -25,12 +25,25 @@ public static class RepoPathResolver
         if (relativeToRoot is "." or ".." ||
             relativeToRoot.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
             Path.IsPathRooted(relativeToRoot) ||
-            (expectFile ? !File.Exists(candidate) : !Directory.Exists(candidate)))
+            (expectFile ? !File.Exists(candidate) : !Directory.Exists(candidate)) ||
+            ContainsReparsePoint(canonicalRoot, candidate))
         {
             return false;
         }
 
         resolvedPath = candidate;
         return true;
+    }
+
+    private static bool ContainsReparsePoint(string root, string path)
+    {
+        var current = root;
+        if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return true;
+        foreach (var segment in Path.GetRelativePath(root, path).Split(Path.DirectorySeparatorChar))
+        {
+            current = Path.Combine(current, segment);
+            if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return true;
+        }
+        return false;
     }
 }

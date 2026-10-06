@@ -4,15 +4,6 @@ namespace Jarvis.PcBridge.Core;
 
 public static class CommandPolicy
 {
-    private static readonly HashSet<string> Apps = new(StringComparer.Ordinal)
-    {
-        "vscode",
-        "codex",
-        "edge",
-        "explorer",
-        "terminal",
-    };
-
     public static bool IsValid(string command, JsonElement arguments)
     {
         if (arguments.ValueKind != JsonValueKind.Object) return false;
@@ -26,7 +17,7 @@ public static class CommandPolicy
             "open_app" => HasOnly(arguments, "app") &&
                 arguments.TryGetProperty("app", out var app) &&
                 app.ValueKind == JsonValueKind.String &&
-                Apps.Contains(app.GetString() ?? string.Empty),
+                IsValidAppName(app.GetString()),
             "open_folder" => HasOnly(arguments, "relativePath") &&
                 arguments.TryGetProperty("relativePath", out var folder) &&
                 folder.ValueKind == JsonValueKind.String &&
@@ -53,6 +44,12 @@ public static class CommandPolicy
             _ => false,
         };
     }
+
+    public static bool IsValidAppName(string? value) =>
+        value is { Length: > 0 and <= 128 } &&
+        value is not "." and not ".." &&
+        value == value.Trim() &&
+        value.All(character => char.IsLetterOrDigit(character) || character is ' ' or '.' or '_' or '-' or '(' or ')' or '+' or '&');
 
     private static bool IsUiAutomationAction(JsonElement arguments)
     {

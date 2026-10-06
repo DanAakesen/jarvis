@@ -655,16 +655,20 @@ delegated apps, and users other than Dan are rejected at the route boundary.
 The backend registers `pc_open` and `pc_active_window` in its existing tool
 registry. Protocol messages are bounded to 64 KiB, correlate UUID command IDs,
 cap in-flight work, and time out after 15 seconds. Both backend validation and
-the companion's portable core enforce the fixed allow-list: HTTP(S) URLs, VS
-Code, Edge, File Explorer, Windows Terminal, folders below `C:\Repo` opened in
-VS Code, active-window title reads, and exact-title window focus. URL commands
-are routed through the browser executor: if the extension is connected and
+the companion's portable core validate app display names; the Windows companion
+resolves known apps or exact Start Menu shortcut names and launches no arbitrary
+command line. VS Code file and folder paths are resolved below `C:\Repo`, and
+traversal, missing targets, and reparse-point escapes are refused. `pc_open`
+persists tool outcomes while redacting its paths, URLs, and results from the
+generic audit. Active-window
+title reads and exact-title window focus remain available. URL commands are
+routed through the browser executor: if the extension is connected and
 Chrome automation is enabled, it opens the URL in Dan's normal Chrome; if the
 extension is disconnected, the current companion launches the installed Chrome
 executable directly and identifies that fallback in the tool result. Websites
 are never handed to the Windows default browser. A connected extension with
 automation disabled is refused rather than silently bypassing the setting.
-Launched apps and VS Code folder opens use Windows `AllowSetForegroundWindow`
+Launched apps and VS Code file/folder opens use Windows `AllowSetForegroundWindow`
 to grant the new process foreground eligibility; no synthetic input or
 focus-stealing workaround is used. The bridge does not expose arbitrary command
 execution; its only direct executable launch for a URL is the Chrome fallback.
@@ -685,8 +689,8 @@ remain unverified.
 The backend registers the sensitive `pc_act` tool only when the existing Jev
 client is configured. It reuses the authenticated PC bridge and its bounded
 `uia_snapshot`/`uia_act` commands; no new route, credential, persistence, or
-migration is added. Only the foreground VS Code (`code`) and File Explorer
-(`explorer`) windows are eligible. The Windows provider traverses at most 1,000
+migration is added. Any foreground Windows app with a valid process name is
+eligible. The Windows provider traverses at most 1,000
 controls and depth 12, checking a one-second traversal budget and cancellation
 between traversal batches. The portable policy returns at most
 100 enabled, visible, actionable controls with only role and accessible name.
@@ -699,8 +703,9 @@ element's runtime ID, role, name, visibility, enabled state, sensitivity, and
 supported control pattern. Only fixed click, type, and small-scroll operations
 are exposed. Jev makes one decision per fresh snapshot, for at most 20 steps or
 30 seconds, with a 1.2-second request timeout; cancellation reaches both the
-planner and bridge. Typed content must be an exact, non-sensitive value quoted
-in Dan's request. Risky intents and destructive control names use the existing
+planner and bridge. In `pc_act`, typed content must be an exact, non-sensitive
+value quoted in Dan's request; `codex_prompt` types only the exact supplied
+non-sensitive prompt. Risky intents and destructive control names use the existing
 P7-03 `computer_use` approval flow and retry the same observed element only
 after approval; missing approval refuses the action. The approval identifies
 clicks and text replacements using a bounded control role/name, without
@@ -715,6 +720,17 @@ lint/build and Linux Windows-target build pass. A cancellation token cannot
 preempt an individual synchronous UI Automation COM call. Live Jev calls,
 Windows UIA responsiveness/cancellation, physical approval delivery, and Dan's
 end-to-end app task remain unverified.
+
+The sensitive `codex_prompt` tool opens the Codex desktop app and uses the same
+bounded UI Automation loop to enter Dan's exact, non-sensitive prompt. It
+exposes only text-entry and Send/Submit controls, stops after one submission,
+and refuses to report success if it only typed the prompt. Typing needs no
+confirmation; the ensuing send/submit action uses the existing `runConfirmed`
+flow. Missing Codex returns a clear refusal. The prompt and UI snapshot remain
+redacted from tool-call audit and step telemetry. Voice guidance routes longer
+tracked repository work to `create_task` and quick local requests to
+`codex_prompt`. Website tasks remain on the Chrome-only path; there is no
+Foundry computer-use or raw shell/command tool.
 
 ### Chrome browser executor (P7-18, P7-25, P7-26)
 

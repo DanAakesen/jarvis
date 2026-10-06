@@ -60,6 +60,22 @@ public sealed class UiAutomationExecutorTests
         Assert.Empty(provider.Actions);
     }
 
+    [Theory]
+    [InlineData("Confirm search")]
+    [InlineData("Save settings")]
+    public void Reversible_controls_do_not_require_confirmation(string name)
+    {
+        var provider = new FakeUiAutomationProvider(new UiAutomationView("settings", "window-1",
+        [
+            Control("action", "button", name),
+        ]));
+        var executor = new UiAutomationExecutor(provider);
+        var snapshot = executor.Observe(CancellationToken.None);
+
+        Assert.True(executor.Act(snapshot.SnapshotId, 0, UiAutomationAction.Click, null, false, CancellationToken.None));
+        Assert.Single(provider.Actions);
+    }
+
     [Fact]
     public void Typing_into_a_destructive_control_requires_confirmation()
     {
@@ -77,7 +93,7 @@ public sealed class UiAutomationExecutorTests
     }
 
     [Fact]
-    public void Refuses_stale_controls_and_disallowed_foreground_apps()
+    public void Refuses_stale_controls_but_allows_UI_Automation_in_any_valid_foreground_app()
     {
         var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1",
         [
@@ -92,6 +108,8 @@ public sealed class UiAutomationExecutorTests
         Assert.Equal("stale", stale.Code);
 
         provider.View = provider.View with { Application = "chrome" };
+        Assert.Equal("chrome", executor.Observe(CancellationToken.None).Application);
+        provider.View = provider.View with { Application = "bad process!" };
         var blocked = Assert.Throws<UiAutomationRefusedException>(() => executor.Observe(CancellationToken.None));
         Assert.Equal("not_allowed", blocked.Code);
     }
