@@ -166,7 +166,14 @@ public sealed class WindowsCommandExecutor : IWindowCaptureProvider
             arguments.GetProperty("y").GetInt32(),
             action,
             cancellationToken);
-        return new { acted = true, action = command };
+        var actionName = action switch
+        {
+            WindowPointAction.Click => "click",
+            WindowPointAction.ScrollUp => "scroll_up",
+            WindowPointAction.ScrollDown => "scroll_down",
+            _ => throw new WindowCaptureRefusedException("not_allowed"),
+        };
+        return new { acted = true, action = actionName };
     }
 
     // Dan uses Chrome only: never hand a website to the Windows default browser (Edge).

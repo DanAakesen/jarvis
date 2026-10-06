@@ -75,6 +75,40 @@ describe('pc_act Jev planner', () => {
     expect(init?.redirect).toBe('error');
   });
 
+  it('asks Jev to choose among visual boxes without offering visual typing', async () => {
+    const fetcher = vi.fn(async () => jevResponse({
+      operation: { type: 'choice', choice: 'click', confidence: 0.99 },
+      target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
+    }));
+    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+    const visualSnapshot: PcActSnapshot = {
+      ...snapshot,
+      elements: [{
+        index: 0, role: 'button', name: 'Start',
+        bounds: { x: 0.2, y: 0.3, width: 0.2, height: 0.1 },
+      }],
+      visual: { width: 1280, height: 720 },
+    };
+
+    await expect(planner.decide({
+      goal: 'Start the game',
+      step: 1,
+      previousActions: [],
+      snapshot: visualSnapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'click', confidence: 0.99, targetIndex: 0,
+    });
+
+    const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)) as {
+      state: { elements: unknown[] };
+      questions: Record<string, { criteria: Record<string, unknown> }>;
+    };
+    expect(body.state.elements).toHaveLength(1);
+    expect(JSON.stringify(body.questions.target)).toContain('normalized box {\\"x\\":0.2');
+    expect(body.questions.operation.criteria).not.toHaveProperty('type');
+    expect(body.questions).not.toHaveProperty('text_value');
+  });
+
   it.each([
     [402, 'billing'],
     [401, 'auth'],
@@ -186,6 +220,141 @@ describe('pc_act Jev planner', () => {
 });
 
 describe('pc_act bounded Windows control loop', () => {
+  it('uses transient vision candidates and clicks only the selected in-bounds box centre', async () => {
+    const empty = { ...snapshot, elements: [] };
+    const full = { ...snapshot, elements: [
+      ...snapshot.elements,
+      { index: 1, role: 'button', name: 'Options' },
+      { index: 2, role: 'button', name: 'Help' },
+    ] };
+    const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1]).toString('base64');
+    const observed = vi.fn().mockResolvedValueOnce(empty).mockResolvedValueOnce(full);
+    const actPoint = vi.fn(async ({ action }: { action: string }) => ({ acted: true, action }));
+    const pcBridge = bridge({
+      observe: observed,
+      capture: vi.fn(async () => ({
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        application: 'vscode',
+        width: 1280,
+        height: 720,
+        png,
+      })),
+      actPoint,
+    });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+    let modelImage: Buffer | undefined;
+    const visionModel = {
+      locateElements: vi.fn(async ({ image }: { image: Buffer }) => {
+        modelImage = image;
+        return [{
+          index: 0,
+          role: 'button',
+          name: 'Start game',
+          bounds: { x: 0.25, y: 0.4, width: 0.5, height: 0.2 },
+        }];
+      }),
+    };
+    const onStep = vi.fn();
+
+    const result = await runPcAct(
+      { goal: 'Start the game' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, visionModel, onStep },
+    );
+
+    expect(result.status).toBe('completed');
+    expect(visionModel.locateElements).toHaveBeenCalledOnce();
+    expect(modelImage).toBeDefined();
+    expect(modelImage!.every((byte) => byte === 0)).toBe(true);
+    expect(actPoint).toHaveBeenCalledWith({
+      snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+      x: 640,
+      y: 360,
+      action: 'click',
+      confirmed: false,
+    }, expect.any(AbortSignal));
+    expect(onStep).toHaveBeenCalledWith({ step: 1, action: 'click', outcome: 'completed' });
+    expect(JSON.stringify(onStep.mock.calls)).not.toContain('Start game');
+  });
+
+  it('confirms irreversible vision clicks before executing them', async () => {
+    const empty = { ...snapshot, elements: [] };
+    const full = { ...snapshot, elements: [
+      ...snapshot.elements,
+      { index: 1, role: 'button', name: 'Options' },
+      { index: 2, role: 'button', name: 'Help' },
+    ] };
+    const observed = vi.fn().mockResolvedValueOnce(empty).mockResolvedValueOnce(full);
+    const actPoint = vi.fn(async ({ action }: { action: string }) => ({ acted: true, action }));
+    const pcBridge = bridge({
+      observe: observed,
+      capture: vi.fn(async () => ({
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        application: 'vscode', width: 1280, height: 720,
+        png: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'),
+      })),
+      actPoint,
+    });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+    const visionModel = { locateElements: vi.fn(async () => [{
+      index: 0, role: 'button', name: 'Send', bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 },
+    }]) };
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+
+    await runPcAct(
+      { goal: 'Send the message' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, visionModel, runConfirmed },
+    );
+
+    expect(runConfirmed).toHaveBeenCalledWith(
+      'Click the button "Send" in VS Code.',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+    expect(actPoint).toHaveBeenCalledWith(expect.objectContaining({ action: 'click', confirmed: true }), expect.any(AbortSignal));
+  });
+
+  it('rejects invalid vision bounds without clicking or logging candidate data', async () => {
+    const onStep = vi.fn();
+    const actPoint = vi.fn();
+    const pcBridge = bridge({
+      observe: vi.fn(async () => ({ ...snapshot, elements: [] })),
+      capture: vi.fn(async () => ({
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        application: 'vscode', width: 1280, height: 720,
+        png: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'),
+      })),
+      actPoint,
+    });
+    const planner = { decide: vi.fn() };
+
+    await expect(runPcAct(
+      { goal: 'Click the secret control' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      {
+        planner,
+        onStep,
+        visionModel: { locateElements: vi.fn(async () => [{
+          index: 0, role: 'button', name: 'Private target', bounds: { x: 0.9, y: 0.1, width: 0.2, height: 0.2 },
+        }]) },
+      },
+    )).rejects.toThrow(/visual controls could not be safely identified/u);
+
+    expect(actPoint).not.toHaveBeenCalled();
+    expect(JSON.stringify(onStep.mock.calls)).not.toContain('Private target');
+  });
+
   it('controls any bounded foreground app and does not confirm reversible settings actions', async () => {
     const appSnapshot: PcActSnapshot = { ...snapshot, application: 'SystemSettings' };
     const pcBridge = bridge({ observe: vi.fn(async () => appSnapshot) });

@@ -471,6 +471,13 @@ try {
       onError: () => logger.warn('github.checks_loop_recovery_failed'),
     })
     : undefined;
+  const screenVisionModel = config.foundryProjectEndpoint && credential
+    ? createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
+      const token = await credential.getToken(scope, { abortSignal: signal });
+      if (!token) throw new Error('Foundry screen identity unavailable');
+      return token.token;
+    })
+    : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
     ...(webResearchModule ? [webResearchModule] : []),
@@ -487,6 +494,10 @@ try {
       } : {}),
     }),
     createPcBridgeModule({
+      ...(screenVisionModel ? {
+        pcActVisionModel: screenVisionModel,
+        pcActVisionDeployment: 'gpt-5.6-luna',
+      } : {}),
       ...(pcActPlanner ? {
         pcActPlanner,
         onPcActStep: (activity) => logger.info(activity, 'pc_act.step'),
@@ -533,13 +544,9 @@ try {
       ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
     }));
   }
-  if (database && settingsStore && config.foundryProjectEndpoint && credential) {
+  if (database && settingsStore && screenVisionModel) {
     modules.push(createScreenVisionModule(new ScreenVisionService(
-      createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Foundry screen identity unavailable');
-        return token.token;
-      }),
+      screenVisionModel,
       createScreenFrameUsageStore(database.pool),
     )));
   }
