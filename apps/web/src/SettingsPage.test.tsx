@@ -97,7 +97,10 @@ beforeEach(() => {
   themePreference.saveTheme.mockClear();
   themePreference.refreshAppearance.mockClear();
   themePreference.retry.mockClear();
-  vi.stubGlobal('fetch', fetchMock);
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).endsWith('/recipes')
+      ? Promise.resolve(response({ recipes: [] }))
+      : fetchMock(input, init));
 });
 
 afterEach(() => { vi.unstubAllGlobals(); });
@@ -125,7 +128,7 @@ describe('SettingsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
     expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
-    expect(getAccessToken).toHaveBeenCalledTimes(2);
+    expect(getAccessToken).toHaveBeenCalledTimes(3);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [, request] = fetchMock.mock.calls[1]!;
     expect(request).toMatchObject({ method: 'PATCH' });

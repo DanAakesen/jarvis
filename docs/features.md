@@ -37,6 +37,7 @@ Status as of 5 October 2026.
 | Voice transcripts | Read what was said in each voice sitting, with voice minutes | Screen | Main page | Built | P5-06 |
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built | P4-04 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built | P4-05 |
+| Task recipes | Remember successful PC/browser operation sequences without entered values; Jev selects and verifies fresh targets, falling back to planning on drift. List and delete saved recipes. | Both | Voice/chat and Settings → Task recipes | Built offline; live replay timing pending | P7-35, P7-34, P5-14 |
 | Software Factory tools | Ask Jarvis to list projects and tasks, create tasks, change the agent or model on a Ready task, and steer, pause, resume or cancel tasks | Voice/chat | Main page | Built | P4-10, P7-11 |
 | Image generation | Ask Jarvis to create an image with the existing ChatGPT/Codex subscription; open it in the workspace and inspect its saved artifact in chat history | Both | Main conversation and workspace | Built offline; live Codex and Blob acceptance pending | P7-15 |
 | Model switching by voice | Change Jarvis for the next session or a Ready task using verified provider options; running-task changes are refused | Voice/chat | Main page | Built (offline) | P7-11 |
@@ -209,8 +210,8 @@ Existing chat, voice, safe Markdown, queue/steering, workspace tools and shared 
 | Feature | Behaviour | Surface | Status | Tasks |
 | --- | --- | --- | --- | --- |
 | Compact voice bar and shared Language flyout | Truthful voice/activity state, reachable End voice; Language inside More with Danish/English flyout; existing capture capabilities retain their placement | Jarvis voice bar and shared menu | Merged in PR #403; full selected shell/composer/messages remain #398 | P8-36 (#397) |
-| Matching glass composer | Small voice-start orb, attachments, writing area, More and Send; preserve Enter/Send steering and Ctrl+Enter queueing during replies | Jarvis typing, bottom centre | Planned; consolidated with shell/messages | P8-37 (#398) |
-| Readable message window | Coherent frosted messages; remove header orb/title, separator and both message avatars; preserve author semantics, window/tab controls and safe Markdown | Jarvis typing and requested voice history | Planned; consolidated with composer/shell | P8-37 (#398) |
+| Matching glass composer | Small voice-start orb, paperclip menu for existing screen/camera visual context (disabled with a reason until shared; no file upload), multiline writing area, More → Language and Send; preserve Enter/Send steering and Ctrl+Enter queueing during replies | Jarvis typing, bottom centre | Implemented in the P8-37 PR | P8-37 (#398) |
+| Readable message window | Glass history hosted as the shared workspace view `conversation` (shared tabs, minimise/restore, maximise, close, drag/resize and Jarvis commands); avatar-free 62ch messages with hidden author text; auto-follow only at the latest message with Jump to latest; safe Markdown, tool outcomes and failures kept | Jarvis typing and requested voice history | Implemented in the P8-37 PR | P8-37 (#398) |
 
 [Approved visual and acceptance criteria](ui/chat-voice/README.md). Architectural Glass is selected; P8-37 (#398) implements the shell without a bottom bar, matching composer and avatar-free messages together. #399/#401 are superseded separate allocations.
 
@@ -218,7 +219,7 @@ Existing chat, voice, safe Markdown, queue/steering, workspace tools and shared 
 
 | Feature | Behaviour | Surface | Status | Tasks |
 | --- | --- | --- | --- | --- |
-| Architectural Glass shell | Selected dimensional graphite/glass framing, existing navigation and context; remove separate bottom bar/layout track, retaining compact accessible database-waking status in the top bar | Shared shell; large room/orb on Jarvis only | Planned; consolidated with composer/messages | P8-37 (#398) |
+| Architectural Glass shell | Selected dimensional graphite/glass framing, existing navigation and context; remove separate bottom bar/layout track, retaining compact accessible database-waking status in the top bar | Shared shell; large room/orb on Jarvis only | Implemented in the P8-37 PR | P8-37 (#398) |
 
 [Refined selected reference](ui/shell-styling/README.md#refined-approved-reference). The bottom composer and voice bar remain; P8-37 owns the shell, composer and avatar-free message-window update in one PR. Existing shell/voice/window/data capabilities remain implemented with their recorded validation limits.
 
@@ -231,3 +232,12 @@ These accepted changes are implemented offline together in P8-40 [#417](https://
 | Under-orb voice status | Accessible session state/recovery follows the orb; compact More/End voice controls have no overlapping state or long language note | Jarvis browser voice | Implemented offline; fixture layout checks reported in PR #419 | P8-40 (#417) |
 | Microphone on voice start | Explicit voice start requests native permission and begins capture after session readiness; no normal Enable microphone button; preserve mute, recovery and cleanup | Jarvis browser voice | Implemented offline; lifecycle tests pass, real audio unverified | P8-40 (#417) |
 | Expressive awakening and live orb | Pronounced core/shell wake, distinct listening/thinking/tool-work motion and audible-playback-driven speech/light/reflection; interruptible and reduced-motion safe | Same Jarvis scene in typing/voice | Implemented offline; motion-model tests and software-WebGL observations, hardware acceptance pending | P8-40 (#417) |
+
+
+## Voice UI hotfix (#435)
+
+| Feature | Behavior | Location | Evidence | Task |
+| --- | --- | --- | --- | --- |
+| Direct voice sharing | Native-permission screen/camera start, requested inspection and stop; sharing alone sends no frame | More in voice controls | Local implementation; live physical capture/backend pending | P8-43 (#435) |
+| Transient notifications | Dismissible bottom-right toast; no menu overlay or composer text leakage | Outside chat/voice layout | Local implementation; browser verification recorded with the PR | P8-43 (#435) |
+| Projected status and living dormancy | White text without badge/dot; gentle dormant cyan pulse and stirring amber core, stronger awake movement; preserve wake and real state/audio responses | Under orb and existing Jarvis stage | Local implementation; hardware motion acceptance pending | P8-43 (#435) |
