@@ -119,8 +119,8 @@ stateDiagram-v2
 
 | Policy | Allowed outcome |
 | --- | --- |
-| **Deliver a PR** | Implement, test, push a task branch, and open or update a pull request. Stop at a non-draft PR with green checks; mark Done without merging. |
-| **Complete without deployment** | Also squash-merge with the GitHub App when checks are green, the PR is not a draft, its branch is up to date, and GitHub reports it mergeable. Mark Done after the signed merge webhook is persisted. |
+| **Deliver a PR** | Implement, test, push a task branch, and open or update a pull request. Stop at a non-draft PR with green checks, or with no configured checks after a two-minute grace period; mark Done without merging. |
+| **Complete without deployment** | Also squash-merge with the GitHub App when checks are green or none are configured after a two-minute grace period, the PR is not a draft, its branch is up to date, and GitHub reports it mergeable. Mark Done after the signed merge webhook is persisted. |
 
 - Merge rules and Done are Dan's choices per project.
 - The backend applies policy only from task-linked P3-04 GitHub records and current GitHub API state; an agent report never marks a task Done. `NeedsAttention` can become Done only after that verification.
@@ -227,7 +227,7 @@ footer belongs only to screenshot fixtures and is absent from the production UI.
 | Filters: project, agent, state, period | Filter; search |
 | Compact release context for the selected project: repository/default branch, latest build/deployment status, short commit timeline | Open the full project release view; select a project when the filter is All |
 
-The board shows up to 100 newest matching tasks. Pull request, checks, and usage are marked "Not reported" until their data sources are connected; the board does not infer values.
+The board shows up to 100 newest matching tasks. P6-21 connects recorded pull-request, check and usage summaries to the task API; absent data remains unreported rather than inferred. Dan can retry a Needs attention task whose dispatch failed before a sandbox ran, resetting its start-attempt budget and returning it to Ready. Tasks with sandbox history use Recover instead. UI rendering and retry controls are separate work.
 
 P8-34 (#369) implements the approved board/release-bar/right-details composition. Selecting a task opens its existing task detail data in the contextual right pane while retaining filters and board position; Open full task keeps the complete timeline available. The release bar uses the existing authenticated project release source, never mixes data between projects, and shows honest loading/empty/unavailable/stale states. The Factory Ask Jarvis composer hands messages to the existing conversation queue and focuses the explicit voice-start control without activating the microphone. These paths reuse existing contracts; fixture browser checks do not establish live Entra, backend, release, provider-usage, or voice behavior.
 
