@@ -51,9 +51,9 @@ export function createGraphClient({ getToken, fetcher = fetch }: GraphClientOpti
     try {
       token = await getToken(signal);
     } catch {
-      throw new Error('Microsoft Graph credentials are unavailable');
+      throw Object.assign(new Error('Microsoft Graph credentials are unavailable'), { kind: 'auth' });
     }
-    if (!token) throw new Error('Microsoft Graph credentials are unavailable');
+    if (!token) throw Object.assign(new Error('Microsoft Graph credentials are unavailable'), { kind: 'auth' });
 
     const url = new URL(path, graphRoot);
     if (url.origin !== 'https://graph.microsoft.com' || !url.pathname.startsWith('/v1.0/')) {
@@ -74,11 +74,12 @@ export function createGraphClient({ getToken, fetcher = fetch }: GraphClientOpti
         redirect: 'error',
       });
     } catch {
-      throw new Error('Microsoft Graph request failed');
+      const kind = signal.aborted ? (signal.reason?.name === 'TimeoutError' ? 'timeout' : 'aborted') : 'transport';
+      throw Object.assign(new Error('Microsoft Graph request failed'), { kind });
     }
     if (!response.ok) {
       await response.body?.cancel();
-      throw new Error('Microsoft Graph request failed');
+      throw Object.assign(new Error('Microsoft Graph request failed'), { kind: 'http', statusCode: response.status });
     }
     return readJson(response);
   }

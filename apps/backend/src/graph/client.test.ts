@@ -28,6 +28,7 @@ describe('Microsoft Graph client', () => {
 
     await expect(client.get('users/owner/drive', signal))
       .rejects.toThrow('Microsoft Graph credentials are unavailable');
+    await expect(client.get('users/owner/drive', signal)).rejects.toMatchObject({ kind: 'auth' });
   });
 
   it('rejects non-Graph destinations and failed requests without provider details', async () => {
@@ -39,6 +40,23 @@ describe('Microsoft Graph client', () => {
 
     await expect(client.get('https://example.com/private', signal)).rejects.toThrow('Invalid Microsoft Graph request path');
     await expect(client.get('users/owner/drive', signal)).rejects.toThrow('Microsoft Graph request failed');
+    await expect(client.get('users/owner/drive', signal)).rejects.toMatchObject({ kind: 'http', statusCode: 403 });
+  });
+
+  it.each([
+    { reason: undefined, kind: 'transport' },
+    { reason: new DOMException('private error', 'AbortError'), kind: 'aborted' },
+    { reason: new DOMException('private error', 'TimeoutError'), kind: 'timeout' },
+  ])('preserves the safe $kind diagnostic when fetching fails', async ({ reason, kind }) => {
+    const controller = new AbortController();
+    if (reason) controller.abort(reason);
+    const client = createGraphClient({
+      getToken: async () => 'private-token',
+      fetcher: vi.fn(async () => { throw new Error('private provider error'); }),
+    });
+    const error = await client.get('users/owner/drive', controller.signal).catch((error: unknown) => error);
+    expect(error).toMatchObject({ message: 'Microsoft Graph request failed', kind });
+    expect(JSON.stringify(error)).not.toContain('private');
   });
 
   it('rejects oversized responses', async () => {
