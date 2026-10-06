@@ -7,6 +7,7 @@ import {
   createRealtimeSessionUpdate,
   DANISH_REALTIME_VOICE,
   executeRealtimeToolCall,
+  toModelToolSchema,
   ENGLISH_REALTIME_INSTRUCTIONS,
   ENGLISH_REALTIME_VOICE,
   type RealtimeFunctionCall,
@@ -56,6 +57,26 @@ describe('English realtime session', () => {
     }]);
     expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use notes_search');
     expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('include a note');
+  });
+
+  it('removes untyped schema combinators that Voice Live rejects, keeping typed unions', () => {
+    expect(toModelToolSchema({
+      type: 'object',
+      properties: {
+        model: { type: 'string' },
+        rules: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      },
+      anyOf: [{ required: ['model'] }],
+      allOf: [{ if: { required: ['model'] }, then: { required: ['rules'] } }],
+      additionalProperties: false,
+    })).toEqual({
+      type: 'object',
+      properties: {
+        model: { type: 'string' },
+        rules: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      },
+      additionalProperties: false,
+    });
   });
 
   it('configures Danish with a native Danish voice, server VAD and the shared tool rules', () => {

@@ -102,6 +102,21 @@ switch to English if Dan speaks English to you.
 ${rules}`;
 }
 
+// Voice Live rejects untyped combinator branches such as `anyOf: [{ required: [...] }]` (L103).
+// The model gets a simplified schema; tool calls are still validated against the full schema.
+export function toModelToolSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(toModelToolSchema);
+  if (schema === null || typeof schema !== 'object') return schema;
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
+    if (['allOf', 'not', 'if', 'then', 'else'].includes(key)) continue;
+    if ((key === 'anyOf' || key === 'oneOf') && (!Array.isArray(value) || !value.every((branch) =>
+      branch !== null && typeof branch === 'object' && 'type' in branch))) continue;
+    result[key] = toModelToolSchema(value);
+  }
+  return result;
+}
+
 // Voice Live (api-version 2026-07-15) accepts only its flat session shape; `session.type`,
 // `output_modalities` and `audio.input` are rejected as extra fields (L103).
 export function createRealtimeSessionUpdate(
@@ -133,7 +148,7 @@ export function createRealtimeSessionUpdate(
         type: 'function',
         name,
         description,
-        parameters: structuredClone(inputSchema),
+        parameters: toModelToolSchema(inputSchema),
       })),
       tool_choice: 'auto',
     },
