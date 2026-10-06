@@ -730,17 +730,25 @@ export function createTaskStore(
         await acquireSleepSwitchLock(transaction, 'Shared');
         const current = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, BigInt(id))
-          .query<{ state: TaskState; attemptCount: number; hasHistory: boolean; leased: boolean }>(`
+          .query<{ state: TaskState; attemptCount: number; hasHistory: boolean; leased: boolean; startRefused: boolean }>(`
             SELECT state, attempt_count AS attemptCount,
               CAST(CASE WHEN EXISTS (SELECT 1 FROM dbo.sandbox_sessions WHERE task_id = @taskId)
+                OR EXISTS (SELECT 1 FROM dbo.task_event_archives WHERE task_id = @taskId)
                 OR EXISTS (SELECT 1 FROM dbo.task_events WHERE task_id = @taskId AND
                   (source = N'runner' OR (type = N'state_changed' AND
-                    JSON_VALUE(payload, '$.reason') = N'session_persistence_failed')))
+                    JSON_VALUE(payload, '$.reason') IN
+                      (N'session_persistence_failed', N'foundry_start_failed', N'dispatch_lease_expired'))))
                 THEN 1 ELSE 0 END AS bit) AS hasHistory,
+              CAST(CASE WHEN (SELECT TOP (1) JSON_VALUE(payload, '$.reason')
+                FROM dbo.task_events WHERE task_id = @taskId AND type = N'state_changed'
+                  AND source = N'backend' ORDER BY at DESC, id DESC)
+                IN (N'credential_unavailable', N'foundry_start_rejected')
+                THEN 1 ELSE 0 END AS bit) AS startRefused,
               CAST(CASE WHEN lease_until > SYSUTCDATETIME() THEN 1 ELSE 0 END AS bit) AS leased
             FROM dbo.tasks WITH (UPDLOCK, HOLDLOCK) WHERE id = @taskId;`);
         const row = current.recordset[0];
-        if (!row || row.state !== 'NeedsAttention' || row.attemptCount === 0 || row.hasHistory || row.leased) {
+        if (!row || row.state !== 'NeedsAttention' || row.attemptCount === 0 ||
+          row.hasHistory || row.leased || !row.startRefused) {
           await transaction.rollback();
           return { kind: row ? 'invalid-transition' : 'not-found' };
         }

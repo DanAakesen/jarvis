@@ -758,7 +758,7 @@ describe('committed domain schema (groups 1-8)', () => {
       throw new Error('Retry fixture was not claimed');
     }
     await store.transition(task.id, 'Running');
-    await dispatcher.failStart('retry-fixture', claim.task, null, 'foundry_start_failed');
+    await dispatcher.failStart('retry-fixture', claim.task, null, 'foundry_start_rejected');
     await pool.request().query(`UPDATE dbo.tasks SET attempt_count = 3,
       next_attempt_at = DATEADD(hour, 1, SYSUTCDATETIME()) WHERE id = ${task.id};`);
     published.length = 0;
@@ -790,6 +790,28 @@ describe('committed domain schema (groups 1-8)', () => {
     await pool.request().query(`UPDATE dbo.tasks SET attempt_count = 0 WHERE id = ${task.id};`);
     expect((await store.retry(task.id)).kind).toBe('invalid-transition');
     await pool.request().query(`UPDATE dbo.tasks SET attempt_count = 1 WHERE id = ${task.id};`);
+    await pool.request().query(`UPDATE dbo.tasks SET lease_owner = N'retry-fixture',
+      lease_until = DATEADD(hour, 1, SYSUTCDATETIME())
+      WHERE id = ${task.id};`);
+    expect((await store.retry(task.id)).kind).toBe('invalid-transition');
+    await pool.request().query(`UPDATE dbo.tasks SET lease_owner = NULL, lease_until = NULL WHERE id = ${task.id};`);
+    const uncertain = (await store.create({
+      projectId: String(projectId), title: 'Unknown start outcome', request: 'Run',
+    }))!;
+    await pool.request().query(`UPDATE dbo.tasks SET state = N'NeedsAttention', attempt_count = 1
+      WHERE id = ${uncertain.id};`);
+    expect((await store.retry(uncertain.id)).kind).toBe('invalid-transition');
+    for (const reason of ['foundry_start_failed', 'dispatch_lease_expired']) {
+      await store.recordEvent({
+        taskId: uncertain.id, type: 'state_changed', source: 'backend', payload: { reason },
+      });
+      expect((await store.retry(uncertain.id)).kind).toBe('invalid-transition');
+    }
+    await pool.request().query(`INSERT dbo.task_event_archives
+      (task_id, first_at, first_event_id, blob_name, event_count)
+      VALUES (${task.id}, SYSUTCDATETIME(), 1, N'retry-archived-fixture', 1);`);
+    expect((await store.retry(task.id)).kind).toBe('invalid-transition');
+    await pool.request().query(`DELETE dbo.task_event_archives WHERE task_id = ${task.id};`);
     await store.recordEvent({
       taskId: task.id, type: 'state_changed', source: 'backend',
       payload: { reason: 'session_persistence_failed' },

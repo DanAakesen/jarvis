@@ -24,8 +24,9 @@ usage and PR-opened event records without live GitHub reads or a schema change.
 Unknown state, token metrics and costs stay null; recorded costs can be partial.
 Keep pre-start Retry separate from Recover: reset the dispatcher attempt budget
 under the existing sleep/task locks and publish a committed `state_changed` event.
-Any sandbox history or recorded evidence of an accepted runner start refuses
-Retry. Focused API/dispatcher and real SQL Server tests verify the contracts;
+Require a confirmed pre-start refusal; sandbox history, ambiguous start outcomes
+and archived event history refuse Retry rather than risk duplicate remote work.
+Focused API/dispatcher and real SQL Server tests verify the contracts;
 deployed behavior and UI consumption remain unverified.
 
 P7-35 (6 October 2026): reuse the existing global JSON settings store for bounded,

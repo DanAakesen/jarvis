@@ -385,9 +385,16 @@ authentication (agent and runner identities are refused). It returns `200` with
 the Ready task, `400` for an invalid SQL bigint ID, `404` for an unknown task,
 `409` for an ineligible task, or `503` when task storage is unavailable.
 Eligibility requires NeedsAttention, at least one dispatch attempt, no unexpired
-lease, and no sandbox session history. Recorded runner events or a
+lease, no archived event history, no sandbox session history, and a latest backend
+state event confirming `credential_unavailable` or `foundry_start_rejected`.
+Recorded runner events or a
 `session_persistence_failed` start result also refuse retry because the remote
-sandbox may already have run. Use Recover for tasks with sandbox history.
+sandbox may already have run. Transport/timeouts, expired dispatch leases and
+legacy `foundry_start_failed` results remain ambiguous and refuse retry even
+without a session row. Final auth/HTTP 4xx refusals (except HTTP 408) now retain
+`foundry_start_rejected` rather than the ambiguous failure reason.
+Use Recover for tasks with sandbox history; ambiguous or archived outcomes need
+reconciliation before another sandbox can safely start.
 The transaction takes the shared sleep-switch lock and locks the task, resets
 the attempt count, retry deadline, lease and start/finish timestamps, and preserves
 the task request, configuration and branch. It records a Dan-sourced
