@@ -49,10 +49,6 @@ export function createNowFeedStore(pool: sql.ConnectionPool, onNotificationCreat
           SELECT id, N'alert' AS category, title, link, at
           FROM dbo.activity
           WHERE dismissed_at IS NULL AND alert_key IS NOT NULL
-          UNION ALL
-          SELECT id, N'mode' AS category, title, link, at
-          FROM dbo.activity
-          WHERE dismissed_at IS NULL AND area = N'core' AND kind = N'away_mode'
         )
         SELECT TOP (100) CAST(id AS varchar(19)) AS id, category, title, link, at
         FROM visible ORDER BY at DESC, id DESC;`);

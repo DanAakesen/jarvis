@@ -147,13 +147,6 @@ describe('Now feed API', () => {
   });
 
   it('keeps the Now feed available in the browser while away', async () => {
-    const modeActivity = {
-      id: '8',
-      category: 'mode' as const,
-      title: 'Away mode is on',
-      link: null,
-      at: '2026-10-04T00:01:00.000Z',
-    };
     const awayModeStore: AwayModeStore = {
       read: vi.fn(async () => ({ mode: 'away', source: 'manual', changedAt: null })),
       markPresent: vi.fn(),
@@ -163,7 +156,6 @@ describe('Now feed API', () => {
       {
         read: vi.fn(async () => ({
           ...feed,
-          items: [...feed.items, modeActivity],
         })),
         dismiss: vi.fn(async () => true),
       },
@@ -177,7 +169,7 @@ describe('Now feed API', () => {
     expect(response.json()).toMatchObject({
       awayMode: true,
       running: feed.running,
-      items: [...feed.items, modeActivity],
+      items: feed.items,
       confirmations: [],
     });
   });

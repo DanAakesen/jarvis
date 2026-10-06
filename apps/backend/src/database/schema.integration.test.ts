@@ -448,6 +448,7 @@ describe('committed domain schema (groups 1-8)', () => {
     expect((await tasks.transition(needsAttention.id, 'Running')).kind).toBe('ok');
     expect((await tasks.transition(needsAttention.id, 'Cancelled')).kind).toBe('ok');
     expect(initial.items.length).toBeLessThanOrEqual(100);
+    expect(initial.items.map((item) => item.category)).not.toContain('mode');
     expect(initial.items.map((item) => item.at)).toEqual(
       [...initial.items].map((item) => item.at).sort((left, right) => right.localeCompare(left)),
     );

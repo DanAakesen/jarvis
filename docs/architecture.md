@@ -445,8 +445,9 @@ instead of inferring them. No backend route or persistence change is required.
 
 The main page's authenticated `GET /now` returns up to 100 running tasks with
 their project, agent, current activity and start time, plus up to 100
-non-dismissed attention, release/deployment, credential and mode activity
-records, along with the current away/present state.
+non-dismissed attention, release/deployment, credential and alert activity
+records, along with the current presence state. Presence transition audit rows
+are excluded from the bounded feed; read the current mode through `/presence`.
 The read derives attention from the latest activity for each task in
 `NeedsAttention`; other categories use their `activity.kind`. The
 `POST /now/activity/:id/dismiss` route updates `activity.dismissed_at`, returns

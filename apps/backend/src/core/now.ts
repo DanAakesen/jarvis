@@ -10,7 +10,7 @@ import { generatedViewValidationOptions } from './generated-view-validation.js';
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
 
-export type NowActivityCategory = 'attention' | 'release' | 'credential' | 'alert' | 'mode';
+export type NowActivityCategory = 'attention' | 'release' | 'credential' | 'alert';
 
 export interface NowRunningTask {
   id: string;
