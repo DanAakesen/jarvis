@@ -743,28 +743,28 @@ between traversal batches. The portable policy returns at most
 Password controls and names that look sensitive are omitted; field values are
 never observed.
 
-Each snapshot has one opaque ID and expires after 30 seconds. Before an action,
-the bridge re-observes the foreground app/window and verifies the selected
-element's runtime ID, role, name, visibility, enabled state, sensitivity, and
-supported control pattern. Only fixed click, type, and small-scroll operations
-are exposed. Jev makes one decision per fresh snapshot, for at most 20 steps or
-30 seconds, with a 1.2-second request timeout; cancellation reaches both the
-planner and bridge. Typed content must be an exact, non-sensitive value quoted
-in Dan's request. Send, delete, pay/payment, purchase, post, push, and overwrite
-actions use the existing P7-03 `computer_use` approval flow and retry the same
-observed element only after approval; missing approval refuses the action.
-Reversible submit, remove, replace, and other controls do not require approval.
-The approval identifies the clicked control or text replacement using a
-bounded app/control label, without including the goal or typed text. Website
-tasks remain on P7-17–P7-19's Chrome-only path, and this tool does not use
-Foundry computer-use.
-in Dan's request. Risky intents and destructive control names use the existing
-P7-03 `computer_use` approval flow and retry the same observed element only
-after approval; only irreversible actions require approval, and missing
-approval refuses the action. The approval identifies
-clicks and text replacements using a bounded control role/name, without
-including the goal or typed text. Browser tasks remain on P7-17–P7-19's
-Chrome-only path, and this tool does not use Foundry computer-use.
+Each snapshot has one opaque ID and expires after 30 seconds. Before a control
+action, the bridge re-observes the foreground app/window and verifies the
+selected element's runtime ID, role, name, visibility, enabled state,
+sensitivity, and supported control pattern. Fixed click, type, small-scroll,
+keyboard, and focused-typing operations are exposed. A keyboard action is a
+sequence of at most four chords, each containing only Ctrl/Alt/Shift/Win
+modifiers and a named key or one printable character. Win+L and
+Ctrl+Alt+Delete are refused; Alt+F4 is available only when Dan explicitly asks
+to close or quit. The Windows provider rechecks the foreground window and
+focused UI Automation element before calling `SendInput`; any keyboard or
+focused-typing action is refused when focus is sensitive or cannot be verified.
+`type_focused` accepts only exact, non-sensitive text quoted in Dan's request.
+Jev makes one decision per fresh snapshot, for at most 20 steps or 30 seconds,
+with a 1.2-second request timeout; cancellation reaches both the planner and
+bridge. Send/delete/pay/purchase/post/push/overwrite actions and irreversible
+keyboard chords (including Delete and Ctrl+Enter) use the existing P7-03
+`computer_use` approval flow; no action is retried until approval, and missing
+approval refuses it. Reversible actions do not require approval. Approval and
+step logs use bounded labels or fixed action metadata without goals, key
+sequences, typed text, screenshots, control data, or UIA values. Website tasks
+remain on P7-17–P7-19's Chrome-only path, and this tool does not use Foundry
+computer-use.
 
 The operation, target, and exact-text questions are Choice questions; the planner
 uses the minimum returned Choice confidence and requires at least 0.9. There is no
@@ -812,8 +812,13 @@ object IDs under an opaque snapshot ID; the index is never converted to a
 selector or coordinate. An action expires after 30 seconds or when replaced by a
 new snapshot. Immediately before acting, the companion checks that the same node
 is connected and unchanged, remains visible and enabled, and is still the
-topmost element at its center. Click, type, select, scroll and wait are fixed
-operations; the bridge never accepts or evaluates a model-provided script.
+topmost element at its center. Click, type, select, scroll, wait, bounded
+keyboard sequences, and `type_focused` are fixed operations; the bridge never
+accepts or evaluates a model-provided script. Keyboard actions require the
+listed tab to remain the focused Chrome tab, and a fixed page-side probe reports
+only whether `document.activeElement` is sensitive; it never reads the focused
+value. The Windows provider performs the chord/text injection with `SendInput`
+after repeating the foreground and sensitive-focus checks.
 
 Password, payment-card and one-time-code fields are omitted from values and
 refuse typing; code-like numeric and Luhn-valid card-number text is also
@@ -848,16 +853,19 @@ current tab ID, without owning the browser loop.
 
 Each step takes a new snapshot through the registered P7-18 tools and sends one
 Jev request containing the goal, recent actions, page title/URL, and bounded
-visible control table. That request chooses the operation and speculative
-indexed targets for click, type, select, scroll, and wait. The backend accepts
-only a high-confidence choice present in that snapshot; the selected index and
-snapshot ID go unchanged to `pc_browser_act`, where the PC bridge rechecks the
-same DOM node, freshness, visibility and occlusion. Clicks on controls named
-send/delete/pay/payment/purchase/post/push/overwrite still require the existing
-P7-03 approval flow. The Foundry `gpt-5.6-luna` chat deployment with
-reasoning disabled writes a small validated JSON text value only for TYPE; a
-separate JSON check independently verifies Jev's DONE decision against a fresh
-snapshot.
+visible control table. Closed-set Choice questions select the operation,
+indexed targets for click/type/select/scroll/wait, a bounded keyboard sequence,
+or one exact quoted value for `type_focused`. The request includes common
+shortcut hints when the app is recognized; those hints inform selection but do
+not add app-specific execution paths. The backend accepts only a high-confidence
+choice and target/value present in that request; the selected index and snapshot
+ID go unchanged to `pc_browser_act`, where the PC bridge rechecks the same DOM
+node, freshness, visibility and occlusion. Keyboard operations have no element
+target and execute only in the focused Chrome tab. Irreversible clicks and
+keyboard chords use the existing P7-03 approval flow; the Foundry
+`gpt-5.6-luna` chat deployment with reasoning disabled writes a small validated
+JSON text value only for TYPE; a separate JSON check independently verifies
+Jev's DONE decision against a fresh snapshot.
 
 The planner uses the minimum calibrated Choice confidence for the selected
 operation, target, and (for selection) quoted value, requiring at least 0.9;

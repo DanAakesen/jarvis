@@ -13,6 +13,12 @@ public sealed class WindowsCommandExecutor
     private const string BrowserFallbackNote =
         "Opened in Chrome directly because the Jarvis Chrome extension isn't connected.";
     private readonly UiAutomationExecutor _uiAutomation = new(new WindowsUiAutomationProvider());
+    private readonly KeyboardExecutor _keyboard;
+
+    public WindowsCommandExecutor(KeyboardExecutor? keyboard = null)
+    {
+        _keyboard = keyboard ?? new KeyboardExecutor(new WindowsKeyboardProvider());
+    }
 
     public Task<object> ExecuteAsync(BridgeCommand command, CancellationToken cancellationToken)
     {
@@ -40,6 +46,11 @@ public sealed class WindowsCommandExecutor
     private object ActOnUiAutomation(JsonElement arguments, CancellationToken cancellationToken)
     {
         var actionName = arguments.GetProperty("action").GetString()!;
+        if (actionName is "keys" or "type_focused")
+        {
+            _uiAutomation.EnsureCurrentWindow(arguments.GetProperty("snapshotId").GetString()!, cancellationToken);
+            return _keyboard.Execute(actionName, arguments, cancellationToken);
+        }
         var action = actionName switch
         {
             "click" => UiAutomationAction.Click,
