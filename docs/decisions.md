@@ -19,6 +19,15 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P6-21 (6 October 2026): project task summaries from existing PR, workflow,
+usage and PR-opened event records without live GitHub reads or a schema change.
+Unknown state, token metrics and costs stay null; recorded costs can be partial.
+Keep pre-start Retry separate from Recover: reset the dispatcher attempt budget
+under the existing sleep/task locks and publish a committed `state_changed` event.
+Require a confirmed pre-start refusal; sandbox history, ambiguous start outcomes
+and archived event history refuse Retry rather than risk duplicate remote work.
+Focused API/dispatcher and real SQL Server tests verify the contracts;
+deployed behavior and UI consumption remain unverified.
 P6-20 (6 October 2026): maintenance workflow cancellations are not failed
 deployments. Match deploy workflows by file (`deploy*.yml`/`deploy*.yaml`), retain
 real GitHub release deployments, and collapse same-project/workflow failures over
@@ -42,6 +51,8 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-06 | P6-16 treats zero GitHub check runs and zero commit statuses as no CI only after two minutes from PR creation; recheck through the project-policy evaluator and record no-CI completion as task activity. Any present pending or failed check still blocks. | Reuse the persisted PR open time, current GitHub check APIs and existing policy flow without a migration. Focused tests cover empty checks after grace, checks appearing during grace, and failed checks. | Implemented offline; live test-repository acceptance pending |
+| 2026-10-06 | P6-17 preserves background failure event names and exports only fixed error kinds and bounded HTTP statuses. Retain `ENTRA_JARVIS_AGENT_OBJECT_ID` in Bicep. | Callback errors now reach the logger without exporting messages or provider data; logging and monitor tests exercise the sanitized diagnostics. `apps/backend/src/auth/config.ts` still reads the agent object ID to authorize the hosted identity, so the setting is not unused. | Implemented offline; live failure identification awaits deployment |
 | 2026-10-06 | P7-38 continuously watches only the screen/camera Dan independently shares and speaks only for useful observations. Reuse transient frame handling, the dedicated `gpt-6-luna` deployment, existing usage rows and the voice status announcer; default to a shared USD 1 UTC-day budget. Watch instructions/summaries remain session-local in memory, image text is untrusted, and no sensitive-content pause or web edit is added. | Dan's decisions and API contract in #440 supersede request-only inspection for the new watch path. SQL admission reserves a conservative pending cost to bound concurrent spend; unknown-cost failures keep it until UTC rollover. Fake model, route, store, logger and voice tests cover quiet/noteworthy frames, refusal, dedupe, and delivery; the existing on-demand route remains available. | Backend implemented offline; separate UI, live SQL/model/billing and useful-comment acceptance pending |
 | 2026-10-06 | P7-39: Dan chose an offline wake word on his PC, exactly "Wake up Jarvis". Use the Microsoft Speech SDK on-device `KeywordRecognizer` with a Speech Studio basic custom keyword `.table` model, not a third-party engine. No audio leaves the PC before detection. The bridge sends `wake_word { at }`, and the backend publishes `voice.wake` on the activity hub as a separate `voice-wake` SSE event, leaving `apps/web` and existing activity semantics unchanged. The bridge pauses during voice sessions through backend `voice_state` messages, sent only to bridges that report `wakeWord: true`, so older bridges and backends stay compatible | Microsoft-first and privacy requirement from Dan. Fake-recognizer tests cover toggle, pause, one event per detection and the 3 s debounce; backend tests cover bridge-only acceptance, strict validation and publication | Implemented offline; keyword model and live acceptance pending |
 | 2026-10-06 | P6-15 preserves credential status and dates on uncertain Codex renewal, retaining the lease until expiry; retry after 15 minutes with doubling backoff capped at one hour, resetting to daily after a known outcome. Export allowlisted renewal outcomes/error kinds/status codes and dispatcher start-failure reasons. | A timeout or unavailable invocation does not prove credential failure. Focused fake-client/timer and log-export tests cover preservation, retry timing and redaction. | Implemented offline; live Foundry/Azure acceptance remains unverified |
@@ -208,6 +219,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-05 | P7-28 adds reflex-safe, redacted calendar range and next-event reads while retaining `calendar_today_agenda`. Date-only range endpoints use Dan's configured time zone and include both dates; explicit date-times use an exclusive end. Listing is capped at 100 events/62 days; next-event lookup searches 60 days and skips Dan-declined events. All-day dates stay date-only. | This extends the confirmed P7-22 Google provider without changing its OAuth or write-confirmation boundary. Fake Google client tests cover local-week paging, next event on a later day, empty and over-limit ranges, and multi-day all-day events; live account behavior still requires coordinator acceptance. | Implemented offline; live "this week" and next-appointment acceptance pending |
 | 2026-10-04 | P7-09 keeps pending calendar/mail confirmations in process memory rather than adding SQL state. | Bicep keeps the backend at one replica. Pending codes expire after ten minutes and are lost on restart, which fails closed; scaling out requires moving this state to shared durable storage before changing the replica limit. | Implemented; scaling constraint documented |
 | 2026-10-04 | P7-03: use Azure Bot Service F0 with its Teams channel and the backend's user-assigned managed identity; send Dan-only personal chat notifications and five-minute, single-use Adaptive Card confirmations. Speech voice notes use Azure Speech F0 only and fall back to text when unavailable or exhausted. Always gate merge, delete, mail, calendar changes, repository creation, computer use outside the browser, and spending money on Dan's explicit approval. | The identity and confirmation decision comes from Dan's issue comment. SQL stores only a validated conversation reference and confirmation state; fakes cover approve/reject, replay, unknown identity, expiry, audio links and action gating. The Teams SDK's incompatible internal JWT declaration types require `skipLibCheck`; backend source remains typechecked. Bicep build/lint and offline tests do not verify Azure deployment, role ID, F0 quota, Teams installation or a phone round trip. | Implemented offline; coordinator's live Azure/Teams check pending |
+| 2026-10-06 | P6-19 posts committed Done, NeedsAttention, Cancelled, and PR-opened updates into the task's originating conversation. Persist one claim per task/state; include the verified PR URL when available, speak through the active voice status announcer, and use the existing Teams route while away. | `create_task` now records its source message. A dedicated SQL key avoids mixing notification deduplication with user-visible activity; event subscribers run after task-event commits. Focused tests cover conversation routing, voice wording, away routing and claim survival across store recreation. Live voice and Teams delivery remain unverified. | Implemented offline; live acceptance pending |
 | 2026-10-04 | P7-10 searched Dan's configured OneDrive notes folder with Microsoft Graph keyword search. | Superseded on 6 October by P7-40; OneDrive configuration, setup script and `notes_search` were removed. | Superseded |
 | 2026-10-06 | Dan's private `DanAakesen/vault` GitHub repository on `master` is the source of truth for durable knowledge. Jarvis automatically captures clearly stated preferences, people, project facts, decisions and unfinished tasks; SQL is an index/cache, not a second memory. Writes commit directly to `master` with a reason and Jarvis co-author trailer. | Reuses the existing GitHub App with Contents read/write on the vault, signed push webhooks, existing embedding deployment and SQL memory infrastructure. Writes verify stored Dan messages, enforce routing and size bounds, refuse secrets/credentials, and require the literal “remember” for banking/health details. Fake API tests cover indexing, search, retry, refusals and webhook signatures; App installation/live access remain unverified. | Implemented offline; Dan must install the existing App on the private vault before live acceptance |
 | 2026-10-04 | Autopilot decisions by the coordinator at Dan's request ("take decisions as you think I would"; only truly Dan-only items stay in Needs Dan). P8-12: Escape ends voice and a labelled End voice control sits by the orb (DESIGN.md). P8-18: initial renderer, action and theme-token allowlists (ui.md); no generated code runs. P3-08 waits for the new shell and visual system | Unblocks the UI track; recorded on each issue for Dan's review | Decided on autopilot; Dan to review |
@@ -488,6 +500,26 @@ PR #419 uses one reconciled voice presentation for the under-orb HTML feedback a
 
 The same orb uses phased core ignition, outward wave and settling, with distinct listening/thinking/tool motion and actual playback-driven speech energy. Camera, room and platform remain fixed. Reduced motion uses steady forms. The focused tests and prior PR CI passed; Copilot reported browser fixtures and low-rate software-WebGL motion frames. Live microphone/provider, physical devices and normal hardware-GPU motion remain unverified. No new provider protocol or persistence is introduced.
 
+
+## 6 October 2026 — Credential health and repair (#457)
+
+P6-18 keeps the existing `renew_soon` status vocabulary and Codex renewal lease.
+Manual repair forces the runner's refresh but never bypasses running-task or
+single-flight exclusion. Uncertain completion remains distinct from failure.
+
+Copilot health uses a bounded authenticated GitHub check plus available Key
+Vault expiry; it establishes token authentication, not seat entitlement.
+That check owns Copilot status exclusively, so runner expiry-only metadata
+cannot clear a confirmed authentication failure during Codex renewal.
+GitHub App health follows actual installation-token mints, including catalog
+operations, rather than an extra polling request. Failed mint transitions
+raise one transactional activity alert per failure episode. Check timestamps
+make observation freshness visible without exposing credentials.
+
+Local fake-provider tests verify the backend contract. SQL Server CI and live
+Key Vault/GitHub/Foundry checks are not established by those tests. Settings UI
+wiring remains separate. Migration 0023 leaves 0022 available for #432 and
+must be rechecked against the migration history before merge.
 
 ## 6 October 2026 — Direct voice sharing and living dormant orb (#435)
 

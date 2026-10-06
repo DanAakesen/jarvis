@@ -494,7 +494,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     upstream!.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
     await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
     expect(received.find((event) => event.type === 'response.create')).toMatchObject({
-      response: { instructions: 'Speak this exact status update to Dan, verbatim: A task has finished.' },
+      response: { instructions: 'Speak this exact status update to Dan, verbatim: Task 1 is done.' },
     });
   });
 
@@ -595,7 +595,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
   });
 
   it.each(['session.created', 'session.updated'])(
-    'delivers watch notifications on the Danish hosted fallback after %s without status subscriptions',
+    'delivers Danish watch notifications after %s and tracks away mode with task status',
     async (readyType) => {
       const received: Record<string, unknown>[] = [];
       let upstream!: WebSocket;
@@ -633,8 +633,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
       await upstreamEvent(readyType);
       expect(connectDanish).toHaveBeenCalledOnce();
       expect(visionWatch.registerVoice).toHaveBeenCalledExactlyOnceWith('41', expect.any(Function));
-      expect(taskSubscription).not.toHaveBeenCalled();
-      expect(nowSubscription).not.toHaveBeenCalled();
+      expect(taskSubscription).toHaveBeenCalledOnce();
+      expect(nowSubscription).toHaveBeenCalledOnce();
       expect(received).toEqual([]);
 
       app.nowEventHub.publish({ type: 'status', kind: 'pull_request_ready' });
@@ -779,6 +779,104 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const elapsedMs = responseRequestedAt! - turnStartedAt!;
     expect(elapsedMs).toBeLessThan(500);
     console.info(`Offline final-transcript-to-response-request latency: ${elapsedMs.toFixed(2)} ms`);
+  });
+
+  it.each(['response.done', 'response.cancelled'] as const)(
+    'coalesces quick user turns until the active response is %s',
+    async (terminalEvent) => {
+      const records: string[] = [];
+      const received: Record<string, unknown>[] = [];
+      let upstream!: WebSocket;
+      const upstreamUrl = await echoServer((socket) => {
+        upstream = socket;
+        socket.on('message', (data) => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+      });
+      const classifier: ReflexClassifier = { classify: vi.fn(async () => null) };
+      const { app } = appFor(
+        (token, signal) => new WebSocket(upstreamUrl, {
+          headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+        }),
+        undefined, records, [], undefined, undefined, undefined, classifier, {}, 'info',
+      );
+      await app.listen({ host: '127.0.0.1', port: 0 });
+      const address = app.server.address() as AddressInfo;
+      await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+      await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+
+      upstream.send(JSON.stringify({ type: 'response.created' }));
+      for (const [item_id, transcript] of [
+        ['first_turn', 'Skip to the next track again'],
+        ['second_turn', 'Okay, now pause'],
+      ]) {
+        upstream.send(JSON.stringify({
+          type: 'conversation.item.input_audio_transcription.completed', item_id, transcript,
+        }));
+      }
+      await vi.waitFor(() => {
+        const decisions = records.map((line) => JSON.parse(line) as Record<string, unknown>)
+          .filter(({ msg }) => msg === 'reflex.decision');
+        expect(decisions).toHaveLength(2);
+      });
+      expect(received.filter((event) => event.type === 'response.create')).toHaveLength(0);
+
+      upstream.send(JSON.stringify({ type: terminalEvent }));
+      await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+      expect(received.some((event) => event.type === 'error')).toBe(false);
+    },
+  );
+
+  it('sends tool output after the active response ends, before creating its follow-up', async () => {
+    const received: Record<string, unknown>[] = [];
+    const order: string[] = [];
+    let upstream!: WebSocket;
+    const upstreamUrl = await echoServer((socket) => {
+      upstream = socket;
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'conversation.item.create') order.push('tool-output');
+        if (event.type === 'response.create') order.push('response.create');
+      });
+    });
+    const toolModule: BackendModule = {
+      id: 'response-queue-test',
+      tools: [{
+        name: 'response_queue_test',
+        description: 'Return a test result.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        execute: vi.fn(async () => ({ ok: true })),
+      }],
+      registerRoutes: async () => {},
+    };
+    const { app } = appFor((token, signal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    }), undefined, [], [toolModule]);
+    const activity = vi.spyOn(app.jarvisActivityHub, 'publish');
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+
+    upstream.send(JSON.stringify({ type: 'response.created' }));
+    upstream.send(JSON.stringify({
+      type: 'response.function_call_arguments.done',
+      call_id: 'queued_call',
+      name: 'response_queue_test',
+      arguments: '{}',
+    }));
+    await vi.waitFor(() => expect(activity.mock.calls.some(([event]) =>
+      event.type === 'tool-call-finished')).toBe(true));
+    expect(received.some((event) =>
+      (event.item as Record<string, unknown> | undefined)?.type === 'function_call_output')).toBe(false);
+
+    order.push('response.done');
+    upstream.send(JSON.stringify({ type: 'response.done' }));
+    await vi.waitFor(() => {
+      expect(received.some((event) =>
+        (event.item as Record<string, unknown> | undefined)?.type === 'function_call_output')).toBe(true);
+      expect(received.some((event) => event.type === 'response.create')).toBe(true);
+    });
+    expect(order).toEqual(['response.done', 'tool-output', 'response.create']);
   });
 
   it('executes a completed partial before the final transcript and does not repeat it', async () => {

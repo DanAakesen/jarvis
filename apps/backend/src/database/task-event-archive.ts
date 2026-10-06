@@ -341,7 +341,7 @@ export function createTaskEventArchive(
 
 export function createTaskEventArchiveJob(
   archive: TaskEventArchive,
-  onError: () => void,
+  onError: (error: unknown) => void,
   hasActiveWork: () => boolean = () => true,
   intervalMs = 60 * 60 * 1000,
 ) {
@@ -354,7 +354,7 @@ export function createTaskEventArchiveJob(
     controller = new AbortController();
     running = archive.archiveExpiredEvents(undefined, controller.signal)
       .then(() => undefined)
-      .catch(() => { onError(); })
+      .catch((error: unknown) => { onError(error); })
       .finally(() => {
         running = undefined;
         controller = undefined;

@@ -732,8 +732,12 @@ export class TaskDispatcher implements TaskController {
       this.onStartFailure({ taskId: task.taskId, reason: 'foundry_start_rejected' });
       this.schedule(retryAt);
     } else {
-      await this.store.failStart(this.owner, task, null, 'foundry_start_failed');
-      this.onStartFailure({ taskId: task.taskId, reason: 'foundry_start_failed' });
+      const refused = error instanceof FoundryClientError &&
+        (error.kind === 'auth' || (error.kind === 'http' && error.statusCode !== undefined &&
+          error.statusCode >= 400 && error.statusCode < 500 && error.statusCode !== 408));
+      const reason = refused ? 'foundry_start_rejected' : 'foundry_start_failed';
+      await this.store.failStart(this.owner, task, null, reason);
+      this.onStartFailure({ taskId: task.taskId, reason });
     }
     this.onError(error);
   }

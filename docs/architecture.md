@@ -129,6 +129,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   server returns the accepted value; rejected updates retain the previous
   appearance. Remaining voice samples, sleep, credential, and custom-theme
   controls are visibly disabled until their owning services/contracts exist.
+  P6-18 supplies the credential-health and Codex-repair backend contract below;
+  this backend-only change does not enable the Settings buttons.
 - P8-32 keeps the existing Jarvis Three.js scene mounted while theme changes
   update its materials, lights, exposure and atmosphere from the semantic
   `--stage-*` CSS roles. Shared glass roles keep foreground HTML readable over
@@ -345,6 +347,14 @@ configuration or secret fails webhook requests with 503, not an unsigned fallbac
 The server generates request IDs and records only approved event names, methods,
 route templates, statuses and timings. A final output allowlist covers child
 logger bindings as well as log arguments, dropping request/provider secrets.
+Background failure events retain their emitted names for presence, sandbox
+heartbeat, budget checks, task-event archival, project-policy confirmations,
+dispatcher operations, checks-loop recovery, PC bridge status, Google expiry
+alerts and telemetry shutdown. These events export only a fixed error-kind
+vocabulary and integer HTTP status codes (100–599), never error messages,
+bodies, tokens or URLs. Error callbacks preserve caught errors until the logging
+boundary; Graph authentication/transport/HTTP failures and budget HTTP failures
+carry safe metadata without provider responses.
 
 The factory module exposes authenticated `POST /factory/tasks`, filtered and
 paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event
@@ -361,6 +371,53 @@ state events atomically. Completion can reach Done only through a trusted call t
 confirms completion. The browser and hosted agent service identities do not receive
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
+
+Chat-created tasks retain their originating message ID. Committed Done,
+NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
+status message with the task ID, outcome, and validated GitHub PR link to that
+conversation. A SQL task/state key prevents repeat delivery across restarts;
+away mode routes through the existing Teams notification service, while active
+voice sessions speak the same status through the existing voice announcer.
+P6-21 adds the following fields to every task in `GET /factory/tasks` and to
+`GET /factory/tasks/:id`, independently of event pagination:
+
+- `pullRequest`: `{ number, url, state }` or `null`. The newest linked
+  `pull_requests` row (opened time, then ID) supplies the number and
+  `open`/`closed`/`merged` state. Without a linked row, the newest backend
+  `pull_request_opened` event can supply a known number with `state: null`.
+  URLs use the task project's repository, not the activity's display text.
+- `checks`: the linked PR's recorded `pending`/`passed`/`failed` value or `null`.
+  `checkConclusion` is the latest linked workflow conclusion for the PR's current
+  head SHA (completion/start time, then ID); without one, recorded passed/failed
+  checks map to `success`/`failure`. No GitHub request runs during these reads.
+- `usageSummary`: `{ inputTokens, outputTokens, costDkk }` or `null` when no
+  task-linked usage exists. Values sum recorded `usage` rows across sources.
+  Missing token metrics and wholly unreported costs remain `null`, not zero.
+  Recorded costs may be partial when some usage rows have no cost. Active sandbox
+  estimates remain in the detail's existing `usage` array, not this summary.
+
+`POST /factory/tasks/:id/retry` takes no body and uses default Dan-only
+authentication (agent and runner identities are refused). It returns `200` with
+the Ready task, `400` for an invalid SQL bigint ID, `404` for an unknown task,
+`409` for an ineligible task, or `503` when task storage is unavailable.
+Eligibility requires NeedsAttention, at least one dispatch attempt, no unexpired
+lease, no archived event history, no sandbox session history, and a latest backend
+state event confirming `credential_unavailable` or `foundry_start_rejected`.
+Recorded runner events or a
+`session_persistence_failed` start result also refuse retry because the remote
+sandbox may already have run. Transport/timeouts, expired dispatch leases and
+legacy `foundry_start_failed` results remain ambiguous and refuse retry even
+without a session row. Final auth/HTTP 4xx refusals (except HTTP 408) now retain
+`foundry_start_rejected` rather than the ambiguous failure reason.
+Use Recover for tasks with sandbox history; ambiguous or archived outcomes need
+reconciliation before another sandbox can safely start.
+The transaction takes the shared sleep-switch lock and locks the task, resets
+the attempt count, retry deadline, lease and start/finish timestamps, and preserves
+the task request, configuration and branch. It records a Dan-sourced
+`state_changed` event with `from: NeedsAttention`, `to: Ready`, `reason: start_retry`
+and the previous attempt count, plus activity. Publication occurs only after
+commit and wakes the existing dispatcher; retry does not bypass its credential,
+capacity or project guards. Concurrent/duplicate retries yield only one transition.
 
 `POST /factory/tasks/:id/controls` accepts only `steer`, `pause`, `resume`, `recover`, or
 `cancel`; it uses the default Dan-only authentication and never accepts a requested
@@ -1393,9 +1450,68 @@ These boxes are responsibilities; they do not each need a separate service.
 | Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. The dispatcher sends `task_id` in every start and resume invocation; a runner deployed with `JARVIS_BACKEND_URL` rejects task invocations without one (L59). Browser streaming is P1-06. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. |
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. The fetch client reconnects with its last delivered ID and ignores repeats. |
-| Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. Live state is visible; PR/check/usage values stay unavailable until their owning data integrations exist. |
+| Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. P6-21 supplies recorded PR/check/usage summaries and a Dan-only retry API for failed starts without sandbox history; UI rendering and retry controls are owned separately. |
 | Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. The event-archive timer also skips SQL until active sandbox work exists. |
 | Always on | The backend normally runs with a minimum of 1 replica, so timers remain alive. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. SQL can pause between genuine accesses; the daily Codex renewal lease check and request-driven endpoints remain deliberate exceptions. |
+
+### Credential health and repair (P6-18, #457)
+
+`GET /settings` includes a `credentials` array with `codex-login`,
+`copilot-token`, and `github-app`. Each item has `name`, `status`
+(`ok`, `renew_soon`, `failed`, or `unknown`), nullable UTC ISO-8601
+`expiresAt`, `lastRenewedAt`, and `lastCheckedAt`. `renew_soon` is the
+existing API spelling for expiring within three days. No token, App key,
+Key Vault response, or runner result is returned.
+
+- Copilot: on readiness and every 24 hours, the backend reads `jarvis-copilot`
+  from Key Vault and makes a ten-second, no-redirect authenticated GitHub
+  `GET /user` check. This verifies token authentication, not Copilot seat
+  entitlement. Success is `ok`, or `renew_soon` when the Key Vault expiry is
+  within three days; expired credentials and HTTP 401/403 are `failed`.
+  Tokens without expiry can be `ok` with `expiresAt: null`. Secret lookup,
+  transport, rate-limit (429 or rate-limit headers on 403), and server failures preserve the previous
+  status and log only a fixed diagnostic. The authenticated check is the sole
+  owner of Copilot health: Codex renewal no longer copies runner expiry metadata
+  into health, which could overwrite an authentication failure with `ok`.
+- GitHub App: all repository-scoped and catalog installation-token mint
+  paths record `ok` or `failed` and `lastCheckedAt`; successful mints also
+  update `lastRenewedAt`. `expiresAt` remains null because an installation
+  token's one-hour lifetime is not the App key's expiry. An older observation
+  cannot replace newer health. On transition to failed, status and a
+  `credential_expiry` activity alert commit together, then refresh Now and
+  notify the existing telemetry/email path. Repeated failures do not create
+  additional alerts until a successful mint resets health. Status-persistence
+  errors are logged without disrupting a valid mint.
+- Migration `0023_github_app_credential_health.sql` adds the health row and
+  check timestamp, with a matching reverse batch. `0022` is left available
+  for #432; recheck the sequence before merge. The legacy `github-app-key`
+  name remains permitted in SQL but is not part of the Settings list.
+
+#### UI repair contract
+
+`POST /settings/credentials/codex-login/renew` requires Dan's delegated API
+token. Agent and runner identities are forbidden. No body is required.
+It calls `runCodexRenewalOnce` with `force=true`, which bypasses the runner's
+freshness threshold but **not** the existing SQL lease or active Codex task
+exclusion. It waits for the bounded renewal (up to eight minutes) and reads
+the persisted credential status afterward.
+
+| HTTP | Body | Meaning |
+| --- | --- | --- |
+| 200 | `{ "credential": { "name": "codex-login", "status": "ok", "expiresAt": "...", "lastRenewedAt": "...", "lastCheckedAt": "..." } }` | Completed; use the returned status (which may also be `renew_soon`). |
+| 400 | `{ "error": "Credential cannot be renewed here" }` | The name is not `codex-login`; no renewal starts. |
+| 401 / 403 | `{ "error": "Unauthorized" }` / `{ "error": "Forbidden" }` | Missing/invalid authentication or disallowed identity. |
+| 409 | `{ "error": "Codex credential is busy; retry later", "credential": { ... } }` | Another renewal or running Codex task holds the credential. |
+| 502 | `{ "error": "Credential renewal failed", "credential": { ... } }` | Definitive runner failure; persisted status is failed. |
+| 503 | `{ "error": "Renewal outcome uncertain; retry later", "credential": { ... } }` | Completion could not be confirmed; previous status and lease are preserved. |
+| 503 | `{ "error": "Credential renewal unavailable" }` or `{ "error": "Credential status unavailable" }` | Missing runner/storage configuration, persistence error, or missing status. |
+
+Disable overlapping UI submissions. A busy or uncertain result is not success;
+show the safe error and allow a later retry. After a client timeout, reload
+`GET /settings` rather than assuming repair completed. Copilot re-seeding and
+App key rotation remain operator workflows; their renew endpoints return 400.
+Local fake-provider checks cover this contract; live Key Vault/GitHub/Foundry
+verification and the SQL Server contract suite remain separate checks.
 
 ### Idle SQL path audit (P5-13)
 
@@ -1411,7 +1527,7 @@ The table separates SQL from external/network-only activity:
 | Teams/Graph presence | The Graph client polls every 60 seconds; every observation entered a SQL transaction and read persisted away state, even if unchanged (up to 60 SQL checks/hour). | Graph polling remains every 60 seconds, but cached observations skip SQL when the state is unchanged. A real presence transition or the ten-minute away threshold still persists normally. |
 | Sandbox heartbeat | The backend loads active sessions once at startup; each active invocation is polled about once/minute and its valid result updates SQL. | Unchanged: active work remains monitored, while no tracked session means no recurring heartbeat SQL. |
 | Board SSE and Project plan sync | SSE replay queries SQL on connection; its 25-second keepalive is network-only. The GitHub Project plan-status workflow reads/writes GitHub and `PLAN.md`, not Azure SQL. | Unchanged; no recurring SQL is caused by SSE keepalives or plan-status sync. |
-| Codex renewal and budget monitor | Codex renewal starts on backend readiness and checks daily, using SQL lease/status operations; uncertain runs retry after 15 minutes with doubling backoff capped at one hour. The budget monitor reads ARM every 15 minutes and writes SQL only when a new threshold alert is due. | Deliberate maintenance checks; they can still cause isolated SQL accesses while idle. |
+| Codex renewal, Copilot health, and budget monitor | Codex renewal starts on backend readiness and checks daily, using SQL lease/status operations; uncertain runs retry after 15 minutes with doubling backoff capped at one hour. P6-18 also checks Copilot authentication on readiness and daily, persisting successful/definitive health observations. The budget monitor reads ARM every 15 minutes and writes SQL only when a new threshold alert is due. | Deliberate maintenance checks; they can still cause isolated SQL accesses while idle. |
 
 Tracked webhook rows and mapped PR/run/release/deployment status changes are
 already batched per delivery in the same serializable transaction; no volatile
@@ -1715,7 +1831,7 @@ dismisses historical board failures without deleting activity.
 
 When a task turn completes, P3-14 uses the repository-scoped GitHub App token to verify the task branch, reuse an open PR for the configured base if present, or compare the branch with the default branch and create a PR only when it is ahead. Branch/PR reads happen outside the task policy lock; the backend rechecks that the task is Running under the lock before the bounded PR create, reconciles an ambiguous create response with a matching-PR lookup, and records `pull_request_opened` before releasing it. This serializes the side effect with cancellation without holding the lock across the GitHub preflight. The new PR uses the task title and links to its Jarvis task through the configured Static Web App origin. The backend ends the completed sandbox without marking the task Done; GitHub's signed PR/check webhooks continue the P3-06 policy flow. A missing branch, no new commits, or GitHub API refusal records a clear task event and moves the task to Needs attention. Duplicate completions reuse the PR, including a second lookup after GitHub reports a duplicate create. The GitHub App token stays backend-side.
 
-P3-06 joins the task-linked PR record to its project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. `deliver_pr` marks a verified green, non-draft PR Done without merging. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then requests a squash merge with the expected head SHA. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. GitHub rate limits remain retryable webhook failures. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, and refusal reasons; live App installation and test-repository acceptance remain unverified.
+P3-06 joins the task-linked PR record to its project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. An open PR with no check runs or commit statuses waits two minutes from its recorded open time, then rechecks GitHub; only a still-empty result counts as no CI, and pending or failed records continue to block. `deliver_pr` marks a verified green or no-CI, non-draft PR Done without merging, recording no-CI completion in task activity. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then requests a squash merge with the expected head SHA. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. GitHub rate limits remain retryable webhook failures. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, and refusal reasons; live App installation and test-repository acceptance remain unverified.
 
 
 **Codex login rules** (Pro login only; no API key):

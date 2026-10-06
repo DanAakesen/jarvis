@@ -16,6 +16,7 @@ import { presenceAwayThresholdMs } from '../core/away-mode.js';
 import { createDispatcherStore } from './dispatcher-store.js';
 import { createConversationStore } from './conversation-store.js';
 import { createMemoryStore } from './memory-store.js';
+import { createTaskStatusNotificationStore } from './task-status-notification-store.js';
 import {
   createTaskEventArchive,
   type TaskEventArchiveBlobStore,
@@ -36,8 +37,8 @@ const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'credential_status', 'deployment_failure_receipts', 'deployments', 'jarvis_sessions', 'memories',
   'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects', 'pull_requests', 'releases',
-  'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks',
-  'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks',
+  'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
+  'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks',
   'webhook_deliveries', 'workflow_runs', 'workspace_artifacts',
 ];
 
@@ -117,6 +118,33 @@ describe('committed domain schema (groups 1-8)', () => {
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
       'UX_activity_alert_key',
     ]);
+  });
+
+  it('persists one notification claim per task and state across store recreation', async () => {
+    const project = await createProjectStore(pool).create({
+      name: 'Notification fixture',
+      repo: `DanAakesen/notification-${randomUUID()}`,
+      default_branch: 'main',
+      default_agent: 'copilot',
+      policy: 'deliver_pr',
+      merge_rules: null,
+      sandbox_size: '1x2',
+      tech: 'node',
+    });
+    const task = await createTaskStore(pool, createEventHub<TaskEventMessage>()).create({
+      projectId: project.id,
+      title: 'Notification fixture',
+      request: 'Verify notification deduplication',
+    });
+    if (!task) throw new Error('Notification fixture task was not created');
+    const firstStore = createTaskStatusNotificationStore(pool);
+    const restartedStore = createTaskStatusNotificationStore(pool);
+
+    await expect(firstStore.claim(task.id, 'Done')).resolves.toBe(true);
+    await expect(restartedStore.claim(task.id, 'Done')).resolves.toBe(false);
+    await expect(restartedStore.claim(task.id, 'pull_request_opened')).resolves.toBe(true);
+    await expect(createTaskStore(pool, createEventHub<TaskEventMessage>())
+      .transition(task.id, 'Cancelled')).resolves.toMatchObject({ kind: 'ok' });
   });
   it('persists away mode and an in-progress Teams presence timer across store recreation', async () => {
     const startedAt = new Date('2026-10-04T12:00:00.000Z');
@@ -781,6 +809,31 @@ describe('committed domain schema (groups 1-8)', () => {
       WHERE id = ${String(task)};`);
   });
 
+  it('records GitHub App mint health and alerts once per failure episode after commit', async () => {
+    const alertNotifier = vi.fn();
+    const onAlert = vi.fn();
+    const credentials = createCredentialStatusStore(pool, { alertNotifier, onAlert });
+    await credentials.updateGitHubAppStatus('ok', '2030-01-01T00:00:00.000Z');
+    await credentials.updateGitHubAppStatus('failed', '2030-01-01T01:00:00.000Z');
+    await credentials.updateGitHubAppStatus('failed', '2030-01-01T02:00:00.000Z');
+    expect((await credentials.list()).find((row) => row.name === 'github-app')).toEqual({
+      name: 'github-app', status: 'failed', expiresAt: null,
+      lastRenewedAt: '2030-01-01T00:00:00.000Z', lastCheckedAt: '2030-01-01T02:00:00.000Z',
+    });
+    expect(alertNotifier).toHaveBeenCalledOnce();
+    expect(onAlert).toHaveBeenCalledOnce();
+    const { recordset } = await pool.request().query<{ title: string }>(`SELECT title FROM dbo.activity
+      WHERE alert_key = N'credential:github-app:failed:2030-01-01T01:00:00.000Z';`);
+    expect(recordset[0]?.title).toContain('GitHub App token mint failed');
+    await credentials.updateGitHubAppStatus('ok', '2029-01-01T00:00:00.000Z');
+    expect((await credentials.list()).find((row) => row.name === 'github-app')?.status).toBe('failed');
+    await credentials.updateGitHubAppStatus('ok', '2030-01-01T03:00:00.000Z');
+    await credentials.updateGitHubAppStatus('failed', '2030-01-01T04:00:00.000Z');
+    expect(alertNotifier).toHaveBeenCalledTimes(2);
+    await pool.request().query(`UPDATE dbo.credential_status SET status = N'unknown',
+      last_checked_at = NULL, last_renewed_at = NULL WHERE name = N'github-app';`);
+  });
+
   it('serializes Codex starts against renewal acquisition and recovers expired leases', async () => {
     const project = await pool.request()
       .input('repo', sql.NVarChar(140), `DanAakesen/credentials-${randomUUID().slice(0, 8)}`)
@@ -821,11 +874,14 @@ describe('committed domain schema (groups 1-8)', () => {
       {
         name: 'codex-login', status: 'ok',
         expiresAt: '2030-01-01T00:00:00.000Z', lastRenewedAt: '2026-10-03T00:00:00.000Z',
+        lastCheckedAt: expect.any(String),
       },
       {
         name: 'copilot-token', status: 'renew_soon',
         expiresAt: '2026-10-05T12:00:00.000Z', lastRenewedAt: '2026-10-01T12:00:00.000Z',
+        lastCheckedAt: expect.any(String),
       },
+      { name: 'github-app', status: 'unknown', expiresAt: null, lastRenewedAt: null, lastCheckedAt: null },
     ]);
     expect((await tasks.transition(blockedCodex.id, 'PauseRequested')).kind).toBe('ok');
     expect((await tasks.transition(blockedCodex.id, 'Paused')).kind).toBe('ok');
@@ -849,6 +905,135 @@ describe('committed domain schema (groups 1-8)', () => {
     expect((await tasks.transition(failedCredentialTask.id, 'Running')).kind).toBe('ok');
     expect((await tasks.transition(failedCredentialTask.id, 'PauseRequested')).kind).toBe('ok');
     expect((await tasks.transition(failedCredentialTask.id, 'Paused')).kind).toBe('ok');
+  });
+
+  it('projects recorded PR, check and usage data without inventing missing values', async () => {
+    const repository = `DanAakesen/summary-${randomUUID().slice(0, 8)}`;
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Summary fixture', N'${repository}', N'main', N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const store = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    const task = (await store.create({ projectId: String(projectId), title: 'Recorded data', request: 'Run' }))!;
+    const empty = (await store.create({ projectId: String(projectId), title: 'No data', request: 'Run' }))!;
+    await store.recordEvent({
+      taskId: task.id, type: 'pull_request_opened', source: 'backend',
+      payload: { pullRequest: 2, url: `https://github.com/${repository}/pull/2` },
+    });
+    expect(await store.get(task.id, 1, 0)).toMatchObject({
+      pullRequest: { number: 2, url: `https://github.com/${repository}/pull/2`, state: null },
+      checks: null, checkConclusion: null, usageSummary: null,
+    });
+    const prId = await scalar(`INSERT dbo.pull_requests
+      (task_id, project_id, number, branch, head_sha, state, checks, opened_at)
+      VALUES (${task.id}, ${projectId}, 3, N'jarvis/task-${task.id}', N'${'a'.repeat(40)}',
+        N'closed', N'failed', SYSUTCDATETIME())`);
+    await pool.request().query(`INSERT dbo.workflow_runs
+      (project_id, github_run_id, workflow, [trigger], head_sha, pull_request_id, status, conclusion, started_at, completed_at)
+      VALUES (${projectId}, 99, N'CI', N'pull_request', N'${'a'.repeat(40)}', ${prId},
+        N'completed', N'failure', DATEADD(minute, -2, SYSUTCDATETIME()), DATEADD(minute, -1, SYSUTCDATETIME())),
+        (${projectId}, 100, N'CI', N'pull_request', N'${'a'.repeat(40)}', ${prId},
+        N'completed', N'cancelled', SYSUTCDATETIME(), SYSUTCDATETIME());
+      INSERT dbo.usage (task_id, project_id, source, metric, quantity, cost_dkk)
+      VALUES (${task.id}, ${projectId}, N'codex', N'input_tokens', 100, NULL),
+        (${task.id}, ${projectId}, N'codex', N'input_tokens', 23, NULL),
+        (${task.id}, ${projectId}, N'codex', N'output_tokens', 45, NULL),
+        (${task.id}, ${projectId}, N'jarvis_model', N'input_tokens', 10, 0.25);`);
+    const expected = {
+      pullRequest: { number: 3, url: `https://github.com/${repository}/pull/3`, state: 'closed' },
+      checks: 'failed', checkConclusion: 'cancelled',
+      usageSummary: { inputTokens: 133, outputTokens: 45, costDkk: 0.25 },
+    };
+    const listed = await store.list({ projectId: String(projectId), limit: 100, offset: 0 });
+    expect(listed.find((item) => item.id === task.id)).toMatchObject(expected);
+    expect(listed.find((item) => item.id === empty.id)).toMatchObject({
+      pullRequest: null, checks: null, checkConclusion: null, usageSummary: null,
+    });
+    expect(await store.get(task.id, 1, 100)).toMatchObject(expected);
+    await pool.request().query(`UPDATE dbo.usage SET cost_dkk = NULL WHERE task_id = ${task.id};`);
+    expect(await store.get(task.id, 1, 0)).toMatchObject({ usageSummary: { costDkk: null } });
+    const archived = createTaskStore(pool, createEventHub<TaskEventMessage>(),
+      createTaskEventArchive(pool, createMemoryArchiveBlobStore().blobs));
+    expect(await archived.get(task.id, 1, 0)).toMatchObject({ ...expected, usageSummary: { ...expected.usageSummary, costDkk: null } });
+    await pool.request().query(`UPDATE dbo.tasks SET state = N'Cancelled' WHERE project_id = ${projectId};`);
+  });
+
+  it('retries failed starts atomically, resets dispatch attempts, and refuses sandbox history', async () => {
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Retry fixture', N'DanAakesen/retry-${randomUUID().slice(0, 8)}', N'main',
+        N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const hub = createEventHub<TaskEventMessage>();
+    const published: TaskEventMessage[] = [];
+    hub.subscribe((event) => published.push(event));
+    const store = createTaskStore(pool, hub);
+    const task = (await store.create({
+      projectId: String(projectId), title: 'Retry start', request: 'Run', priority: 2_147_483_647,
+    }))!;
+    const dispatcher = createDispatcherStore(pool, hub);
+    const claim = await dispatcher.claimNext('retry-fixture', 120, 3);
+    if (claim.kind !== 'claimed' || claim.task.taskId !== task.id) {
+      throw new Error('Retry fixture was not claimed');
+    }
+    await store.transition(task.id, 'Running');
+    await dispatcher.failStart('retry-fixture', claim.task, null, 'foundry_start_rejected');
+    await pool.request().query(`UPDATE dbo.tasks SET attempt_count = 3,
+      next_attempt_at = DATEADD(hour, 1, SYSUTCDATETIME()) WHERE id = ${task.id};`);
+    published.length = 0;
+    const results = await Promise.all([store.retry(task.id), store.retry(task.id)]);
+    expect(results.map((result) => result.kind).sort()).toEqual(['invalid-transition', 'ok']);
+    expect(published).toHaveLength(1);
+    expect(published[0]).toMatchObject({
+      type: 'state_changed', source: 'dan',
+      payload: { from: 'NeedsAttention', to: 'Ready', reason: 'start_retry', previousAttemptCount: 3 },
+    });
+    const persisted = await store.get(task.id, 100, 0);
+    expect(persisted).toMatchObject({
+      state: 'Ready', attemptCount: 0, nextAttemptAt: null, startedAt: null,
+      branch: claim.task.branch,
+    });
+    expect(persisted?.events.filter((event) => event.source === 'dan')).toHaveLength(1);
+    expect((await store.retry('9223372036854775807')).kind).toBe('not-found');
+    expect((await store.retry(task.id)).kind).toBe('invalid-transition');
+    const claimedAgain = await dispatcher.claimNext('retry-again', 120, 3);
+    expect(claimedAgain).toMatchObject({ kind: 'claimed', task: { taskId: task.id, attemptCount: 1 } });
+    if (claimedAgain.kind !== 'claimed') throw new Error('Retry was not dispatchable');
+    await dispatcher.failStart('retry-again', claimedAgain.task, null, 'credential_unavailable');
+    const sessionId = await scalar(`INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, size, image, status, ended_at, end_reason)
+      VALUES (${task.id}, N'retry-${randomUUID()}', N'1', N'1x2', N'node', N'Ended',
+        SYSUTCDATETIME(), N'crashed')`);
+    expect((await store.retry(task.id)).kind).toBe('invalid-transition');
+    await pool.request().query(`DELETE dbo.sandbox_sessions WHERE id = ${sessionId};`);
+    await pool.request().query(`UPDATE dbo.tasks SET attempt_count = 0 WHERE id = ${task.id};`);
+    expect((await store.retry(task.id)).kind).toBe('invalid-transition');
+    await pool.request().query(`UPDATE dbo.tasks SET attempt_count = 1 WHERE id = ${task.id};`);
+    await pool.request().query(`UPDATE dbo.tasks SET lease_owner = N'retry-fixture',
+      lease_until = DATEADD(hour, 1, SYSUTCDATETIME())
+      WHERE id = ${task.id};`);
+    expect((await store.retry(task.id)).kind).toBe('invalid-transition');
+    await pool.request().query(`UPDATE dbo.tasks SET lease_owner = NULL, lease_until = NULL WHERE id = ${task.id};`);
+    const uncertain = (await store.create({
+      projectId: String(projectId), title: 'Unknown start outcome', request: 'Run',
+    }))!;
+    await pool.request().query(`UPDATE dbo.tasks SET state = N'NeedsAttention', attempt_count = 1
+      WHERE id = ${uncertain.id};`);
+    expect((await store.retry(uncertain.id)).kind).toBe('invalid-transition');
+    for (const reason of ['foundry_start_failed', 'dispatch_lease_expired']) {
+      await store.recordEvent({
+        taskId: uncertain.id, type: 'state_changed', source: 'backend', payload: { reason },
+      });
+      expect((await store.retry(uncertain.id)).kind).toBe('invalid-transition');
+    }
+    await pool.request().query(`INSERT dbo.task_event_archives
+      (task_id, first_at, first_event_id, blob_name, event_count)
+      VALUES (${task.id}, SYSUTCDATETIME(), 1, N'retry-archived-fixture', 1);`);
+    expect((await store.retry(task.id)).kind).toBe('invalid-transition');
+    await pool.request().query(`DELETE dbo.task_event_archives WHERE task_id = ${task.id};`);
+    await store.recordEvent({
+      taskId: task.id, type: 'state_changed', source: 'backend',
+      payload: { reason: 'session_persistence_failed' },
+    });
+    expect((await store.retry(task.id)).kind).toBe('invalid-transition');
   });
 
   it('creates, filters, reads and transitions tasks with transactional history', async () => {
@@ -887,7 +1072,7 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await store.list({
       projectId, agent: 'copilot', state: 'Ready', search: 'contract',
       limit: 10, offset: 0,
-    })).toEqual([created]);
+    })).toEqual([{ ...created, pullRequest: null, checks: null, checkConclusion: null, usageSummary: null }]);
     expect(await store.get(created.id, 10, 0)).toMatchObject({
       id: created.id,
       events: [{ type: 'created', payload: { state: 'Ready' }, source: 'backend' }],
@@ -1040,6 +1225,47 @@ describe('committed domain schema (groups 1-8)', () => {
       { kind: 'files_changed', title: 'Changed source files' },
       { kind: 'state_changed', title: 'Task state changed' },
     ]);
+  });
+
+  it('includes the recorded pull request URL in later attention and completion events', async () => {
+    const project = await createProjectStore(pool).create({
+      name: 'Task status fixture',
+      repo: `DanAakesen/task-status-${randomUUID()}`,
+      default_branch: 'main',
+      default_agent: 'copilot',
+      policy: 'deliver_pr',
+      merge_rules: null,
+      sandbox_size: '1x2',
+      tech: 'node',
+    });
+    const hub = createEventHub<TaskEventMessage>();
+    const events: TaskEventMessage[] = [];
+    hub.subscribe((event) => events.push(event));
+    const store = createTaskStore(pool, hub);
+    const task = await store.create({
+      projectId: project.id,
+      title: 'Task status fixture',
+      request: 'Retain the pull request link',
+    });
+    if (!task) throw new Error('Task status fixture was not created');
+    const url = 'https://github.com/DanAakesen/jarvis/pull/42';
+
+    await store.recordEvent({
+      taskId: task.id,
+      type: 'pull_request_opened',
+      payload: { url },
+      source: 'backend',
+    });
+    await store.transition(task.id, 'Running');
+    await store.recordEvent({ taskId: task.id, type: 'disk_low', source: 'runner' });
+    await store.transition(task.id, 'Done', true);
+
+    expect(events.filter((event) => event.type === 'state_changed').map((event) => event.payload))
+      .toEqual([
+        { from: 'Ready', to: 'Running' },
+        { from: 'Running', to: 'NeedsAttention', reason: 'disk_low', pullRequestUrl: url },
+        { from: 'NeedsAttention', to: 'Done', pullRequestUrl: url },
+      ]);
   });
 
   it('moves a running task to NeedsAttention atomically when runner disk is low', async () => {
@@ -1430,11 +1656,12 @@ describe('committed domain schema (groups 1-8)', () => {
     const message = await scalar(`INSERT dbo.messages
       (jarvis_session_id, role, text, language, interrupted)
       VALUES (${String(session)}, N'jarvis', N'Partial reply', N'en', 1)`);
-    const down = await readDownMigration('0020_chat_message_steering.sql');
-    const later = committed.filter((migration) => migration.name > down.name);
-    for (const migration of [...later].reverse()) {
-      expect(await revertMigration(pool, committed, await readDownMigration(migration.name))).toBe(migration.name);
+    const newer = committed.filter((migration) => migration.name > '0020_chat_message_steering.sql').reverse();
+    for (const migration of newer) {
+      const script = await readDownMigration(migration.name);
+      expect(await revertMigration(pool, committed, script)).toBe(script.name);
     }
+    const down = await readDownMigration('0020_chat_message_steering.sql');
 
     await expect(revertMigration(pool, committed, down))
       .rejects.toThrow('Message language and interruption data must be retained');
@@ -1446,7 +1673,7 @@ describe('committed domain schema (groups 1-8)', () => {
       `UPDATE dbo.messages SET language = NULL, interrupted = 0 WHERE id = ${String(message)}`,
     );
     expect(await revertMigration(pool, committed, down)).toBe(down.name);
-    expect(await applyMigrations(pool, committed)).toEqual([down.name, ...later.map((migration) => migration.name)]);
+    expect(await applyMigrations(pool, committed)).toEqual([down.name, ...[...newer].reverse().map((migration) => migration.name)]);
   });
 
   it('refuses to revert a migration that is not the latest applied one and keeps state on failure', async () => {
