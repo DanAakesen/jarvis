@@ -425,8 +425,9 @@ describe('committed domain schema (groups 1-8)', () => {
     expect((await tasks.transition(running.id, 'Running')).kind).toBe('ok');
     expect((await tasks.transition(needsAttention.id, 'Running')).kind).toBe('ok');
     expect((await tasks.transition(needsAttention.id, 'NeedsAttention')).kind).toBe('ok');
-    await pool.request().query(`UPDATE dbo.activity
-      SET at = DATEADD(day, 1, SYSUTCDATETIME())
+    // Each task event has an activity row; a shared timestamp makes id the deterministic tie-breaker.
+    await pool.request().query(`DECLARE @attentionAt datetime2(7) = DATEADD(day, 1, SYSUTCDATETIME());
+      UPDATE dbo.activity SET at = @attentionAt
       WHERE area = N'factory' AND link = N'task:${needsAttention.id}';`);
     const attentionActivity = await pool.request().query<{ id: string }>(`SELECT TOP (1)
       CAST(id AS varchar(19)) AS id FROM dbo.activity
