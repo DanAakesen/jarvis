@@ -36,8 +36,8 @@ const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'credential_status', 'deployments', 'jarvis_sessions', 'memories',
   'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects', 'pull_requests', 'releases',
-  'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks',
-  'task_status_notifications', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks',
+  'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
+  'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks',
   'webhook_deliveries', 'workflow_runs', 'workspace_artifacts',
 ];
 

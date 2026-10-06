@@ -341,6 +341,8 @@ function registerVoiceRoute(
       outcome?: 'ok' | 'refused' | 'error',
     ) => void>();
     let unsubscribeAwayMode: (() => void) | undefined;
+    // Declared early because closeAnnouncements can run before the announcer exists.
+    // eslint-disable-next-line prefer-const
     let statusAnnouncer: ReturnType<typeof createVoiceStatusAnnouncer> | undefined;
     const finishActiveToolActivities = () => {
       for (const finish of activeToolActivities) finish('interrupted');
