@@ -93,8 +93,8 @@
   --glass-selected: color-mix(in srgb, var(--glass-edge-cool) 18%, var(--surface));
   --glass-selected-glow: 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 42%, transparent), 0 0 18px color-mix(in srgb, var(--glass-edge-cool) 22%, transparent);
   --glass-shell-sheen: linear-gradient(180deg, color-mix(in srgb, var(--glass-edge-cool) 6%, transparent), transparent 42%);
-  --message-dan-tint: color-mix(in srgb, var(--glass-edge-warm) 13%, transparent);
-  --message-jarvis-tint: color-mix(in srgb, var(--glass-edge-cool) 9%, transparent);
+  --message-dan-tint: color-mix(in srgb, var(--glass-edge-warm) 18%, transparent);
+  --message-jarvis-tint: color-mix(in srgb, var(--glass-edge-cool) 12%, transparent);
   --space-1: calc(4px * var(--theme-density-scale, 1));
   --space-2: calc(8px * var(--theme-density-scale, 1));
   --space-3: calc(12px * var(--theme-density-scale, 1));
