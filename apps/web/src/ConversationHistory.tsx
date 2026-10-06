@@ -278,7 +278,7 @@ export function ConversationHistory({
       return;
     }
     setQueue((current) => [...current, queued]);
-  }, [camera?.sharing, client, config, language, screenShare?.sharing, sending, session, visionContext, voiceActive]);
+  }, [camera?.sharing, client, config, language, sending, session, visionContext, voiceActive]);
 
   useEffect(() => {
     const intent = conversationIntents.pending[0];
