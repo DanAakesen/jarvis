@@ -338,7 +338,8 @@ describe('Workspace', () => {
   it('reserves phone content space above the conditional voice dock and leaves no-content voice centred', () => {
     const styles = readFileSync('src/ConversationHistory.css', 'utf8');
     const phone = styles.slice(styles.indexOf('@media (max-width: 700px)'));
-    expect(phone).toContain('bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + 12px)');
+    const statusStyles = readFileSync('src/VoiceControls.css', 'utf8');
+    expect(statusStyles).toContain('.voice-status-region { bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + 12px); }');
     expect(phone).toContain('--phone-dock-height: var(--voice-bar-height, 60px);');
     expect(phone).toContain('[data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom);');
     expect(phone).not.toContain('voice-orb');

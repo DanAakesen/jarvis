@@ -234,3 +234,12 @@ These accepted changes are implemented offline together in P8-40 [#417](https://
 | Under-orb voice status | Accessible session state/recovery follows the orb; compact More/End voice controls have no overlapping state or long language note | Jarvis browser voice | Implemented offline; fixture layout checks reported in PR #419 | P8-40 (#417) |
 | Microphone on voice start | Explicit voice start requests native permission and begins capture after session readiness; no normal Enable microphone button; preserve mute, recovery and cleanup | Jarvis browser voice | Implemented offline; lifecycle tests pass, real audio unverified | P8-40 (#417) |
 | Expressive awakening and live orb | Pronounced core/shell wake, distinct listening/thinking/tool-work motion and audible-playback-driven speech/light/reflection; interruptible and reduced-motion safe | Same Jarvis scene in typing/voice | Implemented offline; motion-model tests and software-WebGL observations, hardware acceptance pending | P8-40 (#417) |
+
+
+## Voice UI hotfix (#435)
+
+| Feature | Behavior | Location | Evidence | Task |
+| --- | --- | --- | --- | --- |
+| Direct voice sharing | Native-permission screen/camera start, requested inspection and stop; sharing alone sends no frame | More in voice controls | Local implementation; live physical capture/backend pending | P8-43 (#435) |
+| Transient notifications | Dismissible bottom-right toast; no menu overlay or composer text leakage | Outside chat/voice layout | Local implementation; browser verification recorded with the PR | P8-43 (#435) |
+| Projected status and living dormancy | White text without badge/dot; gentle dormant cyan pulse and stirring amber core, stronger awake movement; preserve wake and real state/audio responses | Under orb and existing Jarvis stage | Local implementation; hardware motion acceptance pending | P8-43 (#435) |

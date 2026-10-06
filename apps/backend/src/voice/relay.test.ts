@@ -41,6 +41,7 @@ const browsers: WebSocket[] = [];
 const appSockets: Socket[] = [];
 
 afterEach(async () => {
+  vi.useRealTimers();
   for (const browser of browsers.splice(0)) browser.terminate();
   for (const socket of appSockets.splice(0)) socket.destroy();
   await Promise.all(apps.splice(0).map((app) => app.close()));
@@ -226,6 +227,120 @@ function sendTimedPartialTranscript(socket: WebSocket, itemId: string) {
 }
 
 describe('backend-relayed Voice Live WebSocket', () => {
+  it('logs transcript, Jev, tool, audio, and response timings for one voice turn', async () => {
+    vi.useFakeTimers({ toFake: ['performance'] });
+    const records: string[] = [];
+    const execute = vi.fn(async () => {
+      vi.advanceTimersByTime(17);
+      return { completed: true };
+    });
+    const toolModule: BackendModule = {
+      id: 'test-tools',
+      tools: [{
+        name: 'greet',
+        description: 'Greet a person.',
+        inputSchema: {
+          type: 'object',
+          properties: { name: { type: 'string', minLength: 1 } },
+          required: ['name'],
+          additionalProperties: false,
+        },
+        execute,
+      }],
+      registerRoutes: async () => {},
+    };
+    const classifier: ReflexClassifier = {
+      classify: vi.fn(async () => {
+        vi.advanceTimersByTime(7);
+        return null;
+      }),
+    };
+    let upstream!: WebSocket;
+    let responseCreates = 0;
+    const upstreamUrl = await echoServer((socket) => {
+      upstream = socket;
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        if (event.type === 'session.update') {
+          socket.send(JSON.stringify({ type: 'session.updated' }));
+        } else if (event.type === 'input_audio_buffer.append') {
+          vi.advanceTimersByTime(5);
+          socket.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
+        } else if (event.type === 'response.create' && responseCreates++ === 0) {
+          socket.send(JSON.stringify({ type: 'response.created' }));
+          vi.advanceTimersByTime(13);
+          socket.send(JSON.stringify({ type: 'response.audio.delta', delta: 'AQID' }));
+          socket.send(JSON.stringify({
+            type: 'response.function_call_arguments.done',
+            call_id: 'call_1',
+            name: 'greet',
+            arguments: '{"name":"Dan"}',
+          }));
+          socket.send(JSON.stringify({ type: 'response.done' }));
+        } else if (event.type === 'response.create') {
+          vi.advanceTimersByTime(4);
+          socket.send(JSON.stringify({ type: 'response.done' }));
+        }
+      });
+    });
+    const { app } = appFor(
+      (token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }),
+      vi.fn(async () => voiceToken),
+      records,
+      [toolModule],
+      undefined,
+      undefined,
+      undefined,
+      classifier,
+      {},
+      'info',
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    let resolveSpeechStopped!: () => void;
+    const speechStopped = new Promise<void>((resolve) => { resolveSpeechStopped = resolve; });
+    let resolveSessionReady!: () => void;
+    const sessionReady = new Promise<void>((resolve) => { resolveSessionReady = resolve; });
+    let responseDoneCount = 0;
+    let resolveFinalResponseDone!: () => void;
+    const finalResponseDone = new Promise<void>((resolve) => { resolveFinalResponseDone = resolve; });
+    browser.on('message', (data) => {
+      const event = JSON.parse(data.toString()) as Record<string, unknown>;
+      if (event.type === 'input_audio_buffer.speech_stopped') resolveSpeechStopped();
+      if (event.type === 'session.updated') resolveSessionReady();
+      if (event.type === 'response.done' && ++responseDoneCount === 2) resolveFinalResponseDone();
+    });
+    await sessionReady;
+    browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
+    await speechStopped;
+    vi.advanceTimersByTime(11);
+    upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'item_1',
+      transcript: 'Greet Dan',
+    }));
+
+    await finalResponseDone;
+
+    const timing = records.map((line) => JSON.parse(line) as Record<string, unknown>)
+      .find((record) => record.msg === 'voice.turn_timing');
+    expect(timing).toMatchObject({
+      transcriptCompletedMs: 11,
+      jevDecisionMs: 18,
+      firstAudioDeltaMs: 31,
+      responseDoneMs: 52,
+      tools: [{ name: 'greet', startedMs: 31, finishedMs: 48, outcome: 'ok' }],
+    });
+    expect(records.filter((line) => line.includes('"msg":"voice.turn_timing"'))).toHaveLength(1);
+    expect(classifier.classify).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
+    expect(records.join('')).not.toContain('Greet Dan');
+    expect(records.join('')).not.toContain('"name":"Dan"');
+  });
+
   it('tiles workspace windows mid-sentence, logs both decisions and gives the final agent a no-repeat note', async () => {
     const partialSpeech = partialSpeechHarness();
     const records: string[] = [];

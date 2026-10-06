@@ -30,7 +30,7 @@ describe('VoiceOrbStatus', () => {
     expect(screen.getByText('Thinking')).not.toBeNull();
     rerender(<VoiceOrbStatus presentation={voicePresentation({ ...live, status: 'speaking' })} />);
     expect(screen.getByText('Speaking')).not.toBeNull();
-    expect(status().querySelector('.voice-status-glyph')?.getAttribute('aria-hidden')).toBe('true');
+    expect(status().querySelector('svg')).toBeNull();
   });
 
   it('announces microphone problems assertively with readable recovery detail', () => {
