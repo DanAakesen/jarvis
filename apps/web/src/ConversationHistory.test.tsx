@@ -1024,4 +1024,97 @@ describe('ConversationHistory', () => {
     expect(reply?.querySelector('time')?.getAttribute('title')).toBe(new Date(message.at).toLocaleString());
     expect(screen.getByText('Sure.').closest('li')?.getAttribute('data-speaker')).toBe('dan');
   });
+
+  const historyPair = [
+    { ...message, id: '43', role: 'dan' as const, text: 'Hello Jarvis', toolCalls: [] },
+    { ...message, id: '44', channel: 'chat' as const, text: 'I am ready.', toolCalls: [] },
+  ];
+
+  it('minimises, maximises and closes the history window without blocking typing, and reopens it for a reply', async () => {
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    sendChatTurn.mockResolvedValue({ ...assistantMessage, id: '60', text: 'Back again.' });
+    renderConversation();
+    await screen.findByText('I am ready.');
+
+    expect(screen.queryByText('What’s on your mind?')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Move conversation window/ })).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Maximise conversation history' }));
+    expect(screen.getByRole('button', { name: 'Restore size of conversation history' })).not.toBeNull();
+    expect(document.querySelector('[data-history-maximised]')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Restore size of conversation history' }));
+    expect(document.querySelector('[data-history-maximised]')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Minimise conversation history' }));
+    expect(screen.queryByRole('region', { name: 'Conversation history' })).toBeNull();
+    expect(screen.getByLabelText('Conversation history').closest('[hidden]')).not.toBeNull();
+    const restore = screen.getByRole('button', { name: 'Restore conversation history' });
+    expect(document.activeElement).toBe(restore);
+    fireEvent.click(restore);
+    expect(screen.getByLabelText('Conversation history').closest('[hidden]')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close conversation history' }));
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    expect(document.activeElement).toBe(input);
+    expect(screen.getByLabelText('Conversation history').closest('[hidden]')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Restore conversation history' })).toBeNull();
+
+    fireEvent.change(input, { target: { value: 'Are you there?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(screen.getByLabelText('Conversation history').closest('[hidden]')).toBeNull();
+    expect(await screen.findByText('Back again.')).not.toBeNull();
+  });
+
+  it('keeps Dan’s reading position until he returns to the latest message', async () => {
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    renderConversation();
+    await screen.findByText('I am ready.');
+    const transcript = screen.getByLabelText('Conversation history');
+    Object.defineProperty(transcript, 'scrollHeight', { configurable: true, value: 1200 });
+    Object.defineProperty(transcript, 'clientHeight', { configurable: true, value: 300 });
+
+    transcript.scrollTop = 100;
+    fireEvent.scroll(transcript);
+    const jump = await screen.findByRole('button', { name: 'Jump to latest' });
+    fireEvent.click(jump);
+
+    expect(transcript.scrollTop).toBe(1200);
+    expect(document.activeElement).toBe(transcript);
+    expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull();
+  });
+
+  it('keeps author roles for assistive technology without visible avatars or name headings', async () => {
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    renderConversation();
+    const reply = (await screen.findByText('I am ready.')).closest('li');
+
+    expect(reply?.getAttribute('data-speaker')).toBe('jarvis');
+    expect(reply?.querySelector('.message-author')?.textContent).toBe('Jarvis');
+    expect(reply?.querySelector('.message-author')?.classList.contains('visually-hidden')).toBe(true);
+    expect(reply?.querySelector('img, .message-avatar')).toBeNull();
+    expect(document.querySelector('.conversation-window-bar h2, .conversation-window-bar h3')).toBeNull();
+  });
+
+  it('offers visual context from the composer attachment menu only when a source is shared', async () => {
+    const camera: CameraController = {
+      sharing: true,
+      starting: false,
+      inspecting: false,
+      error: '',
+      start: vi.fn(async () => {}),
+      stop: vi.fn(),
+      inspect: vi.fn(async () => ({ description: 'A red mug.' })),
+    };
+    renderConversation(0, camera);
+    await screen.findByRole('heading', { name: 'What’s on your mind?' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Attach visual context' }));
+    const screenItem = screen.getByRole('menuitem', { name: 'Look at screen' });
+    expect(screenItem.getAttribute('aria-disabled')).toBe('true');
+    expect(screenItem.getAttribute('title')).toBe('Share your screen from Activity, sharing and backend first.');
+    expect(screen.queryByRole('menuitem', { name: 'Language' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Look at camera' }));
+
+    await waitFor(() => expect(camera.inspect).toHaveBeenCalledWith(session.id));
+    expect((await screen.findByText(/Camera context is ready for the next message/)).getAttribute('role')).toBe('status');
+  });
 });

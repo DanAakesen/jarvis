@@ -319,6 +319,9 @@ function ShellLayout({ signedIn, config, session, camera }: {
         </div>
         {signedIn && (
           <div className="topbar-actions">
+            {config.backendUrl && (
+              <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+            )}
             {(working || latestActivity) && (
               <span className={`topbar-working${working ? '' : ' topbar-activity-terminal'}`} role="status" aria-label={activityText} aria-live="polite">
                 <span className="topbar-working-mark" aria-hidden="true" />
@@ -378,11 +381,6 @@ function ShellLayout({ signedIn, config, session, camera }: {
           </VoiceWorkspaceContext.Provider>
         </WorkspaceCommandContext.Provider>
       </main>
-      <footer className="bottom-bar">
-        {signedIn && config.backendUrl && (
-          <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
-        )}
-      </footer>
       {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} />}
     </div>
   );

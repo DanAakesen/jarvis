@@ -12,11 +12,13 @@ export type MoreMenuAction = {
   description?: string;
 };
 
-function MenuIcon({ name }: { name: 'more' | 'globe' | 'chevron' | 'check' }) {
+function MenuIcon({ name }: { name: 'more' | 'attach' | 'globe' | 'chevron' | 'check' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'more':
       return <svg {...common} fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="19" cy="12" r="1.9" /></svg>;
+    case 'attach':
+      return <svg {...common}><path d="m20 11.5-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" /></svg>;
     case 'globe':
       return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z" /></svg>;
     case 'chevron':
@@ -40,8 +42,9 @@ function focusItem(container: HTMLElement | null, move: 'first' | 'last' | 'next
 }
 
 /**
- * Shared three-dot conversation menu. Language is always the first row and opens a Danish/English
- * flyout bound to the caller's real language state; callers may add further actions below it.
+ * Shared three-dot conversation menu. When the caller passes language state, Language is the first row
+ * and opens a Danish/English flyout bound to it; callers may add further actions below it. The same
+ * menu, with an attachment trigger and no Language row, serves the composer's attachment actions.
  */
 export function ConversationMoreMenu({
   language,
@@ -49,12 +52,16 @@ export function ConversationMoreMenu({
   actions = [],
   align = 'start',
   className,
+  label = 'More options',
+  icon = 'more',
 }: {
-  language: VoiceLanguage;
-  onLanguageChange: (language: VoiceLanguage) => void;
+  language?: VoiceLanguage;
+  onLanguageChange?: (language: VoiceLanguage) => void;
   actions?: MoreMenuAction[];
   align?: 'start' | 'end';
   className?: string;
+  label?: string;
+  icon?: 'more' | 'attach';
 }) {
   const id = useId();
   const menuId = `${id}-menu`;
@@ -182,20 +189,20 @@ export function ConversationMoreMenu({
         ref={trigger}
         className="more-menu-trigger"
         type="button"
-        aria-label="More options"
-        title="More options"
+        aria-label={label}
+        title={label}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         onClick={() => (open ? close(false) : openMenu('first'))}
         onKeyDown={onTriggerKeyDown}
       >
-        <MenuIcon name="more" />
+        <MenuIcon name={icon} />
       </button>
       {open && (
-        <div ref={menu} id={menuId} className="more-menu-list luminous-glass" role="menu" aria-label="More options"
+        <div ref={menu} id={menuId} className="more-menu-list luminous-glass" role="menu" aria-label={label}
           onKeyDown={(event) => onMenuKeyDown(event, false)}>
-          <div role="none" className="more-menu-language">
+          {language !== undefined && onLanguageChange && <div role="none" className="more-menu-language">
             <button
               ref={languageItem}
               className="more-menu-item"
@@ -233,7 +240,7 @@ export function ConversationMoreMenu({
                 ))}
               </div>
             )}
-          </div>
+          </div>}
           {actions.map((action) => {
             const descriptionId = action.description ? `${id}-${action.id}-description` : undefined;
             return (

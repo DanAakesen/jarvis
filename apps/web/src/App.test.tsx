@@ -307,7 +307,11 @@ describe('App shell', () => {
     });
 
     await renderSignedIn();
-    expect((await screen.findByText('Waking Jarvis…')).getAttribute('role')).toBe('status');
+    const wakeStatus = (await screen.findByText('Waking Jarvis…')).closest('[role="status"]');
+    expect(wakeStatus).not.toBeNull();
+    expect(wakeStatus!.closest('.topbar-actions')).not.toBeNull();
+    expect(document.querySelector('.bottom-bar')).toBeNull();
+    expect(screen.queryByRole('contentinfo')).toBeNull();
     resolveFeed(new Response(JSON.stringify({
       awayMode: false, confirmations: [], updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [],
     })));

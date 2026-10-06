@@ -190,4 +190,17 @@ describe('shared glass tokens', () => {
       expect(tokenValue(source, ':root\\[data-theme="dark"\\]', token)).toBeTruthy();
     }
   });
+
+  it('removes the bottom shell bar and marks selection with complete illuminated surfaces', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');
+
+    expect(source).not.toContain('.bottom-bar');
+    expect(historyStyles).not.toContain('.bottom-bar');
+    expect(ruleDeclaration(source, /\.app-shell\s*\{([^}]*)\}/, 'grid-template-rows')).toBe('var(--rail-size) minmax(0, 1fr)');
+    for (const selector of [/\.rail-link\[aria-current="page"\]\s*\{([^}]*)\}/, /\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/]) {
+      expect(ruleDeclaration(source, selector, 'background')).toBe('var(--glass-selected)');
+      expect(ruleDeclaration(source, selector, 'box-shadow')).toBe('var(--glass-selected-glow)');
+    }
+  });
 });
