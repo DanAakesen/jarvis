@@ -12,7 +12,6 @@ import { createProjectStore } from './project-store.js';
 import { createSandboxHeartbeatStore } from './sandbox-heartbeat-store.js';
 import { createAlertActivityStore } from './alert-store.js';
 import { createAwayModeStore } from './away-mode-store.js';
-import { presenceAwayThresholdMs } from '../core/away-mode.js';
 import { createDispatcherStore } from './dispatcher-store.js';
 import { createConversationStore } from './conversation-store.js';
 import { createMemoryStore } from './memory-store.js';
@@ -117,29 +116,20 @@ describe('committed domain schema (groups 1-8)', () => {
       'UX_activity_alert_key',
     ]);
   });
-  it('persists away mode and an in-progress Teams presence timer across store recreation', async () => {
-    const startedAt = new Date('2026-10-04T12:00:00.000Z');
+  it('persists manual away mode across store recreation', async () => {
+    const changedAt = new Date('2026-10-04T12:00:00.000Z');
     const firstStore = createAwayModeStore(pool);
-    await firstStore.observePresence(true, startedAt);
+    await firstStore.set(true, changedAt);
 
     const onModeChanged = vi.fn();
     const restartedStore = createAwayModeStore(pool, onModeChanged);
     expect(await restartedStore.read()).toEqual({
-      away: false,
-      source: null,
-      changedAt: null,
-      presenceAwaySince: startedAt.toISOString(),
+      away: true,
+      source: 'manual',
+      changedAt: changedAt.toISOString(),
     });
 
-    expect(await restartedStore.observePresence(
-      true,
-      new Date(startedAt.getTime() + presenceAwayThresholdMs),
-    )).toMatchObject({
-      away: true,
-      source: 'teams_presence',
-      presenceAwaySince: startedAt.toISOString(),
-    });
-    await restartedStore.set(false, new Date(startedAt.getTime() + presenceAwayThresholdMs + 1));
+    await restartedStore.set(false, new Date(changedAt.getTime() + 1));
     expect(await createAwayModeStore(pool).read()).toMatchObject({ away: false, source: 'manual' });
     expect((await pool.request().query<{ kind: string; title: string }>(
       `SELECT kind, title FROM dbo.activity WHERE area = N'core' ORDER BY id;`,

@@ -31,6 +31,9 @@ interface PendingRow {
 function harness(
   speech?: { synthesize: ReturnType<typeof vi.fn> },
   isAway: () => Promise<boolean> = async () => true,
+  teamsConfigured = true,
+  onWebNotification = vi.fn(async () => {}),
+  onConfirmationPending = vi.fn(),
 ) {
   const rows = new Map<string, PendingRow>();
   const sent: Array<{ reference: ConversationReference; activity: ActivityLike }> = [];
@@ -81,13 +84,16 @@ function harness(
     tenantId,
     publicOrigin: 'https://jarvis.example',
     store,
-    connector,
-    audioStore: createEphemeralAudioStore(),
+    ...(teamsConfigured ? { connector, audioStore: createEphemeralAudioStore() } : {}),
+    onWebNotification,
+    onConfirmationPending,
     isAway,
     onConfirmationsChanged,
     ...(speech ? { speech } : {}),
   });
-  return { service, store, connector, sent, rows, onConfirmationsChanged };
+  return {
+    service, store, connector, sent, rows, onConfirmationsChanged, onWebNotification, onConfirmationPending,
+  };
 }
 
 function firstConfirmationData(activity: ActivityLike): Record<string, unknown> {
@@ -157,6 +163,26 @@ describe('Teams notification service', () => {
     expect(store.consumeApproval).toHaveBeenCalledOnce();
     expect(service.pendingBrowserConfirmations()).toEqual([]);
     expect(onConfirmationsChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses browser approvals and Now notifications when Teams is not configured', async () => {
+    const onWebNotification = vi.fn(async () => {});
+    const onConfirmationPending = vi.fn();
+    const { service, connector, onConfirmationsChanged, onWebNotification: webNotify } =
+      harness(undefined, async () => true, false, onWebNotification, onConfirmationPending);
+    const operation = service.runConfirmed('merge', 'Merge the reviewed change.', async () => 'merged');
+
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    const confirmation = service.pendingBrowserConfirmations()[0]!;
+    expect(connector.send).not.toHaveBeenCalled();
+    expect(onConfirmationsChanged).toHaveBeenCalledOnce();
+    expect(onConfirmationPending).toHaveBeenCalledOnce();
+    await expect(service.resolveBrowserConfirmation(confirmation.id, 'approve')).resolves.toBe(true);
+    await expect(operation).resolves.toBe('merged');
+
+    await service.notify('warning', 'A task needs attention.');
+    expect(webNotify).toHaveBeenCalledExactlyOnceWith('warning', 'A task needs attention.');
+    expect(connector.send).not.toHaveBeenCalled();
   });
 
   it('links phone-session approvals to their originating call', async () => {

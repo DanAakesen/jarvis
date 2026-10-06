@@ -92,10 +92,9 @@ describe('get_status_summary', () => {
 
   it('summarizes the full feed while away', async () => {
     const awayModeStore: AwayModeStore = {
-      read: async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null }),
-      markPresent: async () => ({ away: false, source: 'browser', changedAt: null, presenceAwaySince: null }),
-      set: async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null }),
-      observePresence: async () => ({ away: true, source: 'presence', changedAt: null, presenceAwaySince: null }),
+      read: async () => ({ away: true, source: 'manual', changedAt: null }),
+      markPresent: async () => ({ away: false, source: 'browser', changedAt: null }),
+      set: async () => ({ away: true, source: 'manual', changedAt: null }),
     };
     const { app } = fixture({ read: async () => feed, dismiss: vi.fn(async () => true) }, awayModeStore);
     const response = await app.inject({

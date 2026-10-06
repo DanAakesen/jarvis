@@ -400,12 +400,13 @@ try {
         connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
         audioStore: teamsAudioStore,
       } : {}),
-      isAway: async () => false,
+      ...(awayModeStore ? { isAway: async () => (await awayModeStore.read()).away } : {}),
       onWebNotification: async (kind, text) => {
         if (!nowFeedStore.recordNotification) throw new Error('Now feed notifications are unavailable');
         await nowFeedStore.recordNotification(kind, text);
       },
       onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
+      onConfirmationPending: () => nowEventHub.publish({ type: 'status', kind: 'approval_pending' }),
       ...(teamsSpeech ? { speech: teamsSpeech } : {}),
     })
     : undefined;
@@ -627,7 +628,7 @@ try {
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(releaseViewStore ? { releaseViewStore } : {}),
     ...(releaseGraphReader ? { releaseGraphReader } : {}),
-    ...(database && taskStore && settingsStore ? {
+    ...(database && taskStore && settingsStore && nowFeedStore ? {
       ...(projectStore ? { projectStore } : {}),
       ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
       toolCallStore: createToolCallStore(database.pool),

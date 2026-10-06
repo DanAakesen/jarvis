@@ -169,6 +169,7 @@ export interface TeamsNotificationOptions {
   readonly connector?: TeamsConnector;
   readonly audioStore?: EphemeralAudioStore;
   readonly onWebNotification?: (kind: NotificationKind, text: string) => Promise<void>;
+  readonly onConfirmationPending?: () => void;
   readonly isAway?: () => Promise<boolean>;
   readonly onConfirmationsChanged?: () => void;
   readonly speech?: SpeechSynthesizer;
@@ -182,6 +183,7 @@ export function createTeamsNotificationService({
   connector,
   audioStore,
   onWebNotification,
+  onConfirmationPending,
   isAway = async () => true,
   onConfirmationsChanged = () => {},
   speech,
@@ -324,6 +326,7 @@ export function createTeamsNotificationService({
         expiresAt: new Date(Date.now() + confirmationLifetimeSeconds * 1000).toISOString(),
       });
       onConfirmationsChanged();
+      onConfirmationPending?.();
     }
     try {
       signal?.throwIfAborted();

@@ -2,7 +2,6 @@ import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
 import {
   defaultAwayModeState,
-  observeAwayPresence,
   parseAwayModeState,
   setAwayMode,
   type AwayModeState,
@@ -19,8 +18,6 @@ export function createAwayModeStore(
   pool: sql.ConnectionPool,
   onModeChanged: (state: AwayModeState) => void = () => {},
 ): AwayModeStore {
-  let cachedState: AwayModeState | undefined;
-
   async function read(request: sql.Request | sql.Transaction): Promise<AwayModeState> {
     const result = await (request instanceof sql.Transaction ? new sql.Request(request) : request)
       .input('scope', sql.NVarChar(64), 'global')
@@ -31,7 +28,13 @@ export function createAwayModeStore(
     try { value = JSON.parse(result.recordset[0].value) as unknown; }
     catch { throw new Error('Away mode state is invalid'); }
     const state = parseAwayModeState(value);
-    if (JSON.stringify(value) !== JSON.stringify(state)) throw new Error('Away mode state is invalid');
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new Error('Away mode state is invalid');
+    }
+    const persistedState = { ...value as Record<string, unknown> };
+    delete persistedState.presenceAwaySince;
+    if (persistedState.source === 'teams_presence') persistedState.source = null;
+    if (JSON.stringify(persistedState) !== JSON.stringify(state)) throw new Error('Away mode state is invalid');
     return state;
   }
 
@@ -78,7 +81,6 @@ export function createAwayModeStore(
       try { await transaction.rollback(); } catch { /* Preserve the sanitized store error. */ }
       throw new Error('Away mode could not be saved');
     }
-    cachedState = next;
     if (modeChanged) onModeChanged(next);
     return next;
   }
@@ -87,8 +89,7 @@ export function createAwayModeStore(
     async read() {
       try {
         const request = databaseReadRequest(pool);
-        cachedState = await read(request);
-        return cachedState;
+        return read(request);
       } catch {
         throw new Error('Away mode is unavailable');
       }
@@ -99,13 +100,6 @@ export function createAwayModeStore(
     },
     markPresent(at = new Date()) {
       return update((state) => setAwayMode(state, false, 'browser', at));
-    },
-    observePresence(away, at = new Date()) {
-      if (away !== null && typeof away !== 'boolean') throw new TypeError('Presence state is invalid');
-      if (cachedState && observeAwayPresence(cachedState, away, at) === cachedState) {
-        return Promise.resolve(cachedState);
-      }
-      return update((state) => observeAwayPresence(state, away, at));
     },
   };
 }

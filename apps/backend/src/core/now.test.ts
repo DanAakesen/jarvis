@@ -69,13 +69,12 @@ describe('Now feed API', () => {
   it('marks explicit authenticated browser activity as present', async () => {
     let away = true;
     const awayModeStore = {
-      read: vi.fn(async () => ({ away, source: away ? 'manual' : 'browser', changedAt: null, presenceAwaySince: null })),
+      read: vi.fn(async () => ({ away, source: away ? 'manual' : 'browser', changedAt: null })),
       markPresent: vi.fn(async () => {
         away = false;
-        return { away, source: 'browser', changedAt: null, presenceAwaySince: null };
+        return { away, source: 'browser', changedAt: null };
       }),
       set: vi.fn(),
-      observePresence: vi.fn(),
     };
     const app = buildApp({ ...config, staticWebAppOrigin: 'https://fixture.azurestaticapps.net' }, undefined, {
       auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
@@ -103,7 +102,7 @@ describe('Now feed API', () => {
     expect(awayModeStore.markPresent).toHaveBeenCalledOnce();
   });
 
-  it('keeps the Now feed and approvals available in the browser while away', async () => {
+  it('keeps the Now feed available in the browser while away', async () => {
     const modeActivity = {
       id: '8',
       category: 'mode' as const,
@@ -112,10 +111,9 @@ describe('Now feed API', () => {
       at: '2026-10-04T00:01:00.000Z',
     };
     const awayModeStore: AwayModeStore = {
-      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null })),
+      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null })),
       markPresent: vi.fn(),
       set: vi.fn(),
-      observePresence: vi.fn(),
     };
     const { app } = fixture(
       {
@@ -141,7 +139,7 @@ describe('Now feed API', () => {
   });
 
   it('lists browser confirmations and accepts an authenticated approval while away', async () => {
-    const away = true;
+    let away = true;
     const confirmation = {
       id: 'A'.repeat(43),
       actionKind: 'merge',
@@ -153,14 +151,12 @@ describe('Now feed API', () => {
         away,
         source: away ? 'manual' : 'browser',
         changedAt: null,
-        presenceAwaySince: null,
       })),
       markPresent: vi.fn(async () => {
         away = false;
-        return { away, source: 'browser', changedAt: null, presenceAwaySince: null };
+        return { away, source: 'browser', changedAt: null };
       }),
       set: vi.fn(),
-      observePresence: vi.fn(),
     };
     const resolveBrowserConfirmation = vi.fn(async () => true);
     const teamsNotifications = {
@@ -216,10 +212,9 @@ describe('Now feed API', () => {
         displayName: 'Other user',
       }),
       awayModeStore: {
-        read: vi.fn(async () => ({ away: false, source: 'browser', changedAt: null, presenceAwaySince: null })),
+        read: vi.fn(async () => ({ away: false, source: 'browser', changedAt: null })),
         markPresent,
         set: vi.fn(),
-        observePresence: vi.fn(),
       } as unknown as AwayModeStore,
       teamsNotifications: {
         pendingBrowserConfirmations: () => [],
@@ -248,10 +243,9 @@ describe('Now feed API', () => {
     nowEventHub.subscribe(update);
     const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
     const awayModeStore = {
-      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null })),
+      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null })),
       set: vi.fn(),
       markPresent: vi.fn(),
-      observePresence: vi.fn(),
     } as unknown as AwayModeStore;
     const notify = vi.fn(async () => {});
     const app = buildApp(config, undefined, {
@@ -375,7 +369,7 @@ describe('Now feed API', () => {
   });
 
   it('sends Now refresh events while away', async () => {
-    let away = true;
+    const away = true;
     const nowEventHub: NowFeedEventHub = createEventHub();
     const app = buildApp(config, undefined, {
       auth: async () => ({
@@ -389,11 +383,9 @@ describe('Now feed API', () => {
           away,
           source: away ? 'manual' : 'browser',
           changedAt: null,
-          presenceAwaySince: null,
         })),
         markPresent: vi.fn(),
         set: vi.fn(),
-        observePresence: vi.fn(),
       } as unknown as AwayModeStore,
     });
     apps.push(app);

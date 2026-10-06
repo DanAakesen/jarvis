@@ -9,6 +9,7 @@ export type VoiceStatusKind =
 const statusText: Readonly<Record<VoiceStatusKind, string>> = {
   task_finished: 'A task has finished',
   needs_attention: 'A task needs attention',
+  approval_pending: 'Approval is pending in Jarvis',
   pull_request_ready: 'A pull request is ready',
   deployment_failed: 'A deployment has failed',
 };

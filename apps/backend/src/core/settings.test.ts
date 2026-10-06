@@ -325,10 +325,9 @@ describe('settings API', () => {
       },
     });
     const awayModeStore = {
-      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null })),
+      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null })),
       set: vi.fn(),
       markPresent: vi.fn(),
-      observePresence: vi.fn(),
     } as unknown as AwayModeStore;
     const app = fixture(store, async () => ({
       kind: 'jarvis-agent',

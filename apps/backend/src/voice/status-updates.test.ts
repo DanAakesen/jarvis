@@ -117,6 +117,23 @@ describe('voice status announcements', () => {
     expect(speak).toHaveBeenCalledOnce();
   });
 
+  it('announces that a browser approval is pending during an active voice session', () => {
+    vi.useFakeTimers();
+    const nowEvents: NowFeedEventHub = createEventHub();
+    const speak = vi.fn();
+    const announcer = createVoiceStatusAnnouncer({
+      nowEvents,
+      canSpeak: () => true,
+      speak,
+    });
+
+    nowEvents.publish({ type: 'status', kind: 'approval_pending' });
+    vi.advanceTimersByTime(500);
+
+    expect(speak).toHaveBeenCalledExactlyOnceWith('Approval is pending in Jarvis.');
+    announcer.close();
+  });
+
   it('keeps multiple events of the same kind to one short announcement per burst', () => {
     vi.useFakeTimers();
     const taskEvents: TaskEventHub = createEventHub<TaskEventMessage>();

@@ -44,7 +44,7 @@ export interface NowFeedStore {
   recordNotification?(kind: string, text: string): Promise<void>;
 }
 
-export type NowFeedStatusKind = 'pull_request_ready' | 'deployment_failed';
+export type NowFeedStatusKind = 'pull_request_ready' | 'deployment_failed' | 'approval_pending';
 
 export type NowFeedUpdate =
   | { type: 'refresh' }
