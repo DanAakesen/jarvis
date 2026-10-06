@@ -129,6 +129,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   server returns the accepted value; rejected updates retain the previous
   appearance. Remaining voice samples, sleep, credential, and custom-theme
   controls are visibly disabled until their owning services/contracts exist.
+  P6-18 supplies the credential-health and Codex-repair backend contract below;
+  this backend-only change does not enable the Settings buttons.
 - P8-32 keeps the existing Jarvis Three.js scene mounted while theme changes
   update its materials, lights, exposure and atmosphere from the semantic
   `--stage-*` CSS roles. Shared glass roles keep foreground HTML readable over
@@ -370,6 +372,12 @@ confirms completion. The browser and hosted agent service identities do not rece
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
 
+Chat-created tasks retain their originating message ID. Committed Done,
+NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
+status message with the task ID, outcome, and validated GitHub PR link to that
+conversation. A SQL task/state key prevents repeat delivery across restarts;
+away mode routes through the existing Teams notification service, while active
+voice sessions speak the same status through the existing voice announcer.
 P6-21 adds the following fields to every task in `GET /factory/tasks` and to
 `GET /factory/tasks/:id`, independently of event pagination:
 
@@ -1403,6 +1411,65 @@ These boxes are responsibilities; they do not each need a separate service.
 | Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. The event-archive timer also skips SQL until active sandbox work exists. |
 | Always on | The backend normally runs with a minimum of 1 replica, so timers remain alive. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. SQL can pause between genuine accesses; the daily Codex renewal lease check and request-driven endpoints remain deliberate exceptions. |
 
+### Credential health and repair (P6-18, #457)
+
+`GET /settings` includes a `credentials` array with `codex-login`,
+`copilot-token`, and `github-app`. Each item has `name`, `status`
+(`ok`, `renew_soon`, `failed`, or `unknown`), nullable UTC ISO-8601
+`expiresAt`, `lastRenewedAt`, and `lastCheckedAt`. `renew_soon` is the
+existing API spelling for expiring within three days. No token, App key,
+Key Vault response, or runner result is returned.
+
+- Copilot: on readiness and every 24 hours, the backend reads `jarvis-copilot`
+  from Key Vault and makes a ten-second, no-redirect authenticated GitHub
+  `GET /user` check. This verifies token authentication, not Copilot seat
+  entitlement. Success is `ok`, or `renew_soon` when the Key Vault expiry is
+  within three days; expired credentials and HTTP 401/403 are `failed`.
+  Tokens without expiry can be `ok` with `expiresAt: null`. Secret lookup,
+  transport, rate-limit (429 or rate-limit headers on 403), and server failures preserve the previous
+  status and log only a fixed diagnostic. The authenticated check is the sole
+  owner of Copilot health: Codex renewal no longer copies runner expiry metadata
+  into health, which could overwrite an authentication failure with `ok`.
+- GitHub App: all repository-scoped and catalog installation-token mint
+  paths record `ok` or `failed` and `lastCheckedAt`; successful mints also
+  update `lastRenewedAt`. `expiresAt` remains null because an installation
+  token's one-hour lifetime is not the App key's expiry. An older observation
+  cannot replace newer health. On transition to failed, status and a
+  `credential_expiry` activity alert commit together, then refresh Now and
+  notify the existing telemetry/email path. Repeated failures do not create
+  additional alerts until a successful mint resets health. Status-persistence
+  errors are logged without disrupting a valid mint.
+- Migration `0023_github_app_credential_health.sql` adds the health row and
+  check timestamp, with a matching reverse batch. `0022` is left available
+  for #432; recheck the sequence before merge. The legacy `github-app-key`
+  name remains permitted in SQL but is not part of the Settings list.
+
+#### UI repair contract
+
+`POST /settings/credentials/codex-login/renew` requires Dan's delegated API
+token. Agent and runner identities are forbidden. No body is required.
+It calls `runCodexRenewalOnce` with `force=true`, which bypasses the runner's
+freshness threshold but **not** the existing SQL lease or active Codex task
+exclusion. It waits for the bounded renewal (up to eight minutes) and reads
+the persisted credential status afterward.
+
+| HTTP | Body | Meaning |
+| --- | --- | --- |
+| 200 | `{ "credential": { "name": "codex-login", "status": "ok", "expiresAt": "...", "lastRenewedAt": "...", "lastCheckedAt": "..." } }` | Completed; use the returned status (which may also be `renew_soon`). |
+| 400 | `{ "error": "Credential cannot be renewed here" }` | The name is not `codex-login`; no renewal starts. |
+| 401 / 403 | `{ "error": "Unauthorized" }` / `{ "error": "Forbidden" }` | Missing/invalid authentication or disallowed identity. |
+| 409 | `{ "error": "Codex credential is busy; retry later", "credential": { ... } }` | Another renewal or running Codex task holds the credential. |
+| 502 | `{ "error": "Credential renewal failed", "credential": { ... } }` | Definitive runner failure; persisted status is failed. |
+| 503 | `{ "error": "Renewal outcome uncertain; retry later", "credential": { ... } }` | Completion could not be confirmed; previous status and lease are preserved. |
+| 503 | `{ "error": "Credential renewal unavailable" }` or `{ "error": "Credential status unavailable" }` | Missing runner/storage configuration, persistence error, or missing status. |
+
+Disable overlapping UI submissions. A busy or uncertain result is not success;
+show the safe error and allow a later retry. After a client timeout, reload
+`GET /settings` rather than assuming repair completed. Copilot re-seeding and
+App key rotation remain operator workflows; their renew endpoints return 400.
+Local fake-provider checks cover this contract; live Key Vault/GitHub/Foundry
+verification and the SQL Server contract suite remain separate checks.
+
 ### Idle SQL path audit (P5-13)
 
 This inventory is a source-level measurement of code paths and configured
@@ -1417,7 +1484,7 @@ The table separates SQL from external/network-only activity:
 | Teams/Graph presence | The Graph client polled every 60 seconds; every observation entered a SQL transaction and read persisted away state, even if unchanged (up to 60 SQL checks/hour). | Removed by P6-22; away mode is manual, with no Graph calls or presence-driven SQL work. |
 | Sandbox heartbeat | The backend loads active sessions once at startup; each active invocation is polled about once/minute and its valid result updates SQL. | Unchanged: active work remains monitored, while no tracked session means no recurring heartbeat SQL. |
 | Board SSE and Project plan sync | SSE replay queries SQL on connection; its 25-second keepalive is network-only. The GitHub Project plan-status workflow reads/writes GitHub and `PLAN.md`, not Azure SQL. | Unchanged; no recurring SQL is caused by SSE keepalives or plan-status sync. |
-| Codex renewal and budget monitor | Codex renewal starts on backend readiness and checks daily, using SQL lease/status operations; uncertain runs retry after 15 minutes with doubling backoff capped at one hour. The budget monitor reads ARM every 15 minutes and writes SQL only when a new threshold alert is due. | Deliberate maintenance checks; they can still cause isolated SQL accesses while idle. |
+| Codex renewal, Copilot health, and budget monitor | Codex renewal starts on backend readiness and checks daily, using SQL lease/status operations; uncertain runs retry after 15 minutes with doubling backoff capped at one hour. P6-18 also checks Copilot authentication on readiness and daily, persisting successful/definitive health observations. The budget monitor reads ARM every 15 minutes and writes SQL only when a new threshold alert is due. | Deliberate maintenance checks; they can still cause isolated SQL accesses while idle. |
 
 Tracked webhook rows and mapped PR/run/release/deployment status changes are
 already batched per delivery in the same serializable transaction; no volatile
@@ -1701,6 +1768,23 @@ record is missing; failed or malformed API responses fail closed.
 P3-07 creates one release per project and default-branch SHA even when a `Release`
 workflow run arrives before its matching push event. The later push reconciles the
 run; workflow runs and deployments link to releases by project and SHA.
+P6-20 limits workflow-driven release status changes to workflows whose file is
+`deploy*.yml`/`deploy*.yaml`; cancelled runs leave release status unchanged.
+Default-branch `Release` push runs still supply version bookkeeping, not deployment
+status. Actual GitHub deployments remain supported,
+excluding the `project-board`, `plan-status` and `copilot` maintenance environments.
+GitHub cancellation errors are ignored. Deployment failures sharing a project
+and workflow ID collapse into one activity/telemetry alert over a rolling hour.
+For failures with a repository-scoped Actions run URL, an Actions-read App token
+resolves the workflow ID and cancellation through a bounded GitHub API request
+before persistence, independent of webhook arrival order; lookup failure returns
+503, never an unstable alert. Without an Actions URL, the environment is the
+grouping fallback. The SQL
+transaction includes dismissed alerts in the window and preserves exact
+deployment-ID deduplication through `deployment_failure_receipts`, including
+failures suppressed within the hour and deployments without a matching release.
+Migration `0024_dismiss_board_deployment_failures.sql`
+dismisses historical board failures without deleting activity.
 
 When a task turn completes, P3-14 uses the repository-scoped GitHub App token to verify the task branch, reuse an open PR for the configured base if present, or compare the branch with the default branch and create a PR only when it is ahead. Branch/PR reads happen outside the task policy lock; the backend rechecks that the task is Running under the lock before the bounded PR create, reconciles an ambiguous create response with a matching-PR lookup, and records `pull_request_opened` before releasing it. This serializes the side effect with cancellation without holding the lock across the GitHub preflight. The new PR uses the task title and links to its Jarvis task through the configured Static Web App origin. The backend ends the completed sandbox without marking the task Done; GitHub's signed PR/check webhooks continue the P3-06 policy flow. A missing branch, no new commits, or GitHub API refusal records a clear task event and moves the task to Needs attention. Duplicate completions reuse the PR, including a second lookup after GitHub reports a duplicate create. The GitHub App token stays backend-side.
 

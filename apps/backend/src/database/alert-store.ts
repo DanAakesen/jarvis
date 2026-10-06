@@ -1,17 +1,24 @@
 import sql from 'mssql';
 import type { ActivityAlert } from '../alerts.js';
 
-export async function insertActivityAlert(transaction: sql.Transaction, alert: ActivityAlert): Promise<boolean> {
+export async function insertActivityAlert(
+  transaction: sql.Transaction, alert: ActivityAlert, dedupePrefix?: string,
+): Promise<boolean> {
   const { recordset } = await new sql.Request(transaction)
     .input('kind', sql.NVarChar(64), alert.type)
     .input('title', sql.NVarChar(400), alert.title)
     .input('link', sql.NVarChar(100), alert.link)
     .input('dedupeKey', sql.NVarChar(200), alert.dedupeKey)
+    .input('dedupePrefix', sql.NVarChar(200), dedupePrefix ?? null)
     .query<{ id: string }>(`INSERT dbo.activity (area, kind, title, link, alert_key)
       OUTPUT CAST(inserted.id AS varchar(19)) AS id
       SELECT N'operations', @kind, @title, @link, @dedupeKey
       WHERE NOT EXISTS (
-        SELECT 1 FROM dbo.activity WITH (UPDLOCK, HOLDLOCK) WHERE alert_key = @dedupeKey
+        SELECT 1 FROM dbo.activity WITH (UPDLOCK, HOLDLOCK)
+        WHERE alert_key = @dedupeKey OR (
+          @dedupePrefix IS NOT NULL AND alert_key LIKE @dedupePrefix + N'%'
+          AND at > DATEADD(hour, -1, SYSUTCDATETIME())
+        )
       );`);
   return recordset.length > 0;
 }

@@ -14,6 +14,7 @@ interface CredentialStatusRow {
   name: CredentialName;
   expiresAt: Date | string | null;
   lastRenewedAt: Date | string | null;
+  lastCheckedAt: Date | string | null;
   status: CredentialStatusValue;
 }
 
@@ -49,15 +50,49 @@ export function createCredentialStatusStore(
   return {
     async list(): Promise<CredentialStatus[]> {
       const { recordset } = await databaseReadRequest(pool).query<CredentialStatusRow>(`SELECT name,
-        expires_at AS expiresAt, last_renewed_at AS lastRenewedAt, status
-        FROM dbo.credential_status WHERE name IN (N'codex-login', N'copilot-token')
+        expires_at AS expiresAt, last_renewed_at AS lastRenewedAt, last_checked_at AS lastCheckedAt, status
+        FROM dbo.credential_status WHERE name IN (N'codex-login', N'copilot-token', N'github-app')
         ORDER BY name;`);
       return recordset.map((row) => ({
         name: row.name,
         expiresAt: iso(row.expiresAt),
         lastRenewedAt: iso(row.lastRenewedAt),
+        lastCheckedAt: iso(row.lastCheckedAt),
         status: row.status,
       }));
+    },
+
+    async updateGitHubAppStatus(status: 'ok' | 'failed', checkedAt: string): Promise<void> {
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      const alert: ActivityAlert = {
+        type: 'credential_expiry',
+        dedupeKey: `credential:github-app:failed:${checkedAt}`,
+        title: 'GitHub App token mint failed; check the App key and installation',
+        link: null,
+      };
+      let inserted = false;
+      try {
+        const { recordset } = await new sql.Request(transaction)
+          .input('status', sql.NVarChar(16), status)
+          .input('checkedAt', sql.DateTime2(7), new Date(checkedAt))
+          .query<{ previousStatus: CredentialStatusValue }>(`UPDATE dbo.credential_status SET status = @status,
+            last_checked_at = @checkedAt,
+            last_renewed_at = CASE WHEN @status = N'ok' THEN @checkedAt ELSE last_renewed_at END
+            OUTPUT deleted.status AS previousStatus
+            WHERE name = N'github-app' AND (last_checked_at IS NULL OR last_checked_at <= @checkedAt);`);
+        if (status === 'failed' && recordset[0] && recordset[0].previousStatus !== 'failed') {
+          inserted = await insertActivityAlert(transaction, alert);
+        }
+        await transaction.commit();
+      } catch (error) {
+        await rollback(transaction);
+        throw error;
+      }
+      if (inserted) {
+        notifyAlert(options.alertNotifier, alert);
+        options.onAlert?.();
+      }
     },
 
     async acquireCodexRenewalLease(owner: string, leaseSeconds: number): Promise<boolean> {
@@ -119,7 +154,7 @@ export function createCredentialStatusStore(
           .input('expiresAt', sql.DateTime2(7), expiresAt ? new Date(expiresAt) : null)
           .input('lastRenewedAt', sql.DateTime2(7), lastRenewedAt ? new Date(lastRenewedAt) : null)
           .query<{ expiresAt: Date | null }>(`UPDATE dbo.credential_status SET status = @status,
-            expires_at = @expiresAt, last_renewed_at = @lastRenewedAt
+            expires_at = @expiresAt, last_renewed_at = @lastRenewedAt, last_checked_at = SYSUTCDATETIME()
             OUTPUT inserted.expires_at AS expiresAt
             WHERE name = N'copilot-token';`);
         alert = recordset[0] ? expiryAlert('copilot-token', status, recordset[0].expiresAt) : undefined;
@@ -156,6 +191,7 @@ export function createCredentialStatusStore(
           .query<{ expiresAt: Date | null }>(`UPDATE dbo.credential_status SET status = @status,
             expires_at = COALESCE(@expiresAt, expires_at),
             last_renewed_at = COALESCE(@lastRenewedAt, last_renewed_at),
+            last_checked_at = SYSUTCDATETIME(),
             renewal_lease_owner = CASE WHEN @releaseLease = 1 THEN NULL ELSE renewal_lease_owner END,
             renewal_lease_until = CASE WHEN @releaseLease = 1 THEN NULL ELSE renewal_lease_until END
             OUTPUT inserted.expires_at AS expiresAt

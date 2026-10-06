@@ -298,6 +298,7 @@ describe('settings API', () => {
       acquireCodexRenewalLease: async () => false,
       refreshCodexRenewalLease: async () => false,
       updateCopilotStatus: async () => {},
+      updateGitHubAppStatus: async () => {},
       completeCodexRenewal: async () => {},
     };
     const app = fixture(store, undefined, credentials);

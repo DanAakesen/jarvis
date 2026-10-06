@@ -71,7 +71,7 @@ describe('voice status announcements', () => {
     expect(announcer.announce('Vision update.')).toBe(false);
     expect(speak).not.toHaveBeenCalled();
     announcer.flush();
-    expect(speak).toHaveBeenCalledExactlyOnceWith('A task has finished.');
+    expect(speak).toHaveBeenCalledExactlyOnceWith('Task 42 is done.');
     expect(announcer.announce('Vision update.')).toBe(true);
     expect(speak).toHaveBeenLastCalledWith('Vision update.');
     announcer.close();
@@ -105,7 +105,7 @@ describe('voice status announcements', () => {
     announcer.flush();
     expect(speak).toHaveBeenCalledOnce();
     expect(speak).toHaveBeenCalledWith(
-      'A task has finished, A task needs attention, A pull request is ready, and A deployment has failed.',
+      'Task 42 is done, Task 42 needs attention, A pull request is ready, and A deployment has failed.',
     );
     expect(speak.mock.calls[0]?.[0]).not.toContain('Sensitive');
     expect(speak.mock.calls[0]?.[0]).not.toContain('log content');
@@ -151,7 +151,47 @@ describe('voice status announcements', () => {
     vi.advanceTimersByTime(500);
 
     expect(speak).toHaveBeenCalledOnce();
-    expect(speak).toHaveBeenCalledWith('A task has finished.');
+    expect(speak).toHaveBeenCalledWith('Task 42 is done.');
+    announcer.close();
+  });
+
+  it('speaks task identity, outcome, and a validated pull request link', () => {
+    vi.useFakeTimers();
+    const taskEvents: TaskEventHub = createEventHub<TaskEventMessage>();
+    const speak = vi.fn();
+    const announcer = createVoiceStatusAnnouncer({
+      taskEvents,
+      canSpeak: () => true,
+      speak,
+      mergeWindowMs: 60_000,
+    });
+
+    taskEvents.publish(taskEvent('pull_request_opened', {
+      url: 'https://github.com/DanAakesen/jarvis/pull/12',
+    }));
+    vi.advanceTimersByTime(60_000);
+
+    expect(speak).toHaveBeenCalledExactlyOnceWith(
+      'Task 42 opened a pull request (PR: https://github.com/DanAakesen/jarvis/pull/12).',
+    );
+    announcer.close();
+  });
+
+  it('speaks task outcomes in the active conversation language', () => {
+    vi.useFakeTimers();
+    const taskEvents: TaskEventHub = createEventHub<TaskEventMessage>();
+    const speak = vi.fn();
+    const announcer = createVoiceStatusAnnouncer({
+      taskEvents,
+      language: 'da',
+      canSpeak: () => true,
+      speak,
+    });
+
+    taskEvents.publish(taskEvent('state_changed', { from: 'Running', to: 'NeedsAttention' }));
+    vi.advanceTimersByTime(500);
+
+    expect(speak).toHaveBeenCalledExactlyOnceWith('Opgave 42 kræver opmærksomhed.');
     announcer.close();
   });
 });

@@ -1,43 +1,44 @@
 import type { NowFeedEventHub, NowFeedStatusKind } from '../core/now.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
+import { taskStatusMessage, taskStatusNotification } from '../factory/task-status-notifications.js';
 
-export type VoiceStatusKind =
-  | 'task_finished'
-  | 'needs_attention'
-  | NowFeedStatusKind;
+export type VoiceStatusKind = NowFeedStatusKind;
 
 const statusText: Readonly<Record<VoiceStatusKind, string>> = {
-  task_finished: 'A task has finished',
-  needs_attention: 'A task needs attention',
   approval_pending: 'Approval is pending in Jarvis',
   pull_request_ready: 'A pull request is ready',
   deployment_failed: 'A deployment has failed',
 };
 
-function taskStatus(event: TaskEventMessage): VoiceStatusKind | undefined {
-  if (event.type !== 'state_changed' || event.payload === null ||
-      typeof event.payload !== 'object' || Array.isArray(event.payload)) return undefined;
-  const destination = (event.payload as Record<string, unknown>).to;
-  if (destination === 'Done') return 'task_finished';
-  if (destination === 'NeedsAttention') return 'needs_attention';
-  return undefined;
+function taskStatus(event: TaskEventMessage): string | undefined {
+  const notification = taskStatusNotification(event);
+  return notification
+    ? taskStatusMessage(event.taskId, notification.state, notification.url)
+    : undefined;
 }
 
-function announcement(kinds: readonly VoiceStatusKind[]): string {
-  const phrases = kinds.map((kind) => statusText[kind]);
-  if (phrases.length === 1) return `${phrases[0]}.`;
+function announcement(updates: readonly string[]): string {
+  if (updates.length === 1) {
+    const update = updates[0]!;
+    return /[.!?]$/u.test(update) ? update : `${update}.`;
+  }
+  const phrases = updates.map((update) => update.replace(/[.!?]+$/u, ''));
   return `${phrases.slice(0, -1).join(', ')}, and ${phrases.at(-1)}.`;
 }
 
 export function createVoiceStatusAnnouncer(options: {
   readonly taskEvents?: TaskEventHub;
   readonly nowEvents?: NowFeedEventHub;
+  readonly language?: 'da' | 'en';
   readonly canSpeak: () => boolean;
+  readonly shouldQueueTaskStatus?: () => boolean;
   readonly speak: (text: string) => void;
   readonly mergeWindowMs?: number;
 }) {
-  const pending = new Set<VoiceStatusKind>();
+  const pending = new Set<string>();
+  const announcedTaskStates = new Set<string>();
   const mergeWindowMs = options.mergeWindowMs ?? 500;
+  const language = options.language ?? 'en';
   let timer: NodeJS.Timeout | undefined;
   let closed = false;
 
@@ -48,9 +49,9 @@ export function createVoiceStatusAnnouncer(options: {
     options.speak(announcement(kinds));
   };
 
-  const enqueue = (kind: VoiceStatusKind) => {
+  const enqueue = (update: string) => {
     if (closed) return;
-    pending.add(kind);
+    pending.add(update);
     if (timer) return;
     timer = setTimeout(() => {
       timer = undefined;
@@ -60,11 +61,17 @@ export function createVoiceStatusAnnouncer(options: {
   };
 
   const unsubscribeTaskEvents = options.taskEvents?.subscribe((event) => {
-    const kind = taskStatus(event);
-    if (kind) enqueue(kind);
+    if (options.shouldQueueTaskStatus && !options.shouldQueueTaskStatus()) return;
+    const update = taskStatus(event);
+    const status = taskStatusNotification(event);
+    if (!update || !status) return;
+    const key = `${event.taskId}:${status.state}`;
+    if (announcedTaskStates.has(key)) return;
+    announcedTaskStates.add(key);
+    enqueue(language === 'da' ? taskStatusMessage(event.taskId, status.state, status.url, 'da') : update);
   });
   const unsubscribeNowEvents = options.nowEvents?.subscribe((event) => {
-    if (event.type === 'status') enqueue(event.kind);
+    if (event.type === 'status') enqueue(statusText[event.kind]);
   });
 
   return {

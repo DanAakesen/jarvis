@@ -404,6 +404,36 @@ function flattenSettings(settings: SettingsPatch): { key: string; value: string 
 }
 
 export async function registerSettingsRoutes(app: import('fastify').FastifyInstance) {
+  app.post<{ Params: { name: string } }>('/settings/credentials/:name/renew', async (request, reply) => {
+    if (request.principal?.objectId !== app.ownerObjectId) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    if (request.params.name !== 'codex-login') {
+      return reply.code(400).send({ error: 'Credential cannot be renewed here' });
+    }
+    if (!app.credentialStatusStore || !app.renewCodexCredential) {
+      return reply.code(503).send({ error: 'Credential renewal unavailable' });
+    }
+    try {
+      const outcome = await app.renewCodexCredential();
+      const credential = (await app.credentialStatusStore.list()).find((row) => row.name === 'codex-login');
+      if (!credential) return reply.code(503).send({ error: 'Credential status unavailable' });
+      if (outcome === 'skipped') {
+        return reply.code(409).send({ error: 'Codex credential is busy; retry later', credential });
+      }
+      if (outcome === 'uncertain') {
+        return reply.code(503).send({ error: 'Renewal outcome uncertain; retry later', credential });
+      }
+      if (outcome === 'failed') {
+        return reply.code(502).send({ error: 'Credential renewal failed', credential });
+      }
+      return { credential };
+    } catch {
+      request.log.warn('credentials.codex_renewal_failed');
+      return reply.code(503).send({ error: 'Credential renewal unavailable' });
+    }
+  });
+
   app.get('/settings', async (_request, reply) => {
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const credentials = await app.credentialStatusStore?.list() ?? [];

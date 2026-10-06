@@ -15,6 +15,7 @@ import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createPhoneSessionStore } from './database/phone-session-store.js';
 import { createTaskStore } from './database/task-store.js';
+import { createTaskStatusNotificationStore } from './database/task-status-notification-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
 import { createTaskRecoveryStore } from './database/recovery-store.js';
 import { createCredentialStatusStore } from './database/credential-status-store.js';
@@ -51,7 +52,8 @@ import { createRecipeModule } from './core/recipe-management.js';
 import { createRecipeStore } from './database/recipe-store.js';
 import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
-import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
+import { runCodexRenewalOnce, startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
+import { startDailyCopilotStatusJob } from './credentials/copilot-status.js';
 import { createNowFeedStore } from './database/now-feed-store.js';
 import { createGitHubAppRepositoryCatalog, createGitHubAppTokenIssuer } from './github-app.js';
 import { createRepoAdminRepositoryCreator } from './credentials/repo-admin.js';
@@ -130,6 +132,10 @@ try {
     ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({ type: 'mode_changed', away: state.away }))
     : undefined;
   const alertNotifier = createAlertNotifier(telemetry);
+  const credentialStatusStore = database ? createCredentialStatusStore(database.pool, {
+    alertNotifier,
+    onAlert: () => nowEventHub.publish({ type: 'refresh' }),
+  }) : undefined;
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
     config.foundryEndpoints || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
@@ -197,16 +203,22 @@ try {
     if (!secret.value) throw new Error('GitHub App private key is unavailable');
     return secret.value;
   };
+  const onTokenMint = async (status: 'ok' | 'failed', checkedAt: string) => {
+    try { await credentialStatusStore?.updateGitHubAppStatus(status, checkedAt); }
+    catch { logger.warn('credentials.github_app_status_failed'); }
+  };
   const githubAppTokenIssuer = config.githubAppId && githubAppKeyVault
     ? createGitHubAppTokenIssuer({
       appId: config.githubAppId,
       getPrivateKey: getGitHubAppPrivateKey,
+      onTokenMint,
     })
     : undefined;
   const githubRepositoryCatalog = config.githubAppId && githubAppKeyVault
     ? createGitHubAppRepositoryCatalog({
       appId: config.githubAppId,
       getPrivateKey: getGitHubAppPrivateKey,
+      onTokenMint,
     })
     : undefined;
   const webhookSecretClient = config.keyVaultUri && credential
@@ -379,6 +391,7 @@ try {
     : null;
   const projectStore = database ? createProjectStore(database.pool, trackedRepositories) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
+  const taskStatusNotificationStore = database ? createTaskStatusNotificationStore(database.pool) : undefined;
   const teamsAudioStore = config.teams ? createEphemeralAudioStore() : undefined;
   const teamsSpeech = config.teams && credential
     ? createAzureSpeechSynthesizer(
@@ -499,6 +512,9 @@ try {
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
       getSecret: getWebhookSecret,
+      ...(githubAppTokenIssuer ? {
+        readWorkflowRun: createGitHubActionsLogClient(githubAppTokenIssuer).readWorkflowRun,
+      } : {}),
       isTrackedRepository: (repository) => repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() ||
         trackedRepositories.has(repository.toLowerCase()),
       ...(checksLoop || projectPolicyEvaluator || vaultModule ? {
@@ -606,10 +622,6 @@ try {
       audioStore: teamsAudioStore,
     }));
   }
-  const credentialStatusStore = database ? createCredentialStatusStore(database.pool, {
-    alertNotifier,
-    onAlert: () => nowEventHub.publish({ type: 'refresh' }),
-  }) : undefined;
   const budgetAlertStore = alertActivityStore;
   const budgetReader = database && credential && config.monthlyBudgetResourceId
     ? createArmBudgetReader({
@@ -634,6 +646,7 @@ try {
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
+      ...(taskStatusNotificationStore ? { taskStatusNotificationStore } : {}),
       ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
@@ -644,6 +657,14 @@ try {
     } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
+    ...(credentialStatusStore && credential && config.foundryEndpoints && config.foundryRunnerAgentName ? {
+      renewCodexCredential: () => runCodexRenewalOnce(
+        credentialStatusStore,
+        clientFor(config.foundryRunnerAgentName!),
+        (details) => logger.warn(details, 'credentials.codex_renewal'),
+        true,
+      ),
+    } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
     eventHub,
     nowEventHub,
@@ -669,6 +690,24 @@ try {
         budgetAlertStore,
         (error) => logger.warn(safeErrorFields(error), 'budget_alert.check_failed'),
       );
+    });
+  }
+  if (credentialStatusStore && credential && config.keyVaultUri) {
+    const secrets = new SecretClient(config.keyVaultUri, credential);
+    let stopCopilotStatus: (() => void) | undefined;
+    app.addHook('onClose', async () => { stopCopilotStatus?.(); });
+    app.addHook('onReady', async () => {
+      stopCopilotStatus = startDailyCopilotStatusJob(credentialStatusStore, {
+        getSecret: async () => {
+          const secret = await secrets.getSecret('jarvis-copilot', { abortSignal: AbortSignal.timeout(10_000) });
+          if (!secret.value) throw new Error('Copilot credential unavailable');
+          return {
+            value: secret.value,
+            expiresAt: secret.properties.expiresOn?.toISOString() ?? null,
+            lastRenewedAt: secret.properties.updatedOn?.toISOString() ?? null,
+          };
+        },
+      }, () => logger.warn('credentials.copilot_check_failed'));
     });
   }
   if (database && credential && config.foundryEndpoints && config.foundryRunnerAgentName) {
