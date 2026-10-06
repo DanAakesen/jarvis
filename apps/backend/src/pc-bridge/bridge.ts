@@ -80,6 +80,8 @@ export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
   ) => Promise<T>;
 }
 
+type PcBridgeTimingLogger = Pick<FastifyRequest['log'], 'info'>;
+
 export class PcBridgeConnection {
   private socket: WebSocket | undefined;
   private readonly pending = new Map<string, PendingCommand>();
@@ -118,7 +120,30 @@ export class PcBridgeConnection {
     await this.statusUpdate;
   }
 
-  execute(command: PcCommand, signal: AbortSignal): Promise<Record<string, unknown>> {
+  async execute(
+    command: PcCommand,
+    signal: AbortSignal,
+    logger: PcBridgeTimingLogger,
+  ): Promise<Record<string, unknown>> {
+    const startedAt = performance.now();
+    let outcome: 'ok' | 'refused' | 'error' = 'error';
+    try {
+      const result = await this.executeCommand(command, signal);
+      outcome = 'ok';
+      return result;
+    } catch (error) {
+      outcome = error instanceof ToolRefusal ? 'refused' : 'error';
+      throw error;
+    } finally {
+      logger.info({
+        command: command.name,
+        outcome,
+        roundTripMs: Number(Math.max(0, performance.now() - startedAt).toFixed(2)),
+      }, 'pc_bridge.command_timing');
+    }
+  }
+
+  private executeCommand(command: PcCommand, signal: AbortSignal): Promise<Record<string, unknown>> {
     const socket = this.socket;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       throw new ToolRefusal('The local PC bridge is offline.');
@@ -288,7 +313,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           }],
           additionalProperties: false,
         },
-        execute: (input, _request, signal) => runPcOpen(bridge, input, signal),
+        execute: (input, request, signal) => runPcOpen(bridge, input, signal, request.log),
       },
       {
         name: 'pc_media',
@@ -300,14 +325,14 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           additionalProperties: false,
         },
         reflexSafe: true,
-        execute: (input, _request, signal) => runPcMedia(bridge, input, signal),
+        execute: (input, request, signal) => runPcMedia(bridge, input, signal, request.log),
       },
       {
         name: 'pc_active_window',
         description: 'Return the title of the active window on Dan’s PC.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-        execute: async (_input, _request, signal) => {
-          const result = await bridge.execute({ name: 'active_window', arguments: {} }, signal);
+        execute: async (_input, request, signal) => {
+          const result = await bridge.execute({ name: 'active_window', arguments: {} }, signal, request.log);
           return { title: result.title };
         },
       },
@@ -320,7 +345,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           additionalProperties: false,
         },
         sensitive: true,
-        execute: async (input, _request, signal) => {
+        execute: async (input, request, signal) => {
           const offset = isRecord(input) && Object.keys(input).length === 1 &&
             Number.isInteger(input.offset) && (input.offset as number) >= 0 && (input.offset as number) <= 5000
             ? input.offset as number
@@ -328,7 +353,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           if (offset === null) throw new ToolRefusal('Provide a valid browser tab page offset.');
           const result = await bridge.execute({
             name: 'browser_tabs', arguments: offset === undefined ? {} : { offset },
-          }, signal);
+          }, signal, request.log);
           if (!validBrowserTabs(result)) throw new Error('Invalid browser tab response');
           return result;
         },
@@ -343,14 +368,14 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           additionalProperties: false,
         },
         sensitive: true,
-        execute: async (input, _request, signal) => {
+        execute: async (input, request, signal) => {
           if (!isRecord(input) || Object.keys(input).length !== 1 ||
               typeof input.tabId !== 'string' || !isTabId(input.tabId)) {
             throw new ToolRefusal('Choose a tab returned by pc_browser_tabs.');
           }
           const result = await bridge.execute({
             name: 'browser_snapshot', arguments: { tabId: input.tabId },
-          }, signal);
+          }, signal, request.log);
           if (!validBrowserSnapshot(result, input.tabId)) throw new Error('Invalid browser snapshot response');
           return result;
         },
@@ -374,7 +399,8 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           additionalProperties: false,
         },
         sensitive: true,
-        execute: (input, _request, signal) => runBrowserAction(bridge, options.runConfirmed, input, signal),
+        execute: (input, request, signal) =>
+          runBrowserAction(bridge, options.runConfirmed, input, signal, request.log),
       },
       ...(options.pcActPlanner ? [{
         name: 'pc_act',
@@ -392,10 +418,12 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
             observe: (commandSignal) => bridge.execute(
               { name: 'uia_snapshot', arguments: {} },
               commandSignal,
+              request.log,
             ),
             act: (action, commandSignal) => bridge.execute(
               { name: 'uia_act', arguments: action },
               commandSignal,
+              request.log,
             ),
           }, {
             planner: options.pcActPlanner!,
@@ -433,6 +461,7 @@ async function runBrowserAction(
   runConfirmed: PcBridgeModuleOptions['runConfirmed'],
   input: unknown,
   signal: AbortSignal,
+  logger: PcBridgeTimingLogger,
 ): Promise<Record<string, unknown>> {
   const action = validateBrowserAction(input);
   if (!action) {
@@ -442,7 +471,7 @@ async function runBrowserAction(
     name: 'browser_act',
     arguments: { ...action, ...(action.action === 'click' ? { confirmed: false } : {}) },
   };
-  const result = await bridge.execute(command, signal);
+  const result = await bridge.execute(command, signal, logger);
   if (!isConfirmationRequired(result)) {
     if (!validBrowserActionFor(result, action.action)) throw new Error('Invalid browser action response');
     return result;
@@ -455,7 +484,7 @@ async function runBrowserAction(
     const approved = await bridge.execute({
       name: 'browser_act',
       arguments: { ...action, confirmed: true },
-    }, signal);
+    }, signal, logger);
     if (!validBrowserActionFor(approved, action.action)) throw new Error('Invalid browser action response');
     return approved;
   }, signal);
@@ -549,6 +578,7 @@ async function runPcOpen(
   bridge: PcBridgeConnection,
   input: unknown,
   signal: AbortSignal,
+  logger: PcBridgeTimingLogger,
 ): Promise<Record<string, unknown>> {
   if (!isRecord(input) || typeof input.target !== 'string' ||
       typeof input.value !== 'string' || input.value.length > 2048) {
@@ -569,7 +599,7 @@ async function runPcOpen(
       }
       if (isEdgeAppName(input.value)) throw new ToolRefusal('Microsoft Edge cannot be launched; websites always open in Chrome.');
       command = { name: 'open_app', arguments: { app: input.value.trim() } };
-      return handleAppOpen(await bridge.execute(command, signal));
+      return handleAppOpen(await bridge.execute(command, signal, logger));
     case 'folder': {
       const relativePath = validateRepoPath(input.value);
       if (!relativePath) throw new ToolRefusal('Choose a folder under C:\\Repo using a relative path.');
@@ -584,7 +614,7 @@ async function runPcOpen(
       throw new ToolRefusal('That PC action is not supported.');
   }
 
-  return bridge.execute(command, signal);
+  return bridge.execute(command, signal, logger);
 }
 
 function isEdgeAppName(value: string): boolean {
@@ -611,12 +641,17 @@ async function runPcMedia(
   bridge: PcBridgeConnection,
   input: unknown,
   signal: AbortSignal,
+  logger: PcBridgeTimingLogger,
 ): Promise<Record<string, unknown>> {
   if (!isRecord(input) || Object.keys(input).length !== 1 ||
       typeof input.action !== 'string' || !mediaActions.includes(input.action as typeof mediaActions[number])) {
     throw new ToolRefusal('Choose one supported media playback or volume action.');
   }
-  return bridge.execute({ name: 'media', arguments: { action: input.action as typeof mediaActions[number] } }, signal);
+  return bridge.execute(
+    { name: 'media', arguments: { action: input.action as typeof mediaActions[number] } },
+    signal,
+    logger,
+  );
 }
 
 function validateUrl(value: string): string | undefined {

@@ -19,6 +19,7 @@ const agentToken = 'agent.payload.signature';
 const danToken = 'dan.payload.signature';
 
 afterEach(async () => {
+  vi.useRealTimers();
   const remainingClients = clients.splice(0);
   const closing = remainingClients.map((client) => new Promise<void>((resolve) => {
     if (client.readyState === WebSocket.CLOSED) {
@@ -34,12 +35,14 @@ afterEach(async () => {
 
 function fixture(options: {
   timeoutMs?: number;
+  logLevel?: 'info' | 'silent';
   onStatusChange?: (online: boolean) => void;
   pcActPlanner?: PcActPlanner;
   onPcActStep?: PcActOptions['onStep'];
   runConfirmed?: <T>(summary: string, action: () => Promise<T>, signal: AbortSignal) => Promise<T>;
 } = {}) {
-  const output = new Writable({ write(_chunk: Buffer, _encoding, done) { done(); } });
+  const records: string[] = [];
+  const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
   const record = vi.fn(async () => {});
   const module: BackendModule = createPcBridgeModule(options);
   const auth: TokenVerifier = async (token) => {
@@ -54,13 +57,14 @@ function fixture(options: {
     }
     throw new AuthenticationDenied(401);
   };
-  const app = buildApp(config, createLogger(config, undefined, output), {
+  const appConfig = { ...config, logLevel: options.logLevel ?? config.logLevel };
+  const app = buildApp(appConfig, createLogger(appConfig, undefined, output), {
     auth,
     modules: [coreModule, module],
     toolCallStore: { record },
   });
   apps.push(app);
-  return { app, record };
+  return { app, record, records };
 }
 
 async function listen(app: ReturnType<typeof buildApp>): Promise<string> {
@@ -96,6 +100,34 @@ async function callTool(
 }
 
 describe('authenticated PC bridge protocol', () => {
+  it('logs the outcome and monotonic round-trip time for every bridge command', async () => {
+    vi.useFakeTimers({ toFake: ['performance'] });
+    const { app, records } = fixture({ logLevel: 'info' });
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      vi.advanceTimersByTime(command.command === 'active_window' ? 23 : 9);
+      bridge.send(JSON.stringify(command.command === 'active_window'
+        ? { id: command.id, type: 'result', result: { title: 'Jarvis' } }
+        : { id: command.id, type: 'error', error: 'not_found' }));
+    });
+
+    const active = await callTool(app, 'pc_active_window', {});
+    const missing = await callTool(app, 'pc_open', { target: 'app', value: 'missing-app' });
+
+    expect(active.json()).toMatchObject({ outcome: 'ok' });
+    expect(missing.json()).toMatchObject({ outcome: 'refused' });
+    const timings = records.map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((record) => record.msg === 'pc_bridge.command_timing');
+    expect(timings).toHaveLength(2);
+    expect(timings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ command: 'active_window', outcome: 'ok', roundTripMs: 23 }),
+      expect.objectContaining({ command: 'open_app', outcome: 'refused', roundTripMs: 9 }),
+    ]));
+    expect(records.join('')).not.toContain('missing-app');
+  });
+
   it('routes allow-listed open and active-window tools through a fake bridge', async () => {
     const statuses: boolean[] = [];
     const { app, record } = fixture({ onStatusChange: (online) => statuses.push(online) });

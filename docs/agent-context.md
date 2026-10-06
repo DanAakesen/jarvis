@@ -781,6 +781,71 @@ URLs, query strings, arbitrary messages and raw errors. Request IDs are generate
 by the server. Telemetry tests use fake sinks, never Azure. SIGTERM/SIGINT stops
 the backend and bounds close/flush/disposal to five seconds.
 
+### Voice and PC bridge timing (P5-14)
+
+`voice.turn_timing` logs one content-free event per voice turn, with all stage
+times relative to `input_audio_buffer.speech_stopped`. `tools` contains only
+tool names, start/finish offsets and normalized outcomes. `pc_bridge.command_timing`
+records each bridge command name, outcome and round-trip milliseconds. The
+existing logger allowlist drops transcripts, arguments and results.
+
+List the latest N voice turns and their timing columns (change `N` as needed):
+
+```kusto
+let N = 50;
+traces
+| where message == "voice.turn_timing"
+| extend turnId = tostring(customDimensions.turnId),
+    transcriptCompletedMs = todouble(customDimensions.transcriptCompletedMs),
+    jevDecisionMs = todouble(customDimensions.jevDecisionMs),
+    firstAudioDeltaMs = todouble(customDimensions.firstAudioDeltaMs),
+    responseDoneMs = todouble(customDimensions.responseDoneMs),
+    tools = parse_json(tostring(customDimensions.tools))
+| top N by timestamp desc
+| project timestamp, turnId, transcriptCompletedMs, jevDecisionMs,
+    tools, firstAudioDeltaMs, responseDoneMs
+```
+
+Calculate p50/p90 per voice step, voice tool and PC bridge command across the
+same latest N voice turns and the latest N bridge commands:
+
+```kusto
+let N = 50;
+let turns =
+    traces
+    | where message == "voice.turn_timing"
+    | top N by timestamp desc
+    | project timestamp, customDimensions;
+let steps =
+    turns
+    | mv-expand step = pack_array(
+        pack("name", "transcript_completed", "durationMs", todouble(customDimensions.transcriptCompletedMs)),
+        pack("name", "jev_decision", "durationMs", todouble(customDimensions.jevDecisionMs)),
+        pack("name", "first_audio_delta", "durationMs", todouble(customDimensions.firstAudioDeltaMs)),
+        pack("name", "response_done", "durationMs", todouble(customDimensions.responseDoneMs)))
+    | extend name = tostring(step.name), durationMs = todouble(step.durationMs)
+    | where isnotnull(durationMs)
+    | project name, durationMs;
+let voiceTools =
+    turns
+    | mv-expand tool = parse_json(tostring(customDimensions.tools))
+    | extend name = strcat("tool.", tostring(tool.name)),
+        durationMs = todouble(tool.finishedMs) - todouble(tool.startedMs)
+    | where isnotnull(tool.finishedMs)
+    | project name, durationMs;
+let bridgeCommands =
+    traces
+    | where message == "pc_bridge.command_timing"
+    | top N by timestamp desc
+    | extend name = strcat("bridge.", tostring(customDimensions.command)),
+        durationMs = todouble(customDimensions.roundTripMs)
+    | where isnotnull(durationMs)
+    | project name, durationMs;
+union steps, voiceTools, bridgeCommands
+| summarize p50Ms = percentile(durationMs, 50), p90Ms = percentile(durationMs, 90) by name
+| order by name asc
+```
+
 `Backend CI` runs the offline lint, tests and targeted build plus a production
 container build and smoke test without Azure credentials. Its image uses pinned
 Node.js, runs as non-root, and contains backend output and production dependencies.
