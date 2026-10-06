@@ -52,7 +52,7 @@ describe('SQL project store', () => {
 
     query.mockResolvedValueOnce({ rowsAffected: [1], recordset: [{ repo: 'DanAakesen/jarvis' }] } as never);
     expect(await store.archive('42')).toBe(true);
-    expect(query.mock.calls[1]?.[0]).toContain('OUTPUT DELETED.repo AS repo SET active = 0 WHERE id = @id');
+    expect(query.mock.calls[1]?.[0]).toContain('SET active = 0 OUTPUT DELETED.repo AS repo WHERE id = @id');
     expect(trackedRepositories).toEqual(new Set());
   });
 

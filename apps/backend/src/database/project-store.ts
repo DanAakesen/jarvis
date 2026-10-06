@@ -81,7 +81,7 @@ export function createProjectStore(pool: sql.ConnectionPool, trackedRepositories
     },
     async archive(id: string) {
       const result = await pool.request().input('id', sql.BigInt, BigInt(id))
-        .query<{ repo: string }>('UPDATE dbo.projects OUTPUT DELETED.repo AS repo SET active = 0 WHERE id = @id;');
+        .query<{ repo: string }>('UPDATE dbo.projects SET active = 0 OUTPUT DELETED.repo AS repo WHERE id = @id;');
       const { rowsAffected, recordset } = result;
       const archivedRepository = recordset[0]?.repo;
       if (archivedRepository) trackedRepositories?.delete(repositoryKey(archivedRepository));

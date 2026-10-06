@@ -229,7 +229,7 @@ export class TaskDispatcher implements TaskController {
   }
 
   private scheduleReconciliation(delayMs: number, allowIdle = false): void {
-    if (!this.started || (!allowIdle && !this.heartbeat.hasTrackedSessions())) return;
+    if (!this.started || this.reconciliationTimer || (!allowIdle && !this.heartbeat.hasTrackedSessions())) return;
     this.reconciliationTimer = setTimeout(() => {
       this.reconciliationTimer = undefined;
       this.reconciling = this.reconcileStaleTasks().catch(this.onError).finally(() => {

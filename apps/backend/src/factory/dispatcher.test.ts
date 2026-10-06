@@ -97,10 +97,13 @@ function harness(
   const settings: SettingsStore = { read: vi.fn(async () => ({
     'codex.model': '"gpt-5.5"', 'codex.reasoning_effort': '"medium"',
   })), write: vi.fn(async () => {}) };
-  const track = vi.fn();
-  const untrack = vi.fn();
+  const tracked = { value: hasTrackedSessions };
+  const track = vi.fn(() => { tracked.value = true; });
+  const untrack = vi.fn(() => { tracked.value = false; });
   const setCompletionHandler = vi.fn();
-  const heartbeat = { track, untrack, setCompletionHandler, hasTrackedSessions: () => hasTrackedSessions } as unknown as SandboxHeartbeat;
+  const heartbeat = {
+    track, untrack, setCompletionHandler, hasTrackedSessions: () => tracked.value,
+  } as unknown as SandboxHeartbeat;
   const steer = vi.fn(async () => ({
     invocationId: 'invocation-steer', sessionId: 'session-1', status: 'queued' as const, agent: 'codex' as const,
   }));
