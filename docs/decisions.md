@@ -422,3 +422,27 @@ Mistakes made so far and the rule that prevents each one.
 ## 5 October 2026 — Software Factory layout selected
 
 **Confirmed by Dan:** use image 2 (Task Lens) as the base, include image 3's compact release bar and keep the details pane on the right. Dan approved [the combined mockup](ui/software-factory/task-lens-release-bar.png) and requested one implementation issue. P8-34 (#369) implements that composition using the existing task, release, workspace and conversation contracts; #364 supplies the shared glass styling. The reference uses illustrative data. Dark/light desktop and phone fixture checks are recorded in `docs/agent-context.md`; live integration and physical-device acceptance remain unverified. This decision does not authorize starting or assigning a worker.
+
+## 6 October 2026 — Luminous-glass conversation components selected
+
+**Confirmed by Dan:** select the last Luminous Glass component-family image for the compact voice bar, chat input and message window. Remove the line above messages and the small orb/Jarvis title from the top-left window header; keep top-right window controls and the input's voice-start orb. Language belongs inside More as an icon/text row with a Danish/English flyout. Existing capture capabilities and their placements remain.
+
+[Edited reference](ui/chat-voice/README.md). [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399) are implementation tasks and preserve existing steering/queue, voice and workspace behavior. They are unclaimed; publication does not start a worker. Three app-shell styling alternatives were requested separately and remain proposals until selected.
+
+## 6 October 2026 — Architectural Glass shell selected; footer and message avatars removed
+
+**Confirmed by Dan:** choose the last/third displayed shell concept for its 3D material feel. Remove the separate bottom app-shell/status bar, leaving open the possibility of adding one later if needed. Keep the bottom-centred composer and compact voice-session controls. Preserve the current footer's truthful database-waking feedback in compact top-bar status treatment.
+
+Remove only the two message-avatar icons (human and Jarvis) from the selected chat window. Preserve accessible author roles and hierarchy, the large scene orb, small voice-start orb, window controls and all other selected elements. [The refined reference](ui/shell-styling/README.md#refined-approved-reference) applies these removals to the exact selected result. New P8-39 (#401) covers shell/footer changes; existing P8-38 (#399) is amended for avatars, avoiding a duplicate message-window issue. These tasks are unclaimed; publishing the selection does not start a worker. This supersedes earlier bottom-bar requirements and message-avatar details in the original comparison image.
+
+## 6 October 2026 — Consolidate input, messages and shell into #398
+
+**Confirmed by Dan:** #398, #399 and #401 should be one implementation issue to avoid unnecessary splitting and repeated CI across separate PRs. P8-37 (#398) now owns the full composer, avatar-free message window and selected Architectural Glass shell/footer scope in one PR. All acceptance criteria and retained prerequisites remain. P8-38 (#399) and P8-39 (#401) are closed as superseded (`not_planned`), not completed; keep their IDs reserved and their original scopes archived.
+
+P8-36 (#397) is already claimed by Copilot in PR #403, so its voice-bar/shared-menu work remains separate and is reused by #398. The selected references, two retained orbs and all runtime/window/theme/steering requirements are unchanged. CI still runs for updates to the combined PR; no checks are bypassed and no worker is started by consolidation.
+
+## 6 October 2026 — Voice status below the orb, microphone on start and stronger live states
+
+**Confirmed by Dan:** resolve the supplied screenshot overlap by moving state feedback beneath the orb and keeping the compact glass bar for controls. Remove the normal Enable microphone button: explicit voice start is the activation gesture, with native browser permission and authenticated readiness still required. Keep language in More with current/next-session explanation inside its flyout. Make waking substantial and listening, thinking, tool-work and speaking visibly different; actual runtime and audible playback drive the same cyan orb/open amber core and reflected light. Preserve the room, scene/window continuity and reduced-motion behavior.
+
+All changes belong in [#417](https://github.com/DanAakesen/jarvis/issues/417), P8-40. Dan confirmed keeping all requested changes in this issue. This supersedes earlier two-step microphone and in-bar status requirements; the current code still uses them. One implementation PR must include responsive layout and observed motion verification. No separate prototype or new design decision is required. #398 remains the shell/input/messages task. Creating the issue and publishing these requirements does not start a worker or claim implementation.

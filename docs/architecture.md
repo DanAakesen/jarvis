@@ -58,6 +58,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   voice actions in both the bar and the composer. Language still flows through
   `ConversationHistory` state into the next session. No event, persistence or
   service contract changes.
+- Planned P8-40 (#417) keeps the same voice client, authenticated activity and
+  scene, but requests microphone access/audio preparation from explicit Start
+  voice and enables capture after real session readiness without a second click.
+  Transport/mute/runtime/playback are reconciled into one presentation state for
+  the under-orb HTML status and distinct scene motion; speech energy must reflect
+  actual playback time, including silence/interruption reset. Preserve permission
+  recovery, reconnect mute, cancelled-start cleanup and existing provider/API
+  contracts. No new persistence or retained audio/transcript is required. This
+  accepted follow-up supersedes the separate-enable and in-bar placement below;
+  those paths describe current implementation until #417 is delivered.
 - P8-31 applies the selected smoky glass to existing shell, conversation,
   temporary-workspace, contextual-panel, Factory and Settings surfaces through
   the light/dark semantic tokens in `apps/web/src/styles.css`. Shared headings
