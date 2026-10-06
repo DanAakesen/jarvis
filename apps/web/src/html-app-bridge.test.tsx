@@ -19,6 +19,8 @@ const environment: HtmlAppEnvironment = {
     '--line-body': '1.55',
     '--radius-control': '10px',
   },
+  density: 'comfortable',
+  fonts: { body: 'system-ui, sans-serif', heading: 'system-ui, sans-serif' },
 };
 
 describe('HTML app iframe bridge', () => {
@@ -36,6 +38,8 @@ describe('HTML app iframe bridge', () => {
     expect(document).toContain('color-scheme:dark');
     expect(document).toContain('<main>untrusted app</main>');
     expect(document).toContain("Object.defineProperty(window,'jarvis'");
+    expect(document).toContain('onFrame');
+    expect(document).toContain("message.type!=='frame'");
   });
 
   it('accepts only bounded messages from the expected channel', () => {
@@ -51,6 +55,10 @@ describe('HTML app iframe bridge', () => {
       { type: 'resize', channel: 'channel-1', height: 480 }, 'channel-1',
     )).toEqual({ type: 'resize', height: 480 });
     expect(validateHtmlAppBridgeMessage(
+      { type: 'frame_report', channel: 'channel-1', status: 'error', error: 'ReferenceError', scrollHeight: 420, overflowX: false },
+      'channel-1',
+    )).toEqual({ type: 'frame_report', status: 'error', error: 'ReferenceError', scrollHeight: 420, overflowX: false });
+    expect(validateHtmlAppBridgeMessage(
       { type: 'ask', channel: 'another-channel', text: 'Hello' }, 'channel-1',
     )).toBeNull();
     expect(validateHtmlAppBridgeMessage(
@@ -64,6 +72,10 @@ describe('HTML app iframe bridge', () => {
     )).toBeNull();
     expect(validateHtmlAppBridgeMessage(
       { type: 'resize', channel: 'channel-1', height: 1_201 }, 'channel-1',
+    )).toBeNull();
+    expect(validateHtmlAppBridgeMessage(
+      { type: 'frame_report', channel: 'channel-1', status: 'error', error: 'x'.repeat(501), scrollHeight: 420, overflowX: false },
+      'channel-1',
     )).toBeNull();
     expect(validateHtmlAppBridgeMessage(
       { type: 'pin', channel: 'channel-1', extra: true }, 'channel-1',

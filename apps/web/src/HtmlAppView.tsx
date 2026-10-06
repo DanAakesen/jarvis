@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useConversationIntents } from './conversation-intents';
 import { backendFetch } from './backend-request';
+import type { HtmlAppFrame } from '@jarvis/contracts';
 import { inlineHtmlAppLibraries } from './html-app-libraries';
 import {
   createHtmlAppDocument,
@@ -69,6 +70,7 @@ export function HtmlAppView({
   const intents = useConversationIntents();
   const channel = useId();
   const iframe = useRef<HTMLIFrameElement>(null);
+  const frameRoot = useRef<HTMLDivElement>(null);
   const [artifactState, setArtifact] = useState<HtmlAppArtifact | null>(null);
   const [preparedDocument, setPreparedDocument] = useState({
     artifactId: '', html: '', document: '', error: '', attempt: -1,
@@ -80,7 +82,8 @@ export function HtmlAppView({
   const loading = loadState.key !== requestKey;
   const error = loadState.key === requestKey ? loadState.error : '';
   const artifact = artifactState?.id === artifactId ? artifactState : null;
-  const frameKey = `${artifactId}:${environment.theme}`;
+  const frameKey = artifactId;
+  const [frame, setFrame] = useState<HtmlAppFrame | null>(null);
   const [frameSize, setFrameSize] = useState({ key: frameKey, height: 320 });
   const [loadedFrameKey, setLoadedFrameKey] = useState('');
   const frameHeight = frameSize.key === frameKey ? frameSize.height : 320;
@@ -140,6 +143,48 @@ export function HtmlAppView({
     return preparedDocument.artifactId === artifact.id ? preparedDocument.document : '';
   }, [artifact, preparedDocument]);
   const frameLoading = Boolean(sourceDocument) && loadedFrameKey !== frameKey;
+
+  useEffect(() => {
+    const root = frameRoot.current;
+    if (!root) return;
+    const host = root.closest('.workspace-window') ?? root;
+    const updateFrame = () => {
+      const bounds = host.getBoundingClientRect();
+      const frameValue: HtmlAppFrame = {
+        widthPx: Math.min(10_000, Math.max(1, Math.round(bounds.width))),
+        heightPx: Math.min(10_000, Math.max(1, Math.round(bounds.height))),
+        device: window.matchMedia?.('(max-width: 700px), (max-height: 500px) and (pointer: coarse)').matches
+          ? 'phone' : 'desktop',
+        theme: environment.theme,
+        reducedMotion: document.documentElement.dataset.motion === 'reduced' ||
+          (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false),
+        density: environment.density,
+        designTokens: environment.tokens,
+        fonts: environment.fonts,
+        layout: root.closest<HTMLElement>('.workspace-canvas')?.dataset.arrangement === 'layered'
+          ? 'layered' : 'tiled',
+        pinned: artifact?.pinned ?? false,
+      };
+      setFrame((current) => JSON.stringify(current) === JSON.stringify(frameValue) ? current : frameValue);
+    };
+    updateFrame();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(updateFrame) : null;
+    observer?.observe(host);
+    const device = window.matchMedia?.('(max-width: 700px), (max-height: 500px) and (pointer: coarse)');
+    const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    device?.addEventListener('change', updateFrame);
+    motion?.addEventListener('change', updateFrame);
+    return () => {
+      observer?.disconnect();
+      device?.removeEventListener('change', updateFrame);
+      motion?.removeEventListener('change', updateFrame);
+    };
+  }, [artifact?.pinned, environment]);
+
+  useEffect(() => {
+    if (!frame || loadedFrameKey !== frameKey || !iframe.current?.contentWindow) return;
+    iframe.current.contentWindow.postMessage({ type: 'frame', channel, frame }, '*');
+  }, [channel, frame, frameKey, loadedFrameKey]);
 
   useEffect(() => {
     if (!artifact || (preparedDocument.artifactId === artifact.id &&
@@ -239,6 +284,13 @@ export function HtmlAppView({
             : { key: frameKey, height: Math.min(maxFrameHeight, Math.max(120, Math.ceil(message.height))) };
         });
           break;
+        case 'frame_report':
+          if (message.status === 'error') {
+            setBridgeStatus(`HTML app runtime error: ${message.error}`);
+          } else if (message.overflowX) {
+            setBridgeStatus('HTML app content overflows horizontally.');
+          }
+          break;
         case 'ask':
           intents.sendMessage(message.text);
           setBridgeStatus('Sent to Jarvis.');
@@ -284,7 +336,7 @@ export function HtmlAppView({
   if (!sourceDocument) return <p role="status">Starting HTML app…</p>;
 
   return (
-    <div className="generated-view-html-app">
+    <div ref={frameRoot} className="generated-view-html-app">
       <div className="html-app-controls">
         <button className="secondary-button" type="button" disabled={updatingPin}
           aria-pressed={artifact.pinned} onClick={() => void patchPinned(!artifact.pinned)}>

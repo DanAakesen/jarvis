@@ -20,6 +20,8 @@ const artifact = {
 const environment: HtmlAppEnvironment = {
   theme: 'light',
   tokens: {},
+  density: 'comfortable',
+  fonts: { body: 'system-ui, sans-serif', heading: 'system-ui, sans-serif' },
 };
 const getAccessToken = vi.fn(async () => 'test-token');
 const sendMessage = vi.fn();

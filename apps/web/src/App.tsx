@@ -132,12 +132,12 @@ function ShellLayout({ signedIn, config, session, camera }: {
 }) {
   const { pathname } = useLocation();
   const getAccessToken = session.getAccessToken;
-  const { resolvedTheme } = useThemePreference();
+  const { resolvedTheme, appearance } = useThemePreference();
   const htmlAppContext = useMemo(() => ({
     backendUrl: config.backendUrl,
     getAccessToken,
-    environment: readHtmlAppEnvironment(resolvedTheme),
-  }), [config.backendUrl, getAccessToken, resolvedTheme]);
+    environment: readHtmlAppEnvironment(resolvedTheme, appearance.density),
+  }), [appearance.density, config.backendUrl, getAccessToken, resolvedTheme]);
   const { working, latestActivity } = useJarvisActivity();
   const activityText = activityLabel(latestActivity);
   const navigationToggle = useRef<HTMLButtonElement>(null);

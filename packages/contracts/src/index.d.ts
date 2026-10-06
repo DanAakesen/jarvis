@@ -9,6 +9,19 @@ export type GeneratedViewRenderer = typeof generatedViewRenderers[number];
 export type GeneratedViewActionType = typeof generatedViewActionTypes[number];
 export type HtmlAppLibrary = typeof htmlAppLibraries[number];
 
+export interface HtmlAppFrame {
+  widthPx: number;
+  heightPx: number;
+  device: 'desktop' | 'phone';
+  theme: 'dark' | 'light';
+  reducedMotion: boolean;
+  density: 'compact' | 'comfortable';
+  designTokens: Readonly<Record<string, string>>;
+  fonts: Readonly<{ body: string; heading: string }>;
+  layout: 'tiled' | 'layered';
+  pinned: boolean;
+}
+
 export interface GeneratedViewPage {
   limit: number;
   offset: number;
@@ -102,8 +115,15 @@ export type GeneratedView =
   | (GeneratedViewBase & { renderer: 'html-app'; data: { artifactId: string } });
 
 export interface WorkspaceSnapshot {
-  windows: readonly { viewId: string; title: string }[];
+  windows: readonly {
+    viewId: string;
+    title: string;
+    artifactId?: string;
+    frame?: HtmlAppFrame;
+  }[];
   contextPanelOpen: boolean;
+  focusedViewId?: string;
+  layout?: 'tiled' | 'layered';
 }
 
 export type WorkspaceCommand =
