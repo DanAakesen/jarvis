@@ -3,7 +3,7 @@ import websocket from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
 import {
-  createEnglishSessionUpdate,
+  createRealtimeSessionUpdate,
   ENGLISH_REALTIME_MODEL,
   executeRealtimeToolCall,
   isBrowserControlledToolOutput,
@@ -1187,7 +1187,7 @@ function registerVoiceRoute(
         }
         upstream = connect(token, controller.signal);
         upstream.once('open', () => {
-          if (english) sendUpstream(createEnglishSessionUpdate(app.jarvisTools, personality, awayMode), flushQueued);
+          if (english) sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, awayMode, language), flushQueued);
           else flushQueued();
         });
         const upstreamEventTypes = new Set<string>();
@@ -1366,7 +1366,19 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.createPartialRecognizer,
         );
       }
-      if (options.connectDanish) {
+      if (options.connect) {
+        // Danish uses the same gpt-realtime Voice Live path as English (L103); the hosted-agent
+        // voice wrapper remains only as a fallback when Voice Live is not configured.
+        registerVoiceRoute(
+          app,
+          '/voice/da',
+          options.connect,
+          true,
+          'da',
+          options.getToken,
+          options.createPartialRecognizer,
+        );
+      } else if (options.connectDanish) {
         registerVoiceRoute(
           app,
           '/voice/da',
