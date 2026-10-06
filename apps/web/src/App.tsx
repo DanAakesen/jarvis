@@ -168,16 +168,14 @@ function ShellLayout({ signedIn, config, session, camera }: {
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false);
   useEffect(() => {
-    if (!signedIn || !config.backendUrl) {
-      setPinnedHtmlViews([]);
-      setPinnedArtifactsError('');
-      return;
-    }
+    if (!signedIn || !config.backendUrl) return;
     const controller = new AbortController();
     let active = true;
-    setPinnedArtifactsError('');
     void loadPinnedHtmlArtifacts(config.backendUrl, getAccessToken, controller.signal).then((artifacts) => {
-      if (active) setPinnedHtmlViews(artifacts.map(pinnedArtifactView));
+      if (active) {
+        setPinnedHtmlViews(artifacts.map(pinnedArtifactView));
+        setPinnedArtifactsError('');
+      }
     }).catch((error: unknown) => {
       if (active && !controller.signal.aborted) {
         setPinnedArtifactsError(error instanceof Error ? error.message : 'Pinned HTML apps could not be loaded.');
@@ -426,14 +424,14 @@ function ShellLayout({ signedIn, config, session, camera }: {
               <div className="workspace-shell-area" hidden={pathname !== '/'}>
                 <Workspace
                   ref={workspaceController}
-                  views={pinnedHtmlViews}
+                  views={signedIn ? pinnedHtmlViews : []}
                   onVisibleViewsChange={setVoiceHasWindows}
                   onOpenWindowsChange={onOpenWindowsChange}
                   loadHtmlArtifact={loadHtmlArtifact}
                   setHtmlArtifactPinned={setHtmlArtifactPinned}
                   onHtmlAppAsk={askFromHtmlApp}
                   onHtmlAppOpenUrl={openUrlFromHtmlApp}
-                  pinnedArtifactsError={pinnedArtifactsError}
+                  pinnedArtifactsError={signedIn ? pinnedArtifactsError : ''}
                   onRetryPinnedArtifacts={retryPinnedArtifacts}
                 />
               </div>

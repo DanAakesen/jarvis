@@ -28,9 +28,10 @@ Latest visual decision: [Accepted centred 3D stage — 5 October 2026](#accepted
 - Research results can be presented through a component that shows the returned
   data visually. Spoken and written summaries can be followed by a visual view
   when Dan asks for one.
-- Generated views and UI components are temporary and are not saved. This
-  decision concerns the generated interface; retention of underlying research
-  data or conversation history has not been decided in this discussion.
+- Generated views and UI components are temporary unless Dan explicitly pins an
+  HTML app. Pinned HTML artifacts are persisted server-side and restored as tabs;
+  this does not persist window geometry or change the separate retention rules
+  for underlying research data or conversation history (P8-42, 6 October 2026).
 - Any data Jarvis can access should be available for Dan to see through the UI.
   Dan emphasised the large volume and variety of that data. The UI concept
   must accommodate different kinds of content and combinations of content.

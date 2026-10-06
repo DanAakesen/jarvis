@@ -133,7 +133,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Minimised views remain mounted but hidden and inert; open/minimised/closed and
   maximised state is memory-only. The shell passes the component's typed
   `WorkspaceController` dispatch through `WorkspaceCommandContext` to the active
-  page. P8-14 supplies bounded declarative view data and fixed React renderers.
+  page. P8-14 supplies bounded declarative view data and fixed React renderers;
+  P8-42 adds the separately isolated `html-app` renderer.
 - P8-15 registers one sensitive `workspace_command` Jarvis tool with the shared
   generated-view/operation schema. An in-memory broker binds each command to the
   active owner's authenticated `/now/events` session, bounds pending work and
@@ -145,16 +146,21 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   returned as refused/error results; no view or geometry rows are persisted.
   On non-conversation signed-in routes, the shell keeps the command stream
   mounted in a hidden Now panel while the workspace controller remains active.
-  The renderers use fixed React elements; generated HTML, JavaScript and CSS
-  never execute. Offline route/controller tests cover the flow; live
-  Entra/Foundry delivery remains unverified.
+  Typed data views use fixed React elements. P8-42's generated HTML/JS runs only
+  in an opaque-origin iframe with `sandbox="allow-scripts"` and a restrictive
+  CSP; the parent validates the frame source, opaque origin, message shape, HTTPS
+  URLs, and payload bounds. No same-origin, top-navigation, popup, form, or
+  script/fetch network permissions are granted; CSP permits only data/HTTPS
+  images, inline styles/scripts, and data fonts. Offline route/controller tests cover the
+  flow; live Entra/Foundry delivery remains unverified.
 - P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
   and IDs, including minimised windows, plus context-panel visibility) through
   owner-authenticated `POST /now/workspace/state`. The broker accepts only its
   active `/now/events` session and drops the snapshot on disconnect/reconnect;
-  no view content or workspace state is persisted. Jev selects fixed
-  `workspace_command` targets for show/focus/minimise/restore/close, a large
-  resize, tiled/layered layout and context-panel visibility. A context-panel
+  window geometry and layout are not persisted. Jev selects fixed
+  `workspace_command` targets for show/focus/minimise/restore/close/move, pin or
+  unpin eligible HTML apps, cycle the stack, resize, tiled/layered layout and
+  context-panel visibility. A context-panel
   `open` command without a view opens existing content idempotently; an `open`
   command with a generated view retains the original agent-only behavior.
   Creation/update and new generated panel content remain agent-only.
@@ -171,6 +177,17 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   to undo without generating content. Manual closes still discard the view,
   and reusing a view ID invalidates its retained entry. Older evicted entries
   cannot be restored and produce an honest refused result.
+- P8-42 creates HTML app artifacts transiently in the backend memory cache and
+   delivers only `{ renderer: 'html-app', data: { artifactId } }` through
+   `workspace_command`. An explicit pin writes the bounded HTML, title, HTTPS
+   source references, owner ID and creation time to `dbo.workspace_html_artifacts`
+   (migration 0021); unpin deletes that row and returns the app to transient
+   memory. Dan-only artifact list/read/pin/unpin routes use `Cache-Control:
+   private, no-store`; reload restores the pinned summaries as workspace tabs and
+   the iframe fetches content by owner-authorized artifact ID. The HTML is
+   restricted to 512 KiB UTF-8 and 50 sources. Iframe messages are accepted only
+   from the expected frame with opaque origin `null`; only the narrow bridge
+   contract is handled. Window position, stack order and lifecycle are not saved.
   Every attempted chat/voice classification emits an allowlisted
   `reflex.decision`: source, addressed, intent, tool (or `none`), confidence
   bucket, completeCommand, executed, bounded reason and latencyMs (0–600,000).
@@ -231,8 +248,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   registered tool, and image URLs must use GitHub or the configured task-archive
   Blob host. The serialized view is capped at 256 KiB. The signed-in Now panel
   builds a list view from its existing bounded `/now` response and renders
-  values through fixed React elements. No generated HTML, JavaScript or CSS is
-  interpreted. Views remain ephemeral; live Entra/Azure behavior is unverified.
+  values through fixed React elements. The Now panel does not interpret generated
+  HTML; workspace HTML apps use P8-42's isolated iframe and persist only when
+  pinned. Typed data views remain ephemeral; live Entra/Azure behavior is
+  unverified.
   P6-02 adds a dismissible Alerts group backed by `activity.alert_key`. Failed
   deployment, confirmed sandbox crash and credential-expiry activity is inserted
   transactionally with its source change and emits a hashed Application Insights

@@ -206,9 +206,8 @@ export class WorkspaceArtifactStore {
         ORDER BY created_at DESC, id DESC;`);
     signal.throwIfAborted();
     return recordset.map((row) => {
-      const artifact = this.mapHtmlRow({ ...row, html: ' ' });
-      const { html: _html, ...summary } = artifact;
-      return summary;
+      const { id, kind, title, sources, createdAt, pinned } = this.mapHtmlRow({ ...row, html: ' ' });
+      return { id, kind, title, sources, createdAt, pinned };
     });
   }
 

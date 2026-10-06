@@ -40,7 +40,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | **Subscriptions** | Coding tasks and image generation use Dan's ChatGPT/Codex subscription through the Jarvis-only login; Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. Codex usage is shared with Dan's use; no per-image API billing or fallback is allowed. |
 | **Voice** | An open browser is enough. Danish and English, chosen from the shared More → Language menu in the composer and voice bar; status requests and follow-ups. During English sessions, Jarvis announces selected task, pull-request, and deployment status changes in fixed short wording, merging bursts and waiting until the current voice turn is idle. Voice Live credentials stay on the backend; the browser connects through an authenticated backend WebSocket relay. |
 | **Reflex layer** | Jev evaluates stable streaming voice clauses as they arrive, with the per-turn ledger of prior actions, so high-confidence, complete, reversible open/navigation/pause actions can run before Dan finishes speaking. English and Danish Voice Live keep streaming the final transcript to Jarvis; the relay replaces any early partial message with the final text and gives the ledger to Jarvis to prevent repeats. Submit, send, buy, delete, merge, uncertain, and confirmation-requiring actions wait for the final turn and required confirmation. If the final transcript contradicts an early action, Jarvis attempts an available undo and reports success, refusal, failure, or an unavailable undo honestly. |
-| **Phone workspace** | At phone width or short coarse-pointer landscape, one content view is foreground. Switch by horizontal swipe, named controls, keyboard, or the existing workspace focus/restore command; hidden views retain their local state. The persistent stage orb stays subdued behind content, while the small composer orb remains the explicit voice-start control. Active voice docks a compact glass bar (More, runtime status, End voice) below foreground content, and returns to the main space when all content is closed or minimised. Agent-delivered views and requests remain P8-15. |
+| **Phone workspace** | At phone width or short coarse-pointer landscape, one content view is foreground. Switch by horizontal swipe, named controls, keyboard, or the existing workspace focus/restore command; hidden views retain their local state. Pinned HTML apps remain available as tabs across reloads. The persistent stage orb stays subdued behind content, while the small composer orb remains the explicit voice-start control. Active voice docks a compact glass bar (More, runtime status, End voice) below foreground content, and returns to the main space when all content is closed or minimised. Agent-delivered views and requests remain P8-15. |
 | **Away mode** | Dan can say or type that he is leaving or back; Teams Away/Offline also turns the mode on after ten minutes. Active use of the authenticated Jarvis browser app turns it off; background feed refreshes do not. The persisted mode appears in Now. While away, task-state updates and approval requests use the existing Teams phone path; when present, updates and approval requests use the browser. Spoken replies are especially brief while away. |
 | **Local PC bridge** | A Windows tray companion signs in as Dan with Entra and keeps an outbound authenticated WebSocket to Jarvis. Registered Jarvis tools can open HTTP(S) URLs, VS Code, Edge, File Explorer, or Windows Terminal; open folders below `C:\Repo` in VS Code; report the active window title; or focus a window by exact title. `pc_act` can control any foreground Windows app through bounded UI Automation, without an app allow-list. Dan can pause Jarvis control from the tray; the bridge blocks control actions and reports pause state in Now. No inbound ports are opened. |
 | **Calendar and mail** | Jarvis reads today's Google Calendar agenda, finds free slots, searches and summarises Gmail, and prepares calendar changes, reply drafts, or messages to send. Every write waits for Dan's exact confirmation in a later message. Reply drafts are saved to Gmail for Dan to send himself. Mail content is untrusted data, never instructions. |
@@ -386,13 +386,17 @@ Voice is explicitly started; the always-available assistant does not continuousl
 listen. Desktop and phone layouts follow the mode/window rules in ui.md. Theme
 variables can be changed on demand and persist until changed again. Banking and
 Fitness and Health are future areas; their detailed integrations remain deferred.
-Generated views use versioned declarative JSON over existing authorised, bounded
-data sources and the renderer/action allowlists recorded in `ui.md`. They are
-temporary; HTML, JavaScript, and CSS supplied with a view are never executed.
-P8-14's fixed React renderers display these typed views in the signed-in
-workspace and contextual panel. P8-15's authenticated command tool controls
-their in-memory lifecycle and layout; live Entra/Foundry delivery remains
-unverified.
+Typed data views use versioned declarative JSON over existing authorised, bounded
+data sources and the renderer/action allowlists recorded in `ui.md`; P8-14's fixed
+React renderers display them in the signed-in workspace and contextual panel.
+Generated HTML apps are a separate `html-app` renderer: model-written HTML/JS
+runs only in a sandboxed iframe with no same-origin, navigation, form, popup, or
+network-connect permissions. Apps remain transient unless Dan pins one; pinning
+persists the validated HTML artifact, title and HTTPS source references server-side
+and restores it as a tab after reload/sign-in. Window geometry and open/minimised
+state remain transient. P8-15/P8-42's authenticated workspace command path supports
+window lifecycle, movement, sizing, stack cycling and pinning; live
+Entra/Foundry delivery remains unverified.
 
 Implementation status and live-service limitations are tracked in PLAN.md and
 the UI coverage report.

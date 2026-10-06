@@ -57,6 +57,11 @@ existing tool-call outcome constraint to include runtime `refused` records, whic
 the Usage page includes in its daily per-tool count. Its down migration refuses
 to restore the old constraint while refused rows exist.
 
+P8-42 adds `dbo.workspace_html_artifacts` in `0021_workspace_html_artifacts.sql`.
+Rows contain owner-scoped, validated HTML app content and source metadata only
+after an explicit pin; transient generated HTML remains in backend memory. The
+paired down migration drops the table.
+
 P8-14 generated views are versioned JSON contracts in the shared
 `@jarvis/contracts` workspace. A view carries bounded source/page metadata but
 is not stored in SQL or Blob; source records retain their existing storage and
@@ -138,7 +143,7 @@ flowchart LR
 | 7 | Usage and cost | Transparency per task/project and current UTC-day web-research calls; the latter reuses group-one `tool_calls` | `usage` |
 | 8 | Phone, notifications and confirmations | Phone-call sessions plus Dan's validated Teams conversation and expiring approvals for Teams or browser delivery | `phone_sessions`, `teams_conversations`, `teams_confirmations` |
 | 9 | Long-term memory | Relevant source-linked preferences, project facts, decisions and unfinished tasks across sessions | `memories`, `memory_history`, `memory_deletions` |
-| 10 | Workspace artifacts | Owner-scoped image metadata for generated workspace/chat previews; image bytes are private Blob objects | `workspace_artifacts` |
+| 10 | Workspace artifacts | Owner-scoped image metadata and explicitly pinned HTML apps; image bytes are private Blob objects | `workspace_artifacts`, `workspace_html_artifacts` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
@@ -656,6 +661,12 @@ on demand and never persisted. The `0019` down migration drops metadata only and
 does not delete Blob objects. `0018_tool_call_refused_outcome.sql` makes the runtime
 `refused` outcome persistable so refused image requests remain visible and counted;
 its down migration refuses to proceed while refused rows exist.
+
+`0021_workspace_html_artifacts.sql` stores `id`, owner object ID, title, HTML
+(`nvarchar(max)`, bounded to 512 KiB UTF-8), up to 50 validated HTTPS source
+references as JSON, byte size and UTC creation time. The owner/pinned/creation
+index supports bounded reload listings. Only pinned rows are durable; unpin
+deletes the row, while window geometry and ordering are never persisted.
 
 ## Long-term memory schema (group 9)
 

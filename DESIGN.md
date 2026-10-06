@@ -577,9 +577,10 @@ P8-14/P8-15. Windows can tile, overlap, minimise into tabs and be restored.
 Existing windows carry between modes by default. The optional minimise-on-voice
 setting defaults off; when enabled, voice begins with only the orb and windows
 remain docked on return to typing. Otherwise the earlier shell layout returns.
-Generated views are temporary; theme values persist. P8-14 reuses the existing
-Now list treatment for its first signed-in fixture. Values render as React text
-and allowlisted links; view-provided markup is not interpreted. Small-orb input
+Typed data views are temporary; explicitly pinned HTML apps persist as tabs while
+their geometry remains transient. P8-14 reuses the existing Now list treatment
+for its first signed-in fixture. Values render as React text and allowlisted
+links; view-provided markup is not interpreted. Small-orb input
 controls start voice explicitly. The minimise-on-voice preference persists with
 the account through P8-17, with a device-local cache for immediate startup.
 Concept B/C's translucent surfaces are the selected treatment; the earlier white
@@ -631,6 +632,35 @@ disclosure so the canvas and title bar stay compact; keyboard move and resize
 controls remain available there. The shell exposes the typed workspace command
 controller to page consumers; authenticated Jarvis delivery remains P8-15.
 Tab motion uses the P8-20 tokens and becomes static under reduced motion.
+
+## Pinned HTML apps and layered creation (P8-42)
+
+New generated windows switch to the layered workspace and sit above earlier
+windows, which remain visible underneath. Existing layered-window controls and
+P8-20 surfaces remain unchanged. HTML apps have a labelled pin/unpin action and
+their own pinned tab row; selecting a tab restores that app without replacing
+other workspace views. On phone the same pinned tabs sit above the single
+foreground view and selection changes only that foreground.
+
+Generated HTML runs only inside an opaque-origin `sandbox="allow-scripts"` iframe.
+The host exposes no app DOM or credentials and accepts only the documented,
+validated `open_url`, `ask`, `pin`/`unpin`, and bounded `resize` messages. Pin
+state and the artifact survive reloads; window geometry and arrangement do not.
+Use the existing glass, focus, touch-target, and reduced-motion treatments rather
+than adding a separate visual system.
+
+Scratch Chromium verification mounted the real `Workspace` component and
+production styles with deterministic artifact fixtures at 1440×900 and 390×844,
+in dark and light. Stacking, pinning, pinned-tab selection, the sandbox attribute,
+and one-foreground/no-horizontal-overflow phone behavior were exercised. The
+window transition is present at its normal 260 ms duration and becomes static
+under `prefers-reduced-motion`. Captures are
+[`p8-42-stacked-desktop-dark.png`](docs/ui/screenshots/p8-42-stacked-desktop-dark.png),
+[`p8-42-pinned-desktop-light.png`](docs/ui/screenshots/p8-42-pinned-desktop-light.png),
+[`p8-42-pinned-phone-dark.png`](docs/ui/screenshots/p8-42-pinned-phone-dark.png),
+and [`p8-42-pinned-phone-light.png`](docs/ui/screenshots/p8-42-pinned-phone-light.png).
+These verify presentation with local fixtures, not live authentication or SQL
+durability.
 
 ## Accepted capability surfaces
 

@@ -122,7 +122,7 @@ describe('workspace artifact store', () => {
   });
 
   it('pins validated HTML metadata in SQL and lists only pinned artifact summaries', async () => {
-    const { store, input, query } = fixture();
+    const { store, input, query, pool, container, serviceClient } = fixture();
     const artifact = store.createTransientHtml(ownerId, 'pin-html', 'Research', '<h1>Findings</h1>', htmlSources);
     query.mockResolvedValueOnce({ recordset: [] });
     query.mockResolvedValueOnce({ recordset: [{ created_at: new Date('2026-10-06T10:00:00.000Z') }] });
@@ -143,6 +143,20 @@ describe('workspace artifact store', () => {
     await expect(store.listPinnedHtml(ownerId, new AbortController().signal))
       .resolves.toEqual([{ id: artifact.id, kind: 'html', title: 'Research', sources: htmlSources,
         createdAt: '2026-10-06T10:00:00.000Z', pinned: true }]);
+
+    const reloadedStore = new WorkspaceArtifactStore({
+      pool, container, serviceClient, storageAccount: 'jarvisstore',
+    });
+    query.mockResolvedValueOnce({ recordset: [{
+      id: artifact.id,
+      title: 'Research',
+      html: '<h1>Findings</h1>',
+      sources_json: JSON.stringify(htmlSources),
+      created_at: new Date('2026-10-06T10:00:00.000Z'),
+      pinned: true,
+    }] });
+    await expect(reloadedStore.getHtml(artifact.id, ownerId, new AbortController().signal))
+      .resolves.toMatchObject({ id: artifact.id, html: '<h1>Findings</h1>', pinned: true });
   });
 
   it('unpins an artifact by deleting its durable row while keeping it available transiently', async () => {
