@@ -64,6 +64,8 @@ export interface ConversationStore {
   }): Promise<ConversationMessage | null>;
   updateMessage?(messageId: string, text: string): Promise<ConversationMessage | null>;
   getDanMessageIdBySourceItemId(sourceItemId: string): Promise<string | null>;
+  getMessageSessionId?(messageId: string): Promise<string | null>;
+  getLatestDanMessageText?(sessionId: string): Promise<string | null>;
   getHistory(input: {
     readonly limit: number;
     readonly before?: string;

@@ -33,6 +33,7 @@ public sealed class WindowsCommandExecutor
             "close_app" => CloseApp(command.Arguments.GetProperty("app").GetString()!),
             "media" => ControlMedia(command.Arguments.GetProperty("action").GetString()!),
             "open_folder" => OpenFolder(command.Arguments.GetProperty("relativePath").GetString()!),
+            "open_file" => OpenFile(command.Arguments.GetProperty("relativePath").GetString()!),
             "active_window" => ReadActiveWindow(),
             "focus_window" => FocusWindow(command.Arguments.GetProperty("title").GetString()!),
             "uia_snapshot" => _uiAutomation.Observe(cancellationToken),
@@ -387,21 +388,14 @@ public sealed class WindowsCommandExecutor
         return result!;
     }
 
-    private static object OpenFolder(string relativePath)
+    private static object OpenFolder(string relativePath) => OpenRepoPath(relativePath, expectFile: false);
+
+    private static object OpenFile(string relativePath) => OpenRepoPath(relativePath, expectFile: true);
+
+    private static object OpenRepoPath(string relativePath, bool expectFile)
     {
-        if (!CommandPolicy.TryNormalizeRepoPath(relativePath, out var normalized))
-            throw new CommandRefusedException("not_allowed");
-        var root = Path.GetFullPath(RepoRoot);
-        var fullPath = Path.GetFullPath(Path.Combine(root, normalized));
-        var relativeToRoot = Path.GetRelativePath(root, fullPath);
-        if (relativeToRoot == "." || relativeToRoot == ".." ||
-            relativeToRoot.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-            Path.IsPathRooted(relativeToRoot) ||
-            !Directory.Exists(fullPath) ||
-            ContainsReparsePoint(root, fullPath))
-        {
+        if (!RepoPathResolver.TryResolve(RepoRoot, relativePath, expectFile, out var fullPath))
             throw new CommandRefusedException("not_found");
-        }
 
         var code = FindExecutable("vscode");
         if (code is null) throw new CommandRefusedException("not_found");
@@ -416,18 +410,6 @@ public sealed class WindowsCommandExecutor
     {
         if (process is null || !AllowSetForegroundWindow((uint)process.Id))
             throw new CommandRefusedException("failed");
-    }
-
-    private static bool ContainsReparsePoint(string root, string fullPath)
-    {
-        var current = root;
-        if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return true;
-        foreach (var segment in Path.GetRelativePath(root, fullPath).Split(Path.DirectorySeparatorChar))
-        {
-            current = Path.Combine(current, segment);
-            if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return true;
-        }
-        return false;
     }
 
     private static object ReadActiveWindow()
