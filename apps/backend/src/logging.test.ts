@@ -179,6 +179,19 @@ describe('structured log export', () => {
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
   });
+  it('exports recipe timing through P5-14 without recipe content', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    const phases = ['recipe_select', 'recipe_verify', 'recipe_plan', 'recipe_run'];
+    for (const phase of phases) {
+      logger.info({ phase, durationMs: 12.5, goal: 'private-content', target: 'private-content', text: 'private-content' }, 'chat.latency');
+    }
+    expect(records.map(record => JSON.parse(record).phase)).toEqual(phases);
+    expect(records.map(record => JSON.parse(record).durationMs)).toEqual(phases.map(() => 12.5));
+    expect(records.join('')).not.toContain('private-content');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('private-content');
+  });
   it('exports bounded chat and voice failure diagnostics', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

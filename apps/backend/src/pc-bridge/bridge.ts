@@ -162,6 +162,7 @@ export interface PcBridgeConnectionOptions {
 
 export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
   readonly pcActPlanner?: PcActPlanner;
+  readonly recipes?: PcActOptions['recipes'];
   readonly onPcActStep?: PcActOptions['onStep'];
   readonly runConfirmed?: <T>(
     summary: string,
@@ -520,6 +521,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
             ),
           }, {
             planner: options.pcActPlanner!,
+            ...(options.recipes ? { recipes: options.recipes } : {}),
             ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
             ...(options.onPcActStep ? { onStep: options.onPcActStep } : {}),
           }),

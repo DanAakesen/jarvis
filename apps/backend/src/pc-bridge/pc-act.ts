@@ -1,5 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
+import { createRecipeSession, type RecipeRuntime, type RecipeSession } from '../core/task-recipes.js';
 import {
   isJevFailure,
   jevChoiceConfidenceThreshold,
@@ -105,6 +106,7 @@ export type PcActBridgeAction =
 
 export interface PcActOptions {
   readonly planner: PcActPlanner;
+  readonly recipes?: RecipeRuntime;
   readonly runConfirmed?: <T>(
     summary: string,
     action: () => Promise<T>,
@@ -505,9 +507,13 @@ export async function runPcAct(
     throw new ToolRefusal('Jarvis will not handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.');
   }
 
+  const runStartedAt = performance.now();
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(maxRunMs)]);
   const goal = input.goal.trim();
   const previousActions: string[] = [];
+  let recipe: RecipeSession | undefined;
+  let recipeKey: string | undefined;
+  let recipeDrifted = false;
   for (let step = 1; step <= maxSteps; step += 1) {
     if (deadline.aborted) break;
     let operation: PcActOperation = 'blocked';
@@ -515,13 +521,31 @@ export async function runPcAct(
       const rawSnapshot = await bridge.observe(deadline);
       if (!validSnapshot(rawSnapshot)) throw new ToolFailure('The active Windows application could not be safely observed.');
       const snapshot = rawSnapshot;
+      if (recipeKey === undefined) {
+        recipeKey = snapshot.application;
+        recipe = await withAbort(createRecipeSession(
+          options.recipes, 'pc', recipeKey, goal, request, deadline,
+        ), deadline);
+      } else if (recipeKey !== snapshot.application) {
+        recipeDrifted = true;
+      }
+      const proposal = await withAbort(
+        recipe!.propose(snapshot.application, snapshot.elements, deadline, { previousActions }), deadline,
+      );
       const jevStartedAt = performance.now();
-      const result = await options.planner.decide({
-        goal,
-        step,
-        previousActions,
-        snapshot,
-      }, deadline);
+      let result: PcActDecision | JevFailure | null | typeof proposal = proposal;
+      if (!proposal) {
+        try {
+          result = await options.planner.decide({ goal, step, previousActions, snapshot }, deadline);
+        } finally {
+          if (options.recipes) {
+            request.log.info({
+              phase: 'recipe_plan',
+              durationMs: Math.min(600_000, Math.max(0, performance.now() - jevStartedAt)),
+            }, 'chat.latency');
+          }
+        }
+      }
       if (isJevFailure(result)) {
         logJevFailure(request, reflexSourceForRequest(request), jevStartedAt, result.failure);
         throw new ToolRefusal('Jev could not return a valid PC decision. Please try again.');
@@ -534,12 +558,22 @@ export async function runPcAct(
           decision.confidence < jevChoiceConfidenceThreshold) {
         throw new ToolRefusal('Jev is not confident enough to choose a safe PC action. Please clarify the goal.');
       }
-      operation = decision.operation;
+      operation = decision.operation as PcActOperation;
       if (operation === 'blocked') {
         throw new ToolRefusal('Jev declined the PC action because it is unsafe or unclear.');
       }
       if (operation === 'done') {
+        if (!recipeDrifted) {
+          recipe!.record('done');
+          await withAbort(recipe!.complete(deadline), deadline);
+        }
         logStep(options.onStep, step, operation, 'completed');
+        if (options.recipes) {
+          request.log.info({
+            phase: 'recipe_run',
+            durationMs: Math.min(600_000, Math.max(0, performance.now() - runStartedAt)),
+          }, 'chat.latency');
+        }
         return {
           status: 'completed',
           steps: step,
@@ -548,6 +582,7 @@ export async function runPcAct(
       }
       if (operation === 'wait') {
         await wait(250, deadline);
+        if (!recipeDrifted) recipe!.record(operation);
         logStep(options.onStep, step, operation, 'completed');
         previousActions.push('waited briefly for the application');
         continue;
@@ -643,6 +678,12 @@ export async function runPcAct(
         await options.runConfirmed(error.summary, () => action(true), deadline);
       }
 
+      if (!recipeDrifted) {
+        recipe!.record(operation, target, {
+          ...(decision.text === undefined ? {} : { text: decision.text }),
+          ...(decision.keys === undefined ? {} : { keys: decision.keys }),
+        });
+      }
       logStep(options.onStep, step, operation, 'completed');
       previousActions.push(operation === 'type' || operation === 'type_focused'
         ? 'entered the user-provided text'
