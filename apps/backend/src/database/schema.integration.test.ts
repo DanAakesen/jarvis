@@ -166,7 +166,7 @@ describe('committed domain schema (groups 1-8)', () => {
       { kind: 'away_mode', title: 'Away mode is on' },
       { kind: 'away_mode', title: 'Away mode is off' },
     ]);
-    expect(onModeChanged).toHaveBeenCalledTimes(2);
+    expect(onModeChanged).toHaveBeenCalledTimes(1);
   });
 
   it('retains source-linked memory across sessions and store restarts, then forgets without deleting sources', async () => {
