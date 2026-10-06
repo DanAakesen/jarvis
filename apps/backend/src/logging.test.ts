@@ -12,6 +12,24 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it('exports watch metadata without images, summaries, comments, or watch instructions', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const fields = { source: 'camera', noteworthy: true, spoke: false, latencyMs: 42, cost: 0.0009 };
+    logger.info({ ...fields, image: 'private-image', summary: 'private-summary', speak: 'private-comment',
+      instructions: 'private-instructions' }, 'vision.watch');
+    logger.info({ source: 'private-source', noteworthy: 'private-value', cost: -1, latencyMs: Infinity }, 'vision.watch');
+    expect(JSON.parse(records[0]!)).toMatchObject({ ...fields, msg: 'vision.watch' });
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('cost');
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('source');
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'vision.watch', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    expect(records.join('')).not.toContain('private');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
   it.each(['chat', 'voice-partial', 'voice-final'])('exports bounded %s reflex decisions without transcripts or arguments', (source) => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

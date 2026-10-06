@@ -28,6 +28,7 @@ const events = new Set([
   'voice.partials_unavailable', 'chat.latency', 'memory.embedding', 'vault.index', 'vault.write',
   'pc_act.step',
   'reflex.decision',
+  'vision.watch',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing',
 ]);
@@ -121,6 +122,15 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (input.msg === 'vault.write') {
     if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
     if (['People', 'Work', 'Personal', 'General'].includes(String(input.folder))) fields.folder = input.folder;
+  }
+  if (input.msg === 'vision.watch') {
+    if (input.source === 'screen' || input.source === 'camera') fields.source = input.source;
+    for (const key of ['noteworthy', 'spoke']) {
+      if (typeof input[key] === 'boolean') fields[key] = input[key];
+    }
+    for (const key of ['latencyMs', 'cost']) {
+      if (typeof input[key] === 'number' && Number.isFinite(input[key]) && input[key] >= 0) fields[key] = input[key];
+    }
   }
   if (input.msg === 'pc_act.step') {
     if (Number.isSafeInteger(input.step) && Number(input.step) >= 1 && Number(input.step) <= 20) {

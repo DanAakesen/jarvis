@@ -721,7 +721,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             }
             {
               name: 'FOUNDRY_RUNNER_AGENT_NAME'
-              value: 'jarvis-runner-node-1x2'
+              value: 'jarvis-runner-base-1x2'
             }
             {
               name: 'JARVIS_CODEX_TOOL_MODEL'

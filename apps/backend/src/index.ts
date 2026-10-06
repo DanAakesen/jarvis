@@ -82,6 +82,7 @@ import { createGoogleModule } from './google/tools.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
+import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
 import { createWebResearchModule } from './core/web-research.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
 import { createEphemeralAudioStore } from './teams/audio-store.js';
@@ -557,18 +558,21 @@ try {
       model: config.codexImageModel,
     }));
   }
+  let visionWatch: VisionWatchService | undefined;
   if (database && settingsStore && config.foundryProjectEndpoint && credential) {
-    modules.push(createScreenVisionModule(new ScreenVisionService(
-      createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Foundry screen identity unavailable');
-        return token.token;
-      }),
-      createScreenFrameUsageStore(database.pool),
-    )));
+    const visionModel = createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
+      const token = await credential.getToken(scope, { abortSignal: signal });
+      if (!token) throw new Error('Foundry screen identity unavailable');
+      return token.token;
+    });
+    const visionUsage = createScreenFrameUsageStore(database.pool);
+    modules.push(createScreenVisionModule(new ScreenVisionService(visionModel, visionUsage)));
+    visionWatch = new VisionWatchService(visionModel, visionUsage, createConversationStore(database.pool));
+    modules.push(createVisionWatchModule(visionWatch));
   }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
+      ...(visionWatch ? { visionWatch } : {}),
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
         if (!token) throw new Error('Voice identity unavailable');
@@ -631,6 +635,7 @@ try {
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
+      ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
       ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),

@@ -715,7 +715,7 @@ extension is disconnected, the current companion launches the installed Chrome
 executable directly and identifies that fallback in the tool result. Websites
 are never handed to the Windows default browser. A connected extension with
 automation disabled is refused rather than silently bypassing the setting.
-Launched apps and VS Code folder opens use Windows `AllowSetForegroundWindow`
+Launched apps and VS Code file/folder opens use Windows `AllowSetForegroundWindow`
 to grant the new process foreground eligibility; no synthetic input or
 focus-stealing workaround is used. The bridge does not expose arbitrary command
 execution; its only direct executable launch for a URL is the Chrome fallback.
@@ -725,6 +725,13 @@ titles, or message content.
 The backend logs each WebSocket command's safe command name, normalized outcome
 and monotonic round-trip milliseconds as `pc_bridge.command_timing`; request
 arguments and returned data are excluded by the logger allowlist.
+
+`pc_open` accepts repo-relative folder and file targets under `C:\Repo` and
+opens them in VS Code. The portable `RepoPathResolver` checks the requested
+file/folder kind, canonical containment and every path segment for reparse
+points; invalid, missing, traversing or linked-out paths are refused. This
+reuses the P7-31 `open_app`/`InstalledAppMatcher` implementation for app
+launching and adds no second launcher.
 
 Online/offline changes update one existing Now-feed activity row keyed by
 `pc_bridge_status`; the same row reports whether Jarvis control is active or
@@ -795,6 +802,16 @@ backend lint/build and the Linux Windows-target build pass. A cancellation token
 preempt an individual synchronous UI Automation COM call. Live Jev calls,
 Windows UIA responsiveness/cancellation, physical approval delivery, and Dan's
 end-to-end app task remain unverified.
+
+When the configured Jev planner is available, the sensitive `codex_prompt`
+tool opens Codex through `open_app` and delegates UI interaction to this same
+`runPcAct` loop and the existing `uia_snapshot`/`uia_act` bridge commands. It
+passes the exact prompt as one JSON-quoted value; password, payment-card,
+one-time-code and other sensitive text remain refused. Codex prompts are audited
+as redacted data. Typing does not request approval; irreversible controls or
+intent reuse the existing `runConfirmed` flow. The tool returns success only
+after a completed text-entry action, submission action and `pc_act` completion;
+an unavailable Codex app or an incomplete submission is a refusal.
 
 ### Chrome browser executor (P7-18, P7-25, P7-26)
 
@@ -1689,7 +1706,17 @@ P5-03 pins the English model and Ryan HD in the backend. P5-04 implements browse
 
 The Danish backend connector uses the Foundry project endpoint from `FOUNDRY_PROJECT_ENDPOINT` and a server-side Azure Identity token. Bicep grants the backend managed identity the `Foundry User` role on the project. After a successful `Deploy`, its smoke step grants the workflow's deploy identity `Foundry User`; the `Danish voice agent` workflow then creates/updates `jarvis-voice-mai` when provisioning inputs change, or by manual dispatch. It uses a hash-locked SDK to wrap the hosted agent `jarvis`. The P5-04 client is implemented and locally tested; live browser audio remains unverified.
 
-P7-05 and P7-08 reuse that Foundry endpoint, backend managed identity and `Foundry User` assignment; the camera adds no provider key, route, migration, or Azure resource. The bridge uses the configured `jarvis.model` (`gpt-5.6-luna` by default) and `/models/chat/completions` with an image. The signed-in browser never receives a provider credential. The project price snapshot dated 2 October 2026 lists short-context Global Standard rates of 1.3157 DKK per million input tokens and 7.8941 DKK per million output tokens (effective 1 August 2026); these are displayed as estimates, not billed usage. The coordinator must confirm the live deployment is image-capable and that its SKU/rates still match before live acceptance.
+P7-05, P7-08 and P7-38 reuse that Foundry endpoint, backend managed identity and `Foundry User` assignment; camera adds no provider key or Azure resource. Vision uses the dedicated `VISION_MODEL_DEPLOYMENT` (`gpt-6-luna`), not `jarvis.model`, through `/models/chat/completions` with image detail `auto`, `max_completion_tokens: 500`, and `reasoning_effort: none`. Estimated rates are 0.6579 DKK per million input tokens and 3.2893 per million output tokens, converted at 6.5785 DKK/USD. The signed-in browser never receives a provider credential. These are estimates, not billed usage; live deployment pricing and useful-comment acceptance remain to verify.
+
+### Continuous vision watching (P7-38)
+
+Dan-only `POST /vision/watch` accepts `{ sessionId, source: 'screen' | 'camera', frame }` and returns `{ summary, speak: string | null, budget: { usedUsd, limitUsd } }`. It reuses the existing JPEG/1 MiB validation, abort handling, and `image.fill(0)` cleanup. Dan's separate web work owns independent sharing toggles, meaningful-change detection, and a maximum of one frame every 2.5 seconds per source; the backend never polls a source or pauses for sensitive content.
+
+`VisionWatchService` holds the last summary and up to 20 watch instructions per session/source in memory. The authenticated `watch_for { source?, what }` (300 characters) and `stop_watching_for { source? }` tools resolve the stored Dan message to its session; their audits redact arguments/results. The prompt includes the source summary, instructions, latest Dan text, and recent comments as bounded context. It requires strict `{ summary, noteworthy, speak }` JSON, treats image text as untrusted, and permits comments only for screen errors/problems, instruction matches, or direct question answers. Malformed results fail visibly but still record incurred model usage.
+
+The service suppresses repeated normalized comments for two minutes across both sources; the prompt also suppresses paraphrases of a recent issue. Concurrent deliveries share an in-memory dedupe guard. An active voice relay registers its synchronous announcer callback; a free relay sends `response.create` with verbatim instructions and no tools. If Dan is speaking or the relay is otherwise busy/disconnected, the service posts a Jarvis message to the same session instead. Summaries are never persisted or logged. Successful conversation end invokes the injected session-end callback across module boundaries; that callback, voice teardown and backend shutdown clear in-memory watch state.
+
+Watch frames replace the 300-frame cap with `global.vision_daily_budget_usd` (default 1, range 0–100; 0 disables watching). The existing `screen_frames` usage store sums today's `cost_dkk` across all sessions and both sources, including on-demand inspections. Watch reservations are excluded from the existing on-demand three-second throttle and 300-frame count. SQL reservations use the existing UTC-day application lock, per-session/source 2500 ms throttling, and a conservative 0.1 DKK pending-cost hold reconciled to known token cost. This is an allowance for the bounded prompt/model, not a tokenizer-proven upper bound. Failed/unknown-cost calls retain the hold until the UTC day ends; insufficient remaining budget refuses before another model call. The budget response includes outstanding holds, so it can decrease after concurrent calls reconcile. No migration or dependency is added. `vision.watch` logs only source, noteworthy, spoke, latencyMs, and cost (DKK); the logger allowlist excludes frames, summaries, comments and instructions. Offline tests verify the contract; live Azure SQL concurrency, actual billing and Dan's UI integration remain unverified.
 
 ### Jarvis agent
 
