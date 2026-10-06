@@ -317,6 +317,7 @@ try {
       client: createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer }),
       indexStore: vaultIndexStore,
       memoryStore,
+      apiMemoryStore: memoryStore,
       ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
       log: (event, fields) => logger.info({ msg: event, ...fields }, event),
     })
