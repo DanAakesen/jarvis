@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import websocket from '@fastify/websocket';
 import WebSocket, { type RawData } from 'ws';
+import type { JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import {
@@ -24,6 +25,10 @@ const controlActions = new Set<PcCommand['name']>([
   'open_url', 'open_app', 'close_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
   'open_file',
 ]);
+// Voice session states that mean Dan is talking to Jarvis; `ended` and `failed` end the session.
+const activeVoiceStates = new Set<JarvisActivityEvent['type']>(['listening', 'thinking', 'speaking', 'reconnecting']);
+const maxTrackedVoiceSessions = 64;
+const wakeWordTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const mediaActions = ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const;
 
 type PcCommand =
@@ -181,6 +186,9 @@ export class PcBridgeConnection {
   private readonly pending = new Map<string, PendingCommand>();
   private status: boolean | undefined;
   private controlPaused = false;
+  private wakeWordListening = false;
+  private onWakeWord: ((at: string) => void) | undefined;
+  private readonly activeVoiceSessions = new Set<string>();
   private statusUpdate = Promise.resolve();
   private readonly timeoutMs: number;
 
@@ -192,17 +200,34 @@ export class PcBridgeConnection {
     this.setStatus(false);
   }
 
-  attach(socket: WebSocket): void {
+  attach(socket: WebSocket, onWakeWord?: (at: string) => void): void {
     if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) {
       socket.close(1008, 'Bridge already connected');
       return;
     }
 
     this.socket = socket;
+    this.onWakeWord = onWakeWord;
+    this.wakeWordListening = false;
     socket.on('message', (data, isBinary) => this.receive(socket, data, isBinary));
     socket.once('close', () => this.detach(socket));
     socket.once('error', () => this.detach(socket));
     this.setStatus(true);
+  }
+
+  // The bridge pauses its wake-word listener while any Jarvis voice session is active.
+  observeActivity(event: JarvisActivityEvent | JarvisVoiceWakeEvent): void {
+    if (event.type === 'voice.wake' || event.source !== 'voice') return;
+    const wasActive = this.activeVoiceSessions.size > 0;
+    if (event.type === 'ended' || event.type === 'failed') {
+      this.activeVoiceSessions.delete(event.activityId);
+    } else if (activeVoiceStates.has(event.type) && !this.activeVoiceSessions.has(event.activityId)) {
+      if (this.activeVoiceSessions.size >= maxTrackedVoiceSessions) {
+        this.activeVoiceSessions.delete(this.activeVoiceSessions.values().next().value as string);
+      }
+      this.activeVoiceSessions.add(event.activityId);
+    }
+    if (wasActive !== this.activeVoiceSessions.size > 0) this.sendVoiceState();
   }
 
   async close(): Promise<void> {
@@ -288,12 +313,26 @@ export class PcBridgeConnection {
       return;
     }
     if (isRecord(response) && response.type === 'status') {
-      if (Object.keys(response).length !== 2 || typeof response.controlPaused !== 'boolean') {
+      const keys = Object.keys(response).length;
+      if (typeof response.controlPaused !== 'boolean' ||
+          !(keys === 2 || (keys === 3 && typeof response.wakeWord === 'boolean'))) {
         socket.close(1007, 'Invalid bridge status');
         this.detach(socket);
         return;
       }
+      this.wakeWordListening = response.wakeWord === true;
       this.setStatus(true, response.controlPaused);
+      this.sendVoiceState();
+      return;
+    }
+    if (isRecord(response) && response.type === 'wake_word') {
+      const at = Object.keys(response).length === 2 ? wakeWordTimestamp(response.at) : undefined;
+      if (at === undefined) {
+        socket.close(1007, 'Invalid bridge event');
+        this.detach(socket);
+        return;
+      }
+      this.onWakeWord?.(at);
       return;
     }
     if (!isRecord(response) || typeof response.id !== 'string' || !idPattern.test(response.id)) {
@@ -360,9 +399,17 @@ export class PcBridgeConnection {
     else pending.resolve(result!);
   }
 
+  private sendVoiceState(): void {
+    const socket = this.socket;
+    if (!this.wakeWordListening || !socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ type: 'voice_state', active: this.activeVoiceSessions.size > 0 }), () => {});
+  }
+
   private detach(socket: WebSocket): void {
     if (this.socket !== socket) return;
     this.socket = undefined;
+    this.onWakeWord = undefined;
+    this.wakeWordListening = false;
     this.rejectPending(new Error('PC bridge disconnected'));
     this.setStatus(false);
   }
@@ -588,10 +635,20 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           socket.close(1008, 'Unauthorized');
           return;
         }
-        bridge.attach(socket);
+        bridge.attach(socket, (at) => {
+          app.jarvisActivityHub.publish({ type: 'voice.wake', at });
+          request.log.info('pc_bridge.wake_word');
+        });
       });
-      app.addHook('onReady', async () => bridge.initialize());
-      app.addHook('onClose', async () => bridge.close());
+      let unsubscribeActivity: (() => void) | undefined;
+      app.addHook('onReady', async () => {
+        bridge.initialize();
+        unsubscribeActivity = app.jarvisActivityHub.subscribe((event) => bridge.observeActivity(event));
+      });
+      app.addHook('onClose', async () => {
+        unsubscribeActivity?.();
+        await bridge.close();
+      });
     },
   };
 }
@@ -1036,6 +1093,12 @@ function validUiAutomationAction(value: Record<string, unknown>): boolean {
 function validBrowserActionResult(value: Record<string, unknown>): boolean {
   return Object.keys(value).length === 2 && value.acted === true &&
   ['click', 'type', 'type_focused', 'keys', 'select', 'scroll', 'wait'].includes(String(value.action));
+}
+
+function wakeWordTimestamp(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !wakeWordTimestampPattern.test(value)) return undefined;
+  const time = Date.parse(value);
+  return Number.isFinite(time) && new Date(time).toISOString() === value ? value : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
