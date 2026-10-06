@@ -88,7 +88,7 @@ async function connectBridge(url: string, token = bridgeToken): Promise<WebSocke
 
 async function callTool(
   app: ReturnType<typeof buildApp>,
-  tool: 'pc_open' | 'pc_media' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
+  tool: 'pc_open' | 'pc_close' | 'pc_media' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
   payload: Record<string, unknown>,
 ) {
   return app.inject({
@@ -233,6 +233,35 @@ describe('authenticated PC bridge protocol', () => {
     },
   );
 
+  it('closes an app by name through the bridge and refuses when no window matches', async () => {
+    const runConfirmed = vi.fn(async (_summary: string, operation: () => Promise<unknown>) => operation());
+    const { app, record } = fixture({ runConfirmed });
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const commands: Array<Record<string, unknown>> = [];
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      commands.push(command);
+      const name = (command.arguments as Record<string, unknown>).app;
+      bridge.send(JSON.stringify(name === 'Notepad'
+        ? { id: command.id, type: 'error', error: 'not_found' }
+        : { id: command.id, type: 'result', result: { closing: true, windows: 1 } }));
+    });
+
+    const closed = await callTool(app, 'pc_close', { app: 'Visual Studio Code - Insiders' });
+    expect(closed.json()).toMatchObject({ outcome: 'ok', result: { closing: true, windows: 1 } });
+    const missing = await callTool(app, 'pc_close', { app: 'Notepad' });
+    expect(missing.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'No open window of that app was found; nothing was closed.' },
+    });
+    expect(commands).toMatchObject([
+      { command: 'close_app', arguments: { app: 'Visual Studio Code - Insiders' } },
+      { command: 'close_app', arguments: { app: 'Notepad' } },
+    ]);
+    expect(runConfirmed).not.toHaveBeenCalled();
+    expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['ok', 'refused']);
+  });
   it('runs pc_act through the authenticated bridge and redacts its audit and step activity', async () => {
     const onPcActStep = vi.fn();
     const planner: PcActPlanner = {

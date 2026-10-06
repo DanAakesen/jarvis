@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JarvisStageOptions } from './jarvis-stage-scene';
 import { JarvisActivityProvider } from './activity-provider';
 import { useJarvisActivity } from './activity-context';
-import { PlaybackAudioLevelContext } from './playback-audio-context';
+import { VoiceStageContext } from './voice-stage-context';
 import { JarvisStage } from './JarvisStage';
 
 const { createScene } = vi.hoisted(() => ({ createScene: vi.fn() }));
@@ -13,11 +13,11 @@ vi.mock('./jarvis-stage-scene', () => ({ createJarvisStageScene: createScene }))
 describe('JarvisStage', () => {
   const update = vi.fn();
   const dispose = vi.fn();
-  const setAudioLevel = vi.fn();
+  const setSignals = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
-    createScene.mockReturnValue({ update, dispose, setAudioLevel });
+    createScene.mockReturnValue({ update, dispose, setSignals });
   });
 
   afterEach(() => {
@@ -37,9 +37,7 @@ describe('JarvisStage', () => {
       reducedMotion: false,
       voiceActive: false,
       hasWindows: false,
-      working: false,
-      activityState: null,
-      audioLevel: 0,
+      orbState: 'idle',
     } satisfies JarvisStageOptions);
     expect(container.querySelector('.jarvis-stage')?.getAttribute('data-ready')).toBe('true');
 
@@ -52,9 +50,7 @@ describe('JarvisStage', () => {
       reducedMotion: false,
       voiceActive: true,
       hasWindows: true,
-      working: false,
-      activityState: null,
-      audioLevel: 0,
+      orbState: 'idle',
     }));
 
     rerender(
@@ -67,9 +63,7 @@ describe('JarvisStage', () => {
       reducedMotion: false,
       voiceActive: true,
       hasWindows: true,
-      working: false,
-      activityState: null,
-      audioLevel: 0,
+      orbState: 'idle',
     }));
 
     unmount();
@@ -100,7 +94,7 @@ describe('JarvisStage', () => {
     createScene.mockImplementation((_element, onLost, _options, onRestored) => {
       loseContext = onLost;
       restoreContext = onRestored;
-      return { update, dispose, setAudioLevel };
+      return { update, dispose, setSignals };
     });
 
     const { container, unmount } = render(<JarvisStage theme="dark" />);
@@ -158,55 +152,76 @@ describe('JarvisStage', () => {
       reducedMotion: true,
       voiceActive: false,
       hasWindows: false,
-      working: false,
-      activityState: null,
-      audioLevel: 0,
+      orbState: 'idle',
     }));
   });
 
-  it('keeps one scene mounted while observed activity and playback audio update it', async () => {
+  it('keeps one scene mounted while chat activity and the voice presentation drive the orb', async () => {
     function ActivityControls() {
       const activity = useJarvisActivity();
+      const activityId = '11111111-1111-4111-8111-111111111111';
       return (
         <>
           <button type="button" onClick={() => activity.applyRuntimeActivity({
-            type: 'thinking',
-            activityId: '11111111-1111-4111-8111-111111111111',
-            source: 'chat',
+            type: 'thinking', activityId, source: 'chat',
           })}>Start thinking</button>
+          <button type="button" onClick={() => activity.applyRuntimeActivity({
+            type: 'tool-call-started', activityId, source: 'chat', toolName: 'open_window',
+          })}>Start tool</button>
           <button type="button" onClick={activity.clearRuntimeActivities}>Clear activity</button>
         </>
       );
     }
-    function AudioProbe() {
-      const setAudioLevel = useContext(PlaybackAudioLevelContext);
-      return <button type="button" onClick={() => setAudioLevel(0.65)}>Playback level</button>;
+    const signals = { playbackLevel: () => 0.5, inputLevel: () => 0.1 };
+    function VoiceProbe() {
+      const stage = useContext(VoiceStageContext);
+      return (
+        <>
+          <button type="button" onClick={() => { stage.setSignals(signals); stage.setOrbState('speaking'); }}>Voice speaking</button>
+          <button type="button" onClick={() => { stage.setSignals(null); stage.setOrbState(null); }}>Voice ended</button>
+        </>
+      );
     }
     const { container } = render(
       <JarvisActivityProvider>
         <div className="app-shell" data-voice-active="false" data-voice-has-windows="false">
           <JarvisStage theme="dark">
-            <AudioProbe />
+            <VoiceProbe />
           </JarvisStage>
           <ActivityControls />
         </div>
       </JarvisActivityProvider>,
     );
     await waitFor(() => expect(createScene).toHaveBeenCalledTimes(1));
+    expect(setSignals).toHaveBeenLastCalledWith(null);
 
     fireEvent.click(screen.getByRole('button', { name: 'Start thinking' }));
-    await waitFor(() => expect(update).toHaveBeenLastCalledWith(expect.objectContaining({
-      working: true,
-      activityState: 'thinking',
-    })));
-    fireEvent.click(screen.getByRole('button', { name: 'Playback level' }));
-    expect(setAudioLevel).toHaveBeenCalledWith(0.65);
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ orbState: 'thinking' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Start tool' }));
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ orbState: 'tool' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Voice speaking' }));
+    expect(setSignals).toHaveBeenLastCalledWith(signals);
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ orbState: 'speaking' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Voice ended' }));
+    expect(setSignals).toHaveBeenLastCalledWith(null);
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ orbState: 'tool' })));
     fireEvent.click(screen.getByRole('button', { name: 'Clear activity' }));
-    await waitFor(() => expect(update).toHaveBeenLastCalledWith(expect.objectContaining({
-      working: false,
-      activityState: null,
-    })));
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ orbState: 'idle' })));
     expect(createScene).toHaveBeenCalledTimes(1);
     expect(container.querySelector('.jarvis-stage')).not.toBeNull();
+  });
+
+  it('clears published orb geometry when the room becomes unavailable', async () => {
+    let loseContext = () => {};
+    createScene.mockImplementation((_element, onLost) => {
+      loseContext = onLost;
+      return { update, dispose, setSignals };
+    });
+    const { container } = render(<div className="jarvis-page"><JarvisStage theme="dark" /></div>);
+    await waitFor(() => expect(createScene).toHaveBeenCalledTimes(1));
+    const page = container.querySelector<HTMLElement>('.jarvis-page')!;
+    page.style.setProperty('--jarvis-orb-x', '400px');
+    act(() => loseContext());
+    expect(page.style.getPropertyValue('--jarvis-orb-x')).toBe('');
   });
 });

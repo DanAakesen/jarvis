@@ -13,6 +13,8 @@ public sealed class CommandPolicyTests
     [InlineData("focus_window", true)]
     [InlineData("uia_act", true)]
     [InlineData("browser_act", true)]
+    [InlineData("media", true)]
+    [InlineData("close_app", true)]
     [InlineData("active_window", false)]
     [InlineData("uia_snapshot", false)]
     [InlineData("browser_snapshot", false)]

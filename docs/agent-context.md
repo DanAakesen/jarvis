@@ -1344,3 +1344,11 @@ does not turn off the legacy Git credential path. Set it to `true` only after th
 backend deployment and Key Vault setup are confirmed, then dispatch Runner deploy
 from `main`. Keep the legacy secret and runner read grant until the live sandbox
 push to `DanAakesen/jarvis-test-target` succeeds; remove them in a follow-up.
+
+### Voice feedback and microphone lifecycle (#417)
+
+PR #419 replaces Enable microphone with capture on explicit Start voice. Browser audio preparation and the native permission request happen in that gesture; sending requires the authenticated handshake. Reconnect keeps explicit mute, late permission grants after end are released, and denial/device loss exposes Retry microphone in More. No new secret, setting or backend contract is needed.
+
+Focused web checks cover voice client lifecycle, presentation/status, scene persistence and motion envelopes. Copilot reported fixture browser layout and motion observations; the software-WebGL cadence was about 4 fps, so normal hardware motion quality remains unverified. Live microphone/speaker, English/Danish provider, physical phone and hardware-GPU acceptance remain post-deploy checks.
+
+Reviewer verification against updated main: web lint, all 36 web test files (313 tests), and the production web build pass. Scratch Chromium exercised the real voice client with fake microphone hardware and an intercepted voice handshake: no microphone request before Start voice, one request after it, PCM sending after readiness, Listening below the orb without bar overlap or horizontal overflow at 1440×1000 and 390×844, one mounted canvas, and End voice returning the composer. No page errors occurred. Captures/report: `docs/ui/screenshots/p8-40-review-*`. This is fixture/software-WebGL evidence, not live Azure, real microphone/speaker or hardware-GPU verification.

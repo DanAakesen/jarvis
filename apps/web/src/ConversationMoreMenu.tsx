@@ -49,16 +49,20 @@ export function ConversationMoreMenu({
   actions = [],
   align = 'start',
   className,
+  languageNote,
 }: {
   language: VoiceLanguage;
   onLanguageChange: (language: VoiceLanguage) => void;
   actions?: MoreMenuAction[];
   align?: 'start' | 'end';
   className?: string;
+  /** Explains how a language choice applies, shown inside the Language flyout. */
+  languageNote?: string;
 }) {
   const id = useId();
   const menuId = `${id}-menu`;
   const languageMenuId = `${id}-language`;
+  const languageNoteId = `${id}-language-note`;
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -213,7 +217,8 @@ export function ConversationMoreMenu({
             </button>
             {languageOpen && (
               <div ref={languageMenu} id={languageMenuId} className="more-menu-flyout luminous-glass" role="menu"
-                aria-label="Language" onKeyDown={(event) => onMenuKeyDown(event, true)}>
+                aria-label="Language" aria-describedby={languageNote ? languageNoteId : undefined}
+                onKeyDown={(event) => onMenuKeyDown(event, true)}>
                 {voiceLanguages.map((option) => (
                   <button
                     key={option.value}
@@ -231,6 +236,7 @@ export function ConversationMoreMenu({
                     <span className="more-menu-check"><MenuIcon name="check" /></span>
                   </button>
                 ))}
+                {languageNote && <p id={languageNoteId} role="none" className="more-menu-note">{languageNote}</p>}
               </div>
             )}
           </div>
