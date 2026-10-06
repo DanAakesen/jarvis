@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { Link, useLocation } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
@@ -6,6 +7,8 @@ import { sharedScreenContext, type CameraController, type ScreenShareController 
 import { ConversationMoreMenu, type MoreMenuAction } from './ConversationMoreMenu';
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
+import { WorkspaceCommandContext } from './workspace-command-state';
+import { conversationViewId, useConversationWindow } from './conversation-window-state';
 import { MarkdownContent } from './MarkdownContent';
 import { useConversationIntents } from './conversation-intents';
 import {
@@ -23,24 +26,11 @@ import {
 const maxTaskId = 9_223_372_036_854_775_807n;
 
 type QueuedMessage = { id: number; text: string; language: 'da' | 'en' };
-type HistoryWindowState = 'open' | 'minimised' | 'closed';
-type WindowOffset = { x: number; y: number };
-type WindowDrag = { pointerId: number; x: number; y: number; origin: WindowOffset; bounds: { minX: number; maxX: number; minY: number; maxY: number } };
-
 const followThreshold = 32;
-const keyboardMoveStep = 24;
 
-function ConversationIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'close' | 'screen' | 'camera' | 'send' | 'latest' | 'history' }) {
+function ConversationIcon({ name }: { name: 'screen' | 'camera' | 'send' | 'latest' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
-    case 'minimise':
-      return <svg {...common}><path d="M5 17h14" /></svg>;
-    case 'maximise':
-      return <svg {...common}><rect x="5" y="5" width="14" height="14" rx="1.5" /></svg>;
-    case 'restore':
-      return <svg {...common}><path d="M8 5h11v11M5 8v11h11" /></svg>;
-    case 'close':
-      return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>;
     case 'screen':
       return <svg {...common}><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></svg>;
     case 'camera':
@@ -49,12 +39,9 @@ function ConversationIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' 
       return <svg {...common}><path d="M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5Z" /></svg>;
     case 'latest':
       return <svg {...common}><path d="M12 5v14m-6-6 6 6 6-6" /></svg>;
-    case 'history':
-      return <svg {...common}><path d="M5 5h14v10H9l-4 4Z" /></svg>;
   }
 }
 
-const clampOffset = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 type FailedTurn = QueuedMessage & { messageId?: string; error: string; partialReply: string };
 
 function relativeTime(at: string, now: number): string {
@@ -180,27 +167,16 @@ export function ConversationHistory({
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceRefresh, setVoiceRefresh] = useState(0);
   const [now, setNow] = useState(() => Date.now());
-  const [windowState, setWindowState] = useState<HistoryWindowState>('open');
-  const [maximised, setMaximised] = useState(false);
-  const [offset, setOffset] = useState<WindowOffset>({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
   const [atLatest, setAtLatest] = useState(true);
+  const conversationWindow = useConversationWindow();
+  const workspaceCommands = useContext(WorkspaceCommandContext);
   const { key: locationKey } = useLocation();
-  const [seenLocationKey, setSeenLocationKey] = useState(locationKey);
-  if (seenLocationKey !== locationKey) {
-    // Choosing Conversation in the navigation brings a closed or minimised history back.
-    setSeenLocationKey(locationKey);
-    setWindowState('open');
-  }
+  const seenLocationKey = useRef(locationKey);
   const input = useRef<HTMLTextAreaElement>(null);
   const transcript = useRef<HTMLDivElement>(null);
-  const section = useRef<HTMLElement>(null);
-  const historyWindow = useRef<HTMLDivElement>(null);
+  const followedTranscript = useRef<HTMLDivElement | null>(null);
   const inputBar = useRef<HTMLDivElement>(null);
-  const restoreButton = useRef<HTMLButtonElement>(null);
   const followLatest = useRef(true);
-  const windowDrag = useRef<WindowDrag | null>(null);
-  const pendingWindowFocus = useRef<'restore' | 'input' | 'transcript' | null>(null);
   const wasBusy = useRef(false);
   const hasFocusedInput = useRef(false);
   const hasLoadedOlder = useRef(false);
@@ -212,6 +188,11 @@ export function ConversationHistory({
 
   useEffect(() => () => { turnController.current?.abort(); }, []);
   const lastMessageId = messages.at(-1)?.id;
+  const windowed = messages.length > 0 || sending || queue.length > 0 || failedTurns.length > 0 || activeMessage !== null || Boolean(turnError);
+  const hosted = windowed && conversationWindow !== null;
+  const setConversationAvailable = conversationWindow?.setAvailable;
+  useLayoutEffect(() => { setConversationAvailable?.(windowed); }, [setConversationAvailable, windowed]);
+  useLayoutEffect(() => () => { setConversationAvailable?.(false); }, [setConversationAvailable]);
   const updateVoiceActive = useCallback((active: boolean) => {
     setVoiceActive(active);
     onVoiceActiveChange(active);
@@ -246,25 +227,13 @@ export function ConversationHistory({
 
   useEffect(() => {
     // Follow new content only while Dan is reading the latest message; scrolling up keeps his place.
+    // A newly mounted window (first history or reopened after Close) starts at the latest message.
     const element = transcript.current;
-    if (voiceActive || !element || !followLatest.current) return;
+    if (!element || (!followLatest.current && element === followedTranscript.current)) return;
+    followedTranscript.current = element;
+    followLatest.current = true;
     element.scrollTop = element.scrollHeight;
-  }, [lastMessageId, streamedText, sending, queue.length, failedTurns.length, voiceActive, loading, windowState, maximised]);
-
-  useEffect(() => {
-    const target = pendingWindowFocus.current;
-    if (!target) return;
-    pendingWindowFocus.current = null;
-    if (target === 'restore') restoreButton.current?.focus({ preventScroll: true });
-    else if (target === 'transcript') transcript.current?.focus({ preventScroll: true });
-    else input.current?.focus({ preventScroll: true });
-  }, [windowState, maximised]);
-
-  useEffect(() => {
-    const reset = () => setOffset((current) => current.x === 0 && current.y === 0 ? current : { x: 0, y: 0 });
-    window.addEventListener('resize', reset);
-    return () => window.removeEventListener('resize', reset);
-  }, []);
+  }, [lastMessageId, streamedText, sending, queue.length, failedTurns.length, voiceActive, loading, conversationWindow?.element]);
 
   function updateFollow() {
     const element = transcript.current;
@@ -283,69 +252,24 @@ export function ConversationHistory({
     element.focus({ preventScroll: true });
   }
 
-  function changeWindow(next: HistoryWindowState) {
-    pendingWindowFocus.current = next === 'minimised' ? 'restore' : next === 'closed' ? 'input' : 'transcript';
-    setWindowState(next);
-  }
+  useEffect(() => {
+    // Closing the history window must leave typing usable: focus returns to the composer, not the page.
+    if (!hosted || conversationWindow?.element) return;
+    if (!document.activeElement || document.activeElement === document.body) input.current?.focus({ preventScroll: true });
+  }, [conversationWindow?.element, hosted]);
 
-  function toggleMaximised() {
-    setOffset({ x: 0, y: 0 });
-    setMaximised((current) => !current);
-  }
+  const revealHistory = useCallback(() => {
+    // History is a shared workspace view, so it returns through the same restore command Jarvis uses.
+    if (!workspaceCommands || workspaceCommands.isViewVisible?.(conversationViewId)) return;
+    workspaceCommands.dispatch({ commandId: 'conversation-reveal', operation: 'restore', viewId: conversationViewId });
+  }, [workspaceCommands]);
 
-  function moveBounds() {
-    const win = historyWindow.current?.getBoundingClientRect();
-    const area = section.current?.getBoundingClientRect();
-    const bar = inputBar.current?.getBoundingClientRect();
-    if (!win || !area) return null;
-    const bottom = bar && bar.height > 0 ? bar.top - 8 : area.bottom;
-    const bound = (low: number, high: number, current: number) => low <= high ? [low, high] : [current, current];
-    const [minX, maxX] = bound(offset.x + area.left - win.left, offset.x + area.right - win.right, offset.x);
-    const [minY, maxY] = bound(offset.y + area.top - win.top, offset.y + bottom - win.bottom, offset.y);
-    return { minX: minX!, maxX: maxX!, minY: minY!, maxY: maxY! };
-  }
-
-  function beginWindowDrag(event: PointerEvent<HTMLButtonElement>) {
-    if (maximised || (event.button !== 0 && event.pointerType !== 'touch')) return;
-    const bounds = moveBounds();
-    if (!bounds) return;
-    windowDrag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, origin: offset, bounds };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    setDragging(true);
-  }
-
-  function updateWindowDrag(event: PointerEvent<HTMLButtonElement>) {
-    const gesture = windowDrag.current;
-    if (!gesture || gesture.pointerId !== event.pointerId) return;
-    setOffset({
-      x: clampOffset(gesture.origin.x + event.clientX - gesture.x, gesture.bounds.minX, gesture.bounds.maxX),
-      y: clampOffset(gesture.origin.y + event.clientY - gesture.y, gesture.bounds.minY, gesture.bounds.maxY),
-    });
-  }
-
-  function endWindowDrag(event: PointerEvent<HTMLButtonElement>) {
-    if (windowDrag.current?.pointerId !== event.pointerId) return;
-    windowDrag.current = null;
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    setDragging(false);
-  }
-
-  function moveWindowByKey(event: KeyboardEvent<HTMLButtonElement>) {
-    if (event.key === 'Home') {
-      event.preventDefault();
-      setOffset({ x: 0, y: 0 });
-      return;
-    }
-    const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
-    if (!step || maximised) return;
-    event.preventDefault();
-    const bounds = moveBounds();
-    if (!bounds) return;
-    setOffset({
-      x: clampOffset(offset.x + step[0]! * keyboardMoveStep, bounds.minX, bounds.maxX),
-      y: clampOffset(offset.y + step[1]! * keyboardMoveStep, bounds.minY, bounds.maxY),
-    });
-  }
+  useEffect(() => {
+    // Choosing Conversation in the navigation brings a closed or minimised history back.
+    if (seenLocationKey.current === locationKey) return;
+    seenLocationKey.current = locationKey;
+    revealHistory();
+  }, [locationKey, revealHistory]);
 
   useEffect(() => {
     const busy = voiceActive || sending;
@@ -409,7 +333,7 @@ export function ConversationHistory({
     // A new message needs its reply visible: bring history back and follow the latest content.
     followLatest.current = true;
     setAtLatest(true);
-    setWindowState('open');
+    revealHistory();
     const queued = { id: ++nextQueueId.current, text, language };
     const activeSession = turnSession.current;
     if (sending && !queueOnly && activeSession) {
@@ -432,7 +356,7 @@ export function ConversationHistory({
       return;
     }
     setQueue((current) => [...current, queued]);
-  }, [camera?.sharing, client, config, language, sending, session, visionContext, voiceActive]);
+  }, [camera?.sharing, client, config, language, revealHistory, sending, session, visionContext, voiceActive]);
 
   useEffect(() => {
     const intent = conversationIntents.pending[0];
@@ -608,9 +532,6 @@ export function ConversationHistory({
   }
 
   const displayedVoiceUsage = new Set<string>();
-  const windowed = messages.length > 0 || sending || queue.length > 0 || failedTurns.length > 0 || activeMessage !== null || Boolean(turnError);
-  const historyVisible = !windowed || windowState === 'open';
-  const moved = windowed && !maximised && (offset.x !== 0 || offset.y !== 0);
   const attachActions: MoreMenuAction[] = [
     {
       id: 'screen',
@@ -630,195 +551,164 @@ export function ConversationHistory({
     },
   ];
 
-  return (
-    <section ref={section} className="conversation-history" data-turn-active={sending || undefined} aria-label="Conversation"
-      data-history-window={windowed ? windowState : undefined} data-history-maximised={(windowed && maximised) || undefined}>
-      <div
-        ref={historyWindow}
-        className={`conversation-window${windowed ? ' luminous-glass' : ''}`}
-        data-windowed={windowed}
-        data-dragging={dragging || undefined}
-        hidden={voiceActive || !historyVisible}
-        style={moved ? { transform: `translate(${offset.x}px, ${offset.y}px)` } : undefined}
-      >
-      {windowed && (
-        <div className="conversation-window-bar">
-          <button
-            className="conversation-window-drag"
-            type="button"
-            aria-label={maximised ? 'Conversation window is maximised' : 'Move conversation window. Use arrow keys to move; Home resets its position.'}
-            title={maximised ? undefined : 'Drag to move'}
-            disabled={maximised}
-            onPointerDown={beginWindowDrag}
-            onPointerMove={updateWindowDrag}
-            onPointerUp={endWindowDrag}
-            onPointerCancel={endWindowDrag}
-            onKeyDown={moveWindowByKey}
-            onDoubleClick={() => setOffset({ x: 0, y: 0 })}
-          >
-            <span className="conversation-window-grip" aria-hidden="true" />
-          </button>
-          <div className="conversation-window-actions">
-            <button className="conversation-window-control" type="button" aria-label="Minimise conversation history" title="Minimise"
-              onClick={() => changeWindow('minimised')}>
-              <ConversationIcon name="minimise" />
-            </button>
-            <button className="conversation-window-control" type="button"
-              aria-label={maximised ? 'Restore size of conversation history' : 'Maximise conversation history'}
-              title={maximised ? 'Restore size' : 'Maximise'} onClick={toggleMaximised}>
-              <ConversationIcon name={maximised ? 'restore' : 'maximise'} />
-            </button>
-            <button className="conversation-window-control" type="button" aria-label="Close conversation history" title="Close"
-              onClick={() => changeWindow('closed')}>
-              <ConversationIcon name="close" />
+  const latestButton = !atLatest && (
+    <button className="conversation-latest" type="button" onClick={jumpToLatest}>
+      <ConversationIcon name="latest" />
+      <span>Jump to latest</span>
+    </button>
+  );
+  const transcriptContent = (
+    <>
+        {loading ? (
+          <p role="status" aria-live="polite">Loading conversation history…</p>
+        ) : historyError && messages.length === 0 ? (
+          <div className="history-feedback">
+            <p role="alert">{historyError}</p>
+            <button className="history-button" type="button" onClick={retry}>
+              Retry
             </button>
           </div>
-        </div>
-      )}
-      <div ref={transcript} className="conversation-transcript" hidden={voiceActive} tabIndex={0} aria-label="Conversation history"
-        onScroll={updateFollow}>
-      {loading ? (
-        <p role="status" aria-live="polite">Loading conversation history…</p>
-      ) : historyError && messages.length === 0 ? (
-        <div className="history-feedback">
-          <p role="alert">{historyError}</p>
-          <button className="history-button" type="button" onClick={retry}>
-            Retry
-          </button>
-        </div>
-      ) : messages.length === 0 && !sending && queue.length === 0 && failedTurns.length === 0 ? (
-        <div className="conversation-greeting">
-          <h2>What’s on your mind?</h2>
-          <p>Make a plan, explore an idea, or pick up where you left off.</p>
-        </div>
-      ) : (
-        <>
-          {nextCursor && (
-            <button className="history-button" type="button" onClick={() => void loadOlder()} disabled={loadingOlder}>
-              {loadingOlder ? 'Loading older history…' : 'Load older history'}
-            </button>
-          )}
-          {historyError && <p role="alert" className="history-error">{historyError}</p>}
-          <ol className="conversation-messages" aria-label="Messages between Dan and Jarvis">
-            {messages.map((message) => {
-              const voiceUsageText = message.channel === 'voice' && message.voiceMinutes != null &&
-                !displayedVoiceUsage.has(message.sessionId)
-                ? ` · ${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(message.voiceMinutes)} voice minutes`
-                : '';
-              if (voiceUsageText) displayedVoiceUsage.add(message.sessionId);
-              return (
-                <li className="conversation-message" data-speaker={message.role} key={message.id} tabIndex={0}>
-                  <strong className="message-author visually-hidden">{message.role === 'dan' ? 'Dan' : 'Jarvis'}</strong>
-                  {message.role === 'jarvis' && message.channel === 'chat'
-                    ? <MarkdownContent source={message.text} />
-                    : <p>{message.text}</p>}
-                  {message.interrupted && <p className="interrupted-label">Interrupted</p>}
-                  <div className="message-metadata">
-                    <p className="message-language">
-                      {message.channel === 'voice' ? 'Voice' : 'Chat'} · {message.language === 'da' ? 'Danish' : 'English'}
-                      {voiceUsageText}
-                    </p>
-                    <time dateTime={message.at} title={new Date(message.at).toLocaleString()}>{relativeTime(message.at, now)}</time>
-                  </div>
-                  {message.toolCalls.length > 0 && (
-                    <ul className="message-tools" aria-label="Tool calls">
-                      {message.toolCalls.map((call) => (
-                        <li key={call.id}>
-                          <span className="tool-call">{call.tool} · {call.outcome}</span>
-                          {validTaskId(call.taskId) && (
-                            <Link className="task-reference" to={`/factory/tasks/${call.taskId}`}>
-                              Task #{call.taskId}
-                            </Link>
-                          )}
-                          {call.tool === 'image_generation' && call.outcome === 'ok' && call.artifactId && (
-                            <ConversationImageArtifact client={client} config={config} artifactId={call.artifactId} />
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {failedTurns.filter((turn) => turn.messageId === message.id).map(failedTurnFeedback)}
-                </li>
-              );
-            })}
-          </ol>
-        </>
-      )}
-
-      {failedTurns.filter((turn) => !turn.messageId).map((turn) => (
-        <div className="conversation-message" data-speaker="dan" key={turn.id}>
-          <strong className="message-author visually-hidden">Dan</strong>
-          <p>{turn.text}</p>
-          {failedTurnFeedback(turn)}
-        </div>
-      ))}
-      {activeMessage && <div className="conversation-message" data-speaker="dan">
-        <strong className="message-author visually-hidden">Dan</strong>
-        <p>{activeMessage.text}</p>
-        <p className="queued-state">Sending · {activeMessage.language === 'da' ? 'Danish' : 'English'}</p>
-      </div>}
-      {sending && (
-        <div className="streaming-message">
-          {streamedText ? (
-            <>
-              <strong className="message-author visually-hidden">Jarvis</strong>
-              <div className="streaming-reply" aria-label="Jarvis reply in progress">
-                <MarkdownContent source={streamedText} streaming />
-                <span className="streaming-caret" aria-hidden="true" />
-              </div>
-            </>
-          ) : (
-            <p className="chat-thinking" role="status" aria-live="polite">
-              <span className="thinking-dot" aria-hidden="true" />
-              Jarvis is thinking…
-            </p>
-          )}
-          {steering && <p className="chat-status" role="status" aria-live="polite">Steering…</p>}
-        </div>
-      )}
-      {turnError && (
-        <div>
-          <p className="chat-error" role="alert">{turnError}</p>
-          <p className="chat-guidance">If a reply is interrupted, check the conversation and task status before sending again.</p>
-        </div>
-      )}
-      {sending && streamedText && <p className="chat-status" role="status" aria-live="polite">Jarvis is replying…</p>}
-      <p className={`queue-count${queue.length === 0 ? ' visually-hidden' : ''}`} aria-live="polite" aria-atomic="true">
-        {`${queue.length} ${queue.length === 1 ? 'message' : 'messages'} queued`}
-      </p>
-      {queue.length > 0 && <ol className="conversation-messages queued-messages" aria-label="Queued messages">
-        {queue.map((message) => (
-          <li className="conversation-message" data-speaker="dan" key={message.id}>
-            <div className="message-heading queued-heading">
-              <strong className="message-author visually-hidden">Dan</strong>
-              <p className="queued-state">Queued · {message.language === 'da' ? 'Danish' : 'English'}</p>
-              <button className="queue-remove" type="button"
-                aria-label={`Remove queued message: ${message.text}`}
-                onClick={() => setQueue((current) => current.filter((item) => item.id !== message.id))}>
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  <path d="m6 6 12 12M18 6 6 18" />
-                </svg>
+        ) : messages.length === 0 && !sending && queue.length === 0 && failedTurns.length === 0 ? (
+          <div className="conversation-greeting">
+            <h2>What’s on your mind?</h2>
+            <p>Make a plan, explore an idea, or pick up where you left off.</p>
+          </div>
+        ) : (
+          <>
+            {nextCursor && (
+              <button className="history-button" type="button" onClick={() => void loadOlder()} disabled={loadingOlder}>
+                {loadingOlder ? 'Loading older history…' : 'Load older history'}
               </button>
-            </div>
-            <p>{message.text}</p>
-          </li>
+            )}
+            {historyError && <p role="alert" className="history-error">{historyError}</p>}
+            <ol className="conversation-messages" aria-label="Messages between Dan and Jarvis">
+              {messages.map((message) => {
+                const voiceUsageText = message.channel === 'voice' && message.voiceMinutes != null &&
+                  !displayedVoiceUsage.has(message.sessionId)
+                  ? ` · ${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(message.voiceMinutes)} voice minutes`
+                  : '';
+                if (voiceUsageText) displayedVoiceUsage.add(message.sessionId);
+                return (
+                  <li className="conversation-message" data-speaker={message.role} key={message.id} tabIndex={0}>
+                    <strong className="message-author visually-hidden">{message.role === 'dan' ? 'Dan' : 'Jarvis'}</strong>
+                    {message.role === 'jarvis' && message.channel === 'chat'
+                      ? <MarkdownContent source={message.text} />
+                      : <p>{message.text}</p>}
+                    {message.interrupted && <p className="interrupted-label">Interrupted</p>}
+                    <div className="message-metadata">
+                      <p className="message-language">
+                        {message.channel === 'voice' ? 'Voice' : 'Chat'} · {message.language === 'da' ? 'Danish' : 'English'}
+                        {voiceUsageText}
+                      </p>
+                      <time dateTime={message.at} title={new Date(message.at).toLocaleString()}>{relativeTime(message.at, now)}</time>
+                    </div>
+                    {message.toolCalls.length > 0 && (
+                      <ul className="message-tools" aria-label="Tool calls">
+                        {message.toolCalls.map((call) => (
+                          <li key={call.id}>
+                            <span className="tool-call">{call.tool} · {call.outcome}</span>
+                            {validTaskId(call.taskId) && (
+                              <Link className="task-reference" to={`/factory/tasks/${call.taskId}`}>
+                                Task #{call.taskId}
+                              </Link>
+                            )}
+                            {call.tool === 'image_generation' && call.outcome === 'ok' && call.artifactId && (
+                              <ConversationImageArtifact client={client} config={config} artifactId={call.artifactId} />
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {failedTurns.filter((turn) => turn.messageId === message.id).map(failedTurnFeedback)}
+                  </li>
+                );
+              })}
+            </ol>
+          </>
+        )}
+
+        {failedTurns.filter((turn) => !turn.messageId).map((turn) => (
+          <div className="conversation-message" data-speaker="dan" key={turn.id}>
+            <strong className="message-author visually-hidden">Dan</strong>
+            <p>{turn.text}</p>
+            {failedTurnFeedback(turn)}
+          </div>
         ))}
-      </ol>}
+        {activeMessage && <div className="conversation-message" data-speaker="dan">
+          <strong className="message-author visually-hidden">Dan</strong>
+          <p>{activeMessage.text}</p>
+          <p className="queued-state">Sending · {activeMessage.language === 'da' ? 'Danish' : 'English'}</p>
+        </div>}
+        {sending && (
+          <div className="streaming-message">
+            {streamedText ? (
+              <>
+                <strong className="message-author visually-hidden">Jarvis</strong>
+                <div className="streaming-reply" aria-label="Jarvis reply in progress">
+                  <MarkdownContent source={streamedText} streaming />
+                  <span className="streaming-caret" aria-hidden="true" />
+                </div>
+              </>
+            ) : (
+              <p className="chat-thinking" role="status" aria-live="polite">
+                <span className="thinking-dot" aria-hidden="true" />
+                Jarvis is thinking…
+              </p>
+            )}
+            {steering && <p className="chat-status" role="status" aria-live="polite">Steering…</p>}
+          </div>
+        )}
+        {turnError && (
+          <div>
+            <p className="chat-error" role="alert">{turnError}</p>
+            <p className="chat-guidance">If a reply is interrupted, check the conversation and task status before sending again.</p>
+          </div>
+        )}
+        {sending && streamedText && <p className="chat-status" role="status" aria-live="polite">Jarvis is replying…</p>}
+        <p className={`queue-count${queue.length === 0 ? ' visually-hidden' : ''}`} aria-live="polite" aria-atomic="true">
+          {`${queue.length} ${queue.length === 1 ? 'message' : 'messages'} queued`}
+        </p>
+        {queue.length > 0 && <ol className="conversation-messages queued-messages" aria-label="Queued messages">
+          {queue.map((message) => (
+            <li className="conversation-message" data-speaker="dan" key={message.id}>
+              <div className="message-heading queued-heading">
+                <strong className="message-author visually-hidden">Dan</strong>
+                <p className="queued-state">Queued · {message.language === 'da' ? 'Danish' : 'English'}</p>
+                <button className="queue-remove" type="button"
+                  aria-label={`Remove queued message: ${message.text}`}
+                  onClick={() => setQueue((current) => current.filter((item) => item.id !== message.id))}>
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                    <path d="m6 6 12 12M18 6 6 18" />
+                  </svg>
+                </button>
+              </div>
+              <p>{message.text}</p>
+            </li>
+          ))}
+        </ol>}
+    </>
+  );
+
+  return (
+    <section className="conversation-history" data-turn-active={sending || undefined} aria-label="Conversation"
+      data-history-hosted={hosted || undefined}>
+      {/* Hosted history lives in the shared workspace window; this element keeps the overview mounted in place. */}
+      <div ref={hosted ? undefined : transcript} className={hosted ? 'conversation-dock' : 'conversation-transcript'}
+        hidden={voiceActive} tabIndex={hosted ? undefined : 0} aria-label={hosted ? undefined : 'Conversation history'}
+        onScroll={hosted ? undefined : updateFollow}>
+      {hosted ? null : transcriptContent}
       {children}
       </div>
-      {windowed && !atLatest && (
-        <button className="conversation-latest" type="button" onClick={jumpToLatest}>
-          <ConversationIcon name="latest" />
-          <span>Jump to latest</span>
-        </button>
-      )}
-      </div>
-      {windowed && windowState === 'minimised' && !voiceActive && (
-        <button ref={restoreButton} className="conversation-restore luminous-glass" type="button"
-          aria-label="Restore conversation history" onClick={() => changeWindow('open')}>
-          <ConversationIcon name="history" />
-          <span>Conversation</span>
-        </button>
+      {!hosted && windowed && latestButton}
+      {hosted && conversationWindow.element && createPortal(
+        <>
+          <div ref={transcript} className="conversation-transcript" tabIndex={0} aria-label="Conversation history"
+            onScroll={updateFollow}>
+            {transcriptContent}
+          </div>
+          {latestButton}
+        </>,
+        conversationWindow.element,
       )}
 
       <div ref={inputBar} className={`conversation-input${voiceActive ? '' : ' luminous-glass'}`} data-voice-active={voiceActive}>

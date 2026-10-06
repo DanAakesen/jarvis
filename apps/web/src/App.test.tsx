@@ -39,7 +39,12 @@ const {
   };
 });
 vi.mock('./auth', () => ({ createAuthClient, restoreProfile, signIn }));
-vi.mock('./conversation-history', () => ({ loadConversationHistory, createChatSession, sendChatTurn }));
+vi.mock('./conversation-history', () => ({
+  loadConversationHistory,
+  createChatSession,
+  sendChatTurn,
+  waitForChatSetup: <T,>(operation: () => Promise<T>) => operation(),
+}));
 vi.mock('./JarvisStage', () => ({
   JarvisStage: ({ children }: { children?: ReactNode }) => <div data-testid="jarvis-stage">{children}</div>,
 }));
@@ -335,6 +340,174 @@ describe('App shell', () => {
     await user.click(screen.getByRole('button', { name: 'End voice' }));
     expect(shell?.getAttribute('data-voice-active')).toBe('false');
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
+  });
+
+  const historyPair = [
+    {
+      id: '43', sessionId: '41', channel: 'chat', language: 'en', role: 'dan', text: 'Hello Jarvis',
+      model: null, voiceMinutes: null, at: '2026-10-03T12:00:00.000Z', toolCalls: [],
+    },
+    {
+      id: '44', sessionId: '41', channel: 'chat', language: 'en', role: 'jarvis', text: 'I am ready.',
+      model: null, voiceMinutes: null, at: '2026-10-03T12:01:00.000Z', toolCalls: [],
+    },
+  ];
+
+  function streamWorkspaceCommands() {
+    fetchMock.mockImplementation(async (input) => {
+      if (new URL(String(input)).pathname === '/now/events') {
+        return new Response(new ReadableStream<Uint8Array>({
+          start(controller) { activityStream = controller; },
+          cancel() { activityStream = null; },
+        }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      }
+      return new Response(JSON.stringify({ state: 'awake' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const publish = (event: string, data: unknown) => activityStream!.enqueue(
+      new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+    );
+    const ack = (commandId: string) => fetchMock.mock.calls.find(([url]) => (
+      String(url).endsWith(`/now/workspace/commands/${commandId}/ack`)
+    ));
+    return {
+      ready: () => act(() => { publish('workspace-ready', { sessionId: '12345678-1234-4234-8234-123456789abc' }); }),
+      command: async (commandId: string, operation: string) => {
+        act(() => {
+          publish('workspace-command', {
+            command: { commandId, operation, viewId: 'conversation' }, expiresAt: Date.now() + 5_000,
+          });
+        });
+        await waitFor(() => expect(ack(commandId)).toBeTruthy());
+        return JSON.parse(String(ack(commandId)![1]!.body)) as { applied: boolean };
+      },
+    };
+  }
+
+  it('hosts conversation history in a shared workspace window with tabs, maximise and close', async () => {
+    const user = userEvent.setup();
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    sendChatTurn.mockImplementation(async (...args: unknown[]) => {
+      const user = {
+        id: '59', sessionId: '41', channel: 'chat', language: 'en', role: 'dan', text: 'Still typing',
+        model: null, voiceMinutes: null, at: '2026-10-03T12:02:00.000Z', toolCalls: [],
+      };
+      const reply = {
+        id: '60', sessionId: '41', channel: 'chat', language: 'en', role: 'jarvis', text: 'Back again.',
+        model: null, voiceMinutes: null, at: '2026-10-03T12:03:00.000Z', toolCalls: [],
+      };
+      (args[4] as (message: typeof user) => void)(user);
+      loadConversationHistory.mockResolvedValue({ messages: [...historyPair, user, reply], nextCursor: null });
+      return reply;
+    });
+    await renderSignedIn();
+
+    const reply = await screen.findByText('I am ready.');
+    const historyWindow = screen.getByRole('article', { name: 'Conversation' });
+    const transcript = screen.getByLabelText('Conversation history');
+    const composer = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    expect(historyWindow.contains(reply)).toBe(true);
+    expect(historyWindow.contains(transcript)).toBe(true);
+    expect(historyWindow.contains(composer)).toBe(false);
+    expect(historyWindow.contains(screen.getByRole('button', { name: 'Start voice' }))).toBe(false);
+    expect(historyWindow.className).toContain('luminous-glass');
+    expect(document.querySelector('.conversation-window-bar, .conversation-restore')).toBeNull();
+
+    await user.click(within(historyWindow).getByRole('button', { name: 'Minimise Conversation' }));
+    const tabs = screen.getByRole('navigation', { name: 'Minimised views' });
+    expect(historyWindow.hasAttribute('inert')).toBe(true);
+    expect(screen.getByLabelText('Conversation history')).toBe(transcript);
+    await user.type(composer, 'Still typing');
+    expect((composer as HTMLTextAreaElement).value).toBe('Still typing');
+    await user.click(within(tabs).getByRole('button', { name: 'Restore Conversation' }));
+    expect(historyWindow.hasAttribute('inert')).toBe(false);
+    expect(screen.getByLabelText('Conversation history')).toBe(transcript);
+
+    await user.click(within(historyWindow).getByRole('button', { name: 'Maximise Conversation' }));
+    expect(historyWindow.className).toContain('workspace-window-maximized');
+    await user.click(within(historyWindow).getByRole('button', { name: 'Restore size of Conversation' }));
+    await user.click(within(historyWindow).getByRole('button', { name: 'Close Conversation' }));
+    expect(screen.queryByRole('article', { name: 'Conversation' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(composer);
+
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    const reopened = screen.getByRole('article', { name: 'Conversation' });
+    expect(reopened.contains(await screen.findByText('Back again.'))).toBe(true);
+    expect(reopened.contains(screen.getByText('Still typing'))).toBe(true);
+  });
+
+  it('lets Jarvis minimise, restore, close and focus the conversation window through workspace commands', async () => {
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    const workspace = streamWorkspaceCommands();
+    await renderSignedIn();
+    await screen.findByText('I am ready.');
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    workspace.ready();
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => (
+      String(url).endsWith('/now/workspace/state') &&
+      (JSON.parse(String(init?.body)) as { windows: unknown[] }).windows.some((window) => (
+        JSON.stringify(window) === JSON.stringify({ viewId: 'conversation', title: 'Conversation' })
+      ))
+    ))).toBe(true));
+
+    expect(await workspace.command('jarvis-minimise', 'minimise')).toMatchObject({ applied: true });
+    expect(screen.getByRole('button', { name: 'Restore Conversation' })).not.toBeNull();
+    expect(await workspace.command('jarvis-restore', 'restore')).toMatchObject({ applied: true });
+    expect(screen.queryByRole('button', { name: 'Restore Conversation' })).toBeNull();
+    expect(await workspace.command('jarvis-close', 'close')).toMatchObject({ applied: true });
+    expect(screen.queryByRole('article', { name: 'Conversation' })).toBeNull();
+    expect(await workspace.command('jarvis-reopen', 'restore')).toMatchObject({ applied: true });
+    expect(await workspace.command('jarvis-focus', 'focus')).toMatchObject({ applied: true });
+    const historyWindow = screen.getByRole('article', { name: 'Conversation' });
+    expect(document.activeElement).toBe(within(historyWindow).getByRole('heading', { name: 'Conversation' }));
+    expect(historyWindow.contains(screen.getByText('I am ready.'))).toBe(true);
+  });
+
+  it('keeps chat and voice outside the history window and lets Jarvis bring history forward during voice', async () => {
+    const user = userEvent.setup();
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    const workspace = streamWorkspaceCommands();
+    await renderSignedIn();
+    await screen.findByText('I am ready.');
+    const transcript = screen.getByLabelText('Conversation history');
+    const historyWindow = screen.getByRole('article', { name: 'Conversation' });
+    const shell = historyWindow.closest('.app-shell')!;
+
+    await user.click(screen.getByRole('button', { name: 'Start voice' }));
+    expect(shell.getAttribute('data-voice-active')).toBe('true');
+    expect(shell.getAttribute('data-voice-has-windows')).toBe('false');
+    expect(historyWindow.className).toContain('workspace-window-minimized');
+    expect(screen.getByLabelText('Conversation history')).toBe(transcript);
+
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    workspace.ready();
+    expect(await workspace.command('voice-show-history', 'show')).toMatchObject({ applied: true });
+    expect(shell.getAttribute('data-voice-has-windows')).toBe('true');
+    expect(historyWindow.className).not.toContain('workspace-window-minimized');
+    expect(screen.getByRole('button', { name: 'End voice' })).not.toBeNull();
+    expect(screen.getByLabelText('Conversation history')).toBe(transcript);
+
+    await user.click(screen.getByRole('button', { name: 'End voice' }));
+    expect(shell.getAttribute('data-voice-active')).toBe('false');
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
+    expect(screen.getByRole('article', { name: 'Conversation' })).toBe(historyWindow);
+    expect(historyWindow.hasAttribute('inert')).toBe(false);
+    expect(screen.getByLabelText('Conversation history')).toBe(transcript);
+  });
+
+  it('restores history minimised for voice when voice ends', async () => {
+    const user = userEvent.setup();
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    await renderSignedIn();
+    await screen.findByText('I am ready.');
+    const historyWindow = screen.getByRole('article', { name: 'Conversation' });
+
+    await user.click(screen.getByRole('button', { name: 'Start voice' }));
+    expect(historyWindow.hasAttribute('inert')).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'End voice' }));
+    expect(historyWindow.hasAttribute('inert')).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Restore Conversation' })).toBeNull();
   });
 
   it('keeps camera/sharing behind a labelled disclosure with Escape focus recovery', async () => {

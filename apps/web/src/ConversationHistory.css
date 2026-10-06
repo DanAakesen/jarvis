@@ -2,38 +2,69 @@
 .app-shell:has(.jarvis-page) { height: 100vh; height: 100dvh; }
 .jarvis-page { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: var(--space-5) clamp(12px, 3vw, 40px); }
 .conversation-history { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
-.conversation-window { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
-.conversation-window[hidden] { display: none; }
-.conversation-window[data-windowed="true"] {
-  flex: 0 1 auto;
-  width: min(860px, 100%);
-  max-height: min(40vh, 440px);
-  margin: auto auto var(--space-4);
-  border-radius: var(--radius-window);
-  transition: max-height var(--motion-panel) var(--ease-standard), width var(--motion-panel) var(--ease-standard);
+.conversation-history[data-history-hosted] > .conversation-dock { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; width: min(860px, 100%); margin: auto auto var(--space-2); }
+.conversation-dock[hidden] { display: none; }
+.conversation-dock > .conversation-overview { margin: 0; }
+.conversation-dock > .conversation-overview[open] {
+  position: fixed;
+  z-index: 4;
+  top: calc(var(--rail-size) + var(--space-4));
+  right: clamp(12px, 3vw, 40px);
+  bottom: 112px;
+  width: min(760px, calc(100vw - 24px));
+  overflow-y: auto;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--surface-translucent);
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(var(--surface-blur));
 }
-.conversation-history[data-history-maximised] .conversation-window[data-windowed="true"] { flex: 1 1 auto; width: min(1080px, 100%); max-height: none; margin-top: 0; }
-.conversation-window[data-dragging] { transition: none; user-select: none; }
-.conversation-window-bar { display: flex; flex: 0 0 auto; align-items: center; gap: var(--space-1); padding: 6px 8px 0 12px; }
-.conversation-window-drag { display: grid; flex: 1 1 auto; min-width: 0; min-height: 36px; place-items: center; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: grab; touch-action: none; }
-.conversation-window-drag:disabled { cursor: default; }
-.conversation-window[data-dragging] .conversation-window-drag { cursor: grabbing; }
-.conversation-window-grip { width: 40px; height: 4px; border-radius: var(--radius-pill); background: currentColor; opacity: 0; transition: opacity var(--motion-fade) var(--ease-standard); }
-.conversation-window-drag:hover:not(:disabled) .conversation-window-grip, .conversation-window-drag:focus-visible .conversation-window-grip, .conversation-window[data-dragging] .conversation-window-grip { opacity: .45; }
-.conversation-window-drag:focus-visible, .conversation-window-control:focus-visible, .conversation-latest:focus-visible, .conversation-restore:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.conversation-window-actions { display: flex; flex: 0 0 auto; gap: 2px; }
-.conversation-window-control { display: grid; width: 36px; height: 36px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
-.conversation-window-control svg { width: 18px; height: 18px; }
-.conversation-window-control:hover { background: var(--glass-hover); color: var(--text); }
-.conversation-window-control:active { background: var(--glass-pressed); transform: scale(.94); }
-.conversation-window[data-windowed="true"] > .conversation-transcript { padding: 0 var(--space-5) var(--space-4); }
+.conversation-dock > .conversation-overview[open] > summary { position: sticky; top: 0; z-index: 1; margin: 0 0 var(--space-2) auto; }
+/* The shared workspace window hosting the conversation: Architectural Glass, no visible title, quiet top-right controls. */
+.workspace-window-conversation { gap: 0; padding: 0; }
+.workspace-window-conversation .workspace-window-heading { flex-wrap: nowrap; align-items: center; gap: var(--space-1); padding: 6px 8px 0 12px; }
+.workspace-window-conversation .workspace-title-drag { position: relative; justify-content: center; min-height: 36px; color: var(--text-muted); }
+.workspace-window-conversation .workspace-title-drag::after { width: 40px; height: 4px; border-radius: var(--radius-pill); background: currentColor; opacity: 0; content: ""; transition: opacity var(--motion-fade) var(--ease-standard); }
+.workspace-window-conversation .workspace-title-drag:hover::after, .workspace-window-conversation.workspace-window-dragging .workspace-title-drag::after { opacity: .45; }
+.workspace-window-conversation .workspace-window-actions { flex-wrap: nowrap; gap: 2px; }
+.workspace-window-conversation .workspace-icon-control,
+.workspace-window-conversation .workspace-arrange-menu > summary { width: 36px; min-width: 36px; height: 36px; min-height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
+.workspace-window-conversation .workspace-icon-control:hover,
+.workspace-window-conversation .workspace-arrange-menu > summary:hover { background: var(--glass-hover); color: var(--text); }
+.workspace-window-conversation .workspace-icon-control:active { background: var(--glass-pressed); transform: scale(.94); }
+.workspace-conversation-content { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.conversation-window-host { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.conversation-window-host > .conversation-transcript { padding: 0 var(--space-5) var(--space-4); }
 .conversation-latest { position: absolute; bottom: var(--space-3); left: 50%; display: inline-flex; min-height: 40px; align-items: center; gap: 6px; padding: 0 14px 0 12px; border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--glass-selected); box-shadow: var(--panel-shadow); color: var(--text); font: inherit; font-size: var(--type-small); font-weight: 650; cursor: pointer; transform: translateX(-50%); animation: conversation-enter var(--motion-state) var(--ease-enter); }
-.conversation-latest svg, .conversation-restore svg { width: 18px; height: 18px; flex: 0 0 auto; }
+.conversation-latest svg { width: 18px; height: 18px; flex: 0 0 auto; }
 .conversation-latest:hover { box-shadow: var(--panel-shadow), var(--glass-selected-glow); }
 .conversation-latest:active { transform: translateX(-50%) scale(.97); }
-.conversation-restore { position: relative; display: inline-flex; align-self: center; min-height: 44px; align-items: center; gap: 8px; margin: auto auto var(--space-3); padding: 0 18px 0 14px; border-radius: var(--radius-pill); color: var(--text); font: inherit; font-size: var(--type-small); font-weight: 650; cursor: pointer; animation: conversation-enter var(--motion-state) var(--ease-enter); transition: transform var(--motion-press) var(--ease-standard); }
-.conversation-restore:hover { box-shadow: var(--panel-shadow), var(--glass-selected-glow); }
-.conversation-restore:active { transform: scale(.97); }
+.conversation-latest:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* Typing mode on the Jarvis page: the workspace fills the stage above the composer without its own panel chrome. */
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) { display: flex; flex-direction: column; }
+.app-shell[data-voice-active="false"] .jarvis-page { flex: 1; height: auto; min-height: 0; }
+.app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-shell-area { display: none; }
+.app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-shell-area:not([hidden]):has(.workspace-tabs) { display: block; order: -1; flex: 0 0 auto; }
+.app-shell[data-voice-active="false"][data-voice-has-windows="true"] .workspace-shell-area { order: -1; flex: 1; min-height: 0; overflow: hidden; }
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-shell-area { padding: var(--space-4) clamp(12px, 3vw, 40px) 0; }
+.app-shell[data-voice-active="false"][data-voice-has-windows="true"] .jarvis-page { flex: 0 0 auto; height: auto; padding-top: var(--space-2); }
+.app-shell[data-voice-active="false"][data-voice-has-windows="true"] .conversation-history > .conversation-transcript { flex: 0 0 auto; padding: 0; overflow: visible; }
+.app-shell[data-voice-active="false"][data-voice-has-windows="true"] .conversation-history > .conversation-transcript > :not(.conversation-overview) { display: none; }
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace { display: flex; height: 100%; min-height: 0; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-heading { flex: 0 0 auto; justify-content: flex-end; }
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-heading h2,
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-arrangements,
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-guidance,
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-empty { display: none; }
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-tabs { flex: 0 0 auto; margin: 0; }
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-canvas { flex: 1; min-height: 0; }
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-canvas-tiled { grid-auto-rows: minmax(0, 1fr); }
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-canvas-layered,
+.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-canvas-has-maximized { height: auto; min-height: 0; }
+.app-shell[data-voice-active="false"] .workspace-canvas-tiled .workspace-window-conversation:not(.workspace-window-maximized) { align-self: end; justify-self: center; width: min(860px, 100%); max-height: min(44vh, 460px); }
 .conversation-transcript { position: relative; flex: 1; min-height: 0; overflow-y: auto; padding: 0 max(4px, calc((100% - 760px) / 2)) var(--space-6); scrollbar-gutter: stable; }
 .conversation-transcript:has(.conversation-greeting) { display: flex; flex-direction: column; padding: clamp(16px, 12vh, 100px) 12px var(--space-6); }
 .conversation-greeting {
@@ -247,8 +278,7 @@
   .conversation-input { gap: var(--space-2); padding: var(--space-2); }
   .conversation-message, .streaming-message { max-width: 96%; }
   .conversation-message { padding: var(--space-3) var(--space-4); }
-  .conversation-window[data-windowed="true"] { max-height: min(46dvh, 420px); margin-bottom: var(--space-2); }
-  .conversation-window[data-windowed="true"] > .conversation-transcript { padding: 0 var(--space-3) var(--space-3); }
+  .conversation-window-host > .conversation-transcript { padding: 0 var(--space-3) var(--space-3); }
   .conversation-input { border-radius: 26px; padding: 6px 8px; }
   .conversation-input[data-voice-active="false"] > .conversation-actions { padding-right: var(--space-1); }
   .conversation-history .composer-attach, .conversation-history .composer-more { padding-right: 2px; }
@@ -265,7 +295,9 @@
 
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .app-shell[data-voice-active="false"] .shell-main { display: flex; flex-direction: column; }
-  .app-shell[data-voice-active="false"] .jarvis-page { flex: 1; height: auto; min-height: 0; }
+  .app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-shell-area { padding: var(--space-3) var(--space-3) 0; }
+  .app-shell[data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not(.workspace-window-maximized) { flex: 0 1 auto; align-self: flex-end; max-height: min(46dvh, 420px); }
+  .workspace[data-phone="true"] .workspace-conversation-content { touch-action: pan-y pinch-zoom; }
   .conversation-overview[open] {
     position: fixed;
     z-index: 4;
@@ -288,16 +320,6 @@
   }
   .conversation-overview[open] > summary { position: sticky; top: 0; z-index: 1; margin: 0 0 var(--space-2) auto; }
   .conversation-transcript:has(.conversation-greeting) > .conversation-overview[open] { width: auto; }
-  .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-shell-area { display: none; }
-  .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-shell-area:not([hidden]):has(.workspace-tabs) { display: block; order: -1; flex: 0 0 auto; }
-  .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace { height: auto; }
-  .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-heading,
-  .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-empty { display: none; }
-  .app-shell[data-voice-active="false"][data-voice-has-windows="true"] .workspace-shell-area { order: -1; flex: 1; min-height: 0; overflow: hidden; }
-  .app-shell[data-voice-active="false"][data-voice-has-windows="true"] .jarvis-page { flex: 0 0 auto; height: auto; }
-  .app-shell[data-voice-active="false"][data-voice-has-windows="true"] .conversation-window,
-  .app-shell[data-voice-active="false"][data-voice-has-windows="true"] .conversation-restore,
-  .app-shell[data-voice-active="false"][data-voice-has-windows="true"] .conversation-overview { display: none; }
   .app-shell[data-voice-active="true"] { --phone-dock-height: var(--voice-bar-height, 60px); --phone-dock-bottom: max(16px, env(safe-area-inset-bottom)); }
   .app-shell[data-voice-active="true"] .voice-bar,
   .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom); left: 12px; width: calc(100vw - 24px); transform: none; }
@@ -313,10 +335,10 @@
 @media (prefers-reduced-motion: reduce) {
   .conversation-message, .streaming-message, .streaming-caret, .tool-call-running,
   .history-button, .input-orb, .message-metadata, .voice-bar-action, .voice-end-control,
-  .conversation-window, .conversation-window-grip, .conversation-window-control, .conversation-restore { transition: none; }
+  .workspace-window-conversation .workspace-title-drag::after, .workspace-window-conversation .workspace-icon-control { transition: none; }
   .voice-bar-glyph-ring { transform: none; transition: none; }
   .conversation-message, .streaming-message, .streaming-caret, .thinking-dot, .tool-call-running,
-  .conversation-latest, .conversation-restore { animation: none; }
+  .conversation-latest { animation: none; }
   .message-metadata { opacity: 1; }
 }
 
