@@ -411,6 +411,31 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(recordset[0]?.deploymentReleaseId).toBe(recordset[0]?.releaseId);
   });
 
+  it('orders task events by numeric id across a digit boundary', async () => {
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Ordering fixture', N'DanAakesen/order-${randomUUID().slice(0, 8)}', N'main',
+        N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const store = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    const task = (await store.create({ projectId: String(projectId), title: 'Ordering', request: 'Run' }))!;
+    // Reseed just below the next power of ten so the new ids change digit count.
+    const maxId = Number((await pool.request().query<{ maxId: string }>(`SELECT CAST(COALESCE(MAX(id), 0) AS varchar(19)) AS maxId FROM dbo.task_events;`)).recordset[0]!.maxId);
+    const reseed = 10 ** String(Math.max(maxId, 10)).length - 3;
+    await pool.request().query(`DBCC CHECKIDENT ('dbo.task_events', RESEED, ${String(reseed)}) WITH NO_INFOMSGS;`);
+    const recorded: string[] = [];
+    for (let index = 0; index < 6; index += 1) {
+      recorded.push((await store.recordEvent({ taskId: task.id, type: 'agent_turn', payload: { index }, source: 'runner' })).id);
+    }
+    expect(recorded.some((id) => id.length !== recorded[0]!.length)).toBe(true);
+    await pool.request().query(`UPDATE dbo.task_events SET at = SYSUTCDATETIME() WHERE task_id = ${task.id};`);
+    const sorted = [...recorded].sort((left, right) => Number(left) - Number(right));
+
+    const after = await store.getEventsAfter(task.id, String(Number(sorted[0]) - 1), 6);
+    expect(after.map((event) => event.id)).toEqual(sorted);
+    const detail = await store.get(task.id, 50, 0);
+    expect(detail!.events.map((event) => event.id).filter((id) => recorded.includes(id))).toEqual(sorted);
+    expect((await store.transition(task.id, 'Cancelled')).kind).toBe('ok');
+  });
   it('reads running tasks and categorized activity and persists dismissals', async () => {
     const projectId = await scalar(`INSERT dbo.projects
       (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
