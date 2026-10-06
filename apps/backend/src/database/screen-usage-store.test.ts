@@ -177,6 +177,32 @@ describe('SQL screen and watch usage store', () => {
     expect(query).toContain('jarvis_sessions');
   });
 
+  it('excludes watch rows from both on-demand limits while preserving null event IDs and boundaries', async () => {
+    const { request, store } = fixture();
+    await store.reserveFrame({ sessionId: '42', eventId: 'demand-frame', dailyCap: 300, at });
+    const query = request.query.mock.calls[0]![0] as string;
+    const throttle = query.slice(query.indexOf('ELSE IF EXISTS'), query.indexOf('ELSE IF ('));
+    const count = query.slice(query.indexOf('SELECT COUNT_BIG(*)'), query.indexOf(') >= @dailyCap'));
+    const excludeWatch = "(source_event_id IS NULL OR source_event_id NOT LIKE N'screen:watch:%')";
+    expect(throttle).toContain(excludeWatch);
+    expect(throttle).toContain('jarvis_session_id = @sessionId');
+    expect(throttle).toContain('at > DATEADD(millisecond, -3000, @at)');
+    expect(count).toContain(excludeWatch);
+    expect(count).toContain('at >= @dayStart AND at < @dayEnd');
+    expect(count).not.toContain('jarvis_session_id = @sessionId');
+    expect(query).toContain(') >= @dailyCap');
+    expect(request.input).toHaveBeenCalledWith('dailyCap', sql.Int, 300);
+    expect(request.input).toHaveBeenCalledWith('at', sql.DateTime2, at);
+    expect(request.input).toHaveBeenCalledWith('dayStart', sql.DateTime2, new Date('2026-10-06T00:00:00.000Z'));
+    expect(request.input).toHaveBeenCalledWith('dayEnd', sql.DateTime2, new Date('2026-10-07T00:00:00.000Z'));
+
+    await store.reserveWatchFrame(frame);
+    expect(request.query.mock.calls[1]![0]).not.toContain('NOT LIKE');
+    request.query.mockResolvedValueOnce({ recordset: [{ usedDkk: 0.2 }], rowsAffected: [] });
+    await store.readWatchBudget(at);
+    expect(request.query.mock.calls[2]![0]).not.toContain('source_event_id');
+  });
+
   it.each([0.0123, null])('reconciles known costs and keeps pending costs when unknown: %s', async (costDkk) => {
     const { request, transaction, store } = fixture();
     await store.recordTokens({

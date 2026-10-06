@@ -628,6 +628,7 @@ try {
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
+      ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
       ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),

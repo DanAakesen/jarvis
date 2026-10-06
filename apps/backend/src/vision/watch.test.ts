@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
+import { conversationModule } from '../core/conversation.js';
 import type { ConversationStore } from '../core/conversation-store.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { executeRealtimeToolCall } from '../voice/realtime.js';
@@ -57,8 +58,9 @@ function fixture(options: {
     auth: async () => options.principal ?? { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' },
     settingsStore: { read: async () => ({}), write: async () => {} },
     conversationStore: conversations,
+    onConversationSessionEnded: (sessionId) => service.forgetSession(sessionId),
     toolCallStore: { record: async (input) => { recordedTools.push(input); } },
-    modules: [coreModule, createVisionWatchModule(service), {
+    modules: [coreModule, conversationModule, createVisionWatchModule(service), {
       id: 'voice-tool-test', tools: [],
       registerRoutes: async (app) => {
         app.post('/test/voice/watch-tool', async (request) => {
@@ -82,6 +84,23 @@ function fixture(options: {
 }
 
 describe('continuous vision watching', () => {
+  it('releases in-memory watch state through the successful conversation-end lifecycle, across sibling plugins', async () => {
+    const f = fixture({ observation: { summary: 'Editor', noteworthy: false, speak: null } });
+    await f.service.setInstruction('42', 'screen', 'Tell me when the build finishes');
+    await f.watch();
+    const forget = vi.spyOn(f.service, 'forgetSession');
+    const response = await f.app.inject({
+      method: 'POST', url: '/conversation/sessions/42/end', headers,
+    });
+    expect(response.statusCode).toBe(204);
+    expect(forget).toHaveBeenCalledWith('42');
+    f.advance(2_500);
+    await f.watch();
+    expect(vi.mocked(f.model.describe).mock.lastCall![0].watch).toMatchObject({
+      previousSummary: '', instructions: [],
+    });
+  });
+
   it('returns the contract, posts noteworthy comments as Jarvis chat, and clears image bytes', async () => {
     const f = fixture();
     const response = await f.watch();

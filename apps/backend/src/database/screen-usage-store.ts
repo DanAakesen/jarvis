@@ -54,6 +54,7 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
               FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
               WHERE jarvis_session_id = @sessionId AND source = N'jarvis_model'
                 AND metric = N'screen_frames' AND at > DATEADD(millisecond, -3000, @at)
+                AND (source_event_id IS NULL OR source_event_id NOT LIKE N'screen:watch:%')
             )
               SELECT CAST(N'rate-limited' AS nvarchar(20)) AS outcome;
             ELSE IF (
@@ -61,6 +62,7 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
               FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
               WHERE source = N'jarvis_model' AND metric = N'screen_frames'
                 AND at >= @dayStart AND at < @dayEnd
+                AND (source_event_id IS NULL OR source_event_id NOT LIKE N'screen:watch:%')
             ) >= @dailyCap
               SELECT CAST(N'limit' AS nvarchar(10)) AS outcome;
             ELSE

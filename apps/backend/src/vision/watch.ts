@@ -276,11 +276,6 @@ export function createVisionWatchModule(service: VisionWatchService): BackendMod
     id: 'vision-watch', tools,
     registerRoutes: async (app) => {
       app.addHook('onClose', async () => { service.close(); });
-      app.addHook('onResponse', async (request, reply) => {
-        if (request.routeOptions.url === '/conversation/sessions/:sessionId/end' && reply.statusCode === 200) {
-          service.forgetSession((request.params as { sessionId: string }).sessionId);
-        }
-      });
       app.post<{ Body: { sessionId: string; source: WatchSource; frame: string } }>('/vision/watch', {
         bodyLimit: SCREEN_FRAME_BODY_LIMIT,
         schema: {
