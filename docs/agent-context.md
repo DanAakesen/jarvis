@@ -226,6 +226,12 @@ Python runtime remains in its planned tasks. Issue #7 adds the database connecti
 P0-04 adds the Bicep template; its first Azure deployment is P0-16. Bicep sets backend `KEY_VAULT_URI`; the backend uses its managed identity to read `github-app-webhook-secret`. Locally, the URI can be omitted; webhook requests then fail with 503. The secret is cached in memory after a successful lookup and requires a backend restart to rotate.
 P7-04 reads the Jev API key `jev-api-key` from the same Key Vault with the backend identity. Dan provisions it after merge with the coordinator's `set-jev-key.ps1` outside this repository; agents must not run that script or access the live key. The reflex uses the configured `jev-latest` model. Live Jev latency and Voice Live behavior are not covered by offline tests.
 P7-07 and P7-19 reuse that existing Jev key; P7-19 also uses P7-18's default-off Chrome toggle. They add no secret, environment variable, or setup command. Dan's live Windows UI Automation, shared-form, Jev/Foundry, Voice Live, Chrome, and confirmation checks remain post-merge work.
+P7-35 reuses that key and existing global settings storage (`recipe.<hash>` keys),
+with no new migration or configuration. Recipe storage is bounded to 100 records;
+Dan can delete unused recipes in Settings or through `task_recipes`. P5-14
+`chat.latency` phases `recipe_select`, `recipe_verify`, `recipe_plan` and
+`recipe_run` contain only durations, never goals, target labels or entered values.
+Controlled offline speedup is not evidence of live Windows/Chrome/Jev latency.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
 and Python 3.12.14 (`.python-version`, for future Python work). Install from the
@@ -242,6 +248,7 @@ Verified in Codex cloud for P0-02:
 | All workspace builds | `npm run build` in the repository root |
 | All workspace lint checks | `npm run lint` in the repository root |
 | All workspace tests (single run) | `npm test` in the repository root |
+| Focused P7-35 recipe storage/management checks | `npm test --workspace @jarvis/backend -- --run src/core/task-recipes.test.ts src/core/recipe-management.test.ts src/database/recipe-store.test.ts src/logging.test.ts` |
 | Shared generated-view contract | `npm test --workspace @jarvis/contracts`; `npm run lint --workspace @jarvis/contracts` |
 | Focused P8-16 activity tests | `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- --run src/core/activity.test.ts src/core/conversation-activity.test.ts src/core/now.test.ts src/voice/relay.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx src/activity-context.test.tsx src/ConversationHistory.test.tsx src/VoiceControls.test.tsx src/VoiceOrb.test.tsx src/Workspace.test.tsx src/NowFeedPanel.test.tsx src/now-feed.test.ts` |
 | Targeted web checks | `npm run lint --workspace @jarvis/web`; `npm test --workspace @jarvis/web` |
@@ -1368,3 +1375,19 @@ build retains the existing large-chunk advisory. Screenshots and the report:
 `docs/ui/screenshots/p8-43-{dormant,awake,toast,phone,typing-after-error}.png` and
 `p8-43-browser-report.json`. Fixtures do not verify physical capture, live vision/
 voice providers, Safari or hardware-GPU motion. No fixture auth is committed.
+
+## Shell and conversation integration (#398)
+
+PR #418 registers the avatar-free conversation history as the shared workspace
+view `conversation`; its tabs, geometry, focus, snapshot and Jarvis commands use
+the existing controller. The composer and voice client remain outside the window.
+The footer is removed and database-waking feedback moves to the top bar.
+
+Final integration preserves #419/#437's voice lifecycle, unframed status,
+living orb and portal toasts. Voice/capture failures stay outside the composer;
+the conversation overview hides during voice and phone window controls have
+44px targets. Web lint, 329 tests and production build passed. Chromium fixtures
+at 1440×1000 and 390×844 verified shared minimise/restore, maximise/restore,
+close/reopen, draft continuity across voice, capture/inspection, denial feedback,
+cleanup and reduced motion. Captures/report: `docs/ui/screenshots/p8-37-integration-*`.
+These use scratch authentication/API/socket and fake media, not live providers.

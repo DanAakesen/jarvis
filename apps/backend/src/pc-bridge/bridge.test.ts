@@ -622,7 +622,8 @@ describe('authenticated PC bridge protocol', () => {
       bounds: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
     }]);
     const steps: Parameters<NonNullable<PcActOptions['onStep']>>[0][] = [];
-    const { app, record } = fixture({
+    const { app, record, records } = fixture({
+      logLevel: 'info',
       pcActPlanner: planner,
       pcActVisionModel: { locateElements },
       onPcActStep: (activity) => { steps.push(activity); },
@@ -668,6 +669,14 @@ describe('authenticated PC bridge protocol', () => {
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed', steps: 2 } });
     expect(commands.map(({ command }) => command)).toEqual([
       'uia_snapshot', 'window_capture', 'click_point', 'uia_snapshot',
+    ]);
+    const timings = records.map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((entry) => entry.msg === 'pc_bridge.command_timing');
+    expect(timings.map(({ command, outcome }) => [command, outcome])).toEqual([
+      ['uia_snapshot', 'ok'],
+      ['window_capture', 'ok'],
+      ['click_point', 'ok'],
+      ['uia_snapshot', 'ok'],
     ]);
     expect(JSON.stringify(commands)).not.toContain('image');
     expect(locateElements).toHaveBeenCalledOnce();

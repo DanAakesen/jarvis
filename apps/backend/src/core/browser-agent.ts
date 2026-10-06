@@ -5,6 +5,12 @@ import { FOUNDRY_SCOPE } from '../foundry/client.js';
 import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import {
+  createRecipeSession,
+  recipeSiteKey,
+  type RecipeRuntime,
+  type RecipeSession,
+} from './task-recipes.js';
+import {
   isJevFailure,
   jevChoiceConfidenceThreshold,
   jevFailureFromStatus,
@@ -196,6 +202,7 @@ export interface BrowserAgent {
 export interface BrowserAgentLimits {
   readonly maxSteps?: number;
   readonly maxRunMs?: number;
+  readonly recipes?: RecipeRuntime;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -981,6 +988,7 @@ export function createBrowserAgent(
     ? Math.min(maxRunMs, limits.maxRunMs!)
     : maxRunMs;
   const clauseWindows = new Map<string, { viewId: string; created: { value: boolean } }>();
+  type RunRecipe = { initialized: boolean; key: string | undefined; session?: RecipeSession; drifted: boolean };
 
   async function reportClause(
     request: FastifyRequest,
@@ -1011,7 +1019,7 @@ export function createBrowserAgent(
     input: BrowserClauseInput,
     request: FastifyRequest,
     signal: AbortSignal,
-    runtime?: { step: number; previousActions: readonly string[]; tab?: BrowserTab },
+    runtime?: { step: number; previousActions: readonly string[]; tab?: BrowserTab; recipe: RunRecipe },
   ): Promise<BrowserClauseResult> {
     validateClause(input);
     if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for browser actions.');
@@ -1022,19 +1030,52 @@ export function createBrowserAgent(
     if (!runtime) await reportClause(request, tab.id, step, 'observe', undefined, 'Reading the current page.', signal);
     try {
       const snapshot = await executor.snapshot(tab.id, signal);
+      const recipe = runtime?.recipe;
+      const key = recipeSiteKey(snapshot.url);
+      if (recipe && !recipe.initialized) {
+        recipe.initialized = true;
+        recipe.key = key;
+        if (key) {
+          recipe.session = await withAbort(createRecipeSession(
+            limits.recipes, 'browser', key, input.goal.trim(), request, signal,
+          ), signal);
+        }
+      } else if (recipe && recipe.key !== key) {
+        recipe.drifted = true;
+      }
+      const proposal = recipe?.session
+        ? await withAbort(recipe.session.propose(key ?? '', snapshot.elements, signal, {
+          title: snapshot.title,
+          url: snapshot.url,
+          previousActions: runtime?.previousActions ?? input.previousActions ?? [],
+        }), signal)
+        : undefined;
       const jevStartedAt = performance.now();
-      const result = await planner.decide({
-        goal: input.goal.trim(),
-        step,
-        previousActions: runtime?.previousActions ?? input.previousActions ?? [],
-        snapshot,
-      }, signal);
+      let result: BrowserDecision | JevFailure | null | undefined = proposal;
+      if (!proposal) {
+        try {
+          result = await planner.decide({
+            goal: input.goal.trim(),
+            step,
+            previousActions: runtime?.previousActions ?? input.previousActions ?? [],
+            snapshot,
+          }, signal);
+        } finally {
+          if (limits.recipes && runtime) {
+            request.log.info({
+              phase: 'recipe_plan',
+              durationMs: Math.min(600_000, Math.max(0, performance.now() - jevStartedAt)),
+            }, 'chat.latency');
+          }
+        }
+      }
       if (isJevFailure(result)) {
         logJevFailure(request, reflexSourceForRequest(request), jevStartedAt, result.failure);
         throw new ToolRefusal('Jev could not return a valid browser decision. Please try again.');
       }
       const decision = result;
-      if (!decision || decision.confidence < jevChoiceConfidenceThreshold) {
+      if (!decision || !validProbability(decision.confidence) ||
+          decision.confidence < jevChoiceConfidenceThreshold) {
         throw new ToolRefusal('Jev is not confident enough to choose the next browser action. Please clarify the goal or ask Jarvis to continue.');
       }
       if (decision.operation === 'blocked') {
@@ -1042,7 +1083,9 @@ export function createBrowserAgent(
       }
       if (decision.operation === 'done') {
         const current = await executor.snapshot(tab.id, signal);
+        if (recipe && recipe.key !== recipeSiteKey(current.url)) recipe.drifted = true;
         const complete = await textModel.verifyCompletion({ goal: input.goal, snapshot: current }, signal);
+        if (signal.aborted) throw signal.reason;
         if (!runtime) {
           await reportClause(
             request, tab.id, step, 'verify completion', undefined,
@@ -1051,6 +1094,7 @@ export function createBrowserAgent(
           );
         }
         if (complete) {
+          if (!recipe?.drifted) recipe?.session?.record('done');
           return {
             tabId: tab.id, step, operation: 'done', completed: true,
             detail: 'Goal independently verified from the current page.',
@@ -1063,6 +1107,7 @@ export function createBrowserAgent(
       }
       const actionLabel = operationLabel(decision);
       let targetLabel: string | undefined;
+      let recipeTarget: Pick<BrowserElement, 'role' | 'name'> | undefined;
       let action: BrowserActionInput;
       if (decision.operation === 'keys') {
         if (!decision.keys || !isSafeKeySequence(decision.keys, closeIntentFor(input.goal))) {
@@ -1095,6 +1140,7 @@ export function createBrowserAgent(
         }
         const target = snapshot.elements.find(({ index }) => index === decision.targetIndex);
         if (!target) throw new ToolRefusal('The selected browser element is no longer in the current page snapshot.');
+        recipeTarget = { role: target.role, name: target.name };
         targetLabel = `${cleanDisplay(target.role)} "${cleanDisplay(target.name)}"`;
         if (!runtime) await reportClause(request, tab.id, step, actionLabel, targetLabel, 'Action selected.', signal);
 
@@ -1111,7 +1157,9 @@ export function createBrowserAgent(
         }
         action = { ...snapshotAction(snapshot, tab.id, target.index, 'type'), text };
         } else if (decision.operation === 'select') {
-          if (!decision.selectionValue) throw new ToolRefusal('Jev did not select a quoted option. Please clarify the choice.');
+          if (!decision.selectionValue || !quotedSelections(input.goal).includes(decision.selectionValue)) {
+            throw new ToolRefusal('Jev did not select a quoted option. Please clarify the choice.');
+          }
           action = { ...snapshotAction(snapshot, tab.id, target.index, 'select'), value: decision.selectionValue };
         } else if (decision.operation === 'scroll_up' || decision.operation === 'scroll_down') {
           action = {
@@ -1126,6 +1174,14 @@ export function createBrowserAgent(
       }
       if (!runtime) await reportClause(request, tab.id, step, actionLabel, targetLabel, 'Action selected.', signal);
       await executor.act(action, signal);
+      if (signal.aborted) throw signal.reason;
+      if (!recipe?.drifted) {
+        recipe?.session?.record(decision.operation, recipeTarget, {
+          ...(action.action === 'type' || action.action === 'type_focused' ? { text: action.text } : {}),
+          ...(action.action === 'select' ? { selectionValue: action.value } : {}),
+          ...(action.action === 'keys' ? { keys: action.keys } : {}),
+        });
+      }
       if (!runtime) await reportClause(request, tab.id, step, actionLabel, targetLabel, 'Action completed.', signal);
       return {
         tabId: tab.id,
@@ -1155,11 +1211,13 @@ export function createBrowserAgent(
     signal: AbortSignal,
   ): Promise<BrowserTaskResult> {
     validateClause(input);
+    const runStartedAt = performance.now();
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(runLimitMs)]);
     const viewId = `browserTask_${randomUUID().replaceAll('-', '')}`;
     const created = { value: false };
     let tab: BrowserTab | undefined;
     const previousActions: string[] = [];
+    const recipe: RunRecipe = { initialized: false, key: undefined, drifted: false };
     let last = { step: 0, action: 'starting', detail: 'Connecting to Dan’s Chrome.' };
     try {
       if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for browser actions.');
@@ -1172,7 +1230,7 @@ export function createBrowserAgent(
           { goal: input.goal, tabId: tab.id, step, previousActions },
           request,
           deadline,
-          { step, previousActions, tab },
+          { step, previousActions, tab, recipe },
         );
         last = {
           step,
@@ -1182,6 +1240,15 @@ export function createBrowserAgent(
         };
         await publishProgress(request, viewId, { ...last, final: result.completed }, deadline, created);
         if (result.completed) {
+          if (!recipe.drifted && recipe.session) {
+            await withAbort(recipe.session.complete(deadline), deadline);
+          }
+          if (limits.recipes) {
+            request.log.info({
+              phase: 'recipe_run',
+              durationMs: Math.min(600_000, Math.max(0, performance.now() - runStartedAt)),
+            }, 'chat.latency');
+          }
           return {
             status: 'completed',
             tabId: tab.id,

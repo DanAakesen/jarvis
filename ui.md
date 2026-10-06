@@ -635,6 +635,8 @@ Dan requested combining #398, #399 and #401 because the input, messages and shel
 
 #397's voice bar/shared-menu work was implemented by Copilot and merged in PR #403. The combined issue reuses its existing components and tokens. CI still runs for pushes/updates to the single combined PR; consolidation avoids three separate implementation PR pipelines. No worker was started by this planning update.
 
+P8-37 implementation: the bottom bar is removed and database waking is a compact top-bar status; the composer is one glass pill (orb, paperclip visual-context menu, multiline input, More → Language, Send); history is an avatar-free glass window hosted as the shared workspace view `conversation` (shared Minimise tab, Maximise, Close, drag/resize and Jarvis commands) with Jump to latest. Fixture captures: `docs/ui/screenshots/p8-37-*`.
+
 ## Voice feedback and expressive orb — 6 October 2026
 
 Dan supplied screenshots of Listening overlapping End voice/long language feedback and the unwanted Enable microphone button. He confirmed that all fixes belong in [#417](https://github.com/DanAakesen/jarvis/issues/417), P8-40; no separate prototype is required. These requirements are implemented offline in [PR #419](https://github.com/DanAakesen/jarvis/pull/419). Live voice, physical-device and hardware-GPU acceptance remain unverified.

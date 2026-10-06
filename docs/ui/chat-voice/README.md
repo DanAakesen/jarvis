@@ -26,6 +26,8 @@ Replace the current oversized voice status/control treatment with the selected L
 
 Deliver the connected shell, composer and message-window change together. One implementation PR reduces repeated CI across separate PRs; updates to that PR still run CI.
 
+**Status:** implemented in the P8-37 PR and awaiting review; the checklist below is ticked on acceptance. Fixture Chromium captures are `../screenshots/p8-37-*`; live provider, physical-device and hardware-GPU behavior are unverified.
+
 - [ ] Implement the coherent selected foreground material/typography across shell, composer and messages: dimensional graphite/smoked glass, restrained cyan/amber refraction, adequate frosted text opacity and purposeful spacing. Extend existing semantic tokens and #397's shared components. Selected/focus states use complete shapes and text/icons, not lone colored accent borders.
 - [ ] Keep the bottom-centred composer with small voice-start orb, attachment, usable multiline writing area, More and Send. Use the shared More → icon/text Language row → Danish/English flyout with checked selection; remove the large DA/EN toggle without losing real language/session behavior.
 - [ ] Implement the readable message window with constrained line length, clear user/assistant hierarchy and top-right minimise/maximise/close plus an unobtrusive drag region. Remove the separator above messages, top-left header orb/Jarvis title and both human/Jarvis avatar icons inside messages; reclaim the avatar gaps and preserve accessible author roles using alignment/text semantics. Keep the large scene orb and small composer orb.

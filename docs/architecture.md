@@ -164,6 +164,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   The renderers use fixed React elements; generated HTML, JavaScript and CSS
   never execute. Offline route/controller tests cover the flow; live
   Entra/Foundry delivery remains unverified.
+- P8-37 registers conversation history as the page-owned workspace view
+  `conversation` from `App.tsx` once a conversation exists. The view content is
+  an empty host element; `ConversationHistory` portals its transcript into it
+  through `ConversationWindowContext`, while the chat session, composer, voice
+  controls and command-stream overview stay mounted outside the window. The
+  window therefore uses the shared tabs, geometry, focus, snapshot and Jarvis
+  commands. Voice entry minimises it, voice exit restores it, and sending or
+  Conversation navigation restores it after Close.
 - P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
   and IDs, including minimised windows, plus context-panel visibility) through
   owner-authenticated `POST /now/workspace/state`. The broker accepts only its
@@ -264,7 +272,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   or malformed. The route exposes only that name, never token claims or IDs.
 - P1-14 tracks pending data requests in `src/backend-request.ts`. The signed-in
   shell probes authenticated `GET /database/status` while foreground requests
-  are pending and displays “Waking Jarvis…” only for `{ waking: true }`.
+  are pending and displays “Waking Jarvis…” only for `{ waking: true }`,
+  as a compact top-bar status (P8-37; there is no bottom shell bar).
   The endpoint reads process-local retry state, never SQL, and is not cached.
   Data requests allow 120 seconds; status probes stop when requests settle or
   the page is hidden. Task SSE sends `event: ready` after replay so heartbeat
@@ -903,6 +912,39 @@ data nor typed text. Fake Jev, model, executor and workspace tests pass; the
 offline median fake step was 0.07 ms excluding page loads. Live Jev/Foundry,
 Dan's signed-in Chrome, Teams approval delivery and end-to-end voice/browser
 behavior remain unverified.
+
+### Task recipes (P7-35)
+
+The backend captures only completed `pc_act` / `browser_do` runs, including
+independently verified browser completion. `core/task-recipes.ts` stores normalized
+goals and bounded operation sequences with role/name targets, safe keyboard
+chords and quoted-value slot numbers, never text or selection values. Browser
+generated text is regenerated for the new goal. Sensitive, value-echoing or
+unstable target labels make the run ineligible for storage.
+
+`database/recipe-store.ts` uses existing `dbo.settings` rows at scope `global`,
+key `recipe.<sha256(kind,key,goal)>`, separate from validated settings preferences.
+Recipes are capped at 100 records, 20 steps and 32 KiB each; a transaction-owned
+application lock serializes bounded upserts. No migration is needed: 0020 already
+belongs to chat steering and remains unchanged.
+
+On the first fresh snapshot, Jev makes one calibrated Choice among at most
+20 recipes for the exact process name or HTTP(S) origin plus `none`. Each replay
+step re-locates a unique role/name target and makes one typed replay/plan
+verification against the current observation. Missing/ambiguous targets or
+verification drift disable replay and resume normal planning; app/site changes
+also prevent saving a cross-context sequence. Confidence below 0.9 asks Dan.
+Replay still executes through the existing PC bridge policy/Windows executor,
+Chrome transport, pause switch and irreversible-only `runConfirmed` gates.
+
+Dan-only `GET /recipes` and `DELETE /recipes/:id` support the Settings section.
+The sensitive `task_recipes` list/delete tool uses the existing authenticated
+tool dispatcher and redacted audit. P5-14 `chat.latency` adds content-free
+`recipe_select`, `recipe_verify`, `recipe_plan` and `recipe_run` durations.
+Offline timing fixtures compare whole runs including selection; live provider
+and Windows/Chrome timing remains unverified. Controlled `recipe_run` timings
+are PC 220 ms planning versus 65 ms replay and browser 234 ms versus 79 ms;
+browser timing includes independent completion verification.
 
 ### Act on the shared Chrome tab (P7-19)
 

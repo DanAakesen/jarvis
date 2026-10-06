@@ -176,6 +176,7 @@ export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
   readonly pcActPlanner?: PcActPlanner;
   readonly pcActVisionModel?: PcActVisionModel;
   readonly pcActVisionDeployment?: string;
+  readonly recipes?: PcActOptions['recipes'];
   readonly onPcActStep?: PcActOptions['onStep'];
   readonly runConfirmed?: <T>(
     summary: string,
@@ -567,6 +568,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
             capture: (commandSignal) => bridge.execute(
               { name: 'window_capture', arguments: {} },
               commandSignal,
+              request.log,
             ),
             act: (action, commandSignal) => bridge.execute(
               { name: 'uia_act', arguments: action },
@@ -594,11 +596,13 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
                   },
                 },
               commandSignal,
+              request.log,
             ),
           }, {
             planner: options.pcActPlanner!,
             ...(options.pcActVisionModel ? { visionModel: options.pcActVisionModel } : {}),
             ...(options.pcActVisionDeployment ? { visionDeployment: options.pcActVisionDeployment } : {}),
+            ...(options.recipes ? { recipes: options.recipes } : {}),
             ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
             ...(options.onPcActStep ? { onStep: options.onPcActStep } : {}),
           }),

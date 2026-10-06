@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 import type { KeySequence } from '../core/keyboard-actions.js';
+import { recipeId, type RecipeDraft, type RecipeRuntime } from '../core/task-recipes.js';
 import {
   createJevPcActPlanner,
   runPcAct,
@@ -20,6 +21,8 @@ function request(principal: 'agent' | 'other' = 'agent'): FastifyRequest {
     agentPrincipal: principal === 'agent' ? { objectId: 'jarvis' } : null,
     principal: principal === 'other' ? { objectId: 'someone-else' } : null,
     server: { ownerObjectId: 'dan' },
+    log: { info: vi.fn() },
+    routeOptions: { url: '/conversation/:sessionId/messages' },
   } as unknown as FastifyRequest;
 }
 
@@ -51,6 +54,201 @@ function jevResponse(answers: Record<string, unknown>): Response {
     headers: { 'content-type': 'application/json' },
   });
 }
+
+function recipes(draft?: RecipeDraft): RecipeRuntime {
+  return {
+    store: {
+      list: vi.fn(async () => draft ? [{ ...draft, id: recipeId(draft) }] : []),
+      save: vi.fn(async () => {}),
+      delete: vi.fn(async () => false),
+    },
+    planner: {
+      select: vi.fn(async () => ({ choice: draft ? recipeId(draft) : 'none', confidence: 0.99 })),
+      verify: vi.fn(async () => ({ choice: 'replay', confidence: 0.99 })),
+    },
+  };
+}
+
+describe('PC task recipes', () => {
+  it('measures full planning versus replay runs including recipe selection overhead', async () => {
+    let clock = 0;
+    const now = vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    try {
+      let saved: RecipeDraft | undefined;
+      const runtime = recipes();
+      runtime.store.list = vi.fn(async () => {
+        clock += 5;
+        return saved ? [{ ...saved, id: recipeId(saved) }] : [];
+      });
+      runtime.store.save = vi.fn(async (draft) => { clock += 2; saved = draft; });
+      runtime.planner.select = vi.fn(async () => {
+        clock += 25;
+        return { choice: recipeId(saved!), confidence: 0.99 };
+      });
+      runtime.planner.verify = vi.fn(async () => {
+        clock += 10;
+        return { choice: 'replay', confidence: 0.99 };
+      });
+      const decisions = [decision('click', 0), decision('done')];
+      const planner = { decide: vi.fn(async () => { clock += 100; return decisions.shift()!; }) };
+      const pc = bridge({
+        observe: vi.fn(async () => { clock += 3; return snapshot; }),
+        act: vi.fn(async ({ action }) => { clock += 7; return { acted: true, action }; }),
+      });
+      const planningRequest = request();
+      const planningLog = vi.fn();
+      planningRequest.log.info = planningLog;
+      const replayRequest = request();
+      const replayLog = vi.fn();
+      replayRequest.log.info = replayLog;
+      await runPcAct({ goal: 'Open project' }, planningRequest, new AbortController().signal, pc, { planner, recipes: runtime });
+      await runPcAct({ goal: 'Open project' }, replayRequest, new AbortController().signal, pc, { planner, recipes: runtime });
+      const planningMs = planningLog.mock.calls.find(([entry]) => entry.phase === 'recipe_run')![0].durationMs as number;
+      const replayMs = replayLog.mock.calls.find(([entry]) => entry.phase === 'recipe_run')![0].durationMs as number;
+      expect(planningMs).toBe(220);
+      expect(replayMs).toBe(65);
+      expect(replayMs).toBeLessThan(planningMs);
+      expect(replayLog).toHaveBeenCalledWith({ phase: 'recipe_select', durationMs: 30 }, 'chat.latency');
+      expect(planningLog.mock.calls.filter(([entry]) => entry.phase === 'recipe_plan'))
+        .toEqual([[{ phase: 'recipe_plan', durationMs: 100 }, 'chat.latency'], [{ phase: 'recipe_plan', durationMs: 100 }, 'chat.latency']]);
+      expect(replayLog).not.toHaveBeenCalledWith(expect.objectContaining({ phase: 'recipe_plan' }), 'chat.latency');
+      expect(planner.decide).toHaveBeenCalledTimes(2);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('captures only successful completed runs without retaining entered values or snapshot indexes', async () => {
+    const runtime = recipes();
+    const pc = bridge({
+      observe: vi.fn(async () => ({
+        ...snapshot, elements: [{ index: 0, role: 'edit', name: 'Search' }],
+      })),
+    });
+    const planner = {
+      decide: vi.fn()
+        .mockResolvedValueOnce(decision('type', 0, 'Alpha note'))
+        .mockResolvedValueOnce(decision('done')),
+    };
+    const req = request();
+    await runPcAct({ goal: 'Enter "Alpha note"' }, req, new AbortController().signal, pc, {
+      planner, recipes: runtime,
+    });
+    expect(runtime.store.save).toHaveBeenCalledOnce();
+    const persisted = vi.mocked(runtime.store.save).mock.calls[0]![0];
+    expect(persisted).toMatchObject({
+      kind: 'pc', key: 'vscode', goal: 'enter [value]',
+      steps: [{ operation: 'type', target: { role: 'edit', name: 'Search' }, valueSlot: 0 }, { operation: 'done' }],
+    });
+    expect(JSON.stringify(persisted)).not.toContain('Alpha note');
+    expect(JSON.stringify(persisted)).not.toContain('index');
+    expect(req.log.info).toHaveBeenCalledWith({
+      phase: 'recipe_plan', durationMs: expect.any(Number),
+    }, 'chat.latency');
+    expect(req.log.info).toHaveBeenCalledWith({
+      phase: 'recipe_run', durationMs: expect.any(Number),
+    }, 'chat.latency');
+  });
+
+  it('never saves unsuccessful actions', async () => {
+    const runtime = recipes();
+    await expect(runPcAct({ goal: 'Open project' }, request(), new AbortController().signal, bridge({
+      act: vi.fn(async () => ({ acted: false, action: 'click' })),
+    }), {
+      planner: { decide: vi.fn(async () => decision('click', 0)) }, recipes: runtime,
+    })).rejects.toThrow(/did not complete/u);
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+
+  it('relocalizes every replay step against reordered fresh controls', async () => {
+    const runtime = recipes({
+      kind: 'pc', key: 'vscode', goal: 'open project',
+      steps: [
+        { operation: 'click', target: { role: 'button', name: 'Open project' } },
+        { operation: 'click', target: { role: 'button', name: 'Open project' } },
+        { operation: 'done' },
+      ],
+    });
+    const pc = bridge({
+      observe: vi.fn()
+        .mockResolvedValueOnce(snapshot)
+        .mockResolvedValue({
+          ...snapshot,
+          snapshotId: '2730aa51-f380-4df9-a345-1feb862cb1c4',
+          elements: [
+            { index: 0, role: 'button', name: 'Other' },
+            { index: 1, role: 'button', name: 'Open project' },
+          ],
+        }),
+    });
+    const planner = { decide: vi.fn(async () => decision('blocked')) };
+    const req = request();
+    await runPcAct({ goal: 'Open project' }, req, new AbortController().signal, pc, { planner, recipes: runtime });
+    expect(planner.decide).not.toHaveBeenCalled();
+    expect(runtime.planner.select).toHaveBeenCalledOnce();
+    expect(pc.act).toHaveBeenNthCalledWith(1, expect.objectContaining({ elementIndex: 0 }), expect.any(AbortSignal));
+    expect(pc.act).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      elementIndex: 1, snapshotId: '2730aa51-f380-4df9-a345-1feb862cb1c4',
+    }), expect.any(AbortSignal));
+    expect(runtime.planner.verify).toHaveBeenCalledWith(expect.objectContaining({
+      context: { previousActions: expect.any(Array) },
+    }), expect.any(AbortSignal));
+    expect(req.log.info).not.toHaveBeenCalledWith(expect.objectContaining({ phase: 'recipe_plan' }), 'chat.latency');
+    expect(req.log.info).toHaveBeenCalledWith({
+      phase: 'recipe_run', durationMs: expect.any(Number),
+    }, 'chat.latency');
+  });
+
+  it('abandons replay after application drift and does not capture a cross-app run', async () => {
+    const runtime = recipes({
+      kind: 'pc', key: 'vscode', goal: 'open project',
+      steps: [{ operation: 'click', target: { role: 'button', name: 'Open project' } }, { operation: 'done' }],
+    });
+    const pc = bridge({
+      observe: vi.fn()
+        .mockResolvedValueOnce(snapshot)
+        .mockResolvedValueOnce({ ...snapshot, application: 'explorer' })
+        .mockResolvedValue(snapshot),
+    });
+    const planner = { decide: vi.fn().mockResolvedValueOnce(decision('click', 0)).mockResolvedValueOnce(decision('done')) };
+    await runPcAct({ goal: 'Open project' }, request(), new AbortController().signal, pc, { planner, recipes: runtime });
+    expect(planner.decide).toHaveBeenCalledTimes(2);
+    expect(runtime.planner.verify).toHaveBeenCalledOnce();
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+
+  it('refuses low-confidence replay instead of falling through to the normal planner', async () => {
+    const runtime = recipes({
+      kind: 'pc', key: 'vscode', goal: 'open project',
+      steps: [{ operation: 'click', target: { role: 'button', name: 'Open project' } }, { operation: 'done' }],
+    });
+    runtime.planner.verify = vi.fn(async () => ({ choice: 'replay', confidence: 0.89 }));
+    const pc = bridge();
+    const planner = { decide: vi.fn(async () => decision('done')) };
+    await expect(runPcAct({ goal: 'Open project' }, request(), new AbortController().signal, pc, {
+      planner, recipes: runtime,
+    })).rejects.toThrow(/not confident/u);
+    expect(pc.act).not.toHaveBeenCalled();
+    expect(planner.decide).not.toHaveBeenCalled();
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+
+  it('keeps replayed irreversible clicks behind runConfirmed', async () => {
+    const runtime = recipes({
+      kind: 'pc', key: 'vscode', goal: 'delete item',
+      steps: [{ operation: 'click', target: { role: 'button', name: 'Delete' } }, { operation: 'done' }],
+    });
+    const pc = bridge({
+      observe: vi.fn(async () => ({ ...snapshot, elements: [{ index: 0, role: 'button', name: 'Delete' }] })),
+    });
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    await runPcAct({ goal: 'Delete item' }, request(), new AbortController().signal, pc, {
+      planner: { decide: vi.fn(async () => decision('blocked')) }, recipes: runtime, runConfirmed,
+    });
+    expect(runConfirmed).toHaveBeenCalledOnce();
+    expect(pc.act).toHaveBeenCalledWith(expect.objectContaining({ confirmed: true }), expect.any(AbortSignal));
+  });
+});
 
 describe('pc_act Jev planner', () => {
   it('sends one bounded Jev decision the observed Windows controls and exact user-quoted values', async () => {
@@ -338,6 +536,47 @@ describe('pc_act bounded Windows control loop', () => {
     }, expect.any(AbortSignal));
     expect(onStep).toHaveBeenCalledWith({ step: 1, action: 'click', outcome: 'completed' });
     expect(JSON.stringify(onStep.mock.calls)).not.toContain('Start game');
+  });
+
+  it('does not save recipes derived from transient visual candidates', async () => {
+    const runtime = recipes();
+    const pcBridge = bridge({
+      observe: vi.fn()
+        .mockResolvedValueOnce({ ...snapshot, elements: [] })
+        .mockResolvedValueOnce({ ...snapshot, elements: [] }),
+      capture: vi.fn(async () => ({
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        application: 'vscode',
+        width: 1280,
+        height: 720,
+        png: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'),
+      })),
+      actPoint: vi.fn(async ({ action }: { action: string }) => ({ acted: true, action })),
+    });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+
+    await runPcAct(
+      { goal: 'Start the game' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      {
+        planner,
+        recipes: runtime,
+        visionModel: { locateElements: vi.fn(async () => [{
+          index: 0,
+          role: 'button',
+          name: 'Start game',
+          bounds: { x: 0.25, y: 0.4, width: 0.5, height: 0.2 },
+        }]) },
+      },
+    );
+
+    expect(runtime.store.save).not.toHaveBeenCalled();
+    expect(runtime.planner.select).not.toHaveBeenCalled();
+    expect(runtime.planner.verify).not.toHaveBeenCalled();
   });
 
   it('confirms irreversible vision clicks before executing them', async () => {

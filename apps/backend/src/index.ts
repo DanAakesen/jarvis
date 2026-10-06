@@ -46,6 +46,9 @@ import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
 import { FoundryClient, FoundryClientError } from './foundry/client.js';
 import { createJevPcActPlanner } from './pc-bridge/pc-act.js';
+import { createJevRecipePlanner } from './core/task-recipes.js';
+import { createRecipeModule } from './core/recipe-management.js';
+import { createRecipeStore } from './database/recipe-store.js';
 import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
 import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
@@ -252,6 +255,10 @@ try {
   };
   const reflexClassifier = createJevReflexClassifier(getJevApiKey);
   const pcActPlanner = jevSecretClient ? createJevPcActPlanner(getJevApiKey) : undefined;
+  const recipeStore = database ? createRecipeStore(database.pool) : undefined;
+  const recipes = recipeStore && jevSecretClient
+    ? { store: recipeStore, planner: createJevRecipePlanner(getJevApiKey) }
+    : undefined;
   const browserAgent = jevSecretClient && config.foundryProjectEndpoint && credential
     ? createBrowserAgent(
       createJevBrowserPlanner(getJevApiKey),
@@ -260,6 +267,7 @@ try {
         if (!token) throw new Error('Foundry browser identity unavailable');
         return token.token;
       }),
+      { ...(recipes ? { recipes } : {}) },
     )
     : undefined;
   let webhookSecret: string | undefined;
@@ -480,6 +488,7 @@ try {
     : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
+    createRecipeModule(recipeStore),
     ...(webResearchModule ? [webResearchModule] : []),
     ...(googleModule ? [googleModule] : []),
     createGithubWebhookModule({
@@ -500,6 +509,7 @@ try {
       } : {}),
       ...(pcActPlanner ? {
         pcActPlanner,
+        ...(recipes ? { recipes } : {}),
         onPcActStep: (activity) => logger.info(activity, 'pc_act.step'),
       } : {}),
       ...(pcBridgeStatusStore ? {
