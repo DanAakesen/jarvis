@@ -199,3 +199,15 @@ The earlier shell/workspace/contracts remain implemented with their recorded liv
 | Re-lit light appearance | Same room geometry/viewpoint re-lit for light mode; existing approved preferences/tokens persist; empty prompt, activity disclosure, and Jarvis replies use readable glass | Jarvis stage and shared appearance | Merged in PR #387; dark/light captures and system-switch continuity recorded; live settings, real devices and hardware GPU remain unverified | P8-32 |
 | Resilient phone/GPU experience | Single-view docking/swipe, adaptive quality, hidden-tab lifecycle, reduced motion and usable WebGL failure handling | Jarvis phone/browser | Implementation in draft PR #391; Chromium checks cover phone/landscape layouts, context loss/restore and unavailable WebGL. SwiftShader frame cadence remains poor; hardware GPU, physical phone, Safari and live-provider acceptance are unverified | P8-33 |
 [Requirements](../ui.md#accepted-centred-3d-stage--5-october-2026), [references](ui/centred-stage/README.md), [runnable prototype](reference/ui-stage-prototype/README.md). Reuse P8-14–P8-17 for data, tools, activity and preference logic; do not recreate those completed tasks. The latest persistent orb decision supersedes older phone-typing/voice-collapse visual requirements.
+
+## Accepted conversation-surface refinement (6 October 2026)
+
+Existing chat, voice, safe Markdown, queue/steering, workspace tools and shared glass remain implemented with their recorded validation limits. These tasks refine their presentation; they do not recreate those capabilities.
+
+| Feature | Behaviour | Surface | Status | Tasks |
+| --- | --- | --- | --- | --- |
+| Compact voice bar and shared Language flyout | Truthful voice/activity state, reachable End voice; Language inside More with Danish/English flyout; existing capture capabilities retain their placement | Jarvis voice bar and shared menu | Planned | P8-36 (#397) |
+| Matching glass composer | Small voice-start orb, attachments, writing area, More and Send; preserve Enter/Send steering and Ctrl+Enter queueing during replies | Jarvis typing, bottom centre | Planned | P8-37 (#398) |
+| Readable message window | Coherent frosted messages; remove header orb/title and separator; reuse window/tab controls and safe Markdown | Jarvis typing and requested voice history | Planned | P8-38 (#399) |
+
+[Approved visual and acceptance criteria](ui/chat-voice/README.md). Shell-styling alternatives are unselected proposals, not additional approved features.

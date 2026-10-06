@@ -412,3 +412,9 @@ Mistakes made so far and the rule that prevents each one.
 ## 5 October 2026 — Software Factory layout selected
 
 **Confirmed by Dan:** use image 2 (Task Lens) as the base, include image 3's compact release bar and keep the details pane on the right. Dan approved [the combined mockup](ui/software-factory/task-lens-release-bar.png) and requested one implementation issue. P8-34 (#369) implements that composition using the existing task, release, workspace and conversation contracts; #364 supplies the shared glass styling. The reference uses illustrative data. Dark/light desktop and phone fixture checks are recorded in `docs/agent-context.md`; live integration and physical-device acceptance remain unverified. This decision does not authorize starting or assigning a worker.
+
+## 6 October 2026 — Luminous-glass conversation components selected
+
+**Confirmed by Dan:** select the last Luminous Glass component-family image for the compact voice bar, chat input and message window. Remove the line above messages and the small orb/Jarvis title from the top-left window header; keep top-right window controls and the input's voice-start orb. Language belongs inside More as an icon/text row with a Danish/English flyout. Existing capture capabilities and their placements remain.
+
+[Edited reference](ui/chat-voice/README.md). [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399) are implementation tasks and preserve existing steering/queue, voice and workspace behavior. They are unclaimed; publication does not start a worker. Three app-shell styling alternatives were requested separately and remain proposals until selected.
