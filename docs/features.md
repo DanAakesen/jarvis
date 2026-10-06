@@ -207,15 +207,15 @@ Existing chat, voice, safe Markdown, queue/steering, workspace tools and shared 
 | Feature | Behaviour | Surface | Status | Tasks |
 | --- | --- | --- | --- | --- |
 | Compact voice bar and shared Language flyout | Truthful voice/activity state, reachable End voice; Language inside More with Danish/English flyout; existing capture capabilities retain their placement | Jarvis voice bar and shared menu | Planned | P8-36 (#397) |
-| Matching glass composer | Small voice-start orb, attachments, writing area, More and Send; preserve Enter/Send steering and Ctrl+Enter queueing during replies | Jarvis typing, bottom centre | Planned | P8-37 (#398) |
-| Readable message window | Coherent frosted messages; remove header orb/title, separator and both message avatars; preserve author semantics, window/tab controls and safe Markdown | Jarvis typing and requested voice history | Planned | P8-38 (#399) |
+| Matching glass composer | Small voice-start orb, attachments, writing area, More and Send; preserve Enter/Send steering and Ctrl+Enter queueing during replies | Jarvis typing, bottom centre | Planned; consolidated with shell/messages | P8-37 (#398) |
+| Readable message window | Coherent frosted messages; remove header orb/title, separator and both message avatars; preserve author semantics, window/tab controls and safe Markdown | Jarvis typing and requested voice history | Planned; consolidated with composer/shell | P8-37 (#398) |
 
-[Approved visual and acceptance criteria](ui/chat-voice/README.md). Architectural Glass is selected; P8-39 (#401) implements the shell without a bottom bar. P8-38 (#399) additionally removes both message avatars while preserving author roles.
+[Approved visual and acceptance criteria](ui/chat-voice/README.md). Architectural Glass is selected; P8-37 (#398) implements the shell without a bottom bar, matching composer and avatar-free messages together. #399/#401 are superseded separate allocations.
 
 ## Selected shared shell refinement (6 October 2026)
 
 | Feature | Behaviour | Surface | Status | Tasks |
 | --- | --- | --- | --- | --- |
-| Architectural Glass shell | Selected dimensional graphite/glass framing, existing navigation and context; remove separate bottom bar/layout track, retaining compact accessible database-waking status in the top bar | Shared shell; large room/orb on Jarvis only | Planned | P8-39 (#401) |
+| Architectural Glass shell | Selected dimensional graphite/glass framing, existing navigation and context; remove separate bottom bar/layout track, retaining compact accessible database-waking status in the top bar | Shared shell; large room/orb on Jarvis only | Planned; consolidated with composer/messages | P8-37 (#398) |
 
-[Refined selected reference](ui/shell-styling/README.md#refined-approved-reference). The bottom composer and voice bar remain; P8-38 owns the avatar-free message-window update. Existing shell/voice/window/data capabilities remain implemented with their recorded validation limits.
+[Refined selected reference](ui/shell-styling/README.md#refined-approved-reference). The bottom composer and voice bar remain; P8-37 owns the shell, composer and avatar-free message-window update in one PR. Existing shell/voice/window/data capabilities remain implemented with their recorded validation limits.
