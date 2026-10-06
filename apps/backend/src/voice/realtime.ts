@@ -125,7 +125,7 @@ const DANISH_PHRASE_LIST = [
 function danishInstructions(personality: Settings['personality'], presence: AwayModeState): string {
   const rules = englishPersonalityInstructions(personality, presence)
     .split('\n\n').slice(1).join('\n\n')
-    .replace(/\n\nResearch:\n[\s\S]*?(?=\n\nMemory:)/u, '')
+    .replace(/\n\nResearch:\n[\s\S]*?(?=\n\n(?:Memory|Long-term knowledge):)/u, '')
     .replace('Preserve English as the selected language', 'Preserve Danish as the selected language');
   return `You are Jarvis, Dan's personal AI butler, running his software factory.
 Always speak natural, modern Danish (rigsdansk) like a well-spoken Dane: courteous, calm, precise,
