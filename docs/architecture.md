@@ -362,6 +362,40 @@ confirms completion. The browser and hosted agent service identities do not rece
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
 
+P6-21 adds the following fields to every task in `GET /factory/tasks` and to
+`GET /factory/tasks/:id`, independently of event pagination:
+
+- `pullRequest`: `{ number, url, state }` or `null`. The newest linked
+  `pull_requests` row (opened time, then ID) supplies the number and
+  `open`/`closed`/`merged` state. Without a linked row, the newest backend
+  `pull_request_opened` event can supply a known number with `state: null`.
+  URLs use the task project's repository, not the activity's display text.
+- `checks`: the linked PR's recorded `pending`/`passed`/`failed` value or `null`.
+  `checkConclusion` is the latest linked workflow conclusion for the PR's current
+  head SHA (completion/start time, then ID); without one, recorded passed/failed
+  checks map to `success`/`failure`. No GitHub request runs during these reads.
+- `usageSummary`: `{ inputTokens, outputTokens, costDkk }` or `null` when no
+  task-linked usage exists. Values sum recorded `usage` rows across sources.
+  Missing token metrics and wholly unreported costs remain `null`, not zero.
+  Recorded costs may be partial when some usage rows have no cost. Active sandbox
+  estimates remain in the detail's existing `usage` array, not this summary.
+
+`POST /factory/tasks/:id/retry` takes no body and uses default Dan-only
+authentication (agent and runner identities are refused). It returns `200` with
+the Ready task, `400` for an invalid SQL bigint ID, `404` for an unknown task,
+`409` for an ineligible task, or `503` when task storage is unavailable.
+Eligibility requires NeedsAttention, at least one dispatch attempt, no unexpired
+lease, and no sandbox session history. Recorded runner events or a
+`session_persistence_failed` start result also refuse retry because the remote
+sandbox may already have run. Use Recover for tasks with sandbox history.
+The transaction takes the shared sleep-switch lock and locks the task, resets
+the attempt count, retry deadline, lease and start/finish timestamps, and preserves
+the task request, configuration and branch. It records a Dan-sourced
+`state_changed` event with `from: NeedsAttention`, `to: Ready`, `reason: start_retry`
+and the previous attempt count, plus activity. Publication occurs only after
+commit and wakes the existing dispatcher; retry does not bypass its credential,
+capacity or project guards. Concurrent/duplicate retries yield only one transition.
+
 `POST /factory/tasks/:id/controls` accepts only `steer`, `pause`, `resume`, `recover`, or
 `cancel`; it uses the default Dan-only authentication and never accepts a requested
 task state. The dispatcher validates the current state, uses the Foundry client for
@@ -1393,7 +1427,7 @@ These boxes are responsibilities; they do not each need a separate service.
 | Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. The dispatcher sends `task_id` in every start and resume invocation; a runner deployed with `JARVIS_BACKEND_URL` rejects task invocations without one (L59). Browser streaming is P1-06. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. |
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. The fetch client reconnects with its last delivered ID and ignores repeats. |
-| Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. Live state is visible; PR/check/usage values stay unavailable until their owning data integrations exist. |
+| Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. P6-21 supplies recorded PR/check/usage summaries and a Dan-only retry API for failed starts without sandbox history; UI rendering and retry controls are owned separately. |
 | Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. The event-archive timer also skips SQL until active sandbox work exists. |
 | Always on | The backend normally runs with a minimum of 1 replica, so timers remain alive. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. SQL can pause between genuine accesses; the daily Codex renewal lease check and request-driven endpoints remain deliberate exceptions. |
 
