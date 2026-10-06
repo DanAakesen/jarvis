@@ -38,6 +38,7 @@ export interface Settings {
     maxParallelTasks: number;
     maxCheckAttempts: number;
     screenShareDailyFrameCap: number;
+    visionDailyBudgetUsd: number;
   };
   newProjects: {
     owner: string;
@@ -77,7 +78,7 @@ export const defaultSettings: Settings = {
   },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
-  global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300 },
+  global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300, visionDailyBudgetUsd: 1 },
   newProjects: {
     owner: 'DanAakesen',
     visibility: 'private',
@@ -143,6 +144,7 @@ const settingKeys = {
     maxParallelTasks: 'global.max_parallel_tasks',
     maxCheckAttempts: 'global.max_check_attempts',
     screenShareDailyFrameCap: 'global.screen_share_daily_frame_cap',
+    visionDailyBudgetUsd: 'global.vision_daily_budget_usd',
   },
   newProjects: {
     owner: 'new_projects.owner',
@@ -215,6 +217,9 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
   }
   if (area === 'global' && key === 'screenShareDailyFrameCap') {
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 300;
+  }
+  if (area === 'global' && key === 'visionDailyBudgetUsd') {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100;
   }
   if (area === 'newProjects') {
     if (key === 'owner') {
@@ -310,6 +315,7 @@ const settingsPatchSchema = {
             maxParallelTasks: { type: 'integer', minimum: 1, maximum: 100 },
             maxCheckAttempts: { type: 'integer', minimum: 0, maximum: 10 },
             screenShareDailyFrameCap: { type: 'integer', minimum: 1, maximum: 300 },
+            visionDailyBudgetUsd: { type: 'number', minimum: 0, maximum: 100 },
           },
         },
         newProjects: {
@@ -455,7 +461,18 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     };
   });
 
-  app.patch('/settings', { schema: { body: settingsPatchSchema } }, async (request, reply) => {
+  app.patch('/settings', {
+    schema: { body: settingsPatchSchema },
+    preValidation: async (request, reply) => {
+      const budget = (request.body as {
+        settings?: { global?: { visionDailyBudgetUsd?: unknown } };
+      } | undefined)?.settings?.global?.visionDailyBudgetUsd;
+      // AJV would otherwise coerce null to zero, unintentionally disabling watch.
+      if (budget !== undefined && typeof budget !== 'number') {
+        return reply.code(400).send({ error: 'Invalid setting value' });
+      }
+    },
+  }, async (request, reply) => {
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const body = request.body as { settings: unknown };
     if (!isSettingsPatch(body.settings)) return reply.code(400).send({ error: 'Invalid setting value' });

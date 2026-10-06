@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
-import { flattenSettings, type SettingsStore } from './settings.js';
+import { flattenSettings, readSettings, settingsStoreKeys, type SettingsStore } from './settings.js';
 import type { CredentialStatusStore } from '../credentials/credential-status.js';
 import type { AwayModeStore } from './away-mode.js';
 
@@ -56,7 +56,7 @@ describe('settings API', () => {
         voice: { defaultLanguage: 'da', minimizeWindowsOnVoiceStart: false },
         codex: { model: 'default' },
         copilot: { model: 'default' },
-        global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300 },
+        global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300, visionDailyBudgetUsd: 1 },
         newProjects: {
           owner: 'DanAakesen',
           visibility: 'private',
@@ -149,6 +149,28 @@ describe('settings API', () => {
     const readBack = await app.inject({ url: '/settings', headers: authorization });
     expect(readBack.json().settings.appearance).toEqual({ theme: 'dark' });
   });
+
+  it.each([0, 0.125, 1, 100])('persists and reloads the daily vision budget of %s USD', async (visionDailyBudgetUsd) => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { global: { visionDailyBudgetUsd } } },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().settings.global.visionDailyBudgetUsd).toBe(visionDailyBudgetUsd);
+    expect(values['global.vision_daily_budget_usd']).toBe(JSON.stringify(visionDailyBudgetUsd));
+    expect(settingsStoreKeys).toContain('global.vision_daily_budget_usd');
+    expect((await readSettings(store)).global.visionDailyBudgetUsd).toBe(visionDailyBudgetUsd);
+  });
+
+  it.each(['-0.01', '100.01', '"1"', 'null', '1e999', 'NaN', 'Infinity'])(
+    'falls back to the default for invalid persisted vision budgets: %s', async (value) => {
+      const { store, values } = createStore();
+      values['global.vision_daily_budget_usd'] = value;
+      expect((await readSettings(store)).global.visionDailyBudgetUsd).toBe(1);
+    },
+  );
 
   it('persists bounded personality preferences and supports restoring their defaults', async () => {
     const { store, values } = createStore();
@@ -369,6 +391,10 @@ describe('settings API', () => {
     { settings: { global: { maxCheckAttempts: -1 } } },
     { settings: { global: { screenShareDailyFrameCap: 0 } } },
     { settings: { global: { screenShareDailyFrameCap: 301 } } },
+    { settings: { global: { visionDailyBudgetUsd: -0.01 } } },
+    { settings: { global: { visionDailyBudgetUsd: 100.01 } } },
+    { settings: { global: { visionDailyBudgetUsd: '1' } } },
+    { settings: { global: { visionDailyBudgetUsd: null } } },
     { settings: { voice: { unknown: 'value' } } },
     { settings: { newProjects: { owner: '-invalid' } } },
     { settings: { newProjects: { visibility: 'internal' } } },

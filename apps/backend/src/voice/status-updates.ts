@@ -29,8 +29,8 @@ function announcement(kinds: readonly VoiceStatusKind[]): string {
 }
 
 export function createVoiceStatusAnnouncer(options: {
-  readonly taskEvents: TaskEventHub;
-  readonly nowEvents: NowFeedEventHub;
+  readonly taskEvents?: TaskEventHub;
+  readonly nowEvents?: NowFeedEventHub;
   readonly canSpeak: () => boolean;
   readonly speak: (text: string) => void;
   readonly mergeWindowMs?: number;
@@ -58,24 +58,29 @@ export function createVoiceStatusAnnouncer(options: {
     timer.unref();
   };
 
-  const unsubscribeTaskEvents = options.taskEvents.subscribe((event) => {
+  const unsubscribeTaskEvents = options.taskEvents?.subscribe((event) => {
     const kind = taskStatus(event);
     if (kind) enqueue(kind);
   });
-  const unsubscribeNowEvents = options.nowEvents.subscribe((event) => {
+  const unsubscribeNowEvents = options.nowEvents?.subscribe((event) => {
     if (event.type === 'status') enqueue(event.kind);
   });
 
   return {
     flush,
+    announce(text: string): boolean {
+      if (closed || timer || pending.size > 0 || !options.canSpeak()) return false;
+      options.speak(text);
+      return true;
+    },
     close() {
       if (closed) return;
       closed = true;
       if (timer) clearTimeout(timer);
       timer = undefined;
       pending.clear();
-      unsubscribeTaskEvents();
-      unsubscribeNowEvents();
+      unsubscribeTaskEvents?.();
+      unsubscribeNowEvents?.();
     },
   };
 }
