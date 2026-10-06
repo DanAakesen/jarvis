@@ -323,16 +323,12 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const firstSession = await firstUpdate;
     const firstInstructions = String(firstSession.instructions);
     expect(firstSession).toMatchObject({
-      audio: {
-        input: {
-          turn_detection: {
-            type: 'azure_semantic_vad_en',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 700,
-            create_response: false,
-          },
-        },
+      turn_detection: {
+        type: 'azure_semantic_vad_en',
+        threshold: 0.5,
+        prefix_padding_ms: 300,
+        silence_duration_ms: 500,
+        create_response: false,
       },
     });
     expect(firstInstructions).toContain('warm and supportive');
@@ -748,7 +744,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(received.some((event) => event.type === 'input_audio_buffer.append')).toBe(true);
   });
 
-  it('runs Danish partial reflexes and reconciles the hosted agent user message', async () => {
+  it('runs Danish partial reflexes and reconciles the final realtime transcript', async () => {
     const itemId = 'danish_partial';
     const received: Record<string, unknown>[] = [];
     const services = taskReflexServices();
@@ -819,14 +815,13 @@ describe('backend-relayed Voice Live WebSocket', () => {
     );
 
     upstream.send(JSON.stringify({
-      type: 'user.message',
+      type: 'conversation.item.input_audio_transcription.completed',
       item_id: itemId,
-      content: [{ type: 'input_text', text: 'Jarvis, sæt opgave 12 på pause.' }],
+      transcript: 'Jarvis, sæt opgave 12 på pause.',
     }));
     await vi.waitFor(() => expect(received.some((event) =>
-      event.type === 'conversation.item.create' &&
-      String(((event.item as Record<string, unknown> | undefined)?.content as Record<string, unknown>[] | undefined)?.[0]?.text)
-        .includes('Reflex turn ledger'),
+      event.type === 'response.create' &&
+      String((event.response as Record<string, unknown> | undefined)?.instructions).includes('Reflex turn ledger'),
     )).toBe(true));
     expect(services.taskController.control).toHaveBeenCalledTimes(1);
     expect(conversationStore.updateMessage).toHaveBeenCalledWith('42', 'Jarvis, sæt opgave 12 på pause.');

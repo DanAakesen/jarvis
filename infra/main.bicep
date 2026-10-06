@@ -578,7 +578,9 @@ resource sqlDatabase 'Microsoft.Sql/servers/databases@2025-01-01' = {
     autoPauseDelay: 60
     minCapacity: json('0.5')
     useFreeLimit: true
-    freeLimitExhaustionBehavior: 'AutoPause'
+    // Keep running past the free monthly allowance (Dan approved, 6 October; L104). Azure
+    // cannot switch back to AutoPause once BillOverUsage is set.
+    freeLimitExhaustionBehavior: 'BillOverUsage'
   }
 }
 
