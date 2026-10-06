@@ -22,6 +22,10 @@ constraint while refused rows exist, preserving their truthful outcomes.
 P7-15; private image bytes remain in the existing `artifacts` Blob container.
 `0020_chat_message_steering.sql` adds per-message language overrides and the
 persisted interrupted-reply marker (P8-35).
+`0022_dismiss_board_deployment_failures.sql` dismisses historical board-sync
+deployment failure activity (P6-20). It retains rows and existing owner dismissal
+timestamps. Its down batch is deliberately a no-op rather than resurrecting
+dismissals; restoring pre-cleanup visibility requires a reviewed backup restore.
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only

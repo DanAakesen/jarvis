@@ -110,6 +110,8 @@ describe('webhook delivery store', () => {
     expect(workflowRunSql).toContain('default_branch = @branch');
     expect(workflowRunSql).toContain('VALUES (@projectId, CONVERT(nvarchar(100), @runNumber), @headSha');
     expect(workflowRunSql).toContain('release_id = COALESCE(@releaseId, release_id)');
+    expect(workflowRunSql).toContain("@conclusion <> N'cancelled'");
+    expect(workflowRunSql).toContain('@deploymentWorkflow = 1 OR');
 
     const pushSql = query.mock.calls[3]?.[0];
     expect(pushSql).toContain('WHERE project_id = @projectId AND sha = @sha');
@@ -119,6 +121,7 @@ describe('webhook delivery store', () => {
     const deploymentSql = query.mock.calls[5]?.[0];
     expect(deploymentSql).toContain('WHERE project_id = @projectId AND sha = @sha');
     expect(deploymentSql).toContain('INSERT INTO dbo.deployments');
+    expect(deploymentSql).toContain("github_run_id = @workflowRunId AND conclusion = N'cancelled'");
     expect(query.mock.calls[1]?.[1]).toContainEqual(['runNumber', sql.Int, 7]);
     expect(transactionEvents.values).toEqual([
       `begin:${sql.ISOLATION_LEVEL.SERIALIZABLE}`, 'commit',

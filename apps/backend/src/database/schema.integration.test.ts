@@ -23,6 +23,7 @@ import {
 import { ProjectConflictError } from '../factory/projects.js';
 import { createEventHub } from '../core/event-hub.js';
 import type { TaskEventMessage } from '../factory/task-store.js';
+import { mapGithubWebhook } from '../github/webhook-mapping.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -479,7 +480,7 @@ describe('committed domain schema (groups 1-8)', () => {
     });
     expect(alertNotifier).toHaveBeenCalledExactlyOnceWith({
       type: 'deployment_failure',
-      dedupeKey: `deployment:${failedDeployment.id}`,
+      dedupeKey: `deployment:${projectId}:${createHash('sha256').update('production').digest('hex')}:${failedDeployment.id}`,
       title: 'Deployment failed: production',
       link: `release:${releaseId}`,
     });
@@ -525,6 +526,148 @@ describe('committed domain schema (groups 1-8)', () => {
       expect.objectContaining({ category: 'alert', title: `copilot-token expires ${expiry.slice(0, 10)}`, link: null }),
       expect.objectContaining({ category: 'alert', title: 'Monthly Azure budget reached 80%', link: null }),
     ]));
+  });
+
+  it('keeps board, plan and CI runs in history without deployment effects, and never fails cancelled deploys', async () => {
+    const repo = `DanAakesen/workflow-${randomUUID().slice(0, 8)}`;
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Workflow fixture', N'${repo}', N'main', N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const sha = 'e'.repeat(40);
+    const releaseId = await scalar(`INSERT dbo.releases (project_id, version, sha, status, created_at)
+      VALUES (${projectId}, N'1', N'${sha}', N'deploying', SYSUTCDATETIME())`);
+    const notifier = vi.fn();
+    const store = createWebhookDeliveryStore(pool, notifier);
+    let id = 1_900_000_001_000;
+    for (const [file, result, initial, expected] of [
+      ['project-board.yml', 'failure', 'deploying', 'deploying'],
+      ['plan-status.yml', 'failure', 'deploying', 'deploying'],
+      ['ci.yml', 'failure', 'deploying', 'deploying'],
+      ['deploy.yml', 'cancelled', 'deploying', 'deploying'],
+      ['deploy.yml', 'cancelled', 'failed', 'failed'],
+      ['deploy.yml', 'failure', 'deploying', 'failed'],
+    ]) {
+      await pool.request().input('status', sql.NVarChar(16), initial)
+        .query(`UPDATE dbo.releases SET status = @status WHERE id = ${releaseId}`);
+      const mapping = mapGithubWebhook('workflow_run', {
+        repository: { full_name: repo },
+        workflow_run: {
+          id: ++id, name: file, path: `.github/workflows/${file}`, event: 'push', head_branch: 'main',
+          head_sha: sha, run_number: 1, status: 'completed', conclusion: result,
+        },
+      });
+      if (!mapping) throw new Error('Workflow mapping fixture was not created');
+      await store.record({ deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok', mapping });
+      expect((await pool.request().query(`SELECT status FROM dbo.releases WHERE id = ${releaseId}`)).recordset)
+        .toEqual([{ status: expected }]);
+    }
+    expect((await pool.request().query(`SELECT COUNT(*) AS count FROM dbo.workflow_runs
+      WHERE project_id = ${projectId}`)).recordset).toEqual([{ count: 6 }]);
+    expect(notifier).not.toHaveBeenCalled();
+  });
+
+  it('collapses failures for the same project workflow over a rolling hour, including dismissed alerts', async () => {
+    const repo = `DanAakesen/collapse-${randomUUID().slice(0, 8)}`;
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Collapse fixture', N'${repo}', N'main', N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    const sha = 'f'.repeat(40);
+    const releaseId = await scalar(`INSERT dbo.releases (project_id, version, sha, status, created_at)
+      VALUES (${projectId}, N'1', N'${sha}', N'deploying', SYSUTCDATETIME())`);
+    const notifier = vi.fn();
+    const store = createWebhookDeliveryStore(pool, notifier);
+    const workflow = {
+      kind: 'workflow_run' as const, repository: repo, id: 1_900_000_002_000, name: 'Deploy',
+      deploymentWorkflow: true, event: 'push', branch: 'main', headSha: sha, runNumber: 1,
+      pullRequestNumbers: [], status: 'completed' as const, conclusion: 'failure' as const,
+      startedAt: null, completedAt: null,
+    };
+    const deployment = {
+      kind: 'deployment_status' as const, repository: repo, id: 1_900_000_003_000, sha,
+      environment: 'production', status: 'failure' as const, at: new Date().toISOString(),
+      workflowRunId: workflow.id,
+    };
+    const recordDeployment = async (id: number, workflowRunId = workflow.id) => {
+      await store.record({
+        deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok',
+        mapping: { ...deployment, id, workflowRunId },
+      });
+    };
+    await store.record({ deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok', mapping: workflow });
+    await recordDeployment(deployment.id);
+    await pool.request().query(`UPDATE dbo.activity SET at = DATEADD(minute, -59, SYSUTCDATETIME()),
+      dismissed_at = SYSUTCDATETIME() WHERE link = N'release:${releaseId}'`);
+    await store.record({
+      deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok',
+      mapping: { ...workflow, id: workflow.id + 10 },
+    });
+    await recordDeployment(deployment.id + 1, workflow.id + 10);
+    expect(notifier).toHaveBeenCalledTimes(1);
+    await pool.request().query(`UPDATE dbo.activity SET at = DATEADD(minute, -61, SYSUTCDATETIME())
+      WHERE link = N'release:${releaseId}'`);
+    await Promise.all([recordDeployment(deployment.id + 2), recordDeployment(deployment.id + 3)]);
+    expect(notifier).toHaveBeenCalledTimes(2);
+    await store.record({
+      deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok',
+      mapping: { ...workflow, id: workflow.id + 1, name: 'Deploy staging' },
+    });
+    await recordDeployment(deployment.id + 4, workflow.id + 1);
+    expect(notifier).toHaveBeenCalledTimes(3);
+    await store.record({
+      deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok',
+      mapping: { ...workflow, id: workflow.id + 2, conclusion: 'cancelled' },
+    });
+    await pool.request().query(`UPDATE dbo.releases SET status = N'deploying' WHERE id = ${releaseId}`);
+    await recordDeployment(deployment.id + 5, workflow.id + 2);
+    expect(notifier).toHaveBeenCalledTimes(3);
+    expect((await pool.request().query(`SELECT status FROM dbo.releases WHERE id = ${releaseId}`)).recordset)
+      .toEqual([{ status: 'deploying' }]);
+    expect((await pool.request().query(`SELECT COUNT(*) AS count FROM dbo.deployments
+      WHERE release_id = ${releaseId}`)).recordset).toEqual([{ count: 5 }]);
+    expect((await pool.request().query(`SELECT COUNT(*) AS count FROM dbo.activity
+      WHERE link = N'release:${releaseId}'`)).recordset).toEqual([{ count: 3 }]);
+    await pool.request().query(`INSERT dbo.activity (area, kind, title, link, alert_key)
+      VALUES (N'operations', N'deployment_failure', N'Deployment failed: production',
+        N'release:${releaseId}', N'deployment:${deployment.id + 6}')`);
+    await recordDeployment(deployment.id + 6);
+    expect(notifier).toHaveBeenCalledTimes(3);
+    const otherRepo = `DanAakesen/other-${randomUUID().slice(0, 8)}`;
+    await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Other deployment fixture', N'${otherRepo}', N'main', N'copilot', N'deliver_pr', N'1x2', N'node')`);
+    await store.record({
+      deliveryId: randomUUID(), event: 'workflow_run', outcome: 'ok',
+      mapping: { ...workflow, repository: otherRepo, id: workflow.id + 20 },
+    });
+    await store.record({
+      deliveryId: randomUUID(), event: 'deployment_status', outcome: 'ok',
+      mapping: { ...deployment, repository: otherRepo, id: deployment.id + 20, workflowRunId: workflow.id + 20 },
+    });
+    expect(notifier).toHaveBeenCalledTimes(4);
+  });
+
+  it('dismisses only historical board deployment failures, preserving data and owner dismissals', async () => {
+    const link = `cleanup:${randomUUID()}`;
+    await pool.request().input('link', sql.NVarChar(100), link).query(`INSERT dbo.activity
+      (area, kind, title, link, dismissed_at) VALUES
+      (N'operations', N'deployment_failure', N'Deployment failed: project-board', @link, NULL),
+      (N'operations', N'deployment_failure', N'Deployment failed: project-board', @link, '2026-10-01'),
+      (N'operations', N'deployment_failure', N'Deployment failed: production', @link, NULL),
+      (N'factory', N'task_event', N'Deployment failed: project-board', @link, NULL)`);
+    const cleanup = (await readMigrations()).find((migration) =>
+      migration.name === '0022_dismiss_board_deployment_failures.sql');
+    if (!cleanup) throw new Error('Cleanup migration missing');
+    await pool.request().batch(cleanup.sql);
+    await pool.request().batch(cleanup.sql);
+    await pool.request().batch((await readDownMigration(cleanup.name)).sql);
+    const { recordset } = await pool.request().input('link', sql.NVarChar(100), link)
+      .query<{ dismissedAt: Date | null }>(`SELECT dismissed_at AS dismissedAt FROM dbo.activity
+        WHERE link = @link ORDER BY id`);
+    expect(recordset).toHaveLength(4);
+    expect(recordset[0]?.dismissedAt).toBeInstanceOf(Date);
+    expect(recordset[1]?.dismissedAt?.toISOString()).toBe('2026-10-01T00:00:00.000Z');
+    expect(recordset[2]?.dismissedAt).toBeNull();
+    expect(recordset[3]?.dismissedAt).toBeNull();
   });
 
   it('stores valid records across the committed schema', async () => {
@@ -1269,9 +1412,11 @@ describe('committed domain schema (groups 1-8)', () => {
     const message = await scalar(`INSERT dbo.messages
       (jarvis_session_id, role, text, language, interrupted)
       VALUES (${String(session)}, N'jarvis', N'Partial reply', N'en', 1)`);
-    const latest = await readDownMigration('0021_vault_memory_index.sql');
-    expect(await revertMigration(pool, committed, latest)).toBe(latest.name);
     const down = await readDownMigration('0020_chat_message_steering.sql');
+    const later = committed.filter((migration) => migration.name > down.name);
+    for (const migration of [...later].reverse()) {
+      expect(await revertMigration(pool, committed, await readDownMigration(migration.name))).toBe(migration.name);
+    }
 
     await expect(revertMigration(pool, committed, down))
       .rejects.toThrow('Message language and interruption data must be retained');
@@ -1283,7 +1428,7 @@ describe('committed domain schema (groups 1-8)', () => {
       `UPDATE dbo.messages SET language = NULL, interrupted = 0 WHERE id = ${String(message)}`,
     );
     expect(await revertMigration(pool, committed, down)).toBe(down.name);
-    expect(await applyMigrations(pool, committed)).toEqual([down.name, latest.name]);
+    expect(await applyMigrations(pool, committed)).toEqual([down.name, ...later.map((migration) => migration.name)]);
   });
 
   it('refuses to revert a migration that is not the latest applied one and keeps state on failure', async () => {
