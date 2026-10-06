@@ -29,6 +29,7 @@
     "jose": "6.2.12",
     "microsoft-cognitiveservices-speech-sdk": "1.52.0",
     "mssql": "12.7.2",
+    "parse5": "8.0.1",
     "pino": "10.4.0",
     "ws": "8.22.0"
   },
