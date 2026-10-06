@@ -1,9 +1,10 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { JarvisActivityEvent } from '@jarvis/contracts';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { ConversationMoreMenu, type MoreMenuAction } from './ConversationMoreMenu';
+import { ConversationToast, type ConversationNotification } from './ConversationToast';
 import { VoiceOrbStatus } from './VoiceOrbStatus';
 import { BrowserVoiceClient, type MicrophoneState, type VoiceLanguage, type VoiceStatus } from './voice-client';
 import { languageName } from './voice-language';
@@ -13,8 +14,8 @@ import type { CameraController, ScreenShareController } from './screen-sharing';
 import './VoiceControls.css';
 
 const initialMessage = 'Start voice with the input orb. Your browser asks for microphone access when voice starts; Jarvis only hears you after the voice session is connected.';
-const cameraGuidance = 'Turn on the camera from the top bar before asking Jarvis to inspect a frame.';
-const screenGuidance = 'Start screen sharing from Activity, sharing and backend before asking Jarvis to inspect a frame.';
+const cameraGuidance = 'Choose Turn on camera in More options, then ask Jarvis to look.';
+const screenGuidance = 'Choose Share screen in More options, then ask Jarvis to look.';
 const sessionPendingGuidance = 'Available once the voice session is connected.';
 
 function MenuGlyph({ name }: { name: 'microphone' | 'microphone-off' | 'screen' | 'camera' }) {
@@ -76,7 +77,12 @@ export function VoiceControls({
   const voiceBar = useRef<HTMLDivElement>(null);
   const voiceStatus = useRef<HTMLDivElement>(null);
   const [screenSessionId, setScreenSessionId] = useState<string | null>(null);
-  const [screenError, setScreenError] = useState('');
+  const [notification, setNotification] = useState<ConversationNotification | null>(null);
+  const notify = useCallback((message: string, error = false) => {
+    setNotification({ message, error, id: performance.now() });
+  }, []);
+  const dismissNotification = useCallback(() => setNotification(null), []);
+
   const [localLanguage, setLocalLanguage] = useState<VoiceLanguage>(language);
   const [sessionLanguage, setSessionLanguage] = useState<VoiceLanguage | null>(null);
   // Runtime activity that already existed when this session started belongs to an earlier session.
@@ -172,6 +178,7 @@ export function VoiceControls({
     setScreenSessionId(null);
     setSessionLanguage(selectedLanguage);
     setStaleActivity(voiceActivity);
+    dismissNotification();
     setMuted(false);
     setMicrophone('off');
     const voice = new BrowserVoiceClient({
@@ -192,6 +199,7 @@ export function VoiceControls({
         setClientStatus(nextStatus);
         setClientMessage(nextMessage);
         if (nextStatus === 'stopped' || nextStatus === 'error') {
+          if (nextStatus === 'error') notify(nextMessage, true);
           client.current = null;
           stage.setSignals(null);
           setSessionLanguage(null);
@@ -218,25 +226,27 @@ export function VoiceControls({
   const inspectAndSendVision = async (source: 'camera' | 'screen') => {
     const capture = source === 'camera' ? camera : screenShare;
     const sessionId = screenSessionIdRef.current;
-    if (!sessionId || !client.current) return;
-    setScreenError('');
+    const voice = client.current;
+    if (!sessionId || !voice) return;
     if (!capture?.sharing) {
-      setScreenError(source === 'camera' ? cameraGuidance : screenGuidance);
+      notify(source === 'camera' ? cameraGuidance : screenGuidance);
       if (source === 'screen') {
-        try { client.current.sendScreenContextUnavailable(); } catch { /* The voice session may be closing. */ }
+        try { voice.sendScreenContextUnavailable(); } catch { /* The voice session may be closing. */ }
       }
       return;
     }
     try {
-      const context = await capture.inspect(sessionId);
-      client.current.sendScreenContext(
+      const context = await capture.inspect(sessionId, 'caller');
+      if (client.current !== voice || screenSessionIdRef.current !== sessionId) return;
+      voice.sendScreenContext(
         context.description,
         source === 'screen' ? context.sharedWindowTitle : undefined,
       );
     } catch (reason) {
-      setScreenError(reason instanceof Error ? reason.message : 'Jarvis could not inspect the visual frame.');
+      if (client.current !== voice || screenSessionIdRef.current !== sessionId) return;
+      notify(reason instanceof Error ? reason.message : 'Jarvis could not inspect the visual frame.', true);
       if (source === 'screen') {
-        try { client.current.sendScreenContextUnavailable(); } catch { /* The voice session may be closing. */ }
+        try { voice.sendScreenContextUnavailable(); } catch { /* The voice session may be closing. */ }
       }
     }
   };
@@ -251,12 +261,48 @@ export function VoiceControls({
     client.current?.setMuted(nextMuted);
   };
 
-  const visionUnavailable = (sharing: boolean | undefined, inspecting: boolean | undefined, guidance: string, busy: string) =>
-    !sharing ? guidance : !screenSessionId || pending ? sessionPendingGuidance : inspecting ? busy : undefined;
-  const screenUnavailable = visionUnavailable(screenShare?.sharing, screenShare?.inspecting, screenGuidance,
-    'Jarvis is already looking at the screen.');
-  const cameraUnavailable = visionUnavailable(camera?.sharing, camera?.inspecting, cameraGuidance,
-    'Jarvis is already looking at the camera.');
+  const screenActions: MoreMenuAction[] = screenShare?.sharing ? [{
+    id: 'screen',
+    label: screenShare.inspecting ? 'Looking at screen…' : 'Look at screen',
+    icon: <MenuGlyph name="screen" />,
+    onSelect: () => { void inspectAndSendVision('screen'); },
+    disabled: !screenSessionId || pending || screenShare.inspecting,
+    ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
+  }, {
+    id: 'stop-screen',
+    label: 'Stop sharing screen',
+    icon: <MenuGlyph name="screen" />,
+    onSelect: () => screenShare.stop(),
+  }] : [{
+    id: 'screen',
+    label: screenShare?.starting ? 'Choosing screen…' : 'Share screen',
+    icon: <MenuGlyph name="screen" />,
+    // Request permission directly in the click gesture; capture errors become toasts.
+    onSelect: () => { void screenShare?.start((message) => notify(message, true)); },
+    disabled: !screenShare || screenShare.starting,
+    ...(!screenShare ? { description: 'Screen sharing is unavailable.' } : {}),
+  }];
+  const cameraActions: MoreMenuAction[] = camera?.sharing ? [{
+    id: 'camera',
+    label: camera.inspecting ? 'Looking at camera…' : 'Look at camera',
+    icon: <MenuGlyph name="camera" />,
+    onSelect: () => { void inspectAndSendVision('camera'); },
+    disabled: !screenSessionId || pending || camera.inspecting,
+    ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
+  }, {
+    id: 'stop-camera',
+    label: 'Turn off camera',
+    icon: <MenuGlyph name="camera" />,
+    onSelect: () => camera.stop(),
+  }] : [{
+    id: 'camera',
+    label: camera?.starting ? 'Starting camera…' : 'Turn on camera',
+    icon: <MenuGlyph name="camera" />,
+    // Request permission directly in the click gesture; capture errors become toasts.
+    onSelect: () => { void camera?.start((message) => notify(message, true)); },
+    disabled: !camera || camera.starting,
+    ...(!camera ? { description: 'Camera access is unavailable.' } : {}),
+  }];
   const microphoneReady = microphone === 'live' || microphone === 'granted';
   const menuActions: MoreMenuAction[] = [
     ...(presentation.canRetryMicrophone ? [{
@@ -273,22 +319,8 @@ export function VoiceControls({
       disabled: pending,
       ...(pending ? { description: sessionPendingGuidance } : {}),
     }] : []),
-    {
-      id: 'screen',
-      label: 'Look at screen',
-      icon: <MenuGlyph name="screen" />,
-      onSelect: () => void inspectAndSendVision('screen'),
-      disabled: Boolean(screenUnavailable),
-      ...(screenUnavailable ? { description: screenUnavailable } : {}),
-    },
-    {
-      id: 'camera',
-      label: 'Look at camera',
-      icon: <MenuGlyph name="camera" />,
-      onSelect: () => void inspectAndSendVision('camera'),
-      disabled: Boolean(cameraUnavailable),
-      ...(cameraUnavailable ? { description: cameraUnavailable } : {}),
-    },
+    ...screenActions,
+    ...cameraActions,
   ];
   const languageNote = !sessionLanguage ? ''
     : sessionLanguage !== selectedLanguage
@@ -297,7 +329,6 @@ export function VoiceControls({
 
   return (
     <div className="voice-controls" data-active={active}>
-      {clientStatus === 'error' && <p className="voice-error" role="alert">{clientMessage}</p>}
       {!active && <p id="voice-start-guidance" className="visually-hidden">{initialMessage}</p>}
       {active ? (
         <>
@@ -322,7 +353,7 @@ export function VoiceControls({
           <span className="voice-start-label" aria-hidden="true">Start voice</span>
         </div>
       )}
-      {screenError && <p className="voice-screen-error" role="alert">{screenError}</p>}
+      {notification && <ConversationToast voiceActive={active} notification={notification} onDismiss={dismissNotification} />}
     </div>
   );
 }

@@ -8,6 +8,16 @@ import {
   reflexSourceForRequest,
   type JevFailure,
 } from '../core/jev.js';
+import {
+  closeIntentFor,
+  commonShortcutsFor,
+  isIrreversibleKeySequence,
+  isSafeKeySequence,
+  keySequenceChoiceOptions,
+  keySequenceFromChoice,
+  keySequencesFor,
+  type KeySequence,
+} from '../core/keyboard-actions.js';
 
 const endpoint = 'https://api.typesafe.ai/v1/systemone';
 const model = 'jev-latest';
@@ -39,13 +49,15 @@ export interface PcActSnapshot {
   readonly elements: readonly PcActElement[];
 }
 
-export type PcActOperation = 'click' | 'type' | 'scroll_up' | 'scroll_down' | 'wait' | 'done' | 'blocked';
+export type PcActOperation =
+  | 'click' | 'type' | 'type_focused' | 'keys' | 'scroll_up' | 'scroll_down' | 'wait' | 'done' | 'blocked';
 
 export interface PcActDecision {
   readonly operation: PcActOperation;
   readonly confidence: number;
   readonly targetIndex?: number;
   readonly text?: string;
+  readonly keys?: KeySequence;
 }
 
 export interface PcActDecisionInput {
@@ -67,14 +79,29 @@ export interface PcActStepActivity {
 
 export interface PcActBridge {
   observe(signal: AbortSignal): Promise<unknown>;
-  act(action: {
+  act(action: PcActBridgeAction, signal: AbortSignal): Promise<unknown>;
+}
+
+export type PcActBridgeAction =
+  | {
     readonly snapshotId: string;
     readonly elementIndex: number;
     readonly action: 'click' | 'type' | 'scroll_up' | 'scroll_down';
     readonly confirmed?: boolean;
     readonly text?: string;
-  }, signal: AbortSignal): Promise<unknown>;
-}
+  }
+  | {
+    readonly snapshotId: string;
+    readonly action: 'keys';
+    readonly keys: KeySequence;
+    readonly confirmed: boolean;
+    readonly closeIntent: boolean;
+  }
+  | {
+    readonly snapshotId: string;
+    readonly action: 'type_focused';
+    readonly text: string;
+  };
 
 export interface PcActOptions {
   readonly planner: PcActPlanner;
@@ -292,6 +319,8 @@ export function createJevPcActPlanner(
           requestSignal.aborted) return null;
 
       const values = quotedValues(input.goal).filter(value => !sensitiveText(value));
+      const keyboardOptions = keySequencesFor(input.snapshot.application, input.goal);
+      const closeIntent = closeIntentFor(input.goal);
       const body = JSON.stringify({
         model,
         state: {
@@ -299,6 +328,7 @@ export function createJevPcActPlanner(
           step: input.step,
           previousActions: input.previousActions,
           application: input.snapshot.application,
+          commonShortcuts: commonShortcutsFor(input.snapshot.application),
           elements: input.snapshot.elements,
         },
         questions: {
@@ -308,6 +338,8 @@ export function createJevPcActPlanner(
             criteria: {
               click: 'Activate one matching visible, non-sensitive control.',
               type: 'Enter one exact quoted, non-sensitive value into one matching text field.',
+              type_focused: 'Type one exact quoted, non-sensitive value into the currently focused control.',
+              keys: 'Send one bounded sequence of keyboard chords to the foreground app.',
               scroll_up: 'Scroll a matching observed control upward.',
               scroll_down: 'Scroll a matching observed control downward.',
               wait: 'Wait briefly for a visible application update.',
@@ -326,9 +358,14 @@ export function createJevPcActPlanner(
               ]),
             ]),
           },
+          key_sequence: {
+            type: 'choice',
+            instructions: 'Choose one listed keyboard sequence that advances the goal, or none. Do not invent keys.',
+            criteria: { none: 'No listed keyboard sequence is a safe next step.', ...keySequenceChoiceOptions(keyboardOptions) },
+          },
           text_value: {
             type: 'choice',
-            instructions: 'For type only, choose an exact non-sensitive value explicitly quoted in the user goal. Otherwise choose none.',
+            instructions: 'For type or type_focused only, choose an exact non-sensitive value explicitly quoted in the user goal. Otherwise choose none.',
             criteria: Object.fromEntries([
               ['none', 'No safe, explicit text value is available.'],
               ...values.map((value, index) => [`value_${index}`, `Exact user-provided value "${value}".`]),
@@ -374,7 +411,7 @@ export function createJevPcActPlanner(
       const answers = payload.answers;
       const operation = readChoice(answers.operation);
       const operations: readonly PcActOperation[] =
-        ['click', 'type', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked'];
+        ['click', 'type', 'keys', 'type_focused', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked'];
       if (!operation || !operations.includes(operation.choice as PcActOperation)) {
         return { failure: 'invalid_answer' };
       }
@@ -383,6 +420,38 @@ export function createJevPcActPlanner(
       if (confidence < jevChoiceConfidenceThreshold) return { operation: selected, confidence };
       if (selected === 'done' || selected === 'blocked' || selected === 'wait') {
         return { operation: selected, confidence };
+      }
+
+      if (selected === 'keys') {
+        const keysChoice = readChoice(answers.key_sequence);
+        if (!keysChoice) return { failure: 'invalid_answer' };
+        const keys = keySequenceFromChoice(keysChoice.choice, keyboardOptions);
+        if (!keys || !isSafeKeySequence(keys, closeIntent)) {
+          return keysChoice.choice === 'none'
+            ? { operation: selected, confidence: Math.min(confidence, keysChoice.confidence) }
+            : { failure: 'invalid_answer' };
+        }
+        return {
+          operation: selected,
+          confidence: Math.min(confidence, keysChoice.confidence),
+          keys,
+        };
+      }
+
+      if (selected === 'type_focused') {
+        const textChoice = readChoice(answers.text_value);
+        if (!textChoice) return { failure: 'invalid_answer' };
+        if (textChoice.choice === 'none') {
+          return { operation: selected, confidence: Math.min(confidence, textChoice.confidence) };
+        }
+        const textMatch = /^value_(\d{1,1})$/u.exec(textChoice.choice);
+        const text = textMatch ? values[Number(textMatch[1])] : undefined;
+        if (!text || sensitiveText(text)) return { failure: 'invalid_answer' };
+        return {
+          operation: selected,
+          confidence: Math.min(confidence, textChoice.confidence),
+          text,
+        };
       }
 
       const target = readChoice(answers.target);
@@ -460,7 +529,7 @@ export async function runPcAct(
       const decision = result;
       if (deadline.aborted) throw deadline.reason;
       if (!decision || !validProbability(decision.confidence) ||
-          !['click', 'type', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked']
+          !['click', 'type', 'type_focused', 'keys', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked']
             .includes(decision.operation) ||
           decision.confidence < jevChoiceConfidenceThreshold) {
         throw new ToolRefusal('Jev is not confident enough to choose a safe PC action. Please clarify the goal.');
@@ -483,46 +552,83 @@ export async function runPcAct(
         previousActions.push('waited briefly for the application');
         continue;
       }
-      if (decision.targetIndex === undefined) {
-        throw new ToolRefusal('Jev did not choose a control from the current Windows snapshot.');
-      }
-      const target = snapshot.elements[decision.targetIndex];
-      if (!target || target.index !== decision.targetIndex) {
-        throw new ToolRefusal('The selected Windows control is no longer in the current snapshot.');
-      }
-      if (operation === 'type' && (!decision.text || sensitiveText(decision.text))) {
-        throw new ToolRefusal('Provide one explicit, non-sensitive value in quotation marks before asking Jarvis to type.');
-      }
-      if (operation === 'type' && !quotedValues(goal).includes(decision.text!)) {
-        throw new ToolRefusal('Jarvis can type only a non-sensitive value quoted in the request.');
+      let target: PcActElement | undefined;
+      if (operation === 'keys') {
+        if (!decision.keys || !isSafeKeySequence(decision.keys, closeIntentFor(goal))) {
+          throw new ToolRefusal('Jev did not choose a safe, listed keyboard sequence.');
+        }
+      } else if (operation === 'type_focused') {
+        if (!decision.text || sensitiveText(decision.text) ||
+            !quotedValues(goal).includes(decision.text)) {
+          throw new ToolRefusal('Jarvis can type only an explicit, non-sensitive value quoted in the request.');
+        }
+      } else {
+        if (decision.targetIndex === undefined) {
+          throw new ToolRefusal('Jev did not choose a control from the current Windows snapshot.');
+        }
+        target = snapshot.elements[decision.targetIndex];
+        if (!target || target.index !== decision.targetIndex) {
+          throw new ToolRefusal('The selected Windows control is no longer in the current snapshot.');
+        }
+        if (operation === 'type' && (!decision.text || sensitiveText(decision.text))) {
+          throw new ToolRefusal('Provide one explicit, non-sensitive value in quotation marks before asking Jarvis to type.');
+        }
+        if (operation === 'type' && !quotedValues(goal).includes(decision.text!)) {
+          throw new ToolRefusal('Jarvis can type only a non-sensitive value quoted in the request.');
+        }
       }
 
       const action = async (confirmed: boolean): Promise<void> => {
         if (deadline.aborted) throw deadline.reason;
-        const result = await bridge.act({
-          snapshotId: snapshot.snapshotId,
-          elementIndex: target.index,
-          action: operation as 'click' | 'type' | 'scroll_up' | 'scroll_down',
-          ...(operation === 'click' || operation === 'type' ? { confirmed } : {}),
-          ...(operation === 'type' ? { text: decision.text } : {}),
-        }, deadline);
+        const result = operation === 'keys'
+          ? await bridge.act({
+            snapshotId: snapshot.snapshotId,
+            action: 'keys',
+            keys: decision.keys!,
+            confirmed,
+            closeIntent: closeIntentFor(goal),
+          }, deadline)
+          : operation === 'type_focused'
+            ? await bridge.act({
+              snapshotId: snapshot.snapshotId,
+              action: 'type_focused',
+              text: decision.text!,
+            }, deadline)
+            : await bridge.act({
+              snapshotId: snapshot.snapshotId,
+              elementIndex: target!.index,
+              action: operation as 'click' | 'type' | 'scroll_up' | 'scroll_down',
+              ...(operation === 'click' || operation === 'type' ? { confirmed } : {}),
+              ...(operation === 'type' ? { text: decision.text } : {}),
+            }, deadline);
         if (validActed(result, operation)) return;
         if (isRecord(result) && Object.keys(result).length === 3 &&
             result.confirmationRequired === true && result.actionKind === 'computer_use' &&
-            result.summary === 'Activate a potentially destructive Windows control.' &&
-            (operation === 'click' || operation === 'type')) {
-          throw new ConfirmationNeeded(approvalSummary(operation, snapshot.application, target));
+            typeof result.summary === 'string' && result.summary.length <= 300) {
+          throw new ConfirmationNeeded(operation === 'click' || operation === 'type'
+            ? approvalSummary(operation, snapshot.application, target!)
+            : `Send an irreversible keyboard action in ${snapshot.application}.`);
         }
         throw new ToolFailure('The Windows control action did not complete.');
       };
 
       try {
-        if ((operation === 'click' || operation === 'type') && needsApproval(operation, goal, target)) {
+        if ((operation === 'click' || operation === 'type') && needsApproval(operation, goal, target!)) {
           if (!options.runConfirmed) {
             throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
           }
           await options.runConfirmed(
-            approvalSummary(operation, snapshot.application, target),
+            approvalSummary(operation, snapshot.application, target!),
+            () => action(true),
+            deadline,
+          );
+        } else if (operation === 'keys' &&
+            (isIrreversibleKeySequence(decision.keys!) || irreversibleActionPattern.test(goal))) {
+          if (!options.runConfirmed) {
+            throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
+          }
+          await options.runConfirmed(
+            `Send an irreversible keyboard action in ${snapshot.application}.`,
             () => action(true),
             deadline,
           );
@@ -538,9 +644,11 @@ export async function runPcAct(
       }
 
       logStep(options.onStep, step, operation, 'completed');
-      previousActions.push(operation === 'type'
+      previousActions.push(operation === 'type' || operation === 'type_focused'
         ? 'entered the user-provided text'
-        : `${operation} on observed ${target.role}`);
+        : operation === 'keys'
+          ? 'sent keyboard input'
+          : `${operation} on observed ${target!.role}`);
     } catch (error) {
       logStep(options.onStep, step, operation, error instanceof ToolRefusal ? 'refused' : 'error');
       if (signal.aborted) throw new ToolRefusal('PC task stopped before completion.');

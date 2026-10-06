@@ -110,6 +110,49 @@ public sealed class BrowserExecutorTests
     }
 
     [Fact]
+    public async Task Sends_keyboard_actions_only_to_the_focused_non_sensitive_browser_control()
+    {
+        await using (var target = await FakeCdpTarget.StartAsync())
+        {
+            var keyboard = new FakeKeyboardProvider();
+            using var executor = new BrowserExecutor(
+                () => true,
+                () => "Search - Google Chrome",
+                targetsUri: target.TargetsUri,
+                keyboardExecutor: new KeyboardExecutor(keyboard));
+            var snapshot = await Execute(executor, "browser_snapshot", """{"tabId":"tab_1"}""");
+            var id = (string)snapshot.GetType().GetProperty("SnapshotId")!.GetValue(snapshot)!;
+
+            var result = await Execute(executor, "browser_act",
+                $$"""{"tabId":"tab_1","snapshotId":"{{id}}","action":"keys","keys":["Ctrl+L"],"confirmed":false,"closeIntent":false}""");
+
+            Assert.Equal(true, result.GetType().GetProperty("acted")!.GetValue(result));
+            Assert.Equal(["Ctrl+L"], keyboard.Keys);
+            Assert.Contains(target.Calls, call =>
+                call.GetProperty("params").TryGetProperty("expression", out var expression) &&
+                expression.GetString()!.Contains("document.activeElement", StringComparison.Ordinal));
+        }
+
+        await using (var target = await FakeCdpTarget.StartAsync())
+        {
+            target.FocusedSensitive = true;
+            var keyboard = new FakeKeyboardProvider();
+            using var executor = new BrowserExecutor(
+                () => true,
+                () => "Search - Google Chrome",
+                targetsUri: target.TargetsUri,
+                keyboardExecutor: new KeyboardExecutor(keyboard));
+            var snapshot = await Execute(executor, "browser_snapshot", """{"tabId":"tab_1"}""");
+            var id = (string)snapshot.GetType().GetProperty("SnapshotId")!.GetValue(snapshot)!;
+
+            await AssertRefused(executor,
+                $$"""{"tabId":"tab_1","snapshotId":"{{id}}","action":"keys","keys":["Ctrl+L"],"confirmed":false,"closeIntent":false}""",
+                "blocked");
+            Assert.Empty(keyboard.Keys);
+        }
+    }
+
+    [Fact]
     public async Task Refuses_replaced_stale_covered_and_sensitive_targets()
     {
         await using (var target = await FakeCdpTarget.StartAsync())
@@ -344,5 +387,27 @@ public sealed class BrowserExecutorTests
             new BridgeCommand("1730aa51-f380-4df9-a345-1feb862cb1c4", "command", command, document.RootElement),
             CancellationToken.None));
         Assert.Equal(code, exception.Code);
+    }
+
+    private sealed class FakeKeyboardProvider : IKeyboardProvider
+    {
+        public List<string> Keys { get; } = [];
+
+        public bool IsSensitiveFieldFocused(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return false;
+        }
+
+        public void SendKeys(IReadOnlyList<string> sequence, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Keys.AddRange(sequence);
+        }
+
+        public void TypeFocused(string text, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
     }
 }

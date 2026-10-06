@@ -1352,3 +1352,19 @@ PR #419 replaces Enable microphone with capture on explicit Start voice. Browser
 Focused web checks cover voice client lifecycle, presentation/status, scene persistence and motion envelopes. Copilot reported fixture browser layout and motion observations; the software-WebGL cadence was about 4 fps, so normal hardware motion quality remains unverified. Live microphone/speaker, English/Danish provider, physical phone and hardware-GPU acceptance remain post-deploy checks.
 
 Reviewer verification against updated main: web lint, all 36 web test files (313 tests), and the production web build pass. Scratch Chromium exercised the real voice client with fake microphone hardware and an intercepted voice handshake: no microphone request before Start voice, one request after it, PCM sending after readiness, Listening below the orb without bar overlap or horizontal overflow at 1440×1000 and 390×844, one mounted canvas, and End voice returning the composer. No page errors occurred. Captures/report: `docs/ui/screenshots/p8-40-review-*`. This is fixture/software-WebGL evidence, not live Azure, real microphone/speaker or hardware-GPU verification.
+
+
+## Voice UI hotfix browser evidence (#435)
+
+The real app and browser voice client were inspected at 1440×1000 and 390×844 in
+Chromium with scratch-only authentication, backend/socket fixtures and fake media
+devices. Screen/camera start from More, sharing sends no frame until inspection,
+permission denial uses a bottom-right toast, session end stops tracks, and the
+composer remains 70 px high after a failure. Status is white with a transparent
+background and no glyph; it stays above the bar, with no horizontal overflow or
+page/shader errors. Dormant/awake frames show core movement; reduced-motion
+Listening remains usable. Web lint, all 318 tests (37 files), and build pass;
+build retains the existing large-chunk advisory. Screenshots and the report:
+`docs/ui/screenshots/p8-43-{dormant,awake,toast,phone,typing-after-error}.png` and
+`p8-43-browser-report.json`. Fixtures do not verify physical capture, live vision/
+voice providers, Safari or hardware-GPU motion. No fixture auth is committed.
