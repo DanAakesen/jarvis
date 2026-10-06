@@ -743,7 +743,7 @@ the coding agent must not access Azure or run live Codex acceptance.
 
 Production runner calls use the optional paired `FOUNDRY_RUNTIME_ENDPOINT` and
 `FOUNDRY_ADMIN_ENDPOINT`, plus `FOUNDRY_RUNNER_AGENT_NAME`. Bicep supplies the
-project URLs and `jarvis-runner-node-1x2`; these are non-secret settings. When
+project URLs and `jarvis-runner-base-1x2`; these are non-secret settings. When
 configured, the backend uses its shared `DefaultAzureCredential`, selected with
 `SQL_MANAGED_IDENTITY_CLIENT_ID`. The daily Codex renewal job requires database
 and Foundry runner configuration, and uses the SQL credential lease; the task

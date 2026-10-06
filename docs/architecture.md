@@ -715,7 +715,7 @@ extension is disconnected, the current companion launches the installed Chrome
 executable directly and identifies that fallback in the tool result. Websites
 are never handed to the Windows default browser. A connected extension with
 automation disabled is refused rather than silently bypassing the setting.
-Launched apps and VS Code folder opens use Windows `AllowSetForegroundWindow`
+Launched apps and VS Code file/folder opens use Windows `AllowSetForegroundWindow`
 to grant the new process foreground eligibility; no synthetic input or
 focus-stealing workaround is used. The bridge does not expose arbitrary command
 execution; its only direct executable launch for a URL is the Chrome fallback.
@@ -725,6 +725,13 @@ titles, or message content.
 The backend logs each WebSocket command's safe command name, normalized outcome
 and monotonic round-trip milliseconds as `pc_bridge.command_timing`; request
 arguments and returned data are excluded by the logger allowlist.
+
+`pc_open` accepts repo-relative folder and file targets under `C:\Repo` and
+opens them in VS Code. The portable `RepoPathResolver` checks the requested
+file/folder kind, canonical containment and every path segment for reparse
+points; invalid, missing, traversing or linked-out paths are refused. This
+reuses the P7-31 `open_app`/`InstalledAppMatcher` implementation for app
+launching and adds no second launcher.
 
 Online/offline changes update one existing Now-feed activity row keyed by
 `pc_bridge_status`; the same row reports whether Jarvis control is active or
@@ -795,6 +802,16 @@ backend lint/build and the Linux Windows-target build pass. A cancellation token
 preempt an individual synchronous UI Automation COM call. Live Jev calls,
 Windows UIA responsiveness/cancellation, physical approval delivery, and Dan's
 end-to-end app task remain unverified.
+
+When the configured Jev planner is available, the sensitive `codex_prompt`
+tool opens Codex through `open_app` and delegates UI interaction to this same
+`runPcAct` loop and the existing `uia_snapshot`/`uia_act` bridge commands. It
+passes the exact prompt as one JSON-quoted value; password, payment-card,
+one-time-code and other sensitive text remain refused. Codex prompts are audited
+as redacted data. Typing does not request approval; irreversible controls or
+intent reuse the existing `runConfirmed` flow. The tool returns success only
+after a completed text-entry action, submission action and `pc_act` completion;
+an unavailable Codex app or an incomplete submission is a refusal.
 
 ### Chrome browser executor (P7-18, P7-25, P7-26)
 
