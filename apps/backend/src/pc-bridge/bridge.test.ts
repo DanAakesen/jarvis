@@ -8,7 +8,7 @@ import { coreModule } from '../core/index.js';
 import { createLogger } from '../logging.js';
 import type { BackendModule } from '../modules.js';
 import { createPcBridgeModule, PC_BRIDGE_SUBPROTOCOL } from './bridge.js';
-import type { PcActOptions, PcActPlanner } from './pc-act.js';
+import type { PcActOptions, PcActPlanner, PcActVisionModel } from './pc-act.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -38,6 +38,7 @@ function fixture(options: {
   logLevel?: 'info' | 'silent';
   onStatusChange?: (online: boolean) => void;
   pcActPlanner?: PcActPlanner;
+  pcActVisionModel?: PcActVisionModel;
   onPcActStep?: PcActOptions['onStep'];
   runConfirmed?: <T>(summary: string, action: () => Promise<T>, signal: AbortSignal) => Promise<T>;
 } = {}) {
@@ -749,6 +750,85 @@ describe('authenticated PC bridge protocol', () => {
     expect(invalidMedia.json()).toMatchObject({ error: 'Invalid request' });
   });
 
+  it('transfers a transient capture above the command limit and returns only redacted pc_act activity', async () => {
+    const planner: PcActPlanner = {
+      decide: vi.fn()
+        .mockResolvedValueOnce({ operation: 'click', confidence: 0.99, targetIndex: 0 })
+        .mockResolvedValueOnce({ operation: 'done', confidence: 0.99 }),
+    };
+    const locateElements = vi.fn(async () => [{
+      index: 0,
+      role: 'button',
+      name: 'Play',
+      bounds: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+    }]);
+    const steps: Parameters<NonNullable<PcActOptions['onStep']>>[0][] = [];
+    const { app, record, records } = fixture({
+      logLevel: 'info',
+      pcActPlanner: planner,
+      pcActVisionModel: { locateElements },
+      onPcActStep: (activity) => { steps.push(activity); },
+    });
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const commands: Array<Record<string, unknown>> = [];
+    let observations = 0;
+    const image = Buffer.alloc(100_000);
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(image);
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      commands.push(command);
+      let result: Record<string, unknown>;
+      if (command.command === 'uia_snapshot') {
+        observations += 1;
+        result = {
+          snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+          application: 'spotify',
+          elements: observations === 1 ? [] : [
+            { index: 0, role: 'button', name: 'Play' },
+            { index: 1, role: 'button', name: 'Pause' },
+            { index: 2, role: 'button', name: 'Next' },
+          ],
+        };
+      } else if (command.command === 'window_capture') {
+        result = {
+          snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+          application: 'spotify',
+          width: 1280,
+          height: 720,
+          png: image.toString('base64'),
+        };
+      } else {
+        result = { acted: true, action: 'click' };
+      }
+      bridge.send(JSON.stringify({ id: command.id, type: 'result', result }));
+    });
+
+    const response = await callTool(app, 'pc_act', { goal: 'Start playing' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed', steps: 2 } });
+    expect(commands.map(({ command }) => command)).toEqual([
+      'uia_snapshot', 'window_capture', 'click_point', 'uia_snapshot',
+    ]);
+    const timings = records.map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((entry) => entry.msg === 'pc_bridge.command_timing');
+    expect(timings.map(({ command, outcome }) => [command, outcome])).toEqual([
+      ['uia_snapshot', 'ok'],
+      ['window_capture', 'ok'],
+      ['click_point', 'ok'],
+      ['uia_snapshot', 'ok'],
+    ]);
+    expect(JSON.stringify(commands)).not.toContain('image');
+    expect(locateElements).toHaveBeenCalledOnce();
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    }));
+    expect(JSON.stringify(steps)).not.toContain('Play');
+    expect(JSON.stringify(response.json())).not.toContain(image.toString('base64'));
+  });
+
   it('reports paused control state and refuses PC actions until resumed', async () => {
     const statuses: Array<[boolean, boolean | undefined]> = [];
     let resolvePaused!: () => void;
@@ -760,6 +840,7 @@ describe('authenticated PC bridge protocol', () => {
     };
     const { app } = fixture({
       pcActPlanner: planner,
+      pcActVisionModel: { locateElements: vi.fn(async () => []) },
       onStatusChange: (online, controlPaused) => {
         statuses.push([online, controlPaused]);
         if (online && controlPaused) resolvePaused();

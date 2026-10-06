@@ -480,6 +480,13 @@ try {
       onError: () => logger.warn('github.checks_loop_recovery_failed'),
     })
     : undefined;
+  const screenVisionModel = config.foundryProjectEndpoint && credential
+    ? createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
+      const token = await credential.getToken(scope, { abortSignal: signal });
+      if (!token) throw new Error('Foundry screen identity unavailable');
+      return token.token;
+    })
+    : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
     createRecipeModule(recipeStore),
@@ -497,6 +504,10 @@ try {
       } : {}),
     }),
     createPcBridgeModule({
+      ...(screenVisionModel ? {
+        pcActVisionModel: screenVisionModel,
+        pcActVisionDeployment: 'gpt-5.6-luna',
+      } : {}),
       ...(pcActPlanner ? {
         pcActPlanner,
         ...(recipes ? { recipes } : {}),
@@ -545,15 +556,10 @@ try {
     }));
   }
   let visionWatch: VisionWatchService | undefined;
-  if (database && settingsStore && config.foundryProjectEndpoint && credential) {
-    const visionModel = createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
-      const token = await credential.getToken(scope, { abortSignal: signal });
-      if (!token) throw new Error('Foundry screen identity unavailable');
-      return token.token;
-    });
+  if (database && settingsStore && screenVisionModel) {
     const visionUsage = createScreenFrameUsageStore(database.pool);
-    modules.push(createScreenVisionModule(new ScreenVisionService(visionModel, visionUsage)));
-    visionWatch = new VisionWatchService(visionModel, visionUsage, createConversationStore(database.pool));
+    modules.push(createScreenVisionModule(new ScreenVisionService(screenVisionModel, visionUsage)));
+    visionWatch = new VisionWatchService(screenVisionModel, visionUsage, createConversationStore(database.pool));
     modules.push(createVisionWatchModule(visionWatch));
   }
   if (graphClient) {
