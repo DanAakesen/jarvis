@@ -456,7 +456,7 @@ function reflexSkipReason(
   const partialSafe = target?.tool.name === 'workspace_command' && workspaceReflexSafe(target) ||
     target?.tool.name === 'pause_task' && target.tool.reflexSafe === true ||
     target?.tool.name === 'pc_open' && target.arguments.target === 'app' &&
-      target.arguments.value === 'edge' ||
+      target.arguments.value === 'chrome' ||
     target?.tool.name === 'pc_open' && target.arguments.target === 'url' &&
       typeof target.arguments.value === 'string' && safeHttpUrl(target.arguments.value);
   const modeSafe = mode === 'partial' ? partialSafe

@@ -14,7 +14,8 @@ const MAX_MESSAGE_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 15_000;
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
-const allowedApps = new Set(['vscode', 'edge', 'explorer', 'terminal']);
+// Chrome, never Edge (Dan's rule; L106).
+const allowedApps = new Set(['vscode', 'chrome', 'explorer', 'terminal']);
 
 type PcCommand =
   | { name: 'open_url'; arguments: { url: string } }
@@ -249,7 +250,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
     tools: [
       {
         name: 'pc_open',
-        description: 'Open files and allow-listed apps on Dan’s PC; websites open in Dan’s Chrome. Use browser_do for work on a website.',
+        description: 'Open a website (target url, e.g. https://www.youtube.com/; it opens in Dan’s Chrome), an allow-listed app (vscode, chrome, explorer, terminal), a repo folder or a window on Dan’s PC. Use browser_do for work on a website.',
         inputSchema: {
           type: 'object',
           properties: {
