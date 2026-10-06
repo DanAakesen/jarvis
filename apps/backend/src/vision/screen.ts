@@ -6,7 +6,7 @@ import { VISION_MODEL_DEPLOYMENT } from './foundry-model.js';
 export const MAX_SCREEN_FRAME_BYTES = 1_000_000;
 const MAX_SCREEN_FRAME_BASE64_BYTES = Math.ceil(MAX_SCREEN_FRAME_BYTES / 3) * 4;
 const MAX_SCREEN_DESCRIPTION_CHARACTERS = 5_000;
-const SCREEN_FRAME_BODY_LIMIT = MAX_SCREEN_FRAME_BASE64_BYTES + 1_024;
+export const SCREEN_FRAME_BODY_LIMIT = MAX_SCREEN_FRAME_BASE64_BYTES + 1_024;
 
 export interface ScreenVisionResult {
   readonly description: string;
@@ -20,6 +20,13 @@ export interface ScreenVisionModel {
     readonly image: Buffer;
     readonly model: string;
     readonly signal: AbortSignal;
+    readonly watch?: {
+      readonly source: 'screen' | 'camera';
+      readonly previousSummary: string;
+      readonly instructions: readonly string[];
+      readonly latestQuestion: string | null;
+      readonly recentComments: readonly string[];
+    };
   }): Promise<ScreenVisionResult>;
 }
 
@@ -119,11 +126,11 @@ export class ScreenVisionService {
 
 }
 
-function validSessionId(value: string): boolean {
+export function validSessionId(value: string): boolean {
   return /^[1-9]\d{0,18}$/u.test(value) && BigInt(value) <= 9_223_372_036_854_775_807n;
 }
 
-function decodeFrame(value: unknown): Buffer {
+export function decodeFrame(value: unknown): Buffer {
   if (typeof value !== 'string' || value.length === 0 || value.length > MAX_SCREEN_FRAME_BASE64_BYTES ||
       value.length % 4 !== 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)) {
     throw new ScreenVisionError(400, 'A valid JPEG screen frame is required.');

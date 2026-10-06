@@ -25,11 +25,12 @@ const events = new Set([
   'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
   'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
-  'voice.partials_unavailable', 'chat.latency', 'memory.embedding',
+  'voice.partials_unavailable', 'chat.latency', 'memory.embedding', 'vault.index', 'vault.write',
   'pc_act.step',
   'reflex.decision',
+  'vision.watch',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
-  'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing',
+  'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'credentials.codex_renewal', 'dispatcher.start_failed',
 ]);
 
@@ -124,6 +125,30 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
         input.durationMs >= 0 && input.durationMs <= 600_000) {
       fields.durationMs = input.durationMs;
+    }
+  }
+  if (input.msg === 'vault.index') {
+    if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    for (const key of ['added', 'changed', 'removed']) {
+      const value = input[key];
+      if (Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 10_000) fields[key] = value;
+    }
+    if (Array.isArray(input.folders)) {
+      fields.folders = [...new Set(input.folders.filter((folder) =>
+        ['People', 'Work', 'Personal', 'General'].includes(String(folder))))].slice(0, 4);
+    }
+  }
+  if (input.msg === 'vault.write') {
+    if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    if (['People', 'Work', 'Personal', 'General'].includes(String(input.folder))) fields.folder = input.folder;
+  }
+  if (input.msg === 'vision.watch') {
+    if (input.source === 'screen' || input.source === 'camera') fields.source = input.source;
+    for (const key of ['noteworthy', 'spoke']) {
+      if (typeof input[key] === 'boolean') fields[key] = input[key];
+    }
+    for (const key of ['latencyMs', 'cost']) {
+      if (typeof input[key] === 'number' && Number.isFinite(input[key]) && input[key] >= 0) fields[key] = input[key];
     }
   }
   if (input.msg === 'pc_act.step') {

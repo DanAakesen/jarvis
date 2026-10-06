@@ -15,7 +15,7 @@ import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspac
 import { findChatReflexReplay } from './reflex.js';
 import { executePhoneTool } from '../phone/approval.js';
 
-const memoryReadOnlyTools = new Set(['memory_search', 'memory_list', 'memory_history']);
+const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
 
 // Keep deletable memory content out of the durable generic tool-call audit.
 function auditToolArguments(toolName: string, value: unknown): unknown {
@@ -105,7 +105,7 @@ export const coreModule: BackendModule = {
         const validMessageId = messageId !== undefined &&
           /^[1-9]\d{0,18}$/u.test(messageId) && BigInt(messageId) <= 9_223_372_036_854_775_807n;
         const unrecordedRead = messageId === undefined && request.agentPrincipal !== null &&
-          memoryReadOnlyTools.has(tool.name);
+          readOnlyToolsWithoutMessage.has(tool.name);
         if (!validMessageId && !unrecordedRead) {
           return reply.code(400).send({ error: 'Invalid message ID' });
         }

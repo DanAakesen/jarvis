@@ -16,7 +16,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions; P3-14 opens or reuses an App-token PR after completed task work and leaves policy completion to P3-06; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; P7-03 adds managed-identity Teams notifications, expiring confirmations and Speech F0 fallback; P7-22 adds Google OAuth-backed Gmail and Calendar tools; P7-02 adds persisted away state and a managed-identity Graph presence monitor; live Azure behavior remains unverified |
 | Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0; `@microsoft/teams.apps` and `@microsoft/teams.cards` 2.1.0: schema validation, a plugin per area, SSE support, Bot Service adapter and Adaptive Cards | Skeleton, core/factory module registration and P1-03 projects API implemented; P7-03 adds the Teams module and fake-connector coverage; live Bot Service remains unverified |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
-| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, group 5 in #42, heartbeat agent routing in #32, `idle_expired` session end reason in #226, group 8 conversation/confirmation state in P7-03, and group 9 long-term memory in P7-13; deployed heartbeat verification remains open |
+| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, group 5 in #42, heartbeat agent routing in #32, `idle_expired` session end reason in #226, group 8 conversation/confirmation state in P7-03, legacy group 9 in P7-13, and the derived vault index in P7-40; deployed heartbeat verification remains open |
 | Files | Azure Blob Storage for artifacts, logs, and archived task events | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
@@ -715,7 +715,7 @@ extension is disconnected, the current companion launches the installed Chrome
 executable directly and identifies that fallback in the tool result. Websites
 are never handed to the Windows default browser. A connected extension with
 automation disabled is refused rather than silently bypassing the setting.
-Launched apps and VS Code folder opens use Windows `AllowSetForegroundWindow`
+Launched apps and VS Code file/folder opens use Windows `AllowSetForegroundWindow`
 to grant the new process foreground eligibility; no synthetic input or
 focus-stealing workaround is used. The bridge does not expose arbitrary command
 execution; its only direct executable launch for a URL is the Chrome fallback.
@@ -725,6 +725,13 @@ titles, or message content.
 The backend logs each WebSocket command's safe command name, normalized outcome
 and monotonic round-trip milliseconds as `pc_bridge.command_timing`; request
 arguments and returned data are excluded by the logger allowlist.
+
+`pc_open` accepts repo-relative folder and file targets under `C:\Repo` and
+opens them in VS Code. The portable `RepoPathResolver` checks the requested
+file/folder kind, canonical containment and every path segment for reparse
+points; invalid, missing, traversing or linked-out paths are refused. This
+reuses the P7-31 `open_app`/`InstalledAppMatcher` implementation for app
+launching and adds no second launcher.
 
 Online/offline changes update one existing Now-feed activity row keyed by
 `pc_bridge_status`; the same row reports whether Jarvis control is active or
@@ -739,20 +746,60 @@ Linux Windows-target build run in backend CI. Real device-code sign-in, Windows
 process/window behavior, SQL production writes and the live PC opening flow
 remain unverified.
 
+### Windows UI Automation app control (P7-07, expanded by P7-31, P7-32, P7-34, P7-36)
+### Offline wake word (P7-39)
+
+The tray app listens for "Wake up Jarvis" with the Speech SDK
+(`Microsoft.CognitiveServices.Speech` 1.52.0) on-device `KeywordRecognizer` and
+a Speech Studio custom keyword model loaded from `WakeWordModelPath` (an
+absolute path to a `.table` file) in the bridge settings. Keyword spotting needs
+no Speech key or network connection. The default microphone is opened only for
+the current recognition and released when listening stops. Audio is neither
+stored nor sent, and the recognizer's result audio is never read. Listening runs only while
+the persisted tray **Wake word** toggle is on (`WakeWordEnabled`; a missing value
+means on once the model file exists). Without a model, the toggle is disabled
+and explains that `WakeWordModelPath` must be set. The portable
+`WakeWordListener` owns the state: off, listening, paused during voice, or
+microphone unavailable (retried after 5 s). It reports a detection once and
+ignores repeats within 3 s.
+
+While listening, the bridge adds `wakeWord: true` to its `status` message. The
+backend then sends `{ "type": "voice_state", "active": boolean }` on connect and
+whenever any voice session starts (`listening`, `thinking`, `speaking`,
+`reconnecting`) or ends (`ended`, `failed`) on the activity hub. The bridge
+pauses listening while it is active and resumes when it ends or the backend
+disconnects. A bridge without the toggle on sends the earlier two-field status
+and receives no `voice_state`.
+
+On detection the bridge plays the Windows "Speech On" chime (or the asterisk
+system sound) and sends `{ "type": "wake_word", "at": "<ISO UTC ms>" }` over the
+authenticated bridge WebSocket. In parallel it focuses Dan's Jarvis tab. With
+the extension connected, the native-messaging request `focus_jarvis_tab`
+activates an existing tab on the Jarvis origin and focuses its window, or opens
+the configured `WebUrl` (default: the production Static Web App origin). The
+bridge then brings Chrome forward. Without the extension, it brings forward a
+Chrome window titled `Jarvis - …` or launches the Chrome executable with the URL.
+Edge and the Windows default browser are never used. This focus is the wake
+word's own consent, so it does not depend on the Chrome automation toggle.
+
+The backend accepts `wake_word` only on `/pc-bridge/connect`, which admits only
+the PC bridge principal. Any other field, or a timestamp that is not a canonical
+millisecond UTC ISO string, closes the socket with 1007. A valid event
+publishes `{ type: 'voice.wake', at }` on the existing Jarvis activity hub (type
+`JarvisVoiceWakeEvent` / `isJarvisVoiceWakeEvent` in `@jarvis/contracts`).
+`GET /now/events` streams it as the separate SSE event `voice-wake`, which the
+current web client ignores until Dan's UI work makes the page start voice. The
+backend logs the content-free, allowlisted `pc_bridge.wake_word`.
+
 ### Windows UI Automation app control (P7-07, expanded by P7-32)
 
 The backend registers the sensitive `pc_act` tool only when the existing Jev
 client is configured. It reuses the authenticated PC bridge and its bounded
-`uia_snapshot`/`uia_act` commands; no new route, credential, or migration is
-added. Any foreground Windows app is eligible; application names are bounded
-and validated but not allow-listed. The Windows provider traverses at most
-1,000 controls and depth 12, checking a one-second traversal budget and
-cancellation between traversal batches. The portable policy returns at most
 `uia_snapshot`/`uia_act` commands; no new route, credential, persistence, or
-migration is added. Any bounded foreground Windows process identifier is
-eligible. The Windows provider traverses at most 1,000
-controls and depth 12, checking a one-second traversal budget and cancellation
-between traversal batches. The portable policy returns at most
+migration is added. Any foreground Windows app is eligible; the Windows
+provider traverses at most 1,000 controls and depth 12, checking a one-second
+traversal budget and cancellation between traversal batches. The portable
+policy returns at most
 100 enabled, visible, actionable controls with only role and accessible name.
 Password controls and names that look sensitive are omitted; field values are
 never observed.
@@ -786,6 +833,27 @@ self-rated confidence Score question. Jev billing/auth/rate-limit/timeout/status
 invalid-answer, and network failures are returned as typed outcomes and recorded
 in `reflex.decision` without the goal, API key, or control data.
 
+When a fresh UI Automation snapshot has fewer than three actionable elements,
+`pc_act` can use the same bridge to request `window_capture`. The tray pause blocks
+capture and point actions; capture also fails closed when the focused UI Automation
+control is password-like or has a sensitive label. The foreground window is copied
+to a transient PNG bounded to 1,280×720 and 750 KB. The bridge retains only a
+30-second, one-use capture ID and window geometry; point clicks and scrolls are
+pixel coordinates relative to that capture, checked against its dimensions and
+the still-foreground window before `SendInput`.
+
+The backend sends that PNG to the existing managed-identity Foundry vision client
+using the `gpt-5.6-luna` deployment and requests structured JSON with normalized
+candidate boxes. Jev receives only the bounded labels and boxes, chooses one
+target/action for the step using the existing 0.9 Choice-confidence threshold,
+and can click or scroll but cannot type through a visual-only target. Irreversible
+candidate clicks use the existing `runConfirmed` path. Capture byte buffers are
+held in memory only and cleared after use; captures are excluded from tool audit
+and step activity, and the existing sensitive-tool audit records only redacted
+metadata. There is no
+Foundry computer-use, raw shell, new persistence, or migration; website tasks
+remain on the Chrome path and never launch Edge.
+
 Generic tool auditing records only the outcome for this sensitive tool. The
 `pc_act.step` telemetry allow-list exports only step number, fixed action name,
 and outcome—never goals, control labels, typed text, screenshots, or UIA
@@ -795,6 +863,16 @@ backend lint/build and the Linux Windows-target build pass. A cancellation token
 preempt an individual synchronous UI Automation COM call. Live Jev calls,
 Windows UIA responsiveness/cancellation, physical approval delivery, and Dan's
 end-to-end app task remain unverified.
+
+When the configured Jev planner is available, the sensitive `codex_prompt`
+tool opens Codex through `open_app` and delegates UI interaction to this same
+`runPcAct` loop and the existing `uia_snapshot`/`uia_act` bridge commands. It
+passes the exact prompt as one JSON-quoted value; password, payment-card,
+one-time-code and other sensitive text remain refused. Codex prompts are audited
+as redacted data. Typing does not request approval; irreversible controls or
+intent reuse the existing `runConfirmed` flow. The tool returns success only
+after a completed text-entry action, submission action and `pc_act` completion;
+an unavailable Codex app or an incomplete submission is a refusal.
 
 ### Chrome browser executor (P7-18, P7-25, P7-26)
 
@@ -972,26 +1050,38 @@ validation and lifecycle state machine serve HTTP, chat and voice. Task details 
 to a tool contain bounded event summaries, not event payloads. The project and task
 tool overview is in [features.md](features.md).
 
-### Notes search (P7-10)
+### GitHub vault memory (P7-40)
 
-The backend registers `notes_search` when its managed identity is available. It
-validates a bounded query, resolves Dan's OneDrive folder using
-`JARVIS_NOTES_FOLDER_PATH` (default `/Jarvis/Notes`), and calls Microsoft Search for
-`driveItem` results with a KQL `path` restriction. It also verifies every returned
-link stays below that folder, limits the result count and snippet length, and
-returns only title, plain-text snippet and link. Empty results are explicit;
-provider failures return a safe explanation without Graph details. Chat and voice
-instructions require Jarvis to quote returned snippets and include a result link.
+Dan's private `DanAakesen/vault` repository on `master` is the source of truth
+for durable knowledge. The existing GitHub App issues an installation token
+scoped to that repository with Contents write permission (which includes read);
+the backend never uses a personal token. A signed `push` webhook for `master`
+and a startup sync read the recursive Git tree. Sync fetches changed Markdown
+notes by blob SHA, skips `.obsidian/`, `.github/`, `.codex/`, `.vscode/` and
+non-text/binary files, chunks notes by heading, embeds them with the existing
+`text-embedding-3-small` deployment when available, and removes deleted notes.
+`dbo.vault_chunks` in migration `0021_vault_memory_index.sql` is only a derived
+index/cache keyed by path and blob SHA; semantic search falls back to bounded
+term matching when vectors are unavailable.
 
-Graph credentials are backend-only: the backend identity requests a Graph
-application token, while the hosted agent uses only its existing Jarvis tool token.
-Microsoft Graph Search does not support `Sites.Selected`; the idempotent
-[`setup-notes-search.ps1`](../infra/setup-notes-search.ps1) therefore grants
-`Files.Read.All` to the backend identity. This is a tenant-wide app permission,
-so the coordinator must review and approve it before running the script. Runtime
-requests always fix the user to Dan's configured Entra object ID and restrict
-search/results to the configured notes folder. Fake Graph tests cover the
-contracts; tenant consent and a known-note live search remain unverified.
+The backend exposes `vault_search` (up to eight ranked snippets with heading,
+path and GitHub note URL), `vault_read` (one Markdown note, at most 256 KiB),
+and `vault_write` (create, append or replace). Before the first write in a
+process it loads `AGENTS.md`, `.github/agent-state/routing.md`, and relevant
+`.github/instructions/*.instructions.md`; writes are restricted to the vault's
+People/, Work/, Personal/ and General/ note folders. Writes are limited to
+256 KiB, verify the current stored Dan message, refuse secrets/credentials and
+require Dan's explicit “remember” for banking or health details. Contents API
+SHA concurrency retries once; successful changes commit directly to `master`
+as `jarvis: <reason>` with a `Co-authored-by: Jarvis` trailer. The tool result
+includes the commit URL for Jarvis to relay in chat.
+
+Index/write logs contain bounded counts and top-level folders only, never paths
+or note contents. Fake GitHub tests cover add/change/delete indexing, ranking,
+SHA conflict retry, sensitive-data refusal and webhook signature verification.
+The repository is private and was unavailable for live validation; Dan must
+install the existing GitHub App on `DanAakesen/vault` with Contents read/write
+before indexing and writes can succeed.
 
 ### New project creation (P3-12)
 
@@ -1184,36 +1274,24 @@ needed. The store passes a disposable SQL Server integration test, not a
 production Azure SQL test. Live Foundry chat streaming and a tool-call row linked
 to its stored message remain a post-merge Azure acceptance check.
 
-### Long-term memory (P7-13)
+### Legacy SQL memory (P7-13)
 
-The core memory module registers `memory_remember`, `memory_search`, `memory_list`,
-`memory_history`, `memory_correct` and `memory_forget`. Writes verify the referenced
-stored message is a Dan message; chat uses its stored message ID, and voice resolves
-the persisted transcript item ID to the transcript's stored message. Only the hosted
-agent may search/list/history without a current message ID, and those source-less
-read-only calls are not persisted as tool calls. All writes remain source-linked.
-Successful changes return a backend-built confirmation; retrieval errors remain
-errors, not empty results. For source-backed memory calls, the generic
-`tool_calls` audit keeps only the operation outcome, not memory arguments/results,
-so forgetting does not leave a second saved copy in that audit.
+P7-13's SQL memory tables and `memory_*` module remain for existing data and
+compatibility, but the module is not registered in the production backend. P7-40
+supersedes its standalone capture and retrieval path: durable captures now go to
+Dan's GitHub vault, while `dbo.vault_chunks` stores only a derived search index.
+The new workflow's source verification, embedding, vector search, lexical fallback,
+and write safety are documented under [GitHub vault memory](#github-vault-memory-p7-40).
+Existing `dbo.memories` rows are not deleted by this change.
 
-The SQL store keeps one current memory per stable category/key, source-linked
-revisions, and a content-free forget audit. Same-key updates serialize in SQL;
-unchanged content and source are idempotent. Forget removes the current row and its
-history, not the conversation or source message. Search returns at most five
-memories with up to 500 characters of the current Dan source text. It uses
-`text-embedding-3-small` and cosine vector distance when the SQL vector type exists,
-falls back to full-text search when embeddings or vector search are unavailable,
-then uses bounded substring matching when SQL full-text is not installed. Each
-response identifies its search method and whether more results may exist.
-
-`0016_long_term_memory.sql` conditionally adds the `vector(1536)` column. The
-memory-store startup runs the idempotent
+`0016_long_term_memory.sql` conditionally adds the legacy `vector(1536)` column.
+The memory-store startup runs the idempotent
 `db/migrations/setup/0016_long_term_memory.sql` after migrations commit; this
 creates the full-text catalog/index when installed, outside Azure SQL's required
-migration transaction. Bicep deploys a sequential
-Global Standard capacity-1 `text-embedding-3-small` model alongside the existing
-Foundry deployments and sets `JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME`. The backend's
+migration transaction. Bicep deploys a sequential Global Standard
+`text-embedding-3-small` model alongside the existing Foundry deployments and sets
+`JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME`; its current capacity is 20. P7-40 reuses
+that deployment for the vault index.
 existing managed identity and Foundry User role call the project embeddings endpoint
 using `https://ai.azure.com/.default`; no key is added. The existing Deploy workflow
 and startup migration runner provide repeatable, idempotent provisioning; no
@@ -1694,7 +1772,17 @@ P5-03 pins the English model and Ryan HD in the backend. P5-04 implements browse
 
 The Danish backend connector uses the Foundry project endpoint from `FOUNDRY_PROJECT_ENDPOINT` and a server-side Azure Identity token. Bicep grants the backend managed identity the `Foundry User` role on the project. After a successful `Deploy`, its smoke step grants the workflow's deploy identity `Foundry User`; the `Danish voice agent` workflow then creates/updates `jarvis-voice-mai` when provisioning inputs change, or by manual dispatch. It uses a hash-locked SDK to wrap the hosted agent `jarvis`. The P5-04 client is implemented and locally tested; live browser audio remains unverified.
 
-P7-05 and P7-08 reuse that Foundry endpoint, backend managed identity and `Foundry User` assignment; the camera adds no provider key, route, migration, or Azure resource. The bridge uses the configured `jarvis.model` (`gpt-5.6-luna` by default) and `/models/chat/completions` with an image. The signed-in browser never receives a provider credential. The project price snapshot dated 2 October 2026 lists short-context Global Standard rates of 1.3157 DKK per million input tokens and 7.8941 DKK per million output tokens (effective 1 August 2026); these are displayed as estimates, not billed usage. The coordinator must confirm the live deployment is image-capable and that its SKU/rates still match before live acceptance.
+P7-05, P7-08 and P7-38 reuse that Foundry endpoint, backend managed identity and `Foundry User` assignment; camera adds no provider key or Azure resource. Vision uses the dedicated `VISION_MODEL_DEPLOYMENT` (`gpt-6-luna`), not `jarvis.model`, through `/models/chat/completions` with image detail `auto`, `max_completion_tokens: 500`, and `reasoning_effort: none`. Estimated rates are 0.6579 DKK per million input tokens and 3.2893 per million output tokens, converted at 6.5785 DKK/USD. The signed-in browser never receives a provider credential. These are estimates, not billed usage; live deployment pricing and useful-comment acceptance remain to verify.
+
+### Continuous vision watching (P7-38)
+
+Dan-only `POST /vision/watch` accepts `{ sessionId, source: 'screen' | 'camera', frame }` and returns `{ summary, speak: string | null, budget: { usedUsd, limitUsd } }`. It reuses the existing JPEG/1 MiB validation, abort handling, and `image.fill(0)` cleanup. Dan's separate web work owns independent sharing toggles, meaningful-change detection, and a maximum of one frame every 2.5 seconds per source; the backend never polls a source or pauses for sensitive content.
+
+`VisionWatchService` holds the last summary and up to 20 watch instructions per session/source in memory. The authenticated `watch_for { source?, what }` (300 characters) and `stop_watching_for { source? }` tools resolve the stored Dan message to its session; their audits redact arguments/results. The prompt includes the source summary, instructions, latest Dan text, and recent comments as bounded context. It requires strict `{ summary, noteworthy, speak }` JSON, treats image text as untrusted, and permits comments only for screen errors/problems, instruction matches, or direct question answers. Malformed results fail visibly but still record incurred model usage.
+
+The service suppresses repeated normalized comments for two minutes across both sources; the prompt also suppresses paraphrases of a recent issue. Concurrent deliveries share an in-memory dedupe guard. An active voice relay registers its synchronous announcer callback; a free relay sends `response.create` with verbatim instructions and no tools. If Dan is speaking or the relay is otherwise busy/disconnected, the service posts a Jarvis message to the same session instead. Summaries are never persisted or logged. Successful conversation end invokes the injected session-end callback across module boundaries; that callback, voice teardown and backend shutdown clear in-memory watch state.
+
+Watch frames replace the 300-frame cap with `global.vision_daily_budget_usd` (default 1, range 0–100; 0 disables watching). The existing `screen_frames` usage store sums today's `cost_dkk` across all sessions and both sources, including on-demand inspections. Watch reservations are excluded from the existing on-demand three-second throttle and 300-frame count. SQL reservations use the existing UTC-day application lock, per-session/source 2500 ms throttling, and a conservative 0.1 DKK pending-cost hold reconciled to known token cost. This is an allowance for the bounded prompt/model, not a tokenizer-proven upper bound. Failed/unknown-cost calls retain the hold until the UTC day ends; insufficient remaining budget refuses before another model call. The budget response includes outstanding holds, so it can decrease after concurrent calls reconcile. No migration or dependency is added. `vision.watch` logs only source, noteworthy, spoke, latencyMs, and cost (DKK); the logger allowlist excludes frames, summaries, comments and instructions. Offline tests verify the contract; live Azure SQL concurrency, actual billing and Dan's UI integration remain unverified.
 
 ### Jarvis agent
 
@@ -1767,24 +1855,24 @@ call linkage remain the post-merge P4-09 acceptance check.
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (SSE, dispatcher, Teams audio, Google pending confirmations and P7-15 one-use upload keys use process-local state; more copies require shared state/Web PubSub); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `JARVIS_NOTES_FOLDER_PATH`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `JARVIS_CODEX_TOOL_MODEL`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, `SPEECH_REGION`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID`, `JARVIS_GOOGLE_TIME_ZONE`, `ENTRA_PC_BRIDGE_CLIENT_ID` |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (SSE, dispatcher, Teams audio, Google pending confirmations and P7-15 one-use upload keys use process-local state; more copies require shared state/Web PubSub); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `JARVIS_CODEX_TOOL_MODEL`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, `SPEECH_REGION`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID`, `JARVIS_GOOGLE_TIME_ZONE`, `ENTRA_PC_BRIDGE_CLIENT_ID` |
 | Azure Bot Service | `bot-jarvis-{suffix}` | Global; F0; user-assigned managed identity; `MsTeamsChannel` enabled; endpoint `/api/messages` |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Azure Monitor action group | `jarvis-alerts` | Email receivers from required `budgetContactEmails`; no SMS/voice receivers |
 | Log alert rules | Deployment failure, sandbox crash, credential expiry | Stateful scheduled-query rules on `AppTraces`; group by hashed alert condition and send through `jarvis-alerts` |
 | Monthly budget | `jarvis-monthly` | Resource-group scoped; 300 in the subscription billing currency, monthly from 1 October 2026 (fixed start date; Azure rejects changing it), actual-cost alerts above 80 % and 100 % to `jarvis-alerts` |
 
-The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** and **Storage Blob Delegator** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling, the Danish voice agent, and `codex-tool` invocations), **Cognitive Services User** on the Foundry account (P7-24 Speech recognition), **Cognitive Services Speech User** on the separate Speech F0 resource (Teams synthesis), **Cost Management Reader** at the resource group for budget reads, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. The Azure Bot uses the same identity as its single-tenant user-assigned MSI app. The separate P7-10 setup script can assign Graph `Files.Read.All`; this tenant-wide permission requires coordinator approval. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live role assignment and ARM behavior remain unverified until the change is deployed.
+The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** and **Storage Blob Delegator** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling, the Danish voice agent, and `codex-tool` invocations), **Cognitive Services User** on the Foundry account (P7-24 Speech recognition), **Cognitive Services Speech User** on the separate Speech F0 resource (Teams synthesis), **Cost Management Reader** at the resource group for budget reads, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. The Azure Bot uses the same identity as its single-tenant user-assigned MSI app. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live role assignment and ARM behavior remain unverified until the change is deployed.
 
 Required deployment parameters are `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `foundryNameTimestamp`, and `budgetContactEmails`; the comma-separated email list comes from protected GitHub secret `JARVIS_BUDGET_CONTACT_EMAILS`. `backendImage` and `jarvisAgentObjectId` are optional. `JARVIS_GOOGLE_TIME_ZONE` is an optional GitHub variable set by [`infra/setup-google.ps1`](../infra/setup-google.ps1); when set, Bicep enables the Google tools. The OAuth client ID, client secret and refresh token are never deployment variables and stay in Key Vault. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed. `pcBridgeClientId` is optional: Main Deploy passes it from the nonsecret Actions variable `JARVIS_PC_BRIDGE_CLIENT_ID`, and Bicep omits `ENTRA_PC_BRIDGE_CLIENT_ID` until it is provisioned.
 
 PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. The deployments started at Global Standard capacity 1. Dan's first live chat on 5 October hit `rate_limit_exceeded` (capacity 1 = 1,000 tokens and 1 request per minute), so `gpt-5.6-luna` now uses capacity 100, `gpt-realtime-2.1` 10 (the regional quota maximum) and `text-embedding-3-small` 20. Global Standard bills per token, so capacity changes the rate limit only, not the cost (L91). Exact model-specific limits and regional quota availability remain to be verified in P0-16. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
 
-P7-13 adds a sequential Global Standard capacity-1 `text-embedding-3-small`
-deployment after `gpt-realtime-2.1`, with the backend deployment name supplied to
-the Container App by Bicep. This small pay-as-you-go deployment is used only for
-memory embeddings; a model or vector capability failure falls back to lexical
-retrieval. Normal Bicep deployment is idempotent and does not require a portal step.
+P7-13 added a sequential Global Standard `text-embedding-3-small` deployment after
+`gpt-realtime-2.1`, with the backend deployment name supplied to the Container App
+by Bicep. Its current capacity is 20. It is used for conversation and vault-index
+embeddings; a model or vector capability failure falls back to lexical retrieval.
+Normal Bicep deployment is idempotent and does not require a portal step.
 
 `sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, and `budgetStartDate` to `2026-10-01T00:00:00Z`. Budget notification emails are required through `budgetContactEmails`; actual cost is interpreted in the subscription billing currency, which remains to be confirmed as DKK.
 

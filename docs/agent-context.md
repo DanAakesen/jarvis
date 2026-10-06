@@ -137,7 +137,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - **Google Calendar and Gmail setup (Dan only):** Create a Google Cloud project and select it in the project picker. Open **APIs & Services → Library**, search for **Gmail API**, open it and click **Enable**; repeat for **Google Calendar API**. Open **Google Auth Platform → Branding** and configure the app name and support contact; under **Audience**, choose **External** for Dan's personal account. Under **Data Access**, add `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.compose`, `https://www.googleapis.com/auth/gmail.send`, and `https://www.googleapis.com/auth/calendar.events`. Return to **Audience** and click **Publish app** so the publishing status is **In production**, not **Testing**; Testing-mode refresh tokens expire after seven days. Google may show an unverified-app warning or require OAuth verification for restricted Gmail scopes.
 - In Google Auth Platform, open **Clients → Create client**, choose **Desktop app**, create the client, and keep its client ID and secret ready to enter into the hidden prompts. Do not download or commit the client file. On Dan's Windows machine, sign in to the expected Azure subscription and GitHub repository with their CLIs, open **Windows PowerShell 5.1** (not PowerShell 7), change to the repository root, and run exactly `& .\infra\setup-google.ps1`. The script runs loopback OAuth with PKCE, validates consent state, stores `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` in the deployed Key Vault, and removes the temporary vault role assignment it creates. It sets only nonsecret `JARVIS_GOOGLE_TIME_ZONE` as a GitHub Actions variable. Dan needs permission to create/delete role assignments and write Key Vault secrets; no coding agent runs this script or accesses the tenant.
 - After setup, deploy from `main` to enable the configured backend module. Verify agenda and mail reads for `danaakesen@gmail.com`, test event creation/move only after exact later-message confirmation, test a Gmail reply draft (Dan sends it from Gmail), and test sending only to an explicitly approved test recipient. Wrong, expired, and same-turn confirmation codes must not cause writes. Live Google consent, deployment, and API behavior remain unverified until Dan performs these checks.
-- P7-10 deploys `JARVIS_NOTES_FOLDER_PATH` from the `notesFolderPath` Bicep parameter (default `/Jarvis/Notes`). After merge, the coordinator must review and approve the broad Graph `Files.Read.All` application permission before running `./infra/setup-notes-search.ps1` with an administrator-authorized Azure CLI session. The script is idempotent and assigns the permission to `id-jarvis-backend`; Graph Search does not support `Sites.Selected`. The backend fixes the user to Dan and scopes queries and returned links to the configured folder. Live tenant consent and a known-note search remain unverified.
+- **GitHub vault setup (Dan once):** install the existing Jarvis GitHub App on the private `DanAakesen/vault` repository with Contents read/write permission, preferably selecting only that repository for this installation. The backend uses a repository-scoped installation token; never create or use a personal access token. The App already subscribes to `push`; the backend indexes `master` at startup and after verified `master` pushes. If the App is not installed on the vault, search/write are unavailable and the backend reports the missing installation. No Graph or Azure permission is needed. Live installation and note access remain unverified; see [infrastructure setup](../infra/README.md#github-vault-setup).
 - P7-02 reads Dan's Teams presence with the backend managed identity and requires the Microsoft Graph `Presence.Read.All` application role. After merge, a tenant administrator must review/grant that permission and run `./infra/setup-away-presence.ps1` from an Azure CLI session for the expected subscription. The script is idempotent and targets `id-jarvis-backend`; no Bicep or SQL migration is needed. Browser return is signaled by authenticated active-app requests to `POST /now/present`, not passive feed refreshes. Live consent, presence detection, Teams installation, and phone delivery remain unverified.
 - `az` runs through a `.cmd` file: avoid `&`, parentheses, and pipes inside arguments such as `--query` (L20); filter JSON in PowerShell instead.
 - Never reuse a deleted Foundry account or project name; generate timestamped names (L2).
@@ -743,7 +743,7 @@ the coding agent must not access Azure or run live Codex acceptance.
 
 Production runner calls use the optional paired `FOUNDRY_RUNTIME_ENDPOINT` and
 `FOUNDRY_ADMIN_ENDPOINT`, plus `FOUNDRY_RUNNER_AGENT_NAME`. Bicep supplies the
-project URLs and `jarvis-runner-node-1x2`; these are non-secret settings. When
+project URLs and `jarvis-runner-base-1x2`; these are non-secret settings. When
 configured, the backend uses its shared `DefaultAzureCredential`, selected with
 `SQL_MANAGED_IDENTITY_CLIENT_ID`. The daily Codex renewal job requires database
 and Foundry runner configuration, and uses the SQL credential lease; the task
@@ -1020,6 +1020,47 @@ contract; they do not prove Chrome profile behavior, native-host registration,
 or tray interaction. Live Chrome, physical confirmation delivery, and Dan's
 acceptance remain coordinator checks. Do not include unrelated personal tabs or
 page contents in evidence.
+
+### Offline wake word (P7-39)
+
+The bridge detects "Wake up Jarvis" on Dan's PC with the Speech SDK
+`KeywordRecognizer` and a custom keyword model. Agents cannot create the model;
+the coordinator creates it in Dan's signed-in Speech Studio session:
+
+1. Open Speech Studio → **Custom keyword** (`https://speech.microsoft.com/portal/customkeyword`)
+   with the existing Jarvis Speech/AI Services resource. Select **Create a new
+   project**, name it `jarvis-wake-word`, and choose **English (United States)**
+   (one of the two supported languages).
+2. Open the project and select **Create a new model**. Enter the keyword
+   exactly as `Wake up Jarvis`, keep only the candidate pronunciations that match
+   Dan's speech, and select the **Basic** model type. Training can take several
+   hours. Wait for **Succeeded**.
+3. Under **Tune**, download the model `.zip` and extract it. Copy the `.table`
+   file to `%LOCALAPPDATA%\Jarvis\PcBridge\wake-up-jarvis.table` on Dan's PC.
+   Do not commit it.
+4. Add the absolute path to `%LOCALAPPDATA%\Jarvis\PcBridge\settings.json`,
+   escaping backslashes:
+
+   ```json
+   "WakeWordModelPath": "C:\\Users\\<user>\\AppData\\Local\\Jarvis\\PcBridge\\wake-up-jarvis.table"
+   ```
+
+   The installer keeps this field. Optional fields: `WakeWordEnabled` (missing
+   means on once the model exists) and `WebUrl` (Jarvis web origin; defaults to
+   the production Static Web App origin). Restart the bridge from the tray.
+
+Without a valid `.table` path, the tray's **Wake word** item is disabled and
+explains the missing model. With it, the item shows listening, paused during
+voice, or microphone unavailable, and toggling it is saved. Reload the unpacked
+Chrome extension after installing (extension 1.0.3 adds `focus_jarvis_tab`).
+
+Live acceptance (coordinator with Dan, after the page reacts to `voice-wake`):
+say "Wake up Jarvis" with the Jarvis tab in the background, then with no
+Jarvis tab open. Expect one chime, the existing Jarvis Chrome tab (or a new one,
+never Edge) in front, and voice starting. During the voice session the tray
+should show it is paused; after the session ends it should listen again. Turn
+the toggle off and confirm the phrase does nothing. Offline tests use a fake
+recognizer and do not prove microphone, model accuracy, or Chrome focus.
 
 ### Database access and migrations (#7)
 

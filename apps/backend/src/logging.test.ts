@@ -52,6 +52,24 @@ describe('structured log export', () => {
     expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
   });
 
+  it('exports watch metadata without images, summaries, comments, or watch instructions', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const fields = { source: 'camera', noteworthy: true, spoke: false, latencyMs: 42, cost: 0.0009 };
+    logger.info({ ...fields, image: 'private-image', summary: 'private-summary', speak: 'private-comment',
+      instructions: 'private-instructions' }, 'vision.watch');
+    logger.info({ source: 'private-source', noteworthy: 'private-value', cost: -1, latencyMs: Infinity }, 'vision.watch');
+    expect(JSON.parse(records[0]!)).toMatchObject({ ...fields, msg: 'vision.watch' });
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('cost');
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('source');
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'vision.watch', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    expect(records.join('')).not.toContain('private');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
   it.each(['chat', 'voice-partial', 'voice-final'])('exports bounded %s reflex decisions without transcripts or arguments', (source) => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
@@ -105,6 +123,27 @@ describe('structured log export', () => {
     }));
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it('exports vault counts and top-level folders without paths or note content', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.info({
+      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'People', 'Work'],
+      path: 'Work/private-note.md', content: 'note-secret',
+    }, 'vault.index');
+    logger.info({
+      outcome: 'ok', folder: 'People', path: 'People/private-note.md', content: 'note-secret',
+    }, 'vault.write');
+
+    expect(JSON.parse(records[0]!)).toMatchObject({
+      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'People'], msg: 'vault.index',
+    });
+    expect(JSON.parse(records[1]!)).toMatchObject({ outcome: 'ok', folder: 'People', msg: 'vault.write' });
+    expect(records.join('')).not.toContain('private-note');
+    expect(records.join('')).not.toContain('note-secret');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('note-secret');
   });
   it('uses an isolated manual SDK client, disables disk persistence and initializes it', async () => {
     const client = await createTelemetry('offline-test-string');

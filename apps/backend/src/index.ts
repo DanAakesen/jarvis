@@ -70,11 +70,11 @@ import { createPcBridgeStatusStore } from './database/pc-bridge-status-store.js'
 import { createAlertNotifier, notifyAlert } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
-import { createMemoryStore } from './database/memory-store.js';
-import { createMemoryModule } from './core/memory.js';
+import { createMemoryStore, createVaultIndexStore } from './database/memory-store.js';
 import { createFoundryMemoryEmbedder } from './core/memory-embeddings.js';
 import { createGraphClient } from './graph/client.js';
-import { createNotesModule } from './notes/index.js';
+import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './vault/github-client.js';
+import { createVaultModule } from './vault/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 import { createGoogleApiClient } from './google/api-client.js';
 import { createGoogleTokenProvider, type GoogleOAuthCredentials } from './google/oauth.js';
@@ -82,6 +82,7 @@ import { createGoogleModule } from './google/tools.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
+import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
 import { createWebResearchModule } from './core/web-research.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
 import { createEphemeralAudioStore } from './teams/audio-store.js';
@@ -115,6 +116,7 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
+  const vaultIndexStore = database ? createVaultIndexStore(database.pool) : undefined;
   const phoneSessionStore = database && config.phone
     ? createPhoneSessionStore(database.pool)
     : undefined;
@@ -306,6 +308,15 @@ try {
       },
     })
     : undefined;
+  const vaultModule = memoryStore && vaultIndexStore && githubAppTokenIssuer
+    ? createVaultModule({
+      client: createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer }),
+      indexStore: vaultIndexStore,
+      memoryStore,
+      ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
+      log: (event, fields) => logger.info({ msg: event, ...fields }, event),
+    })
+    : undefined;
   const foundryClients = new Map<string, FoundryClient>();
   const trackedRepositories = new Set<string>();
   const taskEventArchive = database && archiveStorageAccount && credential
@@ -480,23 +491,44 @@ try {
       onError: () => logger.warn('github.checks_loop_recovery_failed'),
     })
     : undefined;
+  const screenVisionModel = config.foundryProjectEndpoint && credential
+    ? createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
+      const token = await credential.getToken(scope, { abortSignal: signal });
+      if (!token) throw new Error('Foundry screen identity unavailable');
+      return token.token;
+    })
+    : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
     createRecipeModule(recipeStore),
+    ...(vaultModule ? [vaultModule] : []),
     ...(webResearchModule ? [webResearchModule] : []),
     ...(googleModule ? [googleModule] : []),
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
       getSecret: getWebhookSecret,
-      isTrackedRepository: (repository) => trackedRepositories.has(repository.toLowerCase()),
-      ...(checksLoop || projectPolicyEvaluator ? {
+      isTrackedRepository: (repository) => repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() ||
+        trackedRepositories.has(repository.toLowerCase()),
+      ...(checksLoop || projectPolicyEvaluator || vaultModule ? {
         onMapping: async (mapping) => {
+          if (mapping.kind === 'push' && mapping.repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() &&
+              mapping.ref === `refs/heads/${VAULT_BRANCH}` && vaultModule) {
+            void vaultModule.synchronize(AbortSignal.timeout(10 * 60_000)).catch(() => {
+              logger.warn({
+                msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
+              }, 'vault.index');
+            });
+          }
           await checksLoop?.handleMapping(mapping);
           await projectPolicyEvaluator?.handle(mapping);
         },
       } : {}),
     }),
     createPcBridgeModule({
+      ...(screenVisionModel ? {
+        pcActVisionModel: screenVisionModel,
+        pcActVisionDeployment: 'gpt-5.6-luna',
+      } : {}),
       ...(pcActPlanner ? {
         pcActPlanner,
         ...(recipes ? { recipes } : {}),
@@ -538,31 +570,16 @@ try {
       model: config.codexImageModel,
     }));
   }
-  if (memoryStore) {
-    modules.push(createMemoryModule({
-      store: memoryStore,
-      ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
-    }));
-  }
-  if (database && settingsStore && config.foundryProjectEndpoint && credential) {
-    modules.push(createScreenVisionModule(new ScreenVisionService(
-      createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Foundry screen identity unavailable');
-        return token.token;
-      }),
-      createScreenFrameUsageStore(database.pool),
-    )));
-  }
-  if (graphClient) {
-    modules.push(createNotesModule({
-      graph: graphClient,
-      ownerObjectId: config.auth.ownerObjectId,
-      folderPath: config.notesFolderPath,
-    }));
+  let visionWatch: VisionWatchService | undefined;
+  if (database && settingsStore && screenVisionModel) {
+    const visionUsage = createScreenFrameUsageStore(database.pool);
+    modules.push(createScreenVisionModule(new ScreenVisionService(screenVisionModel, visionUsage)));
+    visionWatch = new VisionWatchService(screenVisionModel, visionUsage, createConversationStore(database.pool));
+    modules.push(createVisionWatchModule(visionWatch));
   }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
+      ...(visionWatch ? { visionWatch } : {}),
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
         if (!token) throw new Error('Voice identity unavailable');
@@ -625,6 +642,7 @@ try {
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
+      ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
       ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),
@@ -701,6 +719,7 @@ try {
     if (database) {
       await database.initialize();
       await memoryStore?.initialize();
+      await vaultIndexStore?.initialize();
       for (const project of await projectStore?.list() ?? []) {
         trackedRepositories.add(project.repo.toLowerCase());
       }
@@ -711,6 +730,13 @@ try {
       await sandboxHeartbeat?.start();
       dispatcher?.start();
       await app.listen({ port: config.port, host: '0.0.0.0' });
+      if (vaultModule) {
+        void vaultModule.synchronize(AbortSignal.timeout(10 * 60_000)).catch(() => {
+          logger.warn({
+            msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
+          }, 'vault.index');
+        });
+      }
       void checksLoop?.start();
       taskEventArchiveJob?.start();
       logger.info({ port: config.port }, 'server.listening');

@@ -24,7 +24,6 @@ export interface BackendConfig {
   githubAppId?: string;
   googleTimeZone?: string;
   monthlyBudgetResourceId?: string;
-  notesFolderPath: string;
   teams?: {
     botAppId: string;
     tenantId: string;
@@ -201,18 +200,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     !/^\/subscriptions\/[\da-f-]+\/resourceGroups\/[a-z\d._()-]+\/providers\/Microsoft\.Consumption\/budgets\/[a-z\d._()-]+$/iu.test(monthlyBudgetResourceId)) {
     throw new ConfigurationError('JARVIS_MONTHLY_BUDGET_RESOURCE_ID must be an Azure budget resource ID');
   }
-  const notesFolderPath = env.JARVIS_NOTES_FOLDER_PATH ?? '/Jarvis/Notes';
-  const notesFolderSegments = notesFolderPath.replace(/\/+$/u, '').split('/').slice(1);
-  const containsControlCharacter = [...notesFolderPath].some((character) => {
-    const code = character.charCodeAt(0);
-    return code < 0x20 || code === 0x7f;
-  });
-  if (notesFolderPath.length > 1024 || !notesFolderPath.startsWith('/') ||
-    containsControlCharacter || /[\\?#]/u.test(notesFolderPath) || notesFolderSegments.length === 0 ||
-    notesFolderSegments.some((segment) => !segment || segment === '.' || segment === '..')) {
-    throw new ConfigurationError('JARVIS_NOTES_FOLDER_PATH must be an absolute OneDrive folder path');
-  }
-
   const botAppId = env.TEAMS_BOT_APP_ID;
   const botTenantId = env.TEAMS_BOT_TENANT_ID;
   const teamsAudioOrigin = env.TEAMS_AUDIO_ORIGIN;
@@ -273,7 +260,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
     ...(teams ? { teams } : {}),
     ...(phone ? { phone } : {}),
-    notesFolderPath: notesFolderPath.replace(/\/+$/u, ''),
   };
 }
 

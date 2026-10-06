@@ -30,6 +30,10 @@ public static class CommandPolicy
                 arguments.TryGetProperty("relativePath", out var folder) &&
                 folder.ValueKind == JsonValueKind.String &&
                 TryNormalizeRepoPath(folder.GetString(), out _),
+            "open_file" => HasOnly(arguments, "relativePath") &&
+                arguments.TryGetProperty("relativePath", out var file) &&
+                file.ValueKind == JsonValueKind.String &&
+                TryNormalizeRepoPath(file.GetString(), out _),
             "active_window" => !arguments.EnumerateObject().Any(),
             "focus_window" => HasOnly(arguments, "title") &&
                 arguments.TryGetProperty("title", out var title) &&
@@ -45,12 +49,43 @@ public static class CommandPolicy
             "browser_act" => IsBrowserAction(arguments),
             "uia_snapshot" => !arguments.EnumerateObject().Any(),
             "uia_act" => IsUiAutomationAction(arguments),
+            "window_capture" => !arguments.EnumerateObject().Any(),
+            "click_point" => IsPointAction(arguments, "click"),
+            "scroll_point" => IsPointAction(arguments, "scroll"),
             _ => false,
         };
     }
 
     public static bool IsControlAction(string command) => command is
-        "open_url" or "open_app" or "close_app" or "open_folder" or "focus_window" or "uia_act" or "browser_act" or "media";
+        "open_url" or "open_app" or "close_app" or "open_folder" or "open_file" or "focus_window" or "uia_act" or
+        "browser_act" or "media" or "window_capture" or "click_point" or "scroll_point";
+
+    private static bool IsPointAction(JsonElement arguments, string action)
+    {
+        if (!arguments.TryGetProperty("snapshotId", out var snapshotId) ||
+            snapshotId.ValueKind != JsonValueKind.String ||
+            !Guid.TryParseExact(snapshotId.GetString(), "D", out _) ||
+            !arguments.TryGetProperty("x", out var x) ||
+            !x.TryGetInt32(out var xValue) || xValue is < 0 or > 2047 ||
+            !arguments.TryGetProperty("y", out var y) ||
+            !y.TryGetInt32(out var yValue) || yValue is < 0 or > 2047)
+        {
+            return false;
+        }
+
+        var common = new[] { "snapshotId", "x", "y" };
+        if (action == "click")
+        {
+            return HasOnly(arguments, common.Append("confirmed").ToArray()) &&
+                arguments.TryGetProperty("confirmed", out var confirmed) &&
+                (confirmed.ValueKind is JsonValueKind.True or JsonValueKind.False);
+        }
+
+        return HasOnly(arguments, common.Append("direction").ToArray()) &&
+            arguments.TryGetProperty("direction", out var direction) &&
+            direction.ValueKind == JsonValueKind.String &&
+            direction.GetString() is "up" or "down";
+    }
 
     public static bool IsValidKeyboardSequence(JsonElement value) =>
         value.ValueKind == JsonValueKind.Array &&

@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 5 October 2026 for P7-01, P7-02, P7-03, P7-08, P7-13, P7-15 and P7-22. Scope: the Jarvis core, Software Factory, Teams calling, notification and confirmation state, Google Calendar/Gmail tools, long-term memory, and generated workspace image metadata. Azure SQL is the source of truth ([Decision 3](decisions.md#decision-areas)); Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 6 October 2026 for P7-01, P7-02, P7-03, P7-08, P7-15, P7-22 and P7-40. Scope: the Jarvis core, Software Factory, Teams calling, notification and confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, and generated workspace image metadata. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -46,7 +46,6 @@ The migration adds `vector(1536)` only when SQL exposes that type. After the
 transaction commits, the idempotent `setup/0016_long_term_memory.sql` creates the
 full-text catalog/index when installed; its paired down script removes memory tables
 and the voice source-item index/column.
-
 P7-15 adds cross-cutting `dbo.workspace_artifacts` metadata in
 `0019_workspace_artifacts.sql`; it is owner-scoped and references no conversation
 or task by foreign key. Image bytes remain in the private Blob `artifacts`
@@ -56,6 +55,10 @@ deletion while retention is unresolved. `0018_tool_call_refused_outcome.sql` exp
 existing tool-call outcome constraint to include runtime `refused` records, which
 the Usage page includes in its daily per-tool count. Its down migration refuses
 to restore the old constraint while refused rows exist.
+P7-40 adds group 11 in `0021_vault_memory_index.sql`: heading chunks indexed by
+vault path and blob SHA, with an optional `vector(1536)` column when available.
+The table is a derived cache of the private GitHub vault, not an authoritative
+store; the paired down migration removes only this index table.
 
 P8-14 generated views are versioned JSON contracts in the shared
 `@jarvis/contracts` workspace. A view carries bounded source/page metadata but
@@ -64,7 +67,7 @@ retention. P8-14 adds no tables or migrations.
 
 ## Overview
 
-Ten groups. Arrows show the main references between groups.
+Eleven groups. Arrows show the main references between groups.
 
 ```mermaid
 flowchart LR
@@ -96,11 +99,15 @@ flowchart LR
     subgraph USE["7 · Usage and cost"]
         usage
     end
-    subgraph MEMORY["9 · Long-term memory"]
+    subgraph MEMORY["9 · Legacy SQL memory"]
         memories
         memory_history
         memory_deletions
     end
+    subgraph VAULT["11 · GitHub vault index"]
+        vault_chunks
+    end
+    vault_repo["Private GitHub vault"] -.-> vault_chunks
     subgraph OPS["6 · Operations"]
         webhook_deliveries
         credential_status
@@ -137,8 +144,9 @@ flowchart LR
 | 6 | Operations | Safe webhook handling, credential expiry warnings | `webhook_deliveries`, `credential_status` |
 | 7 | Usage and cost | Transparency per task/project and current UTC-day web-research calls; the latter reuses group-one `tool_calls` | `usage` |
 | 8 | Phone, notifications and confirmations | Phone-call sessions plus Dan's validated Teams conversation and expiring approvals for Teams or browser delivery | `phone_sessions`, `teams_conversations`, `teams_confirmations` |
-| 9 | Long-term memory | Relevant source-linked preferences, project facts, decisions and unfinished tasks across sessions | `memories`, `memory_history`, `memory_deletions` |
+| 9 | Legacy SQL memory | Historical source-linked memory rows, retained for compatibility but superseded as the durable knowledge source | `memories`, `memory_history`, `memory_deletions` |
 | 10 | Workspace artifacts | Owner-scoped image metadata for generated workspace/chat previews; image bytes are private Blob objects | `workspace_artifacts` |
+| 11 | GitHub vault index | Derived heading chunks and optional vectors keyed by vault path and blob SHA; vault content remains authoritative in GitHub | `vault_chunks` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
@@ -657,7 +665,11 @@ does not delete Blob objects. `0018_tool_call_refused_outcome.sql` makes the run
 `refused` outcome persistable so refused image requests remain visible and counted;
 its down migration refuses to proceed while refused rows exist.
 
-## Long-term memory schema (group 9)
+## Legacy SQL memory schema (group 9)
+
+P7-13 created this standalone memory schema. P7-40 supersedes its production
+capture/retrieval path: the existing tables are retained for compatibility and
+historical data, but current durable knowledge is written to the GitHub vault.
 
 `0016_long_term_memory.sql` adds:
 
@@ -668,13 +680,21 @@ its down migration refuses to proceed while refused rows exist.
 | `memory_deletions` | Content-free audit of the memory ID and Dan message that requested forgetting; no FK to the deleted memory |
 | `messages.source_item_id` | Nullable provider transcript item identifier used to resolve a voice tool call to the saved Dan transcript; indexed only when non-null |
 
-All memory searches and list/history pages are bounded and join only Dan source
+Legacy memory searches and list/history pages are bounded and join only Dan source
 messages. Vector search uses cosine distance when the SQL vector type is available;
 otherwise retrieval uses SQL full-text when installed and bounded substring search
-as the final fallback. A memory is independent of session boundaries, compaction,
-generated windows and the continued retention of its original source record.
+as the final fallback. These tables are not the source of truth for new captures.
 The full-text catalog is created outside migration transactions and remains empty
 after a down migration; the idempotent setup batch can recreate the index later.
+
+## GitHub vault index schema (group 11)
+
+`0021_vault_memory_index.sql` adds `dbo.vault_chunks`, keyed by the SHA-256 hash
+of the note path, blob SHA, and chunk index. It stores the original path, heading,
+and bounded note chunk, plus an optional `vector(1536)` embedding when supported.
+Startup and verified `master` push syncs replace changed note chunks and delete
+removed paths. The table contains only the searchable derived index; note content
+and durable facts remain authoritative in `DanAakesen/vault`.
 
 ## Conventions
 

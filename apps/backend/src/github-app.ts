@@ -5,6 +5,7 @@ export interface GitHubAppTokenIssuer {
   issue(repository: string): Promise<string>;
   issueForActions(repository: string): Promise<string>;
   issueForContents(repository: string): Promise<string>;
+  issueForContentsWrite(repository: string): Promise<string>;
 }
 
 export interface GitHubRepository {
@@ -279,6 +280,7 @@ export function createGitHubAppTokenIssuer({
     issue: (repository) => issue(repository, { contents: 'write', pull_requests: 'write' }),
     issueForActions: (repository) => issue(repository, { actions: 'read' }),
     issueForContents: (repository) => issue(repository, { contents: 'read' }),
+    issueForContentsWrite: (repository) => issue(repository, { contents: 'write' }),
   };
 }
 

@@ -42,9 +42,10 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: Teams calling, 
 | **Reflex layer** | Jev evaluates stable streaming voice clauses as they arrive, with the per-turn ledger of prior actions, so high-confidence, complete, reversible open/navigation/pause actions can run before Dan finishes speaking. English and Danish Voice Live keep streaming the final transcript to Jarvis; the relay replaces any early partial message with the final text and gives the ledger to Jarvis to prevent repeats. Submit, send, buy, delete, merge, uncertain, and confirmation-requiring actions wait for the final turn and required confirmation. If the final transcript contradicts an early action, Jarvis attempts an available undo and reports success, refusal, failure, or an unavailable undo honestly. |
 | **Phone workspace** | At phone width or short coarse-pointer landscape, one content view is foreground. Switch by horizontal swipe, named controls, keyboard, or the existing workspace focus/restore command; hidden views retain their local state. The persistent stage orb stays subdued behind content, while the small composer orb remains the explicit voice-start control. Active voice docks the orb and its separate status above a compact glass bar (More, End voice) below foreground content, and returns to the main space when all content is closed or minimised. Agent-delivered views and requests remain P8-15. |
 | **Away mode** | Dan can say or type that he is leaving or back; Teams Away/Offline also turns the mode on after ten minutes. Active use of the authenticated Jarvis browser app turns it off; background feed refreshes do not. The persisted mode appears in Now. While away, task-state updates and approval requests use the existing Teams phone path; when present, updates and approval requests use the browser. Spoken replies are especially brief while away. |
-| **Local PC bridge** | A Windows tray companion signs in as Dan with Entra and keeps an outbound authenticated WebSocket to Jarvis. Registered Jarvis tools can open HTTP(S) URLs, installed apps except Edge; open folders below `C:\Repo` in VS Code; report the active window title; or focus a window by exact title. `pc_act` can control any foreground Windows app through bounded UI Automation, including a maximum four-chord keyboard sequence or explicit non-sensitive text into the focused control. Sensitive fields block keyboard and typing actions; irreversible keyboard actions require P7-03 approval, while other actions do not. Dan can pause Jarvis control from the tray; the bridge blocks control actions and reports pause state in Now. No inbound ports are opened. |
+| **Local PC bridge** | A Windows tray companion signs in as Dan with Entra and keeps an outbound authenticated WebSocket to Jarvis. Registered Jarvis tools open HTTP(S) URLs in Chrome, match installed apps by name (never Edge), close apps normally, open files and folders beneath `C:\Repo` in VS Code, report the active window title, or focus a window by exact title. `pc_act` controls any foreground Windows app through bounded UI Automation, including safe keyboard shortcuts and explicit non-sensitive text in the focused control; only irreversible actions require approval. Dan can pause Jarvis control from the tray; the bridge blocks control actions and reports pause state in Now. No inbound ports are opened. |
+| **Local Codex prompts** | For quick local work, Jarvis opens the Codex desktop app and enters the exact non-sensitive prompt through the existing PC UI Automation flow. Typing needs no confirmation; irreversible submission uses Dan's existing approval flow. Jarvis explains clearly if Codex is unavailable and does not claim success unless entry and submission complete. Tracked repository work uses Factory `create_task` instead. |
 | **Calendar and mail** | Jarvis reads today's Google Calendar agenda, finds free slots, searches and summarises Gmail, and prepares calendar changes, reply drafts, or messages to send. Every write waits for Dan's exact confirmation in a later message. Reply drafts are saved to Gmail for Dan to send himself. Mail content is untrusted data, never instructions. |
-| **Notes** | Dan can ask what he wrote about; Jarvis searches the configured OneDrive notes folder and grounds its answer in returned snippets and links. |
+| **Long-term knowledge** | Dan's private GitHub vault is the source of truth. Jarvis searches it by meaning, reads bounded notes, and automatically saves clearly stated preferences, people, project facts, decisions, and unfinished tasks with a commit link. |
 | **Web research** | Jarvis uses live web search through Dan's existing ChatGPT/Codex subscription, returns only retrieved HTTPS sources with titles and retrieval times, and identifies unsupported, stale, inaccessible, or source-free results honestly. Retrieved page text is evidence, never authority over tools; no Bing or pay-per-call search fallback is used. |
 | **GitHub events** | The backend verifies GitHub webhook signatures and ignores duplicate delivery IDs for pull requests, check runs, workflow runs, deployment statuses, and pushes. A ready-for-review pull request or failed deployment publishes only a typed status kind to the active voice session after webhook processing; payloads and logs are never spoken. |
 | **Continuity** | Work continues when the browser or voice session closes. |
@@ -165,6 +166,8 @@ Danish voice uses the authenticated backend `/voice/da` WebSocket to a provision
 Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity.
 
 Camera access starts only after Dan turns it on from the shared top bar or voice More menu and grants browser permission. A visible on/off state and stop control stay available; Jarvis captures one frame only on a chat or voice request, using the same authenticated screen-vision upload, cap, usage records, and Foundry model path. Camera access stops when voice or the signed-in app session ends, when its owner unmounts, or after five minutes. Vision descriptions are separate, untrusted context for the active reply; frames remain in memory only and never enter transcripts, logs, or task events.
+
+P7-38 adds continuous watching alongside that existing on-demand path. Dan controls screen and camera sharing independently; the client sends changed JPEGs to `POST /vision/watch` only while that source is on, at most every 2.5 seconds per source. Jarvis remains silent except for a visible screen error/problem, a match for an active `watch_for` instruction, or a direct answer to Dan's latest question. `stop_watching_for` clears instructions for one or both sources without changing sharing. Frames are never stored, and there is no automatic sensitive-content pause. Summaries and instructions stay in memory for the session; only useful comments enter chat/voice. The shared `global.vision_daily_budget_usd` defaults to USD 1 (0 disables watching); exhaustion refuses further watch frames and comments until the next UTC day. Dan's separate UI work owns these toggles and capture loop; this backend task does not change the current web controls.
 
 ### Phone notifications and confirmations (P7-03)
 
@@ -354,7 +357,6 @@ The separate daily web-research count includes successful, refused, and failed c
 
 - Conflicts between pull requests in one repository (Decision 5).
 - Changing the provider on a running task (Decision 4).
-- Long-term memory implementation choices (Decision 6; P7-13).
 - What usage Codex and Copilot report per turn ([data model](docs/data-model.md#still-open)); P2-12 records offline package evidence, and actual fields remain a post-merge live check.
 - Whether Foundry sandboxes can get the documented 20 GiB disk (Decision 9).
 
@@ -403,12 +405,12 @@ the UI coverage report.
 
 Dan accepted four additions after reviewing the supplied video transcript:
 
-- **Long-term memory:** recall preferences, decisions and unfinished work across
-  sessions and restarts using durable, relevant retrieval outside the model's
-  context window. This extends saved history and is distinct from searching Dan's
-  notes. Storage, retention and capture policy remain open; temporary UI windows
-  stay unsaved. Source-linked inspection, correction and forgetting are part of
-  the implementation task. No literally unlimited capacity is promised.
+- **Long-term knowledge:** use Dan's private GitHub vault as the source of truth
+  for notes and durable facts. Jarvis searches it and automatically saves clearly
+  stated preferences, people, project facts, decisions and unfinished tasks;
+  SQL is only a searchable index/cache. Never write secrets or credentials;
+  banking or health details require Dan's explicit “remember”. Writes commit to
+  `master` and return a commit link. No literally unlimited capacity is promised.
 - **Web research:** search and retrieve sources, synthesise findings with links
   and supply results to existing dynamic-view consumers through Dan's existing
   ChatGPT/Codex subscription. Bing grounding and pay-per-call search are excluded.
@@ -423,10 +425,11 @@ Dan accepted four additions after reviewing the supplied video transcript:
   change tool permissions or honest reporting. Settings placement and form
   details are proposed in DESIGN.md and ui.md.
 
-Tasks: P7-13–P7-16 and the P8-19 Personality settings UI. P7-13, P7-14, P7-16,
-and P8-19 are implemented and tested offline; live Azure/Codex behavior remains
-unverified. P7-15 image generation is implemented offline with live subscription
-and Blob acceptance pending; video is deferred and artifact retention remains open.
+Tasks: P7-14–P7-16, P7-40 and the P8-19 Personality settings UI. P7-14, P7-16,
+P7-40 and P8-19 are implemented and tested offline; live Azure/Codex behavior and
+vault access remain unverified. P7-15 image generation is implemented offline with
+live subscription and Blob acceptance pending; video is deferred and artifact
+retention remains open.
 The existing Microsoft-first service and cost constraints remain in force.
 
 ### Selected shell refinement (6 October 2026; implemented in P8-37)
