@@ -10,7 +10,7 @@ The structure stays fixed: thin edge-to-edge top bar, narrow icon rail below it,
 
 The last displayed concept was edited to remove only the two message-avatar icons and reclaim their gaps. Retain the large scene orb and small input voice-start orb. This is the selected visual target; the message window has no top-left header orb/title or separator above messages.
 
-Implementation: [#398](https://github.com/DanAakesen/jarvis/issues/398) (P8-37) covers shell, input and messages together. [#397](https://github.com/DanAakesen/jarvis/issues/397) (P8-36) remains the separate voice-bar/shared-menu prerequisite, already in progress in PR #403. Publication of this design does not start a worker.
+Implementation: [#398](https://github.com/DanAakesen/jarvis/issues/398) (P8-37) covers shell, input and messages together. [#397](https://github.com/DanAakesen/jarvis/issues/397) (P8-36) is the completed voice-bar/shared-menu prerequisite, merged in [PR #403](https://github.com/DanAakesen/jarvis/pull/403). Reuse its existing components and tokens. Publication of this design does not start a worker.
 
 ## Actual current shell
 

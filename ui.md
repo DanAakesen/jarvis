@@ -307,9 +307,9 @@ voice-mode access and mobile overflow need separate design.
 | Sign-in | Sign-in screen; account-control placement remains undecided. |
 | Chat | Main workspace in typing mode; fixed bottom-centred input. |
 | English voice | Full-page voice workspace, started with the input's small orb. |
-| Danish voice | Same voice workspace; language selected through the top bar or Settings. |
+| Danish voice | Same voice workspace; language selected through the shared More → Language menu or Settings. |
 | Interrupt and reconnect | Voice workspace and orb state; manual controls remain to be designed. |
-| Language toggle | Top bar: compact Danish/English selector; detailed preferences in Settings. |
+| Language toggle | Implemented in P8-36 as the shared More menu's Language flyout (Danish/English, checked choice) in the composer and the compact voice bar; detailed preferences in Settings. |
 | Voice transcripts | Conversation view on request during voice; session history in typing mode. |
 | Task context | Background capability; relevant context can appear in requested/generated views. |
 | Honest confirmations | Outcome beside the action or in its generated view; spoken confirmation in voice. |
@@ -320,7 +320,7 @@ voice-mode access and mobile overflow need separate design.
 | Reflex layer | Background behaviour reflected in responsiveness; no dedicated shell control. |
 | Now panel | Proposed right-panel activity view, opened by the top-bar attention control. |
 | Sleep switch | Top-bar More menu or Settings; current state in relevant compact status or context. |
-| Database waking | Bottom status bar and nearby pending-content feedback. |
+| Database waking | Compact top-bar status and nearby pending-content feedback; no separate bottom bar. |
 | Task board | Software Factory navigation in the left sidebar; board in the main workspace. |
 | Create task | Task-board action and global input/voice; creation UI in the workspace. |
 | Task detail | Main workspace; selected-detail previews can use the right panel. |
@@ -613,7 +613,7 @@ P8-30 diagnosis and local verification: baseline Chromium recorded `document.sta
 
 Dan selected the last Luminous Glass component-family concept and requested implementation issues. Use its compact voice bar, matching input and readable frosted message window. Remove the horizontal line above the messages and the orb/Jarvis title from the top-left window header; keep window controls at top right and the voice-start orb in the input. More contains an icon plus Language row and a Danish/English flyout with current selection, replacing the large toggle. Capture controls keep their existing placements.
 
-[Edited visual and full requirements](docs/ui/chat-voice/README.md). Implementation: [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399). All are planned; creating them does not start a worker. Preserve #371's steering, FIFO queue and available controls, existing workspace tools/lifecycle, explicit voice activation and temporary view lifetime.
+[Edited visual and full requirements](docs/ui/chat-voice/README.md). Implementation: [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399). These were the initial task allocations; #397 is now merged in PR #403, while #398 contains the remaining combined implementation. #399 was superseded, as recorded below. Preserve #371's steering, FIFO queue and available controls, existing workspace tools/lifecycle, explicit voice activation and temporary view lifetime.
 
 Dan also requested three styling proposals for the app shell around the new 3D background. His local computer's localhost was inaccessible from the cloud; he authorised capturing a copy of latest GitHub main instead. The shell structure is unchanged: thin full-width top bar, narrow left rail, collapsible left navigation, main tabs/workspace, closable right context panel, Settings top right. Only Jarvis uses the room and large orb. The subsequent selection below removes the bottom shell bar requirement.
 
@@ -627,10 +627,10 @@ Dan selected the third/last shell concept for its dimensional 3D material feel. 
 
 His only additional visual removal is both avatar icons inside the chat window: human beside Dan's messages and Jarvis/orb beside assistant messages. Reclaim their gaps and keep the author roles accessible and visually distinguishable through alignment/text treatment. Keep the main room orb, small input voice-start orb, message text, window controls and all other selected elements.
 
-[Refined approved image and scope](docs/ui/shell-styling/README.md#refined-approved-reference). [#398](https://github.com/DanAakesen/jarvis/issues/398), P8-37, now implements the selected shell, bottom-bar removal, composer and avatar-free messages in one PR. #399/#401 were consolidated and closed as superseded; #397 remains the separate voice-bar/shared-menu work already in progress. The combined issue is planned/unclaimed; this documentation does not start a worker or report implementation. The refined image was edited from the exact last displayed result, not a guessed alternative.
+[Refined approved image and scope](docs/ui/shell-styling/README.md#refined-approved-reference). [#398](https://github.com/DanAakesen/jarvis/issues/398), P8-37, now implements the selected shell, bottom-bar removal, composer and avatar-free messages in one PR. #399/#401 were consolidated and closed as superseded; #397 is the completed voice-bar/shared-menu prerequisite, merged in PR #403. The combined issue is planned/unclaimed; this documentation does not start a worker or report implementation. The refined image was edited from the exact last displayed result, not a guessed alternative.
 
 ## Consolidated chat and shell implementation — 6 October 2026
 
 Dan requested combining #398, #399 and #401 because the input, messages and shell are one connected change. Expand #398 (P8-37) to cover all three with one implementation PR and shared validation. Close #399/#401 as superseded (`not_planned`), retaining their task IDs and archived requirements; this is not completed implementation. Preserve every accepted visual/behavior requirement and prerequisite, including footer removal/status relocation, avatar removal, both retained orbs, steering/queue, safe Markdown and workspace/voice/theme continuity.
 
-#397's voice bar/shared-menu work is already being implemented by Copilot in PR #403 and remains separate. The combined issue reuses it after its blocker completes. CI still runs for pushes/updates to the single combined PR; consolidation avoids three separate implementation PR pipelines. No worker was started by this planning update.
+#397's voice bar/shared-menu work was implemented by Copilot and merged in PR #403. The combined issue reuses its existing components and tokens. CI still runs for pushes/updates to the single combined PR; consolidation avoids three separate implementation PR pipelines. No worker was started by this planning update.

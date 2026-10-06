@@ -3,7 +3,7 @@ import websocket from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
 import {
-  createEnglishSessionUpdate,
+  createRealtimeSessionUpdate,
   ENGLISH_REALTIME_MODEL,
   executeRealtimeToolCall,
   isBrowserControlledToolOutput,
@@ -655,6 +655,7 @@ function registerVoiceRoute(
       let classification: ReflexClassification | null = null;
       let finalAction: ReflexActionResult | null = null;
       let reason: string | undefined;
+      let deferredExecution: (() => Promise<ReflexActionResult | null>) | undefined;
       try {
         await transcriptQueue;
         const message = savedUserMessages.get(itemId);
@@ -705,22 +706,36 @@ function registerVoiceRoute(
             ledger.some((entry) => entry.signature === actionSignature(target) && !entry.undone) ||
             contradictedEntry?.signature === actionSignature(target)
           );
+          const executeFinal = () => executeReflexAction(
+            classification,
+            request,
+            message.id,
+            controller.signal,
+            target?.tool.name === 'pc_open' ? 'partial' : 'final',
+          );
           if (!sharedContextWait && !alreadyExecuted) {
-            finalAction = await executeReflexAction(
-              classification,
-              request,
-              message.id,
-              controller.signal,
-              target?.tool.name === 'pc_open' ? 'partial' : 'final',
-            );
+            finalAction = await executeFinal();
           } else {
             reason = sharedContextWait ? 'shared_context_required' : 'already_executed';
+            if (sharedContextWait && !alreadyExecuted) deferredExecution = executeFinal;
           }
         }
         if (controller.signal.aborted || endRequested) return;
         if (sharedContextWait) {
           const context = await sharedContextWait.promise;
           if (sharedContextWait.cancelled || controller.signal.aborted || endRequested) return;
+          if (!context) {
+            // Not sharing: act on Dan's focused Chrome tab (Dan's decision, 6 October; L107).
+            delete request.requireSharedScreenContext;
+            if (deferredExecution) {
+              finalAction = await deferredExecution();
+              reason = undefined;
+            }
+            if (controller.signal.aborted || endRequested) return;
+          }
+        }
+        if (sharedContextWait && !sharedContextWait.cancelled && request.sharedScreenContext) {
+          const context = request.sharedScreenContext;
           sendUpstream({
             type: 'response.create',
             response: {
@@ -1187,7 +1202,7 @@ function registerVoiceRoute(
         }
         upstream = connect(token, controller.signal);
         upstream.once('open', () => {
-          if (english) sendUpstream(createEnglishSessionUpdate(app.jarvisTools, personality, awayMode), flushQueued);
+          if (english) sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, awayMode, language), flushQueued);
           else flushQueued();
         });
         const upstreamEventTypes = new Set<string>();
@@ -1366,7 +1381,19 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.createPartialRecognizer,
         );
       }
-      if (options.connectDanish) {
+      if (options.connect) {
+        // Danish uses the same gpt-realtime Voice Live path as English (L103); the hosted-agent
+        // voice wrapper remains only as a fallback when Voice Live is not configured.
+        registerVoiceRoute(
+          app,
+          '/voice/da',
+          options.connect,
+          true,
+          'da',
+          options.getToken,
+          options.createPartialRecognizer,
+        );
+      } else if (options.connectDanish) {
         registerVoiceRoute(
           app,
           '/voice/da',

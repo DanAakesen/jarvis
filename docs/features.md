@@ -33,7 +33,7 @@ Status as of 5 October 2026.
 | English voice | Talk to Jarvis in English (gpt-realtime, Ryan HD, British butler persona) | Voice/chat | Main page | Built | P5-03, P5-04 |
 | Danish voice | Talk to Jarvis in Danish (MAI Transcribe, Harper) | Voice/chat | Main page | Built | P5-02, P5-04 |
 | Interrupt and reconnect | Interrupt Jarvis by speaking; voice reconnects automatically | Voice/chat | Main page | Built | P5-04 |
-| Language toggle | Switch Danish/English for the next voice session | Both | Main page, Settings | Built | P5-05 |
+| Language toggle | Switch Danish/English from the shared More → Language menu in the composer and voice bar; during voice the change applies to chat and the next voice session, and the bar says so | Both | Main page, Settings | Built | P5-05, P8-36 |
 | Voice transcripts | Read what was said in each voice sitting, with voice minutes | Screen | Main page | Built | P5-06 |
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built | P4-04 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built | P4-05 |
@@ -206,7 +206,7 @@ Existing chat, voice, safe Markdown, queue/steering, workspace tools and shared 
 
 | Feature | Behaviour | Surface | Status | Tasks |
 | --- | --- | --- | --- | --- |
-| Compact voice bar and shared Language flyout | Truthful voice/activity state, reachable End voice; Language inside More with Danish/English flyout; existing capture capabilities retain their placement | Jarvis voice bar and shared menu | Planned | P8-36 (#397) |
+| Compact voice bar and shared Language flyout | Truthful voice/activity state, reachable End voice; Language inside More with Danish/English flyout; existing capture capabilities retain their placement | Jarvis voice bar and shared menu | Merged in PR #403; full selected shell/composer/messages remain #398 | P8-36 (#397) |
 | Matching glass composer | Small voice-start orb, attachments, writing area, More and Send; preserve Enter/Send steering and Ctrl+Enter queueing during replies | Jarvis typing, bottom centre | Planned; consolidated with shell/messages | P8-37 (#398) |
 | Readable message window | Coherent frosted messages; remove header orb/title, separator and both message avatars; preserve author semantics, window/tab controls and safe Markdown | Jarvis typing and requested voice history | Planned; consolidated with composer/shell | P8-37 (#398) |
 

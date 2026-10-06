@@ -6,7 +6,7 @@ The original voice/composer comparison below remains the shared material referen
 
 ![Original component-family reference; message avatars superseded](luminous-glass-approved.png)
 
-Implementation: [#397](https://github.com/DanAakesen/jarvis/issues/397), P8-36, owns voice/shared menu and is already in progress in PR #403. [#398](https://github.com/DanAakesen/jarvis/issues/398), P8-37, owns shell, composer and avatar-free messages in one PR. #399/#401 are closed as superseded allocations, not implemented work. Wait for #398's blockers and the updated handoff to be on main; consolidation does not start a worker.
+Implementation: [#397](https://github.com/DanAakesen/jarvis/issues/397), P8-36, owns voice/shared menu and was merged in [PR #403](https://github.com/DanAakesen/jarvis/pull/403). Reuse its existing menu components and tokens. [#398](https://github.com/DanAakesen/jarvis/issues/398), P8-37, owns shell, composer and avatar-free messages in one PR. #399/#401 are closed as superseded allocations, not implemented work. Wait for #398's blockers and the updated handoff to be on main; consolidation does not start a worker.
 
 ## Implementation scope
 
@@ -37,4 +37,4 @@ Deliver the connected shell, composer and message-window change together. One im
 
 ## Evidence and boundaries
 
-The selected image was edited with Image Gen to apply the two requested header removals; its PNG is checked into this directory. On 6 October 2026, the latest main at `e00e54d3999092e9387dcb505c336d74a038fae2` was run from a fresh worktree with Node 22.23.3 and npm 10.9.9. Dependency installation and the contracts build completed. Chromium captured the actual signed-in shell using a scratch auth fixture and mocked backend responses; production code/auth were unchanged. The capture used software WebGL and does not validate live authentication, Azure APIs, microphone/audio or GPU motion quality. Dan selected Architectural Glass. #398 now owns shell, composer and avatar-free messages together; #399/#401 are closed as superseded. #397 owns voice/shared menu and is in progress in PR #403; #398 remains planned and unclaimed.
+The selected image was edited with Image Gen to apply the two requested header removals; its PNG is checked into this directory. On 6 October 2026, the latest main at `e00e54d3999092e9387dcb505c336d74a038fae2` was run from a fresh worktree with Node 22.23.3 and npm 10.9.9. Dependency installation and the contracts build completed. Chromium captured the actual signed-in shell using a scratch auth fixture and mocked backend responses; production code/auth were unchanged. The capture used software WebGL and does not validate live authentication, Azure APIs, microphone/audio or GPU motion quality. Dan selected Architectural Glass. #398 now owns shell, composer and avatar-free messages together; #399/#401 are closed as superseded. #397 owns voice/shared menu and is merged in PR #403; #398 remains planned and unclaimed.

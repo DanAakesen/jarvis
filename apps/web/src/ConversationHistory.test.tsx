@@ -73,6 +73,21 @@ function renderConversation(historyRefresh = 0, camera?: CameraController, onVoi
   );
 }
 
+function chooseLanguage(name: 'Danish' | 'English') {
+  fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Language' }));
+  fireEvent.click(screen.getByRole('menuitemradio', { name }));
+}
+
+function selectedLanguage() {
+  fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Language' }));
+  const checked = screen.getAllByRole('menuitemradio').find((item) => item.getAttribute('aria-checked') === 'true');
+  fireEvent.keyDown(screen.getByRole('menu', { name: 'Language' }), { key: 'Escape' });
+  fireEvent.keyDown(screen.getByRole('menu', { name: 'More options' }), { key: 'Escape' });
+  return checked?.textContent;
+}
+
 function ActivityProbe() {
   const { working, applyRuntimeActivity } = useJarvisActivity();
   const activityId = '11111111-1111-4111-8111-111111111111';
@@ -355,7 +370,7 @@ describe('ConversationHistory', () => {
     expect(streamedReply.querySelector('strong')?.textContent).toBe('I am');
     expect(screen.getByRole('status').textContent).toBe('Jarvis is replying…');
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
-    expect(screen.getByRole('button', { name: 'English' })).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'More options' })).toHaveProperty('disabled', false);
     expect(input).toHaveProperty('disabled', false);
     expect(input).toHaveProperty('value', '');
     expect(screen.getByLabelText('Jarvis reply in progress').querySelector('.streaming-caret')?.getAttribute('aria-hidden')).toBe('true');
@@ -403,7 +418,7 @@ describe('ConversationHistory', () => {
     fireEvent.change(input, { target: { value: 'My next message' } });
     expect(sendChatTurn).toHaveBeenCalledOnce();
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', false);
-    expect(screen.getByRole('button', { name: 'Danish' })).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'More options' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', false);
     act(() => delta('I am'));
     expect(screen.queryByText('Jarvis is thinking…')).toBeNull();
@@ -473,7 +488,7 @@ describe('ConversationHistory', () => {
     submit('Second', true);
     fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
     submit('Remove me', true);
-    fireEvent.click(screen.getByRole('button', { name: 'English' }));
+    chooseLanguage('English');
     submit('Third', true);
     expect(screen.getByText('3 messages queued').getAttribute('aria-live')).toBe('polite');
     const queue = screen.getByRole('list', { name: 'Queued messages' });
@@ -542,7 +557,7 @@ describe('ConversationHistory', () => {
     fireEvent.change(input, { target: { value: 'Hello' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await screen.findByLabelText('Jarvis reply in progress');
-    fireEvent.click(screen.getByRole('button', { name: 'English' }));
+    chooseLanguage('English');
     fireEvent.change(input, { target: { value: steeringMessage.text } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
@@ -830,9 +845,7 @@ describe('ConversationHistory', () => {
     fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
     expect(sendChatTurn).not.toHaveBeenCalled();
     await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Danish' }));
-    await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'English' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'More options' }));
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Send' }));
     await user.click(input);
@@ -851,7 +864,7 @@ describe('ConversationHistory', () => {
     const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
     await user.click(input);
     await user.type(input, 'Unsent draft');
-    await user.click(screen.getByRole('button', { name: 'English' }));
+    chooseLanguage('English');
     const start = screen.getByRole('button', { name: 'Start voice' });
     start.focus();
     await user.keyboard('{Enter}');
@@ -872,7 +885,8 @@ describe('ConversationHistory', () => {
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(input);
     expect(input).toHaveProperty('value', 'Unsent draft');
     expect(document.activeElement).toBe(input);
-    expect(screen.getByRole('button', { name: 'English' }).getAttribute('aria-pressed')).toBe('true');
+    expect(selectedLanguage()).toBe('English');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'More options' }));
     if (exit !== 'error') await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(2));
   });
 
@@ -891,8 +905,8 @@ describe('ConversationHistory', () => {
       voice.onStatus('speaking', 'Jarvis is speaking.');
       voice.onStatus('listening', 'Listening after interruption.');
     });
-    const statusHeading = screen.getByRole('heading', { name: 'Listening' });
-    expect(statusHeading.closest('[role="status"]')?.getAttribute('aria-atomic')).toBe('true');
+    const statusLabel = screen.getByText('Listening');
+    expect(statusLabel.closest('[role="status"]')?.getAttribute('aria-atomic')).toBe('true');
     expect(screen.getByText('Listening after interruption.')).not.toBeNull();
     expect(onVoiceActiveChange).toHaveBeenCalledTimes(1);
 
@@ -913,21 +927,48 @@ describe('ConversationHistory', () => {
     menu.remove();
   });
 
-  it('switches reply language with keyboard buttons and sends in that language', async () => {
+  it('switches reply language from the More menu by keyboard and sends in that language', async () => {
     const user = userEvent.setup();
     createChatSession.mockResolvedValue({ ...session, language: 'en' });
     sendChatTurn.mockResolvedValue(assistantMessage);
     renderConversation();
     const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
     expect(screen.queryByRole('radio')).toBeNull();
-    expect(screen.getByRole('group', { name: 'Reply language' })).not.toBeNull();
-    screen.getByRole('button', { name: 'English' }).focus();
-    await user.keyboard('{Enter}');
-    expect(screen.getByRole('button', { name: 'English' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: 'Danish' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByRole('group', { name: 'Reply language' })).toBeNull();
+    const more = screen.getByRole('button', { name: 'More options' });
+    more.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Language' }));
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'Danish' }));
+    expect(screen.getByRole('menuitemradio', { name: 'Danish' }).getAttribute('aria-checked')).toBe('true');
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(more);
+    expect(selectedLanguage()).toBe('English');
+    await user.click(input);
     await user.type(input, 'Hello');
     await user.keyboard('{Enter}');
     await waitFor(() => expect(createChatSession).toHaveBeenCalledWith(client, config, 'en', expect.any(AbortSignal)));
+  });
+
+  it('closes the voice More menu with Escape before Escape ends voice', async () => {
+    const onVoiceActiveChange = vi.fn();
+    renderConversation(0, undefined, onVoiceActiveChange);
+    await screen.findByRole('heading', { name: 'What’s on your mind?' });
+    await userEvent.click(screen.getByRole('button', { name: 'Start voice' }));
+    const voice = voiceSessions[0];
+    if (!voice) throw new Error('Voice client was not created.');
+    act(() => voice.onStatus('listening', 'Listening for your voice.'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByRole('menu', { name: 'More options' })).not.toBeNull();
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(onVoiceActiveChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(onVoiceActiveChange).toHaveBeenLastCalledWith(false);
   });
 
   it('auto-grows the frameless input, bounds long drafts and shrinks again', async () => {
