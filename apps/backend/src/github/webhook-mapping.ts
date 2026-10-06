@@ -23,6 +23,7 @@ type WorkflowRunMapping = {
   readonly repository: string;
   readonly id: number;
   readonly name: string;
+  readonly deploymentWorkflow?: boolean;
   readonly event: string;
   readonly branch: string;
   readonly headSha: string;
@@ -50,6 +51,8 @@ type DeploymentStatusMapping = {
   readonly environment: string;
   readonly status: 'queued' | 'in_progress' | 'success' | 'failure';
   readonly at: string;
+  readonly workflowRunId?: number;
+  readonly workflowId?: number;
 };
 
 export type GithubWebhookMapping =
@@ -126,7 +129,19 @@ function deploymentState(value: unknown): 'queued' | 'in_progress' | 'success' |
 }
 
 // GitHub records workflow jobs that use these environments as deployments; they are not releases (L93).
-const NON_RELEASE_ENVIRONMENTS = new Set(['project-board', 'copilot']);
+const NON_RELEASE_ENVIRONMENTS = new Set(['project-board', 'plan-status', 'copilot']);
+
+function workflowRunId(value: unknown, repo: string): number | undefined {
+  if (typeof value !== 'string') return undefined;
+  try {
+    const url = new URL(value);
+    const match = /^\/([^/]+\/[^/]+)\/actions\/runs\/(\d+)(?:\/|$)/u.exec(url.pathname);
+    return url.protocol === 'https:' && url.hostname === 'github.com' &&
+      match?.[1]?.toLowerCase() === repo.toLowerCase() ? externalId(Number(match[2])) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMapping | undefined {
   const payload = object(value);
@@ -192,6 +207,9 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
       repository: repo,
       id,
       name,
+      deploymentWorkflow: /^\.github\/workflows\/deploy[^/]*\.ya?ml(?:@.*)?$/iu.test(
+        text(workflowRun?.path, 512) ?? '',
+      ),
       event: eventName,
       branch,
       headSha,
@@ -223,6 +241,9 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
     const at = timestamp(statusPayload?.created_at);
     if (!id || !deploymentSha || !environment || !state || !at) return undefined;
     if (NON_RELEASE_ENVIRONMENTS.has(environment.toLowerCase())) return undefined;
+    if (state === 'failure' && typeof statusPayload?.description === 'string' &&
+        /^The deployment was cancel(?:led|ed)\.$/iu.test(statusPayload.description)) return undefined;
+    const runId = workflowRunId(statusPayload?.log_url, repo) ?? workflowRunId(statusPayload?.target_url, repo);
     return {
       kind: 'deployment_status',
       repository: repo,
@@ -231,6 +252,7 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
       environment,
       status: state,
       at,
+      ...(runId ? { workflowRunId: runId } : {}),
     };
   }
 

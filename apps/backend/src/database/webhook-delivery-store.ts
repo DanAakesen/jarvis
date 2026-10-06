@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import sql from 'mssql';
 import type { AlertNotifier, ActivityAlert } from '../alerts.js';
 import { notifyAlert } from '../alerts.js';
@@ -83,6 +84,7 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
     request
       .input('runId', sql.BigInt, mapping.id)
       .input('workflow', sql.NVarChar(255), mapping.name)
+      .input('deploymentWorkflow', sql.Bit, mapping.deploymentWorkflow ?? false)
       .input('trigger', sql.NVarChar(32), mapping.event)
       .input('branch', sql.NVarChar(255), mapping.branch)
       .input('headSha', sql.Char(40), mapping.headSha)
@@ -140,10 +142,12 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
           SET @runChanged = 1;
         END;
         IF @releaseId IS NOT NULL AND @status = N'completed' AND @runChanged = 1
+          AND @workflow = N'Release' AND @trigger = N'push'
+          AND EXISTS (SELECT 1 FROM dbo.projects WHERE id = @projectId AND default_branch = @branch)
+          UPDATE dbo.releases SET version = CONVERT(nvarchar(100), @runNumber) WHERE id = @releaseId;
+        IF @releaseId IS NOT NULL AND @status = N'completed' AND @runChanged = 1
+          AND @conclusion <> N'cancelled' AND @deploymentWorkflow = 1
           UPDATE dbo.releases SET
-            version = CASE WHEN @workflow = N'Release' AND @trigger = N'push'
-              AND EXISTS (SELECT 1 FROM dbo.projects WHERE id = @projectId AND default_branch = @branch)
-              THEN CONVERT(nvarchar(100), @runNumber) ELSE version END,
             status = CASE WHEN status = N'released' THEN status
               WHEN @conclusion = N'failure' THEN N'failed' ELSE N'building' END
           WHERE id = @releaseId;
@@ -156,11 +160,28 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
     .input('sha', sql.Char(40), mapping.sha)
     .input('environment', sql.NVarChar(255), mapping.environment)
     .input('status', sql.NVarChar(16), mapping.status)
+    .input('workflowRunId', sql.BigInt, mapping.workflowRunId ?? null)
     .input('at', sql.DateTime2, new Date(mapping.at));
-  await request.query(`DECLARE @projectId bigint = (SELECT id FROM dbo.projects WHERE repo = @repository);
+  const previous = await request.query<{ alreadyFailed: boolean }>(
+    `DECLARE @alreadyFailed bit = CASE WHEN EXISTS (
+      SELECT 1 FROM dbo.deployments WITH (UPDLOCK, HOLDLOCK)
+      WHERE github_deployment_id = @deploymentId AND status = N'failure'
+    ) OR EXISTS (
+      SELECT 1 FROM dbo.deployment_failure_receipts WITH (UPDLOCK, HOLDLOCK)
+      WHERE github_deployment_id = @deploymentId
+    ) THEN 1 ELSE 0 END;
+    DECLARE @projectId bigint = (SELECT id FROM dbo.projects WHERE repo = @repository);
+    IF @projectId IS NOT NULL AND @status = N'failure' AND @alreadyFailed = 0 AND NOT EXISTS (
+      SELECT 1 FROM dbo.workflow_runs
+      WHERE project_id = @projectId AND github_run_id = @workflowRunId AND conclusion = N'cancelled'
+    )
+      INSERT dbo.deployment_failure_receipts (github_deployment_id) VALUES (@deploymentId);
     DECLARE @releaseId bigint = (
       SELECT id FROM dbo.releases WHERE project_id = @projectId AND sha = @sha);
-    IF @releaseId IS NOT NULL
+    IF @releaseId IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM dbo.workflow_runs
+      WHERE project_id = @projectId AND github_run_id = @workflowRunId AND conclusion = N'cancelled'
+    )
     BEGIN
     DECLARE @changed bit = 0;
     UPDATE dbo.deployments SET
@@ -181,27 +202,42 @@ async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhook
           WHEN @status = N'failure' THEN N'failed' ELSE N'deploying' END,
         released_at = CASE WHEN @status = N'success' THEN @at ELSE released_at END
       WHERE id = @releaseId;
-  END;`);
-  if (mapping.status !== 'failure') return undefined;
+  END;
+  SELECT @alreadyFailed AS alreadyFailed;`);
+  if (mapping.status !== 'failure' || previous.recordset?.[0]?.alreadyFailed) return undefined;
   const project = await new sql.Request(transaction)
     .input('repository', sql.NVarChar(140), mapping.repository)
     .input('deploymentId', sql.BigInt, mapping.id)
-    .query<{ projectId: string; releaseId: string | null }>(`DECLARE @projectId bigint = (
+    .input('workflowRunId', sql.BigInt, mapping.workflowRunId ?? null)
+    .query<{
+      projectId: string; releaseId: string | null; workflow: string | null; conclusion: string | null; alerted: boolean;
+    }>(
+      `DECLARE @projectId bigint = (
         SELECT id FROM dbo.projects WHERE repo = @repository);
       SELECT CAST(@projectId AS varchar(19)) AS projectId,
         CAST((SELECT release_id FROM dbo.deployments WHERE github_deployment_id = @deploymentId)
-          AS varchar(19)) AS releaseId;`);
+          AS varchar(19)) AS releaseId,
+        workflow, conclusion,
+        CAST(CASE WHEN EXISTS (
+          SELECT 1 FROM dbo.activity WITH (UPDLOCK, HOLDLOCK)
+          WHERE alert_key = CONCAT(N'deployment:', @deploymentId)
+            OR alert_key LIKE CONCAT(N'deployment:%:', @deploymentId)
+        ) THEN 1 ELSE 0 END AS bit) AS alerted
+      FROM (VALUES (1)) AS seed(id)
+      LEFT JOIN dbo.workflow_runs ON project_id = @projectId AND github_run_id = @workflowRunId;`);
   const projectId = project.recordset[0]?.projectId;
-  if (!projectId) return undefined;
+  if (!projectId || project.recordset[0]?.conclusion === 'cancelled' || project.recordset[0]?.alerted) return undefined;
+  const workflow = mapping.workflowId ? `workflow:${mapping.workflowId}` : `environment:${mapping.environment}`;
+  const dedupePrefix = `deployment:${projectId}:${createHash('sha256').update(workflow).digest('hex')}:`;
   const alert: ActivityAlert = {
     type: 'deployment_failure',
-    dedupeKey: `deployment:${mapping.id}`,
+    dedupeKey: `${dedupePrefix}${mapping.id}`,
     title: `Deployment failed: ${mapping.environment}`,
     link: project.recordset[0]?.releaseId
       ? `release:${project.recordset[0].releaseId}`
       : `project:${projectId}`,
   };
-  return await insertActivityAlert(transaction, alert) ? alert : undefined;
+  return await insertActivityAlert(transaction, alert, dedupePrefix) ? alert : undefined;
 }
 
 export function createWebhookDeliveryStore(

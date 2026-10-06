@@ -4,9 +4,6 @@
   "parameters": {
     "foundryNameTimestamp": {
       "value": "20261003200000"
-    },
-    "notesFolderPath": {
-      "value": "/Jarvis/Notes"
     }
   }
 }

@@ -8,14 +8,14 @@ import { setThemeTool } from './theme.js';
 import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
 import { setJarvisModelTool } from './model-tools.js';
-import { setAwayModeTool } from './away-mode.js';
+import { setAwayModeTool, setPresenceModeTool } from './away-mode.js';
 import { getStatusSummaryTool } from './status.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspace-commands.js';
 import { findChatReflexReplay } from './reflex.js';
 import { executePhoneTool } from '../phone/approval.js';
 
-const memoryReadOnlyTools = new Set(['memory_search', 'memory_list', 'memory_history']);
+const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
 
 // Keep deletable memory content out of the durable generic tool-call audit.
 function auditToolArguments(toolName: string, value: unknown): unknown {
@@ -46,7 +46,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setThemeTool, setJarvisModelTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool],
+  tools: [setThemeTool, setJarvisModelTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);
@@ -105,7 +105,7 @@ export const coreModule: BackendModule = {
         const validMessageId = messageId !== undefined &&
           /^[1-9]\d{0,18}$/u.test(messageId) && BigInt(messageId) <= 9_223_372_036_854_775_807n;
         const unrecordedRead = messageId === undefined && request.agentPrincipal !== null &&
-          memoryReadOnlyTools.has(tool.name);
+          readOnlyToolsWithoutMessage.has(tool.name);
         if (!validMessageId && !unrecordedRead) {
           return reply.code(400).send({ error: 'Invalid message ID' });
         }

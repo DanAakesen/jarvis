@@ -16,18 +16,24 @@ export interface WorkspaceView {
   id: string;
   title: string;
   content: WorkspaceViewContent;
+  /** `conversation` hosts the shell's conversation history: glass material and a visually hidden title. */
+  presentation?: 'conversation';
+  initialGeometry?: Partial<WorkspaceGeometry>;
 }
 
 export interface WorkspaceController {
   dispatch: (command: WorkspaceCommand, trustedBlobHost?: string) => boolean;
   minimiseAll: () => void;
   hasVisibleViews: () => boolean;
+  /** True when the view is open, not minimised and, on phones, the foreground view. */
+  isViewVisible?: (viewId: string) => boolean;
   snapshot?: WorkspaceSnapshot;
 }
 
 export const PHONE_LAYOUT_MEDIA_QUERY = '(max-width: 700px), (max-height: 500px) and (pointer: coarse)';
 type Arrangement = 'tiled' | 'layered';
-type Geometry = { x: number; y: number; width: number; height: number; columns: number; rows: number };
+export type WorkspaceGeometry = { x: number; y: number; width: number; height: number; columns: number; rows: number };
+type Geometry = WorkspaceGeometry;
 type PendingFocus = { target: 'tab' | 'window'; viewId: string } | { target: 'workspace' };
 type Gesture = {
   id: string;
@@ -78,7 +84,10 @@ export const Workspace = forwardRef<WorkspaceController, {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
   const closedAgentViews = useRef(new Map<string, { view: WorkspaceView; geometry: Geometry | undefined }>());
-  const workspaceViews = useMemo(() => [...views, ...agentViews], [agentViews, views]);
+  const workspaceViews = useMemo(() => [
+    ...views,
+    ...agentViews.filter((agentView) => !views.some((view) => view.id === agentView.id)),
+  ], [agentViews, views]);
   const [arrangement, setArrangement] = useState<Arrangement>('tiled');
   const [order, setOrder] = useState<string[]>([]);
   const [geometry, setGeometry] = useState<Record<string, Geometry>>({});
@@ -103,6 +112,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   const pendingActionsRef = useRef(new Set<string>());
   const jarvisUpdateTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const workspaceHeading = useRef<HTMLHeadingElement>(null);
+  const workspaceSection = useRef<HTMLElement>(null);
   const windowElements = useRef(new Map<string, HTMLElement>());
   const windowHeadings = useRef(new Map<string, HTMLHeadingElement>());
   const tabElements = useRef(new Map<string, HTMLButtonElement>());
@@ -182,8 +192,13 @@ export const Workspace = forwardRef<WorkspaceController, {
     }
   }, [closedViewIdsState, minimizedViewIdsState, openViews, foreground?.id, phone]);
 
+  const initialGeometry = useCallback((id: string, index: number): Geometry => ({
+    ...defaultGeometry(index),
+    ...workspaceViews.find((view) => view.id === id)?.initialGeometry,
+  }), [workspaceViews]);
+
   function geometryFor(id: string, index: number): Geometry {
-    return geometry[id] ?? defaultGeometry(index);
+    return geometry[id] ?? initialGeometry(id, index);
   }
 
   const reorder = useCallback((id: string, offset: number, label: string): boolean => {
@@ -195,12 +210,12 @@ export const Workspace = forwardRef<WorkspaceController, {
     if (!moved) return false;
     ids.splice(to, 0, moved);
     setGeometry((current) => Object.fromEntries(orderedViews.map((view, index) => [
-      view.id, current[view.id] ?? defaultGeometry(index),
+      view.id, current[view.id] ?? initialGeometry(view.id, index),
     ])));
     setOrder(ids);
     setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} ${label}.`);
     return true;
-  }, [orderedViews, workspaceViews]);
+  }, [initialGeometry, orderedViews, workspaceViews]);
 
   const isViewOpen = useCallback((id: string) => {
     return workspaceViews.some((view) => view.id === id) && !closedViewIds.has(id);
@@ -233,7 +248,10 @@ export const Workspace = forwardRef<WorkspaceController, {
       return next;
     });
     setForegroundViewId(id);
-    if (document.activeElement === tabElements.current.get(id) || (phone && foreground?.id !== id)) {
+    // On phones the restored view becomes foreground; move focus with it only from inside the workspace.
+    const focusInWorkspace = !document.activeElement || document.activeElement === document.body ||
+      workspaceSection.current?.contains(document.activeElement);
+    if (document.activeElement === tabElements.current.get(id) || (phone && foreground?.id !== id && focusInWorkspace)) {
       pendingFocus.current = { target: 'window', viewId: id };
     }
     setMinimizedViewIds((current) => {
@@ -396,7 +414,7 @@ export const Workspace = forwardRef<WorkspaceController, {
         return focusView(command.viewId);
       case 'move': {
         if (!isViewOpen(command.viewId) || viewIndex < 0) return false;
-        const current = geometry[command.viewId] ?? defaultGeometry(viewIndex);
+        const current = geometry[command.viewId] ?? initialGeometry(command.viewId, viewIndex);
         if (command.x + current.width > 1 || command.y + current.height > 1) return false;
         setGeometry((value) => ({
           ...value,
@@ -407,7 +425,7 @@ export const Workspace = forwardRef<WorkspaceController, {
       }
       case 'resize': {
         if (!isViewOpen(command.viewId) || viewIndex < 0) return false;
-        const current = geometry[command.viewId] ?? defaultGeometry(viewIndex);
+        const current = geometry[command.viewId] ?? initialGeometry(command.viewId, viewIndex);
         const x = command.x ?? current.x;
         const y = command.y ?? current.y;
         if (x + command.width > 1 || y + command.height > 1) return false;
@@ -428,7 +446,7 @@ export const Workspace = forwardRef<WorkspaceController, {
       case 'context-panel':
         return false;
     }
-  }, [agentViews, closeView, closedViewIds, focusView, geometry, isViewOpen, jarvisUpdateTimers, minimiseView,
+  }, [agentViews, closeView, closedViewIds, focusView, geometry, initialGeometry, isViewOpen, jarvisUpdateTimers, minimiseView,
     orderedViews, restoreView, workspaceViews]);
 
   const minimiseAll = useCallback(() => {
@@ -445,7 +463,8 @@ export const Workspace = forwardRef<WorkspaceController, {
     dispatch: dispatchCommand,
     minimiseAll,
     hasVisibleViews: () => visibleViews.length > 0,
-  }), [dispatchCommand, minimiseAll, visibleViews.length]);
+    isViewVisible: (viewId: string) => visibleViews.some((view) => view.id === viewId) && (!phone || foreground?.id === viewId),
+  }), [dispatchCommand, foreground?.id, minimiseAll, phone, visibleViews]);
 
   function raiseView(event: { target: EventTarget }, id: string) {
     if (arrangement !== 'layered' || narrow) return;
@@ -457,7 +476,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   }
 
   function updateGeometry(id: string, update: (current: Geometry) => Geometry, index: number) {
-    setGeometry((current) => ({ ...current, [id]: update(current[id] ?? defaultGeometry(index)) }));
+    setGeometry((current) => ({ ...current, [id]: update(current[id] ?? initialGeometry(id, index)) }));
   }
 
   function moveBy(id: string, dx: number, dy: number, index: number) {
@@ -643,7 +662,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   }
 
   return (
-    <section className="workspace" data-phone={phone} aria-labelledby={`${workspaceId}-heading`}>
+    <section ref={workspaceSection} className="workspace" data-phone={phone} aria-labelledby={`${workspaceId}-heading`}>
       <header className="workspace-heading">
         <h2 ref={workspaceHeading} id={`${workspaceId}-heading`} tabIndex={-1}>Workspace</h2>
         {openViews.length > 0 && !phone && (
@@ -748,7 +767,7 @@ export const Workspace = forwardRef<WorkspaceController, {
 
           return (
             <article
-              className={`workspace-window${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}${jarvisUpdatingIds.has(view.id) ? ' workspace-window-jarvis-updating' : ''}`}
+              className={`workspace-window${view.presentation === 'conversation' ? ' workspace-window-conversation luminous-glass' : ''}${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}${jarvisUpdatingIds.has(view.id) ? ' workspace-window-jarvis-updating' : ''}`}
               key={view.id}
               style={style}
               aria-labelledby={titleId}
@@ -776,7 +795,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                   onPointerUp={endGesture}
                   onPointerCancel={endGesture}
                 >
-                  {view.title}
+                  {view.presentation === 'conversation' ? <span className="visually-hidden">{view.title}</span> : view.title}
                 </h3>
                 <div className="workspace-window-actions">
                   {!maximized && !phone && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
@@ -852,7 +871,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                   </button>
                 </div>
               </header>
-              <div className="workspace-view-content">
+              <div className={view.presentation === 'conversation' ? 'workspace-conversation-content' : 'workspace-view-content'}>
                 {view.content.status === 'loading' && <p role="status">Loading view…</p>}
                 {view.content.status === 'empty' && <p>This view has no content yet.</p>}
                 {view.content.status === 'error' && (

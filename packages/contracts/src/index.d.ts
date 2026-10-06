@@ -178,6 +178,14 @@ export type JarvisActivityEvent =
 
 export function isJarvisActivityEvent(value: unknown): value is JarvisActivityEvent;
 
+/** The PC bridge heard Dan's offline wake word; `at` is the detection time as an ISO 8601 UTC timestamp. */
+export interface JarvisVoiceWakeEvent {
+  type: 'voice.wake';
+  at: string;
+}
+
+export function isJarvisVoiceWakeEvent(value: unknown): value is JarvisVoiceWakeEvent;
+
 export const generatedViewSchema: Readonly<Record<string, unknown>>;
 export const htmlArtifactSchema: Readonly<Record<string, unknown>>;
 export const htmlArtifactFrameSchema: Readonly<Record<string, unknown>>;

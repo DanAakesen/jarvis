@@ -17,6 +17,10 @@ export interface TaskRecord {
   attemptCount: number;
   nextAttemptAt: string | null;
   branch: string | null;
+  pullRequest?: { number: number; url: string; state: 'open' | 'closed' | 'merged' | null } | null;
+  checks?: 'pending' | 'passed' | 'failed' | null;
+  checkConclusion?: string | null;
+  usageSummary?: { inputTokens: number | null; outputTokens: number | null; costDkk: number | null } | null;
   latestSessionEndReason?: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
   createdAt: string;
   startedAt: string | null;
@@ -134,6 +138,7 @@ export interface TaskStore {
   list(filters: TaskListFilters): Promise<TaskRecord[]>;
   get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null>;
   updateModelConfig(id: string, config: TaskModelConfig): Promise<TaskModelUpdateResult>;
+  retry(id: string): Promise<TaskTransitionResult>;
   getActiveRepository(id: string, foundrySessionId: string): Promise<string | null>;
   getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]>;
   getRunningContext(): Promise<RunningTaskContextSnapshot>;

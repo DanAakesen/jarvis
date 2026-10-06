@@ -6,12 +6,14 @@ import {
   createFoundryBrowserTextModel,
   createJevBrowserPlanner,
   type BrowserActionInput,
+  type BrowserAgentLimits,
   type BrowserJevPlanner,
   type BrowserSnapshot,
   type BrowserTab,
   type BrowserTextModel,
 } from './browser-agent.js';
 import { ToolRefusal } from './tool-registry.js';
+import { recipeId, type RecipeDraft, type RecipeRuntime } from './task-recipes.js';
 
 const snapshot: BrowserSnapshot = {
   tabId: 'tab_1',
@@ -30,6 +32,8 @@ function jevResponse(
   target = 'element_1',
   selection = 'none',
   confidence = 0.99,
+  keySequence = 'none',
+  focusedText = 'none',
 ): Response {
   const answer = (choice: string) => ({ type: 'choice', choice, confidence });
   return new Response(JSON.stringify({
@@ -41,6 +45,8 @@ function jevResponse(
       target_scroll: answer(target),
       target_wait: answer(target),
       selection_value: answer(selection),
+      key_sequence: answer(keySequence),
+      focused_text: answer(focusedText),
     },
   }), { headers: { 'content-type': 'application/json' } });
 }
@@ -54,6 +60,7 @@ function fixture(
   tabs: readonly BrowserTab[] = [
     { id: 'tab_1', title: 'Search', url: 'https://example.test/', focused: true },
   ],
+  limits: BrowserAgentLimits = {},
 ) {
   const actions: BrowserActionInput[] = [];
   const snapshots: unknown[] = [];
@@ -86,7 +93,7 @@ function fixture(
     },
   } as unknown as FastifyRequest;
   return {
-    agent: createBrowserAgent(planner, textModel),
+    agent: createBrowserAgent(planner, textModel, limits),
     request,
     actions,
     snapshots,
@@ -115,16 +122,279 @@ function setSharedContext(request: FastifyRequest, screenDescription: string, sh
 }
 
 function fixedPlanner(decision: {
-  operation: 'click' | 'type' | 'select' | 'scroll_up' | 'scroll_down' | 'wait' | 'done' | 'blocked';
+  operation: 'click' | 'type' | 'type_focused' | 'keys' | 'select' | 'scroll_up' | 'scroll_down' | 'wait' | 'done' | 'blocked';
   confidence?: number;
   targetIndex?: number;
   selectionValue?: string;
+  text?: string;
+  keys?: readonly string[];
 }): BrowserJevPlanner {
   return { decide: vi.fn(async () => ({
     confidence: 0.99,
     ...decision,
   })) };
 }
+
+function recipes(draft?: RecipeDraft): RecipeRuntime {
+  return {
+    store: {
+      list: vi.fn(async () => draft ? [{ ...draft, id: recipeId(draft) }] : []),
+      save: vi.fn(async () => {}),
+      delete: vi.fn(async () => false),
+    },
+    planner: {
+      select: vi.fn(async () => ({ choice: draft ? recipeId(draft) : 'none', confidence: 0.99 })),
+      verify: vi.fn(async () => ({ choice: 'replay', confidence: 0.99 })),
+    },
+  };
+}
+
+describe('browser task recipes', () => {
+  it('compares complete planning and replay latency including selection and independent completion verification', async () => {
+    let clock = 0;
+    const now = vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    try {
+      let saved: RecipeDraft | undefined;
+      const runtime = recipes();
+      runtime.store.list = vi.fn(async () => {
+        clock += 5;
+        return saved ? [{ ...saved, id: recipeId(saved) }] : [];
+      });
+      runtime.store.save = vi.fn(async (draft) => { clock += 2; saved = draft; });
+      runtime.planner.select = vi.fn(async () => {
+        clock += 25;
+        return { choice: recipeId(saved!), confidence: 0.99 };
+      });
+      runtime.planner.verify = vi.fn(async () => {
+        clock += 10;
+        return { choice: 'replay', confidence: 0.99 };
+      });
+      const decisions = [
+        { operation: 'click', targetIndex: 0, confidence: 0.99 },
+        { operation: 'done', confidence: 0.99 },
+      ] as const;
+      let next = 0;
+      const planner: BrowserJevPlanner = {
+        decide: vi.fn(async () => { clock += 100; return decisions[next++]!; }),
+      };
+      const model: BrowserTextModel = {
+        generateText: vi.fn(async () => null),
+        verifyCompletion: vi.fn(async () => { clock += 8; return true; }),
+      };
+      const planning = fixture(planner, model, undefined, { recipes: runtime });
+      const replay = fixture(planner, model, undefined, { recipes: runtime });
+      for (const env of [planning, replay]) {
+        env.getSnapshot.mockImplementation(async () => { clock += 4; return snapshot; });
+        env.act.mockImplementation(async (input) => {
+          clock += 7;
+          return { acted: true, action: (input as BrowserActionInput).action };
+        });
+      }
+      await planning.agent.runTask({ goal: 'Click search' }, planning.request, new AbortController().signal);
+      await replay.agent.runTask({ goal: 'Click search' }, replay.request, new AbortController().signal);
+      const planningMs = planning.log.info.mock.calls.find(([entry]) => entry.phase === 'recipe_run')![0].durationMs as number;
+      const replayMs = replay.log.info.mock.calls.find(([entry]) => entry.phase === 'recipe_run')![0].durationMs as number;
+      expect(planningMs).toBe(234);
+      expect(replayMs).toBe(79);
+      expect(replayMs).toBeLessThan(planningMs);
+      expect(replay.log.info).toHaveBeenCalledWith({ phase: 'recipe_select', durationMs: 30 }, 'chat.latency');
+      expect(planning.log.info.mock.calls.filter(([entry]) => entry.phase === 'recipe_plan'))
+        .toEqual([[{ phase: 'recipe_plan', durationMs: 100 }, 'chat.latency'], [{ phase: 'recipe_plan', durationMs: 100 }, 'chat.latency']]);
+      expect(replay.log.info).not.toHaveBeenCalledWith(expect.objectContaining({ phase: 'recipe_plan' }), 'chat.latency');
+      expect(planner.decide).toHaveBeenCalledTimes(2);
+      expect(model.verifyCompletion).toHaveBeenCalledTimes(2);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('captures successful verified full runs without typed values, page values or indexes', async () => {
+    const runtime = recipes();
+    const planner = {
+      decide: vi.fn()
+        .mockResolvedValueOnce({ operation: 'type', targetIndex: 0, confidence: 0.99 })
+        .mockResolvedValueOnce({ operation: 'done', confidence: 0.99 }),
+    };
+    const env = fixture(planner, undefined, undefined, { recipes: runtime });
+    await env.agent.runTask({ goal: 'Enter "hello"' }, env.request, new AbortController().signal);
+    expect(env.textModel.verifyCompletion).toHaveBeenCalledOnce();
+    expect(runtime.store.save).toHaveBeenCalledOnce();
+    const persisted = vi.mocked(runtime.store.save).mock.calls[0]![0];
+    expect(persisted).toMatchObject({
+      kind: 'browser', key: 'https://example.test', goal: 'enter [value]',
+      steps: [
+        { operation: 'type', target: { role: 'textbox', name: 'Search' }, valueSlot: 0 },
+        { operation: 'done' },
+      ],
+    });
+    expect(JSON.stringify(persisted)).not.toContain('hello');
+    expect(JSON.stringify(persisted)).not.toContain('index');
+    expect(env.log.info).toHaveBeenCalledWith({
+      phase: 'recipe_plan', durationMs: expect.any(Number),
+    }, 'chat.latency');
+    expect(env.log.info.mock.calls.filter(([value]) => value.phase === 'recipe_run')).toHaveLength(1);
+  });
+
+  it('captures generated typing without a value slot and regenerates it from the new replay goal', async () => {
+    const runtime = recipes();
+    const planner: BrowserJevPlanner = {
+      decide: vi.fn()
+        .mockResolvedValueOnce({ operation: 'type', targetIndex: 0, confidence: 0.99 })
+        .mockResolvedValueOnce({ operation: 'done', confidence: 0.99 }),
+    };
+    const original = fixture(planner, undefined, undefined, { recipes: runtime });
+    await original.agent.runTask({ goal: 'Write hello in Search' }, original.request, new AbortController().signal);
+    expect(runtime.store.save).toHaveBeenCalledOnce();
+    const draft = vi.mocked(runtime.store.save).mock.calls[0]![0];
+    expect(draft.goal).toBe('write [value] in search');
+    expect(draft.steps).toEqual([
+      { operation: 'type', target: { role: 'textbox', name: 'Search' } },
+      { operation: 'done' },
+    ]);
+    expect(JSON.stringify(draft)).not.toContain('hello');
+
+    const replayRuntime = recipes(draft);
+    const replayPlanner = fixedPlanner({ operation: 'blocked' });
+    const model: BrowserTextModel = {
+      generateText: vi.fn(async () => 'goodbye'),
+      verifyCompletion: vi.fn(async () => true),
+    };
+    const replay = fixture(replayPlanner, model, undefined, { recipes: replayRuntime });
+    await replay.agent.runTask({ goal: 'Write goodbye in Search' }, replay.request, new AbortController().signal);
+    expect(replayPlanner.decide).not.toHaveBeenCalled();
+    expect(model.generateText).toHaveBeenCalledWith({
+      goal: 'Write goodbye in Search', target: snapshot.elements[0],
+    }, expect.any(AbortSignal));
+    expect(replay.actions[0]).toMatchObject({ action: 'type', text: 'goodbye' });
+    expect(JSON.stringify(vi.mocked(replayRuntime.store.save).mock.calls[0]![0])).not.toContain('goodbye');
+  });
+
+  it('does not retain a recipe when a later target label echoes generated typing', async () => {
+    const runtime = recipes();
+    const planner: BrowserJevPlanner = {
+      decide: vi.fn()
+        .mockResolvedValueOnce({ operation: 'type', targetIndex: 0, confidence: 0.99 })
+        .mockResolvedValueOnce({ operation: 'click', targetIndex: 0, confidence: 0.99 })
+        .mockResolvedValueOnce({ operation: 'done', confidence: 0.99 }),
+    };
+    const env = fixture(planner, undefined, undefined, { recipes: runtime });
+    env.snapshots.push(snapshot, {
+      ...snapshot, elements: [{ index: 0, role: 'button', name: 'hello', value: '' }],
+    });
+    await env.agent.runTask({ goal: 'Write hello in Search' }, env.request, new AbortController().signal);
+    expect(env.actions).toHaveLength(2);
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+
+  it('never records standalone clauses even when their completion is verified', async () => {
+    const runtime = recipes();
+    const env = fixture(fixedPlanner({ operation: 'done' }), undefined, undefined, { recipes: runtime });
+    await env.agent.runClause({ goal: 'Open project' }, env.request, new AbortController().signal);
+    expect(runtime.store.list).not.toHaveBeenCalled();
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+
+  it('does not save when completion verification fails or an action fails', async () => {
+    const runtime = recipes();
+    const env = fixture({
+      decide: vi.fn()
+        .mockResolvedValueOnce({ operation: 'type', targetIndex: 0, confidence: 0.99 })
+        .mockResolvedValue({ operation: 'done', confidence: 0.99 }),
+    }, {
+      generateText: vi.fn(async () => 'hello'), verifyCompletion: vi.fn(async () => false),
+    }, undefined, { recipes: runtime, maxSteps: 2 });
+    await expect(env.agent.runTask({ goal: 'Enter "hello"' }, env.request, new AbortController().signal))
+      .rejects.toThrow(/without verified completion/u);
+    expect(runtime.store.save).not.toHaveBeenCalled();
+    const failed = fixture(fixedPlanner({ operation: 'click', targetIndex: 0 }), undefined, undefined, { recipes: runtime });
+    failed.act.mockRejectedValueOnce(new ToolRefusal('Confirmation declined'));
+    await expect(failed.agent.runTask({ goal: 'Open project' }, failed.request, new AbortController().signal))
+      .rejects.toThrow('Confirmation declined');
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+
+  it('selects once from the first observed origin and relocalizes each replay step', async () => {
+    const runtime = recipes({
+      kind: 'browser', key: 'https://example.test', goal: 'click search',
+      steps: [
+        { operation: 'click', target: { role: 'textbox', name: 'Search' } },
+        { operation: 'click', target: { role: 'textbox', name: 'Search' } },
+        { operation: 'done' },
+      ],
+    });
+    const planner = fixedPlanner({ operation: 'blocked' });
+    const env = fixture(planner, undefined, undefined, { recipes: runtime });
+    env.snapshots.push(snapshot, {
+      ...snapshot,
+      snapshotId: '2730aa51-f380-4df9-a345-1feb862cb1c4',
+      elements: [
+        { index: 0, role: 'button', name: 'Other', value: '' },
+        { index: 1, role: 'textbox', name: 'Search', value: '' },
+      ],
+    });
+    await env.agent.runTask({ goal: 'Click search' }, env.request, new AbortController().signal);
+    expect(runtime.store.list).toHaveBeenCalledWith({ kind: 'browser', key: 'https://example.test' });
+    expect(runtime.planner.select).toHaveBeenCalledOnce();
+    expect(runtime.planner.verify).toHaveBeenCalledTimes(3);
+    expect(planner.decide).not.toHaveBeenCalled();
+    expect(env.actions).toMatchObject([
+      { elementIndex: 0, snapshotId: snapshot.snapshotId },
+      { elementIndex: 1, snapshotId: '2730aa51-f380-4df9-a345-1feb862cb1c4' },
+    ]);
+    expect(env.textModel.verifyCompletion).toHaveBeenCalledOnce();
+    expect(runtime.planner.verify).toHaveBeenCalledWith(expect.objectContaining({
+      context: { title: snapshot.title, url: snapshot.url, previousActions: expect.any(Array) },
+    }), expect.any(AbortSignal));
+    expect(env.log.info).not.toHaveBeenCalledWith(expect.objectContaining({ phase: 'recipe_plan' }), 'chat.latency');
+    expect(env.log.info.mock.calls.filter(([value]) => value.phase === 'recipe_run')).toHaveLength(1);
+  });
+
+  it('falls back to normal planning on site drift without resuming replay on return', async () => {
+    const runtime = recipes({
+      kind: 'browser', key: 'https://example.test', goal: 'click search',
+      steps: [{ operation: 'click', target: { role: 'textbox', name: 'Search' } }, { operation: 'done' }],
+    });
+    const planner = {
+      decide: vi.fn()
+        .mockResolvedValueOnce({ operation: 'click', targetIndex: 0, confidence: 0.99 })
+        .mockResolvedValueOnce({ operation: 'done', confidence: 0.99 }),
+    };
+    const env = fixture(planner, undefined, undefined, { recipes: runtime });
+    env.snapshots.push(snapshot, { ...snapshot, url: 'https://other.test/' }, snapshot);
+    await env.agent.runTask({ goal: 'Click search' }, env.request, new AbortController().signal);
+    expect(planner.decide).toHaveBeenCalledTimes(2);
+    expect(runtime.planner.verify).toHaveBeenCalledOnce();
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+
+  it('refuses low confidence without executing or falling through to normal planning', async () => {
+    const runtime = recipes({
+      kind: 'browser', key: 'https://example.test', goal: 'click search',
+      steps: [{ operation: 'click', target: { role: 'textbox', name: 'Search' } }, { operation: 'done' }],
+    });
+    runtime.planner.verify = vi.fn(async () => ({ choice: 'replay', confidence: 0.89 }));
+    const planner = fixedPlanner({ operation: 'done' });
+    const env = fixture(planner, undefined, undefined, { recipes: runtime });
+    await expect(env.agent.runTask({ goal: 'Click search' }, env.request, new AbortController().signal))
+      .rejects.toThrow(/not confident/u);
+    expect(planner.decide).not.toHaveBeenCalled();
+    expect(env.actions).toHaveLength(0);
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+
+  it('preserves the Chrome confirmation boundary during risky replay', async () => {
+    const runtime = recipes({
+      kind: 'browser', key: 'https://example.test', goal: 'send message',
+      steps: [{ operation: 'click', target: { role: 'button', name: 'Send message' } }, { operation: 'done' }],
+    });
+    const env = fixture(fixedPlanner({ operation: 'blocked' }), undefined, undefined, { recipes: runtime });
+    env.act.mockRejectedValueOnce(new ToolRefusal('Confirmation declined'));
+    await expect(env.agent.runTask({ goal: 'Send message' }, env.request, new AbortController().signal))
+      .rejects.toThrow('Confirmation declined');
+    expect(env.actions).toHaveLength(0);
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+});
 
 describe('Jev browser agent', () => {
   it('selects an operation and observed target in one Jev request', async () => {
@@ -174,6 +444,38 @@ describe('Jev browser agent', () => {
       confidence: 0.99,
       targetIndex: 2,
       selectionValue: 'Denmark',
+    });
+
+  });
+
+  it('maps keyboard and focused typing through closed-set Jev Choice arguments', async () => {
+    const keysFetcher = vi.fn<typeof fetch>(async () => jevResponse('keys', 'none', 'none', 0.99, 'keys_0'));
+    const keysPlanner = createJevBrowserPlanner(async () => 'fake-key', keysFetcher);
+    await expect(keysPlanner.decide({
+      goal: 'Press Ctrl+P to open a file',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'keys', confidence: 0.99, keys: ['Ctrl+P'],
+    });
+    const body = JSON.parse(String(keysFetcher.mock.calls[0]?.[1]?.body)) as {
+      state: { application: string; commonShortcuts: string[] };
+      questions: { key_sequence: { criteria: Record<string, string> } };
+    };
+    expect(body.state.application).toBe('chrome');
+    expect(body.state.commonShortcuts).toContain('Ctrl+L focuses the address and search bar');
+    expect(body.questions.key_sequence.criteria.keys_0).toBe('Ctrl+P');
+
+    const typePlanner = createJevBrowserPlanner(async () => 'fake-key', async () =>
+      jevResponse('type_focused', 'none', 'none', 0.99, 'none', 'value_0'));
+    await expect(typePlanner.decide({
+      goal: 'Type "Daft Punk" into the focused search box',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'type_focused', confidence: 0.99, text: 'Daft Punk',
     });
   });
 
@@ -244,6 +546,7 @@ describe('Jev browser agent', () => {
       targetIndex: operation === 'type' ? 0 : operation === 'select' ? 2 : 1,
       ...(operation === 'select' ? { selectionValue: 'Denmark' } : {}),
     });
+
     const env = fixture(planner);
     await env.agent.runClause({ goal: operation === 'select' ? 'Select "Denmark"' : 'Continue the task', tabId: 'tab_1' },
       env.request, new AbortController().signal);
@@ -259,6 +562,36 @@ describe('Jev browser agent', () => {
     expect(env.textModel.generateText).toHaveBeenCalledTimes(operation === 'type' ? 1 : 0);
     expect(env.workspaceCalls.length).toBeGreaterThan(0);
     expect(JSON.stringify(env.workspaceCalls)).not.toContain('hello');
+  });
+
+  it('runs focused keyboard actions without targets and redacts keys and typed values from progress', async () => {
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce({ operation: 'keys' as const, confidence: 0.99, keys: ['Ctrl+L'] })
+      .mockResolvedValueOnce({ operation: 'type_focused' as const, confidence: 0.99, text: 'Daft Punk' }) };
+    const env = fixture(planner);
+
+    await env.agent.runClause({ goal: 'Press Ctrl+L to focus the search bar', tabId: 'tab_1' },
+      env.request, new AbortController().signal);
+    await env.agent.runClause({ goal: 'Type "Daft Punk" into the focused search box', tabId: 'tab_1' },
+      env.request, new AbortController().signal);
+
+    expect(env.actions).toEqual([
+      {
+        tabId: 'tab_1',
+        snapshotId: snapshot.snapshotId,
+        action: 'keys',
+        keys: ['Ctrl+L'],
+        closeIntent: false,
+        requiresConfirmation: false,
+      },
+      {
+        tabId: 'tab_1',
+        snapshotId: snapshot.snapshotId,
+        action: 'type_focused',
+        text: 'Daft Punk',
+      },
+    ]);
+    expect(JSON.stringify(env.workspaceCalls)).not.toMatch(/Ctrl\+L|Daft Punk/u);
   });
 
   it('does not trust a target that was not in the observed snapshot', async () => {

@@ -74,6 +74,12 @@ describe("Foundry runner wire contract", () => {
     expect(request(fetch).body).toEqual({ agent: "codex", mode: "renew-codex", min_days_left: 3 });
   });
 
+  it("passes force=true for a manual Codex renewal", async () => {
+    const { client, fetch } = setup({ ...(fixtures["task_start"] as object), agent: "codex", mode: "renew-codex" });
+    await client.startCodexRenewal({ force: true });
+    expect(request(fetch).body).toEqual({ agent: "codex", mode: "renew-codex", min_days_left: 3, force: true });
+  });
+
   it("starts a Codex tool invocation without repository workspace fields", async () => {
     const { client, fetch } = setup({
       ...(fixtures["task_start"] as object), agent: "codex", mode: "codex-tool",

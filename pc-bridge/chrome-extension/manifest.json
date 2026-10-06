@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Jarvis PC Bridge",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Connects the Jarvis PC bridge to the Chrome profile you use.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzgNnFzFzpLfWn5cuKBXHOyRvYN5afM7+sAjWtahXbH9Z6iSydmdOFZtTuVv8L4mWCWn4npoyasYwFOZbXGVa9L8XUBqxPTl7QH4acsi9IeeV2suLWPzdoohQXp0kNgkAWxJuwkPnrZiSDgETd6FGUcQSYNbeyzdjdU5Hkfymnofvtriimgpu/yyS0jEexDGiTuH1Gy+t45RKhgFdyjRSDH3WpxnXDaKMkphyvEzbftwH92Vp+8TJpAlePDDb6uvyUDRbQv732wPC7S71aBMGME47m1Bcu/xnaVU3tcgNWV4fGX1Em1lRy+WnarXUdva01yBMFLn74NkvDigv87tQvwIDAQAB",
   "minimum_chrome_version": "136",

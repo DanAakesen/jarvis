@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
 import type { NowFeedSnapshot, NowFeedStore, NowRunningTask, NowActivityItem } from '../core/now.js';
@@ -14,7 +15,7 @@ function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-export function createNowFeedStore(pool: sql.ConnectionPool): NowFeedStore {
+export function createNowFeedStore(pool: sql.ConnectionPool, onNotificationCreated: () => void = () => {}): NowFeedStore {
   return {
     async read(): Promise<NowFeedSnapshot> {
       const running = await databaseReadRequest(pool).query<RunningTaskRow>(`SELECT TOP (100)
@@ -48,13 +49,9 @@ export function createNowFeedStore(pool: sql.ConnectionPool): NowFeedStore {
           SELECT id, N'alert' AS category, title, link, at
           FROM dbo.activity
           WHERE dismissed_at IS NULL AND alert_key IS NOT NULL
-          UNION ALL
-          SELECT id, N'mode' AS category, title, link, at
-          FROM dbo.activity
-          WHERE dismissed_at IS NULL AND area = N'core' AND kind = N'away_mode'
         )
         SELECT TOP (100) CAST(id AS varchar(19)) AS id, category, title, link, at
-        FROM visible ORDER BY at DESC, id DESC;`);
+        FROM visible ORDER BY visible.at DESC, visible.id DESC;`);
 
       return {
         running: running.recordset.map((task) => ({ ...task, startedAt: iso(task.startedAt) })),
@@ -70,6 +67,20 @@ export function createNowFeedStore(pool: sql.ConnectionPool): NowFeedStore {
           WHERE id = @id;
           SELECT CAST(id AS varchar(19)) AS id FROM dbo.activity WHERE id = @id;`);
       return recordset.length > 0;
+    },
+
+    async recordNotification(kind, text) {
+      if (!['info', 'success', 'warning', 'error'].includes(kind) ||
+          typeof text !== 'string' || !text.trim() || text.length > 400) {
+        throw new TypeError('Invalid activity notification');
+      }
+      await pool.request()
+        .input('kind', sql.NVarChar(32), kind)
+        .input('title', sql.NVarChar(400), text)
+        .input('alertKey', sql.NVarChar(200), `notification:${randomUUID()}`)
+        .query(`INSERT dbo.activity (area, kind, title, alert_key)
+          VALUES (N'operations', @kind, @title, @alertKey);`);
+      onNotificationCreated();
     },
   };
 }

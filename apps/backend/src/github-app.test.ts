@@ -21,15 +21,18 @@ describe('GitHub App installation tokens', () => {
         expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
       }), { status: 201 }));
     const getPrivateKey = vi.fn(async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString());
+    const onTokenMint = vi.fn(async () => {});
     const issuer = createGitHubAppTokenIssuer({
       appId: '123456',
       getPrivateKey,
       fetch: fetchImpl,
       now: () => now,
+      onTokenMint,
     });
 
     await expect(issuer.issue('DanAakesen/jarvis-test-target')).resolves.toBe('ghs_test-installation-token');
     expect(getPrivateKey).toHaveBeenCalledOnce();
+    expect(onTokenMint).toHaveBeenCalledWith('ok', new Date(now).toISOString());
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const [installationUrl, installationOptions] = fetchImpl.mock.calls[0]!;
     expect(installationUrl).toBe('https://api.github.com/repos/DanAakesen/jarvis-test-target/installation');
@@ -47,6 +50,44 @@ describe('GitHub App installation tokens', () => {
       permissions: { contents: 'write', pull_requests: 'write' },
     });
     expect(tokenOptions?.redirect).toBe('error');
+  });
+
+  it.each(['key', 'installation', 'mint', 'invalid-token'] as const)(
+    'reports failed health when %s fails without exposing credentials', async (failure) => {
+      const now = Date.parse('2026-10-06T00:00:00.000Z');
+      const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+      const onTokenMint = vi.fn(async () => {});
+      const fetchImpl = vi.fn<typeof fetch>()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ id: 123 }), { status: failure === 'installation' ? 401 : 200 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'private-token' }), { status: failure === 'mint' ? 403 : 201 }));
+      const issuer = createGitHubAppTokenIssuer({
+        appId: '123', now: () => now, fetch: fetchImpl, onTokenMint,
+        getPrivateKey: async () => {
+          if (failure === 'key') throw new Error('private-key-detail');
+          return privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+        },
+      });
+      await expect(issuer.issueForContents('DanAakesen/jarvis')).rejects.toThrow();
+      expect(onTokenMint).toHaveBeenCalledExactlyOnceWith('failed', new Date(now).toISOString());
+      expect(JSON.stringify(onTokenMint.mock.calls)).not.toContain('private');
+    },
+  );
+
+  it('does not turn a valid mint into a failure when health persistence fails', async () => {
+    const now = Date.parse('2026-10-06T00:00:00.000Z');
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const onTokenMint = vi.fn(async () => { throw new Error('storage unavailable'); });
+    const issuer = createGitHubAppTokenIssuer({
+      appId: '123', now: () => now, onTokenMint,
+      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      fetch: vi.fn<typeof fetch>()
+        .mockResolvedValueOnce(new Response('{"id":123}'))
+        .mockResolvedValueOnce(new Response(JSON.stringify({
+          token: 'test-installation-token', expires_at: new Date(now + 60 * 60_000).toISOString(),
+        }))),
+    });
+    await expect(issuer.issueForActions('DanAakesen/jarvis')).resolves.toBe('test-installation-token');
+    expect(onTokenMint).toHaveBeenCalledOnce();
   });
 
   it('lists every installed repository with a read-only token, caches the result, and refreshes on demand', async () => {
@@ -83,14 +124,17 @@ describe('GitHub App installation tokens', () => {
         .mockResolvedValueOnce(new Response(JSON.stringify({ total_count: 2, repositories: repositories.slice(1) }), { status: 200 }));
     };
     queueList();
+    const onTokenMint = vi.fn(async () => {});
     const catalog = createGitHubAppRepositoryCatalog({
       appId: '123456',
       getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
       fetch: fetchImpl,
       now: () => now,
+      onTokenMint,
     });
 
     const first = await catalog.list('DanAakesen');
+    expect(onTokenMint).toHaveBeenCalledWith('ok', new Date(now).toISOString());
     expect(first).toEqual({
       repositories: [
         {
@@ -118,6 +162,7 @@ describe('GitHub App installation tokens', () => {
 
     await catalog.list('danaakesen');
     expect(fetchImpl).toHaveBeenCalledTimes(4);
+    expect(onTokenMint).toHaveBeenCalledOnce();
 
     queueList();
     await catalog.list('DanAakesen', true);
@@ -263,6 +308,31 @@ describe('GitHub App installation tokens', () => {
     expect(JSON.parse(String(tokenOptions?.body))).toEqual({
       repositories: ['repo'],
       permissions: { contents: 'read' },
+    });
+  });
+
+  it('issues a contents-write-only token for vault operations', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const now = Date.parse('2026-10-04T09:00:00.000Z');
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 123 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        token: 'ghs_contents-write-token',
+        expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
+      }), { status: 201 }));
+    const issuer = createGitHubAppTokenIssuer({
+      appId: '123456',
+      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      fetch: fetchImpl,
+      now: () => now,
+    });
+
+    await issuer.issueForContentsWrite('DanAakesen/vault');
+
+    const [, tokenOptions] = fetchImpl.mock.calls[1]!;
+    expect(JSON.parse(String(tokenOptions?.body))).toEqual({
+      repositories: ['vault'],
+      permissions: { contents: 'write' },
     });
   });
 });

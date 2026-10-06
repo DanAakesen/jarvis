@@ -12,6 +12,7 @@ import {
   isGeneratedView,
   isValidHtmlArtifactHtml,
   isJarvisActivityEvent,
+  isJarvisVoiceWakeEvent,
   isWebResearchResult,
   isWorkspaceCommand,
   generatedViewVersion,
@@ -50,6 +51,15 @@ test('accepts only bounded Jarvis activity fields and known outcomes', () => {
   assert.equal(isJarvisActivityEvent({
     type: 'tool-call-finished', activityId, source: 'chat', toolName: 'list_tasks', outcome: 'ok',
   }), true);
+});
+
+test('accepts only a bounded voice wake event with a canonical UTC timestamp', () => {
+  assert.equal(isJarvisVoiceWakeEvent({ type: 'voice.wake', at: '2026-10-06T14:24:37.078Z' }), true);
+  assert.equal(isJarvisVoiceWakeEvent({ type: 'voice.wake', at: '2026-13-06T14:24:37.078Z' }), false);
+  assert.equal(isJarvisVoiceWakeEvent({ type: 'voice.wake', at: '2026-10-06T14:24:37Z' }), false);
+  assert.equal(isJarvisVoiceWakeEvent({ type: 'voice.wake', at: '2026-10-06T14:24:37.078Z', audio: 'x' }), false);
+  assert.equal(isJarvisVoiceWakeEvent({ type: 'listening', at: '2026-10-06T14:24:37.078Z' }), false);
+  assert.equal(isJarvisActivityEvent({ type: 'voice.wake', at: '2026-10-06T14:24:37.078Z' }), false);
 });
 
 test('web research result schema and validator accept bounded source-linked results', () => {

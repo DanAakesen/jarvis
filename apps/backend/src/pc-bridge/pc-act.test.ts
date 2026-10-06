@@ -1,5 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
+import type { KeySequence } from '../core/keyboard-actions.js';
+import { recipeId, type RecipeDraft, type RecipeRuntime } from '../core/task-recipes.js';
 import {
   createJevPcActPlanner,
   runPcAct,
@@ -19,15 +21,23 @@ function request(principal: 'agent' | 'other' = 'agent'): FastifyRequest {
     agentPrincipal: principal === 'agent' ? { objectId: 'jarvis' } : null,
     principal: principal === 'other' ? { objectId: 'someone-else' } : null,
     server: { ownerObjectId: 'dan' },
+    log: { info: vi.fn() },
+    routeOptions: { url: '/conversation/:sessionId/messages' },
   } as unknown as FastifyRequest;
 }
 
-function decision(operation: PcActDecision['operation'], targetIndex?: number, text?: string): PcActDecision {
+function decision(
+  operation: PcActDecision['operation'],
+  targetIndex?: number,
+  text?: string,
+  keys?: KeySequence,
+): PcActDecision {
   return {
     operation,
     confidence: 0.99,
     ...(targetIndex === undefined ? {} : { targetIndex }),
     ...(text === undefined ? {} : { text }),
+    ...(keys === undefined ? {} : { keys }),
   };
 }
 
@@ -44,6 +54,201 @@ function jevResponse(answers: Record<string, unknown>): Response {
     headers: { 'content-type': 'application/json' },
   });
 }
+
+function recipes(draft?: RecipeDraft): RecipeRuntime {
+  return {
+    store: {
+      list: vi.fn(async () => draft ? [{ ...draft, id: recipeId(draft) }] : []),
+      save: vi.fn(async () => {}),
+      delete: vi.fn(async () => false),
+    },
+    planner: {
+      select: vi.fn(async () => ({ choice: draft ? recipeId(draft) : 'none', confidence: 0.99 })),
+      verify: vi.fn(async () => ({ choice: 'replay', confidence: 0.99 })),
+    },
+  };
+}
+
+describe('PC task recipes', () => {
+  it('measures full planning versus replay runs including recipe selection overhead', async () => {
+    let clock = 0;
+    const now = vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    try {
+      let saved: RecipeDraft | undefined;
+      const runtime = recipes();
+      runtime.store.list = vi.fn(async () => {
+        clock += 5;
+        return saved ? [{ ...saved, id: recipeId(saved) }] : [];
+      });
+      runtime.store.save = vi.fn(async (draft) => { clock += 2; saved = draft; });
+      runtime.planner.select = vi.fn(async () => {
+        clock += 25;
+        return { choice: recipeId(saved!), confidence: 0.99 };
+      });
+      runtime.planner.verify = vi.fn(async () => {
+        clock += 10;
+        return { choice: 'replay', confidence: 0.99 };
+      });
+      const decisions = [decision('click', 0), decision('done')];
+      const planner = { decide: vi.fn(async () => { clock += 100; return decisions.shift()!; }) };
+      const pc = bridge({
+        observe: vi.fn(async () => { clock += 3; return snapshot; }),
+        act: vi.fn(async ({ action }) => { clock += 7; return { acted: true, action }; }),
+      });
+      const planningRequest = request();
+      const planningLog = vi.fn();
+      planningRequest.log.info = planningLog;
+      const replayRequest = request();
+      const replayLog = vi.fn();
+      replayRequest.log.info = replayLog;
+      await runPcAct({ goal: 'Open project' }, planningRequest, new AbortController().signal, pc, { planner, recipes: runtime });
+      await runPcAct({ goal: 'Open project' }, replayRequest, new AbortController().signal, pc, { planner, recipes: runtime });
+      const planningMs = planningLog.mock.calls.find(([entry]) => entry.phase === 'recipe_run')![0].durationMs as number;
+      const replayMs = replayLog.mock.calls.find(([entry]) => entry.phase === 'recipe_run')![0].durationMs as number;
+      expect(planningMs).toBe(220);
+      expect(replayMs).toBe(65);
+      expect(replayMs).toBeLessThan(planningMs);
+      expect(replayLog).toHaveBeenCalledWith({ phase: 'recipe_select', durationMs: 30 }, 'chat.latency');
+      expect(planningLog.mock.calls.filter(([entry]) => entry.phase === 'recipe_plan'))
+        .toEqual([[{ phase: 'recipe_plan', durationMs: 100 }, 'chat.latency'], [{ phase: 'recipe_plan', durationMs: 100 }, 'chat.latency']]);
+      expect(replayLog).not.toHaveBeenCalledWith(expect.objectContaining({ phase: 'recipe_plan' }), 'chat.latency');
+      expect(planner.decide).toHaveBeenCalledTimes(2);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('captures only successful completed runs without retaining entered values or snapshot indexes', async () => {
+    const runtime = recipes();
+    const pc = bridge({
+      observe: vi.fn(async () => ({
+        ...snapshot, elements: [{ index: 0, role: 'edit', name: 'Search' }],
+      })),
+    });
+    const planner = {
+      decide: vi.fn()
+        .mockResolvedValueOnce(decision('type', 0, 'Alpha note'))
+        .mockResolvedValueOnce(decision('done')),
+    };
+    const req = request();
+    await runPcAct({ goal: 'Enter "Alpha note"' }, req, new AbortController().signal, pc, {
+      planner, recipes: runtime,
+    });
+    expect(runtime.store.save).toHaveBeenCalledOnce();
+    const persisted = vi.mocked(runtime.store.save).mock.calls[0]![0];
+    expect(persisted).toMatchObject({
+      kind: 'pc', key: 'vscode', goal: 'enter [value]',
+      steps: [{ operation: 'type', target: { role: 'edit', name: 'Search' }, valueSlot: 0 }, { operation: 'done' }],
+    });
+    expect(JSON.stringify(persisted)).not.toContain('Alpha note');
+    expect(JSON.stringify(persisted)).not.toContain('index');
+    expect(req.log.info).toHaveBeenCalledWith({
+      phase: 'recipe_plan', durationMs: expect.any(Number),
+    }, 'chat.latency');
+    expect(req.log.info).toHaveBeenCalledWith({
+      phase: 'recipe_run', durationMs: expect.any(Number),
+    }, 'chat.latency');
+  });
+
+  it('never saves unsuccessful actions', async () => {
+    const runtime = recipes();
+    await expect(runPcAct({ goal: 'Open project' }, request(), new AbortController().signal, bridge({
+      act: vi.fn(async () => ({ acted: false, action: 'click' })),
+    }), {
+      planner: { decide: vi.fn(async () => decision('click', 0)) }, recipes: runtime,
+    })).rejects.toThrow(/did not complete/u);
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+
+  it('relocalizes every replay step against reordered fresh controls', async () => {
+    const runtime = recipes({
+      kind: 'pc', key: 'vscode', goal: 'open project',
+      steps: [
+        { operation: 'click', target: { role: 'button', name: 'Open project' } },
+        { operation: 'click', target: { role: 'button', name: 'Open project' } },
+        { operation: 'done' },
+      ],
+    });
+    const pc = bridge({
+      observe: vi.fn()
+        .mockResolvedValueOnce(snapshot)
+        .mockResolvedValue({
+          ...snapshot,
+          snapshotId: '2730aa51-f380-4df9-a345-1feb862cb1c4',
+          elements: [
+            { index: 0, role: 'button', name: 'Other' },
+            { index: 1, role: 'button', name: 'Open project' },
+          ],
+        }),
+    });
+    const planner = { decide: vi.fn(async () => decision('blocked')) };
+    const req = request();
+    await runPcAct({ goal: 'Open project' }, req, new AbortController().signal, pc, { planner, recipes: runtime });
+    expect(planner.decide).not.toHaveBeenCalled();
+    expect(runtime.planner.select).toHaveBeenCalledOnce();
+    expect(pc.act).toHaveBeenNthCalledWith(1, expect.objectContaining({ elementIndex: 0 }), expect.any(AbortSignal));
+    expect(pc.act).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      elementIndex: 1, snapshotId: '2730aa51-f380-4df9-a345-1feb862cb1c4',
+    }), expect.any(AbortSignal));
+    expect(runtime.planner.verify).toHaveBeenCalledWith(expect.objectContaining({
+      context: { previousActions: expect.any(Array) },
+    }), expect.any(AbortSignal));
+    expect(req.log.info).not.toHaveBeenCalledWith(expect.objectContaining({ phase: 'recipe_plan' }), 'chat.latency');
+    expect(req.log.info).toHaveBeenCalledWith({
+      phase: 'recipe_run', durationMs: expect.any(Number),
+    }, 'chat.latency');
+  });
+
+  it('abandons replay after application drift and does not capture a cross-app run', async () => {
+    const runtime = recipes({
+      kind: 'pc', key: 'vscode', goal: 'open project',
+      steps: [{ operation: 'click', target: { role: 'button', name: 'Open project' } }, { operation: 'done' }],
+    });
+    const pc = bridge({
+      observe: vi.fn()
+        .mockResolvedValueOnce(snapshot)
+        .mockResolvedValueOnce({ ...snapshot, application: 'explorer' })
+        .mockResolvedValue(snapshot),
+    });
+    const planner = { decide: vi.fn().mockResolvedValueOnce(decision('click', 0)).mockResolvedValueOnce(decision('done')) };
+    await runPcAct({ goal: 'Open project' }, request(), new AbortController().signal, pc, { planner, recipes: runtime });
+    expect(planner.decide).toHaveBeenCalledTimes(2);
+    expect(runtime.planner.verify).toHaveBeenCalledOnce();
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+
+  it('refuses low-confidence replay instead of falling through to the normal planner', async () => {
+    const runtime = recipes({
+      kind: 'pc', key: 'vscode', goal: 'open project',
+      steps: [{ operation: 'click', target: { role: 'button', name: 'Open project' } }, { operation: 'done' }],
+    });
+    runtime.planner.verify = vi.fn(async () => ({ choice: 'replay', confidence: 0.89 }));
+    const pc = bridge();
+    const planner = { decide: vi.fn(async () => decision('done')) };
+    await expect(runPcAct({ goal: 'Open project' }, request(), new AbortController().signal, pc, {
+      planner, recipes: runtime,
+    })).rejects.toThrow(/not confident/u);
+    expect(pc.act).not.toHaveBeenCalled();
+    expect(planner.decide).not.toHaveBeenCalled();
+    expect(runtime.store.save).not.toHaveBeenCalled();
+  });
+
+  it('keeps replayed irreversible clicks behind runConfirmed', async () => {
+    const runtime = recipes({
+      kind: 'pc', key: 'vscode', goal: 'delete item',
+      steps: [{ operation: 'click', target: { role: 'button', name: 'Delete' } }, { operation: 'done' }],
+    });
+    const pc = bridge({
+      observe: vi.fn(async () => ({ ...snapshot, elements: [{ index: 0, role: 'button', name: 'Delete' }] })),
+    });
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    await runPcAct({ goal: 'Delete item' }, request(), new AbortController().signal, pc, {
+      planner: { decide: vi.fn(async () => decision('blocked')) }, recipes: runtime, runConfirmed,
+    });
+    expect(runConfirmed).toHaveBeenCalledOnce();
+    expect(pc.act).toHaveBeenCalledWith(expect.objectContaining({ confirmed: true }), expect.any(AbortSignal));
+  });
+});
 
 describe('pc_act Jev planner', () => {
   it('sends one bounded Jev decision the observed Windows controls and exact user-quoted values', async () => {
@@ -73,6 +278,62 @@ describe('pc_act Jev planner', () => {
     expect(JSON.stringify(body)).not.toContain('value:');
     expect(body.questions).not.toHaveProperty('confidence');
     expect(init?.redirect).toBe('error');
+  });
+
+  it('asks Jev to choose among visual boxes without offering visual typing or keyboard actions', async () => {
+    const fetcher = vi.fn(async () => jevResponse({
+      operation: { type: 'choice', choice: 'click', confidence: 0.99 },
+      target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
+    }));
+    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+    const visualSnapshot: PcActSnapshot = {
+      ...snapshot,
+      elements: [{
+        index: 0, role: 'button', name: 'Start',
+        bounds: { x: 0.2, y: 0.3, width: 0.2, height: 0.1 },
+      }],
+      visual: { width: 1280, height: 720 },
+    };
+
+    await expect(planner.decide({
+      goal: 'Start the game',
+      step: 1,
+      previousActions: [],
+      snapshot: visualSnapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'click', confidence: 0.99, targetIndex: 0,
+    });
+
+    const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)) as {
+      state: { elements: unknown[] };
+      questions: Record<string, { criteria: Record<string, unknown> }>;
+    };
+    expect(body.state.elements).toHaveLength(1);
+    expect(JSON.stringify(body.questions.target)).toContain('normalized box {\\"x\\":0.2');
+    expect(body.questions.operation.criteria).not.toHaveProperty('type');
+    expect(body.questions.operation.criteria).not.toHaveProperty('keys');
+    expect(body.questions).not.toHaveProperty('text_value');
+    expect(body.questions).not.toHaveProperty('key_sequence');
+  });
+
+  it('preserves escaped quotes in the exact prompt value for Codex', async () => {
+    const prompt = 'Review "jarvis" and keep the string verbatim.';
+    const fetcher = vi.fn(async () => jevResponse({
+      operation: { type: 'choice', choice: 'type', confidence: 0.99 },
+      target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
+      text_value: { type: 'choice', choice: 'value_0', confidence: 0.99 },
+      confidence: { type: 'score', score: 0.99 },
+    }));
+    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+
+    const result = await planner.decide({
+      goal: `Enter the exact prompt ${JSON.stringify(prompt)} in Codex.`,
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal);
+
+    expect(result).toEqual({ operation: 'type', confidence: 0.99, targetIndex: 0, text: prompt });
   });
 
   it.each([
@@ -120,6 +381,56 @@ describe('pc_act Jev planner', () => {
       previousActions: [],
       snapshot,
     }, new AbortController().signal)).resolves.toEqual({ failure: 'invalid_answer' });
+  });
+
+  it('maps a closed-set keyboard Choice and includes app-specific shortcut hints', async () => {
+    const fetcher = vi.fn(async () => jevResponse({
+      operation: { type: 'choice', choice: 'keys', confidence: 0.99 },
+      key_sequence: { type: 'choice', choice: 'keys_0', confidence: 0.97 },
+    }));
+    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+
+    await expect(planner.decide({
+      goal: 'Use Ctrl+P to open a file',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'keys', confidence: 0.97, keys: ['Ctrl+P'],
+    });
+    const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)) as {
+      state: { commonShortcuts: string[] };
+      questions: { key_sequence: { criteria: Record<string, string> } };
+    };
+    expect(body.state.commonShortcuts).toContain('Ctrl+P opens Quick Open');
+    expect(body.questions.key_sequence.criteria.keys_0).toBe('Ctrl+P');
+
+    const laterChoicePlanner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+      operation: { type: 'choice', choice: 'keys', confidence: 0.99 },
+      key_sequence: { type: 'choice', choice: 'keys_10', confidence: 0.99 },
+    }));
+    await expect(laterChoicePlanner.decide({
+      goal: 'Press Escape',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toMatchObject({ operation: 'keys', keys: ['Escape'] });
+  });
+
+  it('maps type_focused only to an exact quoted non-sensitive Choice value', async () => {
+    const planner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+      operation: { type: 'choice', choice: 'type_focused', confidence: 0.99 },
+      text_value: { type: 'choice', choice: 'value_0', confidence: 0.98 },
+    }));
+
+    await expect(planner.decide({
+      goal: 'Type "Daft Punk" in the focused search box',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'type_focused', confidence: 0.98, text: 'Daft Punk',
+    });
   });
 
   it('logs typed PC planner failures without the goal or Jev key', async () => {
@@ -186,6 +497,207 @@ describe('pc_act Jev planner', () => {
 });
 
 describe('pc_act bounded Windows control loop', () => {
+  it('uses transient vision candidates and clicks only the selected in-bounds box centre', async () => {
+    const empty = { ...snapshot, elements: [] };
+    const full = { ...snapshot, elements: [
+      ...snapshot.elements,
+      { index: 1, role: 'button', name: 'Options' },
+      { index: 2, role: 'button', name: 'Help' },
+    ] };
+    const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1]).toString('base64');
+    const observed = vi.fn().mockResolvedValueOnce(empty).mockResolvedValueOnce(full);
+    const actPoint = vi.fn(async ({ action }: { action: string }) => ({ acted: true, action }));
+    const pcBridge = bridge({
+      observe: observed,
+      capture: vi.fn(async () => ({
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        application: 'vscode',
+        width: 1280,
+        height: 720,
+        png,
+      })),
+      actPoint,
+    });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+    let modelImage: Buffer | undefined;
+    const visionModel = {
+      locateElements: vi.fn(async ({ image }: { image: Buffer }) => {
+        modelImage = image;
+        return [{
+          index: 0,
+          role: 'button',
+          name: 'Start game',
+          bounds: { x: 0.25, y: 0.4, width: 0.5, height: 0.2 },
+        }];
+      }),
+    };
+    const onStep = vi.fn();
+
+    const result = await runPcAct(
+      { goal: 'Start the game' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, visionModel, onStep },
+    );
+
+    expect(result.status).toBe('completed');
+    expect(visionModel.locateElements).toHaveBeenCalledOnce();
+    expect(modelImage).toBeDefined();
+    expect(modelImage!.every((byte) => byte === 0)).toBe(true);
+    expect(actPoint).toHaveBeenCalledWith({
+      snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+      x: 640,
+      y: 360,
+      action: 'click',
+      confirmed: false,
+    }, expect.any(AbortSignal));
+    expect(onStep).toHaveBeenCalledWith({ step: 1, action: 'click', outcome: 'completed' });
+    expect(JSON.stringify(onStep.mock.calls)).not.toContain('Start game');
+  });
+
+  it('does not save recipes derived from transient visual candidates', async () => {
+    const runtime = recipes();
+    const pcBridge = bridge({
+      observe: vi.fn()
+        .mockResolvedValueOnce({ ...snapshot, elements: [] })
+        .mockResolvedValueOnce({ ...snapshot, elements: [] }),
+      capture: vi.fn(async () => ({
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        application: 'vscode',
+        width: 1280,
+        height: 720,
+        png: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'),
+      })),
+      actPoint: vi.fn(async ({ action }: { action: string }) => ({ acted: true, action })),
+    });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+
+    await runPcAct(
+      { goal: 'Start the game' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      {
+        planner,
+        recipes: runtime,
+        visionModel: { locateElements: vi.fn(async () => [{
+          index: 0,
+          role: 'button',
+          name: 'Start game',
+          bounds: { x: 0.25, y: 0.4, width: 0.5, height: 0.2 },
+        }]) },
+      },
+    );
+
+    expect(runtime.store.save).not.toHaveBeenCalled();
+    expect(runtime.planner.select).not.toHaveBeenCalled();
+    expect(runtime.planner.verify).not.toHaveBeenCalled();
+  });
+
+  it('confirms irreversible vision clicks before executing them', async () => {
+    const empty = { ...snapshot, elements: [] };
+    const full = { ...snapshot, elements: [
+      ...snapshot.elements,
+      { index: 1, role: 'button', name: 'Options' },
+      { index: 2, role: 'button', name: 'Help' },
+    ] };
+    const observed = vi.fn().mockResolvedValueOnce(empty).mockResolvedValueOnce(full);
+    const actPoint = vi.fn(async ({ action }: { action: string }) => ({ acted: true, action }));
+    const pcBridge = bridge({
+      observe: observed,
+      capture: vi.fn(async () => ({
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        application: 'vscode', width: 1280, height: 720,
+        png: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'),
+      })),
+      actPoint,
+    });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+    const visionModel = { locateElements: vi.fn(async () => [{
+      index: 0, role: 'button', name: 'Send', bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 },
+    }]) };
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+
+    await runPcAct(
+      { goal: 'Send the message' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, visionModel, runConfirmed },
+    );
+
+    expect(runConfirmed).toHaveBeenCalledWith(
+      'Click the button "Send" in VS Code.',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+    expect(actPoint).toHaveBeenCalledWith(expect.objectContaining({ action: 'click', confirmed: true }), expect.any(AbortSignal));
+  });
+
+  it('rejects invalid vision bounds without clicking or logging candidate data', async () => {
+    const onStep = vi.fn();
+    const actPoint = vi.fn();
+    const pcBridge = bridge({
+      observe: vi.fn(async () => ({ ...snapshot, elements: [] })),
+      capture: vi.fn(async () => ({
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        application: 'vscode', width: 1280, height: 720,
+        png: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'),
+      })),
+      actPoint,
+    });
+    const planner = { decide: vi.fn() };
+
+    await expect(runPcAct(
+      { goal: 'Click the secret control' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      {
+        planner,
+        onStep,
+        visionModel: { locateElements: vi.fn(async () => [{
+          index: 0, role: 'button', name: 'Private target', bounds: { x: 0.9, y: 0.1, width: 0.2, height: 0.2 },
+        }]) },
+      },
+    )).rejects.toThrow(/visual controls could not be safely identified/u);
+
+    expect(actPoint).not.toHaveBeenCalled();
+    expect(JSON.stringify(onStep.mock.calls)).not.toContain('Private target');
+  });
+
+  it('asks Dan when vision finds no safe actionable candidates', async () => {
+    const planner = { decide: vi.fn() };
+    const pcBridge = bridge({
+      observe: vi.fn(async () => ({ ...snapshot, elements: [] })),
+      capture: vi.fn(async () => ({
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        application: 'vscode',
+        width: 1280,
+        height: 720,
+        png: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'),
+      })),
+      actPoint: vi.fn(),
+    });
+
+    await expect(runPcAct(
+      { goal: 'Open the game menu' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, visionModel: { locateElements: vi.fn(async () => []) } },
+    )).rejects.toThrow(/No safe visual controls were found/u);
+
+    expect(planner.decide).not.toHaveBeenCalled();
+  });
+
   it('controls any bounded foreground app and does not confirm reversible settings actions', async () => {
     const appSnapshot: PcActSnapshot = { ...snapshot, application: 'SystemSettings' };
     const pcBridge = bridge({ observe: vi.fn(async () => appSnapshot) });
@@ -283,6 +795,61 @@ describe('pc_act bounded Windows control loop', () => {
       confirmed: false,
     }), expect.any(AbortSignal));
     expect(runConfirmed).not.toHaveBeenCalled();
+  });
+
+  it('confirms irreversible keyboard chords and keeps chord/text content out of step logs', async () => {
+    const pcBridge = bridge();
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('keys', undefined, undefined, ['Ctrl+Enter']))
+      .mockResolvedValueOnce(decision('done')) };
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const onStep = vi.fn();
+
+    const result = await runPcAct(
+      { goal: 'Send the message with Ctrl+Enter' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, runConfirmed, onStep },
+    );
+
+    expect(result.status).toBe('completed');
+    expect(runConfirmed).toHaveBeenCalledWith(
+      'Send an irreversible keyboard action in vscode.',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+    expect(pcBridge.act).toHaveBeenCalledWith({
+      snapshotId: snapshot.snapshotId,
+      action: 'keys',
+      keys: ['Ctrl+Enter'],
+      confirmed: true,
+      closeIntent: false,
+    }, expect.any(AbortSignal));
+    expect(JSON.stringify(onStep.mock.calls)).not.toMatch(/Ctrl\+Enter|message/iu);
+  });
+
+  it('types explicitly quoted text into the focused Windows control without logging its value', async () => {
+    const pcBridge = bridge();
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('type_focused', undefined, 'Daft Punk'))
+      .mockResolvedValueOnce(decision('done')) };
+    const onStep = vi.fn();
+
+    await runPcAct(
+      { goal: 'Type "Daft Punk" in the focused search field' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, onStep },
+    );
+
+    expect(pcBridge.act).toHaveBeenCalledWith({
+      snapshotId: snapshot.snapshotId,
+      action: 'type_focused',
+      text: 'Daft Punk',
+    }, expect.any(AbortSignal));
+    expect(JSON.stringify(onStep.mock.calls)).not.toContain('Daft Punk');
   });
 
   it('does not confirm reversible submit, remove, or replace controls', async () => {
@@ -433,6 +1000,16 @@ describe('pc_act bounded Windows control loop', () => {
       { planner: { decide: vi.fn().mockResolvedValue(decision('type', 0, 'new title')) } },
     )).rejects.toThrow(/approval service is unavailable/u);
     expect(typeBridge.act).not.toHaveBeenCalled();
+
+    const keysBridge = bridge();
+    await expect(runPcAct(
+      { goal: 'Send the message with Ctrl+Enter' },
+      request(),
+      new AbortController().signal,
+      keysBridge,
+      { planner: { decide: vi.fn().mockResolvedValue(decision('keys', undefined, undefined, ['Ctrl+Enter'])) } },
+    )).rejects.toThrow(/approval service is unavailable/u);
+    expect(keysBridge.act).not.toHaveBeenCalled();
   });
 
   it('refuses injected text that was not explicitly quoted and refuses unverified callers', async () => {

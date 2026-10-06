@@ -587,6 +587,7 @@ export const conversationModule: BackendModule = {
       if (!await app.conversationStore.endSession(request.params.sessionId)) {
         return reply.code(404).send({ error: 'Conversation session not found' });
       }
+      app.onConversationSessionEnded(request.params.sessionId);
       return reply.code(204).send();
     });
 

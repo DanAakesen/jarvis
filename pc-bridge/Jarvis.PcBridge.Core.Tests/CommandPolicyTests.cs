@@ -10,6 +10,7 @@ public sealed class CommandPolicyTests
     [InlineData("open_url", true)]
     [InlineData("open_app", true)]
     [InlineData("open_folder", true)]
+    [InlineData("open_file", true)]
     [InlineData("focus_window", true)]
     [InlineData("uia_act", true)]
     [InlineData("browser_act", true)]
@@ -19,6 +20,9 @@ public sealed class CommandPolicyTests
     [InlineData("uia_snapshot", false)]
     [InlineData("browser_snapshot", false)]
     [InlineData("browser_tabs", false)]
+    [InlineData("window_capture", true)]
+    [InlineData("click_point", true)]
+    [InlineData("scroll_point", true)]
     public void Identifies_actions_blocked_when_control_is_paused(string command, bool expected)
     {
         Assert.Equal(expected, CommandPolicy.IsControlAction(command));
@@ -38,6 +42,16 @@ public sealed class CommandPolicyTests
     }
 
     [Theory]
+    [InlineData(true, "", true)]
+    [InlineData(false, "Password", true)]
+    [InlineData(false, "One-time code", true)]
+    [InlineData(false, "Search", false)]
+    public void Detects_sensitive_focused_controls(bool isPassword, string name, bool expected)
+    {
+        Assert.Equal(expected, UiAutomationPolicy.IsSensitiveFocusedControl(isPassword, name));
+    }
+
+    [Theory]
     [InlineData("open_url", """{"url":"https://example.com/repo"}""")]
     [InlineData("open_app", """{"app":"vscode"}""")]
     [InlineData("open_app", """{"app":"Spotify"}""")]
@@ -49,6 +63,7 @@ public sealed class CommandPolicyTests
     [InlineData("media", """{"action":"volume_down"}""")]
     [InlineData("media", """{"action":"mute"}""")]
     [InlineData("open_folder", """{"relativePath":"jarvis\\apps\\backend"}""")]
+    [InlineData("open_file", """{"relativePath":"jarvis\\apps\\backend\\src\\index.ts"}""")]
     [InlineData("active_window", "{}")]
     [InlineData("focus_window", """{"title":"Jarvis - Visual Studio Code"}""")]
     [InlineData("browser_tabs", "{}")]
@@ -63,6 +78,14 @@ public sealed class CommandPolicyTests
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"click","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"Hello, Dan","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"scroll_down"}""")]
+    [InlineData("window_capture", "{}")]
+    [InlineData("click_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20,"confirmed":false}""")]
+    [InlineData("scroll_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20,"direction":"down"}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+P","Enter"],"confirmed":false,"closeIntent":false}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Alt+F4"],"confirmed":false,"closeIntent":true}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"type_focused","text":"search for Jarvis"}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+L"],"confirmed":false,"closeIntent":false}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"type_focused","text":"Jarvis"}""")]
     public void Accepts_allow_list_commands(string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);
@@ -83,6 +106,7 @@ public sealed class CommandPolicyTests
     [InlineData("open_folder", """{"relativePath":"C:\\Repo\\jarvis"}""")]
     [InlineData("open_folder", """{"relativePath":"jarvis\\..\\secrets"}""")]
     [InlineData("open_folder", """{"relativePath":"jarvis\\CON"}""")]
+    [InlineData("open_file", """{"relativePath":"..\\secrets.txt"}""")]
     [InlineData("active_window", """{"title":"ignored"}""")]
     [InlineData("focus_window", """{"title":"window\ninjection"}""")]
     [InlineData("open_app", """{"app":"vscode","path":"C:\\secret"}""")]
@@ -99,6 +123,17 @@ public sealed class CommandPolicyTests
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"Hello, Dan"}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"123456","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"execute_script","text":"alert(1)"}""")]
+    [InlineData("window_capture", """{"window":"other"}""")]
+    [InlineData("click_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":2048,"y":20,"confirmed":false}""")]
+    [InlineData("click_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20}""")]
+    [InlineData("scroll_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20,"direction":"left"}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Win+L"],"confirmed":false,"closeIntent":true}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+Alt+Delete"],"confirmed":false,"closeIntent":true}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Alt+F4"],"confirmed":false,"closeIntent":false}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+P","Enter","Tab","Escape","Delete"],"confirmed":false,"closeIntent":false}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+P","unknown"],"confirmed":false,"closeIntent":false}""")]
+    [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"type_focused","text":"123456"}""")]
+    [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Alt+F4"],"confirmed":false,"closeIntent":false}""")]
     public void Rejects_commands_outside_the_policy(string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);
@@ -139,6 +174,6 @@ public sealed class CommandPolicyTests
     {
         Assert.Throws<InvalidDataException>(() =>
             BridgeProtocol.Success("1730aa51-f380-4df9-a345-1feb862cb1c4",
-                new { text = new string('x', BridgeProtocol.MaxMessageBytes) }));
+                new { text = new string('x', BridgeProtocol.MaxResponseBytes) }));
     }
 }

@@ -231,9 +231,9 @@ export function createTaskEventArchive(
         .input('batchSize', sql.Int, archiveBatchSize), `SELECT TOP (@batchSize)
           CAST(id AS varchar(19)) AS id, CAST(task_id AS varchar(19)) AS taskId, type, summary, payload, source,
           CONVERT(varchar(23), at, 126) + 'Z' AS at, CONVERT(varchar(27), at, 126) AS archiveAt
-          FROM dbo.task_events WITH (UPDLOCK, ROWLOCK)
-          WHERE at < @cutoff
-          ORDER BY at ASC, id ASC;`, signal);
+          FROM dbo.task_events AS e WITH (UPDLOCK, ROWLOCK)
+          WHERE e.at < @cutoff
+          ORDER BY e.at ASC, e.id ASC;`, signal);
       if (recordset.length === 0) {
         aborted(signal);
         await transaction.commit();
@@ -341,7 +341,7 @@ export function createTaskEventArchive(
 
 export function createTaskEventArchiveJob(
   archive: TaskEventArchive,
-  onError: () => void,
+  onError: (error: unknown) => void,
   hasActiveWork: () => boolean = () => true,
   intervalMs = 60 * 60 * 1000,
 ) {
@@ -354,7 +354,7 @@ export function createTaskEventArchiveJob(
     controller = new AbortController();
     running = archive.archiveExpiredEvents(undefined, controller.signal)
       .then(() => undefined)
-      .catch(() => { onError(); })
+      .catch((error: unknown) => { onError(error); })
       .finally(() => {
         running = undefined;
         controller = undefined;

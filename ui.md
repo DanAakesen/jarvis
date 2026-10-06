@@ -641,13 +641,31 @@ Dan requested combining #398, #399 and #401 because the input, messages and shel
 
 #397's voice bar/shared-menu work was implemented by Copilot and merged in PR #403. The combined issue reuses its existing components and tokens. CI still runs for pushes/updates to the single combined PR; consolidation avoids three separate implementation PR pipelines. No worker was started by this planning update.
 
+P8-37 implementation: the bottom bar is removed and database waking is a compact top-bar status; the composer is one glass pill (orb, paperclip visual-context menu, multiline input, More → Language, Send); history is an avatar-free glass window hosted as the shared workspace view `conversation` (shared Minimise tab, Maximise, Close, drag/resize and Jarvis commands) with Jump to latest. Fixture captures: `docs/ui/screenshots/p8-37-*`.
+
 ## Voice feedback and expressive orb — 6 October 2026
 
-Dan supplied screenshots of Listening overlapping End voice/long language feedback and the unwanted Enable microphone button. He confirmed that all fixes belong in [#417](https://github.com/DanAakesen/jarvis/issues/417), P8-40; no separate prototype is required. These are approved requirements awaiting implementation.
+Dan supplied screenshots of Listening overlapping End voice/long language feedback and the unwanted Enable microphone button. He confirmed that all fixes belong in [#417](https://github.com/DanAakesen/jarvis/issues/417), P8-40; no separate prototype is required. These requirements are implemented offline in [PR #419](https://github.com/DanAakesen/jarvis/pull/419). Live voice, physical-device and hardware-GPU acceptance remain unverified.
 
 - Move session state and useful recovery text beneath the orb, following its centred, left-of-windows or phone-docked placement. Keep accessible HTML feedback with WebGL fallback. The compact glass bar contains controls; state and long language feedback cannot overlap End voice. Keep More → Language → Danish/English; show current-session versus next-session explanation in that flyout.
-- Explicit Start voice requests microphone permission and resumes audio as part of the same action. Capture starts once the authenticated session is ready, without a second Enable microphone click. The browser may prompt for permission. Preserve mute across reconnect, handle denied/revoked permission and pending-start cancellation, and release capture on end/navigation. Page load, typing, scene rendering and background activity never open capture. Exceptional retry belongs in More. This supersedes the earlier two-step microphone requirement; it does not claim that the running code has changed.
+- Explicit Start voice requests microphone permission and resumes audio as part of the same action. Capture starts once the authenticated session is ready, without a second Enable microphone click. The browser may prompt for permission. Preserve mute across reconnect, handle denied/revoked permission and pending-start cancellation, and release capture on end/navigation. Page load, typing, scene rendering and background activity never open capture. Exceptional retry belongs in More. This supersedes the earlier two-step microphone requirement. PR #419 implements the lifecycle; earlier browser evidence describes its historical version.
 - Make awakening substantial on the existing orb: ignite the open amber core, propagate energy through the transparent cyan shell, then expand/surge and settle with staged nonlinear motion. Start voice immediately; animation cannot gate connection or controls. Preserve room/camera/platform, responsive orb positioning and mirror continuity through reversals and rapid starts/ends.
 - Make states recognizably different through motion as well as color: subdued dormancy; attentive listening breath/ripples; inward/core-flow thinking; directed tool-work energy; stronger speech movement and light tied to audio actually playing. Use one reconciled transport/microphone/runtime/playback presentation state. Silence, interruption, stale events, muted/reconnecting and failed states must settle truthfully; no invented speech level or retained audio/transcript.
 
 Keep the selected material, scene and core identity, Jarvis-only mounting, shared themes, window/tab continuity, default-off minimise preference, drafts and steering/queue. Reduced motion retains a clear steady state; adaptive tiers and rendering fallback remain. #398 owns the separate shell/input/message-window work; coordinate shared files rather than duplicate it. #417 requires relevant behavior checks, desktop/narrow-phone layout evidence and an observed motion sequence; still images alone do not validate the animation. Live microphone/provider/device/GPU results must be distinguished from fixtures.
+
+PR #419 reviewer evidence: [desktop voice](docs/ui/screenshots/p8-40-review-desktop-listening.png), [phone voice](docs/ui/screenshots/p8-40-review-phone-listening.png), and [browser report](docs/ui/screenshots/p8-40-review-browser-report.json). The real browser client used scratch authentication/voice protocol and a fake microphone device. Listening sits beneath the orb, the compact bar has only More/End voice, and ending returns typing. These checks do not establish live provider or physical-device behavior.
+
+
+## Voice UI hotfix — 6 October 2026 (#435)
+
+Dan requested one direct hotfix after reviewing the implemented voice interface:
+
+- Replace the menu-overlay guidance and text leaking into the composer with bottom-right notification toasts.
+- Enable starting and stopping screen/camera sharing from voice More, with browser permission and on-request inspection.
+- Remove the under-orb status background and colored dot; use bright white text with a subtle light effect.
+- Keep the approved wake effect. Dormant/waiting should retain lighting and subtle motion; increase orange-core movement when awake and gently while dormant.
+
+These changes retain the same room, mirror, transparent orb identity, microphone lifecycle, themes, adaptive rendering and reduced-motion support. #398/#418 still own the separate shell/input/message-window redesign. No new prototype or additional split issue is needed.
+
+Local implementation evidence: [dormant orb](docs/ui/screenshots/p8-43-dormant.png), [awake status](docs/ui/screenshots/p8-43-awake.png), [bottom-right toast](docs/ui/screenshots/p8-43-toast.png), [phone](docs/ui/screenshots/p8-43-phone.png), [typing after permission failure](docs/ui/screenshots/p8-43-typing-after-error.png), and [browser report](docs/ui/screenshots/p8-43-browser-report.json). Native media devices and backend/socket responses were fixtures; live-provider and hardware results remain unverified.

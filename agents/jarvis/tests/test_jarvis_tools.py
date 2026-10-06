@@ -36,9 +36,9 @@ CREATE_TASK = {
         "additionalProperties": False,
     },
 }
-MEMORY_SEARCH = {
-    "name": "memory_search",
-    "description": "Find relevant source-linked memories.",
+VAULT_SEARCH = {
+    "name": "vault_search",
+    "description": "Find relevant vault notes.",
     "inputSchema": {
         "type": "object",
         "properties": {"query": {"type": "string"}},
@@ -47,10 +47,15 @@ MEMORY_SEARCH = {
     },
 }
 
-def test_notes_search_instructions_require_grounded_quotes_and_links() -> None:
-    assert "notes_search" in INSTRUCTIONS
-    assert "returned snippets" in INSTRUCTIONS
-    assert "returned note link" in INSTRUCTIONS
+def test_vault_instructions_require_grounded_answers_and_links() -> None:
+    assert "vault_search" in INSTRUCTIONS
+    assert "returned note content" in INSTRUCTIONS
+    assert "returned GitHub link" in INSTRUCTIONS
+    assert (
+        "Automatically save preferences, people, project facts, decisions and unfinished tasks"
+        in INSTRUCTIONS
+    )
+    assert "Never save secrets or credentials" in INSTRUCTIONS
 
 
 def test_voice_instructions_explain_pc_app_media_and_confirmation_rules() -> None:
@@ -167,10 +172,18 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
     backend = Backend(settings={
         "model": "gpt-5.6-luna",
         "reasoningEffort": "high",
+        "mode": "on_the_move",
+        "awayMode": True,
+        "changedAt": "2026-10-06T12:00:00.000Z",
         "personality": {
             "tone": "warm",
             "responseStyle": "detailed",
             "customInstructions": "Use plain language.",
+            "modeInstructions": {
+                "present": "Be available.",
+                "away": "Use Teams.",
+                "on_the_move": "Keep it brief.",
+            },
         },
     })
     client = make_client(backend)
@@ -185,6 +198,10 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
     assert (settings.tone, settings.response_style, settings.custom_instructions) == (
         "warm", "detailed", "Use plain language."
     )
+    assert settings.mode == "on_the_move"
+    assert settings.away_mode
+    assert settings.changed_at == "2026-10-06T12:00:00.000Z"
+    assert settings.mode_instructions["on_the_move"] == "Keep it brief."
 
 
 @pytest.mark.parametrize(
@@ -196,6 +213,8 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
         {"model": "", "reasoningEffort": "none"},
         {"model": "x" * 101, "reasoningEffort": "none"},
         {"model": "deployment", "reasoningEffort": "unsupported"},
+        {"model": "deployment", "reasoningEffort": "none", "mode": "driving"},
+        {"model": "deployment", "reasoningEffort": "none", "changedAt": 42},
         {"model": "deployment", "reasoningEffort": "none", "personality": {"tone": "unknown"}},
         {
             "model": "deployment",
@@ -206,6 +225,17 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
             "model": "deployment",
             "reasoningEffort": "none",
             "personality": {"customInstructions": "x" * 2_001},
+        },
+        {
+            "model": "deployment",
+            "reasoningEffort": "none",
+            "personality": {
+                "modeInstructions": {
+                    "present": "",
+                    "away": "x" * 2_001,
+                    "on_the_move": "",
+                }
+            },
         },
     ],
 )
@@ -307,15 +337,15 @@ async def test_phone_voice_turn_propagates_its_server_supplied_session_id() -> N
     assert request.headers["x-jarvis-phone-session-id"] == "42"
 
 
-async def test_voice_can_search_memory_without_a_persisted_source_message() -> None:
-    backend = Backend(catalogue=[CREATE_TASK, MEMORY_SEARCH])
+async def test_voice_can_search_vault_without_a_persisted_source_message() -> None:
+    backend = Backend(catalogue=[CREATE_TASK, VAULT_SEARCH])
     client = make_client(backend)
     await client.tools()
 
-    await client.call("memory_search", '{"query": "earlier decision"}', None)
+    await client.call("vault_search", '{"query": "earlier decision"}', None)
 
     request = backend.requests[-1]
-    assert request.url.path == "/tools/memory_search"
+    assert request.url.path == "/tools/vault_search"
     assert "x-jarvis-message-id" not in request.headers
     assert "x-jarvis-voice-item-id" not in request.headers
 

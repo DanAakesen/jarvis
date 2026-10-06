@@ -18,7 +18,12 @@ const pullRequest = {
 };
 
 function tokenIssuer(): GitHubAppTokenIssuer {
-  return { issue: vi.fn(async () => 'installation-token'), issueForActions: vi.fn(async () => 'actions-token') };
+  return {
+    issue: vi.fn(async () => 'installation-token'),
+    issueForActions: vi.fn(async () => 'actions-token'),
+    issueForContents: vi.fn(async () => 'contents-token'),
+    issueForContentsWrite: vi.fn(async () => 'contents-write-token'),
+  };
 }
 
 function jsonResponse(body: unknown, status = 200): Response {

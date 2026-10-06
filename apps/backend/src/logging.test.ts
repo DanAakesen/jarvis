@@ -1,6 +1,6 @@
 import { Writable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { createLogger, createTelemetry } from './logging.js';
+import { createLogger, createTelemetry, safeErrorFields } from './logging.js';
 
 const sdk = vi.hoisted(() => ({
   config: { enableUseDiskRetryCaching: true }, initialize: vi.fn(),
@@ -12,6 +12,115 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it.each([
+    'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
+    'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',
+    'dispatcher.operation_failed', 'github.checks_loop_recovery_failed', 'pc_bridge.status_update_failed',
+    'google.refresh_token_expired_alert_unavailable', 'google.refresh_token_expired_alert_persistence_failed',
+    'telemetry.close_failed',
+  ])('exports %s with only bounded failure diagnostics', (event) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.warn({
+      kind: 'http', statusCode: 403, body: 'body-secret', token: 'token-secret',
+      url: 'https://example.com/url-secret', err: new Error('error-secret'),
+      operation: 'operation-secret', method: 'GET', port: 3000, responseTime: 42,
+    }, event);
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: event, kind: 'http', statusCode: 403,
+    });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: event, properties: { service: 'jarvis-backend', kind: 'http', statusCode: 403 },
+    }));
+    for (const statusCode of [99, 600, 403.5, '403', null, Infinity, NaN]) {
+      logger.warn({ kind: 'kind-secret', statusCode }, event);
+      expect(JSON.parse(records.at(-1)!)).toEqual({
+        level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: event,
+      });
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        message: event, properties: { service: 'jarvis-backend' },
+      }));
+    }
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+  });
+
+  it.each(['http', 'auth', 'timeout', 'aborted', 'transport', 'protocol', 'internal'])(
+    'retains the safe error kind %s and HTTP status boundaries', (kind) => {
+      expect(safeErrorFields({ kind, statusCode: 100, message: 'message-secret' })).toEqual({ kind, statusCode: 100 });
+      expect(safeErrorFields({ kind, status: 599, body: 'body-secret' })).toEqual({ kind, statusCode: 599 });
+    },
+  );
+
+  it('classifies unknown errors without exporting their names, messages or invalid status codes', () => {
+    for (const error of [null, undefined, 'secret', new Error('secret'),
+      { kind: 'secret', name: 'secret', statusCode: 999 }, { statusCode: '403' }, { statusCode: 403.5 }]) {
+      expect(safeErrorFields(error)).toEqual({ kind: 'internal' });
+    }
+    expect(safeErrorFields(new DOMException('secret', 'TimeoutError'))).toEqual({ kind: 'timeout' });
+    expect(safeErrorFields(new DOMException('secret', 'AbortError'))).toEqual({ kind: 'aborted' });
+  });
+
+  it.each(['skipped', 'fresh', 'renewed', 'failed', 'uncertain'])(
+    'exports the %s renewal outcome and bounded diagnostics without provider details',
+    (outcome) => {
+      const records: string[] = [];
+      const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+      const sink = { ...sdk, trackTrace: vi.fn() };
+      const logger = createLogger({ logLevel: 'info' }, sink, output);
+      const details = { outcome, kind: 'http', statusCode: 404 };
+      logger.info({
+        ...details, body: 'body-secret', token: 'token-secret', err: new Error('error-secret'),
+      }, 'credentials.codex_renewal');
+      logger.info({ outcome: 'outcome-secret', kind: 'kind-secret', statusCode: 999 }, 'credentials.codex_renewal');
+      expect(JSON.parse(records[0]!)).toMatchObject({ ...details, msg: 'credentials.codex_renewal' });
+      expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'credentials.codex_renewal', properties: { service: 'jarvis-backend', ...details },
+      }));
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        properties: { service: 'jarvis-backend' },
+      }));
+      expect(records.join('')).not.toContain('secret');
+      expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+    },
+  );
+
+  it.each(['credential_unavailable', 'session_persistence_failed', 'foundry_start_rejected',
+    'foundry_start_failed', 'recovery_start_failed'])('exports the dispatcher start failure reason %s', (reason) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.warn({ taskId: '7', reason, request: 'prompt-secret', error: 'error-secret' }, 'dispatcher.start_failed');
+    logger.warn({ taskId: 'task-secret', reason: 'reason-secret' }, 'dispatcher.start_failed');
+    expect(JSON.parse(records[0]!)).toMatchObject({ msg: 'dispatcher.start_failed', taskId: '7', reason });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'dispatcher.start_failed', properties: { service: 'jarvis-backend', taskId: '7', reason },
+    }));
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+  });
+
+  it('exports watch metadata without images, summaries, comments, or watch instructions', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const fields = { source: 'camera', noteworthy: true, spoke: false, latencyMs: 42, cost: 0.0009 };
+    logger.info({ ...fields, image: 'private-image', summary: 'private-summary', speak: 'private-comment',
+      instructions: 'private-instructions' }, 'vision.watch');
+    logger.info({ source: 'private-source', noteworthy: 'private-value', cost: -1, latencyMs: Infinity }, 'vision.watch');
+    expect(JSON.parse(records[0]!)).toMatchObject({ ...fields, msg: 'vision.watch' });
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('cost');
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('source');
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'vision.watch', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    expect(records.join('')).not.toContain('private');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
   it.each(['chat', 'voice-partial', 'voice-final'])('exports bounded %s reflex decisions without transcripts or arguments', (source) => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
@@ -65,6 +174,27 @@ describe('structured log export', () => {
     }));
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it('exports vault counts and top-level folders without paths or note content', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.info({
+      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'People', 'Work'],
+      path: 'Work/private-note.md', content: 'note-secret',
+    }, 'vault.index');
+    logger.info({
+      outcome: 'ok', folder: 'People', path: 'People/private-note.md', content: 'note-secret',
+    }, 'vault.write');
+
+    expect(JSON.parse(records[0]!)).toMatchObject({
+      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'People'], msg: 'vault.index',
+    });
+    expect(JSON.parse(records[1]!)).toMatchObject({ outcome: 'ok', folder: 'People', msg: 'vault.write' });
+    expect(records.join('')).not.toContain('private-note');
+    expect(records.join('')).not.toContain('note-secret');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('note-secret');
   });
   it('uses an isolated manual SDK client, disables disk persistence and initializes it', async () => {
     const client = await createTelemetry('offline-test-string');
@@ -179,6 +309,19 @@ describe('structured log export', () => {
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
   });
+  it('exports recipe timing through P5-14 without recipe content', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    const phases = ['recipe_select', 'recipe_verify', 'recipe_plan', 'recipe_run'];
+    for (const phase of phases) {
+      logger.info({ phase, durationMs: 12.5, goal: 'private-content', target: 'private-content', text: 'private-content' }, 'chat.latency');
+    }
+    expect(records.map(record => JSON.parse(record).phase)).toEqual(phases);
+    expect(records.map(record => JSON.parse(record).durationMs)).toEqual(phases.map(() => 12.5));
+    expect(records.join('')).not.toContain('private-content');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('private-content');
+  });
   it('exports bounded chat and voice failure diagnostics', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
@@ -234,5 +377,40 @@ describe('structured log export', () => {
     }));
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it('exports only allowlisted voice-turn and PC-bridge timing metadata', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const turn = {
+      turnId: 'd96ed776-15d3-4b3a-ae7b-69c6289cce58',
+      transcriptCompletedMs: 12.5,
+      jevDecisionMs: 35,
+      tools: [{ name: 'pc_open', startedMs: 36, finishedMs: 52, outcome: 'ok', arguments: 'arguments-secret' }],
+      firstAudioDeltaMs: 53,
+      responseDoneMs: 61,
+    };
+    logger.info({ ...turn, transcript: 'transcript-secret', toolArguments: 'arguments-secret' }, 'voice.turn_timing');
+    logger.info({
+      command: 'browser_act', outcome: 'refused', roundTripMs: 42,
+      arguments: 'arguments-secret', url: 'url-secret',
+    }, 'pc_bridge.command_timing');
+
+    expect(JSON.parse(records[0]!)).toMatchObject({
+      ...turn,
+      tools: [{ name: 'pc_open', startedMs: 36, finishedMs: 52, outcome: 'ok' }],
+      msg: 'voice.turn_timing',
+    });
+    expect(JSON.parse(records[0]!).tools).toEqual([
+      { name: 'pc_open', startedMs: 36, finishedMs: 52, outcome: 'ok' },
+    ]);
+    expect(JSON.parse(records[1]!)).toMatchObject({
+      command: 'browser_act', outcome: 'refused', roundTripMs: 42, msg: 'pc_bridge.command_timing',
+    });
+    expect(sink.trackTrace.mock.calls.map(([trace]) => trace.message))
+      .toEqual(['voice.turn_timing', 'pc_bridge.command_timing']);
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
   });
 });
