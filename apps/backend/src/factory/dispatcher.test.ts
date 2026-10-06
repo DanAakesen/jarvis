@@ -330,9 +330,12 @@ describe('task dispatcher', () => {
       }),
       failStart: vi.fn(async (_owner, _task, at) => { retryAt = at; }),
     };
+    const onStartFailure = vi.fn();
     const { dispatcher, startTask } = harness(
       store,
       vi.fn(async () => { throw new FoundryClientError('http', 'start', 429); }),
+      controlTask,
+      { onStartFailure },
     );
     dispatcher.start();
     await vi.advanceTimersByTimeAsync(0);
@@ -355,9 +358,43 @@ describe('task dispatcher', () => {
       3, expect.any(String), expect.objectContaining({ attemptCount: 3 }), null, 'foundry_start_failed',
     );
     expect(startTask).toHaveBeenCalledTimes(3);
+    expect(onStartFailure.mock.calls).toEqual([
+      [{ taskId: '42', reason: 'foundry_start_rejected' }],
+      [{ taskId: '42', reason: 'foundry_start_rejected' }],
+      [{ taskId: '42', reason: 'foundry_start_failed' }],
+    ]);
     for (const [request] of startTask.mock.calls as unknown as [{ branch: string }][]) {
       expect(request.branch).toBe('jarvis/task-42');
     }
+    await dispatcher.stop();
+  });
+
+  it('reports credential-unavailable start failures without starting Foundry', async () => {
+    const store = idleStore();
+    vi.mocked(store.claimNext).mockResolvedValueOnce({ kind: 'claimed', task });
+    const onStartFailure = vi.fn();
+    const { dispatcher, tasks, startTask } = harness(store, undefined, controlTask, { onStartFailure });
+    vi.mocked(tasks.transition).mockResolvedValue({ kind: 'credential-unavailable' });
+    dispatcher.start();
+    await vi.waitFor(() => expect(onStartFailure).toHaveBeenCalledWith({
+      taskId: '42', reason: 'credential_unavailable',
+    }));
+    expect(store.failStart).toHaveBeenCalledWith(expect.any(String), task, null, 'credential_unavailable');
+    expect(startTask).not.toHaveBeenCalled();
+    await dispatcher.stop();
+  });
+
+  it('reports accepted-session persistence failures with a fixed reason', async () => {
+    const store = idleStore();
+    vi.mocked(store.claimNext).mockResolvedValueOnce({ kind: 'claimed', task });
+    vi.mocked(store.recordStarted).mockRejectedValue(new Error('database-secret'));
+    const onStartFailure = vi.fn();
+    const { dispatcher } = harness(store, undefined, controlTask, { onStartFailure });
+    dispatcher.start();
+    await vi.waitFor(() => expect(onStartFailure).toHaveBeenCalledWith({
+      taskId: '42', reason: 'session_persistence_failed',
+    }));
+    expect(JSON.stringify(onStartFailure.mock.calls)).not.toContain('secret');
     await dispatcher.stop();
   });
 

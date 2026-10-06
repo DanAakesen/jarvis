@@ -439,6 +439,7 @@ try {
       {
         onError: () => logger.warn('dispatcher.operation_failed'),
         onReconciliation: (decision) => logger.info(decision, 'task_reconciliation.decision'),
+        onStartFailure: (failure) => logger.warn(failure, 'dispatcher.start_failed'),
         recoveryStore: createTaskRecoveryStore(database.pool, eventHub),
         workspaceFor: async (task) => {
           if (!task.branch) return null;
@@ -675,7 +676,7 @@ try {
       stopCodexRenewal = startDailyCodexRenewalJob(
         app.credentialStatusStore!,
         client,
-        (outcome) => logger.info({ outcome }, 'credentials.codex_renewal'),
+        (outcome, details) => logger.info({ outcome, ...details }, 'credentials.codex_renewal'),
       );
     });
   }

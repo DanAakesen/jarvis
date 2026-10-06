@@ -12,6 +12,46 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it.each(['skipped', 'fresh', 'renewed', 'failed', 'uncertain'])(
+    'exports the %s renewal outcome and bounded diagnostics without provider details',
+    (outcome) => {
+      const records: string[] = [];
+      const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+      const sink = { ...sdk, trackTrace: vi.fn() };
+      const logger = createLogger({ logLevel: 'info' }, sink, output);
+      const details = { outcome, kind: 'http', statusCode: 404 };
+      logger.info({
+        ...details, body: 'body-secret', token: 'token-secret', err: new Error('error-secret'),
+      }, 'credentials.codex_renewal');
+      logger.info({ outcome: 'outcome-secret', kind: 'kind-secret', statusCode: 999 }, 'credentials.codex_renewal');
+      expect(JSON.parse(records[0]!)).toMatchObject({ ...details, msg: 'credentials.codex_renewal' });
+      expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'credentials.codex_renewal', properties: { service: 'jarvis-backend', ...details },
+      }));
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        properties: { service: 'jarvis-backend' },
+      }));
+      expect(records.join('')).not.toContain('secret');
+      expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+    },
+  );
+
+  it.each(['credential_unavailable', 'session_persistence_failed', 'foundry_start_rejected',
+    'foundry_start_failed', 'recovery_start_failed'])('exports the dispatcher start failure reason %s', (reason) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.warn({ taskId: '7', reason, request: 'prompt-secret', error: 'error-secret' }, 'dispatcher.start_failed');
+    logger.warn({ taskId: 'task-secret', reason: 'reason-secret' }, 'dispatcher.start_failed');
+    expect(JSON.parse(records[0]!)).toMatchObject({ msg: 'dispatcher.start_failed', taskId: '7', reason });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'dispatcher.start_failed', properties: { service: 'jarvis-backend', taskId: '7', reason },
+    }));
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+  });
+
   it.each(['chat', 'voice-partial', 'voice-final'])('exports bounded %s reflex decisions without transcripts or arguments', (source) => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

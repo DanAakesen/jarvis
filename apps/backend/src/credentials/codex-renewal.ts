@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { FoundryClient, InvocationStatus } from '../foundry/client.js';
+import { FoundryClientError, type FoundryClient, type FoundryErrorKind, type InvocationStatus } from '../foundry/client.js';
 import type { CredentialStatusStore, CredentialStatusValue } from './credential-status.js';
 
 const leaseSeconds = 15 * 60;
@@ -7,11 +7,23 @@ const heartbeatIntervalMs = 60_000;
 const pollIntervalMs = 5_000;
 const operationTimeoutMs = 8 * 60_000;
 const dayMs = 24 * 60 * 60_000;
+const retryDelayMs = 15 * 60_000;
+const maxRetryDelayMs = 60 * 60_000;
 const terminalStatuses = new Set<InvocationStatus>([
   'completed', 'failed', 'cancelled', 'interrupted', 'paused',
 ]);
 
 type RenewalResult = 'skipped' | 'fresh' | 'renewed' | 'failed' | 'uncertain';
+interface RenewalDiagnostics {
+  kind?: FoundryErrorKind | 'internal';
+  statusCode?: number | undefined;
+}
+
+function diagnostics(error: unknown): RenewalDiagnostics {
+  return error instanceof FoundryClientError
+    ? { kind: error.kind, statusCode: error.statusCode }
+    : { kind: 'internal' };
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -29,7 +41,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new Error('Codex renewal was interrupted'));
+      reject(new FoundryClientError('aborted', 'renewal'));
     };
     const timer = setTimeout(() => {
       signal.removeEventListener('abort', onAbort);
@@ -43,6 +55,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 export async function runCodexRenewalOnce(
   store: CredentialStatusStore,
   client: Pick<FoundryClient, 'startCodexRenewal' | 'status' | 'deleteSession'>,
+  onError: (details: RenewalDiagnostics) => void = () => {},
 ): Promise<RenewalResult> {
   const owner = randomUUID();
   if (!await store.acquireCodexRenewalLease(owner, leaseSeconds)) return 'skipped';
@@ -63,7 +76,7 @@ export async function runCodexRenewalOnce(
   let status: Exclude<CredentialStatusValue, 'unknown'> = 'failed';
   let expiresAt: string | null = null;
   let lastRenewedAt: string | null = null;
-  let result: RenewalResult;
+  let result: RenewalResult = 'uncertain';
 
   try {
     const accepted = await client.startCodexRenewal({ signal: controller.signal });
@@ -100,8 +113,9 @@ export async function runCodexRenewalOnce(
       }
       await sleep(pollIntervalMs, controller.signal);
     }
-  } catch {
+  } catch (error) {
     result = 'uncertain';
+    onError(diagnostics(error));
   } finally {
     clearTimeout(deadline);
     clearInterval(heartbeat);
@@ -109,7 +123,9 @@ export async function runCodexRenewalOnce(
       try { await client.deleteSession(sessionId); }
       catch { /* A completed renewal is safe to release even if session cleanup fails. */ }
     }
-    await store.completeCodexRenewal(owner, status, expiresAt, lastRenewedAt, terminal);
+    if (result !== 'uncertain') {
+      await store.completeCodexRenewal(owner, status, expiresAt, lastRenewedAt, terminal);
+    }
   }
   return result;
 }
@@ -117,15 +133,24 @@ export async function runCodexRenewalOnce(
 export function startDailyCodexRenewalJob(
   store: CredentialStatusStore,
   client: Pick<FoundryClient, 'startCodexRenewal' | 'status' | 'deleteSession'>,
-  onResult: (result: RenewalResult) => void,
+  onResult: (result: RenewalResult, details: RenewalDiagnostics) => void,
 ): () => void {
   let stopped = false;
   let timer: NodeJS.Timeout | undefined;
+  let retryMs = retryDelayMs;
   const run = async () => {
-    try { onResult(await runCodexRenewalOnce(store, client)); }
-    catch { onResult('uncertain'); }
+    let outcome: RenewalResult;
+    let details: RenewalDiagnostics = {};
+    try { outcome = await runCodexRenewalOnce(store, client, (error) => { details = error; }); }
+    catch (error) {
+      outcome = 'uncertain';
+      details = diagnostics(error);
+    }
+    onResult(outcome, details);
+    const delay = outcome === 'uncertain' ? retryMs : dayMs;
+    retryMs = outcome === 'uncertain' ? Math.min(retryMs * 2, maxRetryDelayMs) : retryDelayMs;
     if (!stopped) {
-      timer = setTimeout(() => { void run(); }, dayMs);
+      timer = setTimeout(() => { void run(); }, delay);
       timer.unref();
     }
   };

@@ -30,6 +30,7 @@ const events = new Set([
   'reflex.decision',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing',
+  'credentials.codex_renewal', 'dispatcher.start_failed',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -90,6 +91,24 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   }
   for (const key of ['statusCode', 'responseTime', 'port']) {
     if (typeof input[key] === 'number' && Number.isFinite(input[key])) fields[key] = input[key];
+  }
+  if (input.msg === 'credentials.codex_renewal') {
+    if (['skipped', 'fresh', 'renewed', 'failed', 'uncertain'].includes(String(input.outcome))) {
+      fields.outcome = input.outcome;
+    }
+    if (['http', 'auth', 'timeout', 'aborted', 'transport', 'protocol', 'internal'].includes(String(input.kind))) {
+      fields.kind = input.kind;
+    }
+    if (!Number.isInteger(input.statusCode) || Number(input.statusCode) < 100 || Number(input.statusCode) > 599) {
+      delete fields.statusCode;
+    }
+  }
+  if (input.msg === 'dispatcher.start_failed') {
+    if (typeof input.taskId === 'string' && /^[1-9]\d{0,18}$/.test(input.taskId)) fields.taskId = input.taskId;
+    if (['credential_unavailable', 'session_persistence_failed', 'foundry_start_rejected',
+      'foundry_start_failed', 'recovery_start_failed'].includes(String(input.reason))) {
+      fields.reason = input.reason;
+    }
   }
   if (input.msg === 'chat.latency') {
     if (typeof input.phase === 'string' && chatLatencyPhases.has(input.phase)) fields.phase = input.phase;
