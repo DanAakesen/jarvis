@@ -140,6 +140,14 @@ describe('shared glass tokens', () => {
     expect(styles).toContain('@media (max-width: 600px)');
   });
 
+  it('keeps the shared composer grid without inline voice feedback', () => {
+    const styles = readFileSync('src/ConversationHistory.css', 'utf8');
+    expect(styles).not.toContain('.voice-error');
+    expect(styles).not.toContain('.voice-screen-error');
+    expect(styles).toContain('.conversation-input[data-voice-active="false"] > .conversation-actions,\n'
+      + '.conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] { display: contents; }');
+  });
+
   it('gives Jarvis replies a readable semantic glass surface over the stage', () => {
     const styles = readFileSync('src/ConversationHistory.css', 'utf8');
     const jarvisMessage = ruleDeclaration(
@@ -188,6 +196,19 @@ describe('shared glass tokens', () => {
       '--stage-key', '--stage-rim', '--stage-orb', '--stage-reflector', '--stage-exposure']) {
       expect(tokenValue(source, ':root', token)).toBeTruthy();
       expect(tokenValue(source, ':root\\[data-theme="dark"\\]', token)).toBeTruthy();
+    }
+  });
+
+  it('removes the bottom shell bar and marks selection with complete illuminated surfaces', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');
+
+    expect(source).not.toContain('.bottom-bar');
+    expect(historyStyles).not.toContain('.bottom-bar');
+    expect(ruleDeclaration(source, /\.app-shell\s*\{([^}]*)\}/, 'grid-template-rows')).toBe('var(--rail-size) minmax(0, 1fr)');
+    for (const selector of [/\.rail-link\[aria-current="page"\]\s*\{([^}]*)\}/, /\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/]) {
+      expect(ruleDeclaration(source, selector, 'background')).toBe('var(--glass-selected)');
+      expect(ruleDeclaration(source, selector, 'box-shadow')).toBe('var(--glass-selected-glow)');
     }
   });
 });

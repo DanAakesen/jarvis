@@ -164,6 +164,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   The renderers use fixed React elements; generated HTML, JavaScript and CSS
   never execute. Offline route/controller tests cover the flow; live
   Entra/Foundry delivery remains unverified.
+- P8-37 registers conversation history as the page-owned workspace view
+  `conversation` from `App.tsx` once a conversation exists. The view content is
+  an empty host element; `ConversationHistory` portals its transcript into it
+  through `ConversationWindowContext`, while the chat session, composer, voice
+  controls and command-stream overview stay mounted outside the window. The
+  window therefore uses the shared tabs, geometry, focus, snapshot and Jarvis
+  commands. Voice entry minimises it, voice exit restores it, and sending or
+  Conversation navigation restores it after Close.
 - P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
   and IDs, including minimised windows, plus context-panel visibility) through
   owner-authenticated `POST /now/workspace/state`. The broker accepts only its
@@ -264,7 +272,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   or malformed. The route exposes only that name, never token claims or IDs.
 - P1-14 tracks pending data requests in `src/backend-request.ts`. The signed-in
   shell probes authenticated `GET /database/status` while foreground requests
-  are pending and displays “Waking Jarvis…” only for `{ waking: true }`.
+  are pending and displays “Waking Jarvis…” only for `{ waking: true }`,
+  as a compact top-bar status (P8-37; there is no bottom shell bar).
   The endpoint reads process-local retry state, never SQL, and is not cached.
   Data requests allow 120 seconds; status probes stop when requests settle or
   the page is hidden. Task SSE sends `event: ready` after replay so heartbeat

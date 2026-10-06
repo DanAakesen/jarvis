@@ -1368,3 +1368,19 @@ build retains the existing large-chunk advisory. Screenshots and the report:
 `docs/ui/screenshots/p8-43-{dormant,awake,toast,phone,typing-after-error}.png` and
 `p8-43-browser-report.json`. Fixtures do not verify physical capture, live vision/
 voice providers, Safari or hardware-GPU motion. No fixture auth is committed.
+
+## Shell and conversation integration (#398)
+
+PR #418 registers the avatar-free conversation history as the shared workspace
+view `conversation`; its tabs, geometry, focus, snapshot and Jarvis commands use
+the existing controller. The composer and voice client remain outside the window.
+The footer is removed and database-waking feedback moves to the top bar.
+
+Final integration preserves #419/#437's voice lifecycle, unframed status,
+living orb and portal toasts. Voice/capture failures stay outside the composer;
+the conversation overview hides during voice and phone window controls have
+44px targets. Web lint, 329 tests and production build passed. Chromium fixtures
+at 1440×1000 and 390×844 verified shared minimise/restore, maximise/restore,
+close/reopen, draft continuity across voice, capture/inspection, denial feedback,
+cleanup and reduced motion. Captures/report: `docs/ui/screenshots/p8-37-integration-*`.
+These use scratch authentication/API/socket and fake media, not live providers.
