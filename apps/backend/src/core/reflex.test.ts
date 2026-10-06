@@ -80,20 +80,21 @@ function pcMediaTool() {
 function response(
   route = 'target_0',
   confidence = 0.99,
-  context: { completeCommand?: number; contradictedAction?: string } = {},
+  context: { completeCommand?: number; contradictedAction?: string; contradictedConfidence?: number } = {},
 ) {
   return new Response(JSON.stringify({
     answers: {
       addressed: { type: 'noul', noul: 0.99 },
       intent: { type: 'choice', choice: 'action', confidence: 0.99 },
       target: { type: 'choice', choice: route, confidence },
-      confidence: { type: 'score', score: confidence, confidence },
       needs_confirmation: { type: 'noul', noul: 0.01 },
       ...(context.completeCommand === undefined ? {} : {
         complete_command: { type: 'noul', noul: context.completeCommand },
       }),
       ...(context.contradictedAction === undefined ? {} : {
-        contradicted_action: { type: 'choice', choice: context.contradictedAction, confidence: 0.99 },
+        contradicted_action: {
+          type: 'choice', choice: context.contradictedAction, confidence: context.contradictedConfidence ?? 0.99,
+        },
       }),
     },
   }), { headers: { 'content-type': 'application/json' } });
@@ -281,6 +282,28 @@ describe('Jev reflex classifier', () => {
       none: 'No listed executed action is explicitly contradicted.',
       'action-1': 'pause task 12',
     });
+    expect(partialRequest.questions).not.toHaveProperty('confidence');
+  });
+
+  it('does not undo an action on a low-confidence contradiction Choice', async () => {
+    const classifier = createJevReflexClassifier(async () => 'fake-key', async () =>
+      response('main_agent', 0.99, {
+        completeCommand: 0.99,
+        contradictedAction: 'action-1',
+        contradictedConfidence: 0.4,
+      }));
+
+    await expect(classifier.classify(
+      'Do not pause task 12',
+      'en',
+      [],
+      new AbortController().signal,
+      {
+        executed: ['paused task 12'],
+        executedActions: [{ id: 'action-1', summary: 'pause task 12' }],
+        final: true,
+      },
+    )).resolves.toMatchObject({ contradictedAction: null });
   });
 
   it('offers the recognized browser clause as a fixed reflex-safe target', () => {
@@ -334,7 +357,7 @@ describe('Jev reflex classifier', () => {
       .not.toContainEqual(expect.objectContaining({ arguments: expect.objectContaining({ target: 'app' }) }));
   });
 
-  it('falls through on low-confidence, malformed, missing-key, and rejected responses', async () => {
+  it('returns typed Jev failures while preserving low-confidence and missing-key fallthrough', async () => {
     const tools = createToolRegistry([{ id: 'factory', tools: [tool(true)] }]);
     const targets = createReflexTargets(tools.list(), ['12']);
     const lowConfidence = createJevReflexClassifier(async () => 'fake-key', async () => response('target_0', 0.4));
@@ -342,15 +365,46 @@ describe('Jev reflex classifier', () => {
       new Response(JSON.stringify({ answers: {} }), { headers: { 'content-type': 'application/json' } }));
     const missingKey = createJevReflexClassifier(async () => undefined, vi.fn());
     const rejected = createJevReflexClassifier(async () => 'fake-key', async () => new Response(null, { status: 503 }));
+    const networkError = createJevReflexClassifier(async () => 'fake-key', async () => {
+      throw new Error('private fetch details');
+    });
     const signal = new AbortController().signal;
 
     await expect(lowConfidence.classify('Pause task 12', 'en', targets, signal)).resolves.toMatchObject({
       target: { tool: { name: 'pause_task' } },
       confidence: 0.4,
     });
-    await expect(malformed.classify('Pause task 12', 'en', targets, signal)).resolves.toBeNull();
+    await expect(malformed.classify('Pause task 12', 'en', targets, signal))
+      .resolves.toEqual({ failure: 'invalid_answer' });
     await expect(missingKey.classify('Pause task 12', 'en', targets, signal)).resolves.toBeNull();
-    await expect(rejected.classify('Pause task 12', 'en', targets, signal)).resolves.toBeNull();
+    await expect(rejected.classify('Pause task 12', 'en', targets, signal))
+      .resolves.toEqual({ failure: 'http_503' });
+    await expect(networkError.classify('Pause task 12', 'en', targets, signal))
+      .resolves.toEqual({ failure: 'network_error' });
+  });
+
+  it.each([
+    [402, 'billing'],
+    [401, 'auth'],
+    [403, 'auth'],
+    [429, 'rate_limited'],
+    [502, 'http_502'],
+  ] as const)('classifies Jev HTTP %s as %s', async (status, failure) => {
+    const classifier = createJevReflexClassifier(async () => 'fake-key', async () =>
+      new Response(null, { status }));
+
+    await expect(classifier.classify('Pause task 12', 'en', [], new AbortController().signal))
+      .resolves.toEqual({ failure });
+  });
+
+  it('returns timeout when Jev exceeds its request deadline', async () => {
+    const fetcher = vi.fn<typeof fetch>((_input, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new Error('request aborted')), { once: true });
+    }));
+    const classifier = createJevReflexClassifier(async () => 'fake-key', fetcher);
+
+    await expect(classifier.classify('Pause task 12', 'en', [], new AbortController().signal))
+      .resolves.toEqual({ failure: 'timeout' });
   });
 
   it('retries one rate-limited response only when Retry-After fits the bounded wait', async () => {

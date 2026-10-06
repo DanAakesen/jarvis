@@ -62,7 +62,8 @@ const reflexReasons = new Set([
   'executed', 'unavailable', 'cancelled', 'not_addressed', 'not_action', 'incomplete_command',
   'low_confidence', 'confirmation_required', 'no_target', 'unsafe_target', 'unauthorized',
   'audit_unavailable', 'invalid_arguments', 'execution_failed', 'refused', 'error',
-  'already_executed', 'shared_context_required',
+  'already_executed', 'shared_context_required', 'billing', 'auth', 'rate_limited', 'timeout',
+  'invalid_answer', 'network_error',
 ]);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
@@ -79,7 +80,10 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       if (typeof input[key] === 'boolean') fields[key] = input[key];
     }
     if (typeof input.tool === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(input.tool)) fields.tool = input.tool;
-    if (typeof input.reason === 'string' && reflexReasons.has(input.reason)) fields.reason = input.reason;
+    if (typeof input.reason === 'string' &&
+        (reflexReasons.has(input.reason) || /^http_[1-5]\d{2}$/u.test(input.reason))) {
+      fields.reason = input.reason;
+    }
     if (typeof input.latencyMs === 'number' && Number.isFinite(input.latencyMs) &&
         input.latencyMs >= 0 && input.latencyMs <= 600_000) fields.latencyMs = input.latencyMs;
   }

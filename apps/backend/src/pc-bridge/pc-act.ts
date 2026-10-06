@@ -1,5 +1,13 @@
 import type { FastifyRequest } from 'fastify';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
+import {
+  isJevFailure,
+  jevChoiceConfidenceThreshold,
+  jevFailureFromStatus,
+  logJevFailure,
+  reflexSourceForRequest,
+  type JevFailure,
+} from '../core/jev.js';
 
 const endpoint = 'https://api.typesafe.ai/v1/systemone';
 const model = 'jev-latest';
@@ -8,7 +16,6 @@ const maxSteps = 20;
 const maxRunMs = 30_000;
 const requestTimeoutMs = 1_200;
 const maxResponseBytes = 256 * 1024;
-const confidenceThreshold = 0.9;
 const uiRoles = new Set([
   'button', 'checkbox', 'combobox', 'edit', 'listitem', 'menuitem', 'radio', 'tab', 'treeitem', 'control',
 ]);
@@ -49,7 +56,7 @@ export interface PcActDecisionInput {
 }
 
 export interface PcActPlanner {
-  decide(input: PcActDecisionInput, signal: AbortSignal): Promise<PcActDecision | null>;
+  decide(input: PcActDecisionInput, signal: AbortSignal): Promise<PcActDecision | JevFailure | null>;
 }
 
 export interface PcActStepActivity {
@@ -127,12 +134,6 @@ function readChoice(value: unknown): { choice: string; confidence: number } | un
   if (!isRecord(value) || value.type !== 'choice' ||
       typeof value.choice !== 'string' || !validProbability(value.confidence)) return undefined;
   return { choice: value.choice, confidence: value.confidence };
-}
-
-function readScore(value: unknown): number | undefined {
-  return isRecord(value) && value.type === 'score' && validProbability(value.score)
-    ? value.score
-    : undefined;
 }
 
 async function readBoundedJson(response: Response): Promise<unknown> {
@@ -333,17 +334,13 @@ export function createJevPcActPlanner(
               ...values.map((value, index) => [`value_${index}`, `Exact user-provided value "${value}".`]),
             ]),
           },
-          confidence: {
-            type: 'score',
-            instructions: 'How confident are you that the requested action is clear and matches the observed application state?',
-            criteria: ['uncertain', 'certain'],
-          },
         },
       });
       if (Buffer.byteLength(body) > 512 * 1024) return null;
 
+      let response: Response;
       try {
-        const response = await fetcher(endpoint, {
+        response = await fetcher(endpoint, {
           method: 'POST',
           redirect: 'error',
           headers: {
@@ -354,50 +351,70 @@ export function createJevPcActPlanner(
           body,
           signal: requestSignal,
         });
-        if (!response.ok || !response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
-          await response.body?.cancel().catch(() => {});
-          return null;
-        }
-        const payload = await readBoundedJson(response);
-        if (!isRecord(payload) || !isRecord(payload.answers)) return null;
-        const answers = payload.answers;
-        const operation = readChoice(answers.operation);
-        const confidence = readScore(answers.confidence);
-        const operations: readonly PcActOperation[] =
-          ['click', 'type', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked'];
-        if (!operation || !operations.includes(operation.choice as PcActOperation) || confidence === undefined) return null;
-        const selected = operation.choice as PcActOperation;
-        const combinedConfidence = Math.min(operation.confidence, confidence);
-        if (combinedConfidence < confidenceThreshold) return { operation: selected, confidence: combinedConfidence };
-        if (selected === 'done' || selected === 'blocked' || selected === 'wait') {
-          return { operation: selected, confidence: combinedConfidence };
-        }
-
-        const target = readChoice(answers.target);
-        if (!target || target.confidence < confidenceThreshold || target.choice === 'none') {
-          return { operation: selected, confidence: Math.min(combinedConfidence, target?.confidence ?? 0) };
-        }
-        const match = /^element_(\d{1,2})$/u.exec(target.choice);
-        const targetIndex = match ? Number(match[1]) : -1;
-        if (!input.snapshot.elements.some(element => element.index === targetIndex)) return null;
-
-        if (selected !== 'type') return { operation: selected, confidence: Math.min(combinedConfidence, target.confidence), targetIndex };
-        const textChoice = readChoice(answers.text_value);
-        const textMatch = textChoice && /^value_(\d{1,1})$/u.exec(textChoice.choice);
-        const textIndex = textMatch ? Number(textMatch[1]) : -1;
-        const text = values[textIndex];
-        if (!textChoice || textChoice.confidence < confidenceThreshold || !text || sensitiveText(text)) {
-          return { operation: selected, confidence: Math.min(combinedConfidence, target.confidence, textChoice?.confidence ?? 0) };
-        }
-        return {
-          operation: selected,
-          confidence: Math.min(combinedConfidence, target.confidence, textChoice.confidence),
-          targetIndex,
-          text,
-        };
       } catch {
-        return null;
+        if (signal.aborted) return null;
+        return requestSignal.aborted ? { failure: 'timeout' } : { failure: 'network_error' };
       }
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => {});
+        return jevFailureFromStatus(response.status);
+      }
+      if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+        await response.body?.cancel().catch(() => {});
+        return { failure: 'invalid_answer' };
+      }
+      let payload: unknown;
+      try {
+        payload = await readBoundedJson(response);
+      } catch {
+        if (signal.aborted) return null;
+        return requestSignal.aborted ? { failure: 'timeout' } : { failure: 'invalid_answer' };
+      }
+      if (!isRecord(payload) || !isRecord(payload.answers)) return { failure: 'invalid_answer' };
+      const answers = payload.answers;
+      const operation = readChoice(answers.operation);
+      const operations: readonly PcActOperation[] =
+        ['click', 'type', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked'];
+      if (!operation || !operations.includes(operation.choice as PcActOperation)) {
+        return { failure: 'invalid_answer' };
+      }
+      const selected = operation.choice as PcActOperation;
+      const confidence = operation.confidence;
+      if (confidence < jevChoiceConfidenceThreshold) return { operation: selected, confidence };
+      if (selected === 'done' || selected === 'blocked' || selected === 'wait') {
+        return { operation: selected, confidence };
+      }
+
+      const target = readChoice(answers.target);
+      if (!target) return { failure: 'invalid_answer' };
+      if (target.confidence < jevChoiceConfidenceThreshold || target.choice === 'none') {
+        return { operation: selected, confidence: Math.min(confidence, target.confidence) };
+      }
+      const match = /^element_(\d{1,2})$/u.exec(target.choice);
+      const targetIndex = match ? Number(match[1]) : -1;
+      if (!input.snapshot.elements.some(element => element.index === targetIndex)) {
+        return { failure: 'invalid_answer' };
+      }
+
+      if (selected !== 'type') return { operation: selected, confidence: Math.min(confidence, target.confidence), targetIndex };
+      const textChoice = readChoice(answers.text_value);
+      if (!textChoice) return { failure: 'invalid_answer' };
+      if (textChoice.choice === 'none') {
+        return { operation: selected, confidence: Math.min(confidence, target.confidence, textChoice.confidence) };
+      }
+      const textMatch = /^value_(\d{1,1})$/u.exec(textChoice.choice);
+      const textIndex = textMatch ? Number(textMatch[1]) : -1;
+      const text = values[textIndex];
+      if (!text || sensitiveText(text)) return { failure: 'invalid_answer' };
+      if (textChoice.confidence < jevChoiceConfidenceThreshold) {
+        return { operation: selected, confidence: Math.min(confidence, target.confidence, textChoice.confidence) };
+      }
+      return {
+        operation: selected,
+        confidence: Math.min(confidence, target.confidence, textChoice.confidence),
+        targetIndex,
+        text,
+      };
     },
   };
 }
@@ -429,17 +446,23 @@ export async function runPcAct(
       const rawSnapshot = await bridge.observe(deadline);
       if (!validSnapshot(rawSnapshot)) throw new ToolFailure('The active Windows application could not be safely observed.');
       const snapshot = rawSnapshot;
-      const decision = await options.planner.decide({
+      const jevStartedAt = performance.now();
+      const result = await options.planner.decide({
         goal,
         step,
         previousActions,
         snapshot,
       }, deadline);
+      if (isJevFailure(result)) {
+        logJevFailure(request, reflexSourceForRequest(request), jevStartedAt, result.failure);
+        throw new ToolRefusal('Jev could not return a valid PC decision. Please try again.');
+      }
+      const decision = result;
       if (deadline.aborted) throw deadline.reason;
       if (!decision || !validProbability(decision.confidence) ||
           !['click', 'type', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked']
             .includes(decision.operation) ||
-          decision.confidence < confidenceThreshold) {
+          decision.confidence < jevChoiceConfidenceThreshold) {
         throw new ToolRefusal('Jev is not confident enough to choose a safe PC action. Please clarify the goal.');
       }
       operation = decision.operation;
