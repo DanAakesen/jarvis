@@ -248,4 +248,39 @@ describe('structured log export', () => {
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
   });
+  it('exports only allowlisted voice-turn and PC-bridge timing metadata', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const turn = {
+      turnId: 'd96ed776-15d3-4b3a-ae7b-69c6289cce58',
+      transcriptCompletedMs: 12.5,
+      jevDecisionMs: 35,
+      tools: [{ name: 'pc_open', startedMs: 36, finishedMs: 52, outcome: 'ok', arguments: 'arguments-secret' }],
+      firstAudioDeltaMs: 53,
+      responseDoneMs: 61,
+    };
+    logger.info({ ...turn, transcript: 'transcript-secret', toolArguments: 'arguments-secret' }, 'voice.turn_timing');
+    logger.info({
+      command: 'browser_act', outcome: 'refused', roundTripMs: 42,
+      arguments: 'arguments-secret', url: 'url-secret',
+    }, 'pc_bridge.command_timing');
+
+    expect(JSON.parse(records[0]!)).toMatchObject({
+      ...turn,
+      tools: [{ name: 'pc_open', startedMs: 36, finishedMs: 52, outcome: 'ok' }],
+      msg: 'voice.turn_timing',
+    });
+    expect(JSON.parse(records[0]!).tools).toEqual([
+      { name: 'pc_open', startedMs: 36, finishedMs: 52, outcome: 'ok' },
+    ]);
+    expect(JSON.parse(records[1]!)).toMatchObject({
+      command: 'browser_act', outcome: 'refused', roundTripMs: 42, msg: 'pc_bridge.command_timing',
+    });
+    expect(sink.trackTrace.mock.calls.map(([trace]) => trace.message))
+      .toEqual(['voice.turn_timing', 'pc_bridge.command_timing']);
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+  });
 });

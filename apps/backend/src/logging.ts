@@ -29,7 +29,7 @@ const events = new Set([
   'pc_act.step',
   'reflex.decision',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
-  'voice.upstream_event_error',
+  'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -114,6 +114,47 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (['click', 'type', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked']
       .includes(String(input.action))) fields.action = input.action;
     if (['completed', 'refused', 'error'].includes(String(input.outcome))) fields.outcome = input.outcome;
+  }
+  if (input.msg === 'voice.turn_timing') {
+    if (typeof input.turnId === 'string' && /^[\da-f-]{36}$/iu.test(input.turnId)) {
+      fields.turnId = input.turnId;
+    }
+    for (const key of ['transcriptCompletedMs', 'jevDecisionMs', 'firstAudioDeltaMs', 'responseDoneMs']) {
+      const value = input[key];
+      if (value === null || (typeof value === 'number' && Number.isFinite(value) &&
+          value >= 0 && value <= 600_000)) {
+        fields[key] = value;
+      }
+    }
+    if (Array.isArray(input.tools)) {
+      fields.tools = input.tools.slice(0, 1_000).flatMap((tool) => {
+        if (tool === null || typeof tool !== 'object' || Array.isArray(tool)) return [];
+        const item = tool as Record<string, unknown>;
+        if (typeof item.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(item.name) ||
+            typeof item.startedMs !== 'number' || !Number.isFinite(item.startedMs) ||
+            item.startedMs < 0 || item.startedMs > 600_000 ||
+            !(item.finishedMs === null || (typeof item.finishedMs === 'number' &&
+              Number.isFinite(item.finishedMs) && item.finishedMs >= item.startedMs &&
+              item.finishedMs <= 600_000)) ||
+            !['ok', 'refused', 'error', 'interrupted'].includes(String(item.outcome))) return [];
+        return [{
+          name: item.name,
+          startedMs: item.startedMs,
+          finishedMs: item.finishedMs,
+          outcome: item.outcome,
+        }];
+      });
+    }
+  }
+  if (input.msg === 'pc_bridge.command_timing') {
+    if (typeof input.command === 'string' && /^[a-z][a-z0-9_]{0,63}$/u.test(input.command)) {
+      fields.command = input.command;
+    }
+    if (['ok', 'refused', 'error'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    if (typeof input.roundTripMs === 'number' && Number.isFinite(input.roundTripMs) &&
+        input.roundTripMs >= 0 && input.roundTripMs <= 600_000) {
+      fields.roundTripMs = input.roundTripMs;
+    }
   }
   if (input.msg === 'sandbox_heartbeat.decision') {
     if (typeof input.sandboxSessionId === 'string' && /^[1-9]\d{0,18}$/.test(input.sandboxSessionId)) {

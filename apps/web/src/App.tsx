@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import type { JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot } from '@jarvis/contracts';
@@ -19,7 +19,8 @@ import { SettingsPage } from './SettingsPage';
 import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
 import { backendFetch } from './backend-request';
-import { Workspace, PHONE_LAYOUT_MEDIA_QUERY, type WorkspaceController } from './Workspace';
+import { Workspace, PHONE_LAYOUT_MEDIA_QUERY, type WorkspaceController, type WorkspaceView } from './Workspace';
+import { ConversationWindowContext, conversationViewId } from './conversation-window-state';
 import { WorkspaceCommandContext } from './workspace-command-state';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { readVoiceWorkspacePreference } from './voice-workspace-preference';
@@ -164,6 +165,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
     },
     minimiseAll: () => workspaceController.current?.minimiseAll(),
     hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
+    isViewVisible: (viewId: string) => workspaceController.current?.isViewVisible?.(viewId) ?? false,
   }), [contextPanel, openWindows]);
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
     let applied = false;
@@ -176,6 +178,43 @@ function ShellLayout({ signedIn, config, session, camera }: {
     }
     setVoiceActive(active);
   }, []);
+  // The conversation history is a workspace view: the shared controller owns its tabs, geometry, focus and commands,
+  // while ConversationHistory keeps the chat session, composer and voice controls and portals the transcript in.
+  const [conversationAvailable, setConversationAvailable] = useState(false);
+  const [conversationHost, setConversationHost] = useState<HTMLDivElement | null>(null);
+  const conversationWindow = useMemo(() => ({
+    element: conversationHost,
+    setAvailable: setConversationAvailable,
+  }), [conversationHost]);
+  const workspaceViews = useMemo<WorkspaceView[]>(() => conversationAvailable ? [{
+    id: conversationViewId,
+    title: 'Conversation',
+    presentation: 'conversation',
+    initialGeometry: { x: 0.1, y: 0.36, width: 0.8, height: 0.64, columns: 2 },
+    content: { status: 'ready', content: <div ref={setConversationHost} className="conversation-window-host" /> },
+  }] : [], [conversationAvailable]);
+  const conversationLifecycle = useRef({ available: false, hiddenForVoice: false });
+  useLayoutEffect(() => {
+    const lifecycle = conversationLifecycle.current;
+    const becameAvailable = conversationAvailable && !lifecycle.available;
+    lifecycle.available = conversationAvailable;
+    const controller = workspaceController.current;
+    if (!conversationAvailable || !controller) {
+      lifecycle.hiddenForVoice = false;
+      return;
+    }
+    const command = (operation: 'minimise' | 'restore') => controller.dispatch({
+      commandId: `conversation-${operation}`, operation, viewId: conversationViewId,
+    });
+    if (voiceActive) {
+      // Fullscreen voice starts with history out of the way; Jarvis can still show it with window commands.
+      if (!lifecycle.hiddenForVoice) lifecycle.hiddenForVoice = command('minimise');
+    } else if (lifecycle.hiddenForVoice || (becameAvailable && !controller.isViewVisible?.(conversationViewId))) {
+      // Returning from voice or to the Jarvis page brings history back for the replies.
+      lifecycle.hiddenForVoice = false;
+      command('restore');
+    }
+  }, [conversationAvailable, voiceActive]);
   const [navigationOpen, setNavigationOpen] = useState(() => (
     typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches
   ));
@@ -319,6 +358,9 @@ function ShellLayout({ signedIn, config, session, camera }: {
         </div>
         {signedIn && (
           <div className="topbar-actions">
+            {config.backendUrl && (
+              <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+            )}
             {(working || latestActivity) && (
               <span className={`topbar-working${working ? '' : ' topbar-activity-terminal'}`} role="status" aria-label={activityText} aria-live="polite">
                 <span className="topbar-working-mark" aria-hidden="true" />
@@ -359,10 +401,12 @@ function ShellLayout({ signedIn, config, session, camera }: {
         {presenceError && <p className="browser-presence-error" role="alert">{presenceError}</p>}
         <WorkspaceCommandContext.Provider value={workspaceCommands}>
           <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange }}>
-            <Outlet />
+            <ConversationWindowContext.Provider value={conversationWindow}>
+              <Outlet />
+            </ConversationWindowContext.Provider>
             {signedIn && (
               <div className="workspace-shell-area" hidden={pathname !== '/'}>
-                <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} />
+                <Workspace ref={workspaceController} views={workspaceViews} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} />
               </div>
             )}
             {signedIn && pathname !== '/' && (
@@ -378,11 +422,6 @@ function ShellLayout({ signedIn, config, session, camera }: {
           </VoiceWorkspaceContext.Provider>
         </WorkspaceCommandContext.Provider>
       </main>
-      <footer className="bottom-bar">
-        {signedIn && config.backendUrl && (
-          <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
-        )}
-      </footer>
       {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} />}
     </div>
   );

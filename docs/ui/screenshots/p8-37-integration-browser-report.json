@@ -1,0 +1,68 @@
+{
+  "evidence": "Real app and browser voice client; scratch authentication/API/socket, fake browser media. Software WebGL; not live providers or physical capture.",
+  "cases": [
+    {
+      "viewport": "desktop",
+      "micRequests": 2,
+      "audioSent": 225,
+      "screenRequests": 1,
+      "cameraRequests": 2,
+      "frames": 2,
+      "overflow": false,
+      "status": "Listening",
+      "statusBackground": "rgba(0, 0, 0, 0)",
+      "statusColor": "rgb(255, 255, 255)",
+      "statusGlyphs": 0,
+      "statusBounds": {
+        "x": 662.609375,
+        "y": 656,
+        "width": 114.78125,
+        "height": 37.25,
+        "bottom": 693.25
+      },
+      "barBounds": {
+        "x": 625.5390625,
+        "y": 916,
+        "width": 188.921875,
+        "height": 60,
+        "bottom": 976
+      },
+      "canvasCount": 1
+    },
+    {
+      "viewport": "phone",
+      "micRequests": 2,
+      "audioSent": 249,
+      "screenRequests": 1,
+      "cameraRequests": 2,
+      "frames": 2,
+      "overflow": false,
+      "status": "Listening",
+      "statusBackground": "rgba(0, 0, 0, 0)",
+      "statusColor": "rgb(255, 255, 255)",
+      "statusGlyphs": 0,
+      "statusBounds": {
+        "x": 137.609375,
+        "y": 513,
+        "width": 114.78125,
+        "height": 37.25,
+        "bottom": 550.25
+      },
+      "barBounds": {
+        "x": 104.5390625,
+        "y": 768,
+        "width": 180.921875,
+        "height": 60,
+        "bottom": 828
+      },
+      "canvasCount": 1
+    }
+  ],
+  "pageErrors": [],
+  "shaderErrors": [],
+  "windowLifecycle": "Shared minimize/restore, maximize/restore and close/reopen retain draft",
+  "mediaCleanup": true,
+  "composerHeightAfterError": 66,
+  "voiceContinuity": "History minimizes for voice, restores on exit, and draft survives",
+  "reducedMotion": "Listening and usable controls verified"
+}

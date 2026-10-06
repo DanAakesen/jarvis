@@ -788,6 +788,71 @@ URLs, query strings, arbitrary messages and raw errors. Request IDs are generate
 by the server. Telemetry tests use fake sinks, never Azure. SIGTERM/SIGINT stops
 the backend and bounds close/flush/disposal to five seconds.
 
+### Voice and PC bridge timing (P5-14)
+
+`voice.turn_timing` logs one content-free event per voice turn, with all stage
+times relative to `input_audio_buffer.speech_stopped`. `tools` contains only
+tool names, start/finish offsets and normalized outcomes. `pc_bridge.command_timing`
+records each bridge command name, outcome and round-trip milliseconds. The
+existing logger allowlist drops transcripts, arguments and results.
+
+List the latest N voice turns and their timing columns (change `N` as needed):
+
+```kusto
+let N = 50;
+traces
+| where message == "voice.turn_timing"
+| extend turnId = tostring(customDimensions.turnId),
+    transcriptCompletedMs = todouble(customDimensions.transcriptCompletedMs),
+    jevDecisionMs = todouble(customDimensions.jevDecisionMs),
+    firstAudioDeltaMs = todouble(customDimensions.firstAudioDeltaMs),
+    responseDoneMs = todouble(customDimensions.responseDoneMs),
+    tools = parse_json(tostring(customDimensions.tools))
+| top N by timestamp desc
+| project timestamp, turnId, transcriptCompletedMs, jevDecisionMs,
+    tools, firstAudioDeltaMs, responseDoneMs
+```
+
+Calculate p50/p90 per voice step, voice tool and PC bridge command across the
+same latest N voice turns and the latest N bridge commands:
+
+```kusto
+let N = 50;
+let turns =
+    traces
+    | where message == "voice.turn_timing"
+    | top N by timestamp desc
+    | project timestamp, customDimensions;
+let steps =
+    turns
+    | mv-expand step = pack_array(
+        pack("name", "transcript_completed", "durationMs", todouble(customDimensions.transcriptCompletedMs)),
+        pack("name", "jev_decision", "durationMs", todouble(customDimensions.jevDecisionMs)),
+        pack("name", "first_audio_delta", "durationMs", todouble(customDimensions.firstAudioDeltaMs)),
+        pack("name", "response_done", "durationMs", todouble(customDimensions.responseDoneMs)))
+    | extend name = tostring(step.name), durationMs = todouble(step.durationMs)
+    | where isnotnull(durationMs)
+    | project name, durationMs;
+let voiceTools =
+    turns
+    | mv-expand tool = parse_json(tostring(customDimensions.tools))
+    | extend name = strcat("tool.", tostring(tool.name)),
+        durationMs = todouble(tool.finishedMs) - todouble(tool.startedMs)
+    | where isnotnull(tool.finishedMs)
+    | project name, durationMs;
+let bridgeCommands =
+    traces
+    | where message == "pc_bridge.command_timing"
+    | top N by timestamp desc
+    | extend name = strcat("bridge.", tostring(customDimensions.command)),
+        durationMs = todouble(customDimensions.roundTripMs)
+    | where isnotnull(durationMs)
+    | project name, durationMs;
+union steps, voiceTools, bridgeCommands
+| summarize p50Ms = percentile(durationMs, 50), p90Ms = percentile(durationMs, 90) by name
+| order by name asc
+```
+
 `Backend CI` runs the offline lint, tests and targeted build plus a production
 container build and smoke test without Azure credentials. Its image uses pinned
 Node.js, runs as non-root, and contains backend output and production dependencies.
@@ -1294,3 +1359,35 @@ PR #419 replaces Enable microphone with capture on explicit Start voice. Browser
 Focused web checks cover voice client lifecycle, presentation/status, scene persistence and motion envelopes. Copilot reported fixture browser layout and motion observations; the software-WebGL cadence was about 4 fps, so normal hardware motion quality remains unverified. Live microphone/speaker, English/Danish provider, physical phone and hardware-GPU acceptance remain post-deploy checks.
 
 Reviewer verification against updated main: web lint, all 36 web test files (313 tests), and the production web build pass. Scratch Chromium exercised the real voice client with fake microphone hardware and an intercepted voice handshake: no microphone request before Start voice, one request after it, PCM sending after readiness, Listening below the orb without bar overlap or horizontal overflow at 1440×1000 and 390×844, one mounted canvas, and End voice returning the composer. No page errors occurred. Captures/report: `docs/ui/screenshots/p8-40-review-*`. This is fixture/software-WebGL evidence, not live Azure, real microphone/speaker or hardware-GPU verification.
+
+
+## Voice UI hotfix browser evidence (#435)
+
+The real app and browser voice client were inspected at 1440×1000 and 390×844 in
+Chromium with scratch-only authentication, backend/socket fixtures and fake media
+devices. Screen/camera start from More, sharing sends no frame until inspection,
+permission denial uses a bottom-right toast, session end stops tracks, and the
+composer remains 70 px high after a failure. Status is white with a transparent
+background and no glyph; it stays above the bar, with no horizontal overflow or
+page/shader errors. Dormant/awake frames show core movement; reduced-motion
+Listening remains usable. Web lint, all 318 tests (37 files), and build pass;
+build retains the existing large-chunk advisory. Screenshots and the report:
+`docs/ui/screenshots/p8-43-{dormant,awake,toast,phone,typing-after-error}.png` and
+`p8-43-browser-report.json`. Fixtures do not verify physical capture, live vision/
+voice providers, Safari or hardware-GPU motion. No fixture auth is committed.
+
+## Shell and conversation integration (#398)
+
+PR #418 registers the avatar-free conversation history as the shared workspace
+view `conversation`; its tabs, geometry, focus, snapshot and Jarvis commands use
+the existing controller. The composer and voice client remain outside the window.
+The footer is removed and database-waking feedback moves to the top bar.
+
+Final integration preserves #419/#437's voice lifecycle, unframed status,
+living orb and portal toasts. Voice/capture failures stay outside the composer;
+the conversation overview hides during voice and phone window controls have
+44px targets. Web lint, 329 tests and production build passed. Chromium fixtures
+at 1440×1000 and 390×844 verified shared minimise/restore, maximise/restore,
+close/reopen, draft continuity across voice, capture/inspection, denial feedback,
+cleanup and reduced motion. Captures/report: `docs/ui/screenshots/p8-37-integration-*`.
+These use scratch authentication/API/socket and fake media, not live providers.
