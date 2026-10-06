@@ -87,6 +87,7 @@ function fixture(
       .map((event) => ({ ...event, taskId }))),
     getRunningContext: vi.fn(async () => context),
     transition: vi.fn(async () => ({ kind: 'ok' as const, task })),
+    retry: vi.fn(async () => ({ kind: 'ok' as const, task })),
     withNoActiveTasks: vi.fn(async (operation) => ({ kind: 'idle' as const, value: await operation() })),
     recordEvent: vi.fn(async (event) => ({
       id: '20',
@@ -116,6 +117,72 @@ afterEach(async () => {
 });
 
 describe('factory tasks API', () => {
+  it('returns recorded PR, checks and usage summaries on list and detail', async () => {
+    const summary = {
+      pullRequest: { number: 2, url: 'https://github.com/DanAakesen/jarvis-test-target/pull/2', state: 'open' as const },
+      checks: 'passed' as const,
+      checkConclusion: 'success',
+      usageSummary: { inputTokens: 123, outputTokens: 45, costDkk: 0.25 },
+    };
+    const { app } = fixture({
+      list: vi.fn(async () => [{ ...task, ...summary }]),
+      get: vi.fn(async () => ({ ...detail, ...summary })),
+    });
+    const list = await app.inject({ method: 'GET', url: '/factory/tasks', headers });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().tasks[0]).toMatchObject(summary);
+    const response = await app.inject({ method: 'GET', url: '/factory/tasks/42', headers });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject(summary);
+  });
+
+  it('queues an eligible failed-start task through the retry store contract', async () => {
+    const { app, store } = fixture();
+    const response = await app.inject({ method: 'POST', url: '/factory/tasks/42/retry', headers });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ id: '42', state: 'Ready' });
+    expect(store.retry).toHaveBeenCalledExactlyOnceWith('42');
+    expect(store.transition).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['not-found', 404],
+    ['invalid-transition', 409],
+  ] as const)('reports retry result %s', async (kind, status) => {
+    const { app } = fixture({ retry: vi.fn(async () => ({ kind })) });
+    expect((await app.inject({ method: 'POST', url: '/factory/tasks/42/retry', headers })).statusCode).toBe(status);
+  });
+
+  it.each(['0', 'nope', '9223372036854775808'])('rejects invalid retry ID %s before storage', async (id) => {
+    const { app, store } = fixture();
+    expect((await app.inject({ method: 'POST', url: `/factory/tasks/${id}/retry`, headers })).statusCode).toBe(400);
+    expect(store.retry).not.toHaveBeenCalled();
+  });
+
+  it('requires Dan authentication for retry, rejecting agent and runner identities', async () => {
+    const { app, store } = fixture();
+    expect((await app.inject({ method: 'POST', url: '/factory/tasks/42/retry' })).statusCode).toBe(401);
+    expect(store.retry).not.toHaveBeenCalled();
+    for (const role of ['Jarvis.Tools', 'Jarvis.Runner.Events'] as const) {
+      const service = fixture({}, async () => ({
+        kind: role === 'Jarvis.Tools' ? 'jarvis-agent' as const : 'jarvis-runner' as const,
+        objectId: 'service', tenantId: config.auth.tenantId, clientId: 'service', roles: [role],
+      }));
+      expect((await service.app.inject({
+        method: 'POST', url: '/factory/tasks/42/retry', headers,
+      })).statusCode).toBe(403);
+      expect(service.store.retry).not.toHaveBeenCalled();
+    }
+  });
+
+  it('reports unavailable retry storage', async () => {
+    const app = buildApp(config, undefined, {
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
+    });
+    apps.push(app);
+    expect((await app.inject({ method: 'POST', url: '/factory/tasks/42/retry', headers })).statusCode).toBe(503);
+  });
+
   it('creates a Ready board task for an active project', async () => {
     const { app, store } = fixture();
     const response = await app.inject({
