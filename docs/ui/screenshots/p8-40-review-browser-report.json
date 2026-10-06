@@ -1,0 +1,53 @@
+{
+  "evidence": "Scratch auth/backend/voice protocol; real app, Web Audio and fake browser microphone. Software Chromium; no live provider or physical hardware.",
+  "cases": [
+    {
+      "viewport": "desktop",
+      "micRequests": 1,
+      "audioSent": 27,
+      "overflow": false,
+      "enableMic": false,
+      "status": "Listening",
+      "statusBounds": {
+        "x": 654.15625,
+        "y": 656,
+        "width": 131.671875,
+        "height": 38,
+        "bottom": 694
+      },
+      "barBounds": {
+        "x": 625.5390625,
+        "y": 916,
+        "width": 188.921875,
+        "height": 60,
+        "bottom": 976
+      },
+      "canvasCount": 1
+    },
+    {
+      "viewport": "phone",
+      "micRequests": 1,
+      "audioSent": 53,
+      "overflow": false,
+      "enableMic": false,
+      "status": "Listening",
+      "statusBounds": {
+        "x": 129.15625,
+        "y": 513,
+        "width": 131.671875,
+        "height": 38,
+        "bottom": 551
+      },
+      "barBounds": {
+        "x": 104.5390625,
+        "y": 768,
+        "width": 180.921875,
+        "height": 60,
+        "bottom": 828
+      },
+      "canvasCount": 1
+    }
+  ],
+  "pageErrors": [],
+  "endReturnsComposer": true
+}
