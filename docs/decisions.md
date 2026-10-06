@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P6-21 (6 October 2026): project task summaries from existing PR, workflow,
+usage and PR-opened event records without live GitHub reads or a schema change.
+Unknown state, token metrics and costs stay null; recorded costs can be partial.
+Keep pre-start Retry separate from Recover: reset the dispatcher attempt budget
+under the existing sleep/task locks and publish a committed `state_changed` event.
+Require a confirmed pre-start refusal; sandbox history, ambiguous start outcomes
+and archived event history refuse Retry rather than risk duplicate remote work.
+Focused API/dispatcher and real SQL Server tests verify the contracts;
+deployed behavior and UI consumption remain unverified.
+
 P7-35 (6 October 2026): reuse the existing global JSON settings store for bounded,
 value-free task recipes rather than add a table or rewrite occupied migration
 0020. Jev selects by app/site, verifies each fresh stable target, and falls back
@@ -29,6 +39,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-06 | P6-16 treats zero GitHub check runs and zero commit statuses as no CI only after two minutes from PR creation; recheck through the project-policy evaluator and record no-CI completion as task activity. Any present pending or failed check still blocks. | Reuse the persisted PR open time, current GitHub check APIs and existing policy flow without a migration. Focused tests cover empty checks after grace, checks appearing during grace, and failed checks. | Implemented offline; live test-repository acceptance pending |
 | 2026-10-06 | P6-17 preserves background failure event names and exports only fixed error kinds and bounded HTTP statuses. Retain `ENTRA_JARVIS_AGENT_OBJECT_ID` in Bicep. | Callback errors now reach the logger without exporting messages or provider data; logging and monitor tests exercise the sanitized diagnostics. `apps/backend/src/auth/config.ts` still reads the agent object ID to authorize the hosted identity, so the setting is not unused. | Implemented offline; live failure identification awaits deployment |
 | 2026-10-06 | P7-38 continuously watches only the screen/camera Dan independently shares and speaks only for useful observations. Reuse transient frame handling, the dedicated `gpt-6-luna` deployment, existing usage rows and the voice status announcer; default to a shared USD 1 UTC-day budget. Watch instructions/summaries remain session-local in memory, image text is untrusted, and no sensitive-content pause or web edit is added. | Dan's decisions and API contract in #440 supersede request-only inspection for the new watch path. SQL admission reserves a conservative pending cost to bound concurrent spend; unknown-cost failures keep it until UTC rollover. Fake model, route, store, logger and voice tests cover quiet/noteworthy frames, refusal, dedupe, and delivery; the existing on-demand route remains available. | Backend implemented offline; separate UI, live SQL/model/billing and useful-comment acceptance pending |
 | 2026-10-06 | P7-39: Dan chose an offline wake word on his PC, exactly "Wake up Jarvis". Use the Microsoft Speech SDK on-device `KeywordRecognizer` with a Speech Studio basic custom keyword `.table` model, not a third-party engine. No audio leaves the PC before detection. The bridge sends `wake_word { at }`, and the backend publishes `voice.wake` on the activity hub as a separate `voice-wake` SSE event, leaving `apps/web` and existing activity semantics unchanged. The bridge pauses during voice sessions through backend `voice_state` messages, sent only to bridges that report `wakeWord: true`, so older bridges and backends stay compatible | Microsoft-first and privacy requirement from Dan. Fake-recognizer tests cover toggle, pause, one event per detection and the 3 s debounce; backend tests cover bridge-only acceptance, strict validation and publication | Implemented offline; keyword model and live acceptance pending |

@@ -314,6 +314,27 @@ describe('task dispatcher', () => {
     await dispatcher.stop();
   });
 
+  it.each([
+    [new FoundryClientError('auth', 'start'), 'foundry_start_rejected'],
+    [new FoundryClientError('http', 'start', 403), 'foundry_start_rejected'],
+    [new FoundryClientError('http', 'start', 408), 'foundry_start_failed'],
+    [new FoundryClientError('http', 'start', 500), 'foundry_start_failed'],
+    [new FoundryClientError('timeout', 'start'), 'foundry_start_failed'],
+    [new FoundryClientError('protocol', 'start'), 'foundry_start_failed'],
+  ])('distinguishes refused start %s from uncertain remote outcomes', async (error, reason) => {
+    const store = idleStore();
+    vi.mocked(store.claimNext).mockResolvedValueOnce({
+      kind: 'claimed', task: { ...task, attemptCount: 3 },
+    });
+    const { dispatcher } = harness(store, vi.fn(async () => { throw error; }));
+    dispatcher.start();
+    await vi.waitFor(() => expect(store.failStart).toHaveBeenCalledWith(
+      expect.any(String), expect.objectContaining({ attemptCount: 3 }), null, reason,
+    ));
+    expect(store.recordStarted).not.toHaveBeenCalled();
+    await dispatcher.stop();
+  });
+
   it('retries a rejected Foundry start twice and then moves it to NeedsAttention', async () => {
     vi.useFakeTimers();
     let attempts = 0;
@@ -355,13 +376,13 @@ describe('task dispatcher', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     expect(store.failStart).toHaveBeenCalledTimes(3);
     expect(store.failStart).toHaveBeenNthCalledWith(
-      3, expect.any(String), expect.objectContaining({ attemptCount: 3 }), null, 'foundry_start_failed',
+      3, expect.any(String), expect.objectContaining({ attemptCount: 3 }), null, 'foundry_start_rejected',
     );
     expect(startTask).toHaveBeenCalledTimes(3);
     expect(onStartFailure.mock.calls).toEqual([
       [{ taskId: '42', reason: 'foundry_start_rejected' }],
       [{ taskId: '42', reason: 'foundry_start_rejected' }],
-      [{ taskId: '42', reason: 'foundry_start_failed' }],
+      [{ taskId: '42', reason: 'foundry_start_rejected' }],
     ]);
     for (const [request] of startTask.mock.calls as unknown as [{ branch: string }][]) {
       expect(request.branch).toBe('jarvis/task-42');

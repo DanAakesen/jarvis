@@ -428,6 +428,7 @@ try {
         runConfirmed: (summary, action) => teamsNotifications.runConfirmed('merge', summary, action),
       } : {}),
       onConfirmationError: (error) => logger.warn(safeErrorFields(error), 'project_policy.confirmation_failed'),
+      onError: (error) => logger.warn(safeErrorFields(error), 'project_policy.recheck_failed'),
     })
     : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
@@ -654,7 +655,12 @@ try {
     ...(teamsNotifications ? { teamsNotifications } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
   });
-  if (checksLoop) app.addHook('onClose', async () => { await checksLoop.stop(); });
+  if (checksLoop || projectPolicyEvaluator) {
+    app.addHook('onClose', async () => {
+      await checksLoop?.stop();
+      projectPolicyEvaluator?.stop();
+    });
+  }
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
