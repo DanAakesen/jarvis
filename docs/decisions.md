@@ -489,6 +489,26 @@ PR #419 uses one reconciled voice presentation for the under-orb HTML feedback a
 The same orb uses phased core ignition, outward wave and settling, with distinct listening/thinking/tool motion and actual playback-driven speech energy. Camera, room and platform remain fixed. Reduced motion uses steady forms. The focused tests and prior PR CI passed; Copilot reported browser fixtures and low-rate software-WebGL motion frames. Live microphone/provider, physical devices and normal hardware-GPU motion remain unverified. No new provider protocol or persistence is introduced.
 
 
+## 6 October 2026 — Credential health and repair (#457)
+
+P6-18 keeps the existing `renew_soon` status vocabulary and Codex renewal lease.
+Manual repair forces the runner's refresh but never bypasses running-task or
+single-flight exclusion. Uncertain completion remains distinct from failure.
+
+Copilot health uses a bounded authenticated GitHub check plus available Key
+Vault expiry; it establishes token authentication, not seat entitlement.
+That check owns Copilot status exclusively, so runner expiry-only metadata
+cannot clear a confirmed authentication failure during Codex renewal.
+GitHub App health follows actual installation-token mints, including catalog
+operations, rather than an extra polling request. Failed mint transitions
+raise one transactional activity alert per failure episode. Check timestamps
+make observation freshness visible without exposing credentials.
+
+Local fake-provider tests verify the backend contract. SQL Server CI and live
+Key Vault/GitHub/Foundry checks are not established by those tests. Settings UI
+wiring remains separate. Migration 0023 leaves 0022 available for #432 and
+must be rechecked against the migration history before merge.
+
 ## 6 October 2026 — Direct voice sharing and living dormant orb (#435)
 
 Dan requested the hotfix after seeing inspection guidance overlay More and persist into the typing composer. Voice More must offer native-permission start/stop for screen and camera plus on-request inspection, using existing capture/session cleanup. Transient guidance and failures belong in bottom-right dismissible toasts, outside chat layout. Under-orb state is bright white projected text with no dark badge or colored dot. Preserve awakening, add a gentle dormant pulse and more movement in the open amber core when awake. Existing runtime/playback truth, mirror, themes and reduced motion remain. Codex implements all changes in one PR under Dan’s explicit hotfix/merge instruction.

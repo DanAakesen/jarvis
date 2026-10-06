@@ -306,14 +306,18 @@ the last-release field is explicitly unavailable rather than inferred.
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
 | New projects: owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | Change (applies to projects Jarvis registers) |
-| Credentials: name, expiry, last renewal, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
+| Credentials: name, expiry, last renewal, last check, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
 
 The backend checks Codex daily and renews only when the access token has three
 days or less remaining and no Codex task is running. Credential dates and
 status are non-secret Key Vault metadata; definitive failed renewal is visible as
 "Action needed". Uncertain runs preserve the previous credential state and retry
-after 15 minutes, doubling the delay up to one hour. Manual renewal and re-seed
-controls remain disabled until an operator workflow is available.
+after 15 minutes, doubling the delay up to one hour. Dan can force Codex renewal
+through the backend repair API, using the same lease and running-task exclusion.
+Copilot token authentication is checked daily, retaining expiry where known.
+GitHub App health reflects the last installation-token mint; a failure raises
+an activity alert once per failure episode. Settings UI repair wiring is a
+separate task; re-seeding remains an operator workflow.
 
 The settings API validates choices against the server's available-model catalog.
 The coding-agent catalog currently offers only each provider's default. P2-11

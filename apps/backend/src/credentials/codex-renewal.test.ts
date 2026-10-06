@@ -17,6 +17,7 @@ function fixture(status = 'completed', result: Record<string, unknown> | null = 
     acquireCodexRenewalLease: vi.fn(async () => true),
     refreshCodexRenewalLease: vi.fn(async () => true),
     updateCopilotStatus: vi.fn(async () => {}),
+    updateGitHubAppStatus: vi.fn(async () => {}),
     completeCodexRenewal: vi.fn(async () => {}),
   };
   const snapshot = {
@@ -49,9 +50,7 @@ describe('Codex renewal job', () => {
     expect(store.completeCodexRenewal).toHaveBeenCalledWith(
       expect.any(String), 'ok', '2030-01-01T00:00:00.000Z', null, true,
     );
-    expect(store.updateCopilotStatus).toHaveBeenCalledWith(
-      'ok', '2030-01-01T00:00:00.000Z', '2026-10-03T00:00:00.000Z',
-    );
+    expect(store.updateCopilotStatus).not.toHaveBeenCalled();
     expect(client.deleteSession).toHaveBeenCalledWith('session');
   });
 
@@ -62,6 +61,26 @@ describe('Codex renewal job', () => {
     expect(client.startCodexRenewal).not.toHaveBeenCalled();
     expect(store.completeCodexRenewal).not.toHaveBeenCalled();
   });
+
+  it('forces manual renewal but still respects the existing lease', async () => {
+    const { store, client } = fixture();
+    await expect(runCodexRenewalOnce(store, client, undefined, true)).resolves.toBe('fresh');
+    expect(client.startCodexRenewal).toHaveBeenCalledWith({ signal: expect.any(AbortSignal), force: true });
+    vi.mocked(client.startCodexRenewal).mockClear();
+    vi.mocked(store.acquireCodexRenewalLease).mockResolvedValue(false);
+    await expect(runCodexRenewalOnce(store, client, undefined, true)).resolves.toBe('skipped');
+    expect(client.startCodexRenewal).not.toHaveBeenCalled();
+  });
+
+  it.each([null, '2020-01-01T00:00:00.000Z', '2030-01-01T00:00:00.000Z'])(
+    'does not overwrite authenticated Copilot health with runner expiry %s', async (expires) => {
+    const { store, client } = fixture('completed', {
+      renewed: false, expires: '2030-01-01T00:00:00.000Z', copilot: { expires },
+    });
+    await runCodexRenewalOnce(store, client);
+    expect(store.updateCopilotStatus).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps the lease until expiry when invocation completion is uncertain', async () => {
     const { store, client } = fixture('running', null);

@@ -26,6 +26,7 @@ import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
 import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js';
 import type { CredentialStatusStore } from './credentials/credential-status.js';
+import type { runCodexRenewalOnce } from './credentials/codex-renewal.js';
 import type { UsageStore } from './core/usage.js';
 import type { SandboxHeartbeat } from './factory/heartbeat.js';
 import type { ContainerAppScaler } from './operations/container-app-scale.js';
@@ -53,6 +54,7 @@ export interface BuildAppOptions {
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
   readonly credentialStatusStore?: CredentialStatusStore;
+  readonly renewCodexCredential?: () => ReturnType<typeof runCodexRenewalOnce>;
   readonly usageStore?: UsageStore;
   readonly nowFeedStore?: NowFeedStore;
   readonly nowEventHub?: NowFeedEventHub;
@@ -87,6 +89,7 @@ declare module 'fastify' {
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
     credentialStatusStore: CredentialStatusStore | null;
+    renewCodexCredential: (() => ReturnType<typeof runCodexRenewalOnce>) | null;
     usageStore: UsageStore | null;
     nowFeedStore: NowFeedStore | null;
     nowEventHub: NowFeedEventHub;
@@ -171,6 +174,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.addHook('onClose', async () => { workspaceCommands.dispose(); });
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
+  app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);
   app.decorate('usageStore', options.usageStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
   app.decorate('sandboxHeartbeat', options.sandboxHeartbeat ?? null);

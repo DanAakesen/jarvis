@@ -234,9 +234,10 @@ export class FoundryClient {
     return this.accepted(body, "start", undefined, request.agent);
   }
 
-  async startCodexRenewal(options: RequestOptions = {}): Promise<InvocationAccepted> {
+  async startCodexRenewal(options: RequestOptions & { force?: boolean } = {}): Promise<InvocationAccepted> {
     const body = await this.runtimeRequest("renew-codex", "protocols/invocations", "POST", {
       agent: "codex", mode: "renew-codex", min_days_left: 3,
+      ...(options.force ? { force: true } : {}),
     }, undefined, options);
     return this.accepted(body, "renew-codex", undefined, "codex");
   }
