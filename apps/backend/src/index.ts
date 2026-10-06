@@ -131,7 +131,8 @@ try {
   const awayModePresenceStatus = { unavailable: !config.awayModePresenceEnabled };
   const alertNotifier = createAlertNotifier(telemetry);
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
-    config.foundryEndpoints || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
+    config.foundryEndpoints || config.githubAppId || config.googleTimeZone || config.teams ||
+    config.awayModePresenceEnabled || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
