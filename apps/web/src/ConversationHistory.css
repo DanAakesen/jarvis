@@ -231,9 +231,9 @@
   .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom); left: 50%; width: max-content; max-width: calc(100vw - 24px); transform: translateX(-50%); }
   .app-shell[data-voice-active="true"] .voice-screen-error,
   .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-screen-error { bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + 12px); left: 12px; width: calc(100vw - 24px); transform: none; }
-  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-screen-error { bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 20px); }
+  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-screen-error { bottom: var(--voice-dock-top, calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 20px)); }
   .voice-end-control { padding-inline: 10px 12px; }
-  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; top: max(68px, calc(env(safe-area-inset-top) + 56px)); right: 12px; bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 20px); left: 12px; width: auto; height: auto; overflow: hidden; }
+  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; top: max(68px, calc(env(safe-area-inset-top) + 56px)); right: 12px; bottom: var(--voice-dock-top, calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 20px)); left: 12px; width: auto; height: auto; overflow: hidden; }
 }
 
 @media (prefers-reduced-motion: reduce) {

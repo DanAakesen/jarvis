@@ -133,6 +133,9 @@ function createJarvisStageSceneWithRenderer(
   let animationFrame = 0;
   let animating = false;
   let elapsed = 0;
+  let dockMix = 0;
+  let dockBottom = 0;
+  let dockRadius = 0;
   let previous = performance.now();
   let current = initialOptions;
   let qualityLevel: JarvisStageQualityLevel = renderer.capabilities.maxTextureSize < 4096 ? 1 : 0;
@@ -486,13 +489,29 @@ function createJarvisStageSceneWithRenderer(
     }
     const layout = THREE.MathUtils.clamp(windowPosition, 0, 1);
     const screenX = mobile ? 0.5 : 0.5 - 0.22 * layout;
-    const screenY = mobile ? THREE.MathUtils.lerp(0.46, 0.78, layout) : 0.46;
+    let screenY = mobile ? THREE.MathUtils.lerp(0.46, 0.78, layout) : 0.46;
+    let pixelRadius = mobile
+      ? Math.min(width * 0.28, height * 0.16)
+      : Math.min(width * 0.18, height * 0.18) * (1 - 0.2 * layout);
+    // During phone voice with a window, the shell publishes a compact dock between the window and
+    // the controls so the HTML status can sit beneath the orb without covering it.
+    const dock = mobile ? readOrbDock() : null;
+    if (dock) {
+      dockBottom = dock.bottom;
+      dockRadius = dock.radius;
+    }
+    const dockTarget = dock ? 1 : 0;
+    dockMix = current.reducedMotion
+      ? dockTarget
+      : dockMix + (dockTarget - dockMix) * (1 - Math.exp(-Math.max(0, Math.min(delta, 0.12)) * 9));
+    const docked = mobile && dockRadius > 0 ? dockMix * layout : 0;
+    if (docked > 0.001) {
+      pixelRadius = THREE.MathUtils.lerp(pixelRadius, dockRadius, docked);
+      screenY = THREE.MathUtils.lerp(screenY, (height - dockBottom - dockRadius) / height, docked);
+    }
     cameraRay.set(screenX * 2 - 1, 1 - screenY * 2, 0.5).unproject(camera).sub(camera.position).normalize();
     orbWorld.copy(camera.position).addScaledVector(cameraRay, -camera.position.z / cameraRay.z);
     orbRig.position.copy(orbWorld);
-    const pixelRadius = mobile
-      ? Math.min(width * 0.28, height * 0.16)
-      : Math.min(width * 0.18, height * 0.18) * (1 - 0.2 * layout);
     publishOrbGeometry(screenX * width, screenY * height, pixelRadius);
 
     const awakeTarget = current.voiceActive ? 1 : current.orbState !== 'idle' ? 0.72 : 0;
@@ -550,6 +569,13 @@ function createJarvisStageSceneWithRenderer(
   }
 
   /** Lets the HTML voice status sit beneath the orb wherever the layout places it. */
+  function readOrbDock(): { bottom: number; radius: number } | null {
+    const style = window.getComputedStyle(host);
+    const bottom = Number.parseFloat(style.getPropertyValue('--jarvis-orb-dock-bottom'));
+    const radius = Number.parseFloat(style.getPropertyValue('--jarvis-orb-dock-radius'));
+    return Number.isFinite(bottom) && Number.isFinite(radius) && bottom > 0 && radius > 0 ? { bottom, radius } : null;
+  }
+
   function publishOrbGeometry(x: number, y: number, radius: number) {
     const page = host.parentElement;
     if (!page) return;
