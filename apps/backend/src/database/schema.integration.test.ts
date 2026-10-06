@@ -142,6 +142,8 @@ describe('committed domain schema (groups 1-8)', () => {
     await expect(firstStore.claim(task.id, 'Done')).resolves.toBe(true);
     await expect(restartedStore.claim(task.id, 'Done')).resolves.toBe(false);
     await expect(restartedStore.claim(task.id, 'pull_request_opened')).resolves.toBe(true);
+    await expect(createTaskStore(pool, createEventHub<TaskEventMessage>())
+      .transition(task.id, 'Cancelled')).resolves.toMatchObject({ kind: 'ok' });
   });
   it('persists away mode and an in-progress Teams presence timer across store recreation', async () => {
     const startedAt = new Date('2026-10-04T12:00:00.000Z');
@@ -1071,6 +1073,7 @@ describe('committed domain schema (groups 1-8)', () => {
 
     expect(events.filter((event) => event.type === 'state_changed').map((event) => event.payload))
       .toEqual([
+        { from: 'Ready', to: 'Running' },
         { from: 'Running', to: 'NeedsAttention', reason: 'disk_low', pullRequestUrl: url },
         { from: 'NeedsAttention', to: 'Done', pullRequestUrl: url },
       ]);
