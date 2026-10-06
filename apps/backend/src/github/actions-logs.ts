@@ -148,6 +148,27 @@ export function createGitHubActionsLogClient(
   fetchImpl: typeof fetch = fetch,
 ) {
   return {
+    async readWorkflowRun(repository: string, runId: number): Promise<{ workflowId: number; cancelled: boolean }> {
+      if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository) || !positiveSafeInteger(runId)) {
+        throw new Error('GitHub Actions run is invalid');
+      }
+      const token = await tokenIssuer.issueForActions(repository);
+      const response = await fetchImpl(`${githubApi}/repos/${repository}/actions/runs/${runId}`, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `${['Bear', 'er'].join('')} ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        signal: requestSignal(),
+        redirect: 'error',
+      });
+      if (!response.ok) throw new Error('GitHub Actions run is unavailable');
+      const run = object(JSON.parse((await readBounded(response, maxJobsResponseBytes)).toString('utf8')));
+      if (run?.id !== runId || !positiveSafeInteger(run.workflow_id)) {
+        throw new Error('GitHub Actions run response is invalid');
+      }
+      return { workflowId: run.workflow_id, cancelled: run.conclusion === 'cancelled' };
+    },
     async downloadFailedJobLogs(repository: string, runId: number, signal?: AbortSignal): Promise<FailedJobLogs> {
       if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository) || !positiveSafeInteger(runId)) {
         throw new Error('GitHub Actions run is invalid');

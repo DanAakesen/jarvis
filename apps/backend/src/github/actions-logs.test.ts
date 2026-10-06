@@ -7,6 +7,33 @@ const zip = (name: string, contents: string) =>
   Buffer.from(zipSync({ [name]: strToU8(contents) }));
 
 describe('GitHub Actions job logs', () => {
+  it.each(['failure', 'cancelled'])('resolves stable workflow identity and %s independently of webhook order', async (conclusion) => {
+    const tokenIssuer = { issueForActions: vi.fn(async () => 'actions-read-token') };
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(JSON.stringify({
+      id: 987, workflow_id: 42, conclusion,
+    })));
+    await expect(createGitHubActionsLogClient(tokenIssuer, fetch).readWorkflowRun(repository, 987))
+      .resolves.toEqual({ workflowId: 42, cancelled: conclusion === 'cancelled' });
+    expect(tokenIssuer.issueForActions).toHaveBeenCalledWith(repository);
+    expect(fetch.mock.calls[0]?.[0]).toBe(
+      'https://api.github.com/repos/DanAakesen/jarvis-test-target/actions/runs/987',
+    );
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ redirect: 'error', signal: expect.any(AbortSignal) });
+  });
+
+  it.each([
+    new Response('{}', { status: 503 }),
+    new Response(JSON.stringify({ id: 988, workflow_id: 42 })),
+    new Response(JSON.stringify({ id: 987, workflow_id: '42' })),
+    new Response('{}', { headers: { 'content-length': String(1024 * 1024 + 1) } }),
+  ])('rejects unavailable, invalid or oversized workflow metadata %#', async (response) => {
+    const client = createGitHubActionsLogClient(
+      { issueForActions: vi.fn(async () => 'actions-read-token') },
+      vi.fn<typeof globalThis.fetch>().mockResolvedValue(response),
+    );
+    await expect(client.readWorkflowRun(repository, 987)).rejects.toThrow();
+  });
+
   it('fetches failed jobs using an Actions-read token and extracts their bounded text logs', async () => {
     const tokenIssuer = { issueForActions: vi.fn(async () => 'actions-read-token') };
     const fetch = vi.fn<typeof globalThis.fetch>()

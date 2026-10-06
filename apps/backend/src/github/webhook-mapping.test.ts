@@ -75,13 +75,64 @@ describe('GitHub webhook mapping', () => {
   });
 
   it('ignores deployment statuses from non-release workflow environments', () => {
-    for (const environment of ['project-board', 'copilot', 'Copilot']) {
+    for (const environment of ['project-board', 'Project-Board', 'plan-status', 'copilot', 'Copilot']) {
       expect(mapGithubWebhook('deployment_status', {
         repository,
         deployment: { id: 1_900_000_000_003, sha, environment },
         deployment_status: { state: 'failure', created_at: timestamp },
       })).toBeUndefined();
     }
+  });
+
+  it.each([
+    ['deploy.yml', true],
+    ['deploy-production.yml', true],
+    ['deploy.yaml', true],
+    ['project-board.yml', false],
+    ['plan-status.yml', false],
+    ['ci.yml', false],
+    ['runner-deploy.yml', false],
+  ])('classifies deployments by workflow file, not display name: %s', (file, deploymentWorkflow) => {
+    expect(mapGithubWebhook('workflow_run', {
+      repository,
+      workflow_run: {
+        id: 123, name: 'Deploy', path: `.github/workflows/${file}`, event: 'push',
+        head_branch: 'main', head_sha: sha, run_number: 1, status: 'completed', conclusion: 'failure',
+      },
+    })).toMatchObject({ kind: 'workflow_run', deploymentWorkflow });
+  });
+
+  it('keeps cancelled deploy workflow runs non-failing', () => {
+    expect(mapGithubWebhook('workflow_run', {
+      repository,
+      workflow_run: {
+        id: 123, name: 'Deploy', path: '.github/workflows/deploy.yml', event: 'push',
+        head_branch: 'main', head_sha: sha, run_number: 1, status: 'completed', conclusion: 'cancelled',
+      },
+    })).toMatchObject({ kind: 'workflow_run', deploymentWorkflow: true, conclusion: 'cancelled' });
+  });
+
+  it.each(['cancelled', 'canceled'])('ignores GitHub deployment errors caused by %s jobs', (word) => {
+    expect(mapGithubWebhook('deployment_status', {
+      repository,
+      deployment: { id: 123, sha, environment: 'production' },
+      deployment_status: { state: 'error', description: `The deployment was ${word}.`, created_at: timestamp },
+    })).toBeUndefined();
+  });
+
+  it.each([
+    [`https://github.com/${repository.full_name}/actions/runs/123/job/456`, 123],
+    ['https://github.com/another/repo/actions/runs/123/job/456', undefined],
+    [`https://example.com/${repository.full_name}/actions/runs/123`, undefined],
+    ['not a URL', undefined],
+  ])('links real deployment failures to repository-scoped workflow runs: %s', (logUrl, runId) => {
+    const mapping = mapGithubWebhook('deployment_status', {
+      repository,
+      deployment: { id: 123, sha, environment: 'production' },
+      deployment_status: { state: 'error', created_at: timestamp, log_url: logUrl },
+    });
+    expect(mapping).toMatchObject({ kind: 'deployment_status', status: 'failure' });
+    expect(mapping && 'workflowRunId' in mapping ? mapping.workflowRunId : undefined).toBe(runId);
   });
 
   it('ignores malformed, deleted-branch and unconfigured release event payloads', () => {

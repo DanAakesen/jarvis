@@ -28,6 +28,16 @@ before restoring the prior constraint.
 P6-02 adds nullable `activity.alert_key` and a filtered unique index in
 `0011_alert_deduplication.sql`; each event condition has one activity row and
 can be safely retried. Its down migration removes the index and column.
+P6-20 keeps deployment failure keys unique per deployment, with a project/workflow
+prefix for rolling one-hour collapse (environment fallback when no Actions run URL
+is supplied). The workflow ID comes from a bounded GitHub API read, not webhook
+arrival order. `0024_dismiss_board_deployment_failures.sql` adds
+`deployment_failure_receipts`, keyed by positive GitHub deployment ID, to remember
+collapsed failures even without a release. Its down batch drops those receipts.
+The migration also sets `dismissed_at`
+only on undismissed `deployment_failure` items titled
+`Deployment failed: project-board`. Its down batch intentionally keeps dismissals:
+cleanup timestamps cannot safely be distinguished from owner dismissals.
 P7-06 uses the existing `activity` row keyed by `pc_bridge_status` to publish the
 bridge's latest online/offline state to Now; no migration or retained command data
 is added.
