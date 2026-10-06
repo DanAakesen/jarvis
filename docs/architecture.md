@@ -145,9 +145,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   returned as refused/error results; no view or geometry rows are persisted.
   On non-conversation signed-in routes, the shell keeps the command stream
   mounted in a hidden Now panel while the workspace controller remains active.
-  The renderers use fixed React elements; generated HTML, JavaScript and CSS
-  never execute. Offline route/controller tests cover the flow; live
-  Entra/Foundry delivery remains unverified.
+  Ordinary renderers use fixed React elements and declarative data. P8-41 adds
+  the separate `html-app` renderer for owner-authorized artifacts; generated
+  HTML/JS executes only inside its restrictive sandboxed iframe, never in the
+  host page. Workspace-command tests pass; live delivery and report browser
+  acceptance remain unverified.
 - P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
   and IDs, including minimised windows, plus context-panel visibility) through
   owner-authenticated `POST /now/workspace/state`. The broker accepts only its
@@ -1467,6 +1469,33 @@ name/outcome/time remain for the UTC daily count returned by `/usage` and shown
 on the Usage page. This count covers successful, refused and failed calls and
 is displayed as unavailable if the audit query fails. Live Codex/web-search and
 deployed Azure acceptance remain unverified.
+
+### Interactive research reports (P7-37)
+
+P7-37 registers `research` with `quick` and `deep` depth. After the active
+workspace acknowledges creation of the progress window, the tool returns so
+voice can continue promptly. A bounded detached job reuses the Foundry runner's
+subscription-backed `codex-tool` web-search path, publishes observed
+query/source progress, and asks Codex for one self-contained cited HTML report.
+Research and page text are untrusted evidence; validation bounds UTF-8 size and
+source count, requires a complete parseable document, rejects unsafe elements
+and links, and permits citations only to collected HTTPS sources.
+
+The report is persisted in owner-scoped SQL metadata in
+`dbo.workspace_html_artifacts` (migrations 0021/0022), then the same workspace
+window is updated to renderer `html-app` with the artifact ID. Reads and pin
+changes are Dan-authorized; report bytes remain within the 512 KiB contract.
+The background job has bounded concurrency, shutdown cancellation and visible
+terminal failures; voice announces a short findings summary or fixed failure
+update without invoking tools again.
+
+P8-41 (#429) remains open and owns the iframe renderer and validated host bridge.
+The accepted boundary is `sandbox="allow-scripts"` only and `srcdoc` with the
+restrictive CSP in `ui.md`; no same-origin access, cookies, tokens, host DOM,
+network, forms, popups or top navigation. The host acts only on HTTPS
+`open_url`, bounded `ask`, `pin`/`unpin`, and bounded `resize` messages; all
+other messages are ignored. Renderer integration and browser acceptance remain
+pending that dependency.
 
 ### Sandbox credentials
 

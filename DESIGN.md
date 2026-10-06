@@ -65,6 +65,24 @@ no subscription price is inferred. Research results keep their source title, URL
 and backend receipt time in a typed result for the existing conversation and
 workspace consumers; those consumer windows remain owned by P8.
 
+## Interactive research report (P7-37)
+
+Progress and the final report share one temporary workspace window. Progress
+lists observed queries and sources found without invented percentages; terminal
+errors stay in the window. The final report follows the accepted Architectural
+Glass surfaces and existing workspace chrome. Use report headings, readable
+facts, comparison tables or labelled charts, and visible source links rather
+than a generic repeated card layout. Respect the current viewport, appearance,
+typography and reduced-motion preferences passed in the workspace frame.
+
+The report is model-written HTML/JS in a sandboxed `html-app` iframe, as Dan
+decided on 6 October. The host loads `srcdoc` with `sandbox="allow-scripts"` only
+and the restrictive artifact CSP; it validates bounded `open_url`, `ask`,
+`pin`/`unpin`, and `resize` bridge messages. The iframe has no access to
+same-origin data, tokens, cookies, Jarvis DOM, network, or top-level navigation.
+P7-37's backend/report flow is implemented offline; P8-41's renderer and bridge
+remain in its open implementation PR, so final browser acceptance is pending.
+
 ## Interactions to design
 
 - **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.
