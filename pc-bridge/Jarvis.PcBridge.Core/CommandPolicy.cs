@@ -18,6 +18,10 @@ public static class CommandPolicy
                 arguments.TryGetProperty("app", out var app) &&
                 app.ValueKind == JsonValueKind.String &&
                 HasBoundedString(arguments, "app", 128),
+            "close_app" => HasOnly(arguments, "app") &&
+                arguments.TryGetProperty("app", out var closeApp) &&
+                closeApp.ValueKind == JsonValueKind.String &&
+                HasBoundedString(arguments, "app", 128),
             "media" => HasOnly(arguments, "action") &&
                 arguments.TryGetProperty("action", out var mediaAction) &&
                 mediaAction.ValueKind == JsonValueKind.String &&
@@ -46,7 +50,7 @@ public static class CommandPolicy
     }
 
     public static bool IsControlAction(string command) => command is
-        "open_url" or "open_app" or "open_folder" or "focus_window" or "uia_act" or "browser_act";
+        "open_url" or "open_app" or "close_app" or "open_folder" or "focus_window" or "uia_act" or "browser_act" or "media";
 
     public static bool IsMediaAction(string? action) => TryGetMediaVirtualKey(action, out _);
 

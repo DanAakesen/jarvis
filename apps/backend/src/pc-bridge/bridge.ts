@@ -15,13 +15,14 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
 const controlActions = new Set<PcCommand['name']>([
-  'open_url', 'open_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
+  'open_url', 'open_app', 'close_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
 ]);
 const mediaActions = ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const;
 
 type PcCommand =
   | { name: 'open_url'; arguments: { url: string } }
   | { name: 'open_app'; arguments: { app: string } }
+  | { name: 'close_app'; arguments: { app: string } }
   | { name: 'media'; arguments: { action: typeof mediaActions[number] } }
   | { name: 'open_folder'; arguments: { relativePath: string } }
   | { name: 'active_window'; arguments: Record<string, never> }
@@ -206,6 +207,9 @@ export class PcBridgeConnection {
       else if (error === 'not_found' && pending.command.startsWith('browser_')) {
         this.finish(response.id, new ToolRefusal('Chrome or the requested local tab is unavailable.'));
       }
+      else if (error === 'not_found' && pending.command === 'close_app') {
+        this.finish(response.id, new ToolRefusal('No open window of that app was found; nothing was closed.'));
+      }
       else if (error === 'not_found' && pending.command === 'open_app') {
         this.finish(response.id, new ToolRefusal('No installed app matched that name; nothing was launched.'));
       }
@@ -289,6 +293,17 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           additionalProperties: false,
         },
         execute: (input, _request, signal) => runPcOpen(bridge, input, signal),
+      },
+      {
+        name: 'pc_close',
+        description: 'Close an app on Dan’s PC by its name (e.g. Visual Studio Code - Insiders, Spotify). The app is asked to close normally, so it can still offer to save unsaved work; no confirmation is needed.',
+        inputSchema: {
+          type: 'object',
+          properties: { app: { type: 'string', minLength: 1, maxLength: 128 } },
+          required: ['app'],
+          additionalProperties: false,
+        },
+        execute: (input, _request, signal) => runPcClose(bridge, input, signal),
       },
       {
         name: 'pc_media',
@@ -607,6 +622,18 @@ function handleAppOpen(result: Record<string, unknown>): Record<string, unknown>
   return result;
 }
 
+async function runPcClose(
+  bridge: PcBridgeConnection,
+  input: unknown,
+  signal: AbortSignal,
+): Promise<Record<string, unknown>> {
+  if (!isRecord(input) || Object.keys(input).length !== 1 || typeof input.app !== 'string' ||
+      !input.app.trim() || input.app.length > 128 || hasControlCharacters(input.app)) {
+    throw new ToolRefusal('Name the app to close (1 to 128 characters).');
+  }
+  return bridge.execute({ name: 'close_app', arguments: { app: input.app.trim() } }, signal);
+}
+
 async function runPcMedia(
   bridge: PcBridgeConnection,
   input: unknown,
@@ -683,6 +710,10 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
   if (command === 'media') {
     return Object.keys(value).length === 2 && value.controlled === true &&
       typeof value.action === 'string' && mediaActions.includes(value.action as typeof mediaActions[number]);
+  }
+  if (command === 'close_app') {
+    return Object.keys(value).length === 2 && value.closing === true &&
+      Number.isInteger(value.windows) && (value.windows as number) >= 1 && (value.windows as number) <= 10;
   }
   if (['open_url', 'open_app', 'open_folder'].includes(command)) {
     return Object.keys(value).length === 1 && value.opened === true;
