@@ -1,5 +1,4 @@
 import { defaultTreeAdapter, parse, type DefaultTreeAdapterMap, type ParserError } from 'parse5';
-import { htmlAppLibraries } from '@jarvis/contracts';
 import {
   isWellFormedUtf16,
   workspaceHtmlSizeLimit,
@@ -41,18 +40,8 @@ export function validateHtmlApp(title: unknown, html: unknown, sources: unknown)
     }
     if (defaultTreeAdapter.isElementNode(node)) {
       if (node.tagName === 'base' ||
-          node.tagName === 'script' && node.attrs.some(({ name }) => name.toLowerCase() === 'src') ||
-          node.tagName === 'meta' && node.attrs.some(({ name, value }) =>
-            name.toLowerCase() === 'http-equiv' && value.trim().toLowerCase() === 'refresh')) {
+          node.tagName === 'script' && node.attrs.some(({ name }) => name.toLowerCase() === 'src')) {
         forbiddenElement = true;
-      }
-      if (node.tagName === 'script') {
-        const library = node.attrs.find(({ name }) => name.toLowerCase() === 'data-jarvis-lib');
-        if (library && (node.attrs.length !== 1 || !htmlAppLibraries.includes(library.value) ||
-            node.childNodes.some((child) => !('value' in child) ||
-              typeof child.value !== 'string' || child.value.trim().length > 0))) {
-          forbiddenElement = true;
-        }
       }
       if (node.tagName === 'template') {
         for (const child of (node as DefaultTreeAdapterMap['template']).content.childNodes) visit(child);

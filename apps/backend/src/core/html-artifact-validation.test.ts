@@ -10,19 +10,11 @@ describe('HTML app validation', () => {
     expect(validateHtmlApp('Example', validHtml, sources)).toBe(true);
   });
 
-  it('accepts only empty placeholders for vetted local libraries', () => {
-    expect(validateHtmlApp('Example', '<!doctype html><script data-jarvis-lib="chart"></script>', [])).toBe(true);
-    expect(validateHtmlApp('Example', '<!doctype html><script data-jarvis-lib="unknown"></script>', [])).toBe(false);
-    expect(validateHtmlApp('Example', '<!doctype html><script data-jarvis-lib="chart">alert(1)</script>', [])).toBe(false);
-    expect(validateHtmlApp('Example', '<!doctype html><script data-jarvis-lib="chart" defer></script>', [])).toBe(false);
-  });
-
   it.each([
     '<html><head></head><body>Missing doctype</body></html>',
     '<!doctype html><html><head><base href="https://example.com"></head><body></body></html>',
     '<!doctype html><html><head><script src="/app.js"></script></head><body></body></html>',
     '<!doctype html><html><head><script SRC="https://example.com/app.js"></script></head><body></body></html>',
-    '<!doctype html><html><head><meta http-equiv="refresh" content="0;url=https://example.com"></head><body></body></html>',
   ])('rejects invalid HTML or forbidden elements', (html) => {
     expect(validateHtmlApp('Example', html, sources)).toBe(false);
   });

@@ -2,7 +2,6 @@ import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useLayo
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import { isWorkspaceCommand, type GeneratedView, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
-import type { HtmlAppRendererContext } from './HtmlAppView';
 export type { WorkspaceCommand } from '@jarvis/contracts';
 
 export type WorkspaceViewContent =
@@ -73,10 +72,9 @@ function defaultGeometry(index: number): Geometry {
 
 export const Workspace = forwardRef<WorkspaceController, {
   views: readonly WorkspaceView[];
-  htmlAppContext?: HtmlAppRendererContext;
   onVisibleViewsChange?: (visible: boolean) => void;
   onOpenWindowsChange?: (windows: WorkspaceSnapshot['windows']) => void;
-}>(function Workspace({ views, htmlAppContext, onVisibleViewsChange, onOpenWindowsChange }, ref) {
+}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange }, ref) {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
   const closedAgentViews = useRef(new Map<string, { view: WorkspaceView; geometry: Geometry | undefined }>());
@@ -883,7 +881,6 @@ export const Workspace = forwardRef<WorkspaceController, {
                   <GeneratedViewRenderer
                     view={view.content.view}
                     {...(view.content.trustedBlobHost ? { trustedBlobHost: view.content.trustedBlobHost } : {})}
-                    {...(htmlAppContext ? { htmlAppContext } : {})}
                   />
                 )}
                 {actionSuccess[view.id] && <p role="status">{actionSuccess[view.id]}</p>}

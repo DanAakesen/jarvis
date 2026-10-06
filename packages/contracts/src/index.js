@@ -3,9 +3,6 @@ export const generatedViewRenderers = Object.freeze([
   'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
 ]);
 export const generatedViewActionTypes = Object.freeze(['open-route', 'open-link', 'call-tool', 'window']);
-export const htmlAppLibraries = Object.freeze([
-  'chart', 'd3', 'mermaid', 'three', 'leaflet-offline', 'katex',
-]);
 
 const maxBytes = 256 * 1024;
 const rowLimit = 500;
