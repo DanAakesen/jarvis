@@ -106,6 +106,7 @@ export type PcActBridgeAction =
 
 export interface PcActOptions {
   readonly planner: PcActPlanner;
+  readonly confirmOverwrites?: boolean;
   readonly recipes?: RecipeRuntime;
   readonly runConfirmed?: <T>(
     summary: string,
@@ -202,10 +203,17 @@ async function readBoundedJson(response: Response): Promise<unknown> {
 }
 
 function quotedValues(goal: string): string[] {
-  return [...new Set([...goal.matchAll(/["“]([^"”\r\n]{1,512})["”]/gu)]
-    .map(match => match[1]!.trim())
-    .filter(value => value.length > 0 && !hasControlCharacters(value)))]
-    .slice(0, 8);
+  const quoted = [...goal.matchAll(/"(?:[^"\\]|\\.){1,4096}"|“[^”\r\n]{1,4096}”/gu)]
+    .flatMap(([token]) => {
+      try {
+        return token.startsWith('"')
+          ? [JSON.parse(token) as string]
+          : [token.slice(1, -1).trim()];
+      } catch {
+        return [];
+      }
+    });
+  return [...new Set(quoted.filter(value => value.length > 0 && !hasControlCharacters(value)))].slice(0, 8);
 }
 
 function hasLuhnCardNumber(value: string): boolean {
@@ -262,9 +270,15 @@ function validActed(value: unknown, action: string): boolean {
     value.acted === true && value.action === action;
 }
 
-function needsApproval(operation: 'click' | 'type', goal: string, target: PcActElement): boolean {
-  return irreversibleActionPattern.test(`${target.role} ${target.name}`) ||
-    (operation === 'type' && overwritePattern.test(goal));
+function needsApproval(
+  operation: 'click' | 'type',
+  goal: string,
+  target: PcActElement,
+  confirmOverwrites: boolean,
+): boolean {
+  return operation === 'click'
+    ? irreversibleActionPattern.test(`${goal} ${target.role} ${target.name}`)
+    : confirmOverwrites && overwritePattern.test(goal);
 }
 
 function approvalSummary(
@@ -648,7 +662,8 @@ export async function runPcAct(
       };
 
       try {
-        if ((operation === 'click' || operation === 'type') && needsApproval(operation, goal, target!)) {
+        if ((operation === 'click' || operation === 'type') &&
+            needsApproval(operation, goal, target!, options.confirmOverwrites !== false)) {
           if (!options.runConfirmed) {
             throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
           }
