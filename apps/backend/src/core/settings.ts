@@ -1,3 +1,5 @@
+import { defaultAwayModeState, presenceModes } from './away-mode.js';
+
 export interface Settings {
   appearance: {
     theme: 'light' | 'dark' | 'system';
@@ -18,6 +20,7 @@ export interface Settings {
     tone: 'british_butler' | 'warm' | 'direct' | 'playful';
     responseStyle: 'concise' | 'balanced' | 'detailed';
     customInstructions: string;
+    modeInstructions: Record<'present' | 'away' | 'on_the_move', string>;
   };
   voice: {
     speechToTextModel: string;
@@ -52,7 +55,11 @@ export interface Settings {
 }
 
 export type SettingsPatch = {
-  [Area in keyof Settings]?: Partial<Settings[Area]>;
+  [Area in keyof Settings]?: Area extends 'personality'
+    ? Omit<Partial<Settings[Area]>, 'modeInstructions'> & {
+      modeInstructions?: Partial<Settings['personality']['modeInstructions']>;
+    }
+    : Partial<Settings[Area]>;
 };
 
 export interface SettingsStore {
@@ -67,6 +74,7 @@ export const defaultSettings: Settings = {
     tone: 'british_butler',
     responseStyle: 'concise',
     customInstructions: '',
+    modeInstructions: { present: '', away: '', on_the_move: '' },
   },
   voice: {
     speechToTextModel: 'mai-transcribe',
@@ -129,6 +137,11 @@ const settingKeys = {
     tone: 'personality.tone',
     responseStyle: 'personality.response_style',
     customInstructions: 'personality.custom_instructions',
+    modeInstructions: {
+      present: 'personality.modeInstructions.present',
+      away: 'personality.modeInstructions.away',
+      on_the_move: 'personality.modeInstructions.on_the_move',
+    },
   },
   voice: {
     speechToTextModel: 'voice.stt.model',
@@ -158,11 +171,20 @@ const settingKeys = {
 } as const;
 
 export const settingsStoreKeys = Object.freeze(
-  Object.values(settingKeys).flatMap((area) => Object.values(area)),
+  Object.values(settingKeys).flatMap((area) =>
+    Object.values(area).flatMap((key) => typeof key === 'string' ? [key] : Object.values(key))),
 );
 
 function isOption(value: unknown, options: readonly string[]): value is string {
   return typeof value === 'string' && options.includes(value);
+}
+
+function validInstruction(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 2_000 &&
+    ![...value].some((character) => {
+      const code = character.charCodeAt(0);
+      return code < 0x20 && character !== '\n' && character !== '\r' && character !== '\t';
+    });
 }
 
 function validSetting(area: keyof Settings, key: string, value: unknown): boolean {
@@ -188,12 +210,13 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
   if (area === 'personality') {
     if (key === 'tone') return isOption(value, settingsOptions.personalityTones);
     if (key === 'responseStyle') return isOption(value, settingsOptions.personalityResponseStyles);
-    if (key === 'customInstructions') {
-      return typeof value === 'string' && value.length <= 2_000 &&
-        ![...value].some((character) => {
-          const code = character.charCodeAt(0);
-          return code < 0x20 && character !== '\n' && character !== '\r' && character !== '\t';
-        });
+    if (key === 'customInstructions') return validInstruction(value);
+    if (key === 'modeInstructions') {
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+      const instructions = value as Record<string, unknown>;
+      return Object.keys(instructions).length > 0 &&
+        Object.entries(instructions).every(([mode, instruction]) =>
+          ['present', 'away', 'on_the_move'].includes(mode) && validInstruction(instruction));
     }
   }
   if (area === 'voice') {
@@ -285,6 +308,16 @@ const settingsPatchSchema = {
             tone: selectSchema(settingsOptions.personalityTones),
             responseStyle: selectSchema(settingsOptions.personalityResponseStyles),
             customInstructions: { type: 'string', maxLength: 2_000 },
+            modeInstructions: {
+              type: 'object',
+              minProperties: 1,
+              additionalProperties: false,
+              properties: {
+                present: { type: 'string', maxLength: 2_000 },
+                away: { type: 'string', maxLength: 2_000 },
+                on_the_move: { type: 'string', maxLength: 2_000 },
+              },
+            },
           },
         },
         voice: {
@@ -362,7 +395,11 @@ function mergeSettings(stored: Partial<Settings>): Settings {
     for (const key of Object.keys(settingKeys[area]) as (keyof Settings[typeof area])[]) {
       const value = (values as Record<string, unknown>)[key];
       if (validSetting(area, key, value)) {
-        (merged[area] as Record<string, unknown>)[key] = value;
+        if (area === 'personality' && key === 'modeInstructions') {
+          Object.assign(merged.personality.modeInstructions, value);
+        } else {
+          (merged[area] as Record<string, unknown>)[key] = value;
+        }
       }
     }
   }
@@ -372,17 +409,36 @@ function mergeSettings(stored: Partial<Settings>): Settings {
 function parseStoredValues(values: Record<string, unknown>): Partial<Settings> {
   const stored: Record<string, Record<string, unknown>> = {};
   for (const area of Object.keys(settingKeys) as (keyof Settings)[]) {
-    for (const key of Object.keys(settingKeys[area]) as (keyof Settings[typeof area])[]) {
-      const persisted = values[settingKeys[area][key] as string];
-      if (persisted === undefined) continue;
-      let value: unknown;
-      try { value = JSON.parse(String(persisted)); } catch { continue; }
-      if (validSetting(area, key, value)) {
-        (stored[area] ??= {})[key as string] = value;
+    for (const [key, storeKey] of Object.entries(settingKeys[area])) {
+      if (typeof storeKey === 'string') {
+        const persisted = values[storeKey];
+        if (persisted === undefined) continue;
+        let value: unknown;
+        try { value = JSON.parse(String(persisted)); } catch { continue; }
+        if (validSetting(area, key, value)) (stored[area] ??= {})[key] = value;
+      } else {
+        const instructions: Record<string, string> = {};
+        for (const [mode, nestedStoreKey] of Object.entries(storeKey as Record<string, string>)) {
+          const persisted = values[nestedStoreKey];
+          if (persisted === undefined) continue;
+          let value: unknown;
+          try { value = JSON.parse(String(persisted)); } catch { continue; }
+          if (validInstruction(value)) instructions[mode] = value;
+        }
+        if (Object.keys(instructions).length > 0) {
+          (stored[area] ??= {})[key] = instructions;
+        }
       }
     }
   }
   return stored as Partial<Settings>;
+}
+
+function flattenedKey(area: keyof Settings, key: string, nestedKey?: string): string {
+  const mapping = settingKeys[area][key as keyof Settings[typeof area]];
+  if (typeof mapping === 'string') return mapping;
+  if (!nestedKey || !Object.hasOwn(mapping, nestedKey)) throw new TypeError('Invalid settings key');
+  return mapping[nestedKey];
 }
 
 export async function readSettings(settingsStore: SettingsStore): Promise<Settings> {
@@ -397,7 +453,13 @@ function flattenSettings(settings: SettingsPatch): { key: string; value: string 
     for (const key of Object.keys(values) as (keyof Settings[typeof area])[]) {
       const value = values[key];
       if (value === undefined) continue;
-      entries.push({ key: settingKeys[area][key] as string, value: JSON.stringify(value) });
+      if (area === 'personality' && key === 'modeInstructions') {
+        for (const [mode, instruction] of Object.entries(value)) {
+          entries.push({ key: flattenedKey(area, key, mode), value: JSON.stringify(instruction) });
+        }
+      } else {
+        entries.push({ key: flattenedKey(area, key as string), value: JSON.stringify(value) });
+      }
     }
   }
   return entries;
@@ -455,13 +517,25 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
                 tone: selectSchema(settingsOptions.personalityTones),
                 responseStyle: selectSchema(settingsOptions.personalityResponseStyles),
                 customInstructions: { type: 'string', maxLength: 2_000 },
+                modeInstructions: {
+                  type: 'object',
+                  properties: {
+                    present: { type: 'string', maxLength: 2_000 },
+                    away: { type: 'string', maxLength: 2_000 },
+                    on_the_move: { type: 'string', maxLength: 2_000 },
+                  },
+                  required: ['present', 'away', 'on_the_move'],
+                  additionalProperties: false,
+                },
               },
-              required: ['tone', 'responseStyle', 'customInstructions'],
+              required: ['tone', 'responseStyle', 'customInstructions', 'modeInstructions'],
               additionalProperties: false,
             },
             awayMode: { type: 'boolean' },
+            mode: { type: 'string', enum: [...presenceModes] },
+            changedAt: { type: ['string', 'null'] },
           },
-          required: ['model', 'reasoningEffort', 'personality', 'awayMode'],
+          required: ['model', 'reasoningEffort', 'personality', 'awayMode', 'mode', 'changedAt'],
           additionalProperties: false,
         },
         403: {
@@ -482,12 +556,14 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const settings = await readSettings(app.settingsStore);
-    const awayMode = await app.awayModeStore?.read();
+    const presence = await app.awayModeStore?.read() ?? defaultAwayModeState;
     return {
       model: settings.jarvis.model,
       reasoningEffort: settings.jarvis.reasoning,
       personality: settings.personality,
-      awayMode: awayMode?.away ?? false,
+      awayMode: presence.mode !== 'present',
+      mode: presence.mode,
+      changedAt: presence.changedAt,
     };
   });
 

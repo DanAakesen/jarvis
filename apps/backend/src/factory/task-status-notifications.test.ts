@@ -49,7 +49,7 @@ function fixture(away = false, persistedKeys = new Set<string>()) {
     })),
     addMessage: vi.fn(async () => null),
   } as unknown as ConversationStore;
-  const awayMode = { read: vi.fn(async () => ({ away, source: null, changedAt: null, presenceAwaySince: null })) } as unknown as AwayModeStore;
+  const awayMode = { read: vi.fn(async () => ({ mode: away ? 'away' : 'present', source: away ? 'manual' : 'browser', changedAt: null })) } as unknown as AwayModeStore;
   const teams = { notify: vi.fn(async () => {}) } as unknown as TeamsNotificationService;
   const notifications: TaskStatusNotificationStore = {
     claim: vi.fn(async (taskId, state) => {
@@ -167,7 +167,7 @@ describe('task status notifications', () => {
       taskStore: { get: vi.fn(async () => ({ originMessageId: '11', events: [] })) } as unknown as TaskStore,
       conversationStore: conversations,
       awayModeStore: {
-        read: vi.fn(async () => ({ away: false, source: null, changedAt: null, presenceAwaySince: null })),
+        read: vi.fn(async () => ({ mode: 'present', source: 'browser', changedAt: null })),
       } as unknown as AwayModeStore,
       taskStatusNotificationStore: { claim: vi.fn(async () => true) },
     });

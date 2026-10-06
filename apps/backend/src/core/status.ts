@@ -50,6 +50,6 @@ export const getStatusSummaryTool: JarvisTool = {
       store.read(),
       request.server.awayModeStore?.read() ?? Promise.resolve(defaultAwayModeState),
     ]);
-    return { summary: summarizeNowFeed(feed, awayMode.away) };
+    return { summary: summarizeNowFeed(feed, awayMode.mode !== 'present') };
   },
 };

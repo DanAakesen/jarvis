@@ -623,32 +623,44 @@ The matching Azure Speech resource is F0 with local key authentication disabled
 and a scoped Cognitive Services Speech User assignment. Tests use a fake
 connector and synthesizer; they do not verify a live Teams or Speech service.
 
-## Away mode (P7-02)
+## Presence modes (P6-23; replaces P7-02 away mode)
 
-`createAwayModeStore` persists one validated JSON state under the existing global
-`dbo.settings` key `away.mode.state`; no migration is needed. A mode transition
-and its `core/away_mode` activity row commit together, then refresh Now. The
-authenticated `set_away_mode` tool handles voice/chat commands. The signed-in
-browser sends `POST /now/present` only while visible and focused on startup,
-focus, tab visibility, or user input; passive API/feed requests do not return Dan
-to present. The route verifies Dan's owner identity; the app-only hosted-agent
-principal cannot call it. `GET /now` displays the current mode and, while present,
-the pending browser confirmations. The main-page status makes mode visible.
+`createAwayModeStore` persists `{ mode, source, changedAt }` as JSON in the
+existing global `dbo.settings` key `away.mode.state`; old `{ away: true }` values
+read as `away`, and false values read as `present`. The SQL presence-monitor
+timer is kept separately at `away.presence.timer`, so its ten-minute
+continuous-observation behavior survives process restarts without appearing in
+the public state. No database migration is needed. State transitions and their
+`core/away_mode` activity rows commit together. Existing routing derives its
+boolean as `mode !== 'present'`.
+
+The modes and UI colour contract are Present (`present`, green), Away (`away`,
+yellow), and On the move (`on_the_move`, blue). `GET /presence` returns the
+current state; owner-only `PUT /presence` accepts `{ mode }` and records a manual
+change. The signed-in browser still uses `POST /now/present` only while visible
+and focused on startup, focus, tab visibility, or user input; passive
+API/feed requests do not return Dan to Present. The owner-authenticated
+`set_presence_mode` tool records Jarvis-originated changes without confirmation;
+`set_away_mode` remains a compatibility alias for one release. `GET /agent/settings`
+provides the active mode and timestamp alongside the base
+`personality.customInstructions` and bounded per-mode instructions. Realtime
+voice receives those instructions initially and sends a new `session.update`
+when a mode-change event arrives.
 
 The backend's managed identity reads
 `GET /users/{DanObjectId}/presence` once per minute. Only continuous Graph
-`Away`/`Offline` observations count; the persisted timer turns away mode on after
-ten minutes. Available/busy presence clears a pending timer but never turns an
-already active away mode off; only Dan's explicit return command or browser use
-does that. Unknown or invalid provider results do not advance the timer. While
-away, task-state messages and new approval requests go through the existing
-P7-03 Teams notifier. The authenticated browser Now response contains only mode
-status/activity, and ordinary Now refresh events are suppressed; a mode-change
-event refreshes that status. While present, task updates and new approvals use
-the browser, with high-impact actions still gated by a single-use explicit
-approval. Browser approval IDs and summaries are not written to logs or task
-events, and the existing SQL schema stores the channel marker and expiry
-without a migration.
+`Away`/`Offline` observations count; the persisted timer switches Present to Away
+after ten minutes and records `source: 'jarvis'`. Available/busy presence clears
+a pending timer but never turns an active Away or On the move mode off. Unknown
+or invalid provider results do not advance the timer. The Now event hub publishes
+`mode_changed` with both `mode` and the backward-compatible derived `away`
+boolean. While Away or On the move, task-state messages and new approval requests
+go through the existing P7-03 Teams notifier; spoken status updates stay
+suppressed. The authenticated browser Now response contains only mode
+status/activity, and ordinary Now refresh events are suppressed. While Present,
+task updates and new approvals use the browser, with high-impact actions still
+gated by a single-use explicit approval. Browser approval IDs and summaries are
+not written to logs or task events.
 
 The permission is not part of Bicep or application startup. After merge, a tenant
 administrator must review and grant the Microsoft Graph application role

@@ -128,7 +128,11 @@ try {
     ? createAlertActivityStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
     : undefined;
   const awayModeStore = database
-    ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({ type: 'mode_changed', away: state.away }))
+    ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({
+      type: 'mode_changed',
+      mode: state.mode,
+      away: state.mode !== 'present',
+    }))
     : undefined;
   const alertNotifier = createAlertNotifier(telemetry);
   const credentialStatusStore = database ? createCredentialStatusStore(database.pool, {
@@ -421,7 +425,7 @@ try {
       audioStore: teamsAudioStore,
       isAway: async () => {
         if (!awayModeStore) throw new Error('Away mode is unavailable');
-        return (await awayModeStore.read()).away;
+        return (await awayModeStore.read()).mode !== 'present';
       },
       onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
       ...(teamsSpeech ? { speech: teamsSpeech } : {}),

@@ -146,7 +146,7 @@ describe('committed domain schema (groups 1-8)', () => {
     await expect(createTaskStore(pool, createEventHub<TaskEventMessage>())
       .transition(task.id, 'Cancelled')).resolves.toMatchObject({ kind: 'ok' });
   });
-  it('persists away mode and an in-progress Teams presence timer across store recreation', async () => {
+  it('persists presence modes and an in-progress Teams presence timer across store recreation', async () => {
     const startedAt = new Date('2026-10-04T12:00:00.000Z');
     const firstStore = createAwayModeStore(pool);
     await firstStore.observePresence(true, startedAt);
@@ -154,27 +154,25 @@ describe('committed domain schema (groups 1-8)', () => {
     const onModeChanged = vi.fn();
     const restartedStore = createAwayModeStore(pool, onModeChanged);
     expect(await restartedStore.read()).toEqual({
-      away: false,
-      source: null,
+      mode: 'present',
+      source: 'manual',
       changedAt: null,
-      presenceAwaySince: startedAt.toISOString(),
     });
 
     expect(await restartedStore.observePresence(
       true,
       new Date(startedAt.getTime() + presenceAwayThresholdMs),
     )).toMatchObject({
-      away: true,
-      source: 'teams_presence',
-      presenceAwaySince: startedAt.toISOString(),
+      mode: 'away',
+      source: 'jarvis',
     });
-    await restartedStore.set(false, new Date(startedAt.getTime() + presenceAwayThresholdMs + 1));
-    expect(await createAwayModeStore(pool).read()).toMatchObject({ away: false, source: 'manual' });
+    await restartedStore.set('present', 'manual', new Date(startedAt.getTime() + presenceAwayThresholdMs + 1));
+    expect(await createAwayModeStore(pool).read()).toMatchObject({ mode: 'present', source: 'manual' });
     expect((await pool.request().query<{ kind: string; title: string }>(
       `SELECT kind, title FROM dbo.activity WHERE area = N'core' ORDER BY id;`,
     )).recordset).toEqual([
       { kind: 'away_mode', title: 'Away mode is on' },
-      { kind: 'away_mode', title: 'Away mode is off' },
+      { kind: 'away_mode', title: 'Present mode is on' },
     ]);
     expect(onModeChanged).toHaveBeenCalledTimes(2);
   });

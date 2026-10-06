@@ -52,6 +52,52 @@ afterEach(async () => {
 });
 
 describe('Now feed API', () => {
+  it('returns and updates the owner presence mode', async () => {
+    let state = { mode: 'present' as const, source: 'browser' as const, changedAt: null };
+    const awayModeStore: AwayModeStore = {
+      read: vi.fn(async () => state),
+      set: vi.fn(async (mode, source = 'manual') => {
+        state = { mode, source, changedAt: '2026-10-06T12:00:00.000Z' };
+        return state;
+      }),
+      markPresent: vi.fn(),
+      observePresence: vi.fn(),
+    };
+    const { app } = fixture(undefined, undefined, awayModeStore);
+
+    expect((await app.inject({ url: '/presence', headers })).json()).toEqual({
+      mode: 'present',
+      source: 'browser',
+      changedAt: null,
+    });
+    const changed = await app.inject({
+      method: 'PUT',
+      url: '/presence',
+      headers,
+      payload: { mode: 'on_the_move' },
+    });
+    expect(changed.statusCode).toBe(200);
+    expect(changed.json()).toEqual({
+      mode: 'on_the_move',
+      source: 'manual',
+      changedAt: '2026-10-06T12:00:00.000Z',
+    });
+    expect(awayModeStore.set).toHaveBeenCalledWith('on_the_move', 'manual');
+    expect((await app.inject({
+      method: 'PUT', url: '/presence', headers, payload: { mode: 'driving' },
+    })).statusCode).toBe(400);
+
+    const otherUser = fixture(undefined, async () => ({
+      objectId: '00000000-0000-0000-0000-000000000099',
+      tenantId: config.auth.tenantId,
+      displayName: 'Other user',
+    }), awayModeStore).app;
+    expect((await otherUser.inject({ url: '/presence', headers })).statusCode).toBe(403);
+    expect((await otherUser.inject({
+      method: 'PUT', url: '/presence', headers, payload: { mode: 'present' },
+    })).statusCode).toBe(403);
+  });
+
   it('returns the current running tasks and activity to the signed-in user', async () => {
     const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
     const { app } = fixture(store);
@@ -66,10 +112,10 @@ describe('Now feed API', () => {
   it('marks explicit authenticated browser activity as present', async () => {
     let away = true;
     const awayModeStore = {
-      read: vi.fn(async () => ({ away, source: away ? 'manual' : 'browser', changedAt: null, presenceAwaySince: null })),
+      read: vi.fn(async () => ({ mode: away ? 'away' as const : 'present' as const, source: away ? 'manual' as const : 'browser' as const, changedAt: null })),
       markPresent: vi.fn(async () => {
         away = false;
-        return { away, source: 'browser', changedAt: null, presenceAwaySince: null };
+        return { mode: 'present' as const, source: 'browser' as const, changedAt: null };
       }),
       set: vi.fn(),
       observePresence: vi.fn(),
@@ -109,7 +155,7 @@ describe('Now feed API', () => {
       at: '2026-10-04T00:01:00.000Z',
     };
     const awayModeStore: AwayModeStore = {
-      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null })),
+      read: vi.fn(async () => ({ mode: 'away', source: 'manual', changedAt: null })),
       markPresent: vi.fn(),
       set: vi.fn(),
       observePresence: vi.fn(),
@@ -147,14 +193,13 @@ describe('Now feed API', () => {
     } as const;
     const awayModeStore: AwayModeStore = {
       read: vi.fn(async () => ({
-        away,
+        mode: away ? 'away' as const : 'present' as const,
         source: away ? 'manual' : 'browser',
         changedAt: null,
-        presenceAwaySince: null,
       })),
       markPresent: vi.fn(async () => {
         away = false;
-        return { away, source: 'browser', changedAt: null, presenceAwaySince: null };
+        return { mode: 'present', source: 'browser', changedAt: null };
       }),
       set: vi.fn(),
       observePresence: vi.fn(),
@@ -228,7 +273,7 @@ describe('Now feed API', () => {
         displayName: 'Other user',
       }),
       awayModeStore: {
-        read: vi.fn(async () => ({ away: false, source: 'browser', changedAt: null, presenceAwaySince: null })),
+        read: vi.fn(async () => ({ mode: 'present', source: 'browser', changedAt: null })),
         markPresent,
         set: vi.fn(),
         observePresence: vi.fn(),
@@ -260,7 +305,7 @@ describe('Now feed API', () => {
     nowEventHub.subscribe(update);
     const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
     const awayModeStore = {
-      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null })),
+      read: vi.fn(async () => ({ mode: 'away', source: 'manual', changedAt: null })),
       set: vi.fn(),
       markPresent: vi.fn(),
       observePresence: vi.fn(),
@@ -401,7 +446,6 @@ describe('Now feed API', () => {
           away,
           source: away ? 'manual' : 'browser',
           changedAt: null,
-          presenceAwaySince: null,
         })),
         markPresent: vi.fn(),
         set: vi.fn(),
@@ -425,7 +469,7 @@ describe('Now feed API', () => {
       expect(received).toBe(false);
 
       away = false;
-      nowEventHub.publish({ type: 'mode_changed', away: false });
+      nowEventHub.publish({ type: 'mode_changed', mode: 'present', away: false });
       expect(await next).toContain('event: mode\ndata: {}');
     } finally {
       controller.abort();

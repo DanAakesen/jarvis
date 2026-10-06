@@ -13,6 +13,7 @@ import {
 import type { BackendModule } from '../modules.js';
 import type { ConversationMessage, ConversationRole } from '../core/conversation-store.js';
 import { defaultSettings, readSettings } from '../core/settings.js';
+import { defaultAwayModeState, type AwayModeState } from '../core/away-mode.js';
 import {
   createBrowserUrlTargets,
   executeReflexAction,
@@ -308,7 +309,9 @@ function registerVoiceRoute(
     let pendingToolCalls = 0;
     let toolCallsInResponse = false;
     let responseDone = false;
+    let presence: AwayModeState = defaultAwayModeState;
     let awayMode = false;
+    let personality = defaultSettings.personality;
     let responseCreateActive = false;
     let pendingResponseCreate: Record<string, unknown> | undefined;
     const queuedToolOutputs: Record<string, unknown>[] = [];
@@ -1054,7 +1057,14 @@ function registerVoiceRoute(
       },
     });
     unsubscribeAwayMode = app.nowEventHub.subscribe((event) => {
-      if (event.type === 'mode_changed') awayMode = event.away;
+      if (event.type !== 'mode_changed') return;
+      awayMode = event.away;
+      if (!english || !app.awayModeStore) return;
+      void (async () => {
+        presence = await app.awayModeStore!.read();
+        if (app.settingsStore) personality = (await readSettings(app.settingsStore)).personality;
+        sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, presence, language));
+      })().catch(() => request.log.warn('voice.presence_mode_update_failed'));
     });
 
     const flushQueued = () => {
@@ -1339,7 +1349,6 @@ function registerVoiceRoute(
         await sessionReady;
         const token = await credential(getToken, controller.signal);
         if (controller.signal.aborted || browser.readyState !== WebSocket.OPEN) return;
-        let personality = defaultSettings.personality;
         if (english && app.settingsStore) {
           try {
             personality = (await readSettings(app.settingsStore)).personality;
@@ -1349,14 +1358,15 @@ function registerVoiceRoute(
         }
         if (app.awayModeStore) {
           try {
-            awayMode = (await app.awayModeStore.read()).away;
+            presence = await app.awayModeStore.read();
+            awayMode = presence.mode !== 'present';
           } catch {
             request.log.warn('voice.away_mode_settings_unavailable');
           }
         }
         upstream = connect(token, controller.signal);
         upstream.once('open', () => {
-          if (english) sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, awayMode, language), flushQueued);
+          if (english) sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, presence, language), flushQueued);
           else flushQueued();
         });
         const upstreamEventTypes = new Set<string>();

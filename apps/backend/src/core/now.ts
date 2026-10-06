@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { EventHub } from './event-hub.js';
 import type { JarvisActivityHub } from './activity.js';
 import { defaultAwayModeState } from './away-mode.js';
+import { presenceModes, type PresenceMode } from './away-mode.js';
 import type { BrowserConfirmation } from '../teams/service.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 
@@ -47,7 +48,7 @@ export type NowFeedStatusKind = 'pull_request_ready' | 'deployment_failed';
 
 export type NowFeedUpdate =
   | { type: 'refresh' }
-  | { type: 'mode_changed'; away: boolean }
+  | { type: 'mode_changed'; mode: PresenceMode; away: boolean }
   | { type: 'status'; kind: NowFeedStatusKind };
 
 export type NowFeedEventHub = EventHub<NowFeedUpdate>;
@@ -69,13 +70,39 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 }
 
 export function registerNowRoutes(app: FastifyInstance) {
+  app.get('/presence', async (request, reply) => {
+    if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    if (!app.awayModeStore) return reply.code(503).send({ error: 'Presence mode unavailable' });
+    reply.header('Cache-Control', 'no-store');
+    return app.awayModeStore.read();
+  });
+
+  app.put<{ Body: { mode: PresenceMode } }>('/presence', {
+    schema: {
+      body: {
+        type: 'object',
+        properties: { mode: { type: 'string', enum: [...presenceModes] } },
+        required: ['mode'],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    if (!app.awayModeStore) return reply.code(503).send({ error: 'Presence mode unavailable' });
+    return app.awayModeStore.set(request.body.mode, 'manual');
+  });
+
   app.post('/now/present', async (request, reply) => {
     if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
     if (!app.awayModeStore) return reply.code(503).send({ error: 'Away mode unavailable' });
     const state = await app.awayModeStore.markPresent();
-    return { away: state.away };
+    return { away: state.mode !== 'present' };
   });
 
   app.get('/now', async (_request, reply) => {
@@ -85,17 +112,18 @@ export function registerNowRoutes(app: FastifyInstance) {
       app.nowFeedStore.read(),
       app.awayModeStore?.read() ?? Promise.resolve(defaultAwayModeState),
     ]);
-    const confirmations = awayMode.away
+    const isAway = awayMode.mode !== 'present';
+    const confirmations = isAway
       ? []
       : app.teamsNotifications?.pendingBrowserConfirmations() ?? [];
-    const snapshot = awayMode.away
+    const snapshot = isAway
       ? {
         ...feed,
         running: [],
         items: feed.items.filter((item) => item.category === 'mode'),
       }
       : feed;
-    return sendBounded(reply, { ...snapshot, awayMode: awayMode.away, confirmations });
+    return sendBounded(reply, { ...snapshot, awayMode: isAway, confirmations });
   });
 
   app.post<{ Params: { id: string }; Body: { decision: 'approve' | 'reject' } }>('/now/confirmations/:id', {
@@ -121,7 +149,7 @@ export function registerNowRoutes(app: FastifyInstance) {
     if (!service || !app.awayModeStore) {
       return reply.code(503).send({ error: 'Confirmation service unavailable' });
     }
-    if ((await app.awayModeStore.read()).away) {
+    if ((await app.awayModeStore.read()).mode !== 'present') {
       return reply.code(409).send({ error: 'Approvals are sent to Teams while away.' });
     }
     if (!await service.resolveBrowserConfirmation(request.params.id, request.body.decision)) {
@@ -170,7 +198,7 @@ export function registerNowRoutes(app: FastifyInstance) {
       void (async () => {
         let away: boolean;
         try {
-          away = (await app.awayModeStore?.read() ?? defaultAwayModeState).away;
+          away = (await app.awayModeStore?.read() ?? defaultAwayModeState).mode !== 'present';
         } catch {
           return;
         }

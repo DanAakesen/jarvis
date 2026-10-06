@@ -94,7 +94,7 @@ export function createTaskStatusNotificationHandler(options: {
       if (!sessionId) return false;
       const session = await options.conversations.getSession(sessionId);
       if (!session) return false;
-      const away = awayOverride ?? (await options.awayMode.read()).away;
+      const away = awayOverride ?? ((await options.awayMode.read()).mode !== 'present');
       if (away && !options.teams) return false;
       if (!await options.notifications.claim(event.taskId, state)) return true;
 

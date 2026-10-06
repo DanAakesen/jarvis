@@ -92,10 +92,10 @@ describe('get_status_summary', () => {
 
   it('applies away mode visibility before summarizing status', async () => {
     const awayModeStore: AwayModeStore = {
-      read: async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null }),
-      markPresent: async () => ({ away: false, source: 'browser', changedAt: null, presenceAwaySince: null }),
-      set: async () => ({ away: true, source: 'manual', changedAt: null, presenceAwaySince: null }),
-      observePresence: async () => ({ away: true, source: 'presence', changedAt: null, presenceAwaySince: null }),
+      read: async () => ({ mode: 'away', source: 'manual', changedAt: null }),
+      markPresent: async () => ({ mode: 'present', source: 'browser', changedAt: null }),
+      set: async () => ({ mode: 'away', source: 'manual', changedAt: null }),
+      observePresence: async () => ({ mode: 'away', source: 'jarvis', changedAt: null }),
     };
     const { app } = fixture({ read: async () => feed, dismiss: vi.fn(async () => true) }, awayModeStore);
     const response = await app.inject({

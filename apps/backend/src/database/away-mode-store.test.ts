@@ -5,12 +5,16 @@ import { createAwayModeStore } from './away-mode-store.js';
 describe('SQL away-mode store', () => {
   it('skips SQL when a cached presence observation leaves state unchanged', async () => {
     const state = {
-      away: false,
-      source: null,
+      mode: 'present',
+      source: 'manual',
       changedAt: null,
-      presenceAwaySince: '2026-10-06T12:00:00.000Z',
     };
-    const query = vi.fn(async () => ({ recordset: [{ value: JSON.stringify(state) }] }));
+    const query = vi.fn(async () => ({
+      recordset: [
+        { key: 'away.mode.state', value: JSON.stringify(state) },
+        { key: 'away.presence.timer', value: JSON.stringify('2026-10-06T12:00:00.000Z') },
+      ],
+    }));
     const request = { input: vi.fn(), query };
     request.input.mockReturnValue(request);
     const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
@@ -21,5 +25,26 @@ describe('SQL away-mode store', () => {
 
     expect(pool.request).toHaveBeenCalledOnce();
     expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('reads legacy away settings as the matching presence mode', async () => {
+    const legacy = {
+      away: true,
+      source: 'manual',
+      changedAt: '2026-10-06T12:00:00.000Z',
+      presenceAwaySince: null,
+    };
+    const query = vi.fn(async () => ({
+      recordset: [{ key: 'away.mode.state', value: JSON.stringify(legacy) }],
+    }));
+    const request = { input: vi.fn(), query };
+    request.input.mockReturnValue(request);
+    const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
+
+    await expect(createAwayModeStore(pool).read()).resolves.toEqual({
+      mode: 'away',
+      source: 'manual',
+      changedAt: legacy.changedAt,
+    });
   });
 });
