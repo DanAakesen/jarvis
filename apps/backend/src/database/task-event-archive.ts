@@ -342,6 +342,7 @@ export function createTaskEventArchive(
 export function createTaskEventArchiveJob(
   archive: TaskEventArchive,
   onError: () => void,
+  hasActiveWork: () => boolean = () => true,
   intervalMs = 60 * 60 * 1000,
 ) {
   let timer: NodeJS.Timeout | undefined;
@@ -349,7 +350,7 @@ export function createTaskEventArchiveJob(
   let controller: AbortController | undefined;
 
   const run = async () => {
-    if (running) return;
+    if (running || !hasActiveWork()) return;
     controller = new AbortController();
     running = archive.archiveExpiredEvents(undefined, controller.signal)
       .then(() => undefined)

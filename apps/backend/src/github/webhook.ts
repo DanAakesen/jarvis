@@ -15,6 +15,7 @@ const acceptedEvents = new Set([
 interface WebhookOptions {
   readonly deliveryStore: WebhookDeliveryStore | null;
   readonly getSecret: () => Promise<string | undefined>;
+  readonly isTrackedRepository?: (repository: string) => boolean;
   readonly onMapping?: (mapping: GithubWebhookMapping) => Promise<void>;
 }
 
@@ -83,14 +84,17 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
           return reply.code(400).send({ error: 'Invalid webhook payload' });
         }
         const mapping = acceptedEvents.has(event) ? mapGithubWebhook(event, payload) : undefined;
+        if (!mapping || (options.isTrackedRepository && !options.isTrackedRepository(mapping.repository))) {
+          return reply.code(202).send({ status: 'ignored' });
+        }
         const statusKind = voiceStatusKind(event, payload, mapping);
         let inserted: boolean;
         try {
           inserted = await options.deliveryStore.record({
             deliveryId,
             event,
-            outcome: mapping ? 'ok' : 'ignored',
-            ...(mapping ? { mapping } : {}),
+            outcome: 'ok',
+            mapping,
           });
           if (inserted) app.nowEventHub.publish({ type: 'refresh' });
         } catch {
@@ -98,7 +102,7 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
           return reply.code(503).send({ error: 'Webhook storage unavailable' });
         }
         try {
-          if (mapping) await options.onMapping?.(mapping);
+          await options.onMapping?.(mapping);
         } catch {
           request.log.error('github.webhook_mapping_failed');
           return reply.code(503).send({ error: 'Webhook processing unavailable' });

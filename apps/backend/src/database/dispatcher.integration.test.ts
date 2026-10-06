@@ -62,7 +62,9 @@ function settings(): SettingsStore {
 }
 
 function heartbeat(): SandboxHeartbeat {
-  return { track: vi.fn(), untrack: vi.fn(), setCompletionHandler: vi.fn() } as unknown as SandboxHeartbeat;
+  return {
+    track: vi.fn(), untrack: vi.fn(), setCompletionHandler: vi.fn(), hasTrackedSessions: vi.fn(() => false),
+  } as unknown as SandboxHeartbeat;
 }
 
 describe('dispatcher SQL coordination', () => {

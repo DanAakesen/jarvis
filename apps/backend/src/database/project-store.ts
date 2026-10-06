@@ -15,7 +15,8 @@ function isUniqueViolation(error: unknown): boolean {
     'number' in error && ((error as { number?: unknown }).number === 2601 || (error as { number?: unknown }).number === 2627);
 }
 
-export function createProjectStore(pool: sql.ConnectionPool): ProjectStore {
+export function createProjectStore(pool: sql.ConnectionPool, trackedRepositories?: Set<string>): ProjectStore {
+  const repositoryKey = (repository: string) => repository.toLowerCase();
   return {
     async list() {
       const { recordset } = await databaseReadRequest(pool).query<ProjectRow>(
@@ -40,7 +41,9 @@ export function createProjectStore(pool: sql.ConnectionPool): ProjectStore {
           OUTPUT ${insertedColumns}
           VALUES (@name, @repo, @defaultBranch, @defaultAgent, @policy, @mergeRules,
             @sandboxSize, @tech, @maxParallelTasks);`);
-        return recordset[0]!;
+        const project = recordset[0]!;
+        trackedRepositories?.add(repositoryKey(project.repo));
+        return project;
       } catch (error) {
         if (isUniqueViolation(error)) throw new ProjectConflictError();
         throw error;
@@ -59,19 +62,29 @@ export function createProjectStore(pool: sql.ConnectionPool): ProjectStore {
       if (project.tech !== undefined) { request.input('tech', sql.NVarChar(32), project.tech); assignments.push('tech = @tech'); }
       if (project.max_parallel_tasks !== undefined) { request.input('maxParallelTasks', sql.Int, project.max_parallel_tasks); assignments.push('max_parallel_tasks = @maxParallelTasks'); }
       try {
-        const { recordset } = await request.query<ProjectRow>(`UPDATE dbo.projects
+        const { recordset } = await request        .query<ProjectRow & { previousRepo?: string }>(`UPDATE dbo.projects
           SET ${assignments.join(', ')}
-          OUTPUT ${insertedColumns}
+          OUTPUT ${insertedColumns}, DELETED.repo AS previousRepo
           WHERE id = @id AND active = 1;`);
-        return recordset[0] ?? null;
+        const row = recordset[0];
+        if (!row) return null;
+        const previousRepo = row.previousRepo;
+        if (previousRepo) trackedRepositories?.delete(repositoryKey(previousRepo));
+        trackedRepositories?.add(repositoryKey(row.repo));
+        const project = { ...row };
+        delete project.previousRepo;
+        return project;
       } catch (error) {
         if (isUniqueViolation(error)) throw new ProjectConflictError();
         throw error;
       }
     },
     async archive(id: string) {
-      const { rowsAffected } = await pool.request().input('id', sql.BigInt, BigInt(id))
-        .query('UPDATE dbo.projects SET active = 0 WHERE id = @id;');
+      const result = await pool.request().input('id', sql.BigInt, BigInt(id))
+        .query<{ repo: string }>('UPDATE dbo.projects OUTPUT DELETED.repo AS repo SET active = 0 WHERE id = @id;');
+      const { rowsAffected, recordset } = result;
+      const archivedRepository = recordset[0]?.repo;
+      if (archivedRepository) trackedRepositories?.delete(repositoryKey(archivedRepository));
       return (rowsAffected[0] ?? 0) > 0;
     },
   };
