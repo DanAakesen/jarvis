@@ -43,18 +43,29 @@ class MockSocket extends EventTarget {
 }
 
 function audioAdapter(onOpen?: () => void) {
+  let playbackStarted = () => {};
   let playbackEnded = () => {};
+  let inputEnded = () => {};
+  let level = 0;
   return {
     prepare: vi.fn(async () => {}),
-    open: vi.fn(async () => { onOpen?.(); }),
-    play: vi.fn(() => 0.5),
-    stopPlayback: vi.fn(),
+    requestMicrophone: vi.fn(async () => {}),
+    open: vi.fn<(send: (audio: string) => void) => Promise<void>>(async () => { onOpen?.(); }),
+    detachInput: vi.fn(),
+    play: vi.fn<(audio: string) => void>(),
+    stopPlayback: vi.fn(() => { level = 0; }),
     hasPlayback: vi.fn(() => false),
+    setPlaybackStartedHandler: vi.fn((handler: () => void) => { playbackStarted = handler; }),
     setPlaybackEndedHandler: vi.fn((handler: () => void) => { playbackEnded = handler; }),
+    setInputEndedHandler: vi.fn((handler: () => void) => { inputEnded = handler; }),
+    playbackLevel: vi.fn(() => level),
+    inputLevel: vi.fn(() => 0.3),
     setMuted: vi.fn(),
     closeInput: vi.fn(),
     dispose: vi.fn(),
-    finishPlayback: () => playbackEnded(),
+    startPlayback: (nextLevel = 0.6) => { level = nextLevel; playbackStarted(); },
+    finishPlayback: () => { level = 0; playbackEnded(); },
+    endInput: () => inputEnded(),
   };
 }
 
@@ -74,15 +85,20 @@ afterEach(() => {
 });
 
 describe('BrowserVoiceClient', () => {
-  it('warms the Danish voice agent but only opens microphone capture after explicit activation', async () => {
+  it('requests the microphone from Start voice and captures automatically after the handshake', async () => {
     const statuses: string[] = [];
-    let opened = false;
-    const audio = audioAdapter(() => { opened = true; });
+    const microphone: string[] = [];
     let socket: MockSocket | undefined;
+    const audio = audioAdapter(() => {
+      // Capture is only attached once the authenticated relay has completed its handshake.
+      expect(socket?.readyState).toBe(1);
+      expect(statuses).toContain('connecting');
+    });
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com/',
       getAccessToken: async () => 'token',
       onStatus: (status) => statuses.push(status),
+      onMicrophoneState: (state) => microphone.push(state),
       createAudio: () => audio,
       createSocket: (url, protocols) => {
         socket = new MockSocket(url, protocols);
@@ -91,23 +107,52 @@ describe('BrowserVoiceClient', () => {
     });
     clients.push(client);
 
+    expect(audio.requestMicrophone).not.toHaveBeenCalled();
     client.start();
-    await until(() => statuses.includes('ready'));
+    // Requested synchronously inside the start gesture, before any socket exists.
+    expect(audio.prepare).toHaveBeenCalledOnce();
+    expect(audio.requestMicrophone).toHaveBeenCalledOnce();
     expect(audio.open).not.toHaveBeenCalled();
-    await client.enableMicrophone();
-    await until(() => opened);
+    await until(() => statuses.includes('listening'));
 
+    expect(statuses).not.toContain('ready');
+    expect(microphone).toEqual(['requesting', 'granted', 'live']);
     expect(socket?.url).toBe('wss://api.example.com/voice/da');
     expect(socket?.protocols).toEqual(['jarvis.voice.v1', 'jarvis.auth.token']);
-    expect(socket?.sent.map(({ type }) => type)).toEqual([
-      'jarvis.microphone.active',
-    ]);
+    expect(socket?.sent.map(({ type }) => type)).toEqual(['jarvis.microphone.active']);
     expect(audio.open).toHaveBeenCalledOnce();
+    const send = audio.open.mock.calls[0]![0];
+    send('AAAA');
+    expect(socket?.sent.at(-1)).toEqual({ type: 'input_audio_buffer.append', audio: 'AAAA' });
     client.setMuted(true);
     expect(socket?.sent.at(-1)?.type).toBe('jarvis.microphone.muted');
+    expect(client.inputLevel()).toBe(0);
     client.setMuted(false);
     expect(socket?.sent.at(-1)?.type).toBe('jarvis.microphone.active');
+    expect(client.inputLevel()).toBe(0.3);
     client.stop();
+  });
+
+  it('never sends audio when the handshake has not completed', async () => {
+    const statuses: string[] = [];
+    const audio = audioAdapter();
+    const socket = new MockSocket('wss://api.example.com/never', []);
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      onStatus: (status) => statuses.push(status),
+      createAudio: () => audio,
+      createSocket: () => socket,
+    });
+    clients.push(client);
+    client.start();
+    await until(() => socket.readyState === 1);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect(audio.requestMicrophone).toHaveBeenCalledOnce();
+    expect(audio.open).not.toHaveBeenCalled();
+    expect(socket.sent).toEqual([]);
+    expect(statuses).toEqual(['connecting']);
   });
 
   it('waits for persisted session completion before reporting stop', async () => {
@@ -129,7 +174,7 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
-    await until(() => statuses.includes('ready'));
+    await until(() => statuses.includes('listening'));
     client.stop();
 
     expect(socket?.sent.at(-1)).toEqual({ type: 'jarvis.session.end' });
@@ -199,17 +244,15 @@ describe('BrowserVoiceClient', () => {
     expect(() => client.sendScreenContext('x'.repeat(5_001))).toThrow(/not ready/);
   });
 
-  it('stops current playback when speech starts', async () => {
+  it('reports speaking only once queued audio is audible and resets the level on interruption', async () => {
     const audio = audioAdapter();
     const statuses: string[] = [];
-    const audioLevels: number[] = [];
     let socket: MockSocket | undefined;
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com',
       getAccessToken: async () => 'token',
       language: 'en',
       onStatus: (status) => statuses.push(status),
-      onAudioLevel: (level) => audioLevels.push(level),
       createAudio: () => audio,
       createSocket: (url, protocols) => {
         socket = new MockSocket(url, protocols);
@@ -219,21 +262,27 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
-    await until(() => statuses.includes('ready'));
-    await client.enableMicrophone();
-    await until(() => audio.open.mock.calls.length === 1);
+    await until(() => statuses.includes('listening'));
     socket?.receive({ type: 'response.created' });
     expect(statuses.at(-1)).toBe('thinking');
     socket?.receive({ type: 'response.audio.delta', delta: 'AQID' });
-    expect(audioLevels).toContain(0.5);
+    // A received network chunk is not proof of audible speech.
+    expect(statuses.at(-1)).toBe('thinking');
+    expect(client.playbackLevel()).toBe(0);
+    audio.startPlayback(0.7);
+    expect(statuses.at(-1)).toBe('speaking');
+    expect(client.playbackLevel()).toBe(0.7);
     socket?.receive({ type: 'input_audio_buffer.speech_started' });
-    expect(audioLevels.at(-1)).toBe(0);
+    expect(statuses.at(-1)).toBe('listening');
+    expect(client.playbackLevel()).toBe(0);
     socket?.receive({ type: 'response.audio.delta', delta: 'BAUG' });
 
     expect(audio.play).toHaveBeenCalledWith('AQID');
     expect(audio.play).toHaveBeenCalledOnce();
     expect(audio.stopPlayback).toHaveBeenCalledOnce();
     client.stop();
+    expect(client.playbackLevel()).toBe(0);
+    expect(client.inputLevel()).toBe(0);
   });
 
   it('keeps the speaking state until queued audio playback ends', async () => {
@@ -254,11 +303,10 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
-    await until(() => statuses.includes('ready'));
-    await client.enableMicrophone();
-    await until(() => audio.open.mock.calls.length === 1);
+    await until(() => statuses.includes('listening'));
     socket?.receive({ type: 'response.created' });
     socket?.receive({ type: 'response.audio.delta', delta: 'AQID' });
+    audio.startPlayback();
     audio.hasPlayback.mockReturnValue(true);
     socket?.receive({ type: 'response.done' });
     expect(statuses.at(-1)).toBe('speaking');
@@ -266,10 +314,11 @@ describe('BrowserVoiceClient', () => {
     audio.hasPlayback.mockReturnValue(false);
     audio.finishPlayback();
     expect(statuses.at(-1)).toBe('listening');
+    expect(client.playbackLevel()).toBe(0);
     client.stop();
   });
 
-  it('reconnects after the relay closes unexpectedly', async () => {
+  it('resumes capture after a transport reconnect without another enable step and keeps an explicit mute', async () => {
     const audio = audioAdapter();
     const sockets: MockSocket[] = [];
     const statuses: string[] = [];
@@ -289,21 +338,23 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
-    await until(() => statuses.includes('ready'));
-    await client.enableMicrophone();
-    await until(() => audio.open.mock.calls.length === 1);
+    await until(() => statuses.includes('listening'));
     const firstSocket = sockets[0];
     if (!firstSocket) throw new Error('The initial voice socket was not created.');
     client.setMuted(true);
     firstSocket.disconnect();
-    await until(() => statuses.filter((status) => status === 'ready').length === 2);
+    await until(() => statuses.filter((status) => status === 'listening').length === 2);
 
     expect(statuses).toContain('reconnecting');
+    expect(statuses).not.toContain('ready');
     expect(sockets).toHaveLength(2);
-    expect(audio.open).toHaveBeenCalledOnce();
-    await client.enableMicrophone();
+    expect(audio.requestMicrophone).toHaveBeenCalledOnce();
+    expect(audio.detachInput).toHaveBeenCalled();
+    expect(audio.closeInput).not.toHaveBeenCalled();
     expect(audio.open).toHaveBeenCalledTimes(2);
-    expect(audio.setMuted).toHaveBeenLastCalledWith(false);
+    expect(audio.setMuted).toHaveBeenLastCalledWith(true);
+    // The relay starts muted, so a muted reconnect must not announce an active microphone.
+    expect(sockets[1]?.sent.map(({ type }) => type)).toEqual([]);
     client.stop();
   });
 
@@ -327,7 +378,7 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
-    await until(() => statuses.includes('ready'));
+    await until(() => statuses.includes('listening'));
     client.setLanguage('da');
     const firstSocket = sockets[0];
     if (!firstSocket) throw new Error('The voice socket was not created.');
@@ -335,34 +386,87 @@ describe('BrowserVoiceClient', () => {
     client.stop();
   });
 
-  it('allows an explicit retry after microphone permission is denied', async () => {
+  it('reports a denied microphone without claiming Listening and allows an explicit retry', async () => {
     const audio = audioAdapter();
-    audio.open.mockRejectedValueOnce(new Error('Permission denied'));
-    const statuses: string[] = [];
+    audio.requestMicrophone.mockRejectedValueOnce(new DOMException('Permission denied', 'NotAllowedError'));
+    const statuses: [string, string][] = [];
+    const microphone: string[] = [];
+    let socket: MockSocket | undefined;
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com',
       getAccessToken: async () => 'token',
-      onStatus: (status) => statuses.push(status),
+      onStatus: (status, message) => statuses.push([status, message]),
+      onMicrophoneState: (state) => microphone.push(state),
       createAudio: () => audio,
-      createSocket: (url, protocols) => new MockSocket(url, protocols),
+      createSocket: (url, protocols) => {
+        socket = new MockSocket(url, protocols);
+        return socket;
+      },
     });
     clients.push(client);
-    await client.enableMicrophone();
-    expect(audio.open).not.toHaveBeenCalled();
+    await client.retryMicrophone();
+    expect(audio.requestMicrophone).not.toHaveBeenCalled();
     client.start();
-    await until(() => statuses.includes('ready'));
-    await client.enableMicrophone();
-    expect(statuses.at(-1)).toBe('ready');
-    expect(audio.open).toHaveBeenCalledOnce();
-    await client.enableMicrophone();
-    expect(statuses.at(-1)).toBe('listening');
-    expect(audio.open).toHaveBeenCalledTimes(2);
+    await until(() => statuses.some(([status]) => status === 'ready'));
+    expect(microphone).toEqual(['requesting', 'denied']);
+    expect(statuses.at(-1)?.[1]).toMatch(/Retry microphone/);
+    expect(statuses.map(([status]) => status)).not.toContain('listening');
+    expect(audio.open).not.toHaveBeenCalled();
+    expect(socket?.sent).toEqual([]);
+
+    await client.retryMicrophone();
+    expect(audio.requestMicrophone).toHaveBeenCalledTimes(2);
+    expect(statuses.at(-1)?.[0]).toBe('listening');
+    expect(microphone.at(-1)).toBe('live');
   });
 
-  it('closes capture if voice stops while microphone permission is pending', async () => {
+  it('reports a missing microphone distinctly', async () => {
     const audio = audioAdapter();
-    let resolve!: () => void;
-    audio.open.mockImplementationOnce(() => new Promise<void>((done) => { resolve = done; }));
+    audio.requestMicrophone.mockRejectedValueOnce(new DOMException('No device', 'NotFoundError'));
+    const microphone: string[] = [];
+    const statuses: string[] = [];
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      onStatus: (status) => statuses.push(status),
+      onMicrophoneState: (state) => microphone.push(state),
+      createAudio: () => audio,
+      createSocket: (url, protocols) => new MockSocket(url, protocols),
+    });
+    clients.push(client);
+    client.start();
+    await until(() => statuses.includes('ready'));
+    expect(microphone.at(-1)).toBe('missing');
+  });
+
+  it('stops listening truthfully when the microphone track ends', async () => {
+    const audio = audioAdapter();
+    const statuses: [string, string][] = [];
+    let socket: MockSocket | undefined;
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      onStatus: (status, message) => statuses.push([status, message]),
+      createAudio: () => audio,
+      createSocket: (url, protocols) => {
+        socket = new MockSocket(url, protocols);
+        return socket;
+      },
+    });
+    clients.push(client);
+    client.start();
+    await until(() => statuses.some(([status]) => status === 'listening'));
+    audio.endInput();
+    expect(statuses.at(-1)?.[0]).toBe('ready');
+    expect(statuses.at(-1)?.[1]).toMatch(/Retry microphone/);
+    expect(socket?.sent.at(-1)?.type).toBe('jarvis.microphone.muted');
+    expect(client.inputLevel()).toBe(0);
+  });
+
+  it('disposes a late microphone grant after voice stops while permission is pending', async () => {
+    const audio = audioAdapter();
+    let grant!: () => void;
+    audio.requestMicrophone.mockImplementationOnce(() => new Promise<void>((done) => { grant = done; }));
     const statuses: string[] = [];
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com',
@@ -373,16 +477,40 @@ describe('BrowserVoiceClient', () => {
     });
     clients.push(client);
     client.start();
+    client.start();
+    expect(audio.requestMicrophone).toHaveBeenCalledOnce();
     await until(() => statuses.includes('ready'));
-    const pending = client.enableMicrophone();
-    await client.enableMicrophone();
-    expect(audio.open).toHaveBeenCalledOnce();
     client.stop();
+    await until(() => statuses.at(-1) === 'stopped');
     audio.closeInput.mockClear();
-    resolve();
-    await pending;
+    grant();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     expect(audio.closeInput).toHaveBeenCalled();
+    expect(audio.open).not.toHaveBeenCalled();
     expect(statuses).not.toContain('listening');
     expect(statuses.at(-1)).toBe('stopped');
+  });
+
+  it('releases capture and playback when voice stops', async () => {
+    const audio = audioAdapter();
+    const statuses: string[] = [];
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      onStatus: (status) => statuses.push(status),
+      createAudio: () => audio,
+      createSocket: (url, protocols) => new MockSocket(url, protocols),
+    });
+    clients.push(client);
+    client.start();
+    await until(() => statuses.includes('listening'));
+    audio.startPlayback();
+    client.stop();
+    await until(() => statuses.at(-1) === 'stopped');
+    expect(audio.closeInput).toHaveBeenCalled();
+    expect(audio.stopPlayback).toHaveBeenCalled();
+    expect(audio.dispose).toHaveBeenCalled();
+    expect(client.playbackLevel()).toBe(0);
   });
 });
