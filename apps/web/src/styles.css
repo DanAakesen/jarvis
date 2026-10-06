@@ -664,6 +664,16 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .generated-view-images figure { min-width: 0; margin: 0; }
 .generated-view-images img { display: block; max-width: 100%; height: auto; }
 .generated-view-images figcaption { margin-top: var(--space-1); font-size: var(--type-small); }
+.generated-view-html-app { display: grid; min-width: 0; gap: var(--space-2); }
+.html-app-controls { display: flex; min-width: 0; min-height: 44px; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.html-app-controls .secondary-button { min-height: 44px; margin: 0; }
+.html-app-controls [role="status"] { min-width: 0; color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
+.generated-view-html-frame { display: block; width: 100%; max-height: min(70vh, 960px); border: 0; border-radius: var(--radius-control); background: var(--surface); }
+.html-app-sources summary { min-height: 44px; padding: var(--space-2); cursor: pointer; }
+.html-app-sources summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.html-app-sources ul { margin-block: 0; padding-inline-start: var(--space-5); }
+.html-app-sources li { margin-block: var(--space-1); overflow-wrap: anywhere; }
+.html-app-feedback { display: grid; justify-items: start; gap: var(--space-2); }
 .workspace-announcement { min-height: 1.5em; margin-top: var(--space-2); font-size: var(--type-small); }
 .composer label, .choice-group legend { display: block; margin: 20px 0 6px; padding: 0; color: var(--text); font-weight: 600; }
 .choice-group legend { margin-top: 0; }

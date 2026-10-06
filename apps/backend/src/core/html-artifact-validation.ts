@@ -40,7 +40,9 @@ export function validateHtmlApp(title: unknown, html: unknown, sources: unknown)
     }
     if (defaultTreeAdapter.isElementNode(node)) {
       if (node.tagName === 'base' ||
-          node.tagName === 'script' && node.attrs.some(({ name }) => name.toLowerCase() === 'src')) {
+          node.tagName === 'script' && node.attrs.some(({ name }) => name.toLowerCase() === 'src') ||
+          node.tagName === 'meta' && node.attrs.some(({ name, value }) =>
+            name.toLowerCase() === 'http-equiv' && value.trim().toLowerCase() === 'refresh')) {
         forbiddenElement = true;
       }
       if (node.tagName === 'template') {

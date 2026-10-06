@@ -15,6 +15,7 @@ describe('HTML app validation', () => {
     '<!doctype html><html><head><base href="https://example.com"></head><body></body></html>',
     '<!doctype html><html><head><script src="/app.js"></script></head><body></body></html>',
     '<!doctype html><html><head><script SRC="https://example.com/app.js"></script></head><body></body></html>',
+    '<!doctype html><html><head><meta http-equiv="refresh" content="0;url=https://example.com"></head><body></body></html>',
   ])('rejects invalid HTML or forbidden elements', (html) => {
     expect(validateHtmlApp('Example', html, sources)).toBe(false);
   });

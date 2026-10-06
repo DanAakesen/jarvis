@@ -17,6 +17,8 @@ import { NotFoundPage, SignInPage } from './pages';
 import { NowFeedPanel } from './NowFeedPanel';
 import { SettingsPage } from './SettingsPage';
 import { ThemePreferenceProvider } from './theme-preference';
+import { useThemePreference } from './theme-preference-context';
+import { readHtmlAppEnvironment } from './html-app-bridge';
 import { useSignIn, type SignInSession } from './useSignIn';
 import { backendFetch } from './backend-request';
 import { Workspace, PHONE_LAYOUT_MEDIA_QUERY, type WorkspaceController } from './Workspace';
@@ -130,6 +132,12 @@ function ShellLayout({ signedIn, config, session, camera }: {
 }) {
   const { pathname } = useLocation();
   const getAccessToken = session.getAccessToken;
+  const { resolvedTheme } = useThemePreference();
+  const htmlAppContext = useMemo(() => ({
+    backendUrl: config.backendUrl,
+    getAccessToken,
+    environment: readHtmlAppEnvironment(resolvedTheme),
+  }), [config.backendUrl, getAccessToken, resolvedTheme]);
   const { working, latestActivity } = useJarvisActivity();
   const activityText = activityLabel(latestActivity);
   const navigationToggle = useRef<HTMLButtonElement>(null);
@@ -362,7 +370,8 @@ function ShellLayout({ signedIn, config, session, camera }: {
             <Outlet />
             {signedIn && (
               <div className="workspace-shell-area" hidden={pathname !== '/'}>
-                <Workspace ref={workspaceController} views={[]} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} />
+                <Workspace ref={workspaceController} views={[]} htmlAppContext={htmlAppContext}
+                  onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} />
               </div>
             )}
             {signedIn && pathname !== '/' && (
