@@ -16,6 +16,7 @@ import { presenceAwayThresholdMs } from '../core/away-mode.js';
 import { createDispatcherStore } from './dispatcher-store.js';
 import { createConversationStore } from './conversation-store.js';
 import { createMemoryStore } from './memory-store.js';
+import { createTaskStatusNotificationStore } from './task-status-notification-store.js';
 import {
   createTaskEventArchive,
   type TaskEventArchiveBlobStore,
@@ -35,8 +36,8 @@ const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'credential_status', 'deployments', 'jarvis_sessions', 'memories',
   'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects', 'pull_requests', 'releases',
-  'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'tasks',
-  'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks',
+  'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
+  'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks',
   'webhook_deliveries', 'workflow_runs', 'workspace_artifacts',
 ];
 
@@ -116,6 +117,33 @@ describe('committed domain schema (groups 1-8)', () => {
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
       'UX_activity_alert_key',
     ]);
+  });
+
+  it('persists one notification claim per task and state across store recreation', async () => {
+    const project = await createProjectStore(pool).create({
+      name: 'Notification fixture',
+      repo: `DanAakesen/notification-${randomUUID()}`,
+      default_branch: 'main',
+      default_agent: 'copilot',
+      policy: 'deliver_pr',
+      merge_rules: null,
+      sandbox_size: '1x2',
+      tech: 'node',
+    });
+    const task = await createTaskStore(pool, createEventHub<TaskEventMessage>()).create({
+      projectId: project.id,
+      title: 'Notification fixture',
+      request: 'Verify notification deduplication',
+    });
+    if (!task) throw new Error('Notification fixture task was not created');
+    const firstStore = createTaskStatusNotificationStore(pool);
+    const restartedStore = createTaskStatusNotificationStore(pool);
+
+    await expect(firstStore.claim(task.id, 'Done')).resolves.toBe(true);
+    await expect(restartedStore.claim(task.id, 'Done')).resolves.toBe(false);
+    await expect(restartedStore.claim(task.id, 'pull_request_opened')).resolves.toBe(true);
+    await expect(createTaskStore(pool, createEventHub<TaskEventMessage>())
+      .transition(task.id, 'Cancelled')).resolves.toMatchObject({ kind: 'ok' });
   });
   it('persists away mode and an in-progress Teams presence timer across store recreation', async () => {
     const startedAt = new Date('2026-10-04T12:00:00.000Z');
@@ -1038,6 +1066,47 @@ describe('committed domain schema (groups 1-8)', () => {
     ]);
   });
 
+  it('includes the recorded pull request URL in later attention and completion events', async () => {
+    const project = await createProjectStore(pool).create({
+      name: 'Task status fixture',
+      repo: `DanAakesen/task-status-${randomUUID()}`,
+      default_branch: 'main',
+      default_agent: 'copilot',
+      policy: 'deliver_pr',
+      merge_rules: null,
+      sandbox_size: '1x2',
+      tech: 'node',
+    });
+    const hub = createEventHub<TaskEventMessage>();
+    const events: TaskEventMessage[] = [];
+    hub.subscribe((event) => events.push(event));
+    const store = createTaskStore(pool, hub);
+    const task = await store.create({
+      projectId: project.id,
+      title: 'Task status fixture',
+      request: 'Retain the pull request link',
+    });
+    if (!task) throw new Error('Task status fixture was not created');
+    const url = 'https://github.com/DanAakesen/jarvis/pull/42';
+
+    await store.recordEvent({
+      taskId: task.id,
+      type: 'pull_request_opened',
+      payload: { url },
+      source: 'backend',
+    });
+    await store.transition(task.id, 'Running');
+    await store.recordEvent({ taskId: task.id, type: 'disk_low', source: 'runner' });
+    await store.transition(task.id, 'Done', true);
+
+    expect(events.filter((event) => event.type === 'state_changed').map((event) => event.payload))
+      .toEqual([
+        { from: 'Ready', to: 'Running' },
+        { from: 'Running', to: 'NeedsAttention', reason: 'disk_low', pullRequestUrl: url },
+        { from: 'NeedsAttention', to: 'Done', pullRequestUrl: url },
+      ]);
+  });
+
   it('moves a running task to NeedsAttention atomically when runner disk is low', async () => {
     const projectResult = await pool.request()
       .input('repo', sql.NVarChar(140), `DanAakesen/disk-low-${randomUUID().slice(0, 8)}`)
@@ -1426,8 +1495,11 @@ describe('committed domain schema (groups 1-8)', () => {
     const message = await scalar(`INSERT dbo.messages
       (jarvis_session_id, role, text, language, interrupted)
       VALUES (${String(session)}, N'jarvis', N'Partial reply', N'en', 1)`);
-    const latest = await readDownMigration('0021_vault_memory_index.sql');
-    expect(await revertMigration(pool, committed, latest)).toBe(latest.name);
+    const newer = committed.filter((migration) => migration.name > '0020_chat_message_steering.sql').reverse();
+    for (const migration of newer) {
+      const script = await readDownMigration(migration.name);
+      expect(await revertMigration(pool, committed, script)).toBe(script.name);
+    }
     const down = await readDownMigration('0020_chat_message_steering.sql');
 
     await expect(revertMigration(pool, committed, down))
@@ -1440,7 +1512,7 @@ describe('committed domain schema (groups 1-8)', () => {
       `UPDATE dbo.messages SET language = NULL, interrupted = 0 WHERE id = ${String(message)}`,
     );
     expect(await revertMigration(pool, committed, down)).toBe(down.name);
-    expect(await applyMigrations(pool, committed)).toEqual([down.name, latest.name]);
+    expect(await applyMigrations(pool, committed)).toEqual([down.name, ...[...newer].reverse().map((migration) => migration.name)]);
   });
 
   it('refuses to revert a migration that is not the latest applied one and keeps state on failure', async () => {

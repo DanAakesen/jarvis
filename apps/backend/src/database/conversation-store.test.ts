@@ -113,7 +113,22 @@ describe('SQL conversation store', () => {
     expect(input).toHaveBeenNthCalledWith(4, 'model', sql.NVarChar(100), null);
     expect(input).toHaveBeenNthCalledWith(5, 'language', sql.NVarChar(8), null);
     expect(input).toHaveBeenNthCalledWith(6, 'interrupted', sql.Bit, false);
-    expect(query.mock.calls[0]?.[0]).toContain('ended_at IS NULL');
+    expect(input).toHaveBeenNthCalledWith(8, 'allowEndedSession', sql.Bit, false);
+    expect(query.mock.calls[0]?.[0]).toContain('(ended_at IS NULL OR @allowEndedSession = 1)');
+  });
+
+  it('allows a task status message to be added to its ended source session', async () => {
+    const { store, input } = fixture({ recordset: [] });
+
+    await store.addMessage({
+      sessionId: '41',
+      role: 'jarvis',
+      text: 'Task 42 is done.',
+      model: null,
+      allowEndedSession: true,
+    });
+
+    expect(input).toHaveBeenCalledWith('allowEndedSession', sql.Bit, true);
   });
 
   it('updates an existing user message when a partial becomes final', async () => {

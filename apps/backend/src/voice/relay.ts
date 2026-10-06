@@ -308,6 +308,7 @@ function registerVoiceRoute(
     let pendingToolCalls = 0;
     let toolCallsInResponse = false;
     let responseDone = false;
+    let awayMode = false;
     let responseCreateActive = false;
     let pendingResponseCreate: Record<string, unknown> | undefined;
     const queuedToolOutputs: Record<string, unknown>[] = [];
@@ -339,6 +340,10 @@ function registerVoiceRoute(
       type: 'tool-call-finished' | 'interrupted' | 'failed',
       outcome?: 'ok' | 'refused' | 'error',
     ) => void>();
+    let unsubscribeAwayMode: (() => void) | undefined;
+    // Declared early because closeAnnouncements can run before the announcer exists.
+    // eslint-disable-next-line prefer-const
+    let statusAnnouncer: ReturnType<typeof createVoiceStatusAnnouncer> | undefined;
     const finishActiveToolActivities = () => {
       for (const finish of activeToolActivities) finish('interrupted');
     };
@@ -349,11 +354,12 @@ function registerVoiceRoute(
       activityState = type === 'failed' || type === 'ended' ? null : type;
       app.jarvisActivityHub.publish({ type, activityId, source: 'voice' });
     };
-    let statusAnnouncer: ReturnType<typeof createVoiceStatusAnnouncer> | undefined;
     let unregisterVisionVoice: (() => void) | undefined;
     const closeAnnouncements = () => {
       unregisterVisionVoice?.();
       unregisterVisionVoice = undefined;
+      unsubscribeAwayMode?.();
+      unsubscribeAwayMode = undefined;
       statusAnnouncer?.close();
     };
     let transcriptQueue = Promise.resolve();
@@ -1027,25 +1033,29 @@ function registerVoiceRoute(
       return true;
     };
 
-    if (english || visionWatch) {
-      statusAnnouncer = createVoiceStatusAnnouncer({
-        ...(english ? { taskEvents: app.eventHub, nowEvents: app.nowEventHub } : {}),
-        canSpeak: () => configured && !controller.signal.aborted && !endRequested && !userSpeaking &&
-          !reflexPending && !assistantResponding && !toolCallsInResponse && pendingToolCalls === 0 &&
-          browser.readyState === WebSocket.OPEN && upstream?.readyState === WebSocket.OPEN,
-        speak: (text) => {
-          assistantResponding = true;
-          sendResponseCreate({
-            type: 'response.create',
-            response: {
-              instructions: `Speak this exact status update to Dan, verbatim: ${text}`,
-              tools: [],
-              tool_choice: 'none',
-            },
-          });
-        },
-      });
-    }
+    statusAnnouncer = createVoiceStatusAnnouncer({
+      taskEvents: app.eventHub,
+      ...(english ? { nowEvents: app.nowEventHub } : {}),
+      language,
+      canSpeak: () => configured && !controller.signal.aborted && !endRequested && !awayMode && !userSpeaking &&
+        !reflexPending && !assistantResponding && !toolCallsInResponse && pendingToolCalls === 0 &&
+        browser.readyState === WebSocket.OPEN && upstream?.readyState === WebSocket.OPEN,
+      shouldQueueTaskStatus: () => !awayMode,
+      speak: (text) => {
+        assistantResponding = true;
+        sendResponseCreate({
+          type: 'response.create',
+          response: {
+            instructions: `Speak this exact status update to Dan, verbatim: ${text}`,
+            tools: [],
+            tool_choice: 'none',
+          },
+        });
+      },
+    });
+    unsubscribeAwayMode = app.nowEventHub.subscribe((event) => {
+      if (event.type === 'mode_changed') awayMode = event.away;
+    });
 
     const flushQueued = () => {
       configured = true;
@@ -1330,7 +1340,6 @@ function registerVoiceRoute(
         const token = await credential(getToken, controller.signal);
         if (controller.signal.aborted || browser.readyState !== WebSocket.OPEN) return;
         let personality = defaultSettings.personality;
-        let awayMode = false;
         if (english && app.settingsStore) {
           try {
             personality = (await readSettings(app.settingsStore)).personality;
@@ -1338,7 +1347,7 @@ function registerVoiceRoute(
             request.log.warn('voice.personality_settings_unavailable');
           }
         }
-        if (english && app.awayModeStore) {
+        if (app.awayModeStore) {
           try {
             awayMode = (await app.awayModeStore.read()).away;
           } catch {
