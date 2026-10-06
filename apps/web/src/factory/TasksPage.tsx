@@ -620,7 +620,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
           Start voice in Jarvis
         </button>
         <p id="factory-composer-guidance">
-          Sending opens the conversation and uses its normal message queue. Voice opens Jarvis with its explicit Start voice control focused; the microphone stays off until you activate it.
+          Sending opens the conversation and uses its normal message queue. Voice opens Jarvis with its explicit Start voice control focused; your browser asks for microphone access only when you press it.
         </p>
       </form>
 

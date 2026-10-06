@@ -379,6 +379,67 @@ describe('authenticated PC bridge protocol', () => {
       ]);
     });
 
+    it('routes keyboard and focused-text actions through the bridge with confirmation only when irreversible', async () => {
+      const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+      const { app, record } = fixture({ runConfirmed });
+      const url = await listen(app);
+      const bridge = await connectBridge(url);
+      const commands: Array<Record<string, unknown>> = [];
+      bridge.on('message', (data) => {
+        const command = JSON.parse(data.toString()) as Record<string, unknown>;
+        commands.push(command);
+        const action = (command.arguments as Record<string, unknown>).action;
+        bridge.send(JSON.stringify({
+          id: command.id,
+          type: 'result',
+          result: { acted: true, action },
+        }));
+      });
+
+      const keys = await callTool(app, 'pc_browser_act', {
+        tabId: 'tab_1',
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        action: 'keys',
+        keys: ['Ctrl+Enter'],
+        closeIntent: false,
+        requiresConfirmation: true,
+      });
+      const typed = await callTool(app, 'pc_browser_act', {
+        tabId: 'tab_1',
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        action: 'type_focused',
+        text: 'Daft Punk',
+      });
+
+      expect(keys.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'keys' } });
+      expect(typed.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'type_focused' } });
+      expect(runConfirmed).toHaveBeenCalledWith(
+        'Send an irreversible keyboard action in Chrome.',
+        expect.any(Function),
+        expect.any(AbortSignal),
+      );
+      expect(commands.map(({ arguments: arguments_ }) => arguments_)).toEqual([
+        {
+          tabId: 'tab_1',
+          snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+          action: 'keys',
+          keys: ['Ctrl+Enter'],
+          closeIntent: false,
+          confirmed: true,
+        },
+        {
+          tabId: 'tab_1',
+          snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+          action: 'type_focused',
+          text: 'Daft Punk',
+        },
+      ]);
+      expect(record.mock.calls.map(([call]) => call.arguments)).toEqual([
+        { redacted: true },
+        { redacted: true },
+      ]);
+    });
+
     it.each(['Submit order', 'Purchase now', 'Send message'])(
       'uses P7-03 confirmation before clicking %s',
       async (label) => {

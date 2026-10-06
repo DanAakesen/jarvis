@@ -83,6 +83,66 @@ public static class CommandPolicy
             direction.GetString() is "up" or "down";
     }
 
+    public static bool IsValidKeyboardSequence(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Array &&
+        value.GetArrayLength() is >= 1 and <= 4 &&
+        value.EnumerateArray().All(chord =>
+            chord.ValueKind == JsonValueKind.String &&
+            TryParseKeyboardChord(chord.GetString()!, out _, out _));
+
+    public static bool TryParseKeyboardChord(string chord, out string[] modifiers, out string key)
+    {
+        modifiers = [];
+        key = string.Empty;
+        if (chord == "+")
+        {
+            key = "+";
+            return true;
+        }
+        var keyIsPlus = chord.EndsWith("++", StringComparison.Ordinal);
+        var parts = keyIsPlus
+            ? chord[..^2].Split('+')
+            : chord.Split('+');
+        if (parts.Length is < 1 or > 4 || parts.Any(string.IsNullOrWhiteSpace) ||
+            (keyIsPlus && parts.Length is > 3))
+            return false;
+
+        var modifierNames = new List<string>();
+        foreach (var modifier in keyIsPlus ? parts : parts[..^1])
+        {
+            var normalized = modifier.ToLowerInvariant() switch
+            {
+                "ctrl" => "Ctrl",
+                "alt" => "Alt",
+                "shift" => "Shift",
+                "win" => "Win",
+                _ => string.Empty,
+            };
+            if (normalized.Length == 0 || modifierNames.Contains(normalized, StringComparer.Ordinal))
+                return false;
+            modifierNames.Add(normalized);
+        }
+
+        key = keyIsPlus ? "+" : parts[^1];
+        if (!IsKeyboardKey(key)) return false;
+        modifiers = modifierNames.ToArray();
+        return true;
+    }
+
+    public static bool HasIrreversibleKeyboardChord(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Array) return false;
+        return value.EnumerateArray().Any(chord =>
+        {
+            if (chord.ValueKind != JsonValueKind.String ||
+                !TryParseKeyboardChord(chord.GetString()!, out var modifiers, out var key))
+                return false;
+            return key.Equals("Delete", StringComparison.OrdinalIgnoreCase) ||
+                (key.Equals("Enter", StringComparison.OrdinalIgnoreCase) &&
+                 modifiers.Contains("Ctrl", StringComparer.Ordinal));
+        });
+    }
+
     public static bool IsMediaAction(string? action) => TryGetMediaVirtualKey(action, out _);
 
     public static bool TryGetMediaVirtualKey(string? action, out ushort virtualKey)
@@ -105,13 +165,32 @@ public static class CommandPolicy
         if (!arguments.TryGetProperty("snapshotId", out var snapshotId) ||
             snapshotId.ValueKind != JsonValueKind.String ||
             !Guid.TryParseExact(snapshotId.GetString(), "D", out _) ||
-            !arguments.TryGetProperty("elementIndex", out var elementIndex) ||
-            !elementIndex.TryGetInt32(out var index) || index is < 0 or >= 100 ||
             !arguments.TryGetProperty("action", out var action) ||
             action.ValueKind != JsonValueKind.String)
         {
             return false;
         }
+
+        var actionName = action.GetString();
+        if (actionName == "keys")
+        {
+            var commonKeys = new[] { "snapshotId", "action", "keys", "confirmed", "closeIntent" };
+            return HasOnly(arguments, commonKeys) &&
+                HasBoolean(arguments, "confirmed") &&
+                HasBoolean(arguments, "closeIntent") &&
+                IsValidKeyboardSequence(arguments.GetProperty("keys")) &&
+                IsSafeKeyboardSequence(arguments.GetProperty("keys"), arguments.GetProperty("closeIntent").GetBoolean());
+        }
+        if (actionName == "type_focused")
+        {
+            var commonType = new[] { "snapshotId", "action", "text" };
+            return HasOnly(arguments, commonType) &&
+                HasBoundedString(arguments, "text", 4_096) &&
+                UiAutomationPolicy.IsSafeText(arguments.GetProperty("text").GetString()!);
+        }
+        if (!arguments.TryGetProperty("elementIndex", out var elementIndex) ||
+            !elementIndex.TryGetInt32(out var index) || index is < 0 or >= 100)
+            return false;
 
         var common = new[] { "snapshotId", "elementIndex", "action" };
         return action.GetString() switch
@@ -135,13 +214,32 @@ public static class CommandPolicy
             !arguments.TryGetProperty("snapshotId", out var snapshotId) ||
             snapshotId.ValueKind != JsonValueKind.String ||
             !Guid.TryParseExact(snapshotId.GetString(), "D", out _) ||
-            !arguments.TryGetProperty("elementIndex", out var elementIndex) ||
-            !elementIndex.TryGetInt32(out var index) || index is < 0 or > 500 ||
             !arguments.TryGetProperty("action", out var action) ||
             action.ValueKind != JsonValueKind.String)
         {
             return false;
         }
+
+        var actionName = action.GetString();
+        if (actionName == "keys")
+        {
+            var commonKeys = new[] { "tabId", "snapshotId", "action", "keys", "confirmed", "closeIntent" };
+            return HasOnly(arguments, commonKeys) &&
+                HasBoolean(arguments, "confirmed") &&
+                HasBoolean(arguments, "closeIntent") &&
+                IsValidKeyboardSequence(arguments.GetProperty("keys")) &&
+                IsSafeKeyboardSequence(arguments.GetProperty("keys"), arguments.GetProperty("closeIntent").GetBoolean());
+        }
+        if (actionName == "type_focused")
+        {
+            var commonType = new[] { "tabId", "snapshotId", "action", "text" };
+            return HasOnly(arguments, commonType) &&
+                HasBoundedString(arguments, "text", 4_096) &&
+                UiAutomationPolicy.IsSafeText(arguments.GetProperty("text").GetString()!);
+        }
+        if (!arguments.TryGetProperty("elementIndex", out var elementIndex) ||
+            !elementIndex.TryGetInt32(out var index) || index is < 0 or > 500)
+            return false;
 
         var common = new[] { "tabId", "snapshotId", "elementIndex", "action" };
         return action.GetString() switch
@@ -168,6 +266,51 @@ public static class CommandPolicy
         value.ValueKind == JsonValueKind.String &&
         value.GetString() is { Length: > 0 and <= 128 } id &&
         id.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
+
+    private static bool IsKeyboardKey(string key)
+    {
+        if (key.Length == 1) return key[0] is >= '!' and <= '~';
+        return key.Equals("Enter", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("Tab", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("Escape", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("Esc", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("Space", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("Backspace", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("Delete", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("Insert", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("Home", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("End", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("PageUp", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("PageDown", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("ArrowUp", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("ArrowDown", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("ArrowLeft", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("ArrowRight", StringComparison.OrdinalIgnoreCase) ||
+            (key.Length is 2 or 3 && (key[0] is 'F' or 'f') &&
+             int.TryParse(key[1..], out var functionKey) && functionKey is >= 1 and <= 12);
+    }
+
+    public static bool IsSafeKeyboardSequence(JsonElement value, bool closeIntent)
+    {
+        foreach (var chord in value.EnumerateArray())
+        {
+            if (!TryParseKeyboardChord(chord.GetString()!, out var modifiers, out var key)) return false;
+            if ((modifiers.Contains("Win", StringComparer.Ordinal) &&
+                    key.Equals("L", StringComparison.OrdinalIgnoreCase)) ||
+                (modifiers.Contains("Ctrl", StringComparer.Ordinal) &&
+                    modifiers.Contains("Alt", StringComparer.Ordinal) &&
+                    key.Equals("Delete", StringComparison.OrdinalIgnoreCase)))
+                return false;
+            if (modifiers.Contains("Alt", StringComparer.Ordinal) &&
+                key.Equals("F4", StringComparison.OrdinalIgnoreCase) && !closeIntent)
+                return false;
+        }
+        return true;
+    }
+
+    private static bool HasBoolean(JsonElement value, string property) =>
+        value.TryGetProperty(property, out var item) &&
+        item.ValueKind is JsonValueKind.True or JsonValueKind.False;
 
     private static bool HasBoundedString(JsonElement value, string property, int maximum, bool allowEmpty = false) =>
         value.TryGetProperty(property, out var item) &&

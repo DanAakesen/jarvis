@@ -79,6 +79,20 @@ public sealed class UiAutomationExecutor(IUiAutomationProvider provider)
             .ToArray());
     }
 
+    public void EnsureCurrentWindow(string snapshotId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var snapshot = _snapshot;
+        if (snapshot is null || snapshot.Id != snapshotId ||
+            DateTimeOffset.UtcNow - snapshot.CreatedAt > SnapshotLifetime)
+            throw new UiAutomationRefusedException("stale");
+
+        var current = provider.Observe(cancellationToken);
+        if (current is null || current.Application != snapshot.View.Application ||
+            current.WindowId != snapshot.View.WindowId)
+            throw new UiAutomationRefusedException("stale");
+    }
+
     public bool Act(
         string snapshotId,
         int index,
