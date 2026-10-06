@@ -19,6 +19,14 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
+365 or Teams. Keep away mode manual and do not read Graph presence. Route
+notifications and confirmations through the web app and active browser voice
+sessions; do not provision Teams Bot, Teams channel, or separate Speech F0
+resources in production. This supersedes earlier P7 Teams-call, Graph-presence,
+and Teams-routing choices. Retain optional Teams code only as dormant integration
+code.
+
 P6-21 (6 October 2026): project task summaries from existing PR, workflow,
 usage and PR-opened event records without live GitHub reads or a schema change.
 Unknown state, token metrics and costs stay null; recorded costs can be partial.

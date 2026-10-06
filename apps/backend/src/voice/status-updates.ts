@@ -5,6 +5,7 @@ import { taskStatusMessage, taskStatusNotification } from '../factory/task-statu
 export type VoiceStatusKind = NowFeedStatusKind;
 
 const statusText: Readonly<Record<VoiceStatusKind, string>> = {
+  approval_pending: 'Approval is pending in Jarvis',
   pull_request_ready: 'A pull request is ready',
   deployment_failed: 'A deployment has failed',
 };

@@ -437,7 +437,11 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
   app.get('/settings', async (_request, reply) => {
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const credentials = await app.credentialStatusStore?.list() ?? [];
-    return { settings: await readSettings(app.settingsStore), options: settingsOptions, credentials };
+    return {
+      settings: await readSettings(app.settingsStore),
+      options: settingsOptions,
+      credentials,
+    };
   });
 
   app.get('/agent/settings', {
@@ -509,7 +513,11 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     const patch = body.settings;
     await app.settingsStore.write(patch);
     const credentials = await app.credentialStatusStore?.list() ?? [];
-    return { settings: await readSettings(app.settingsStore), options: settingsOptions, credentials };
+    return {
+      settings: await readSettings(app.settingsStore),
+      options: settingsOptions,
+      credentials,
+    };
   });
 }
 

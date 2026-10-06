@@ -41,9 +41,10 @@ export type NowFeedSnapshot = Omit<NowFeed, 'awayMode' | 'confirmations'>;
 export interface NowFeedStore {
   read(): Promise<NowFeedSnapshot>;
   dismiss(id: string): Promise<boolean>;
+  recordNotification?(kind: string, text: string): Promise<void>;
 }
 
-export type NowFeedStatusKind = 'pull_request_ready' | 'deployment_failed';
+export type NowFeedStatusKind = 'pull_request_ready' | 'deployment_failed' | 'approval_pending';
 
 export type NowFeedUpdate =
   | { type: 'refresh' }
@@ -85,17 +86,12 @@ export function registerNowRoutes(app: FastifyInstance) {
       app.nowFeedStore.read(),
       app.awayModeStore?.read() ?? Promise.resolve(defaultAwayModeState),
     ]);
-    const confirmations = awayMode.away
-      ? []
-      : app.teamsNotifications?.pendingBrowserConfirmations() ?? [];
-    const snapshot = awayMode.away
-      ? {
-        ...feed,
-        running: [],
-        items: feed.items.filter((item) => item.category === 'mode'),
-      }
-      : feed;
-    return sendBounded(reply, { ...snapshot, awayMode: awayMode.away, confirmations });
+    const confirmations = app.teamsNotifications?.pendingBrowserConfirmations() ?? [];
+    return sendBounded(reply, {
+      ...feed,
+      awayMode: awayMode.away,
+      confirmations,
+    });
   });
 
   app.post<{ Params: { id: string }; Body: { decision: 'approve' | 'reject' } }>('/now/confirmations/:id', {
@@ -118,11 +114,8 @@ export function registerNowRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
     const service = app.teamsNotifications;
-    if (!service || !app.awayModeStore) {
+    if (!service) {
       return reply.code(503).send({ error: 'Confirmation service unavailable' });
-    }
-    if ((await app.awayModeStore.read()).away) {
-      return reply.code(409).send({ error: 'Approvals are sent to Teams while away.' });
     }
     if (!await service.resolveBrowserConfirmation(request.params.id, request.body.decision)) {
       return reply.code(404).send({ error: 'Confirmation is no longer available.' });
@@ -167,19 +160,11 @@ export function registerNowRoutes(app: FastifyInstance) {
       if (!response.writableEnded) response.end();
     };
     unsubscribe = app.nowEventHub.subscribe((event) => {
-      void (async () => {
-        let away: boolean;
-        try {
-          away = (await app.awayModeStore?.read() ?? defaultAwayModeState).away;
-        } catch {
-          return;
-        }
-        if (closed) return;
-        const frame = event.type === 'mode_changed'
-          ? 'event: mode\ndata: {}\n\n'
-          : away ? null : 'event: now\ndata: {}\n\n';
-        if (frame && !response.write(frame)) end();
-      })();
+      if (closed) return;
+      const frame = event.type === 'mode_changed'
+        ? 'event: mode\ndata: {}\n\n'
+        : 'event: now\ndata: {}\n\n';
+      if (!response.write(frame)) end();
     });
     unsubscribeActivity = app.jarvisActivityHub.subscribe((event) => {
       if (closed) return;
