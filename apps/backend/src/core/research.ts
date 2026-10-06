@@ -1,0 +1,445 @@
+import { randomUUID } from 'node:crypto';
+import {
+  isHtmlArtifact,
+  isHtmlArtifactFrame,
+  isValidHtmlArtifactHtml,
+  isWebResearchResult,
+  isWorkspaceCommand,
+  type GeneratedView,
+  type HtmlArtifact,
+  type HtmlArtifactFrame,
+  type HtmlArtifactSource,
+  type WebResearchResult,
+} from '@jarvis/contracts';
+import { parse } from 'parse5';
+import type { FastifyInstance } from 'fastify';
+import type { BackendModule } from '../modules.js';
+import { generatedViewValidationOptions } from './generated-view-validation.js';
+import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import { runCodexToolResult, type WebResearchClient } from './web-research.js';
+
+const inputSchema = Object.freeze({
+  type: 'object',
+  properties: {
+    topic: { type: 'string', minLength: 1, maxLength: 2_000 },
+    depth: { enum: ['quick', 'deep'] },
+  },
+  required: ['topic', 'depth'],
+  additionalProperties: false,
+});
+const maxJobs = 8;
+const maxConcurrentJobs = 2;
+const maxReportBytes = 48 * 1024;
+const maxReportSources = 12;
+const maxFindingLength = 1_000;
+const defaultJobTimeoutMs = 15 * 60_000;
+const defaultInvocationTimeoutMs = 305_000;
+const defaultPollIntervalMs = 1_000;
+const plans = {
+  quick: [
+    ['Key findings and current evidence', 'Summarize the key findings and current evidence'],
+    ['Important facts and primary sources', 'Find important facts and authoritative primary sources'],
+  ],
+  deep: [
+    ['Overview and key context', 'Explain the background and current state'],
+    ['Recent developments', 'Find recent developments and dates'],
+    ['Evidence and data', 'Find quantitative evidence, datasets, or measured results'],
+    ['Benefits and limitations', 'Compare benefits, risks, limitations, and uncertainty'],
+    ['Expert perspectives', 'Find credible expert perspectives and disagreements'],
+  ],
+} as const;
+
+interface ResearchArtifactStore {
+  create(
+    ownerObjectId: string,
+    title: string,
+    html: string,
+    sources: HtmlArtifactSource[],
+    signal: AbortSignal,
+  ): Promise<HtmlArtifact>;
+}
+
+interface ResearchOptions {
+  jobTimeoutMs?: number;
+  invocationTimeoutMs?: number;
+  pollIntervalMs?: number;
+}
+
+interface SearchProgress {
+  label: string;
+  query: string;
+  status: 'pending' | 'searching' | 'complete' | 'failed';
+  answer?: string;
+}
+
+interface ResearchJob {
+  controller: AbortController;
+  promise: Promise<void>;
+  done: boolean;
+}
+
+interface ResearchReport {
+  title: string;
+  html: string;
+  spokenSummary: string;
+}
+
+interface HtmlNode {
+  nodeName: string;
+  tagName?: string;
+  attrs?: { name: string; value: string }[];
+  childNodes?: HtmlNode[];
+}
+
+function safeTopic(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim() || value.length > 2_000) {
+    throw new ToolFailure('A valid research topic is required.');
+  }
+  return value.trim();
+}
+
+function boundedQuery(topic: string, suffix: string): string {
+  const budget = 2_000 - suffix.length - 1;
+  let prefix = '';
+  for (const character of topic) {
+    if (prefix.length + character.length > budget) break;
+    prefix += character;
+  }
+  return `${prefix} ${suffix}`;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseReport(value: unknown, sources: readonly HtmlArtifactSource[]): ResearchReport {
+  let data: unknown = value;
+  if (typeof value === 'string') {
+    try {
+      data = JSON.parse(value);
+    } catch {
+      throw new ToolFailure('The report generator returned invalid JSON.');
+    }
+  }
+  if (!isObject(data) || Object.keys(data).some((key) => !['title', 'html', 'spokenSummary'].includes(key)) ||
+      typeof data.title !== 'string' || !data.title.trim() || data.title.length > 200 ||
+      typeof data.html !== 'string' || !isValidHtmlArtifactHtml(data.html) ||
+      typeof data.spokenSummary !== 'string' || !data.spokenSummary.trim() || data.spokenSummary.length > 600 ||
+      Buffer.byteLength(JSON.stringify(data), 'utf8') > maxReportBytes) {
+    throw new ToolFailure('The report generator returned an invalid or oversized report.');
+  }
+
+  const document = parse(data.html) as unknown as HtmlNode;
+  const tags = new Set<string>();
+  const trustedSources = new Set(sources.map(({ url }) => url));
+  let titleFound = false;
+  let bodyFound = false;
+  let doctypeFound = false;
+  let invalid = false;
+  const visit = (node: HtmlNode) => {
+    if (node.nodeName === '#documentType') doctypeFound = true;
+    if (node.tagName) {
+      const tag = node.tagName.toLowerCase();
+      tags.add(tag);
+      if (['base', 'embed', 'form', 'frame', 'frameset', 'iframe', 'link', 'object'].includes(tag)) invalid = true;
+      if (tag === 'title') titleFound = true;
+      if (tag === 'body') bodyFound = true;
+      for (const { name, value } of node.attrs ?? []) {
+        if (tag === 'script' && name.toLowerCase() === 'src') invalid = true;
+        if (tag === 'meta' && name.toLowerCase() === 'http-equiv' && value.toLowerCase() === 'refresh') invalid = true;
+        if (tag === 'a' && name.toLowerCase() === 'href' && !value.startsWith('#')) {
+          try {
+            const url = new URL(value);
+            if (url.protocol !== 'https:' || !trustedSources.has(url.href)) invalid = true;
+          } catch {
+            invalid = true;
+          }
+        }
+        if (tag === 'img' && name.toLowerCase() === 'src' && !value.startsWith('data:')) {
+          try {
+            const url = new URL(value);
+            if (url.protocol !== 'https:' || url.username || url.password || url.port) invalid = true;
+          } catch {
+            invalid = true;
+          }
+        }
+      }
+    }
+    for (const child of node.childNodes ?? []) visit(child);
+  };
+  visit(document);
+  if (!doctypeFound || !tags.has('html') || !tags.has('head') || !titleFound || !bodyFound || invalid) {
+    throw new ToolFailure('The generated HTML failed the self-contained report checks.');
+  }
+  return {
+    title: data.title.trim(),
+    html: data.html,
+    spokenSummary: data.spokenSummary.trim(),
+  };
+}
+
+function reportFrame(snapshot: ReturnType<FastifyInstance['workspaceCommands']['snapshot']>): HtmlArtifactFrame {
+  const frame = snapshot?.frame;
+  if (!isHtmlArtifactFrame(frame)) {
+    throw new ToolRefusal('The workspace display settings are not available yet.');
+  }
+  return { ...frame, pinned: false };
+}
+
+function createProgressView(
+  topic: string,
+  searches: readonly SearchProgress[],
+  sources: readonly HtmlArtifactSource[],
+  status: 'complete' | 'partial' | 'unavailable',
+  reason?: string,
+): GeneratedView {
+  const items = searches.map((search) => ({
+    title: search.status === 'searching'
+      ? `Searching: ${search.label}`
+      : search.status === 'failed'
+        ? `Search failed: ${search.label}`
+        : search.status === 'complete'
+          ? `Found: ${search.label}`
+          : `Queued: ${search.label}`,
+    description: search.status === 'failed'
+      ? 'This search did not complete.'
+      : search.answer ?? search.query,
+  }));
+  for (const source of sources) {
+    items.push({ title: source.title, description: source.url });
+  }
+  if (status === 'unavailable') {
+    items.unshift({ title: 'Research could not be completed', description: reason ?? 'Try again shortly.' });
+  } else if (status === 'complete' || status === 'partial') {
+    items.unshift({
+      title: status === 'complete' ? 'Report is ready' : 'Report is ready with partial findings',
+      description: 'The interactive report has replaced this progress view.',
+    });
+  }
+  return {
+    version: 1,
+    title: `Research: ${topic}`.slice(0, 200),
+    renderer: 'list',
+    source: {
+      id: 'research',
+      status,
+      updatedAt: new Date().toISOString(),
+      ...(status === 'unavailable' ? { reason: reason ?? 'Research could not be completed.' } : {}),
+    },
+    data: { items: items.slice(0, 100) },
+  };
+}
+
+function workspaceCommand(
+  operation: 'create' | 'update',
+  viewId: string,
+  view: GeneratedView,
+): { commandId: string; operation: 'create' | 'update'; viewId: string; view: GeneratedView } {
+  return { commandId: randomUUID(), operation, viewId, view };
+}
+
+async function sendProgress(
+  app: FastifyInstance,
+  ownerId: string,
+  viewId: string,
+  topic: string,
+  searches: readonly SearchProgress[],
+  sources: readonly HtmlArtifactSource[],
+  signal: AbortSignal,
+  status: 'complete' | 'partial' | 'unavailable' = 'partial',
+  reason?: string,
+): Promise<void> {
+  const command = workspaceCommand(
+    'update',
+    viewId,
+    createProgressView(topic, searches, sources, status, reason),
+  );
+  if (!isWorkspaceCommand(command, generatedViewValidationOptions(app))) {
+    throw new ToolFailure('Research progress did not pass workspace validation.');
+  }
+  await app.workspaceCommands.execute(ownerId, command, signal);
+}
+
+function reportRequest(
+  topic: string,
+  depth: 'quick' | 'deep',
+  frame: HtmlArtifactFrame,
+  findings: { query: string; answer: string }[],
+  sources: HtmlArtifactSource[],
+): string {
+  return JSON.stringify({ topic, depth, frame, findings, sources });
+}
+
+export function createHtmlResearchModule(
+  clientFor: () => WebResearchClient,
+  model: string,
+  artifacts: ResearchArtifactStore,
+  options: ResearchOptions = {},
+): BackendModule {
+  const jobTimeoutMs = options.jobTimeoutMs ?? defaultJobTimeoutMs;
+  const invocationTimeoutMs = options.invocationTimeoutMs ?? defaultInvocationTimeoutMs;
+  const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs;
+  const jobs = new Map<string, ResearchJob>();
+  return {
+    id: 'html-research',
+    tools: [{
+      name: 'research',
+      description: 'Research a topic in the background and open an interactive cited HTML report in the workspace.',
+      inputSchema,
+      sensitive: true,
+      execute: async (input, request, signal) => {
+        if (!isObject(input) || !['quick', 'deep'].includes(input.depth as string)) {
+          throw new ToolFailure('Choose a research depth of quick or deep.');
+        }
+        const topic = safeTopic(input.topic);
+        const ownerId = request.server.ownerObjectId;
+        if (!request.agentPrincipal &&
+            request.principal?.objectId.toLowerCase() !== ownerId.toLowerCase()) {
+          throw new ToolRefusal('Research requires an authenticated workspace owner.');
+        }
+        for (const [id, job] of jobs) {
+          if (job.done) jobs.delete(id);
+        }
+        let activeJobs = 0;
+        for (const job of jobs.values()) if (!job.done) activeJobs += 1;
+        if (activeJobs >= maxConcurrentJobs || jobs.size >= maxJobs) {
+          throw new ToolRefusal('Research is busy. Try again when a current report finishes.');
+        }
+        const jobId = randomUUID();
+        const viewId = `research-${jobId.replaceAll('-', '')}`;
+        const searches: SearchProgress[] = plans[input.depth as 'quick' | 'deep'].map(([label, suffix]) => ({
+          label,
+          query: boundedQuery(topic, suffix),
+          status: 'pending',
+        }));
+        const initialView = createProgressView(topic, searches, [], 'partial');
+        const initialCommand = workspaceCommand('create', viewId, initialView);
+        if (!isWorkspaceCommand(initialCommand, generatedViewValidationOptions(request.server))) {
+          throw new ToolFailure('Research progress did not pass workspace validation.');
+        }
+        await request.server.workspaceCommands.execute(ownerId, initialCommand, signal);
+
+        const controller = new AbortController();
+        const job: ResearchJob = { controller, promise: Promise.resolve(), done: false };
+        jobs.set(jobId, job);
+        job.promise = Promise.resolve().then(async () => {
+          const timeoutSignal = AbortSignal.timeout(jobTimeoutMs);
+          const jobSignal = AbortSignal.any([controller.signal, timeoutSignal]);
+          const sourcesByUrl = new Map<string, HtmlArtifactSource>();
+          const findings: { query: string; answer: string }[] = [];
+          const app = request.server;
+          const sources = () => [...sourcesByUrl.values()].slice(0, 50);
+          try {
+            for (const search of searches) {
+              jobSignal.throwIfAborted();
+              search.status = 'searching';
+              await sendProgress(app, ownerId, viewId, topic, searches, sources(), jobSignal);
+              try {
+                const result = await runCodexToolResult(
+                  clientFor(),
+                  'web_research',
+                  search.query,
+                  model,
+                  jobSignal,
+                  invocationTimeoutMs,
+                  pollIntervalMs,
+                  (value) => parseWebResearchResult(value),
+                );
+                search.status = 'complete';
+                search.answer = result.answer.slice(0, maxFindingLength);
+                findings.push({ query: search.query, answer: result.answer.slice(0, maxFindingLength) });
+                for (const source of result.sources) {
+                  if (sourcesByUrl.size >= 50) break;
+                  sourcesByUrl.set(source.url, { title: source.title, url: source.url });
+                }
+              } catch (error) {
+                if (jobSignal.aborted) throw error;
+                search.status = 'failed';
+              }
+              await sendProgress(app, ownerId, viewId, topic, searches, sources(), jobSignal);
+            }
+            if (findings.length === 0) throw new ToolFailure('No research searches completed successfully.');
+            const snapshot = app.workspaceCommands.snapshot(ownerId);
+            const frame = reportFrame(snapshot);
+            const reportSources = sources().slice(0, maxReportSources);
+            const result = await runCodexToolResult(
+              clientFor(),
+              'html_report',
+              reportRequest(topic, input.depth as 'quick' | 'deep', frame, findings, reportSources),
+              model,
+              jobSignal,
+              invocationTimeoutMs,
+              pollIntervalMs,
+              (value) => parseReport(value, reportSources),
+            );
+            const artifact = await artifacts.create(ownerId, result.title, result.html, sources(), jobSignal);
+            if (!isHtmlArtifact(artifact)) throw new ToolFailure('The report failed artifact validation.');
+            const view: GeneratedView = {
+              version: 1,
+              title: artifact.title,
+              renderer: 'html-app',
+              source: {
+                id: 'research',
+                status: searches.some((search) => search.status === 'failed') ? 'partial' : 'complete',
+                updatedAt: new Date().toISOString(),
+              },
+              data: { artifactId: artifact.id },
+            };
+            const command = workspaceCommand('update', viewId, view);
+            if (!isWorkspaceCommand(command, generatedViewValidationOptions(app))) {
+              throw new ToolFailure('The report did not pass workspace validation.');
+            }
+            await app.workspaceCommands.execute(ownerId, command, jobSignal);
+          } catch (error) {
+            if (!controller.signal.aborted) {
+              const reason = error instanceof ToolRefusal
+                ? 'Research was refused. Check workspace access and try again.'
+                : 'Research could not be completed. Try again shortly.';
+              await sendProgress(
+                app,
+                ownerId,
+                viewId,
+                topic,
+                searches,
+                sources(),
+                AbortSignal.timeout(5_000),
+                'unavailable',
+                reason,
+              )
+                .catch(() => undefined);
+            }
+          } finally {
+            job.done = true;
+          }
+        }).catch(() => undefined);
+        return { jobId, message: 'Research has started. The workspace window will show progress and the completed report.' };
+      },
+    }],
+    registerRoutes: async (app) => {
+      app.addHook('onClose', async () => {
+        for (const job of jobs.values()) job.controller.abort();
+        await Promise.all([...jobs.values()].map((job) => job.promise));
+        jobs.clear();
+      });
+    },
+  };
+}
+
+function parseWebResearchResult(value: unknown): WebResearchResult {
+  if (!isObject(value) || Object.keys(value).some((key) => !['answer', 'sources'].includes(key)) ||
+      typeof value.answer !== 'string' || !value.answer.trim() ||
+      !Array.isArray(value.sources) || value.sources.length > 10) {
+    throw new ToolFailure('Web research returned an invalid result.');
+  }
+  const retrievedAt = new Date().toISOString();
+  const sources = value.sources.map((source) => {
+    if (!isObject(source) || Object.keys(source).some((key) => !['title', 'url'].includes(key)) ||
+        typeof source.title !== 'string' || typeof source.url !== 'string') {
+      throw new ToolFailure('Web research returned an invalid source.');
+    }
+    return { title: source.title, url: source.url, retrievedAt };
+  });
+  const result = { answer: value.answer, sources };
+  if (!isWebResearchResult(result)) throw new ToolFailure('Web research returned an invalid or oversized result.');
+  return result;
+}

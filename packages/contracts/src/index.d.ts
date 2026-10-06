@@ -131,6 +131,7 @@ export interface HtmlArtifactFrame {
 export interface WorkspaceSnapshot {
   windows: readonly { viewId: string; title: string }[];
   contextPanelOpen: boolean;
+  frame?: HtmlArtifactFrame;
 }
 
 export type WorkspaceCommand =

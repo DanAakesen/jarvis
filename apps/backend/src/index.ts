@@ -80,6 +80,8 @@ import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
 import { createWebResearchModule } from './core/web-research.js';
+import { createHtmlResearchModule } from './core/research.js';
+import { HtmlArtifactStore } from './database/html-artifact-store.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
 import { createEphemeralAudioStore } from './teams/audio-store.js';
 import { createAzureSpeechSynthesizer } from './teams/speech.js';
@@ -112,6 +114,7 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
+  const htmlArtifactStore = database ? new HtmlArtifactStore(database.pool) : undefined;
   const phoneSessionStore = database && config.phone
     ? createPhoneSessionStore(database.pool)
     : undefined;
@@ -343,6 +346,13 @@ try {
   const webResearchModule = database && credential && config.foundryEndpoints && config.foundryRunnerAgentName
     ? createWebResearchModule(() => clientFor(config.foundryRunnerAgentName!), config.codexToolModel)
     : undefined;
+  const htmlResearchModule = htmlArtifactStore && credential && config.foundryEndpoints && config.foundryRunnerAgentName
+    ? createHtmlResearchModule(
+      () => clientFor(config.foundryRunnerAgentName!),
+      config.codexToolModel,
+      htmlArtifactStore,
+    )
+    : undefined;
   const sandboxHeartbeat = database && config.foundryEndpoints
     ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub, alertNotifier), clientFor, {
       onDecision: (decision) => logger.info(decision, 'sandbox_heartbeat.decision'),
@@ -474,6 +484,7 @@ try {
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
     ...(webResearchModule ? [webResearchModule] : []),
+    ...(htmlResearchModule ? [htmlResearchModule] : []),
     ...(googleModule ? [googleModule] : []),
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
