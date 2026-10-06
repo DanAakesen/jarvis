@@ -19,13 +19,13 @@ public sealed class SpeechKeywordRecognizer(string modelPath) : IKeywordRecogniz
         KeywordRecognitionResult result;
         // Start first: a stop requested before recognition starts would leave the task unresolved.
         var recognizing = recognizer.RecognizeOnceAsync(_model);
-        using (cancellationToken.Register(() => stopping = recognizer.StopRecognitionAsync()))
+        using (cancellationToken.Register(() => Volatile.Write(ref stopping, recognizer.StopRecognitionAsync())))
         {
             result = await recognizing.ConfigureAwait(false);
         }
-        if (stopping is not null)
+        if (Volatile.Read(ref stopping) is { } stop)
         {
-            try { await stopping.ConfigureAwait(false); }
+            try { await stop.ConfigureAwait(false); }
             catch { }
         }
         cancellationToken.ThrowIfCancellationRequested();

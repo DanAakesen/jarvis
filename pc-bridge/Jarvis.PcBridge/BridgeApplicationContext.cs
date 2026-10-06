@@ -255,7 +255,11 @@ public sealed class BridgeApplicationContext : ApplicationContext
                 WindowsCommandExecutor.BringChromeToFront();
                 return;
             }
-            catch (BrowserActionRefusedException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
             {
             }
         }

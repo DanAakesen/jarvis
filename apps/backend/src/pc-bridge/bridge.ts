@@ -218,7 +218,10 @@ export class PcBridgeConnection {
     const wasActive = this.activeVoiceSessions.size > 0;
     if (event.type === 'ended' || event.type === 'failed') {
       this.activeVoiceSessions.delete(event.activityId);
-    } else if (activeVoiceStates.has(event.type) && this.activeVoiceSessions.size < maxTrackedVoiceSessions) {
+    } else if (activeVoiceStates.has(event.type) && !this.activeVoiceSessions.has(event.activityId)) {
+      if (this.activeVoiceSessions.size >= maxTrackedVoiceSessions) {
+        this.activeVoiceSessions.delete(this.activeVoiceSessions.values().next().value as string);
+      }
       this.activeVoiceSessions.add(event.activityId);
     }
     if (wasActive !== this.activeVoiceSessions.size > 0) this.sendVoiceState();
