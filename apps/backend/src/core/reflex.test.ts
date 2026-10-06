@@ -62,6 +62,21 @@ function pcOpenTool() {
   };
 }
 
+function pcMediaTool() {
+  return {
+    name: 'pc_media',
+    description: 'Control media playback.',
+    inputSchema: {
+      type: 'object',
+      properties: { action: { type: 'string', enum: ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] } },
+      required: ['action'],
+      additionalProperties: false,
+    },
+    reflexSafe: true,
+    execute: vi.fn(async () => ({})),
+  };
+}
+
 function response(
   route = 'target_0',
   confidence = 0.99,
@@ -298,6 +313,25 @@ describe('Jev reflex classifier', () => {
     ]);
     expect(createBrowserUrlTargets(openUrl, 'Open my browser')).toEqual([]);
     expect(createBrowserUrlTargets(undefined, 'Open google.com')).toEqual([]);
+  });
+
+  it('offers app-name and all six media controls as reflex targets but never offers Edge', () => {
+    const tools = createToolRegistry([{ id: 'pc-bridge', tools: [pcOpenTool(), pcMediaTool()] }]);
+
+    const targets = createReflexTargets(tools.list(), [], 'Open Spotify');
+
+    expect(targets[0]).toMatchObject({
+      tool: { name: 'pc_open' },
+      arguments: { target: 'app', value: 'Spotify' },
+    });
+    expect(targets.filter(({ tool }) => tool.name === 'pc_media').map(({ arguments: args }) => args.action))
+      .toEqual(['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute']);
+    expect(createReflexTargets(tools.list(), [], 'Åbn Microsoft Teams'))
+      .toContainEqual(expect.objectContaining({ arguments: { target: 'app', value: 'Microsoft Teams' } }));
+    expect(createReflexTargets(tools.list(), [], 'Open Microsoft Edge'))
+      .not.toContainEqual(expect.objectContaining({ tool: { name: 'pc_open' } }));
+    expect(createReflexTargets(tools.list(), [], 'Open the page and search for Jarvis'))
+      .not.toContainEqual(expect.objectContaining({ arguments: expect.objectContaining({ target: 'app' }) }));
   });
 
   it('falls through on low-confidence, malformed, missing-key, and rejected responses', async () => {

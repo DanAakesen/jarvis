@@ -159,6 +159,7 @@ public static partial class UiAutomationPolicy
     private static partial Regex SensitiveNumericPattern();
 
     [GeneratedRegex(
+<<<<<<< HEAD
         @"\b(?:send|submit|delete|remove|erase|overwrite|replace|discard|reset|clear|format|reformat|drop|revert|pay|payment|purchase|post|push|transfer)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DestructiveControlPattern();
@@ -166,6 +167,17 @@ public static partial class UiAutomationPolicy
     public static bool IsAllowedApplication(string application) =>
         application.Length is > 0 and <= 128 &&
         application.All(character => char.IsLetterOrDigit(character) || character is '.' or '_' or '-');
+=======
+        @"\b(?:send|sending|delete|deletion|pay|paid|payment|purchase|post|posting|push|pushing|overwrite|overwriting)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex DestructiveControlPattern();
+
+    [GeneratedRegex(@"^[\p{L}\p{N}_.-]{1,128}$", RegexOptions.CultureInvariant)]
+    private static partial Regex ApplicationNamePattern();
+
+    public static bool IsAllowedApplication(string application) =>
+        !string.IsNullOrWhiteSpace(application) && ApplicationNamePattern().IsMatch(application);
+>>>>>>> origin/main
 
     public static bool IsSensitiveControl(string name) =>
         SensitiveControlPattern().IsMatch(name) ||

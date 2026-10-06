@@ -178,7 +178,7 @@ describe('dispatcher parallel load', () => {
         resume: vi.fn(),
         cancel: vi.fn(),
       }),
-      { track, untrack: vi.fn(), setCompletionHandler: vi.fn() } as unknown as SandboxHeartbeat,
+      { track, untrack: vi.fn(), setCompletionHandler: vi.fn(), hasTrackedSessions: () => false } as unknown as SandboxHeartbeat,
       events,
       { onError: (error) => errors.push(error) },
     ));

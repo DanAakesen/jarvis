@@ -58,6 +58,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   voice actions in both the bar and the composer. Language still flows through
   `ConversationHistory` state into the next session. No event, persistence or
   service contract changes.
+- Planned P8-40 (#417) keeps the same voice client, authenticated activity and
+  scene, but requests microphone access/audio preparation from explicit Start
+  voice and enables capture after real session readiness without a second click.
+  Transport/mute/runtime/playback are reconciled into one presentation state for
+  the under-orb HTML status and distinct scene motion; speech energy must reflect
+  actual playback time, including silence/interruption reset. Preserve permission
+  recovery, reconnect mute, cancelled-start cleanup and existing provider/API
+  contracts. No new persistence or retained audio/transcript is required. This
+  accepted follow-up supersedes the separate-enable and in-bar placement below;
+  those paths describe current implementation until #417 is delivered.
 - P8-31 applies the selected smoky glass to existing shell, conversation,
   temporary-workspace, contextual-panel, Factory and Settings surfaces through
   the light/dark semantic tokens in `apps/web/src/styles.css`. Shared headings
@@ -292,10 +302,13 @@ authentication. `POST /github/webhooks` is the sole public business route and op
 out of Entra authentication through its route configuration only. It accepts
 GitHub's JSON bytes unchanged, verifies `X-Hub-Signature-256` with the Key Vault
 secret `github-app-webhook-secret`, and records the `X-GitHub-Delivery` ID and
-event in `dbo.webhook_deliveries`. An atomic, serialized insert returns 202 for
-new and duplicate deliveries. The five subscribed event types are marked `ok`;
-valid unhandled events such as GitHub's setup `ping` are marked `ignored`.
-Only delivery metadata is stored; P3-04 and P3-07 map allowlisted event fields to the project records.
+event in `dbo.webhook_deliveries` only when the event maps to an active managed
+repository. A process-local repository set is loaded once at startup and updated
+when projects are created, renamed, or archived. Signed unsupported and
+untracked events are acknowledged as ignored without SQL. Tracked mappings and
+the delivery ID are committed together in one serializable transaction; duplicate
+deliveries cannot replay state writes. Only delivery metadata and allowlisted
+mapping fields are stored; P3-04 and P3-07 update project records.
 `KEY_VAULT_URI` is supplied by Bicep, and the backend managed identity reads and
 caches the secret after its first successful Key Vault lookup. Missing Key Vault
 configuration or secret fails webhook requests with 503, not an unsigned fallback.
@@ -652,6 +665,7 @@ to `/pc-bridge/connect` with subprotocol `jarvis.pc.v1`; it opens no listener or
 firewall port and retries after disconnect. Entra app-only identities, other
 delegated apps, and users other than Dan are rejected at the route boundary.
 
+<<<<<<< HEAD
 The backend registers `pc_open` and `pc_active_window` in its existing tool
 registry. Protocol messages are bounded to 64 KiB, correlate UUID command IDs,
 cap in-flight work, and time out after 15 seconds. Both backend validation and
@@ -663,6 +677,23 @@ persists tool outcomes while redacting its paths, URLs, and results from the
 generic audit. Active-window
 title reads and exact-title window focus remain available. URL commands are
 routed through the browser executor: if the extension is connected and
+=======
+The backend registers `pc_open`, `pc_media`, and `pc_active_window` in its
+existing tool registry. Protocol messages are bounded to 64 KiB, correlate UUID
+command IDs, cap in-flight work, and time out after 15 seconds. Both backend
+validation and the companion's portable core bound app names and validate the
+fixed command shapes. App lookup searches the current user's and common
+`Programs` Start-menu trees for `.lnk` shortcuts and enumerates
+`shell:AppsFolder` for packaged apps; matching is case-insensitive and fuzzy,
+and ambiguous matches return a bounded candidate list instead of launching.
+Edge shortcuts/package identities are excluded, including shortcuts targeting
+`msedge.exe`; unknown names are refused. Shortcuts launch through Windows shell
+resolution and packaged apps through their AppsFolder identity. There is no
+raw shell or arbitrary command execution tool. `pc_media` accepts only
+play/pause, next, previous, volume up/down, and mute, and sends the corresponding
+fixed Windows media virtual key. URL commands are routed through the browser
+executor: if the extension is connected and
+>>>>>>> origin/main
 Chrome automation is enabled, it opens the URL in Dan's normal Chrome; if the
 extension is disconnected, the current companion launches the installed Chrome
 executable directly and identifies that fallback in the tool result. Websites
@@ -677,19 +708,33 @@ companion never logs tokens, device codes, command arguments, URLs, paths, windo
 titles, or message content.
 
 Online/offline changes update one existing Now-feed activity row keyed by
-`pc_bridge_status`; status writes are serialized and the feed refresh happens
-after commit. This uses `activity.alert_key` and requires no migration. The
+`pc_bridge_status`; the same row reports whether Jarvis control is active or
+paused. Status writes are serialized and the feed refresh happens after commit.
+The tray's persisted **Pause Jarvis control** toggle reports its state over the
+authenticated WebSocket, and the bridge refuses app opening, navigation, focus,
+UI Automation actions, and browser actions while paused. Read-only window/tab
+inspection remains available. This uses `activity.alert_key` and requires no
+migration. The
 portable policy tests, backend protocol tests with a fake WebSocket bridge, and
 Linux Windows-target build run in backend CI. Real device-code sign-in, Windows
 process/window behavior, SQL production writes and the live PC opening flow
 remain unverified.
 
-### Windows UI Automation app control (P7-07)
+### Windows UI Automation app control (P7-07, expanded by P7-32)
 
 The backend registers the sensitive `pc_act` tool only when the existing Jev
 client is configured. It reuses the authenticated PC bridge and its bounded
+`uia_snapshot`/`uia_act` commands; no new route, credential, or migration is
+added. Any foreground Windows app is eligible; application names are bounded
+and validated but not allow-listed. The Windows provider traverses at most
+1,000 controls and depth 12, checking a one-second traversal budget and
+cancellation between traversal batches. The portable policy returns at most
 `uia_snapshot`/`uia_act` commands; no new route, credential, persistence, or
+<<<<<<< HEAD
 migration is added. Any foreground Windows app with a valid process name is
+=======
+migration is added. Any bounded foreground Windows process identifier is
+>>>>>>> origin/main
 eligible. The Windows provider traverses at most 1,000
 controls and depth 12, checking a one-second traversal budget and cancellation
 between traversal batches. The portable policy returns at most
@@ -703,11 +748,25 @@ element's runtime ID, role, name, visibility, enabled state, sensitivity, and
 supported control pattern. Only fixed click, type, and small-scroll operations
 are exposed. Jev makes one decision per fresh snapshot, for at most 20 steps or
 30 seconds, with a 1.2-second request timeout; cancellation reaches both the
+<<<<<<< HEAD
 planner and bridge. In `pc_act`, typed content must be an exact, non-sensitive
 value quoted in Dan's request; `codex_prompt` types only the exact supplied
 non-sensitive prompt. Risky intents and destructive control names use the existing
+=======
+planner and bridge. Typed content must be an exact, non-sensitive value quoted
+in Dan's request. Send, delete, pay/payment, purchase, post, push, and overwrite
+actions use the existing P7-03 `computer_use` approval flow and retry the same
+observed element only after approval; missing approval refuses the action.
+Reversible submit, remove, replace, and other controls do not require approval.
+The approval identifies the clicked control or text replacement using a
+bounded app/control label, without including the goal or typed text. Website
+tasks remain on P7-17–P7-19's Chrome-only path, and this tool does not use
+Foundry computer-use.
+in Dan's request. Risky intents and destructive control names use the existing
+>>>>>>> origin/main
 P7-03 `computer_use` approval flow and retry the same observed element only
-after approval; missing approval refuses the action. The approval identifies
+after approval; only irreversible actions require approval, and missing
+approval refuses the action. The approval identifies
 clicks and text replacements using a bounded control role/name, without
 including the goal or typed text. Browser tasks remain on P7-17–P7-19's
 Chrome-only path, and this tool does not use Foundry computer-use.
@@ -715,8 +774,9 @@ Chrome-only path, and this tool does not use Foundry computer-use.
 Generic tool auditing records only the outcome for this sensitive tool. The
 `pc_act.step` telemetry allow-list exports only step number, fixed action name,
 and outcome—never goals, control labels, typed text, screenshots, or UIA
-values. Fake-tree and backend tests cover the policy and protocol; the backend
-lint/build and Linux Windows-target build pass. A cancellation token cannot
+values. Fake-tree and backend tests cover non-allow-listed-app control, pause/status,
+approval and the protocol; all 92 .NET core tests, 31 focused backend tests,
+backend lint/build and the Linux Windows-target build pass. A cancellation token cannot
 preempt an individual synchronous UI Automation COM call. Live Jev calls,
 Windows UIA responsiveness/cancellation, physical approval delivery, and Dan's
 end-to-end app task remain unverified.
@@ -767,8 +827,11 @@ operations; the bridge never accepts or evaluates a model-provided script.
 
 Password, payment-card and one-time-code fields are omitted from values and
 refuse typing; code-like numeric and Luhn-valid card-number text is also
-refused. Submit/send/delete/sign-in/payment-style clicks return a confirmation
+refused. Only send/delete/pay/payment/purchase/post/push/overwrite clicks return a confirmation
 request without acting. The backend uses the existing P7-03 `computer_use`
+refused. Only irreversible submit/send/delete/payment/publish/push/overwrite-style clicks
+return a confirmation request without acting; reversible settings and sign-in
+clicks do not. The backend uses the existing P7-03 `computer_use`
 approval path and retries the same indexed action only after approval; without
 confirmation service it refuses. Browser tools are marked sensitive so their
 arguments and results (including typed text, tab URLs and page content) are
@@ -799,9 +862,9 @@ visible control table. That request chooses the operation and speculative
 indexed targets for click, type, select, scroll, and wait. The backend accepts
 only a high-confidence choice present in that snapshot; the selected index and
 snapshot ID go unchanged to `pc_browser_act`, where the PC bridge rechecks the
-same DOM node, freshness, visibility and occlusion. Clicks that the bridge
-identifies as submit/send/delete/sign-in/payment actions still require the
-existing P7-03 approval flow. The Foundry `gpt-5.6-luna` chat deployment with
+same DOM node, freshness, visibility and occlusion. Clicks on controls named
+send/delete/pay/payment/purchase/post/push/overwrite still require the existing
+P7-03 approval flow. The Foundry `gpt-5.6-luna` chat deployment with
 reasoning disabled writes a small validated JSON text value only for TYPE; a
 separate JSON check independently verifies Jev's DONE decision against a fresh
 snapshot.
@@ -841,8 +904,8 @@ calls bind the captured context to the authenticated session request; even if th
 model chooses generic `browser_do`, that request routes through shared-tab
 resolution instead of the focused tab. Saying “stop” cancels either shared
 browser tool route. Each action still uses a new P7-18 node-indexed
-snapshot and its freshness/visibility/occlusion checks. P7-03 confirmation,
-sensitive-field blocking, the 20-step/30-second bound, and the transient P8-15
+snapshot and its freshness/visibility/occlusion checks. P7-03 confirmation for
+irreversible actions, sensitive-field blocking, the 20-step/30-second bound, and the transient P8-15
 workspace progress remain unchanged. Voice speaks one fixed progress phrase after
 a tab is resolved; the exact “stop” transcript aborts the active browser tool.
 Fake tests cover current-context handoff, shared-tab resolution/pagination,
@@ -930,9 +993,11 @@ when present; P5-06 remains the writer. Route/store/web contract tests pass, but
 Chromium inspection at 390/1280 px verifies local mocked interactions.
 Live Azure SQL and provider/voice report data remain unverified.
 
-P6-03's backend job checks for events older than 90 days hourly, in bounded SQL
-batches, and uploads deterministic per-task blobs before deleting each batch in
-the same SQL transaction. The transaction-owned archive lock serializes archiving
+P6-03's backend job checks for events older than 90 days hourly while a sandbox
+is active, in bounded SQL batches, and uploads deterministic per-task blobs
+before deleting each batch in the same SQL transaction. While idle, it skips
+SQL and leaves archival work pending until a sandbox is active. The
+transaction-owned archive lock serializes archiving
 with task-detail reads, but does not affect `recordEvent` or its SSE/runner callers.
 Task detail reads archived blob indexes and its SQL page under a shared lock, then
 downloads only the requested archived chunks after releasing the SQL transaction.
@@ -1194,14 +1259,37 @@ These boxes are responsibilities; they do not each need a separate service.
 | Retries | `attempt_count` and `next_attempt_at` on the task row. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; ambiguous Foundry starts and exhausted attempts move to Needs attention. Expired startup leases move to Needs attention rather than being replayed, avoiding duplicate remote sessions. |
 | Sandbox heartbeat | At startup, the backend loads active sessions with their current invocation status once; the dispatcher registers new turns. Each registered invocation is checked immediately and about once a minute, and `last_heartbeat_at` is updated after a valid response. The poller holds active sessions in memory and makes no recurring SQL reads while idle. A runner `needs_attention` status ends monitoring and transactionally moves the task to NeedsAttention with the bounded question. A `session_question` event marks the turn completed and moves the task to NeedsAttention but keeps its session monitored so later expiry can be classified. |
 | Crash detection | Two consecutive HTTP 424/404/5xx responses, with a confirming poll after 30 s, mark an active invocation's sandbox Crashed and move its task to NeedsAttention. If the correlated turn already completed, the sandbox instead ends as `Ended`/`idle_expired`, and task state is unchanged. Both outcomes persist in one transaction and publish the committed task event through the in-process hub. Event gaps alone never trigger a crash (L22). |
-| Stale task reconciliation | At dispatcher startup and every five minutes, scan at most five Running tasks whose latest sandbox heartbeat is at least five minutes old. Query the recorded Foundry invocation with a 15-second timeout. A live invocation refreshes its heartbeat; a completed invocation uses the normal GitHub delivery and project-policy path, persisting a discovered PR through the P3-04 mapping first. Failed, unavailable, mismatched, or otherwise unverifiable states move to NeedsAttention with a user-visible reason; Done requires the existing verified completion path. Each outcome logs an allowlisted `task_reconciliation.decision` with task/session/invocation IDs and bounded status/decision fields only. This bounded scan is the recovery path for lost completion/webhook events, not a substitute for webhook delivery. |
+| Stale task reconciliation | At dispatcher startup, scan at most five Running tasks whose latest sandbox heartbeat is at least five minutes old. While a sandbox is tracked, repeat at five-minute intervals. Query the recorded Foundry invocation with a 15-second timeout. A live invocation refreshes its heartbeat; a completed invocation uses the normal GitHub delivery and project-policy path, persisting a discovered PR through the P3-04 mapping first. Failed, unavailable, mismatched, or otherwise unverifiable states move to NeedsAttention with a user-visible reason; Done requires the existing verified completion path. Each outcome logs an allowlisted `task_reconciliation.decision` with task/session/invocation IDs and bounded status/decision fields only. This bounded scan is the recovery path for lost completion/webhook events, not a substitute for webhook delivery. |
 | Recovery and completion | Recover atomically claims a NeedsAttention task after an actual crash; Continue after `idle_expired` uses the same branch-recovery path. Both start a fresh Foundry session from the existing task branch with the original request, bounded steering history, and event summary. A completed invocation is correlated to its active task session; the backend accepts Done only after a repository-scoped GitHub App check confirms both the branch and a pull request. Missing evidence returns the task to NeedsAttention; API failures do not produce false success. Migration `0010_idle_expired_sessions.sql` extends the session end-reason vocabulary. Offline fake tests cover both heartbeat outcomes and continuation; SQL Server CI, live runner, Foundry, and GitHub behavior remain unverified. |
 | Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. The dispatcher sends `task_id` in every start and resume invocation; a runner deployed with `JARVIS_BACKEND_URL` rejects task invocations without one (L59). Browser streaming is P1-06. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. |
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. The fetch client reconnects with its last delivered ID and ignores repeats. |
 | Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. Live state is visible; PR/check/usage values stay unavailable until their owning data integrations exist. |
-| Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It also runs the bounded five-minute stale-task scan; there is no unbounded queue poll while idle. |
-| Always on | The backend normally runs with a minimum of 1 replica, so the heartbeat never stops. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. The backend does not query SQL while idle, so the database can still pause. |
+| Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. The event-archive timer also skips SQL until active sandbox work exists. |
+| Always on | The backend normally runs with a minimum of 1 replica, so timers remain alive. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. SQL can pause between genuine accesses; the daily Codex renewal lease check and request-driven endpoints remain deliberate exceptions. |
+
+### Idle SQL path audit (P5-13)
+
+This inventory is a source-level measurement of code paths and configured
+intervals, not a query against production Application Insights or Azure SQL.
+The table separates SQL from external/network-only activity:
+
+| Idle path | Before | After |
+| --- | --- | --- |
+| `POST /github/webhooks` | One serializable SQL delivery insert for every signed event, including unsupported events and events for untracked repositories; mapped tracked events also wrote project state in that transaction. | Unsupported and untracked events return `202 ignored` without SQL. Active managed repositories are cached in memory and kept current by project mutations; mapped events still commit delivery deduplication and all state updates together. |
+| Dispatcher stale-task timer | Startup scan, then an empty `listStaleRunning` SQL query every 5 minutes (12 scans/hour while idle). | One startup scan remains for lost/stale work; recurring scans resume only when the in-memory heartbeat tracks a sandbox. |
+| Task-event archive timer | Immediate SQL archive check at startup and another check every hour, even when no work is active. | Startup and hourly timer callbacks return before SQL when no sandbox is tracked. Archival is delayed until task work resumes; rows are retained, not dropped. |
+| Teams/Graph presence | The Graph client polls every 60 seconds; every observation entered a SQL transaction and read persisted away state, even if unchanged (up to 60 SQL checks/hour). | Graph polling remains every 60 seconds, but cached observations skip SQL when the state is unchanged. A real presence transition or the ten-minute away threshold still persists normally. |
+| Sandbox heartbeat | The backend loads active sessions once at startup; each active invocation is polled about once/minute and its valid result updates SQL. | Unchanged: active work remains monitored, while no tracked session means no recurring heartbeat SQL. |
+| Board SSE and Project plan sync | SSE replay queries SQL on connection; its 25-second keepalive is network-only. The GitHub Project plan-status workflow reads/writes GitHub and `PLAN.md`, not Azure SQL. | Unchanged; no recurring SQL is caused by SSE keepalives or plan-status sync. |
+| Codex renewal and budget monitor | Codex renewal starts on backend readiness and retries daily, using SQL lease/status operations; the budget monitor reads ARM every 15 minutes and writes SQL only when a new threshold alert is due. | Unchanged deliberate maintenance checks; they can still cause isolated SQL accesses while idle. |
+
+Tracked webhook rows and mapped PR/run/release/deployment status changes are
+already batched per delivery in the same serializable transaction; no volatile
+cross-delivery queue was added, so GitHub retries and state correctness remain
+intact. This source audit cannot establish current billable awake time. After
+deployment, compare SQL active time with backend webhook, reconciliation,
+heartbeat, presence and archive logs before claiming a production reduction.
 
 P2-14 also guards the dispatcher's generic NeedsAttention cleanup: a completed
 latest turn stays monitored rather than being marked Crashed. Completion evidence

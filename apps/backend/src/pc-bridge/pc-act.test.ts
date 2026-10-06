@@ -117,6 +117,30 @@ describe('pc_act Jev planner', () => {
 });
 
 describe('pc_act bounded Windows control loop', () => {
+  it('controls any bounded foreground app and does not confirm reversible settings actions', async () => {
+    const appSnapshot: PcActSnapshot = { ...snapshot, application: 'SystemSettings' };
+    const pcBridge = bridge({ observe: vi.fn(async () => appSnapshot) });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+
+    const result = await runPcAct(
+      { goal: 'Open Settings' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, runConfirmed },
+    );
+
+    expect(result.status).toBe('completed');
+    expect(runConfirmed).not.toHaveBeenCalled();
+    expect(pcBridge.act).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'click',
+      confirmed: false,
+    }), expect.any(AbortSignal));
+  });
+
   it('uses one Jev decision for each fresh snapshot and logs only redacted step metadata', async () => {
     const pcBridge = bridge();
     const planner = { decide: vi.fn()
@@ -148,7 +172,77 @@ describe('pc_act bounded Windows control loop', () => {
     expect(JSON.stringify(onStep.mock.calls)).not.toMatch(/Open project|Jarvis|goal|text/iu);
   });
 
-  it('requires the existing approval flow for risky actions and retries the same observed target', async () => {
+  it('searches and plays in a non-allow-listed foreground app without asking for confirmation', async () => {
+    const spotifySnapshots: PcActSnapshot[] = [
+      { ...snapshot, application: 'spotify', elements: [{ index: 0, role: 'edit', name: 'Search Spotify' }] },
+      { ...snapshot, application: 'spotify', elements: [{ index: 0, role: 'button', name: 'Search' }] },
+      { ...snapshot, application: 'spotify', elements: [{ index: 0, role: 'button', name: 'Play Daft Punk' }] },
+      { ...snapshot, application: 'spotify', elements: [] },
+    ];
+    const pcBridge = bridge({
+      observe: vi.fn()
+        .mockResolvedValueOnce(spotifySnapshots[0])
+        .mockResolvedValueOnce(spotifySnapshots[1])
+        .mockResolvedValueOnce(spotifySnapshots[2])
+        .mockResolvedValueOnce(spotifySnapshots[3]),
+    });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('type', 0, 'Daft Punk'))
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+
+    const result = await runPcAct(
+      { goal: 'Search Spotify for "Daft Punk" and play the result' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, runConfirmed },
+    );
+
+    expect(result.status).toBe('completed');
+    expect(pcBridge.act).toHaveBeenNthCalledWith(1, {
+      snapshotId: snapshot.snapshotId,
+      elementIndex: 0,
+      action: 'type',
+      confirmed: false,
+      text: 'Daft Punk',
+    }, expect.any(AbortSignal));
+    expect(pcBridge.act).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      action: 'click',
+      confirmed: false,
+    }), expect.any(AbortSignal));
+    expect(runConfirmed).not.toHaveBeenCalled();
+  });
+
+  it('does not confirm reversible submit, remove, or replace controls', async () => {
+    for (const name of ['Submit', 'Remove', 'Replace']) {
+      const pcBridge = bridge({
+        observe: vi.fn(async () => ({
+          ...snapshot,
+          elements: [{ index: 0, role: 'button', name }],
+        })),
+      });
+      const planner = { decide: vi.fn()
+        .mockResolvedValueOnce(decision('click', 0))
+        .mockResolvedValueOnce(decision('done')) };
+      const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+
+      await runPcAct(
+        { goal: `Click ${name}` },
+        request(),
+        new AbortController().signal,
+        pcBridge,
+        { planner, runConfirmed },
+      );
+
+      expect(runConfirmed).not.toHaveBeenCalled();
+      expect(pcBridge.act).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }), expect.any(AbortSignal));
+    }
+  });
+
+  it('requires the existing approval flow for irreversible actions and retries the same observed target', async () => {
     const pcBridge = bridge({
       act: vi.fn()
         .mockResolvedValueOnce({
@@ -243,8 +337,13 @@ describe('pc_act bounded Windows control loop', () => {
     }, expect.any(AbortSignal));
   });
 
-  it('never executes a risky action if the approval service is unavailable', async () => {
-    const pcBridge = bridge();
+  it('never executes an irreversible action if the approval service is unavailable', async () => {
+    const pcBridge = bridge({
+      observe: vi.fn(async () => ({
+        ...snapshot,
+        elements: [{ index: 0, role: 'button', name: 'Delete project' }],
+      })),
+    });
     const planner = { decide: vi.fn().mockResolvedValue(decision('click', 0)) };
 
     await expect(runPcAct(

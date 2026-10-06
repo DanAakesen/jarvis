@@ -7,11 +7,51 @@ namespace Jarvis.PcBridge.Core.Tests;
 public sealed class CommandPolicyTests
 {
     [Theory]
+    [InlineData("open_url", true)]
+    [InlineData("open_app", true)]
+    [InlineData("open_folder", true)]
+    [InlineData("focus_window", true)]
+    [InlineData("uia_act", true)]
+    [InlineData("browser_act", true)]
+    [InlineData("active_window", false)]
+    [InlineData("uia_snapshot", false)]
+    [InlineData("browser_snapshot", false)]
+    [InlineData("browser_tabs", false)]
+    public void Identifies_actions_blocked_when_control_is_paused(string command, bool expected)
+    {
+        Assert.Equal(expected, CommandPolicy.IsControlAction(command));
+    }
+
+    [Theory]
+    [InlineData("play_pause", 0xB3)]
+    [InlineData("next", 0xB0)]
+    [InlineData("previous", 0xB1)]
+    [InlineData("volume_up", 0xAF)]
+    [InlineData("volume_down", 0xAE)]
+    [InlineData("mute", 0xAD)]
+    public void Maps_media_actions_to_the_windows_media_virtual_key(string action, ushort expectedKey)
+    {
+        Assert.True(CommandPolicy.TryGetMediaVirtualKey(action, out var actualKey));
+        Assert.Equal(expectedKey, actualKey);
+    }
+
+    [Theory]
     [InlineData("open_url", """{"url":"https://example.com/repo"}""")]
     [InlineData("open_app", """{"app":"vscode"}""")]
+<<<<<<< HEAD
     [InlineData("open_app", """{"app":"codex"}""")]
     [InlineData("open_app", """{"app":"Notepad"}""")]
     [InlineData("open_app", """{"app":"terminal"}""")]
+=======
+    [InlineData("open_app", """{"app":"Spotify"}""")]
+    [InlineData("open_app", """{"app":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}""")]
+    [InlineData("media", """{"action":"play_pause"}""")]
+    [InlineData("media", """{"action":"next"}""")]
+    [InlineData("media", """{"action":"previous"}""")]
+    [InlineData("media", """{"action":"volume_up"}""")]
+    [InlineData("media", """{"action":"volume_down"}""")]
+    [InlineData("media", """{"action":"mute"}""")]
+>>>>>>> origin/main
     [InlineData("open_folder", """{"relativePath":"jarvis\\apps\\backend"}""")]
     [InlineData("open_file", """{"relativePath":"jarvis\\apps\\backend\\src\\index.ts"}""")]
     [InlineData("active_window", "{}")]
@@ -39,7 +79,15 @@ public sealed class CommandPolicyTests
     [InlineData("open_url", """{"url":"javascript:alert(1)"}""")]
     [InlineData("open_url", """{"url":"https://user@example.com"}""")]
     [InlineData("open_url", """{"url":"file:///C:/secret.txt"}""")]
+<<<<<<< HEAD
     [InlineData("open_app", """{"app":"C:\\Windows\\System32\\notepad.exe"}""")]
+=======
+    [InlineData("open_app", """{"app":""}""")]
+    [InlineData("open_app", """{"app":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}""")]
+    [InlineData("open_app", """{"app":"spotify\n"}""")]
+    [InlineData("media", """{"action":"launch"}""")]
+    [InlineData("media", """{"action":"mute","confirmed":true}""")]
+>>>>>>> origin/main
     [InlineData("open_folder", """{"relativePath":"..\\secrets"}""")]
     [InlineData("open_folder", """{"relativePath":"C:\\Repo\\jarvis"}""")]
     [InlineData("open_folder", """{"relativePath":"jarvis\\..\\secrets"}""")]
@@ -118,6 +166,19 @@ public sealed class CommandPolicyTests
         Assert.False(BridgeProtocol.TryReadCommand(Encoding.UTF8.GetBytes(
             """{"id":"1730aa51-f380-4df9-a345-1feb862cb1c4","type":"result","command":"active_window","arguments":{}}"""), out _));
         Assert.False(BridgeProtocol.TryReadCommand(new byte[BridgeProtocol.MaxMessageBytes + 1], out _));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Serializes_control_pause_status_for_the_backend(bool paused)
+    {
+        using var document = JsonDocument.Parse(BridgeProtocol.ControlState(paused));
+        var root = document.RootElement;
+
+        Assert.Equal("status", root.GetProperty("type").GetString());
+        Assert.Equal(paused, root.GetProperty("controlPaused").GetBoolean());
+        Assert.Equal(2, root.EnumerateObject().Count());
     }
 
     [Fact]

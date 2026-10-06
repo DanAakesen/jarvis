@@ -3,7 +3,7 @@ import websocket from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
 import {
-  createEnglishSessionUpdate,
+  createRealtimeSessionUpdate,
   ENGLISH_REALTIME_MODEL,
   executeRealtimeToolCall,
   isBrowserControlledToolOutput,
@@ -79,8 +79,16 @@ function actionSignature(target: ReflexTarget): string {
 function partialSafeTarget(target: ReflexTarget): boolean {
   if (workspaceReflexSafe(target)) return true;
   if (target.tool.name === 'pause_task') return target.tool.reflexSafe === true;
+  if (target.tool.name === 'pc_media') {
+    return target.tool.reflexSafe === true &&
+      ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'].includes(String(target.arguments.action));
+  }
   if (target.tool.name !== 'pc_open') return false;
-  if (target.arguments.target === 'app' && target.arguments.value === 'edge') return true;
+  if (target.arguments.target === 'app' && typeof target.arguments.value === 'string') {
+    const name = target.arguments.value.trim().toLowerCase().replace(/[^a-z0-9]/gu, '');
+    return target.arguments.value.length <= 128 && name.length > 0 &&
+      !['edge', 'microsoftedge', 'msedge'].includes(name);
+  }
   if (target.arguments.target !== 'url' || typeof target.arguments.value !== 'string') return false;
   try {
     const url = new URL(target.arguments.value);
@@ -93,6 +101,13 @@ function partialSafeTarget(target: ReflexTarget): boolean {
 
 function reflexSummary(target: ReflexTarget, outcome: ReflexActionResult['outcome']): string {
   if (target.tool.name === 'workspace_command') return `${target.description ?? 'workspace action'} (${outcome})`;
+  if (target.tool.name === 'pc_media' && typeof target.arguments.action === 'string') {
+    return `${outcome === 'ok' ? 'controlled' : 'could not control'} media: ${target.arguments.action} (${outcome})`;
+  }
+  if (target.tool.name === 'pc_open' && target.arguments.target === 'app' &&
+      typeof target.arguments.value === 'string') {
+    return `${outcome === 'ok' ? 'opened' : 'could not open'} ${target.arguments.value} (${outcome})`;
+  }
   if (target.tool.name === 'pc_open' && target.arguments.target === 'url' &&
       typeof target.arguments.value === 'string') {
     try {
@@ -365,10 +380,13 @@ function registerVoiceRoute(
       publishActivity('listening');
     };
 
-    const partialsUnavailable = () => {
+    const partialsUnavailable = (cause?: unknown) => {
       if (partialRecognitionUnavailable) return;
       partialRecognitionUnavailable = true;
-      request.log.warn('voice.partials_unavailable');
+      // Log the Speech SDK reason; without it this failure could not be diagnosed (L108).
+      const failure = (cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : 'unknown')
+        .replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').trim().slice(0, 120) || 'unknown';
+      request.log.warn({ failure, language }, 'voice.partials_unavailable');
     };
 
     const stopPartialRecognition = () => {
@@ -576,9 +594,9 @@ function registerVoiceRoute(
             language,
             phraseHints: [...VOICE_PHRASE_HINTS, ...projectNames],
             onRecognizing: receiveSpeechHypothesis,
-            onFailure: () => {
+            onFailure: (reason) => {
               if (generation !== partialRecognitionGeneration || !partialRecognitionEnabled) return;
-              partialsUnavailable();
+              partialsUnavailable(reason);
               stopPartialRecognition();
             },
           }, signal);
@@ -591,9 +609,9 @@ function registerVoiceRoute(
           for (const chunk of queuedPartialAudio) recognizer.write(chunk);
           queuedPartialAudio = [];
           queuedPartialAudioBytes = 0;
-        } catch {
+        } catch (error) {
           if (generation === partialRecognitionGeneration && partialRecognitionEnabled &&
-              !controller.signal.aborted) partialsUnavailable();
+              !controller.signal.aborted) partialsUnavailable(error);
           queuedPartialAudio = [];
           queuedPartialAudioBytes = 0;
         } finally {
@@ -655,6 +673,7 @@ function registerVoiceRoute(
       let classification: ReflexClassification | null = null;
       let finalAction: ReflexActionResult | null = null;
       let reason: string | undefined;
+      let deferredExecution: (() => Promise<ReflexActionResult | null>) | undefined;
       try {
         await transcriptQueue;
         const message = savedUserMessages.get(itemId);
@@ -705,22 +724,36 @@ function registerVoiceRoute(
             ledger.some((entry) => entry.signature === actionSignature(target) && !entry.undone) ||
             contradictedEntry?.signature === actionSignature(target)
           );
+          const executeFinal = () => executeReflexAction(
+            classification,
+            request,
+            message.id,
+            controller.signal,
+            target?.tool.name === 'pc_open' ? 'partial' : 'final',
+          );
           if (!sharedContextWait && !alreadyExecuted) {
-            finalAction = await executeReflexAction(
-              classification,
-              request,
-              message.id,
-              controller.signal,
-              target?.tool.name === 'pc_open' ? 'partial' : 'final',
-            );
+            finalAction = await executeFinal();
           } else {
             reason = sharedContextWait ? 'shared_context_required' : 'already_executed';
+            if (sharedContextWait && !alreadyExecuted) deferredExecution = executeFinal;
           }
         }
         if (controller.signal.aborted || endRequested) return;
         if (sharedContextWait) {
           const context = await sharedContextWait.promise;
           if (sharedContextWait.cancelled || controller.signal.aborted || endRequested) return;
+          if (!context) {
+            // Not sharing: act on Dan's focused Chrome tab (Dan's decision, 6 October; L107).
+            delete request.requireSharedScreenContext;
+            if (deferredExecution) {
+              finalAction = await deferredExecution();
+              reason = undefined;
+            }
+            if (controller.signal.aborted || endRequested) return;
+          }
+        }
+        if (sharedContextWait && !sharedContextWait.cancelled && request.sharedScreenContext) {
+          const context = request.sharedScreenContext;
           sendUpstream({
             type: 'response.create',
             response: {
@@ -1187,7 +1220,7 @@ function registerVoiceRoute(
         }
         upstream = connect(token, controller.signal);
         upstream.once('open', () => {
-          if (english) sendUpstream(createEnglishSessionUpdate(app.jarvisTools, personality, awayMode), flushQueued);
+          if (english) sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, awayMode, language), flushQueued);
           else flushQueued();
         });
         const upstreamEventTypes = new Set<string>();
@@ -1366,7 +1399,19 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.createPartialRecognizer,
         );
       }
-      if (options.connectDanish) {
+      if (options.connect) {
+        // Danish uses the same gpt-realtime Voice Live path as English (L103); the hosted-agent
+        // voice wrapper remains only as a fallback when Voice Live is not configured.
+        registerVoiceRoute(
+          app,
+          '/voice/da',
+          options.connect,
+          true,
+          'da',
+          options.getToken,
+          options.createPartialRecognizer,
+        );
+      } else if (options.connectDanish) {
         registerVoiceRoute(
           app,
           '/voice/da',

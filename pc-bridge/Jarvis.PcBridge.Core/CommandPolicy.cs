@@ -17,7 +17,15 @@ public static class CommandPolicy
             "open_app" => HasOnly(arguments, "app") &&
                 arguments.TryGetProperty("app", out var app) &&
                 app.ValueKind == JsonValueKind.String &&
+<<<<<<< HEAD
                 IsValidAppName(app.GetString()),
+=======
+                HasBoundedString(arguments, "app", 128),
+            "media" => HasOnly(arguments, "action") &&
+                arguments.TryGetProperty("action", out var mediaAction) &&
+                mediaAction.ValueKind == JsonValueKind.String &&
+                IsMediaAction(mediaAction.GetString()),
+>>>>>>> origin/main
             "open_folder" => HasOnly(arguments, "relativePath") &&
                 arguments.TryGetProperty("relativePath", out var folder) &&
                 folder.ValueKind == JsonValueKind.String &&
@@ -45,11 +53,33 @@ public static class CommandPolicy
         };
     }
 
+<<<<<<< HEAD
     public static bool IsValidAppName(string? value) =>
         value is { Length: > 0 and <= 128 } &&
         value is not "." and not ".." &&
         value == value.Trim() &&
         value.All(character => char.IsLetterOrDigit(character) || character is ' ' or '.' or '_' or '-' or '(' or ')' or '+' or '&');
+=======
+    public static bool IsControlAction(string command) => command is
+        "open_url" or "open_app" or "open_folder" or "focus_window" or "uia_act" or "browser_act";
+
+    public static bool IsMediaAction(string? action) => TryGetMediaVirtualKey(action, out _);
+
+    public static bool TryGetMediaVirtualKey(string? action, out ushort virtualKey)
+    {
+        virtualKey = action switch
+        {
+            "play_pause" => 0xB3,
+            "next" => 0xB0,
+            "previous" => 0xB1,
+            "volume_up" => 0xAF,
+            "volume_down" => 0xAE,
+            "mute" => 0xAD,
+            _ => 0,
+        };
+        return virtualKey != 0;
+    }
+>>>>>>> origin/main
 
     private static bool IsUiAutomationAction(JsonElement arguments)
     {

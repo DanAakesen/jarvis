@@ -10,10 +10,12 @@ public sealed class BridgeApplicationContext : ApplicationContext
     private readonly NotifyIcon _icon;
     private readonly ToolStripMenuItem _status;
     private readonly ToolStripMenuItem _browserToggle;
+    private readonly ToolStripMenuItem _controlToggle;
     private BridgeSettings? _settings;
     private BrowserExecutor? _browserExecutor;
     private NativeMessagingBrowserPort? _extensionPort;
     private BridgeTokenProvider? _tokenProvider;
+    private BridgeClient? _bridgeClient;
 
     public BridgeApplicationContext()
     {
@@ -28,6 +30,12 @@ public sealed class BridgeApplicationContext : ApplicationContext
             Enabled = false,
         };
         menu.Items.Add(_browserToggle);
+        _controlToggle = new ToolStripMenuItem("Pause Jarvis control", null, ToggleControl)
+        {
+            CheckOnClick = false,
+            Enabled = false,
+        };
+        menu.Items.Add(_controlToggle);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
         _icon = new NotifyIcon
@@ -59,13 +67,22 @@ public sealed class BridgeApplicationContext : ApplicationContext
             _settings = settings;
             _browserToggle.Checked = settings.BrowserEnabled;
             _browserToggle.Text = BrowserToggleText(settings.BrowserEnabled);
+            _controlToggle.Checked = settings.ControlPaused;
+            _controlToggle.Text = ControlToggleText(settings.ControlPaused);
             _browserToggle.Enabled = true;
+            _controlToggle.Enabled = true;
             _extensionPort = new NativeMessagingBrowserPort();
             _browserExecutor = new BrowserExecutor(() => _settings?.BrowserEnabled == true,
                 WindowsCommandExecutor.ReadActiveWindowTitle,
                 extensionPort: _extensionPort);
             _tokenProvider = await BridgeTokenProvider.CreateAsync(settings, _stopping.Token);
-            var client = new BridgeClient(settings, _tokenProvider, new WindowsCommandExecutor(), _browserExecutor);
+            var client = new BridgeClient(
+                settings,
+                _tokenProvider,
+                new WindowsCommandExecutor(),
+                _browserExecutor,
+                () => _settings?.ControlPaused == true);
+            _bridgeClient = client;
             await client.RunAsync(SetStatus, _stopping.Token);
         }
         catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
@@ -100,8 +117,44 @@ public sealed class BridgeApplicationContext : ApplicationContext
         }
     }
 
+    private async void ToggleControl(object? sender, EventArgs e)
+    {
+        if (_settings is null) return;
+        var paused = !_settings.ControlPaused;
+        var updated = _settings with { ControlPaused = paused };
+        try
+        {
+            updated.Save();
+        }
+        catch
+        {
+            _controlToggle.Checked = _settings.ControlPaused;
+            SetStatus("Control pause setting could not be saved");
+            return;
+        }
+
+        _settings = updated;
+        _controlToggle.Checked = paused;
+        _controlToggle.Text = ControlToggleText(paused);
+        try
+        {
+            if (_bridgeClient is not null)
+                await _bridgeClient.ReportControlStateAsync(_stopping.Token);
+        }
+        catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            SetStatus("Offline — reconnecting to report Jarvis control state");
+        }
+    }
+
     private static string BrowserToggleText(bool enabled) =>
         $"Chrome browser automation ({(enabled ? "on" : "off")})";
+
+    private static string ControlToggleText(bool paused) =>
+        $"Pause Jarvis control ({(paused ? "on" : "off")})";
 
     private void SetStatus(string status)
     {

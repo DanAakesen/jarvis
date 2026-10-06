@@ -43,10 +43,13 @@ public sealed class UiAutomationExecutorTests
     }
 
     [Theory]
+    [InlineData("Send message")]
+    [InlineData("Delete file")]
+    [InlineData("Make payment")]
+    [InlineData("Purchase item")]
+    [InlineData("Post update")]
+    [InlineData("Push changes")]
     [InlineData("Overwrite file")]
-    [InlineData("Discard changes")]
-    [InlineData("Reset all settings")]
-    [InlineData("Format drive")]
     public void Destructive_controls_require_confirmation(string name)
     {
         var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1",
@@ -61,6 +64,7 @@ public sealed class UiAutomationExecutorTests
     }
 
     [Theory]
+<<<<<<< HEAD
     [InlineData("Confirm search")]
     [InlineData("Save settings")]
     public void Reversible_controls_do_not_require_confirmation(string name)
@@ -68,6 +72,17 @@ public sealed class UiAutomationExecutorTests
         var provider = new FakeUiAutomationProvider(new UiAutomationView("settings", "window-1",
         [
             Control("action", "button", name),
+=======
+    [InlineData("Submit")]
+    [InlineData("Remove file")]
+    [InlineData("Replace text")]
+    [InlineData("Reset settings")]
+    public void Reversible_controls_do_not_require_confirmation(string name)
+    {
+        var provider = new FakeUiAutomationProvider(new UiAutomationView("spotify", "window-1",
+        [
+            Control("control", "button", name),
+>>>>>>> origin/main
         ]));
         var executor = new UiAutomationExecutor(provider);
         var snapshot = executor.Observe(CancellationToken.None);
@@ -93,7 +108,11 @@ public sealed class UiAutomationExecutorTests
     }
 
     [Fact]
+<<<<<<< HEAD
     public void Refuses_stale_controls_but_allows_UI_Automation_in_any_valid_foreground_app()
+=======
+    public void Refuses_stale_controls_and_accepts_any_safe_foreground_app_identifier()
+>>>>>>> origin/main
     {
         var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1",
         [
@@ -107,11 +126,36 @@ public sealed class UiAutomationExecutorTests
             executor.Act(snapshot.SnapshotId, 0, UiAutomationAction.Click, null, false, CancellationToken.None));
         Assert.Equal("stale", stale.Code);
 
+        provider.View = new UiAutomationView("spotify", "window-3",
+        [
+            Control("search", "edit", "Search Spotify", canClick: false, canType: true),
+        ]);
+        var spotify = executor.Observe(CancellationToken.None);
+        Assert.Equal("spotify", spotify.Application);
+        Assert.True(executor.Act(spotify.SnapshotId, 0, UiAutomationAction.Type, "Daft Punk", false, CancellationToken.None));
         provider.View = provider.View with { Application = "chrome" };
         Assert.Equal("chrome", executor.Observe(CancellationToken.None).Application);
+<<<<<<< HEAD
         provider.View = provider.View with { Application = "bad process!" };
+=======
+        provider.View = provider.View with { Application = "chrome browser" };
+>>>>>>> origin/main
         var blocked = Assert.Throws<UiAutomationRefusedException>(() => executor.Observe(CancellationToken.None));
         Assert.Equal("not_allowed", blocked.Code);
+    }
+
+    [Fact]
+    public void Clicking_a_settings_control_does_not_require_confirmation()
+    {
+        var provider = new FakeUiAutomationProvider(new UiAutomationView("settings", "window-1",
+        [
+            Control("settings", "button", "Settings"),
+        ]));
+        var executor = new UiAutomationExecutor(provider);
+        var snapshot = executor.Observe(CancellationToken.None);
+
+        Assert.True(executor.Act(snapshot.SnapshotId, 0, UiAutomationAction.Click, null, false, CancellationToken.None));
+        Assert.Single(provider.Actions);
     }
 
     [Theory]

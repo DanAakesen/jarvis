@@ -202,6 +202,11 @@ sign-in; the header wraps on narrow screens.
   tray context menu as an explicit, persistent on/off check item. Its label
   states the current setting; the disabled default must be unmistakable. This is
   a native companion control, not a new web page or a browser-injected overlay.
+- **PC bridge control pause (P7-32):** Keep **Pause Jarvis control** in the same
+  tray context menu as a persistent check item whose label states on/off. The
+  checked state means PC control is paused; failures to save or report the state
+  remain visible in the tray status. This is a native companion control, not a
+  new web page.
 - **Area pages:** the Software Factory has its own Tasks and Projects
   navigation. Unbuilt task and release pages explain what is unavailable.
   Project management is implemented below; record pages link back to their list.
@@ -547,8 +552,8 @@ workspace, not the phone voice layout owned by P8-11.
 
 [ui.md](ui.md) records the confirmed structure, open questions, feature-placement
 proposals and eight static wireframes. P8-04 routes the existing pages through a
-thin left icon rail, expandable area navigation, top and bottom bars, and a
-toggleable contextual panel. The top bar spans edge to edge above the shell;
+thin left icon rail, expandable area navigation, a top bar, the currently implemented bottom status bar, and a
+toggleable contextual panel. Consolidated P8-37 (#398) removes that bottom bar from the selected design. The top bar spans edge to edge above the shell;
 its height matches the area rail's width, and the rail begins beneath it.
 Settings stays at the top-right. Camera is a working toggle with an accessible
 pressed state, visible desktop On/Off label, and a narrow-phone state indicator;
@@ -557,7 +562,7 @@ Screen share remains disabled in the top bar because its active control remains
 in the conversation workflow. The top bar remains one line at phone and desktop
 widths. Other suggested top-bar controls remain out of scope.
 
-The bottom bar carries the existing database-wake status when configured. The
+The currently implemented bottom bar carries database-wake status when configured; Consolidated P8-37 (#398) removes the bar and relocates the same truthful accessible feedback into compact top-bar status. The
 context panel has an honest empty state until P8-08 supplies contextual content.
 The existing neutral theme remains; the specific placement and responsive
 proportions above are confirmed while other shell styling and the contents of
@@ -653,3 +658,27 @@ Dan approved [the combined Task Lens mockup](docs/ui/software-factory/task-lens-
 ### P8-34 implementation evidence
 
 The implementation uses existing authenticated task, project, release, conversation and contextual-panel paths. The release bar is scoped to the applied project filter and hides stale data from the previous project during a switch. Task selection keeps the board route, filters and scroll position; the close action returns focus to the selecting card. Fixture Chromium captures cover the open-pane composition at 1440×1000 and 390×844 in dark and light; the browser run also checked keyboard selection/close, state-valid Running controls, release-data isolation, reduced motion and horizontal overflow. The screenshots in `docs/ui/screenshots/p8-34-fixture-*` contain fixture data, not live product evidence. Live Entra/backend/GitHub/provider integration, physical-phone rendering and hardware-GPU behavior remain unverified.
+
+## Accepted luminous-glass conversation refinement — 6 October 2026
+
+The existing shared glass implementation remains the foundation. Dan selected [this Luminous Glass reference](docs/ui/chat-voice/README.md) for a more compact voice status bar, matching chat input and readable message window. Implement the exact header removals: no separator above chat messages and no small orb/Jarvis title at top-left; retain top-right window controls, drag region, input voice-start orb. The later Architectural Glass decision below additionally removes both message-avatar icons while preserving accessible author roles.
+
+Use a shared More menu with an icon plus Language row and Danish/English flyout, not a large DA/EN switch. Do not duplicate capture controls inside the voice bar. Extend canonical material/type tokens, with adequate frosted opacity over bright room motion, dark/light contrast and responsive touch targets. Preserve existing runtime/window/conversation contracts, including #371 steering and Ctrl+Enter queueing. [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399) were the initial allocations; #397 is now merged in PR #403, and #398 owns the remaining combined implementation. #399 is superseded. The subsequent Architectural Glass selection below supersedes the bottom-bar and message-avatar requirements; the other agreed shell slots and Jarvis-only room scope stand.
+
+## Selected Architectural Glass shell and avatar-free messages — 6 October 2026
+
+Dan selected the last/third shell styling image. [The refined reference](docs/ui/shell-styling/README.md#refined-approved-reference) defines the graphite/smoked-glass framing, dimensional depth, restrained cyan/amber refraction and readable hierarchy. Keep the agreed top bar, rail, left navigation, main tabs/workspace, right contextual panel and top-right Settings. Remove the separate bottom app-shell bar and its reserved layout space; move existing database-waking feedback into compact top-bar status. Chat input and voice-session controls remain.
+
+Remove human and Jarvis avatar icons from the message content as well as the previously removed top-left header orb/title and separator. Preserve author roles via alignment/text and accessible semantics; keep the scene orb and small input voice-start orb. P8-37 (#398) now implements the shell, composer and message-window changes together; former P8-38 (#399) and P8-39 (#401) are retired separate allocations. Reuse P8-36 material/menu work and existing theme, runtime and window contracts. These are accepted requirements awaiting implementation, not descriptions of changed production behavior.
+
+## Unified implementation scope — 6 October 2026
+
+Dan requested one issue and one implementation PR for the shell, input and messages. P8-37 (#398) absorbs all acceptance criteria and retained prerequisites of former P8-38 (#399) and P8-39 (#401). The selected visuals and behavior are unchanged. P8-36 (#397) is the completed voice-bar/shared-menu prerequisite, merged in PR #403; reuse its existing components and tokens. Closing the superseded issues does not mean those surfaces have been implemented. CI runs for the combined PR and its updates.
+
+## Voice status beneath the orb and stronger live behavior — 6 October 2026
+
+**Confirmed by Dan; planned in [#417](https://github.com/DanAakesen/jarvis/issues/417), P8-40.** State feedback moves out of the compact control bar to readable HTML beneath the orb. It follows the orb when centred, moved left of windows or docked on phones. Keep useful recovery feedback and an accessible text alternative even without WebGL. More and End voice retain clear space; current/next-session language explanation moves into the Language flyout. This supersedes the in-bar state placement in P8-36's reference.
+
+Start voice includes microphone activation, subject to native permission and real session readiness; remove the normal Enable microphone button. Earlier descriptions of microphone-off readiness document the existing implementation and are superseded requirements. Keep explicit user start, mute, cancellation, truthful recovery and resource cleanup; visual awakening alone never requests capture.
+
+Reuse the approved cyan exterior, transparent open amber core, live room and mirror. Make wake-up a pronounced staged nonlinear sequence: core ignition, energy spreading through the shell, a controlled expansion/light surge, then active settling. Keep action handling immediate and transitions interruptible. Use attentive listening breath/ripples, inward/core-flow thinking, directed real tool-work movement and a strong speech envelope synchronized with actual playback. These are state cues rather than arbitrary decoration. Room/reflection lighting follows orb light; room/camera/platform do not jump. Keep state legible at reduced motion and lower rendering quality. Validate actual motion as well as desktop/phone composition; a separate prototype is not a prerequisite.

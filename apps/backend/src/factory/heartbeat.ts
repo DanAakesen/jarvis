@@ -103,6 +103,10 @@ export class SandboxHeartbeat {
     this.completionHandler = handler;
   }
 
+  hasTrackedSessions(): boolean {
+    return this.tracked.size > 0;
+  }
+
   untrack(sandboxSessionId: string): void {
     const entry = this.tracked.get(sandboxSessionId);
     if (entry) this.cancel(entry);

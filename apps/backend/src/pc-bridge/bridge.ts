@@ -17,10 +17,18 @@ const MAX_MESSAGE_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 15_000;
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
+<<<<<<< HEAD
+=======
+const controlActions = new Set<PcCommand['name']>([
+  'open_url', 'open_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
+]);
+const mediaActions = ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const;
+>>>>>>> origin/main
 
 type PcCommand =
   | { name: 'open_url'; arguments: { url: string } }
   | { name: 'open_app'; arguments: { app: string } }
+  | { name: 'media'; arguments: { action: typeof mediaActions[number] } }
   | { name: 'open_folder'; arguments: { relativePath: string } }
   | { name: 'open_file'; arguments: { relativePath: string } }
   | { name: 'active_window'; arguments: Record<string, never> }
@@ -65,7 +73,7 @@ interface PendingCommand {
 
 export interface PcBridgeConnectionOptions {
   readonly timeoutMs?: number;
-  readonly onStatusChange?: (online: boolean) => void | Promise<void>;
+  readonly onStatusChange?: (online: boolean, controlPaused?: boolean) => void | Promise<void>;
   readonly onStatusError?: () => void;
 }
 
@@ -83,6 +91,7 @@ export class PcBridgeConnection {
   private socket: WebSocket | undefined;
   private readonly pending = new Map<string, PendingCommand>();
   private status: boolean | undefined;
+  private controlPaused = false;
   private statusUpdate = Promise.resolve();
   private readonly timeoutMs: number;
 
@@ -120,6 +129,9 @@ export class PcBridgeConnection {
     const socket = this.socket;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       throw new ToolRefusal('The local PC bridge is offline.');
+    }
+    if (this.controlPaused && controlActions.has(command.name)) {
+      throw new ToolRefusal('Jarvis control is paused in the PC bridge. Resume it from the tray menu to act on the PC.');
     }
     if (signal.aborted) throw new Error('PC bridge command was cancelled');
     if (this.pending.size >= 16) throw new Error('PC bridge is busy');
@@ -163,6 +175,15 @@ export class PcBridgeConnection {
       this.detach(socket);
       return;
     }
+    if (isRecord(response) && response.type === 'status') {
+      if (Object.keys(response).length !== 2 || typeof response.controlPaused !== 'boolean') {
+        socket.close(1007, 'Invalid bridge status');
+        this.detach(socket);
+        return;
+      }
+      this.setStatus(true, response.controlPaused);
+      return;
+    }
     if (!isRecord(response) || typeof response.id !== 'string' || !idPattern.test(response.id)) {
       socket.close(1007, 'Invalid bridge response');
       this.detach(socket);
@@ -176,6 +197,9 @@ export class PcBridgeConnection {
       if (error === 'not_allowed') this.finish(response.id, new ToolRefusal('The PC bridge refused that action.'));
       else if (error === 'not_installed') this.finish(response.id, new ToolRefusal('Codex desktop app is not installed on Dan’s PC.'));
       else if (error === 'browser_off') this.finish(response.id, new ToolRefusal('Chrome browser automation is off in the PC bridge settings.'));
+      else if (error === 'paused') this.finish(response.id, new ToolRefusal(
+        'Jarvis control is paused in the PC bridge. Resume it from the tray menu to act on the PC.',
+      ));
       else if (error === 'blocked') this.finish(response.id, new ToolRefusal(
         pending.command === 'uia_act'
           ? 'That Windows control is sensitive or unsupported; no action was performed.'
@@ -189,6 +213,9 @@ export class PcBridgeConnection {
       else if (error === 'covered') this.finish(response.id, new ToolRefusal('That browser element is covered by another page element; it was not activated.'));
       else if (error === 'not_found' && pending.command.startsWith('browser_')) {
         this.finish(response.id, new ToolRefusal('Chrome or the requested local tab is unavailable.'));
+      }
+      else if (error === 'not_found' && pending.command === 'open_app') {
+        this.finish(response.id, new ToolRefusal('No installed app matched that name; nothing was launched.'));
       }
       else if (error === 'not_found') this.finish(response.id, new ToolRefusal(
         pending.command.startsWith('uia_')
@@ -230,11 +257,13 @@ export class PcBridgeConnection {
     for (const id of this.pending.keys()) this.finish(id, error);
   }
 
-  private setStatus(online: boolean): void {
-    if (this.status === online) return;
+  private setStatus(online: boolean, controlPaused = false): void {
+    const paused = online && controlPaused;
+    if (this.status === online && this.controlPaused === paused) return;
     this.status = online;
+    this.controlPaused = paused;
     try {
-      const update = this.options.onStatusChange?.(online);
+      const update = this.options.onStatusChange?.(online, paused);
       if (update) {
         this.statusUpdate = Promise.all([this.statusUpdate, update]).then(() => {}).catch(() => {
           this.options.onStatusError?.();
@@ -253,7 +282,11 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
     tools: [
       {
         name: 'pc_open',
+<<<<<<< HEAD
         description: 'Open installed apps, VS Code repo files and folders, and windows on Dan’s PC; websites open in Dan’s Chrome. Use browser_do for work on a website.',
+=======
+        description: 'Open a website (target url with the full https address; it always opens in Dan’s Chrome, never Edge), any installed app by name (target app, e.g. spotify), a repo folder or a window on Dan’s PC. Use browser_do for work on a website.',
+>>>>>>> origin/main
         inputSchema: {
           type: 'object',
           properties: {
@@ -261,12 +294,17 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
             value: { type: 'string', minLength: 1, maxLength: 2048 },
           },
           required: ['target', 'value'],
+          allOf: [{
+            if: { properties: { target: { const: 'app' } }, required: ['target'] },
+            then: { properties: { value: { type: 'string', maxLength: 128 } } },
+          }],
           additionalProperties: false,
         },
         sensitive: true,
         execute: (input, _request, signal) => runPcOpen(bridge, input, signal),
       },
       {
+<<<<<<< HEAD
         name: 'codex_prompt',
         description: 'Open the Codex desktop app, enter Dan’s prompt through Windows UI Automation, and submit it. Typing is not confirmed; irreversible submission requires Dan’s approval. Use create_task for longer repository work.',
         inputSchema: {
@@ -279,6 +317,18 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
         execute: (input, request, signal) => runCodexPrompt(
           bridge, options.pcActPlanner, options.runConfirmed, input, request, signal,
         ),
+=======
+        name: 'pc_media',
+        description: 'Control Windows media playback or volume with play_pause, next, previous, volume_up, volume_down, or mute.',
+        inputSchema: {
+          type: 'object',
+          properties: { action: { type: 'string', enum: mediaActions } },
+          required: ['action'],
+          additionalProperties: false,
+        },
+        reflexSafe: true,
+        execute: (input, _request, signal) => runPcMedia(bridge, input, signal),
+>>>>>>> origin/main
       },
       {
         name: 'pc_active_window',
@@ -335,7 +385,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
       },
       {
         name: 'pc_browser_act',
-        description: 'Act on an element index from the latest pc_browser_snapshot using click, type, select, scroll, or wait. The bridge rechecks that exact observed DOM element is fresh, visible, and unobstructed. Sensitive fields are blocked; risky clicks require Dan’s explicit approval.',
+        description: 'Act on an element index from the latest pc_browser_snapshot using click, type, select, scroll, or wait. The bridge rechecks that exact observed DOM element is fresh, visible, and unobstructed. Sensitive fields are blocked; only irreversible actions require Dan’s explicit approval.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -356,7 +406,11 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
       },
       ...(options.pcActPlanner ? [{
         name: 'pc_act',
+<<<<<<< HEAD
         description: 'Control the foreground Windows app with one Jev decision per fresh UI Automation snapshot. Use only for PC workflows; website tasks use Chrome through browser_do, never Edge. Types only explicit quoted, non-sensitive values. Irreversible actions require Dan’s approval.',
+=======
+        description: 'Control any foreground Windows app with one Jev decision per fresh UI Automation snapshot. Website tasks use Chrome through browser_do, never Edge. Types only explicit quoted, non-sensitive values. Confirm irreversible actions only.',
+>>>>>>> origin/main
         inputSchema: {
           type: 'object',
           properties: { goal: { type: 'string', minLength: 1, maxLength: 4_000 } },
@@ -542,11 +596,20 @@ async function runPcOpen(
       break;
     }
     case 'app':
+<<<<<<< HEAD
       if (!/^[\p{L}\p{N} ._()+&-]{1,128}$/u.test(input.value) || input.value !== input.value.trim()) {
         throw new ToolRefusal('Provide the exact name of an installed app.');
       }
       command = { name: 'open_app', arguments: { app: input.value } };
       break;
+=======
+      if (!input.value.trim() || input.value.length > 128 || hasControlCharacters(input.value)) {
+        throw new ToolRefusal('Provide an installed app name between 1 and 128 characters.');
+      }
+      if (isEdgeAppName(input.value)) throw new ToolRefusal('Microsoft Edge cannot be launched; websites always open in Chrome.');
+      command = { name: 'open_app', arguments: { app: input.value.trim() } };
+      return handleAppOpen(await bridge.execute(command, signal));
+>>>>>>> origin/main
     case 'folder': {
       const relativePath = validateRepoPath(input.value);
       if (!relativePath) throw new ToolRefusal('Choose a folder under C:\\Repo using a relative path.');
@@ -570,6 +633,7 @@ async function runPcOpen(
   return bridge.execute(command, signal);
 }
 
+<<<<<<< HEAD
 async function runCodexPrompt(
   bridge: PcBridgeConnection,
   planner: PcActPlanner | undefined,
@@ -646,10 +710,43 @@ async function runCodexPrompt(
   );
   if (!promptEntered || !promptSubmitted) {
     throw new ToolRefusal('Codex did not complete the prompt entry and submission.');
+=======
+function isEdgeAppName(value: string): boolean {
+  return value.toLowerCase().replace(/[^a-z0-9]/gu, '') === 'edge' ||
+    value.toLowerCase().replace(/[^a-z0-9]/gu, '') === 'microsoftedge' ||
+    value.toLowerCase().replace(/[^a-z0-9]/gu, '') === 'msedge';
+}
+
+function handleAppOpen(result: Record<string, unknown>): Record<string, unknown> {
+  if (result.opened === false && Array.isArray(result.candidates)) {
+    const candidates = result.candidates.filter((candidate): candidate is string =>
+      typeof candidate === 'string' && candidate.length > 0 && candidate.length <= 128 &&
+      !hasControlCharacters(candidate));
+    if (candidates.length > 0) {
+      const choices = candidates.slice(0, 5).map(candidate => JSON.stringify(candidate.slice(0, 60)));
+      throw new ToolRefusal(`More than one installed app matches. Choose one: ${choices.join(', ')}.`);
+    }
+    throw new ToolRefusal('More than one installed app matched; please provide a more specific name.');
+>>>>>>> origin/main
   }
   return result;
 }
 
+<<<<<<< HEAD
+=======
+async function runPcMedia(
+  bridge: PcBridgeConnection,
+  input: unknown,
+  signal: AbortSignal,
+): Promise<Record<string, unknown>> {
+  if (!isRecord(input) || Object.keys(input).length !== 1 ||
+      typeof input.action !== 'string' || !mediaActions.includes(input.action as typeof mediaActions[number])) {
+    throw new ToolRefusal('Choose one supported media playback or volume action.');
+  }
+  return bridge.execute({ name: 'media', arguments: { action: input.action as typeof mediaActions[number] } }, signal);
+}
+
+>>>>>>> origin/main
 function validateUrl(value: string): string | undefined {
   if (value.length > 2048 || hasControlCharacters(value)) return undefined;
   try {
@@ -701,7 +798,25 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
     // Accept the note from older bridges too; installed bridges update separately from the backend.
     return value.opened === true && typeof value.note === 'string' && BROWSER_FALLBACK_NOTES.has(value.note);
   }
+<<<<<<< HEAD
   if (['open_url', 'open_app', 'open_folder', 'open_file'].includes(command)) {
+=======
+  if (command === 'open_app' && Object.keys(value).length === 2) {
+    if (value.opened === true) {
+      return typeof value.app === 'string' &&
+        value.app.length > 0 && value.app.length <= 128 && !hasControlCharacters(value.app);
+    }
+    return value.opened === false && Array.isArray(value.candidates) &&
+      value.candidates.length > 0 && value.candidates.length <= 8 &&
+      value.candidates.every(candidate => typeof candidate === 'string' &&
+        candidate.length > 0 && candidate.length <= 128 && !hasControlCharacters(candidate));
+  }
+  if (command === 'media') {
+    return Object.keys(value).length === 2 && value.controlled === true &&
+      typeof value.action === 'string' && mediaActions.includes(value.action as typeof mediaActions[number]);
+  }
+  if (['open_url', 'open_app', 'open_folder'].includes(command)) {
+>>>>>>> origin/main
     return Object.keys(value).length === 1 && value.opened === true;
   }
   if (command === 'active_window') {
@@ -724,8 +839,12 @@ function validUiAutomationSnapshot(
   return Object.keys(value).length === 3 &&
     typeof value.snapshotId === 'string' &&
     /^[\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu.test(value.snapshotId) &&
+<<<<<<< HEAD
     typeof value.application === 'string' &&
     /^[\p{L}\p{N}_.-]{1,128}$/u.test(value.application) &&
+=======
+    typeof value.application === 'string' && /^[\p{L}\p{N}_.-]{1,128}$/u.test(value.application) &&
+>>>>>>> origin/main
     Array.isArray(value.elements) && value.elements.length <= 100 &&
     value.elements.every((element, index) => isRecord(element) && Object.keys(element).length === 3 &&
       element.index === index && typeof element.role === 'string' && element.role.length <= 64 &&
