@@ -564,10 +564,8 @@ public sealed class BrowserExecutor : IDisposable
           const top = document.elementFromPoint(x, y);
           if (!top || (top !== this && !this.contains(top))) return {status:'covered'};
           if (action === 'click') {
-            const context = this.closest('form,[role="dialog"],[aria-modal="true"]')?.innerText || '';
-            const risky = this.type === 'submit' ||
-              /\b(submit|send|delete|remove|purchase|buy|pay|payment|checkout|place order|transfer|sign[\s-]?in|log[\s-]?in|publish|subscribe|donat(e|ion))\b/i.test(`${name} ${context}`);
-            if (risky && !confirmed) return {status:'confirmation_required',summary:`Click "${name || role}" in Chrome.`};
+            const irreversible = /\b(send|sending|delete|deletion|pay|paid|payment|purchase|post|posting|push|pushing|overwrite|overwriting)\b/i.test(name);
+            if (irreversible && !confirmed) return {status:'confirmation_required',summary:`Click "${name || role}" in Chrome.`};
             this.click();
           } else if (action === 'type') {
             const sensitive = /password|one-time-code|cc-|card|cvc|cvv|security.?code|verification.?code|otp/i

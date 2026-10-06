@@ -485,7 +485,9 @@ try {
         pcActPlanner,
         onPcActStep: (activity) => logger.info(activity, 'pc_act.step'),
       } : {}),
-      ...(pcBridgeStatusStore ? { onStatusChange: (online) => pcBridgeStatusStore.setStatus(online) } : {}),
+      ...(pcBridgeStatusStore ? {
+        onStatusChange: (online, controlPaused) => pcBridgeStatusStore.setStatus(online, controlPaused),
+      } : {}),
       ...(teamsNotifications ? {
         runConfirmed: (summary, action, signal) =>
           teamsNotifications.runConfirmed('computer_use', summary, action, signal),

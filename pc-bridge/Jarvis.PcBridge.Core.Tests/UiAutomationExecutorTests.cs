@@ -43,10 +43,13 @@ public sealed class UiAutomationExecutorTests
     }
 
     [Theory]
+    [InlineData("Send message")]
+    [InlineData("Delete file")]
+    [InlineData("Make payment")]
+    [InlineData("Purchase item")]
+    [InlineData("Post update")]
+    [InlineData("Push changes")]
     [InlineData("Overwrite file")]
-    [InlineData("Discard changes")]
-    [InlineData("Reset all settings")]
-    [InlineData("Format drive")]
     public void Destructive_controls_require_confirmation(string name)
     {
         var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1",
@@ -58,6 +61,24 @@ public sealed class UiAutomationExecutorTests
 
         Assert.False(executor.Act(snapshot.SnapshotId, 0, UiAutomationAction.Click, null, false, CancellationToken.None));
         Assert.Empty(provider.Actions);
+    }
+
+    [Theory]
+    [InlineData("Submit")]
+    [InlineData("Remove file")]
+    [InlineData("Replace text")]
+    [InlineData("Reset settings")]
+    public void Reversible_controls_do_not_require_confirmation(string name)
+    {
+        var provider = new FakeUiAutomationProvider(new UiAutomationView("spotify", "window-1",
+        [
+            Control("control", "button", name),
+        ]));
+        var executor = new UiAutomationExecutor(provider);
+        var snapshot = executor.Observe(CancellationToken.None);
+
+        Assert.True(executor.Act(snapshot.SnapshotId, 0, UiAutomationAction.Click, null, false, CancellationToken.None));
+        Assert.Single(provider.Actions);
     }
 
     [Fact]
@@ -77,7 +98,7 @@ public sealed class UiAutomationExecutorTests
     }
 
     [Fact]
-    public void Refuses_stale_controls_and_disallowed_foreground_apps()
+    public void Refuses_stale_controls_and_accepts_any_foreground_app()
     {
         var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1",
         [
@@ -91,9 +112,13 @@ public sealed class UiAutomationExecutorTests
             executor.Act(snapshot.SnapshotId, 0, UiAutomationAction.Click, null, false, CancellationToken.None));
         Assert.Equal("stale", stale.Code);
 
-        provider.View = provider.View with { Application = "chrome" };
-        var blocked = Assert.Throws<UiAutomationRefusedException>(() => executor.Observe(CancellationToken.None));
-        Assert.Equal("not_allowed", blocked.Code);
+        provider.View = new UiAutomationView("spotify", "window-3",
+        [
+            Control("search", "edit", "Search Spotify", canClick: false, canType: true),
+        ]);
+        var spotify = executor.Observe(CancellationToken.None);
+        Assert.Equal("spotify", spotify.Application);
+        Assert.True(executor.Act(spotify.SnapshotId, 0, UiAutomationAction.Type, "Daft Punk", false, CancellationToken.None));
     }
 
     [Theory]

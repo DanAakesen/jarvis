@@ -150,7 +150,7 @@ describe('authenticated PC bridge protocol', () => {
       const result = command.command === 'uia_snapshot'
         ? {
           snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
-          application: 'vscode',
+          application: 'spotify',
           elements: [{ index: 0, role: 'button', name: 'Open project' }],
         }
         : { acted: true, action: 'click' };
@@ -208,7 +208,7 @@ describe('authenticated PC bridge protocol', () => {
     });
   });
 
-    it('routes browser tabs, atomic snapshots and actions through the bridge and confirms risky clicks', async () => {
+    it('routes browser tabs, atomic snapshots and actions through the bridge and confirms irreversible clicks', async () => {
       const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
       const { app, record } = fixture({ runConfirmed });
       const url = await listen(app);
@@ -410,6 +410,62 @@ describe('authenticated PC bridge protocol', () => {
       outcome: 'refused',
       result: { refused: 'Choose a folder under C:\\Repo using a relative path.' },
     });
+  });
+
+  it('reports paused control state and refuses PC actions until resumed', async () => {
+    const statuses: Array<[boolean, boolean | undefined]> = [];
+    let resolvePaused!: () => void;
+    let resolveResumed!: () => void;
+    const paused = new Promise<void>((resolve) => { resolvePaused = resolve; });
+    const resumed = new Promise<void>((resolve) => { resolveResumed = resolve; });
+    const planner: PcActPlanner = {
+      decide: vi.fn().mockResolvedValue({ operation: 'click', confidence: 0.99, targetIndex: 0 }),
+    };
+    const { app } = fixture({
+      pcActPlanner: planner,
+      onStatusChange: (online, controlPaused) => {
+        statuses.push([online, controlPaused]);
+        if (online && controlPaused) resolvePaused();
+        if (online && !controlPaused && statuses.length > 2) resolveResumed();
+      },
+    });
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const commands: Array<Record<string, unknown>> = [];
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      commands.push(command);
+      const result = command.command === 'uia_snapshot'
+        ? {
+          snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+          application: 'spotify',
+          elements: [{ index: 0, role: 'button', name: 'Search' }],
+        }
+        : { opened: true };
+      bridge.send(JSON.stringify({ id: command.id, type: 'result', result }));
+    });
+
+    bridge.send(JSON.stringify({ type: 'status', controlPaused: true }));
+    await paused;
+    const blocked = await callTool(app, 'pc_open', { target: 'app', value: 'vscode' });
+    expect(blocked.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'Jarvis control is paused in the PC bridge. Resume it from the tray menu to act on the PC.' },
+    });
+    expect(commands).toHaveLength(0);
+    const blockedUiAutomation = await callTool(app, 'pc_act', { goal: 'Click Search in Spotify' });
+    expect(blockedUiAutomation.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'Jarvis control is paused in the PC bridge. Resume it from the tray menu to act on the PC.' },
+    });
+    expect(commands.map(({ command }) => command)).toEqual(['uia_snapshot']);
+
+    bridge.send(JSON.stringify({ type: 'status', controlPaused: false }));
+    await resumed;
+    const resumedAction = await callTool(app, 'pc_open', { target: 'app', value: 'vscode' });
+    expect(resumedAction.json()).toMatchObject({ outcome: 'ok', result: { opened: true } });
+    expect(commands.map(({ command }) => command)).toEqual(['uia_snapshot', 'open_app']);
+    expect(statuses).toEqual([[false, false], [true, false], [true, true], [true, false]]);
   });
 
   it('waits for the final status write before backend shutdown completes', async () => {

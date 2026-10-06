@@ -873,10 +873,15 @@ the companion on Dan's PC:
    enabled, or the direct Chrome executable fallback when disconnected, never
    Edge. Open an allow-listed app as a separate check. Check the authenticated Now
    feed for online/offline status; verify active-window reads and exact-title
-   focus with Dan present at the PC.
+   focus with Dan present at the PC. Verify **Pause Jarvis control (on)** blocks
+   PC actions and the same Now row reports paused; turn the toggle off and confirm
+   actions resume and the row reports active.
 
 The app allows only HTTP(S) URLs, VS Code, Edge, File Explorer, Windows Terminal,
 folders below `C:\Repo` in VS Code, active-window title, and exact-title focus.
+`pc_act` separately controls any foreground Windows app through UI Automation.
+Pause Jarvis control is saved in the bridge settings and reported over the
+authenticated socket; no shell or arbitrary command execution is exposed.
 Offline policy/protocol tests do not verify live Entra sign-in or Windows
 execution; those remain coordinator post-merge checks.
 

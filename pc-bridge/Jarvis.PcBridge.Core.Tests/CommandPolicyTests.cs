@@ -7,6 +7,22 @@ namespace Jarvis.PcBridge.Core.Tests;
 public sealed class CommandPolicyTests
 {
     [Theory]
+    [InlineData("open_url", true)]
+    [InlineData("open_app", true)]
+    [InlineData("open_folder", true)]
+    [InlineData("focus_window", true)]
+    [InlineData("uia_act", true)]
+    [InlineData("browser_act", true)]
+    [InlineData("active_window", false)]
+    [InlineData("uia_snapshot", false)]
+    [InlineData("browser_snapshot", false)]
+    [InlineData("browser_tabs", false)]
+    public void Identifies_actions_blocked_when_control_is_paused(string command, bool expected)
+    {
+        Assert.Equal(expected, CommandPolicy.IsControlAction(command));
+    }
+
+    [Theory]
     [InlineData("open_url", """{"url":"https://example.com/repo"}""")]
     [InlineData("open_app", """{"app":"vscode"}""")]
     [InlineData("open_app", """{"app":"terminal"}""")]
@@ -77,6 +93,19 @@ public sealed class CommandPolicyTests
         Assert.False(BridgeProtocol.TryReadCommand(Encoding.UTF8.GetBytes(
             """{"id":"1730aa51-f380-4df9-a345-1feb862cb1c4","type":"result","command":"active_window","arguments":{}}"""), out _));
         Assert.False(BridgeProtocol.TryReadCommand(new byte[BridgeProtocol.MaxMessageBytes + 1], out _));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Serializes_control_pause_status_for_the_backend(bool paused)
+    {
+        using var document = JsonDocument.Parse(BridgeProtocol.ControlState(paused));
+        var root = document.RootElement;
+
+        Assert.Equal("status", root.GetProperty("type").GetString());
+        Assert.Equal(paused, root.GetProperty("controlPaused").GetBoolean());
+        Assert.Equal(2, root.EnumerateObject().Count());
     }
 
     [Fact]

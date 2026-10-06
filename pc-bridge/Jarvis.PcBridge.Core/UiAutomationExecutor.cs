@@ -61,8 +61,6 @@ public sealed class UiAutomationExecutor(IUiAutomationProvider provider)
         cancellationToken.ThrowIfCancellationRequested();
         var view = provider.Observe(cancellationToken);
         if (view is null) throw new UiAutomationRefusedException("not_found");
-        if (!UiAutomationPolicy.IsAllowedApplication(view.Application))
-            throw new UiAutomationRefusedException("not_allowed");
 
         var controls = view.Controls
             .Where(control => control.IsEnabled && !control.IsOffscreen && !control.IsSensitive &&
@@ -147,12 +145,6 @@ public sealed class UiAutomationExecutor(IUiAutomationProvider provider)
 
 public static partial class UiAutomationPolicy
 {
-    private static readonly HashSet<string> AllowedApplications = new(StringComparer.Ordinal)
-    {
-        "vscode",
-        "explorer",
-    };
-
     [GeneratedRegex(
         @"\b(?:pass(?:word|phrase|code)s?|one[- ]time (?:code|password)|verification code|security code|otp|(?:credit|debit)[ -]card(?: number)?|card number|cvv|cvc|ssn|social security(?: number)?|passport(?: number)?|national id(?:entification)?(?: number)?|driver'?s? license(?: number)?|tax(?:payer)? id(?:entification)?(?: number)?)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
@@ -165,11 +157,9 @@ public static partial class UiAutomationPolicy
     private static partial Regex SensitiveNumericPattern();
 
     [GeneratedRegex(
-        @"\b(?:send|submit|delete|remove|erase|overwrite|replace|discard|reset|clear|format|reformat|drop|revert|pay|payment|purchase|post|transfer|system settings|settings|confirm)\b",
+        @"\b(?:send|sending|delete|deletion|pay|paid|payment|purchase|post|posting|push|pushing|overwrite|overwriting)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DestructiveControlPattern();
-
-    public static bool IsAllowedApplication(string application) => AllowedApplications.Contains(application);
 
     public static bool IsSensitiveControl(string name) =>
         SensitiveControlPattern().IsMatch(name) ||

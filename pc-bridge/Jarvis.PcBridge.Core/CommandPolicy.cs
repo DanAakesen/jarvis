@@ -49,6 +49,9 @@ public static class CommandPolicy
         };
     }
 
+    public static bool IsControlAction(string command) => command is
+        "open_url" or "open_app" or "open_folder" or "focus_window" or "uia_act" or "browser_act";
+
     private static bool IsUiAutomationAction(JsonElement arguments)
     {
         if (!arguments.TryGetProperty("snapshotId", out var snapshotId) ||
