@@ -27,6 +27,7 @@ import {
 } from '../core/reflex.js';
 import { createVoiceStatusAnnouncer } from './status-updates.js';
 import { isJevFailure } from '../core/jev.js';
+import type { VisionWatchService } from '../vision/watch.js';
 import {
   VOICE_PHRASE_HINTS,
   type PartialSpeechRecognizer,
@@ -150,6 +151,7 @@ export interface VoiceRelayOptions {
   readonly connectDanish?: VoiceConnectionFactory;
   readonly createPartialRecognizer?: PartialSpeechRecognizerFactory;
   readonly registerPhoneMediaRoute?: (app: FastifyInstance) => void;
+  readonly visionWatch?: Pick<VisionWatchService, 'registerVoice'>;
 }
 
 type SharedScreenContext = {
@@ -284,6 +286,7 @@ function registerVoiceRoute(
   language: 'da' | 'en',
   getToken: VoiceRelayOptions['getToken'],
   createPartialRecognizer?: PartialSpeechRecognizerFactory,
+  visionWatch?: VoiceRelayOptions['visionWatch'],
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
     if (request.principal === null) {
@@ -298,6 +301,7 @@ function registerVoiceRoute(
     const controller = new AbortController();
     let upstream: WebSocket | undefined;
     let configured = false;
+    let upstreamSessionReady = false;
     let queuedBytes = 0;
     const queued: { data: RawData; binary: boolean }[] = [];
     const seenCallIds = new Set<string>();
@@ -343,6 +347,12 @@ function registerVoiceRoute(
       app.jarvisActivityHub.publish({ type, activityId, source: 'voice' });
     };
     let statusAnnouncer: ReturnType<typeof createVoiceStatusAnnouncer> | undefined;
+    let unregisterVisionVoice: (() => void) | undefined;
+    const closeAnnouncements = () => {
+      unregisterVisionVoice?.();
+      unregisterVisionVoice = undefined;
+      statusAnnouncer?.close();
+    };
     let transcriptQueue = Promise.resolve();
     let transcriptPersistenceFailed = false;
     let lastScreenContextAt = 0;
@@ -950,7 +960,7 @@ function registerVoiceRoute(
       stopPartialRecognition();
       controller.abort();
       finishSharedScreenContextWait(null, true);
-      statusAnnouncer?.close();
+      closeAnnouncements();
       if (upstream) closeSocket(upstream, code, reason);
       void finalizeSession().then(
         () => closeSocket(browser, code, reason),
@@ -983,18 +993,21 @@ function registerVoiceRoute(
       return true;
     };
 
-    if (english) {
+    if (english || visionWatch) {
       statusAnnouncer = createVoiceStatusAnnouncer({
-        taskEvents: app.eventHub,
-        nowEvents: app.nowEventHub,
-        canSpeak: () => !controller.signal.aborted && !endRequested && !userSpeaking &&
+        ...(english ? { taskEvents: app.eventHub, nowEvents: app.nowEventHub } : {}),
+        canSpeak: () => configured && !controller.signal.aborted && !endRequested && !userSpeaking &&
           !reflexPending && !assistantResponding && !toolCallsInResponse && pendingToolCalls === 0 &&
-          upstream?.readyState === WebSocket.OPEN,
+          browser.readyState === WebSocket.OPEN && upstream?.readyState === WebSocket.OPEN,
         speak: (text) => {
           assistantResponding = true;
           sendUpstream({
             type: 'response.create',
-            response: { instructions: `Speak this exact status update to Dan, verbatim: ${text}` },
+            response: {
+              instructions: `Speak this exact status update to Dan, verbatim: ${text}`,
+              tools: [],
+              tool_choice: 'none',
+            },
           });
         },
       });
@@ -1151,6 +1164,7 @@ function registerVoiceRoute(
       if (event?.type === 'jarvis.session.end') {
         if (endRequested) return;
         endRequested = true;
+        closeAnnouncements();
         stopPartialRecognition();
         void finalizeSession().then(() => {
           if (browser.readyState !== WebSocket.OPEN) return;
@@ -1250,7 +1264,7 @@ function registerVoiceRoute(
       }
       stopPartialRecognition();
       controller.abort();
-      statusAnnouncer?.close();
+      closeAnnouncements();
       logReflexMetrics();
       if (upstream) closeSocket(upstream, 1000, 'Browser disconnected');
       void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
@@ -1261,7 +1275,7 @@ function registerVoiceRoute(
       publishActivity('failed');
       stopPartialRecognition();
       controller.abort();
-      statusAnnouncer?.close();
+      closeAnnouncements();
       logReflexMetrics();
       if (upstream) closeSocket(upstream, 1011, 'Voice connection failed');
       void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
@@ -1296,6 +1310,17 @@ function registerVoiceRoute(
         const upstreamEventTypes = new Set<string>();
         upstream.on('message', (data, binary) => {
           const event = parseVoiceEvent(data, binary);
+          if ((event?.type === 'session.updated' || !english && event?.type === 'session.created') &&
+              !upstreamSessionReady &&
+              !controller.signal.aborted && !endRequested) {
+            upstreamSessionReady = true;
+            if (sessionId && statusAnnouncer && visionWatch) {
+              unregisterVisionVoice = visionWatch.registerVoice(
+                sessionId,
+                (text) => statusAnnouncer?.announce(text) ?? false,
+              );
+            }
+          }
           if (typeof event?.type === 'string' && upstreamEventTypes.size < 40 &&
               /^[a-z_.]{1,80}$/u.test(event.type)) upstreamEventTypes.add(event.type);
           if (event?.type === 'error') {
@@ -1489,6 +1514,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           'en',
           options.getToken,
           options.createPartialRecognizer,
+          options.visionWatch,
         );
       }
       if (options.connect) {
@@ -1502,6 +1528,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           'da',
           options.getToken,
           options.createPartialRecognizer,
+          options.visionWatch,
         );
       } else if (options.connectDanish) {
         registerVoiceRoute(
@@ -1512,6 +1539,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           'da',
           options.getToken,
           options.createPartialRecognizer,
+          options.visionWatch,
         );
       }
     },

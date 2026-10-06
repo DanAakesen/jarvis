@@ -30,6 +30,10 @@ public static class CommandPolicy
                 arguments.TryGetProperty("relativePath", out var folder) &&
                 folder.ValueKind == JsonValueKind.String &&
                 TryNormalizeRepoPath(folder.GetString(), out _),
+            "open_file" => HasOnly(arguments, "relativePath") &&
+                arguments.TryGetProperty("relativePath", out var file) &&
+                file.ValueKind == JsonValueKind.String &&
+                TryNormalizeRepoPath(file.GetString(), out _),
             "active_window" => !arguments.EnumerateObject().Any(),
             "focus_window" => HasOnly(arguments, "title") &&
                 arguments.TryGetProperty("title", out var title) &&
@@ -53,7 +57,7 @@ public static class CommandPolicy
     }
 
     public static bool IsControlAction(string command) => command is
-        "open_url" or "open_app" or "close_app" or "open_folder" or "focus_window" or "uia_act" or
+        "open_url" or "open_app" or "close_app" or "open_folder" or "open_file" or "focus_window" or "uia_act" or
         "browser_act" or "media" or "window_capture" or "click_point" or "scroll_point";
 
     private static bool IsPointAction(JsonElement arguments, string action)

@@ -12,6 +12,7 @@ import {
 import {
   runPcAct,
   type PcActOptions,
+  type PcActOperation,
   type PcActPlanner,
   type PcActVisionModel,
 } from './pc-act.js';
@@ -23,7 +24,7 @@ export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
 const controlActions = new Set<PcCommand['name']>([
   'open_url', 'open_app', 'close_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
-  'window_capture', 'click_point', 'scroll_point',
+  'window_capture', 'click_point', 'scroll_point', 'open_file',
 ]);
 const mediaActions = ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const;
 
@@ -33,6 +34,7 @@ type PcCommand =
   | { name: 'close_app'; arguments: { app: string } }
   | { name: 'media'; arguments: { action: typeof mediaActions[number] } }
   | { name: 'open_folder'; arguments: { relativePath: string } }
+  | { name: 'open_file'; arguments: { relativePath: string } }
   | { name: 'active_window'; arguments: Record<string, never> }
   | { name: 'focus_window'; arguments: { title: string } }
   | { name: 'uia_snapshot'; arguments: Record<string, never> }
@@ -416,11 +418,11 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
     tools: [
       {
         name: 'pc_open',
-        description: 'Open a website (target url with the full https address; it always opens in Dan’s Chrome, never Edge), any installed app by name (target app, e.g. spotify), a repo folder or a window on Dan’s PC. Use browser_do for work on a website.',
+        description: 'Open a website (target url with the full https address; it always opens in Dan’s Chrome, never Edge), any installed app by name (target app, e.g. spotify), a folder or file under C:\\Repo in VS Code, or a window on Dan’s PC. Use browser_do for work on a website.',
         inputSchema: {
           type: 'object',
           properties: {
-            target: { type: 'string', enum: ['url', 'app', 'folder', 'window'] },
+            target: { type: 'string', enum: ['url', 'app', 'folder', 'file', 'window'] },
             value: { type: 'string', minLength: 1, maxLength: 2048 },
           },
           required: ['target', 'value'],
@@ -430,6 +432,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           }],
           additionalProperties: false,
         },
+        sensitive: true,
         execute: (input, request, signal) => runPcOpen(bridge, input, signal, request.log),
       },
       {
@@ -606,6 +609,19 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
             ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
             ...(options.onPcActStep ? { onStep: options.onPcActStep } : {}),
           }),
+      }] : []),
+      ...(options.pcActPlanner ? [{
+        name: 'codex_prompt',
+        description: 'Open the installed Codex desktop app, enter the exact non-sensitive prompt, and submit it through the existing PC control flow. Only irreversible submissions require confirmation.',
+        inputSchema: {
+          type: 'object',
+          properties: { prompt: { type: 'string', minLength: 1, maxLength: 3_000 } },
+          required: ['prompt'],
+          additionalProperties: false,
+        },
+        sensitive: true,
+        execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) =>
+          runCodexPrompt(bridge, input, request, signal, options),
       }] : []),
     ],
     registerRoutes: async (app) => {
@@ -833,6 +849,12 @@ async function runPcOpen(
       command = { name: 'open_url', arguments: { url } };
       break;
     }
+    case 'file': {
+      const relativePath = validateRepoPath(input.value);
+      if (!relativePath) throw new ToolRefusal('Choose a file under C:\\Repo using a relative path.');
+      command = { name: 'open_file', arguments: { relativePath } };
+      break;
+    }
     case 'app':
       if (!input.value.trim() || input.value.length > 128 || hasControlCharacters(input.value)) {
         throw new ToolRefusal('Provide an installed app name between 1 and 128 characters.');
@@ -855,6 +877,57 @@ async function runPcOpen(
   }
 
   return bridge.execute(command, signal, logger);
+}
+
+async function runCodexPrompt(
+  bridge: PcBridgeConnection,
+  input: unknown,
+  request: FastifyRequest,
+  signal: AbortSignal,
+  options: PcBridgeModuleOptions,
+): Promise<Record<string, unknown>> {
+  if (!isRecord(input) || Object.keys(input).length !== 1 ||
+      typeof input.prompt !== 'string' || !input.prompt.trim() ||
+      input.prompt.length > 3_000 || hasControlCharacters(input.prompt)) {
+    throw new ToolRefusal('Provide one non-empty Codex prompt of at most 3,000 characters without control characters.');
+  }
+
+  try {
+    await runPcOpen(bridge, { target: 'app', value: 'Codex' }, signal, request.log);
+  } catch (error) {
+    if (error instanceof ToolRefusal && error.message === 'No installed app matched that name; nothing was launched.') {
+      throw new ToolRefusal('The Codex desktop app is not installed or could not be found; no prompt was entered.');
+    }
+    throw error;
+  }
+
+  const goal = `In the Codex desktop app, enter the exact prompt ${JSON.stringify(input.prompt)} in the prompt field and submit it.`;
+  if (goal.length > 4_000) throw new ToolRefusal('That Codex prompt is too long to enter safely.');
+  const completedActions = new Set<PcActOperation>();
+  const result = await runPcAct({ goal }, request, signal, {
+    observe: (commandSignal) => bridge.execute(
+      { name: 'uia_snapshot', arguments: {} },
+      commandSignal,
+      request.log,
+    ),
+    act: (action, commandSignal) => bridge.execute(
+      { name: 'uia_act', arguments: action },
+      commandSignal,
+      request.log,
+    ),
+  }, {
+    planner: options.pcActPlanner!,
+    confirmOverwrites: false,
+    ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
+    onStep: (activity) => {
+      if (activity.outcome === 'completed') completedActions.add(activity.action);
+      options.onPcActStep?.(activity);
+    },
+  });
+  if (!completedActions.has('type') || !completedActions.has('click')) {
+    throw new ToolRefusal('Codex did not confirm that the prompt was entered and submitted.');
+  }
+  return result;
 }
 
 function isEdgeAppName(value: string): boolean {
@@ -976,7 +1049,7 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
     return Object.keys(value).length === 2 && value.closing === true &&
       Number.isInteger(value.windows) && (value.windows as number) >= 1 && (value.windows as number) <= 10;
   }
-  if (['open_url', 'open_app', 'open_folder'].includes(command)) {
+  if (['open_url', 'open_app', 'open_folder', 'open_file'].includes(command)) {
     return Object.keys(value).length === 1 && value.opened === true;
   }
   if (command === 'active_window') {

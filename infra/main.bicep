@@ -449,6 +449,26 @@ resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deploym
   }
 }
 
+// Continuous screen and camera vision (Dan's choice, 6 October): cheapest capable vision model.
+resource gpt6LunaVisionDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'gpt-6-luna'
+  dependsOn: [
+    memoryEmbeddingDeployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 50
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-6-luna'
+      version: '2026-09-22'
+    }
+  }
+}
+
 resource foundryAcrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(registry.id, foundryProject.id, acrPullRoleId)
   scope: registry
@@ -710,7 +730,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             }
             {
               name: 'FOUNDRY_RUNNER_AGENT_NAME'
-              value: 'jarvis-runner-node-1x2'
+              value: 'jarvis-runner-base-1x2'
             }
             {
               name: 'JARVIS_CODEX_TOOL_MODEL'

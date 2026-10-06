@@ -82,6 +82,7 @@ import { createGoogleModule } from './google/tools.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
+import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
 import { createWebResearchModule } from './core/web-research.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
 import { createEphemeralAudioStore } from './teams/audio-store.js';
@@ -554,11 +555,12 @@ try {
       ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
     }));
   }
+  let visionWatch: VisionWatchService | undefined;
   if (database && settingsStore && screenVisionModel) {
-    modules.push(createScreenVisionModule(new ScreenVisionService(
-      screenVisionModel,
-      createScreenFrameUsageStore(database.pool),
-    )));
+    const visionUsage = createScreenFrameUsageStore(database.pool);
+    modules.push(createScreenVisionModule(new ScreenVisionService(screenVisionModel, visionUsage)));
+    visionWatch = new VisionWatchService(screenVisionModel, visionUsage, createConversationStore(database.pool));
+    modules.push(createVisionWatchModule(visionWatch));
   }
   if (graphClient) {
     modules.push(createNotesModule({
@@ -569,6 +571,7 @@ try {
   }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
+      ...(visionWatch ? { visionWatch } : {}),
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
         if (!token) throw new Error('Voice identity unavailable');
@@ -631,6 +634,7 @@ try {
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
+      ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
       ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),

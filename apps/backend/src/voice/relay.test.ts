@@ -30,6 +30,7 @@ import {
   normalizeVoiceLiveEndpoint,
   VOICE_LIVE_SCOPE,
   VOICE_SUBPROTOCOL,
+  type VoiceRelayOptions,
 } from './relay.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -61,7 +62,7 @@ async function echoServer(onConnection: (socket: WebSocket, request: IncomingMes
 }
 
 function appFor(
-  connect: (token: string, signal: AbortSignal) => WebSocket,
+  connect: ((token: string, signal: AbortSignal) => WebSocket) | undefined,
   getToken = vi.fn(async () => voiceToken),
   records: string[] = [],
   toolModules: readonly BackendModule[] = [],
@@ -100,6 +101,7 @@ function appFor(
   services: Pick<BuildAppOptions, 'taskStore' | 'taskController' | 'toolCallStore'> = {},
   logLevel: 'info' | 'silent' = 'silent',
   createPartialRecognizer?: PartialSpeechRecognizerFactory,
+  visionWatch?: VoiceRelayOptions['visionWatch'],
 ) {
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
   const appConfig = { ...config, logLevel };
@@ -110,9 +112,10 @@ function appFor(
       ...toolModules,
       createVoiceRelayModule({
         getToken,
-        connect,
+        ...(connect ? { connect } : {}),
         ...(connectDanish ? { connectDanish } : {}),
         ...(createPartialRecognizer ? { createPartialRecognizer } : {}),
+        ...(visionWatch ? { visionWatch } : {}),
       }),
     ],
     auth: async (token) => {
@@ -493,6 +496,241 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(received.find((event) => event.type === 'response.create')).toMatchObject({
       response: { instructions: 'Speak this exact status update to Dan, verbatim: A task has finished.' },
     });
+  });
+
+  it.each(['/voice', '/voice/da'])(
+    'delivers watch notifications only after upstream readiness and while idle on %s',
+    async (path) => {
+      const received: Record<string, unknown>[] = [];
+      let upstream!: WebSocket;
+      const upstreamUrl = await echoServer((socket) => {
+        upstream = socket;
+        socket.on('message', (data) => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+      });
+      let speak!: (text: string) => boolean;
+      const unregister = vi.fn();
+      const visionWatch = {
+        registerVoice: vi.fn((_sessionId: string, callback: (text: string) => boolean) => {
+          speak = callback;
+          return unregister;
+        }),
+      };
+      const { app } = appFor(
+        (token, signal) => new WebSocket(upstreamUrl, {
+          headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+        }),
+        undefined, [], [], undefined, undefined, undefined, undefined, {}, 'silent', undefined, visionWatch,
+      );
+      await app.listen({ host: '127.0.0.1', port: 0 });
+      const address = app.server.address() as AddressInfo;
+      const browser = await openBrowser(`ws://127.0.0.1:${address.port}${path}`);
+      await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+      expect(visionWatch.registerVoice).not.toHaveBeenCalled();
+
+      const upstreamEvent = async (type: string) => {
+        const forwarded = once(browser, 'message');
+        upstream.send(JSON.stringify({ type }));
+        await forwarded;
+      };
+      await upstreamEvent('session.updated');
+      expect(visionWatch.registerVoice).toHaveBeenCalledExactlyOnceWith('41', expect.any(Function));
+      expect(speak('The download has finished.')).toBe(true);
+      expect(speak('A second update.')).toBe(false);
+      await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+      expect(received.find((event) => event.type === 'response.create')).toEqual({
+        type: 'response.create',
+        response: {
+          instructions: 'Speak this exact status update to Dan, verbatim: The download has finished.',
+          tools: [],
+          tool_choice: 'none',
+        },
+      });
+
+      await upstreamEvent('response.done');
+      await upstreamEvent('input_audio_buffer.speech_started');
+      expect(speak('Use chat while Dan is speaking.')).toBe(false);
+      await upstreamEvent('input_audio_buffer.speech_stopped');
+      await upstreamEvent('response.created');
+      expect(speak('Use chat while Jarvis is responding.')).toBe(false);
+      await upstreamEvent('response.done');
+      app.nowEventHub.publish({ type: 'status', kind: 'pull_request_ready' });
+      expect(speak('Use chat while a status is queued.')).toBe(false);
+      await upstreamEvent('session.updated');
+      expect(visionWatch.registerVoice).toHaveBeenCalledOnce();
+
+      browser.close();
+      await once(browser, 'close');
+      await vi.waitFor(() => expect(unregister).toHaveBeenCalledOnce());
+      expect(speak('Use chat after disconnect.')).toBe(false);
+      expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1);
+    },
+  );
+
+  it('unregisters watch notifications on upstream disconnect', async () => {
+    let upstream!: WebSocket;
+    const upstreamUrl = await echoServer((socket) => {
+      upstream = socket;
+      socket.on('message', (data) => {
+        if ((JSON.parse(data.toString()) as { type: string }).type === 'session.update') {
+          socket.send(JSON.stringify({ type: 'session.updated' }));
+        }
+      });
+    });
+    const unregister = vi.fn();
+    const visionWatch = { registerVoice: vi.fn(() => unregister) };
+    const { app } = appFor(
+      (token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }),
+      undefined, [], [], undefined, undefined, undefined, undefined, {}, 'silent', undefined, visionWatch,
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(visionWatch.registerVoice).toHaveBeenCalledOnce());
+    const closed = once(browser, 'close');
+    upstream.close();
+    await closed;
+    expect(unregister).toHaveBeenCalledOnce();
+  });
+
+  it.each(['session.created', 'session.updated'])(
+    'delivers watch notifications on the Danish hosted fallback after %s without status subscriptions',
+    async (readyType) => {
+      const received: Record<string, unknown>[] = [];
+      let upstream!: WebSocket;
+      const upstreamUrl = await echoServer((socket) => {
+        upstream = socket;
+        socket.on('message', (data) => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+      });
+      const connectDanish = vi.fn((token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }));
+      let speak!: (text: string) => boolean;
+      const unregister = vi.fn();
+      const visionWatch = {
+        registerVoice: vi.fn((_sessionId: string, callback: (text: string) => boolean) => {
+          speak = callback;
+          return unregister;
+        }),
+      };
+      const { app } = appFor(
+        undefined, undefined, [], [], connectDanish, undefined, undefined, undefined, {},
+        'silent', undefined, visionWatch,
+      );
+      const taskSubscription = vi.spyOn(app.eventHub, 'subscribe');
+      const nowSubscription = vi.spyOn(app.nowEventHub, 'subscribe');
+      await app.listen({ host: '127.0.0.1', port: 0 });
+      const address = app.server.address() as AddressInfo;
+      const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice/da`);
+      await vi.waitFor(() => expect(upstream?.readyState).toBe(WebSocket.OPEN));
+      expect(visionWatch.registerVoice).not.toHaveBeenCalled();
+      const upstreamEvent = async (type: string) => {
+        const forwarded = once(browser, 'message');
+        upstream.send(JSON.stringify({ type }));
+        await forwarded;
+      };
+      await upstreamEvent(readyType);
+      expect(connectDanish).toHaveBeenCalledOnce();
+      expect(visionWatch.registerVoice).toHaveBeenCalledExactlyOnceWith('41', expect.any(Function));
+      expect(taskSubscription).not.toHaveBeenCalled();
+      expect(nowSubscription).not.toHaveBeenCalled();
+      expect(received).toEqual([]);
+
+      app.nowEventHub.publish({ type: 'status', kind: 'pull_request_ready' });
+      expect(speak('Downloadet er færdigt.')).toBe(true);
+      expect(speak('Another update.')).toBe(false);
+      await vi.waitFor(() => expect(received).toHaveLength(1));
+      expect(received[0]).toEqual({
+        type: 'response.create',
+        response: {
+          instructions: 'Speak this exact status update to Dan, verbatim: Downloadet er færdigt.',
+          tools: [],
+          tool_choice: 'none',
+        },
+      });
+      await upstreamEvent('response.done');
+      await upstreamEvent('input_audio_buffer.speech_started');
+      expect(speak('Use chat while speaking.')).toBe(false);
+      await upstreamEvent('input_audio_buffer.speech_stopped');
+      await upstreamEvent('session.updated');
+      expect(visionWatch.registerVoice).toHaveBeenCalledOnce();
+      const closed = once(browser, 'close');
+      browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
+      await closed;
+      expect(unregister).toHaveBeenCalledOnce();
+      expect(speak('Use chat after ending.')).toBe(false);
+    },
+  );
+
+  it.each(['reflex', 'tool'] as const)('declines watch delivery while a %s is pending', async (kind) => {
+    let finish!: () => void;
+    const pending = new Promise<null>((resolve) => { finish = () => resolve(null); });
+    const classify = vi.fn(async () => pending);
+    const execute = vi.fn(async () => pending);
+    const toolModule: BackendModule = {
+      id: 'watch-test-tool',
+      tools: [{
+        name: 'watch_test',
+        description: 'Wait for a test operation.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        execute,
+      }],
+      registerRoutes: async () => {},
+    };
+    const received: Record<string, unknown>[] = [];
+    let upstream!: WebSocket;
+    const upstreamUrl = await echoServer((socket) => {
+      upstream = socket;
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+      });
+    });
+    let speak!: (text: string) => boolean;
+    const visionWatch = {
+      registerVoice: vi.fn((_sessionId: string, callback: (text: string) => boolean) => {
+        speak = callback;
+        return vi.fn();
+      }),
+    };
+    const { app } = appFor(
+      (token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }),
+      undefined, [], [toolModule], undefined, undefined, undefined, { classify }, {},
+      'silent', undefined, visionWatch,
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(visionWatch.registerVoice).toHaveBeenCalledOnce());
+    try {
+      upstream.send(JSON.stringify(kind === 'reflex' ? {
+        type: 'conversation.item.input_audio_transcription.completed',
+        item_id: 'watch_input',
+        transcript: 'Check the download.',
+      } : {
+        type: 'response.function_call_arguments.done',
+        call_id: 'watch_call',
+        name: 'watch_test',
+        arguments: '{}',
+      }));
+      await vi.waitFor(() => expect(kind === 'reflex' ? classify : execute).toHaveBeenCalledOnce());
+      const done = once(browser, 'message');
+      upstream.send(JSON.stringify({ type: 'response.done' }));
+      await done;
+      expect(speak('Use chat while the operation is pending.')).toBe(false);
+      expect(received.some((event) => event.type === 'response.create')).toBe(false);
+    } finally {
+      finish();
+    }
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
+    const done = once(browser, 'message');
+    upstream.send(JSON.stringify({ type: 'response.done' }));
+    await done;
+    expect(speak('The download has finished.')).toBe(true);
   });
 
   it('classifies the final English transcript before requesting the voice reply', async () => {

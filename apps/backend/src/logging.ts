@@ -28,6 +28,7 @@ const events = new Set([
   'voice.partials_unavailable', 'chat.latency', 'memory.embedding',
   'pc_act.step',
   'reflex.decision',
+  'vision.watch',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing',
 ]);
@@ -105,6 +106,15 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
         input.durationMs >= 0 && input.durationMs <= 600_000) {
       fields.durationMs = input.durationMs;
+    }
+  }
+  if (input.msg === 'vision.watch') {
+    if (input.source === 'screen' || input.source === 'camera') fields.source = input.source;
+    for (const key of ['noteworthy', 'spoke']) {
+      if (typeof input[key] === 'boolean') fields[key] = input[key];
+    }
+    for (const key of ['latencyMs', 'cost']) {
+      if (typeof input[key] === 'number' && Number.isFinite(input[key]) && input[key] >= 0) fields[key] = input[key];
     }
   }
   if (input.msg === 'pc_act.step') {
@@ -189,7 +199,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     fields.events = input.events;
   }
   if (input.msg === 'conversation.reply_failed' || input.msg === 'voice.upstream_error' ||
-      input.msg === 'voice.upstream_event_error' ||
+      input.msg === 'voice.upstream_event_error' || input.msg === 'voice.partials_unavailable' ||
       input.msg === 'voice.upstream_closed' || input.msg === 'voice.connection_failed') {
     // Short, fixed-vocabulary diagnostics only: our own error messages and upstream close reasons.
     if (typeof input.failure === 'string' && /^[A-Za-z0-9 .:,'()_-]{1,120}$/.test(input.failure)) {

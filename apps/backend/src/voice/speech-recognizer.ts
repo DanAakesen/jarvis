@@ -46,7 +46,8 @@ export function createAzureSpeechEndpoint(runtimeEndpoint: string): URL {
       resource.username || resource.password || resource.search || resource.hash) {
     throw new TypeError('Foundry runtime endpoint must be a secure Azure AI resource URL');
   }
-  return new URL(`wss://${resource.hostname}/speech/universal/v2`);
+  // Custom-domain Speech endpoints need the /stt prefix; /speech/universal/v2 returned 404 (L111).
+  return new URL(`wss://${resource.hostname}/stt/speech/universal/v2`);
 }
 
 function safePhraseHints(phrases: readonly string[]): string[] {

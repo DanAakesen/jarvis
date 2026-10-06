@@ -22,6 +22,61 @@ function taskEvent(type: string, payload: unknown = null): TaskEventMessage {
 afterEach(() => vi.useRealTimers());
 
 describe('voice status announcements', () => {
+  it('supports direct-only delivery without task or Now subscriptions', () => {
+    const speak = vi.fn();
+    const announcer = createVoiceStatusAnnouncer({ canSpeak: () => true, speak });
+    expect(announcer.announce('Downloadet er færdigt.')).toBe(true);
+    expect(speak).toHaveBeenCalledExactlyOnceWith('Downloadet er færdigt.');
+    announcer.close();
+    expect(announcer.announce('Another update.')).toBe(false);
+  });
+
+  it('delivers direct announcements synchronously only while open and able to speak', () => {
+    const speak = vi.fn();
+    let canSpeak = false;
+    const announcer = createVoiceStatusAnnouncer({
+      taskEvents: createEventHub<TaskEventMessage>(),
+      nowEvents: createEventHub(),
+      canSpeak: () => canSpeak,
+      speak,
+    });
+
+    expect(announcer.announce('The download has finished.')).toBe(false);
+    expect(speak).not.toHaveBeenCalled();
+    canSpeak = true;
+    expect(announcer.announce('The download has finished.')).toBe(true);
+    expect(speak).toHaveBeenCalledExactlyOnceWith('The download has finished.');
+    announcer.close();
+    expect(announcer.announce('Another update.')).toBe(false);
+    expect(speak).toHaveBeenCalledOnce();
+  });
+
+  it('rejects direct announcements during merging and while a status remains pending', () => {
+    vi.useFakeTimers();
+    const taskEvents: TaskEventHub = createEventHub<TaskEventMessage>();
+    const speak = vi.fn();
+    let canSpeak = true;
+    const announcer = createVoiceStatusAnnouncer({
+      taskEvents,
+      nowEvents: createEventHub(),
+      canSpeak: () => canSpeak,
+      speak,
+    });
+
+    taskEvents.publish(taskEvent('state_changed', { to: 'Done' }));
+    expect(announcer.announce('Vision update.')).toBe(false);
+    canSpeak = false;
+    vi.advanceTimersByTime(500);
+    canSpeak = true;
+    expect(announcer.announce('Vision update.')).toBe(false);
+    expect(speak).not.toHaveBeenCalled();
+    announcer.flush();
+    expect(speak).toHaveBeenCalledExactlyOnceWith('A task has finished.');
+    expect(announcer.announce('Vision update.')).toBe(true);
+    expect(speak).toHaveBeenLastCalledWith('Vision update.');
+    announcer.close();
+  });
+
   it('merges only selected events and waits until Dan is no longer speaking', () => {
     vi.useFakeTimers();
     const taskEvents: TaskEventHub = createEventHub<TaskEventMessage>();
