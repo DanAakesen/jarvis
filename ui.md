@@ -128,8 +128,8 @@ Latest visual decision: [Accepted centred 3D stage — 5 October 2026](#accepted
   - A thin top bar for contextual information and compact controls, including
     "Share my screen" and Camera as icons or pills. Exact styling and other contents are
     undecided.
-  - A very thin bottom bar; its contents and relationship to the previously
-    discussed chat-input component are undecided.
+  - No separate bottom app-shell/status bar (updated 6 October 2026). The
+    bottom-centred chat input and compact voice controls remain separate.
   - A right panel that can be opened and closed.
   - Small panel-toggle icons in the upper corners for opening/closing the left
     and right side panels. Their precise placement and appearance remain open.
@@ -292,8 +292,9 @@ already recorded above; their detailed design remains deferred.
 - A compact More menu for model/reasoning, light/dark appearance and sleep/wake.
 
 Keep detailed settings and task-specific actions in their own views. Connection,
-reconnection and database-waking status can use the very thin bottom bar instead
-of adding more permanent top-bar controls. The right panel's use for activity
+reconnection and database-waking feedback use compact existing status or relevant
+inline/context surfaces; the bottom shell bar was removed from the design on
+6 October 2026. Database-waking feedback moves into compact top-bar status. The right panel's use for activity
 and selected-item detail remains a proposal for specific content; its broader
 role as a Jarvis-controlled contextual panel is confirmed. These shell controls are
 not automatically assumed visible in voice mode, where the shell disappears;
@@ -318,7 +319,7 @@ voice-mode access and mobile overflow need separate design.
 | Live voice test | Manual verification work; no permanent dedicated shell control. |
 | Reflex layer | Background behaviour reflected in responsiveness; no dedicated shell control. |
 | Now panel | Proposed right-panel activity view, opened by the top-bar attention control. |
-| Sleep switch | Top-bar More menu or Settings; current state in the bottom status bar. |
+| Sleep switch | Top-bar More menu or Settings; current state in relevant compact status or context. |
 | Database waking | Bottom status bar and nearby pending-content feedback. |
 | Task board | Software Factory navigation in the left sidebar; board in the main workspace. |
 | Create task | Task-board action and global input/voice; creation UI in the workspace. |
@@ -358,7 +359,7 @@ voice-mode access and mobile overflow need separate design.
 | Away mode | Top bar: compact present/away control; details in Settings. |
 | Phone confirmations | Teams approval cards and related attention items. |
 | Screen sharing | Confirmed top-bar control; active sharing/stop treatment still a proposal. |
-| Local PC bridge | Existing feature's connection status in the bottom bar or a requested status view; integration design deferred. |
+| Local PC bridge | Existing feature's connection status in a requested status view or relevant compact status; integration design deferred. |
 | Computer use | Voice/input action; progress and stop feedback in the relevant view; implementation design deferred. |
 | Camera | Confirmed top-bar control; active camera/stop treatment still to be designed. |
 | Calendar and mail | Requested/generated workspace views; future area navigation to be decided. |
@@ -566,7 +567,7 @@ Dan accepted the corrected live browser prototype as the implementation directio
 
 ### Scope and continuity
 
-- Keep the agreed typing/manual shell: thin left rail, expandable left navigation, thin top and bottom bars, contextual right panel, Settings top-right, central workspace/tabs and bottom-centred composer. Keep existing auth, chat, camera/sharing, voice, window and agent controls.
+- Keep the agreed typing/manual shell: thin left rail, expandable left navigation, thin top bar, contextual right panel, Settings top-right, central workspace/tabs and bottom-centred composer. The bottom shell bar requirement was removed on 6 October 2026; preserve truthful status elsewhere. Keep existing auth, chat, camera/sharing, voice, window and agent controls.
 - The live room and large persistent orb belong only on the Jarvis typing/voice page. Factory, Settings and other routes retain the shared shell and glass surface system without the stage or large orb. Future areas remain deferred.
 - Typing and voice run in the browser. The room and viewpoint remain continuous. Voice immediately hides the shell, history and input, wakes the same orb, and retains temporary windows. Ending voice restores typing/draft/focus and dims the orb without removing it.
 - Preserve the default-off minimise-all-windows-on-voice-entry preference, tabs/restore, natural spoken ending, the existing labelled End voice and dialog-first Escape behaviour. Do not persist generated windows or create a second window store.
@@ -614,8 +615,16 @@ Dan selected the last Luminous Glass component-family concept and requested impl
 
 [Edited visual and full requirements](docs/ui/chat-voice/README.md). Implementation: [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399). All are planned; creating them does not start a worker. Preserve #371's steering, FIFO queue and available controls, existing workspace tools/lifecycle, explicit voice activation and temporary view lifetime.
 
-Dan also requested three styling proposals for the app shell around the new 3D background. His local computer's localhost was inaccessible from the cloud; he authorised capturing a copy of latest GitHub main instead. The shell structure is unchanged: thin full-width top bar, narrow left rail, collapsible left navigation, main tabs/workspace, closable right context panel, Settings top right and thin bottom bar. Only Jarvis uses the room and large orb. The shell proposals are unselected and do not authorise implementation.
+Dan also requested three styling proposals for the app shell around the new 3D background. His local computer's localhost was inaccessible from the cloud; he authorised capturing a copy of latest GitHub main instead. The shell structure is unchanged: thin full-width top bar, narrow left rail, collapsible left navigation, main tabs/workspace, closable right context panel, Settings top right. Only Jarvis uses the room and large orb. The subsequent selection below removes the bottom shell bar requirement.
 
 ## Shell styling proposals — 6 October 2026
 
-[Actual local capture and the three generated concepts](docs/ui/shell-styling/README.md) are saved with their provenance. Display order: 1 Smoked Prism, 2 Floating Frost, 3 Architectural Glass. All use the accepted chat/voice glass family and agreed shell slots, with different surface weight and window emphasis. No option has been selected; example content and generated extra affordances do not add requirements. The capture used latest main with local auth/API fixtures and software WebGL, not Dan's unpushed page or live services.
+[Actual local capture and the three generated concepts](docs/ui/shell-styling/README.md) are saved with their provenance. Display order: 1 Smoked Prism, 2 Floating Frost, 3 Architectural Glass. All use the accepted chat/voice glass family and agreed shell slots, with different surface weight and window emphasis. These were initially proposals; the following decision selects the third and refines it. Example content and generated extra affordances do not add requirements. The capture used latest main with local auth/API fixtures and software WebGL, not Dan's unpushed page or live services.
+
+## Selected Architectural Glass shell — 6 October 2026
+
+Dan selected the third/last shell concept for its dimensional 3D material feel. Keep that composition and styling. Remove the separate bottom app-shell/status bar; it can be reconsidered later if a specific need appears. This does not remove the bottom-centred input or the compact voice-session bar. Retain truthful database-waking feedback in compact top-bar status treatment rather than dropping it with the footer.
+
+His only additional visual removal is both avatar icons inside the chat window: human beside Dan's messages and Jarvis/orb beside assistant messages. Reclaim their gaps and keep the author roles accessible and visually distinguishable through alignment/text treatment. Keep the main room orb, small input voice-start orb, message text, window controls and all other selected elements.
+
+[Refined approved image and scope](docs/ui/shell-styling/README.md#refined-approved-reference). [#401](https://github.com/DanAakesen/jarvis/issues/401), P8-39, implements the selected shell and bottom-bar removal. Existing [#399](https://github.com/DanAakesen/jarvis/issues/399), P8-38, now includes the avatar removals; #397/#398 keep the approved voice bar and composer. All are planned/unclaimed; this documentation does not start a worker or report implementation. The refined image was edited from the exact last displayed result, not a guessed alternative.

@@ -426,3 +426,9 @@ and P8-19 are implemented and tested offline; live Azure/Codex behavior remains
 unverified. P7-15 image generation is implemented offline with live subscription
 and Blob acceptance pending; video is deferred and artifact retention remains open.
 The existing Microsoft-first service and cost constraints remain in force.
+
+### Selected shell refinement (6 October 2026; planned)
+
+The shared typing/manual shell retains its top bar, narrow icon rail, collapsible area navigation, main tabs/workspace, closable contextual panel and Settings at top right. It has no separate bottom app-shell/status bar. Existing database-waking feedback remains accessible in compact top-bar status treatment; the bottom-centred chat input and compact voice-session control bar remain. P8-39 (#401) implements this requirement.
+
+P8-38 (#399) uses an avatar-free chat message window: remove both human and Jarvis icon/avatar marks from message content, preserving accessible author roles and readable user/assistant hierarchy. Retain the large scene orb, small voice-start orb, message content, safe Markdown, steering/FIFO queue and existing window actions. This requirement does not create another conversation or workspace system.

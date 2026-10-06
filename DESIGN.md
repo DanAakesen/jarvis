@@ -535,8 +535,8 @@ workspace, not the phone voice layout owned by P8-11.
 
 [ui.md](ui.md) records the confirmed structure, open questions, feature-placement
 proposals and eight static wireframes. P8-04 routes the existing pages through a
-thin left icon rail, expandable area navigation, top and bottom bars, and a
-toggleable contextual panel. The top bar spans edge to edge above the shell;
+thin left icon rail, expandable area navigation, a top bar, the currently implemented bottom status bar, and a
+toggleable contextual panel. P8-39 removes that bottom bar from the selected design. The top bar spans edge to edge above the shell;
 its height matches the area rail's width, and the rail begins beneath it.
 Settings stays at the top-right. Camera is a working toggle with an accessible
 pressed state, visible desktop On/Off label, and a narrow-phone state indicator;
@@ -545,7 +545,7 @@ Screen share remains disabled in the top bar because its active control remains
 in the conversation workflow. The top bar remains one line at phone and desktop
 widths. Other suggested top-bar controls remain out of scope.
 
-The bottom bar carries the existing database-wake status when configured. The
+The currently implemented bottom bar carries database-wake status when configured; P8-39 removes the bar and relocates the same truthful accessible feedback into compact top-bar status. The
 context panel has an honest empty state until P8-08 supplies contextual content.
 The existing neutral theme remains; the specific placement and responsive
 proportions above are confirmed while other shell styling and the contents of
@@ -644,6 +644,12 @@ The implementation uses existing authenticated task, project, release, conversat
 
 ## Accepted luminous-glass conversation refinement — 6 October 2026
 
-The existing shared glass implementation remains the foundation. Dan selected [this Luminous Glass reference](docs/ui/chat-voice/README.md) for a more compact voice status bar, matching chat input and readable message window. Implement the exact header removals: no separator above chat messages and no small orb/Jarvis title at top-left; retain top-right window controls, drag region, input voice-start orb and in-message assistant identity.
+The existing shared glass implementation remains the foundation. Dan selected [this Luminous Glass reference](docs/ui/chat-voice/README.md) for a more compact voice status bar, matching chat input and readable message window. Implement the exact header removals: no separator above chat messages and no small orb/Jarvis title at top-left; retain top-right window controls, drag region, input voice-start orb. The later Architectural Glass decision below additionally removes both message-avatar icons while preserving accessible author roles.
 
-Use a shared More menu with an icon plus Language row and Danish/English flyout, not a large DA/EN switch. Do not duplicate capture controls inside the voice bar. Extend canonical material/type tokens, with adequate frosted opacity over bright room motion, dark/light contrast and responsive touch targets. Preserve existing runtime/window/conversation contracts, including #371 steering and Ctrl+Enter queueing. [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399) are planned refinements, not implemented by this handoff. New shell styling proposals remain unselected; the agreed shell architecture and Jarvis-only room scope stand.
+Use a shared More menu with an icon plus Language row and Danish/English flyout, not a large DA/EN switch. Do not duplicate capture controls inside the voice bar. Extend canonical material/type tokens, with adequate frosted opacity over bright room motion, dark/light contrast and responsive touch targets. Preserve existing runtime/window/conversation contracts, including #371 steering and Ctrl+Enter queueing. [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399) are planned refinements, not implemented by this handoff. The subsequent Architectural Glass selection below supersedes the bottom-bar and message-avatar requirements; the other agreed shell slots and Jarvis-only room scope stand.
+
+## Selected Architectural Glass shell and avatar-free messages — 6 October 2026
+
+Dan selected the last/third shell styling image. [The refined reference](docs/ui/shell-styling/README.md#refined-approved-reference) defines the graphite/smoked-glass framing, dimensional depth, restrained cyan/amber refraction and readable hierarchy. Keep the agreed top bar, rail, left navigation, main tabs/workspace, right contextual panel and top-right Settings. Remove the separate bottom app-shell bar and its reserved layout space; move existing database-waking feedback into compact top-bar status. Chat input and voice-session controls remain.
+
+Remove human and Jarvis avatar icons from the message content as well as the previously removed top-left header orb/title and separator. Preserve author roles via alignment/text and accessible semantics; keep the scene orb and small input voice-start orb. P8-39 (#401) implements the shell, while updated P8-38 (#399) owns the message-window changes. Reuse P8-36/P8-37 material/menu/composer work and existing theme, runtime and window contracts. These are accepted requirements awaiting implementation, not descriptions of changed production behavior.
