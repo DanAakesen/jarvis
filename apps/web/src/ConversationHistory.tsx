@@ -3,6 +3,7 @@ import type { PublicClientApplication } from '@azure/msal-browser';
 import { Link } from 'react-router-dom';
 import type { PublicConfig } from '../config/public-config';
 import { sharedScreenContext, type CameraController, type ScreenShareController } from './screen-sharing';
+import { ConversationMoreMenu } from './ConversationMoreMenu';
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
 import { MarkdownContent } from './MarkdownContent';
@@ -604,6 +605,7 @@ export function ConversationHistory({
         {...(screenShare ? { screenShare } : {})}
         {...(camera ? { camera } : {})}
         language={language}
+        onLanguageChange={setLanguage}
         onActiveChange={updateVoiceActive}
         onSessionEnded={() => {
           screenShare?.stop();
@@ -639,10 +641,7 @@ export function ConversationHistory({
           }}
           aria-describedby="chat-guidance"
         />
-        <div className="composer-language" role="group" aria-label="Reply language">
-          <button type="button" aria-label="Danish" aria-pressed={language === 'da'} onClick={() => setLanguage('da')}>DA</button>
-          <button type="button" aria-label="English" aria-pressed={language === 'en'} onClick={() => setLanguage('en')}>EN</button>
-        </div>
+        <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage} align="end" />
         <button className="primary-button composer-send" type="submit" disabled={!draft.trim()} aria-label="Send" title="Send message">
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="m5 12 7-7 7 7M12 5v15" />

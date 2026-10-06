@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
@@ -554,11 +554,15 @@ describe('App shell', () => {
 
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
-    expect(screen.getByRole('button', { name: 'Danish' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: 'English' })).toHaveProperty('disabled', false);
+    expect(screen.queryByRole('button', { name: 'Danish' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Language' }));
+    expect(screen.getByRole('menuitemradio', { name: 'Danish' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('menuitemradio', { name: 'English' }).getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
 
     expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', false);
-    expect(screen.queryByRole('button', { name: 'Mute' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Voice controls' })).toBeNull();
     expect(screen.getByText(/microphone stays off until you enable it/)).not.toBeNull();
     expect(await screen.findByText('The backend is awake.')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Put the backend to sleep' })).toHaveProperty('disabled', false);
