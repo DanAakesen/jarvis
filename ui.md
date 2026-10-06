@@ -222,9 +222,9 @@ These ideas have been discussed but are not individually approved:
   colours or detailed visual layouts.
 - Voice supports quick direction; the screen provides concrete work Dan can
   inspect, correct and act on.
-- A generated research view could support follow-up requests such as comparing
-  options, filtering the results or changing the presentation. Whether such
-  controls are required, and how they work, remains to be discussed.
+- A generated research report may support follow-up requests such as comparing
+  options or changing its presentation. It uses generated HTML/JS, not a fixed
+  component catalogue; execution is confined to the approved sandboxed iframe.
 - Select the presentation from the data and Dan's current question. Examples
   include tables or charts for measurements, timelines for events, comparison
   views for research, document or code viewers for text, and image or media
@@ -249,18 +249,21 @@ These ideas have been discussed but are not individually approved:
   sharing control could show "Sharing screen" and provide
   a direct way to stop; the detailed active state remains to be discussed.
 
-## Dan's research scenario
+## Interactive research report (P7-37, decision 6 October 2026)
 
-1. Dan asks Jarvis to research a subject.
-2. Jarvis researches it and brings back the data.
-3. Jarvis may first say, "The research shows A, B, C."
-4. Dan says, "Okay, show me in a visual way."
-5. Jarvis creates a component to show that research data and displays it within
-   the app shell.
+1. Dan asks Jarvis for quick or deep research.
+2. Jarvis acknowledges promptly and opens a workspace window showing observed
+   search progress and sources found.
+3. When research finishes, the same window becomes a cited, self-contained
+   interactive HTML report with sections, key facts and useful tables or charts.
+4. Dan can open an HTTPS source in Chrome, ask Jarvis a follow-up, or pin/unpin
+   the artifact through the constrained iframe-to-host bridge.
+5. Jarvis speaks a one- or two-sentence findings summary when complete. A failed
+   job is shown in the window and reported aloud.
 
-This is a confirmed use case for the UI concept. The component type, layout and
-controls depend on the subject and remain undefined. The scenario establishes
-that the response can become a visual component after the initial conversation.
+Dan selected model-written HTML/JS in a sandboxed iframe rather than a fixed
+component catalog. The HTML is never executed outside that iframe. Keep the
+workspace window temporary; the owner-scoped report artifact is persisted.
 
 ## Illustrative experience
 
@@ -545,12 +548,15 @@ retention wait for Dan (#264, #265).
 
 ## Initial allowlists (P8-18, decided 4 October 2026)
 
-No generated code ever runs: views are declarative JSON validated against these lists.
+Ordinary generated views remain validated declarative JSON rendered by fixed
+React elements. On 6 October Dan separately approved the `html-app` renderer for
+owner-authorized HTML artifacts only; it runs in a sandboxed iframe, not in the
+host page or another renderer.
 
 | Kind | Allowed |
 | --- | --- |
-| Renderers | table (max 500 rows), list, detail (key-value), text (plain text plus a sanitised markdown subset: headings, lists, emphasis, links, code; no HTML), timeline, chart (line, bar or area; max 5 series and 1,000 points), task-card, status, image (HTTPS on allowlisted hosts: GitHub and the Jarvis Blob account; max 10 per view) |
-| Actions | open-route (Jarvis routes), open-link (github.com, *.azure.com, learn.microsoft.com), call-tool (registered backend tools through the existing tool route and confirmation rules), window operations (focus, minimise, restore, close, move, resize) |
+| Renderers | table (max 500 rows), list, detail (key-value), text (plain text plus a sanitised markdown subset: headings, lists, emphasis, links, code; no HTML), timeline, chart (line, bar or area; max 5 series and 1,000 points), task-card, status, image (HTTPS on allowlisted hosts: GitHub and the Jarvis Blob account; max 10 per view); `html-app` loads an owner-authorized artifact in a sandboxed iframe |
+| Actions | open-route (Jarvis routes), open-link (github.com, *.azure.com, learn.microsoft.com), call-tool (registered backend tools through the existing tool route and confirmation rules), window operations (focus, minimise, restore, close, move, resize). The `html-app` bridge separately accepts only `open_url` (HTTPS), `ask` (≤ 2,000 characters), `pin`, `unpin`, and bounded `resize`; the host validates every message. |
 | Theme tokens | appearance (light, dark, system); accent and accent-secondary (sRGB hex); surface-tint (hex); background (a preset name from the visual system); glow (0 to 1); motion (full, calm, reduced; the OS reduced-motion setting always wins); radius (0 to 24 px); density (compact, comfortable) |
 
 The number of theme presets follows the visual-system work.

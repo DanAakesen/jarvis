@@ -4,7 +4,7 @@
 export const FOUNDRY_SCOPE = "https://ai.azure.com/.default";
 
 export type CodingAgent = "codex" | "copilot";
-export type CodexToolName = "web_research";
+export type CodexToolName = "web_research" | "html_report";
 export type InvocationStatus =
   | "queued" | "running" | "completed" | "failed" | "cancelled" | "needs_attention"
   | "cancelling" | "interrupted" | "paused" | "unknown";
@@ -96,9 +96,12 @@ function text(value: unknown, name: string): string {
 }
 
 function codexToolRequest(tool: unknown, query: unknown, model: unknown): JsonObject {
-  if (tool !== "web_research") throw new TypeError("tool must be web_research");
-  if (typeof query !== "string" || !query.trim() || query.length > 2_000) {
-    throw new TypeError("query must contain 1–2000 characters");
+  if (tool !== "web_research" && tool !== "html_report") {
+    throw new TypeError("tool must be web_research or html_report");
+  }
+  const queryLimit = tool === "html_report" ? 48_000 : 2_000;
+  if (typeof query !== "string" || !query.trim() || query.length > queryLimit) {
+    throw new TypeError(`query must contain 1–${queryLimit} characters`);
   }
   const selectedModel = option(model, "model", 100);
   if (selectedModel === undefined || selectedModel === "gpt-6.1-sol") {

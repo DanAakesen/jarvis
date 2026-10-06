@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 6 October 2026 for P6-22 and P7-01, P7-02, P7-03, P7-08, P7-15, P7-22 and P7-40. Scope: the Jarvis core, Software Factory, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, and generated workspace image metadata. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 6 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37 and P7-40. Scope: the Jarvis core, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata and generated HTML report artifacts. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -69,6 +69,15 @@ P7-40 adds group 11 in `0021_vault_memory_index.sql`: heading chunks indexed by
 vault path and blob SHA, with an optional `vector(1536)` column when available.
 The table is a derived cache of the private GitHub vault, not an authoritative
 store; the paired down migration removes only this index table.
+
+P7-37 adds `dbo.workspace_html_artifacts` in
+`0025_workspace_html_artifacts.sql`, separate from the image artifact table. It
+stores the report HTML, UTF-8 size, bounded JSON source list, title, creation
+time and pin state under Dan's Entra object ID. Application validation enforces
+the 512 KiB HTML and 50-source contract; the HTML is consumed only by P8-41's
+sandboxed `html-app` renderer. `0026_workspace_html_artifact_history.sql` adds
+version numbers, a repair-attempt flag and version history. Artifacts do not
+reference a conversation or task; workspace windows remain memory-only.
 
 P8-14 generated views are versioned JSON contracts in the shared
 `@jarvis/contracts` workspace. A view carries bounded source/page metadata but

@@ -1,6 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { isWorkspaceCommand, workspaceCommandSchema, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
+import {
+  htmlArtifactFrameSchema,
+  isWorkspaceCommand,
+  workspaceCommandSchema,
+  type WorkspaceCommand,
+  type WorkspaceSnapshot,
+} from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
@@ -243,6 +249,7 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
             },
           },
           contextPanelOpen: { type: 'boolean' },
+          frame: htmlArtifactFrameSchema,
         },
         required: ['sessionId', 'windows', 'contextPanelOpen'], additionalProperties: false,
       },
@@ -251,8 +258,12 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
     if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
-    const { sessionId, windows, contextPanelOpen } = request.body;
-    if (!app.workspaceCommands.updateSnapshot(request.principal.objectId, sessionId, { windows, contextPanelOpen })) {
+    const { sessionId, windows, contextPanelOpen, frame } = request.body;
+    if (!app.workspaceCommands.updateSnapshot(request.principal.objectId, sessionId, {
+      windows,
+      contextPanelOpen,
+      ...(frame ? { frame } : {}),
+    })) {
       return reply.code(409).send({ error: 'Workspace connection is stale' });
     }
     return reply.code(204).send();
