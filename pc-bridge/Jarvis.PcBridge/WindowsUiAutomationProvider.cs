@@ -12,6 +12,20 @@ public sealed class WindowsUiAutomationProvider : IUiAutomationProvider
     private static readonly TimeSpan ObservationLimit = TimeSpan.FromSeconds(1);
     private static readonly TreeWalker Walker = TreeWalker.ControlViewWalker;
 
+    public static bool IsSensitiveControlFocused()
+    {
+        try
+        {
+            var focused = AutomationElement.FocusedElement;
+            return focused is not null &&
+                (focused.Current.IsPassword || UiAutomationPolicy.IsSensitiveControl(focused.Current.Name ?? string.Empty));
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
     public UiAutomationView? Observe(CancellationToken cancellationToken)
     {
         var started = Stopwatch.StartNew();

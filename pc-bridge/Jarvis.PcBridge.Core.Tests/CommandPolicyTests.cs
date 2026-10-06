@@ -19,6 +19,9 @@ public sealed class CommandPolicyTests
     [InlineData("uia_snapshot", false)]
     [InlineData("browser_snapshot", false)]
     [InlineData("browser_tabs", false)]
+    [InlineData("window_capture", true)]
+    [InlineData("click_point", true)]
+    [InlineData("scroll_point", true)]
     public void Identifies_actions_blocked_when_control_is_paused(string command, bool expected)
     {
         Assert.Equal(expected, CommandPolicy.IsControlAction(command));
@@ -63,6 +66,9 @@ public sealed class CommandPolicyTests
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"click","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"Hello, Dan","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"scroll_down"}""")]
+    [InlineData("window_capture", "{}")]
+    [InlineData("click_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20,"confirmed":false}""")]
+    [InlineData("scroll_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20,"direction":"down"}""")]
     public void Accepts_allow_list_commands(string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);
@@ -99,6 +105,10 @@ public sealed class CommandPolicyTests
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"Hello, Dan"}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"type","text":"123456","confirmed":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","elementIndex":0,"action":"execute_script","text":"alert(1)"}""")]
+    [InlineData("window_capture", """{"window":"other"}""")]
+    [InlineData("click_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":2048,"y":20,"confirmed":false}""")]
+    [InlineData("click_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20}""")]
+    [InlineData("scroll_point", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","x":10,"y":20,"direction":"left"}""")]
     public void Rejects_commands_outside_the_policy(string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);
@@ -139,6 +149,6 @@ public sealed class CommandPolicyTests
     {
         Assert.Throws<InvalidDataException>(() =>
             BridgeProtocol.Success("1730aa51-f380-4df9-a345-1feb862cb1c4",
-                new { text = new string('x', BridgeProtocol.MaxMessageBytes) }));
+                new { text = new string('x', BridgeProtocol.MaxResponseBytes) }));
     }
 }

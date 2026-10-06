@@ -1,5 +1,7 @@
 using System.Collections;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -7,12 +9,19 @@ using Jarvis.PcBridge.Core;
 
 namespace Jarvis.PcBridge;
 
-public sealed class WindowsCommandExecutor
+public sealed class WindowsCommandExecutor : IWindowCaptureProvider
 {
     private const string RepoRoot = @"C:\Repo";
+    private const int MaxCapturePngBytes = 750_000;
     private const string BrowserFallbackNote =
         "Opened in Chrome directly because the Jarvis Chrome extension isn't connected.";
     private readonly UiAutomationExecutor _uiAutomation = new(new WindowsUiAutomationProvider());
+    private readonly WindowCaptureExecutor _windowCapture;
+
+    public WindowsCommandExecutor()
+    {
+        _windowCapture = new WindowCaptureExecutor(this);
+    }
 
     public Task<object> ExecuteAsync(BridgeCommand command, CancellationToken cancellationToken)
     {
@@ -31,9 +40,133 @@ public sealed class WindowsCommandExecutor
             "focus_window" => FocusWindow(command.Arguments.GetProperty("title").GetString()!),
             "uia_snapshot" => _uiAutomation.Observe(cancellationToken),
             "uia_act" => ActOnUiAutomation(command.Arguments, cancellationToken),
+            "window_capture" => _windowCapture.Capture(cancellationToken),
+            "click_point" => ActOnPoint(command.Command, command.Arguments, cancellationToken),
+            "scroll_point" => ActOnPoint(command.Command, command.Arguments, cancellationToken),
             _ => throw new CommandRefusedException("not_allowed"),
         };
         return Task.FromResult(result);
+    }
+
+    public WindowCaptureFrame? Capture(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (WindowsUiAutomationProvider.IsSensitiveControlFocused())
+            throw new WindowCaptureRefusedException("blocked");
+
+        var handle = GetForegroundWindow();
+        if (handle == IntPtr.Zero || IsIconic(handle) || !GetWindowRect(handle, out var rect))
+            throw new WindowCaptureRefusedException("not_found");
+        var width = rect.Right - rect.Left;
+        var height = rect.Bottom - rect.Top;
+        if (width is <= 0 or > 16_384 || height is <= 0 or > 16_384 ||
+            (long)width * height > 50_000_000)
+            throw new WindowCaptureRefusedException("failed");
+
+        var targetWidth = Math.Min(width, 1280);
+        var targetHeight = Math.Min(height, 720);
+        var scale = Math.Min((double)targetWidth / width, (double)targetHeight / height);
+        targetWidth = Math.Max(1, (int)Math.Round(width * scale));
+        targetHeight = Math.Max(1, (int)Math.Round(height * scale));
+        using var source = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+        using (var graphics = Graphics.FromImage(source))
+            graphics.CopyFromScreen(rect.Left, rect.Top, 0, 0, new Size(width, height), CopyPixelOperation.SourceCopy);
+
+        byte[] png;
+        for (;;)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var target = new Bitmap(targetWidth, targetHeight, PixelFormat.Format32bppArgb);
+            using (var graphics = Graphics.FromImage(target))
+            {
+                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                graphics.DrawImage(source, 0, 0, targetWidth, targetHeight);
+            }
+            using var stream = new MemoryStream();
+            target.Save(stream, ImageFormat.Png);
+            png = stream.ToArray();
+            if (png.Length <= MaxCapturePngBytes) break;
+            Array.Clear(png);
+            targetWidth = (int)(targetWidth * 0.8);
+            targetHeight = (int)(targetHeight * 0.8);
+            if (targetWidth < 320 || targetHeight < 180)
+                throw new WindowCaptureRefusedException("failed");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var app = ProcessName(handle) switch
+        {
+            "code" => "vscode",
+            "explorer" => "explorer",
+            var name => name,
+        };
+        return new WindowCaptureFrame(
+            app, handle.ToInt64().ToString(System.Globalization.CultureInfo.InvariantCulture),
+            rect.Left, rect.Top, width, height, targetWidth, targetHeight, png);
+    }
+
+    public void ActAt(
+        WindowCaptureFrame frame,
+        int x,
+        int y,
+        WindowPointAction action,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!long.TryParse(frame.WindowId, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var windowId))
+            throw new WindowCaptureRefusedException("stale");
+        var handle = new IntPtr(windowId);
+        if (GetForegroundWindow() != handle || IsIconic(handle) ||
+            !GetWindowRect(handle, out var rect) ||
+            rect.Left != frame.Left || rect.Top != frame.Top ||
+            rect.Right - rect.Left != frame.WindowWidth || rect.Bottom - rect.Top != frame.WindowHeight)
+            throw new WindowCaptureRefusedException("stale");
+        if (WindowsUiAutomationProvider.IsSensitiveControlFocused())
+            throw new WindowCaptureRefusedException("blocked");
+
+        var screenX = rect.Left + Math.Min(frame.WindowWidth - 1,
+            (int)((x + 0.5) * frame.WindowWidth / frame.Width));
+        var screenY = rect.Top + Math.Min(frame.WindowHeight - 1,
+            (int)((y + 0.5) * frame.WindowHeight / frame.Height));
+        if (!SetCursorPos(screenX, screenY)) throw new WindowCaptureRefusedException("failed");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var inputs = action switch
+        {
+            WindowPointAction.Click =>
+                new[] { MouseInputEvent(0, 0x0002), MouseInputEvent(0, 0x0004) },
+            WindowPointAction.ScrollUp => [MouseInputEvent(120, 0x0800)],
+            WindowPointAction.ScrollDown => [MouseInputEvent(unchecked((uint)-120), 0x0800)],
+            _ => throw new WindowCaptureRefusedException("not_allowed"),
+        };
+        var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeInput>());
+        if (action == WindowPointAction.Click && sent == 1)
+            _ = SendInput(1, [MouseInputEvent(0, 0x0004)], Marshal.SizeOf<NativeInput>());
+        if (sent != inputs.Length) throw new WindowCaptureRefusedException("failed");
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private object ActOnPoint(string command, JsonElement arguments, CancellationToken cancellationToken)
+    {
+        var action = command switch
+        {
+            "click_point" => WindowPointAction.Click,
+            "scroll_point" => arguments.GetProperty("direction").GetString() switch
+            {
+                "up" => WindowPointAction.ScrollUp,
+                "down" => WindowPointAction.ScrollDown,
+                _ => throw new WindowCaptureRefusedException("not_allowed"),
+            },
+            _ => throw new WindowCaptureRefusedException("not_allowed"),
+        };
+        _windowCapture.ActAt(
+            arguments.GetProperty("snapshotId").GetString()!,
+            arguments.GetProperty("x").GetInt32(),
+            arguments.GetProperty("y").GetInt32(),
+            action,
+            cancellationToken);
+        return new { acted = true, action = command };
     }
 
     // Dan uses Chrome only: never hand a website to the Windows default browser (Edge).
@@ -473,6 +606,15 @@ public sealed class WindowsCommandExecutor
         },
     };
 
+    private static NativeInput MouseInputEvent(uint data, uint flags) => new()
+    {
+        Type = 0,
+        Data = new InputUnion
+        {
+            Mouse = new MouseInput { Data = data, Flags = flags },
+        },
+    };
+
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeInput
     {
@@ -517,6 +659,14 @@ public sealed class WindowsCommandExecutor
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr handle, out NativeRect rect);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetCursorPos(int x, int y);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr handle, StringBuilder text, int maxCount);
 
@@ -556,4 +706,13 @@ public sealed class WindowsCommandExecutor
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessage(IntPtr handle, uint message, IntPtr wParam, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
 }
