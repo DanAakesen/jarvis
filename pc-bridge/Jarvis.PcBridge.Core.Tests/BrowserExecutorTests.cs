@@ -190,6 +190,20 @@ public sealed class BrowserExecutorTests
     }
 
     [Fact]
+    public async Task Does_not_require_confirmation_for_reversible_submit_controls()
+    {
+        await using var target = await FakeCdpTarget.StartAsync(name: "Submit search");
+        using var executor = new BrowserExecutor(() => true, () => null, targetsUri: target.TargetsUri);
+
+        var snapshot = await Execute(executor, "browser_snapshot", """{"tabId":"tab_1"}""");
+        var id = (string)snapshot.GetType().GetProperty("SnapshotId")!.GetValue(snapshot)!;
+        var action = await Execute(executor, "browser_act",
+            $$"""{"tabId":"tab_1","snapshotId":"{{id}}","elementIndex":0,"action":"click","confirmed":false}""");
+
+        Assert.Equal(true, action.GetType().GetProperty("acted")!.GetValue(action));
+    }
+
+    [Fact]
     public async Task Browser_executor_is_off_until_enabled()
     {
         await using var target = await FakeCdpTarget.StartAsync();

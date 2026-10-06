@@ -19,7 +19,7 @@ describe('structured log export', () => {
     const logger = createLogger({ logLevel: 'info' }, sink, output);
     const decision = {
       source, addressed: true, intent: 'action', tool: 'workspace_command', confidence: '>0.8',
-      completeCommand: true, executed: true, reason: 'executed', latencyMs: 42,
+      completeCommand: true, executed: true, reason: 'http_503', latencyMs: 42,
     };
     logger.info({ ...decision, transcript: 'transcript-secret', arguments: { title: 'title-secret' } }, 'reflex.decision');
     expect(JSON.parse(records[0]!)).toMatchObject({ ...decision, msg: 'reflex.decision' });
@@ -29,9 +29,12 @@ describe('structured log export', () => {
     logger.info({
       source: 'source-secret', intent: 'intent-secret', tool: 'tool-secret', confidence: 'confidence-secret',
       addressed: 'addressed-secret', completeCommand: 1, executed: 'executed-secret',
-      reason: 'reason-secret', latencyMs: 600_001,
+      reason: 'http_999', latencyMs: 600_001,
     }, 'reflex.decision');
     expect(JSON.parse(records[1]!)).not.toHaveProperty('latencyMs');
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('reason');
+    logger.info({ reason: 'billing' }, 'reflex.decision');
+    expect(JSON.parse(records[2]!)).toHaveProperty('reason', 'billing');
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
   });

@@ -24,6 +24,7 @@ public sealed class WindowsCommandExecutor
         {
             "open_url" => OpenUrlInDefaultBrowser(command.Arguments.GetProperty("url").GetString()!),
             "open_app" => OpenApp(command.Arguments.GetProperty("app").GetString()!),
+            "close_app" => CloseApp(command.Arguments.GetProperty("app").GetString()!),
             "media" => ControlMedia(command.Arguments.GetProperty("action").GetString()!),
             "open_folder" => OpenFolder(command.Arguments.GetProperty("relativePath").GetString()!),
             "active_window" => ReadActiveWindow(),
@@ -90,8 +91,110 @@ public sealed class WindowsCommandExecutor
             : new ProcessStartInfo(match.Target) { UseShellExecute = true };
         if (match.IsPackaged) start.ArgumentList.Add($@"shell:AppsFolder\{match.Target}");
         using var process = Process.Start(start);
-        if (process is not null) AllowForeground(process);
+        // The app has launched at this point; foreground permission is best-effort because the
+        // background bridge may not be allowed to grant it (L109).
+        if (process is not null) _ = AllowSetForegroundWindow((uint)process.Id);
+        var executable = Path.GetFileNameWithoutExtension(match.ExecutablePath ?? match.Target);
+        _ = Task.Run(() => BringNewWindowToFront(executable, match.Name));
         return new { opened = true, app = match.Name };
+    }
+
+    // Windows only lets the process that received the last input take the foreground, so the
+    // background bridge sends a synthetic Alt key first (L110). Best effort; failures are ignored.
+    public static void BringToFront(IntPtr window)
+    {
+        if (window == IntPtr.Zero) return;
+        if (IsIconic(window)) ShowWindow(window, 9);
+        var alt = new[] { KeyboardInputEvent(0x12, 0), KeyboardInputEvent(0x12, KeyEventKeyUp) };
+        _ = SendInput((uint)alt.Length, alt, Marshal.SizeOf<NativeInput>());
+        _ = SetForegroundWindow(window);
+    }
+
+    public static void BringChromeToFront() => BringToFront(FindTopWindow(processName => processName == "chrome", _ => false));
+
+    private static void BringNewWindowToFront(string executable, string appName)
+    {
+        var wanted = InstalledAppMatcher.Expand(InstalledAppMatcher.Normalize(appName));
+        var process = InstalledAppMatcher.Normalize(executable);
+        for (var attempt = 0; attempt < 25; attempt++)
+        {
+            Thread.Sleep(200);
+            var window = FindTopWindow(
+                name => process.Length > 0 && InstalledAppMatcher.Normalize(name) == process,
+                title => wanted.Length > 0 &&
+                    InstalledAppMatcher.Expand(InstalledAppMatcher.Normalize(title)).Contains(wanted, StringComparison.Ordinal));
+            if (window != IntPtr.Zero)
+            {
+                BringToFront(window);
+                return;
+            }
+        }
+    }
+
+    // Top-most visible titled window whose process name or title matches (EnumWindows is z-ordered).
+    private static IntPtr FindTopWindow(Func<string, bool> processMatches, Func<string, bool> titleMatches)
+    {
+        var found = IntPtr.Zero;
+        EnumWindows((handle, _) =>
+        {
+            if (!IsWindowVisible(handle)) return true;
+            var title = ReadTitle(handle);
+            if (string.IsNullOrWhiteSpace(title)) return true;
+            if (processMatches(ProcessName(handle)) || titleMatches(title))
+            {
+                found = handle;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    private static string ProcessName(IntPtr window)
+    {
+        _ = GetWindowThreadProcessId(window, out var processId);
+        try
+        {
+            using var process = Process.GetProcessById((int)processId);
+            return process.ProcessName.ToLowerInvariant();
+        }
+        catch (ArgumentException)
+        {
+            return string.Empty;
+        }
+        catch (InvalidOperationException)
+        {
+            return string.Empty;
+        }
+    }
+
+    // Graceful close: the app receives WM_CLOSE and can still ask to save unsaved work.
+    private static object CloseApp(string app)
+    {
+        var wanted = InstalledAppMatcher.Expand(InstalledAppMatcher.Normalize(app));
+        if (wanted.Length < 2) throw new CommandRefusedException("not_allowed");
+        var self = (uint)Environment.ProcessId;
+        var windows = new List<IntPtr>();
+        EnumWindows((handle, _) =>
+        {
+            if (windows.Count >= 10) return false;
+            if (!IsWindowVisible(handle)) return true;
+            var title = ReadTitle(handle);
+            if (string.IsNullOrWhiteSpace(title) || title == "Program Manager") return true;
+            GetWindowThreadProcessId(handle, out uint processId);
+            if (processId == self) return true;
+            var processName = InstalledAppMatcher.Expand(InstalledAppMatcher.Normalize(ProcessName(handle)));
+            var normalizedTitle = InstalledAppMatcher.Expand(InstalledAppMatcher.Normalize(title));
+            if (processName == wanted || normalizedTitle == wanted ||
+                normalizedTitle.EndsWith(wanted, StringComparison.Ordinal))
+            {
+                windows.Add(handle);
+            }
+            return true;
+        }, IntPtr.Zero);
+        if (windows.Count == 0) throw new CommandRefusedException("not_found");
+        foreach (var window in windows) _ = PostMessage(window, 0x0010, IntPtr.Zero, IntPtr.Zero);
+        return new { closing = true, windows = windows.Count };
     }
 
     private static object ControlMedia(string action)
@@ -377,11 +480,26 @@ public sealed class WindowsCommandExecutor
         public InputUnion Data;
     }
 
+    // INPUT must be 40 bytes on 64-bit Windows: the union is sized by MOUSEINPUT. With only the
+    // keyboard member it was 32 bytes and SendInput rejected every media key (error 87; L109).
     [StructLayout(LayoutKind.Explicit)]
     private struct InputUnion
     {
         [FieldOffset(0)]
         public KeyboardInput Keyboard;
+        [FieldOffset(0)]
+        public MouseInput Mouse;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseInput
+    {
+        public int X;
+        public int Y;
+        public uint Data;
+        public uint Flags;
+        public uint Time;
+        public UIntPtr ExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -427,4 +545,15 @@ public sealed class WindowsCommandExecutor
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint inputCount, NativeInput[] inputs, int size);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsIconic(IntPtr handle);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr handle, out uint processId);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PostMessage(IntPtr handle, uint message, IntPtr wParam, IntPtr lParam);
 }

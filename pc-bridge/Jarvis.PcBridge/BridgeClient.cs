@@ -9,9 +9,19 @@ public sealed class BridgeClient(
     BridgeSettings settings,
     BridgeTokenProvider tokens,
     WindowsCommandExecutor executor,
-    BrowserExecutor browserExecutor)
+    BrowserExecutor browserExecutor,
+    Func<bool> isControlPaused)
 {
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
+    private readonly SemaphoreSlim _sendGate = new(1, 1);
+    private ClientWebSocket? _socket;
+
+    public async Task ReportControlStateAsync(CancellationToken cancellationToken)
+    {
+        var socket = _socket;
+        if (socket is null || socket.State != WebSocketState.Open) return;
+        await SendControlStateAsync(socket, cancellationToken).ConfigureAwait(false);
+    }
 
     public async Task RunAsync(Action<string> statusChanged, CancellationToken cancellationToken)
     {
@@ -50,14 +60,16 @@ public sealed class BridgeClient(
         using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         connectTimeout.CancelAfter(TimeSpan.FromSeconds(15));
         await socket.ConnectAsync(endpoint, connectTimeout.Token).ConfigureAwait(false);
-        statusChanged("Online");
-
+        _socket = socket;
         try
         {
+            await SendControlStateAsync(socket, cancellationToken).ConfigureAwait(false);
+            statusChanged("Online");
             await ReceiveCommandsAsync(socket, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
+            _socket = null;
             statusChanged("Offline — reconnecting");
             if (socket.State == WebSocketState.Open)
             {
@@ -99,6 +111,8 @@ public sealed class BridgeClient(
                 byte[] response;
                 try
                 {
+                    if (isControlPaused() && CommandPolicy.IsControlAction(command.Command))
+                        throw new CommandRefusedException("paused");
                     var value = command.Command == "open_url"
                         ? await browserExecutor.OpenUrlAsync(
                             command.Arguments.GetProperty("url").GetString()!,
@@ -107,6 +121,15 @@ public sealed class BridgeClient(
                         : command.Command.StartsWith("browser_", StringComparison.Ordinal)
                             ? await browserExecutor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false)
                             : await executor.ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
+                    if (command.Command == "open_url")
+                    {
+                        // Chrome cannot take focus from the background; bring it forward (L110).
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(300).ConfigureAwait(false);
+                            WindowsCommandExecutor.BringChromeToFront();
+                        });
+                    }
                     response = BridgeProtocol.Success(command.Id, value);
                 }
                 catch (CommandRefusedException exception)
@@ -126,8 +149,7 @@ public sealed class BridgeClient(
                     response = BridgeProtocol.Failure(command.Id, "failed");
                 }
 
-                await socket.SendAsync(response, WebSocketMessageType.Text, true, cancellationToken)
-                    .ConfigureAwait(false);
+                await SendMessageAsync(socket, () => response, cancellationToken).ConfigureAwait(false);
             }
         }
         finally
@@ -135,6 +157,35 @@ public sealed class BridgeClient(
             ArrayPool<byte>.Shared.Return(rented);
         }
     }
+
+    private async Task SendControlStateAsync(ClientWebSocket socket, CancellationToken cancellationToken)
+    {
+        await SendMessageAsync(socket, () => BridgeProtocol.ControlState(isControlPaused()), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task SendMessageAsync(
+        ClientWebSocket socket,
+        Func<byte[]> getPayload,
+        CancellationToken cancellationToken)
+    {
+        await _sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (socket.State != WebSocketState.Open) return;
+            await socket.SendAsync(getPayload(), WebSocketMessageType.Text, true, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            socket.Abort();
+            throw;
+        }
+        finally
+        {
+            _sendGate.Release();
+        }
+    }
+
 }
 
 public sealed class CommandRefusedException(string code) : Exception

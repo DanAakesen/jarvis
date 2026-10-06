@@ -14,11 +14,15 @@ const MAX_MESSAGE_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 15_000;
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
+const controlActions = new Set<PcCommand['name']>([
+  'open_url', 'open_app', 'close_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
+]);
 const mediaActions = ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const;
 
 type PcCommand =
   | { name: 'open_url'; arguments: { url: string } }
   | { name: 'open_app'; arguments: { app: string } }
+  | { name: 'close_app'; arguments: { app: string } }
   | { name: 'media'; arguments: { action: typeof mediaActions[number] } }
   | { name: 'open_folder'; arguments: { relativePath: string } }
   | { name: 'active_window'; arguments: Record<string, never> }
@@ -63,7 +67,7 @@ interface PendingCommand {
 
 export interface PcBridgeConnectionOptions {
   readonly timeoutMs?: number;
-  readonly onStatusChange?: (online: boolean) => void | Promise<void>;
+  readonly onStatusChange?: (online: boolean, controlPaused?: boolean) => void | Promise<void>;
   readonly onStatusError?: () => void;
 }
 
@@ -81,6 +85,7 @@ export class PcBridgeConnection {
   private socket: WebSocket | undefined;
   private readonly pending = new Map<string, PendingCommand>();
   private status: boolean | undefined;
+  private controlPaused = false;
   private statusUpdate = Promise.resolve();
   private readonly timeoutMs: number;
 
@@ -118,6 +123,9 @@ export class PcBridgeConnection {
     const socket = this.socket;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       throw new ToolRefusal('The local PC bridge is offline.');
+    }
+    if (this.controlPaused && controlActions.has(command.name)) {
+      throw new ToolRefusal('Jarvis control is paused in the PC bridge. Resume it from the tray menu to act on the PC.');
     }
     if (signal.aborted) throw new Error('PC bridge command was cancelled');
     if (this.pending.size >= 16) throw new Error('PC bridge is busy');
@@ -161,6 +169,15 @@ export class PcBridgeConnection {
       this.detach(socket);
       return;
     }
+    if (isRecord(response) && response.type === 'status') {
+      if (Object.keys(response).length !== 2 || typeof response.controlPaused !== 'boolean') {
+        socket.close(1007, 'Invalid bridge status');
+        this.detach(socket);
+        return;
+      }
+      this.setStatus(true, response.controlPaused);
+      return;
+    }
     if (!isRecord(response) || typeof response.id !== 'string' || !idPattern.test(response.id)) {
       socket.close(1007, 'Invalid bridge response');
       this.detach(socket);
@@ -173,6 +190,9 @@ export class PcBridgeConnection {
       const error = response.error;
       if (error === 'not_allowed') this.finish(response.id, new ToolRefusal('The PC bridge refused that action.'));
       else if (error === 'browser_off') this.finish(response.id, new ToolRefusal('Chrome browser automation is off in the PC bridge settings.'));
+      else if (error === 'paused') this.finish(response.id, new ToolRefusal(
+        'Jarvis control is paused in the PC bridge. Resume it from the tray menu to act on the PC.',
+      ));
       else if (error === 'blocked') this.finish(response.id, new ToolRefusal(
         pending.command === 'uia_act'
           ? 'That Windows control is sensitive or unsupported; no action was performed.'
@@ -186,6 +206,9 @@ export class PcBridgeConnection {
       else if (error === 'covered') this.finish(response.id, new ToolRefusal('That browser element is covered by another page element; it was not activated.'));
       else if (error === 'not_found' && pending.command.startsWith('browser_')) {
         this.finish(response.id, new ToolRefusal('Chrome or the requested local tab is unavailable.'));
+      }
+      else if (error === 'not_found' && pending.command === 'close_app') {
+        this.finish(response.id, new ToolRefusal('No open window of that app was found; nothing was closed.'));
       }
       else if (error === 'not_found' && pending.command === 'open_app') {
         this.finish(response.id, new ToolRefusal('No installed app matched that name; nothing was launched.'));
@@ -230,11 +253,13 @@ export class PcBridgeConnection {
     for (const id of this.pending.keys()) this.finish(id, error);
   }
 
-  private setStatus(online: boolean): void {
-    if (this.status === online) return;
+  private setStatus(online: boolean, controlPaused = false): void {
+    const paused = online && controlPaused;
+    if (this.status === online && this.controlPaused === paused) return;
     this.status = online;
+    this.controlPaused = paused;
     try {
-      const update = this.options.onStatusChange?.(online);
+      const update = this.options.onStatusChange?.(online, paused);
       if (update) {
         this.statusUpdate = Promise.all([this.statusUpdate, update]).then(() => {}).catch(() => {
           this.options.onStatusError?.();
@@ -268,6 +293,17 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           additionalProperties: false,
         },
         execute: (input, _request, signal) => runPcOpen(bridge, input, signal),
+      },
+      {
+        name: 'pc_close',
+        description: 'Close an app on Dan’s PC by its name (e.g. Visual Studio Code - Insiders, Spotify). The app is asked to close normally, so it can still offer to save unsaved work; no confirmation is needed.',
+        inputSchema: {
+          type: 'object',
+          properties: { app: { type: 'string', minLength: 1, maxLength: 128 } },
+          required: ['app'],
+          additionalProperties: false,
+        },
+        execute: (input, _request, signal) => runPcClose(bridge, input, signal),
       },
       {
         name: 'pc_media',
@@ -336,7 +372,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
       },
       {
         name: 'pc_browser_act',
-        description: 'Act on an element index from the latest pc_browser_snapshot using click, type, select, scroll, or wait. The bridge rechecks that exact observed DOM element is fresh, visible, and unobstructed. Sensitive fields are blocked; only irreversible clicks require Dan’s explicit approval.',
+        description: 'Act on an element index from the latest pc_browser_snapshot using click, type, select, scroll, or wait. The bridge rechecks that exact observed DOM element is fresh, visible, and unobstructed. Sensitive fields are blocked; only irreversible actions require Dan’s explicit approval.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -586,6 +622,18 @@ function handleAppOpen(result: Record<string, unknown>): Record<string, unknown>
   return result;
 }
 
+async function runPcClose(
+  bridge: PcBridgeConnection,
+  input: unknown,
+  signal: AbortSignal,
+): Promise<Record<string, unknown>> {
+  if (!isRecord(input) || Object.keys(input).length !== 1 || typeof input.app !== 'string' ||
+      !input.app.trim() || input.app.length > 128 || hasControlCharacters(input.app)) {
+    throw new ToolRefusal('Name the app to close (1 to 128 characters).');
+  }
+  return bridge.execute({ name: 'close_app', arguments: { app: input.app.trim() } }, signal);
+}
+
 async function runPcMedia(
   bridge: PcBridgeConnection,
   input: unknown,
@@ -662,6 +710,10 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
   if (command === 'media') {
     return Object.keys(value).length === 2 && value.controlled === true &&
       typeof value.action === 'string' && mediaActions.includes(value.action as typeof mediaActions[number]);
+  }
+  if (command === 'close_app') {
+    return Object.keys(value).length === 2 && value.closing === true &&
+      Number.isInteger(value.windows) && (value.windows as number) >= 1 && (value.windows as number) <= 10;
   }
   if (['open_url', 'open_app', 'open_folder'].includes(command)) {
     return Object.keys(value).length === 1 && value.opened === true;

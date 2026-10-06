@@ -18,6 +18,22 @@ public sealed class InstalledAppMatcherTests
     }
 
     [Fact]
+    public void Matches_spoken_short_forms_of_vs_code_insiders()
+    {
+        var apps = new[]
+        {
+            new InstalledApp("Visual Studio Code", @"C:\Start Menu\Code.lnk"),
+            new InstalledApp("Visual Studio Code - Insiders", @"C:\Start Menu\Code Insiders.lnk"),
+        };
+
+        foreach (var spoken in new[] { "VS Code Insiders", "vscode-insiders", "VSCode Insiders", "Visual Studio Code Insiders" })
+        {
+            Assert.Equal("Visual Studio Code - Insiders", Assert.Single(InstalledAppMatcher.FindBestMatches(spoken, apps)).Name);
+        }
+        Assert.Equal("Visual Studio Code", Assert.Single(InstalledAppMatcher.FindBestMatches("VS Code", apps)).Name);
+    }
+
+    [Fact]
     public void Returns_nearby_matches_and_never_returns_edge()
     {
         var apps = new[]
