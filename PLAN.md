@@ -287,6 +287,7 @@ Goal: Dan talks to Jarvis in Danish or English in the browser.
 | P5-07 | [#61](https://github.com/DanAakesen/jarvis/issues/61) | Dan's live test (V8 of the voice prototype) in Danish and English; record the verdict in [docs/decisions.md](docs/decisions.md) | Verdict recorded | P5-04, P5-05 | In progress |
 | P5-13 | [#411](https://github.com/DanAakesen/jarvis/issues/411) | Stop idle webhook and timer traffic from keeping Azure SQL awake; retain tracked task/PR updates | Source-level before/after SQL path inventory; tests prove irrelevant webhook and idle timer paths skip SQL | P2-06, P3-03, P6-03 | Complete |
 | P5-12 | [#410](https://github.com/DanAakesen/jarvis/issues/410) | Log typed Jev failures and use calibrated Choice confidence in reflex, browser, and PC planning | Fake-provider tests cover billing/auth/rate-limit, timeout, `http_<status>`, invalid answer, transcript/key-free decision logging, and confidence gates | P7-04, P7-07, P7-17 | Complete |
+| P5-14 | [#421](https://github.com/DanAakesen/jarvis/issues/421) | Log content-free speech-stopped-relative timings for voice turns and round-trip timings for every PC bridge command | Fake-timer relay/bridge tests verify stage and per-tool fields; logger allowlist excludes transcript, arguments and results; KQL lists recent turns and p50/p90 by step/tool | P5-03, P5-06, P7-06 | Complete |
 
 ### P6 — Hardening
 
