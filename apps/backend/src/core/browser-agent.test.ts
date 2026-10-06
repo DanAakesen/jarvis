@@ -30,6 +30,8 @@ function jevResponse(
   target = 'element_1',
   selection = 'none',
   confidence = 0.99,
+  keySequence = 'none',
+  focusedText = 'none',
 ): Response {
   const answer = (choice: string) => ({ type: 'choice', choice, confidence });
   return new Response(JSON.stringify({
@@ -41,6 +43,8 @@ function jevResponse(
       target_scroll: answer(target),
       target_wait: answer(target),
       selection_value: answer(selection),
+      key_sequence: answer(keySequence),
+      focused_text: answer(focusedText),
     },
   }), { headers: { 'content-type': 'application/json' } });
 }
@@ -115,10 +119,12 @@ function setSharedContext(request: FastifyRequest, screenDescription: string, sh
 }
 
 function fixedPlanner(decision: {
-  operation: 'click' | 'type' | 'select' | 'scroll_up' | 'scroll_down' | 'wait' | 'done' | 'blocked';
+  operation: 'click' | 'type' | 'type_focused' | 'keys' | 'select' | 'scroll_up' | 'scroll_down' | 'wait' | 'done' | 'blocked';
   confidence?: number;
   targetIndex?: number;
   selectionValue?: string;
+  text?: string;
+  keys?: readonly string[];
 }): BrowserJevPlanner {
   return { decide: vi.fn(async () => ({
     confidence: 0.99,
@@ -174,6 +180,38 @@ describe('Jev browser agent', () => {
       confidence: 0.99,
       targetIndex: 2,
       selectionValue: 'Denmark',
+    });
+
+  });
+
+  it('maps keyboard and focused typing through closed-set Jev Choice arguments', async () => {
+    const keysFetcher = vi.fn<typeof fetch>(async () => jevResponse('keys', 'none', 'none', 0.99, 'keys_0'));
+    const keysPlanner = createJevBrowserPlanner(async () => 'fake-key', keysFetcher);
+    await expect(keysPlanner.decide({
+      goal: 'Press Ctrl+P to open a file',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'keys', confidence: 0.99, keys: ['Ctrl+P'],
+    });
+    const body = JSON.parse(String(keysFetcher.mock.calls[0]?.[1]?.body)) as {
+      state: { application: string; commonShortcuts: string[] };
+      questions: { key_sequence: { criteria: Record<string, string> } };
+    };
+    expect(body.state.application).toBe('chrome');
+    expect(body.state.commonShortcuts).toContain('Ctrl+L focuses the address and search bar');
+    expect(body.questions.key_sequence.criteria.keys_0).toBe('Ctrl+P');
+
+    const typePlanner = createJevBrowserPlanner(async () => 'fake-key', async () =>
+      jevResponse('type_focused', 'none', 'none', 0.99, 'none', 'value_0'));
+    await expect(typePlanner.decide({
+      goal: 'Type "Daft Punk" into the focused search box',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'type_focused', confidence: 0.99, text: 'Daft Punk',
     });
   });
 
@@ -244,6 +282,7 @@ describe('Jev browser agent', () => {
       targetIndex: operation === 'type' ? 0 : operation === 'select' ? 2 : 1,
       ...(operation === 'select' ? { selectionValue: 'Denmark' } : {}),
     });
+
     const env = fixture(planner);
     await env.agent.runClause({ goal: operation === 'select' ? 'Select "Denmark"' : 'Continue the task', tabId: 'tab_1' },
       env.request, new AbortController().signal);
@@ -259,6 +298,36 @@ describe('Jev browser agent', () => {
     expect(env.textModel.generateText).toHaveBeenCalledTimes(operation === 'type' ? 1 : 0);
     expect(env.workspaceCalls.length).toBeGreaterThan(0);
     expect(JSON.stringify(env.workspaceCalls)).not.toContain('hello');
+  });
+
+  it('runs focused keyboard actions without targets and redacts keys and typed values from progress', async () => {
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce({ operation: 'keys' as const, confidence: 0.99, keys: ['Ctrl+L'] })
+      .mockResolvedValueOnce({ operation: 'type_focused' as const, confidence: 0.99, text: 'Daft Punk' }) };
+    const env = fixture(planner);
+
+    await env.agent.runClause({ goal: 'Press Ctrl+L to focus the search bar', tabId: 'tab_1' },
+      env.request, new AbortController().signal);
+    await env.agent.runClause({ goal: 'Type "Daft Punk" into the focused search box', tabId: 'tab_1' },
+      env.request, new AbortController().signal);
+
+    expect(env.actions).toEqual([
+      {
+        tabId: 'tab_1',
+        snapshotId: snapshot.snapshotId,
+        action: 'keys',
+        keys: ['Ctrl+L'],
+        closeIntent: false,
+        requiresConfirmation: false,
+      },
+      {
+        tabId: 'tab_1',
+        snapshotId: snapshot.snapshotId,
+        action: 'type_focused',
+        text: 'Daft Punk',
+      },
+    ]);
+    expect(JSON.stringify(env.workspaceCalls)).not.toMatch(/Ctrl\+L|Daft Punk/u);
   });
 
   it('does not trust a target that was not in the observed snapshot', async () => {
