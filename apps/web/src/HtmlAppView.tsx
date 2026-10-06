@@ -68,27 +68,24 @@ export function HtmlAppView({
   const intents = useConversationIntents();
   const channel = useId();
   const iframe = useRef<HTMLIFrameElement>(null);
-  const [artifact, setArtifact] = useState<HtmlAppArtifact | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [artifactState, setArtifact] = useState<HtmlAppArtifact | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [frameHeight, setFrameHeight] = useState(320);
-  const [frameLoading, setFrameLoading] = useState(true);
+  const requestKey = `${artifactId}:${attempt}`;
+  const [loadState, setLoadState] = useState({ key: '', error: '' });
+  const loading = loadState.key !== requestKey;
+  const error = loadState.key === requestKey ? loadState.error : '';
+  const artifact = artifactState?.id === artifactId ? artifactState : null;
+  const frameKey = `${artifactId}:${environment.theme}`;
+  const [frameSize, setFrameSize] = useState({ key: frameKey, height: 320 });
+  const [loadedFrameKey, setLoadedFrameKey] = useState('');
+  const frameHeight = frameSize.key === frameKey ? frameSize.height : 320;
   const [updatingPin, setUpdatingPin] = useState(false);
   const [bridgeStatus, setBridgeStatus] = useState('');
 
   useEffect(() => {
-    if (!backendUrl) {
-      setError('HTML apps are unavailable because the backend is not configured.');
-      setLoading(false);
-      return;
-    }
+    if (!backendUrl) return;
     const controller = new AbortController();
     let active = true;
-    setArtifact(null);
-    setLoading(true);
-    setError('');
-    setBridgeStatus('');
     void (async () => {
       try {
         const response = await backendFetch(
@@ -112,29 +109,28 @@ export function HtmlAppView({
         let value: unknown;
         try { value = await response.json(); } catch { throw new Error('Jarvis returned an invalid HTML app.'); }
         if (!validArtifact(value, artifactId)) throw new Error('Jarvis returned an invalid HTML app.');
-        if (active) setArtifact(value);
+        if (active) {
+          setArtifact(value);
+          setLoadState({ key: requestKey, error: '' });
+        }
       } catch (cause) {
         if (!active || controller.signal.aborted) return;
-        setError(cause instanceof Error ? cause.message : 'Jarvis could not load this HTML app.');
-      } finally {
-        if (active) setLoading(false);
+        setLoadState({
+          key: requestKey,
+          error: cause instanceof Error ? cause.message : 'Jarvis could not load this HTML app.',
+        });
       }
     })();
     return () => {
       active = false;
       controller.abort();
     };
-  }, [artifactId, attempt, backendUrl, getAccessToken]);
+  }, [artifactId, backendUrl, getAccessToken, requestKey]);
 
   const sourceDocument = useMemo(() => artifact
     ? createHtmlAppDocument(artifact.html, environment, channel)
     : '', [artifact, channel, environment]);
-
-  useEffect(() => {
-    if (!sourceDocument) return;
-    setFrameHeight(320);
-    setFrameLoading(true);
-  }, [sourceDocument]);
+  const frameLoading = Boolean(sourceDocument) && loadedFrameKey !== frameKey;
 
   const patchPinned = useCallback(async (pinned: boolean) => {
     if (!artifact || !backendUrl || updatingPin) return;
@@ -200,9 +196,12 @@ export function HtmlAppView({
       if (!message) return;
       switch (message.type) {
         case 'resize':
-          setFrameHeight((current) => Math.abs(current - message.height) < 4
-            ? current
-            : Math.min(maxFrameHeight, Math.max(120, Math.ceil(message.height))));
+        setFrameSize((current) => {
+          const currentHeight = current.key === frameKey ? current.height : 320;
+          return Math.abs(currentHeight - message.height) < 4
+            ? { key: frameKey, height: currentHeight }
+            : { key: frameKey, height: Math.min(maxFrameHeight, Math.max(120, Math.ceil(message.height))) };
+        });
           break;
         case 'ask':
           intents.sendMessage(message.text);
@@ -221,13 +220,14 @@ export function HtmlAppView({
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [channel, intents, openUrl, patchPinned]);
+  }, [channel, frameKey, intents, openUrl, patchPinned]);
 
-  if (loading) return <p role="status" aria-live="polite">Loading HTML app…</p>;
-  if (error) {
+  const loadError = backendUrl ? error : 'HTML apps are unavailable because the backend is not configured.';
+  if (backendUrl && loading) return <p role="status" aria-live="polite">Loading HTML app…</p>;
+  if (loadError) {
     return (
       <div className="html-app-feedback">
-        <p role="alert">{error}</p>
+        <p role="alert">{loadError}</p>
         {backendUrl && <button className="secondary-button" type="button" onClick={() => setAttempt((value) => value + 1)}>
           Retry
         </button>}
@@ -253,7 +253,7 @@ export function HtmlAppView({
         srcDoc={sourceDocument}
         referrerPolicy="no-referrer"
         style={{ height: `${frameHeight}px` }}
-        onLoad={() => setFrameLoading(false)}
+        onLoad={() => setLoadedFrameKey(frameKey)}
       />
       {frameLoading && <p role="status">Starting HTML app…</p>}
       {artifact.sources.length > 0 && (
