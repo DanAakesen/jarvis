@@ -415,8 +415,11 @@ export function createJevBrowserPlanner(
         const selectionMatch = selection && /^selection_(\d{1,1})$/u.exec(selection.choice);
         const selectionIndex = selectionMatch ? Number(selectionMatch[1]) : -1;
         if (!selection) return { failure: 'invalid_answer' };
-        if (selection.confidence < jevChoiceConfidenceThreshold ||
-            selectionIndex < 0 || selectionIndex >= selections.length) {
+        if (selection.choice === 'none') {
+          return { operation: selectedOperation, confidence: Math.min(confidence, target.confidence, selection.confidence) };
+        }
+        if (selectionIndex < 0 || selectionIndex >= selections.length) return { failure: 'invalid_answer' };
+        if (selection.confidence < jevChoiceConfidenceThreshold) {
           return { operation: selectedOperation, confidence: Math.min(confidence, target.confidence, selection.confidence) };
         }
         const selectionValue = selections[selectionIndex];

@@ -393,10 +393,14 @@ export function createJevPcActPlanner(
       if (selected !== 'type') return { operation: selected, confidence: Math.min(confidence, target.confidence), targetIndex };
       const textChoice = readChoice(answers.text_value);
       if (!textChoice) return { failure: 'invalid_answer' };
+      if (textChoice.choice === 'none') {
+        return { operation: selected, confidence: Math.min(confidence, target.confidence, textChoice.confidence) };
+      }
       const textMatch = /^value_(\d{1,1})$/u.exec(textChoice.choice);
       const textIndex = textMatch ? Number(textMatch[1]) : -1;
       const text = values[textIndex];
-      if (textChoice.confidence < jevChoiceConfidenceThreshold || !text || sensitiveText(text)) {
+      if (!text || sensitiveText(text)) return { failure: 'invalid_answer' };
+      if (textChoice.confidence < jevChoiceConfidenceThreshold) {
         return { operation: selected, confidence: Math.min(confidence, target.confidence, textChoice.confidence) };
       }
       return {

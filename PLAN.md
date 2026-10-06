@@ -5,6 +5,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 ## Current focus
 
 - **P7-07 (#205):** Implemented offline on the existing authenticated PC bridge. `pc_act` uses one Jev decision per fresh Windows UI Automation snapshot, allows only VS Code and File Explorer, and stops at 20 steps/30 seconds or cancellation. Sensitive values are blocked, typed text must be quoted by Dan, destructive actions use P7-03 approval, and step logs contain only action metadata. The 72 .NET core tests, 42 focused backend tests, backend lint/build, and Linux Windows-target build pass; Dan's live Windows, Jev, and approval checks remain pending. Website tasks stay on the existing Chrome-only browser path; no Foundry computer-use is used.
+- **P5-12 (#410):** Implemented offline. Reflex, browser, and PC planners return typed Jev failures and log only allowlisted failure reasons; confidence gates now use Jev's calibrated Choice confidence (0.9). Focused backend tests, lint, and build pass; live Jev behavior remains unverified.
 
 - **Approved Software Factory layout (#369):** P8-34 is implemented offline on the merged P8-28/P8-31 foundations. The task lens retains all six states, filters, live updates and bounded results; its project-scoped release bar and closable contextual details pane reuse the existing authenticated contracts. Focused web checks and Chromium fixture verification pass; live Entra/backend/provider data and physical-device acceptance remain unverified. Fixture screenshots are in `docs/ui/screenshots/p8-34-fixture-*`.
 
@@ -276,6 +277,7 @@ Goal: Dan talks to Jarvis in Danish or English in the browser.
 | P5-05 | [#59](https://github.com/DanAakesen/jarvis/issues/59) | Language toggle and voice settings on the main page and the settings page | Toggle switches voice agent for the next session | P5-02, P5-03, P1-11 | Complete |
 | P5-06 | [#60](https://github.com/DanAakesen/jarvis/issues/60) | Voice sessions stored as `jarvis_sessions` with transcripts and usage (voice minutes) | Transcript and usage visible | P4-03, P2-12 | Complete |
 | P5-07 | [#61](https://github.com/DanAakesen/jarvis/issues/61) | Dan's live test (V8 of the voice prototype) in Danish and English; record the verdict in [docs/decisions.md](docs/decisions.md) | Verdict recorded | P5-04, P5-05 | In progress |
+| P5-12 | [#410](https://github.com/DanAakesen/jarvis/issues/410) | Log typed Jev failures and use calibrated Choice confidence in reflex, browser, and PC planning | Fake-provider tests cover billing/auth/rate-limit, timeout, `http_<status>`, invalid answer, transcript/key-free decision logging, and confidence gates | P7-04, P7-07, P7-17 | Complete |
 
 ### P6 — Hardening
 

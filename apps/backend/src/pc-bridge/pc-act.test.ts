@@ -107,6 +107,21 @@ describe('pc_act Jev planner', () => {
     });
   });
 
+  it('returns invalid_answer for an unlisted text Choice', async () => {
+    const planner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+      operation: { type: 'choice', choice: 'type', confidence: 0.99 },
+      target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
+      text_value: { type: 'choice', choice: 'value_9', confidence: 0.99 },
+    }));
+
+    await expect(planner.decide({
+      goal: 'Enter "Jarvis issue 205"',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ failure: 'invalid_answer' });
+  });
+
   it('logs typed PC planner failures without the goal or Jev key', async () => {
     const log = { info: vi.fn() };
     const req = {

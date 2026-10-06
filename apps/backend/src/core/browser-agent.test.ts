@@ -205,6 +205,18 @@ describe('Jev browser agent', () => {
     }, new AbortController().signal)).resolves.toEqual({ operation: 'click', confidence: 0.89 });
   });
 
+  it('returns invalid_answer for an unlisted selection Choice', async () => {
+    const planner = createJevBrowserPlanner(async () => 'fake-key', async () =>
+      jevResponse('select', 'element_2', 'selection_9'));
+
+    await expect(planner.decide({
+      goal: 'Select "Denmark"',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ failure: 'invalid_answer' });
+  });
+
   it('logs typed browser planner failures without the goal or Jev key', async () => {
     const env = fixture({ decide: vi.fn(async () => ({ failure: 'billing' as const })) });
 

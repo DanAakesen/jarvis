@@ -350,11 +350,15 @@ export function createJevReflexClassifier(
         ? answer(answers, 'contradicted_action', 'choice')
         : undefined;
       const contradictedAction = contradictionAnswer?.choice;
+      const contradictionConfidence = contradictionAnswer?.confidence;
+      const validContradictionConfidence = validProbability(contradictionConfidence)
+        ? contradictionConfidence
+        : undefined;
       const contradictedActionChoices = new Set([
         'none',
         ...(context?.executedActions ?? []).map(({ id }) => id),
       ]);
-      const selectedContradiction = typeof contradictedAction === 'string' &&
+      let selectedContradiction = typeof contradictedAction === 'string' &&
         contradictedActionChoices.has(contradictedAction) ? contradictedAction : undefined;
       const intent = intentAnswer?.choice;
       const choice = routeAnswer?.choice;
@@ -362,7 +366,7 @@ export function createJevReflexClassifier(
       if (!validProbability(addressed) || !validProbability(confirmation) ||
           (context && !validProbability(completeCommand)) ||
           (context?.final && context.executed.length > 0 &&
-           selectedContradiction === undefined) ||
+           (selectedContradiction === undefined || validContradictionConfidence === undefined)) ||
           (intent !== 'action' && intent !== 'question' && intent !== 'other') ||
           !validProbability(intentAnswer?.confidence) ||
           typeof choice !== 'string' || !Object.hasOwn(choices, choice) ||
@@ -370,6 +374,11 @@ export function createJevReflexClassifier(
         return { failure: 'invalid_answer' };
       }
 
+      if (context?.final && context.executed.length > 0 &&
+          validContradictionConfidence !== undefined &&
+          validContradictionConfidence < jevChoiceConfidenceThreshold) {
+        selectedContradiction = 'none';
+      }
       const completeCommandScore = validProbability(completeCommand) ? completeCommand : undefined;
       const target = choice === 'main_agent' ? null : targets.find((item) => item.choice === choice) ?? null;
       return {

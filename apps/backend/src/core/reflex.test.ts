@@ -65,7 +65,7 @@ function pcOpenTool() {
 function response(
   route = 'target_0',
   confidence = 0.99,
-  context: { completeCommand?: number; contradictedAction?: string } = {},
+  context: { completeCommand?: number; contradictedAction?: string; contradictedConfidence?: number } = {},
 ) {
   return new Response(JSON.stringify({
     answers: {
@@ -77,7 +77,9 @@ function response(
         complete_command: { type: 'noul', noul: context.completeCommand },
       }),
       ...(context.contradictedAction === undefined ? {} : {
-        contradicted_action: { type: 'choice', choice: context.contradictedAction, confidence: 0.99 },
+        contradicted_action: {
+          type: 'choice', choice: context.contradictedAction, confidence: context.contradictedConfidence ?? 0.99,
+        },
       }),
     },
   }), { headers: { 'content-type': 'application/json' } });
@@ -266,6 +268,27 @@ describe('Jev reflex classifier', () => {
       'action-1': 'pause task 12',
     });
     expect(partialRequest.questions).not.toHaveProperty('confidence');
+  });
+
+  it('does not undo an action on a low-confidence contradiction Choice', async () => {
+    const classifier = createJevReflexClassifier(async () => 'fake-key', async () =>
+      response('main_agent', 0.99, {
+        completeCommand: 0.99,
+        contradictedAction: 'action-1',
+        contradictedConfidence: 0.4,
+      }));
+
+    await expect(classifier.classify(
+      'Do not pause task 12',
+      'en',
+      [],
+      new AbortController().signal,
+      {
+        executed: ['paused task 12'],
+        executedActions: [{ id: 'action-1', summary: 'pause task 12' }],
+        final: true,
+      },
+    )).resolves.toMatchObject({ contradictedAction: null });
   });
 
   it('offers the recognized browser clause as a fixed reflex-safe target', () => {
