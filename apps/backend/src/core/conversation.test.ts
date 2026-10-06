@@ -357,6 +357,36 @@ describe('conversation routes', () => {
       expect(response.body).not.toContain('provider detail');
     });
 
+    it('logs typed reflex failures without the transcript', async () => {
+      const store = storeFixture();
+      const chatAgent = { stream: vi.fn(async function* () { yield 'Hello'; }) };
+      const records: string[] = [];
+      const output = new Writable({
+        write(chunk, _encoding, done) { records.push(chunk.toString()); done(); },
+      });
+      const app = buildApp(config, createLogger(config, undefined, output), {
+        auth,
+        conversationStore: store,
+        conversationAgent: chatAgent,
+        reflexClassifier: { classify: vi.fn(async () => ({ failure: 'billing' as const })) },
+      });
+      apps.push(app);
+      const transcript = 'private-transcript-marker';
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/conversation/sessions/41/turns',
+        headers,
+        payload: { text: transcript },
+      });
+
+      expect(response.body).toContain('event: done');
+      const decision = records.map((record) => JSON.parse(record) as Record<string, unknown>)
+        .find((record) => record.msg === 'reflex.decision');
+      expect(decision).toMatchObject({ reason: 'billing' });
+      expect(JSON.stringify(decision)).not.toContain(transcript);
+    });
+
     it('cancels both the agent and reflex when the chat client disconnects', async () => {
       const store = storeFixture();
       let agentSignal!: AbortSignal;

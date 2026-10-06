@@ -5,6 +5,11 @@ import WebSocket, { type RawData } from 'ws';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import {
+  isIrreversibleKeySequence,
+  isSafeKeySequence,
+  type KeySequence,
+} from '../core/keyboard-actions.js';
+import {
   runPcAct,
   type PcActOptions,
   type PcActOperation,
@@ -16,13 +21,15 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
 const controlActions = new Set<PcCommand['name']>([
-  'open_url', 'open_app', 'open_folder', 'open_file', 'focus_window', 'uia_act', 'browser_act', 'media',
+  'open_url', 'open_app', 'close_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
+  'open_file',
 ]);
 const mediaActions = ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const;
 
 type PcCommand =
   | { name: 'open_url'; arguments: { url: string } }
   | { name: 'open_app'; arguments: { app: string } }
+  | { name: 'close_app'; arguments: { app: string } }
   | { name: 'media'; arguments: { action: typeof mediaActions[number] } }
   | { name: 'open_folder'; arguments: { relativePath: string } }
   | { name: 'open_file'; arguments: { relativePath: string } }
@@ -31,20 +38,34 @@ type PcCommand =
   | { name: 'uia_snapshot'; arguments: Record<string, never> }
   | {
     name: 'uia_act';
-    arguments: {
+    arguments:
+      | {
       snapshotId: string;
       elementIndex: number;
       action: 'click' | 'type' | 'scroll_up' | 'scroll_down';
       confirmed?: boolean;
       text?: string;
-    };
+      }
+      | {
+        snapshotId: string;
+        action: 'keys';
+        keys: KeySequence;
+        confirmed: boolean;
+        closeIntent: boolean;
+      }
+      | {
+        snapshotId: string;
+        action: 'type_focused';
+        text: string;
+      };
   }
 
   | { name: 'browser_tabs'; arguments: { offset?: number } }
   | { name: 'browser_snapshot'; arguments: { tabId: string } }
   | {
     name: 'browser_act';
-    arguments: {
+    arguments:
+      | {
       tabId: string;
       snapshotId: string;
       elementIndex: number;
@@ -54,7 +75,21 @@ type PcCommand =
       value?: string;
       direction?: 'up' | 'down';
       waitMs?: number;
-    };
+      }
+      | {
+        tabId: string;
+        snapshotId: string;
+        action: 'keys';
+        keys: KeySequence;
+        confirmed: boolean;
+        closeIntent: boolean;
+      }
+      | {
+        tabId: string;
+        snapshotId: string;
+        action: 'type_focused';
+        text: string;
+      };
   };
 
 interface PendingCommand {
@@ -65,6 +100,62 @@ interface PendingCommand {
   signal: AbortSignal;
   abort: () => void;
 }
+
+type BrowserActionRequest =
+  | {
+    tabId: string;
+    snapshotId: string;
+    action: 'keys';
+    keys: KeySequence;
+    closeIntent: boolean;
+    requiresConfirmation: boolean;
+  }
+  | {
+    tabId: string;
+    snapshotId: string;
+    action: 'type_focused';
+    text: string;
+    requiresConfirmation?: boolean;
+  }
+  | {
+    tabId: string;
+    snapshotId: string;
+    elementIndex: number;
+    action: 'click';
+    requiresConfirmation?: boolean;
+  }
+  | {
+    tabId: string;
+    snapshotId: string;
+    elementIndex: number;
+    action: 'type';
+    text: string;
+    requiresConfirmation?: boolean;
+  }
+  | {
+    tabId: string;
+    snapshotId: string;
+    elementIndex: number;
+    action: 'select';
+    value: string;
+    requiresConfirmation?: boolean;
+  }
+  | {
+    tabId: string;
+    snapshotId: string;
+    elementIndex: number;
+    action: 'scroll';
+    direction: 'up' | 'down';
+    requiresConfirmation?: boolean;
+  }
+  | {
+    tabId: string;
+    snapshotId: string;
+    elementIndex: number;
+    action: 'wait';
+    waitMs: number;
+    requiresConfirmation?: boolean;
+  };
 
 export interface PcBridgeConnectionOptions {
   readonly timeoutMs?: number;
@@ -208,6 +299,9 @@ export class PcBridgeConnection {
       else if (error === 'not_found' && pending.command.startsWith('browser_')) {
         this.finish(response.id, new ToolRefusal('Chrome or the requested local tab is unavailable.'));
       }
+      else if (error === 'not_found' && pending.command === 'close_app') {
+        this.finish(response.id, new ToolRefusal('No open window of that app was found; nothing was closed.'));
+      }
       else if (error === 'not_found' && pending.command === 'open_app') {
         this.finish(response.id, new ToolRefusal('No installed app matched that name; nothing was launched.'));
       }
@@ -294,6 +388,17 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
         execute: (input, _request, signal) => runPcOpen(bridge, input, signal),
       },
       {
+        name: 'pc_close',
+        description: 'Close an app on Dan’s PC by its name (e.g. Visual Studio Code - Insiders, Spotify). The app is asked to close normally, so it can still offer to save unsaved work; no confirmation is needed.',
+        inputSchema: {
+          type: 'object',
+          properties: { app: { type: 'string', minLength: 1, maxLength: 128 } },
+          required: ['app'],
+          additionalProperties: false,
+        },
+        execute: (input, _request, signal) => runPcClose(bridge, input, signal),
+      },
+      {
         name: 'pc_media',
         description: 'Control Windows media playback or volume with play_pause, next, previous, volume_up, volume_down, or mute.',
         inputSchema: {
@@ -360,20 +465,37 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
       },
       {
         name: 'pc_browser_act',
-        description: 'Act on an element index from the latest pc_browser_snapshot using click, type, select, scroll, or wait. The bridge rechecks that exact observed DOM element is fresh, visible, and unobstructed. Sensitive fields are blocked; only irreversible actions require Dan’s explicit approval.',
+        description: 'Act on a fresh Chrome snapshot with click, type, select, scroll, wait, a bounded keys sequence, or explicit type_focused text. Keyboard input goes only to the focused Chrome window, never sensitive fields; irreversible actions require Dan’s approval.',
         inputSchema: {
           type: 'object',
           properties: {
             tabId: { type: 'string', minLength: 1, maxLength: 128 },
             snapshotId: { type: 'string', format: 'uuid' },
             elementIndex: { type: 'integer', minimum: 0, maximum: 500 },
-            action: { type: 'string', enum: ['click', 'type', 'select', 'scroll', 'wait'] },
+            action: { type: 'string', enum: ['click', 'type', 'type_focused', 'keys', 'select', 'scroll', 'wait'] },
             text: { type: 'string', maxLength: 4096 },
+            keys: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'string', maxLength: 32 } },
+            closeIntent: { type: 'boolean' },
+            requiresConfirmation: { type: 'boolean' },
             value: { type: 'string', maxLength: 512 },
             direction: { type: 'string', enum: ['up', 'down'] },
             waitMs: { type: 'integer', minimum: 0, maximum: 5000 },
           },
-          required: ['tabId', 'snapshotId', 'elementIndex', 'action'],
+          required: ['tabId', 'snapshotId', 'action'],
+          allOf: [
+            {
+              if: { properties: { action: { enum: ['click', 'type', 'select', 'scroll', 'wait'] } }, required: ['action'] },
+              then: { required: ['elementIndex'] },
+            },
+            {
+              if: { properties: { action: { const: 'keys' } }, required: ['action'] },
+              then: { required: ['keys', 'closeIntent', 'requiresConfirmation'] },
+            },
+            {
+              if: { properties: { action: { const: 'type_focused' } }, required: ['action'] },
+              then: { required: ['text'] },
+            },
+          ],
           additionalProperties: false,
         },
         sensitive: true,
@@ -454,36 +576,82 @@ async function runBrowserAction(
   if (!action) {
     throw new ToolRefusal('Use a valid element index from the latest browser snapshot and one supported action.');
   }
+  const { requiresConfirmation = false, ...bridgeAction } = action;
+  if (bridgeAction.action === 'keys' &&
+      (requiresConfirmation || isIrreversibleKeySequence(bridgeAction.keys))) {
+    if (!runConfirmed) {
+      throw new ToolRefusal('Dan’s confirmation service is unavailable; the browser action was not performed.');
+    }
+    return runConfirmed('Send an irreversible keyboard action in Chrome.', async () => {
+      const approved = await bridge.execute({
+        name: 'browser_act',
+        arguments: { ...bridgeAction, confirmed: true },
+      }, signal);
+      if (!validBrowserActionFor(approved, bridgeAction.action)) throw new Error('Invalid browser action response');
+      return approved;
+    }, signal);
+  }
   const command: PcCommand = {
     name: 'browser_act',
-    arguments: { ...action, ...(action.action === 'click' ? { confirmed: false } : {}) },
+    arguments: { ...bridgeAction, ...(bridgeAction.action === 'click' || bridgeAction.action === 'keys' ? { confirmed: false } : {}) },
   };
   const result = await bridge.execute(command, signal);
   if (!isConfirmationRequired(result)) {
     if (!validBrowserActionFor(result, action.action)) throw new Error('Invalid browser action response');
     return result;
   }
-  if (action.action !== 'click') throw new Error('Invalid browser confirmation response');
+  if (bridgeAction.action !== 'click' && bridgeAction.action !== 'keys') throw new Error('Invalid browser confirmation response');
   if (!runConfirmed) {
     throw new ToolRefusal('Dan’s confirmation service is unavailable; the browser action was not performed.');
   }
   return runConfirmed(result.summary, async () => {
     const approved = await bridge.execute({
       name: 'browser_act',
-      arguments: { ...action, confirmed: true },
+      arguments: { ...bridgeAction, confirmed: true },
     }, signal);
-    if (!validBrowserActionFor(approved, action.action)) throw new Error('Invalid browser action response');
+    if (!validBrowserActionFor(approved, bridgeAction.action)) throw new Error('Invalid browser action response');
     return approved;
   }, signal);
 }
 
-function validateBrowserAction(input: unknown): Extract<PcCommand, { name: 'browser_act' }>['arguments'] | undefined {
+function validateBrowserAction(input: unknown): BrowserActionRequest | undefined {
   if (!isRecord(input) ||
       typeof input.tabId !== 'string' || !isTabId(input.tabId) ||
       typeof input.snapshotId !== 'string' || !/^[\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu.test(input.snapshotId) ||
-      !Number.isInteger(input.elementIndex) || (input.elementIndex as number) < 0 || (input.elementIndex as number) > 500 ||
-      !['click', 'type', 'select', 'scroll', 'wait'].includes(String(input.action))) return undefined;
+      typeof input.action !== 'string') return undefined;
 
+  const action = input.action;
+  if (action === 'keys') {
+    const fields = ['tabId', 'snapshotId', 'action', 'keys', 'closeIntent', 'requiresConfirmation'];
+    if (Object.keys(input).length !== fields.length ||
+        !Object.keys(input).every(key => fields.includes(key)) ||
+        typeof input.closeIntent !== 'boolean' ||
+        typeof input.requiresConfirmation !== 'boolean' ||
+        !isSafeKeySequence(input.keys, input.closeIntent))
+      return undefined;
+    return {
+      tabId: input.tabId,
+      snapshotId: input.snapshotId,
+      action,
+      keys: input.keys,
+      closeIntent: input.closeIntent,
+      requiresConfirmation: input.requiresConfirmation,
+    };
+  }
+  if (action === 'type_focused') {
+    const fields = ['tabId', 'snapshotId', 'action', 'text'];
+    if (Object.keys(input).length !== fields.length ||
+        !Object.keys(input).every(key => fields.includes(key)) ||
+        typeof input.text !== 'string' || !safeFocusedText(input.text))
+      return undefined;
+    return { tabId: input.tabId, snapshotId: input.snapshotId, action, text: input.text };
+  }
+  if (!['click', 'type', 'select', 'scroll', 'wait'].includes(action) ||
+      !Number.isInteger(input.elementIndex) || (input.elementIndex as number) < 0 ||
+      (input.elementIndex as number) > 500)
+    return undefined;
+
+  const regularAction = action as 'click' | 'type' | 'select' | 'scroll' | 'wait';
   const common = ['tabId', 'snapshotId', 'elementIndex', 'action'];
   const fields: Record<string, readonly string[]> = {
     click: common,
@@ -492,23 +660,41 @@ function validateBrowserAction(input: unknown): Extract<PcCommand, { name: 'brow
     scroll: [...common, 'direction'],
     wait: [...common, 'waitMs'],
   };
-  const action = input.action as Extract<PcCommand, { name: 'browser_act' }>['arguments']['action'];
-  if (Object.keys(input).length !== fields[action]!.length ||
-      !Object.keys(input).every(key => fields[action]!.includes(key))) return undefined;
-  if (action === 'type' && (typeof input.text !== 'string' || input.text.length > 4096 || hasControlCharacters(input.text))) return undefined;
-  if (action === 'select' && (typeof input.value !== 'string' || !input.value.trim() || input.value.length > 512 || hasControlCharacters(input.value))) return undefined;
-  if (action === 'scroll' && input.direction !== 'up' && input.direction !== 'down') return undefined;
-  if (action === 'wait' && (!Number.isInteger(input.waitMs) || (input.waitMs as number) < 0 || (input.waitMs as number) > 5000)) return undefined;
-  return {
+  if (Object.keys(input).length !== fields[regularAction]!.length ||
+      !Object.keys(input).every(key => fields[regularAction]!.includes(key))) return undefined;
+  if (regularAction === 'type' && (typeof input.text !== 'string' || input.text.length > 4096 || hasControlCharacters(input.text))) return undefined;
+  if (regularAction === 'select' && (typeof input.value !== 'string' || !input.value.trim() || input.value.length > 512 || hasControlCharacters(input.value))) return undefined;
+  if (regularAction === 'scroll' && input.direction !== 'up' && input.direction !== 'down') return undefined;
+  if (regularAction === 'wait' && (!Number.isInteger(input.waitMs) || (input.waitMs as number) < 0 || (input.waitMs as number) > 5000)) return undefined;
+  const commonAction = {
     tabId: input.tabId,
     snapshotId: input.snapshotId,
     elementIndex: input.elementIndex as number,
-    action,
-    ...(action === 'type' ? { text: input.text as string } : {}),
-    ...(action === 'select' ? { value: input.value as string } : {}),
-    ...(action === 'scroll' ? { direction: input.direction as 'up' | 'down' } : {}),
-    ...(action === 'wait' ? { waitMs: input.waitMs as number } : {}),
   };
+  switch (regularAction) {
+    case 'click': return { ...commonAction, action: regularAction };
+    case 'type': return { ...commonAction, action: regularAction, text: input.text as string };
+    case 'select': return { ...commonAction, action: regularAction, value: input.value as string };
+    case 'scroll': return { ...commonAction, action: regularAction, direction: input.direction as 'up' | 'down' };
+    case 'wait': return { ...commonAction, action: regularAction, waitMs: input.waitMs as number };
+  }
+}
+
+function safeFocusedText(value: string): boolean {
+  if (!value.trim() || value.length > 4096 || hasControlCharacters(value) ||
+      /\b\d{4,8}\b/u.test(value) || /\b\d{3}[- ]?\d{2}[- ]?\d{4}\b/u.test(value))
+    return false;
+  const digits = value.replace(/\D/gu, '');
+  if (digits.length < 13 || digits.length > 19) return true;
+  let sum = 0;
+  let doubleDigit = false;
+  for (let index = digits.length - 1; index >= 0; index -= 1) {
+    let digit = Number(digits[index]);
+    if (doubleDigit && (digit *= 2) > 9) digit -= 9;
+    sum += digit;
+    doubleDigit = !doubleDigit;
+  }
+  return sum % 10 !== 0;
 }
 
 function isConfirmationRequired(value: Record<string, unknown>): value is Record<string, unknown> & {
@@ -672,6 +858,18 @@ function handleAppOpen(result: Record<string, unknown>): Record<string, unknown>
   return result;
 }
 
+async function runPcClose(
+  bridge: PcBridgeConnection,
+  input: unknown,
+  signal: AbortSignal,
+): Promise<Record<string, unknown>> {
+  if (!isRecord(input) || Object.keys(input).length !== 1 || typeof input.app !== 'string' ||
+      !input.app.trim() || input.app.length > 128 || hasControlCharacters(input.app)) {
+    throw new ToolRefusal('Name the app to close (1 to 128 characters).');
+  }
+  return bridge.execute({ name: 'close_app', arguments: { app: input.app.trim() } }, signal);
+}
+
 async function runPcMedia(
   bridge: PcBridgeConnection,
   input: unknown,
@@ -749,6 +947,10 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
     return Object.keys(value).length === 2 && value.controlled === true &&
       typeof value.action === 'string' && mediaActions.includes(value.action as typeof mediaActions[number]);
   }
+  if (command === 'close_app') {
+    return Object.keys(value).length === 2 && value.closing === true &&
+      Number.isInteger(value.windows) && (value.windows as number) >= 1 && (value.windows as number) <= 10;
+  }
   if (['open_url', 'open_app', 'open_folder', 'open_file'].includes(command)) {
     return Object.keys(value).length === 1 && value.opened === true;
   }
@@ -779,7 +981,7 @@ function validUiAutomationSnapshot(value: Record<string, unknown>): boolean {
 
 function validUiAutomationAction(value: Record<string, unknown>): boolean {
   return (Object.keys(value).length === 2 && value.acted === true &&
-      ['click', 'type', 'scroll_up', 'scroll_down'].includes(String(value.action))) ||
+      ['click', 'type', 'keys', 'type_focused', 'scroll_up', 'scroll_down'].includes(String(value.action))) ||
     (Object.keys(value).length === 3 && value.confirmationRequired === true &&
       value.actionKind === 'computer_use' &&
       value.summary === 'Activate a potentially destructive Windows control.');
@@ -787,7 +989,7 @@ function validUiAutomationAction(value: Record<string, unknown>): boolean {
 
 function validBrowserActionResult(value: Record<string, unknown>): boolean {
   return Object.keys(value).length === 2 && value.acted === true &&
-  ['click', 'type', 'select', 'scroll', 'wait'].includes(String(value.action));
+  ['click', 'type', 'type_focused', 'keys', 'select', 'scroll', 'wait'].includes(String(value.action));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

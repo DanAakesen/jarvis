@@ -30,6 +30,8 @@ function jevResponse(
   target = 'element_1',
   selection = 'none',
   confidence = 0.99,
+  keySequence = 'none',
+  focusedText = 'none',
 ): Response {
   const answer = (choice: string) => ({ type: 'choice', choice, confidence });
   return new Response(JSON.stringify({
@@ -41,7 +43,8 @@ function jevResponse(
       target_scroll: answer(target),
       target_wait: answer(target),
       selection_value: answer(selection),
-      confidence: { type: 'score', score: confidence },
+      key_sequence: answer(keySequence),
+      focused_text: answer(focusedText),
     },
   }), { headers: { 'content-type': 'application/json' } });
 }
@@ -67,6 +70,7 @@ function fixture(
     return { acted: true, action: (input as BrowserActionInput).action };
   });
   const openUrl = vi.fn(async (): Promise<Record<string, unknown>> => ({ opened: true }));
+  const log = { info: vi.fn() };
   const tools = new Map([
     ['pc_browser_tabs', { execute: listTabs }],
     ['pc_browser_snapshot', { execute: getSnapshot }],
@@ -75,6 +79,8 @@ function fixture(
   ]);
   const request = {
     principal: { objectId: 'dan' },
+    log,
+    routeOptions: { url: '/conversation/:sessionId/messages' },
     server: {
       ownerObjectId: 'dan',
       jarvisTools: { get: (name: string) => tools.get(name) },
@@ -94,6 +100,7 @@ function fixture(
     act,
     openUrl,
     textModel,
+    log,
   };
 }
 
@@ -112,10 +119,12 @@ function setSharedContext(request: FastifyRequest, screenDescription: string, sh
 }
 
 function fixedPlanner(decision: {
-  operation: 'click' | 'type' | 'select' | 'scroll_up' | 'scroll_down' | 'wait' | 'done' | 'blocked';
+  operation: 'click' | 'type' | 'type_focused' | 'keys' | 'select' | 'scroll_up' | 'scroll_down' | 'wait' | 'done' | 'blocked';
   confidence?: number;
   targetIndex?: number;
   selectionValue?: string;
+  text?: string;
+  keys?: readonly string[];
 }): BrowserJevPlanner {
   return { decide: vi.fn(async () => ({
     confidence: 0.99,
@@ -153,6 +162,7 @@ describe('Jev browser agent', () => {
       target_scroll: { type: 'choice' },
       target_wait: { type: 'choice' },
     });
+    expect(request.questions).not.toHaveProperty('confidence');
     expect(String(fetcher.mock.calls[0]?.[1]?.headers && JSON.stringify(fetcher.mock.calls[0]?.[1]?.headers)))
       .toContain('fake-key');
   });
@@ -171,6 +181,92 @@ describe('Jev browser agent', () => {
       targetIndex: 2,
       selectionValue: 'Denmark',
     });
+
+  });
+
+  it('maps keyboard and focused typing through closed-set Jev Choice arguments', async () => {
+    const keysFetcher = vi.fn<typeof fetch>(async () => jevResponse('keys', 'none', 'none', 0.99, 'keys_0'));
+    const keysPlanner = createJevBrowserPlanner(async () => 'fake-key', keysFetcher);
+    await expect(keysPlanner.decide({
+      goal: 'Press Ctrl+P to open a file',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'keys', confidence: 0.99, keys: ['Ctrl+P'],
+    });
+    const body = JSON.parse(String(keysFetcher.mock.calls[0]?.[1]?.body)) as {
+      state: { application: string; commonShortcuts: string[] };
+      questions: { key_sequence: { criteria: Record<string, string> } };
+    };
+    expect(body.state.application).toBe('chrome');
+    expect(body.state.commonShortcuts).toContain('Ctrl+L focuses the address and search bar');
+    expect(body.questions.key_sequence.criteria.keys_0).toBe('Ctrl+P');
+
+    const typePlanner = createJevBrowserPlanner(async () => 'fake-key', async () =>
+      jevResponse('type_focused', 'none', 'none', 0.99, 'none', 'value_0'));
+    await expect(typePlanner.decide({
+      goal: 'Type "Daft Punk" into the focused search box',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'type_focused', confidence: 0.99, text: 'Daft Punk',
+    });
+  });
+
+  it.each([
+    [402, 'billing'],
+    [401, 'auth'],
+    [429, 'rate_limited'],
+    [503, 'http_503'],
+  ] as const)('returns typed Jev HTTP failure %s as %s', async (status, failure) => {
+    const planner = createJevBrowserPlanner(async () => 'fake-key', async () => new Response(null, { status }));
+
+    await expect(planner.decide({
+      goal: 'Click Send message',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ failure });
+  });
+
+  it('uses Choice confidence for the browser confidence gate', async () => {
+    const planner = createJevBrowserPlanner(async () => 'fake-key', async () =>
+      jevResponse('click', 'element_1', 'none', 0.89));
+
+    await expect(planner.decide({
+      goal: 'Click Send message',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ operation: 'click', confidence: 0.89 });
+  });
+
+  it('returns invalid_answer for an unlisted selection Choice', async () => {
+    const planner = createJevBrowserPlanner(async () => 'fake-key', async () =>
+      jevResponse('select', 'element_2', 'selection_9'));
+
+    await expect(planner.decide({
+      goal: 'Select "Denmark"',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ failure: 'invalid_answer' });
+  });
+
+  it('logs typed browser planner failures without the goal or Jev key', async () => {
+    const env = fixture({ decide: vi.fn(async () => ({ failure: 'billing' as const })) });
+
+    await expect(env.agent.runClause({
+      goal: 'open private transcript content',
+      tabId: 'tab_1',
+    }, env.request, new AbortController().signal)).rejects.toThrow(/valid browser decision/u);
+    expect(env.log.info).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'chat',
+      reason: 'billing',
+    }), 'reflex.decision');
+    expect(JSON.stringify(env.log.info.mock.calls)).not.toContain('private transcript content');
   });
 
   it.each([
@@ -186,6 +282,7 @@ describe('Jev browser agent', () => {
       targetIndex: operation === 'type' ? 0 : operation === 'select' ? 2 : 1,
       ...(operation === 'select' ? { selectionValue: 'Denmark' } : {}),
     });
+
     const env = fixture(planner);
     await env.agent.runClause({ goal: operation === 'select' ? 'Select "Denmark"' : 'Continue the task', tabId: 'tab_1' },
       env.request, new AbortController().signal);
@@ -201,6 +298,36 @@ describe('Jev browser agent', () => {
     expect(env.textModel.generateText).toHaveBeenCalledTimes(operation === 'type' ? 1 : 0);
     expect(env.workspaceCalls.length).toBeGreaterThan(0);
     expect(JSON.stringify(env.workspaceCalls)).not.toContain('hello');
+  });
+
+  it('runs focused keyboard actions without targets and redacts keys and typed values from progress', async () => {
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce({ operation: 'keys' as const, confidence: 0.99, keys: ['Ctrl+L'] })
+      .mockResolvedValueOnce({ operation: 'type_focused' as const, confidence: 0.99, text: 'Daft Punk' }) };
+    const env = fixture(planner);
+
+    await env.agent.runClause({ goal: 'Press Ctrl+L to focus the search bar', tabId: 'tab_1' },
+      env.request, new AbortController().signal);
+    await env.agent.runClause({ goal: 'Type "Daft Punk" into the focused search box', tabId: 'tab_1' },
+      env.request, new AbortController().signal);
+
+    expect(env.actions).toEqual([
+      {
+        tabId: 'tab_1',
+        snapshotId: snapshot.snapshotId,
+        action: 'keys',
+        keys: ['Ctrl+L'],
+        closeIntent: false,
+        requiresConfirmation: false,
+      },
+      {
+        tabId: 'tab_1',
+        snapshotId: snapshot.snapshotId,
+        action: 'type_focused',
+        text: 'Daft Punk',
+      },
+    ]);
+    expect(JSON.stringify(env.workspaceCalls)).not.toMatch(/Ctrl\+L|Daft Punk/u);
   });
 
   it('does not trust a target that was not in the observed snapshot', async () => {

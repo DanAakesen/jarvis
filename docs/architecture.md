@@ -58,7 +58,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   voice actions in both the bar and the composer. Language still flows through
   `ConversationHistory` state into the next session. No event, persistence or
   service contract changes.
-- Planned P8-40 (#417) keeps the same voice client, authenticated activity and
+- P8-40 (#417), implemented offline in PR #419, keeps the same voice client, authenticated activity and
   scene, but requests microphone access/audio preparation from explicit Start
   voice and enables capture after real session readiness without a second click.
   Transport/mute/runtime/playback are reconciled into one presentation state for
@@ -66,8 +66,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   actual playback time, including silence/interruption reset. Preserve permission
   recovery, reconnect mute, cancelled-start cleanup and existing provider/API
   contracts. No new persistence or retained audio/transcript is required. This
-  accepted follow-up supersedes the separate-enable and in-bar placement below;
-  those paths describe current implementation until #417 is delivered.
+  implementation supersedes the separate-enable and in-bar placement below.
+  `VoiceStageContext` supplies separate live input/playback readers to the scene;
+  `voicePresentation` reconciles transport, microphone, mute and runtime state.
+  `VoiceOrbStatus` provides HTML feedback independently of WebGL. The pure
+  `createOrbMotion` model drives staged wake, state weights and attack/release
+  envelopes. No backend protocol or persistence change is required.
 - P8-31 applies the selected smoky glass to existing shell, conversation,
   temporary-workspace, contextual-panel, Factory and Settings surfaces through
   the light/dark semantic tokens in `apps/web/src/styles.css`. Shared headings
@@ -174,9 +178,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Every attempted chat/voice classification emits an allowlisted
   `reflex.decision`: source, addressed, intent, tool (or `none`), confidence
   bucket, completeCommand, executed, bounded reason and latencyMs (0–600,000).
-  Transcripts, titles, view IDs, arguments and results are excluded. Offline
-  tests cover early voice execution and duplicate final decisions; live Jev
-  network latency and the under-1.5-second chat acceptance remain unverified.
+  Jev failures distinguish billing (402), auth (401/403), rate limiting (429),
+  timeout, other HTTP status, invalid answer, and network error. The same
+  allowlisted event records browser and PC planner failures. Transcripts, keys,
+  titles, view IDs, arguments and results are excluded. Choice confidence is
+  calibrated by Jev and gates actions at 0.9; no self-rated Score confidence is
+  requested. Offline tests cover failure types, confidence gates, early voice
+  execution, and duplicate final decisions; live Jev network latency remains
+  unverified.
 - P8-07's lifecycle remains in memory: closing a generated view removes only
   its temporary client entry, while closing an existing view changes only its
   workspace visibility. Neither action modifies conversation or source records.
@@ -731,28 +740,34 @@ between traversal batches. The portable policy returns at most
 Password controls and names that look sensitive are omitted; field values are
 never observed.
 
-Each snapshot has one opaque ID and expires after 30 seconds. Before an action,
-the bridge re-observes the foreground app/window and verifies the selected
-element's runtime ID, role, name, visibility, enabled state, sensitivity, and
-supported control pattern. Only fixed click, type, and small-scroll operations
-are exposed. Jev makes one decision per fresh snapshot, for at most 20 steps or
-30 seconds, with a 1.2-second request timeout; cancellation reaches both the
-planner and bridge. Typed content must be an exact, non-sensitive value quoted
-in Dan's request. Send, delete, pay/payment, purchase, post, push, and overwrite
-actions use the existing P7-03 `computer_use` approval flow and retry the same
-observed element only after approval; missing approval refuses the action.
-Reversible submit, remove, replace, and other controls do not require approval.
-The approval identifies the clicked control or text replacement using a
-bounded app/control label, without including the goal or typed text. Website
-tasks remain on P7-17–P7-19's Chrome-only path, and this tool does not use
-Foundry computer-use.
-in Dan's request. Risky intents and destructive control names use the existing
-P7-03 `computer_use` approval flow and retry the same observed element only
-after approval; only irreversible actions require approval, and missing
-approval refuses the action. The approval identifies
-clicks and text replacements using a bounded control role/name, without
-including the goal or typed text. Browser tasks remain on P7-17–P7-19's
-Chrome-only path, and this tool does not use Foundry computer-use.
+Each snapshot has one opaque ID and expires after 30 seconds. Before a control
+action, the bridge re-observes the foreground app/window and verifies the
+selected element's runtime ID, role, name, visibility, enabled state,
+sensitivity, and supported control pattern. Fixed click, type, small-scroll,
+keyboard, and focused-typing operations are exposed. A keyboard action is a
+sequence of at most four chords, each containing only Ctrl/Alt/Shift/Win
+modifiers and a named key or one printable character. Win+L and
+Ctrl+Alt+Delete are refused; Alt+F4 is available only when Dan explicitly asks
+to close or quit. The Windows provider rechecks the foreground window and
+focused UI Automation element before calling `SendInput`; any keyboard or
+focused-typing action is refused when focus is sensitive or cannot be verified.
+`type_focused` accepts only exact, non-sensitive text quoted in Dan's request.
+Jev makes one decision per fresh snapshot, for at most 20 steps or 30 seconds,
+with a 1.2-second request timeout; cancellation reaches both the planner and
+bridge. Send/delete/pay/purchase/post/push/overwrite actions and irreversible
+keyboard chords (including Delete and Ctrl+Enter) use the existing P7-03
+`computer_use` approval flow; no action is retried until approval, and missing
+approval refuses it. Reversible actions do not require approval. Approval and
+step logs use bounded labels or fixed action metadata without goals, key
+sequences, typed text, screenshots, control data, or UIA values. Website tasks
+remain on P7-17–P7-19's Chrome-only path, and this tool does not use Foundry
+computer-use.
+
+The operation, target, and exact-text questions are Choice questions; the planner
+uses the minimum returned Choice confidence and requires at least 0.9. There is no
+self-rated confidence Score question. Jev billing/auth/rate-limit/timeout/status,
+invalid-answer, and network failures are returned as typed outcomes and recorded
+in `reflex.decision` without the goal, API key, or control data.
 
 Generic tool auditing records only the outcome for this sensitive tool. The
 `pc_act.step` telemetry allow-list exports only step number, fixed action name,
@@ -804,8 +819,13 @@ object IDs under an opaque snapshot ID; the index is never converted to a
 selector or coordinate. An action expires after 30 seconds or when replaced by a
 new snapshot. Immediately before acting, the companion checks that the same node
 is connected and unchanged, remains visible and enabled, and is still the
-topmost element at its center. Click, type, select, scroll and wait are fixed
-operations; the bridge never accepts or evaluates a model-provided script.
+topmost element at its center. Click, type, select, scroll, wait, bounded
+keyboard sequences, and `type_focused` are fixed operations; the bridge never
+accepts or evaluates a model-provided script. Keyboard actions require the
+listed tab to remain the focused Chrome tab, and a fixed page-side probe reports
+only whether `document.activeElement` is sensitive; it never reads the focused
+value. The Windows provider performs the chord/text injection with `SendInput`
+after repeating the foreground and sensitive-focus checks.
 
 Password, payment-card and one-time-code fields are omitted from values and
 refuse typing; code-like numeric and Luhn-valid card-number text is also
@@ -840,16 +860,25 @@ current tab ID, without owning the browser loop.
 
 Each step takes a new snapshot through the registered P7-18 tools and sends one
 Jev request containing the goal, recent actions, page title/URL, and bounded
-visible control table. That request chooses the operation and speculative
-indexed targets for click, type, select, scroll, and wait. The backend accepts
-only a high-confidence choice present in that snapshot; the selected index and
-snapshot ID go unchanged to `pc_browser_act`, where the PC bridge rechecks the
-same DOM node, freshness, visibility and occlusion. Clicks on controls named
-send/delete/pay/payment/purchase/post/push/overwrite still require the existing
-P7-03 approval flow. The Foundry `gpt-5.6-luna` chat deployment with
-reasoning disabled writes a small validated JSON text value only for TYPE; a
-separate JSON check independently verifies Jev's DONE decision against a fresh
-snapshot.
+visible control table. Closed-set Choice questions select the operation,
+indexed targets for click/type/select/scroll/wait, a bounded keyboard sequence,
+or one exact quoted value for `type_focused`. The request includes common
+shortcut hints when the app is recognized; those hints inform selection but do
+not add app-specific execution paths. The backend accepts only a high-confidence
+choice and target/value present in that request; the selected index and snapshot
+ID go unchanged to `pc_browser_act`, where the PC bridge rechecks the same DOM
+node, freshness, visibility and occlusion. Keyboard operations have no element
+target and execute only in the focused Chrome tab. Irreversible clicks and
+keyboard chords use the existing P7-03 approval flow; the Foundry
+`gpt-5.6-luna` chat deployment with reasoning disabled writes a small validated
+JSON text value only for TYPE; a separate JSON check independently verifies
+Jev's DONE decision against a fresh snapshot.
+
+The planner uses the minimum calibrated Choice confidence for the selected
+operation, target, and (for selection) quoted value, requiring at least 0.9;
+there is no self-rated confidence Score question. Typed Jev billing/auth/rate
+limit/timeout/status, invalid-answer, and network failures are recorded in
+`reflex.decision` without the goal, page data, or API key.
 
 Runs stop after 20 steps or 30 seconds, propagate cancellation, and refuse low
 confidence or sensitive requests. Existing P8-16 tool activity events report the
@@ -1599,7 +1628,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Browser connection | The composer orb explicitly connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. Readiness never opens capture: a separate Enable microphone action captures and sends mono 24 kHz PCM. Explicit active/muted protocol events start/stop parallel Speech recognition; reconnect returns to microphone-off readiness. Provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, explicit activation, mute signaling, permission denial, interruption, stop during activation, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
 | Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | Every hosted `jarvis` version carries `voiceLiveCompatible: "true"` metadata and declares both `invocations` (chat) and `invocations_ws` (voice bridge); without them Foundry rejects the wrapper. The client connects to the voice wrapper (`/endpoint/protocols/voice`), waits for `session.created`, and then waits for explicit microphone activation. The wrapper owns its session configuration and greeting; the Bridge Protocol `session.start`/`/diag` warm-up applies only to direct hosted-agent connections. The hash-locked provisioner configures MAI Transcribe (`mai-transcribe`, `da`, phrase list) and Harper (`da-DK`); the backend uses `da-DK` Azure Speech interim hypotheses in parallel while unmuted. The Voice Live final message remains authoritative and reconciles the existing P7-20 ledger. Project names from bounded running-task context augment the default phrase hints. P7-20 briefly switched Danish to `gpt-4o-mini-transcribe`, which broke live Danish sessions on 5 October (L92); Voice Live now uses MAI for both final-transcript paths. Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
 | English session | The backend configures `gpt-realtime-2.1`, `mai-transcribe` input transcription, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. Parallel Azure Speech uses `en-GB` interim hypotheses while unmuted. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
-| Reflex (P7-04) | Chat turns and completed English Voice Live transcripts pass through the backend Jev client (`POST https://api.typesafe.ai/v1/systemone`, `jev-latest`) before the main responder. The client has a 1.2 s timeout, one 429 retry only when `Retry-After` is at most 500 ms, a 256 KiB response cap, and a 0.9 confidence threshold; unavailable or uncertain results fall through. The backend reads `jev-api-key` from Key Vault using its managed identity. A direct call requires Dan's authenticated request, an addressed high-confidence action, no confirmation flag, a registered `reflexSafe` tool, validated arguments, and available audit storage. Safe tool results become trusted handoff instructions so the main model acknowledges but does not repeat the action. | Fake-provider backend and hosted-agent tests cover classification, safe target filtering, fallback, retry, handoff, and final-transcript sequencing. Mock-provider classification measured 0.43 ms; final-transcript-to-response-request measured 1.04 ms offline. Both exclude Jev network latency and first generated audio. Live Jev/Key Vault, Danish voice routing, and Azure Voice Live remain unverified. |
+| Reflex (P7-04) | Chat turns and completed English Voice Live transcripts pass through the backend Jev client (`POST https://api.typesafe.ai/v1/systemone`, `jev-latest`) before the main responder. The client has a 1.2 s timeout, one 429 retry only when `Retry-After` is at most 500 ms, and a 256 KiB response cap. Calibrated Choice confidence gates actions at 0.9; address and complete-command Noul values also use 0.9, while confirmation-required uses 0.5. The minimum of intent and route Choice confidence is the action confidence; there is no self-rated Score question. Billing (402), auth (401/403), rate-limit (429), timeout, other HTTP status, invalid-answer, and network failures are typed and logged in `reflex.decision`; logs never contain the key or transcript. The backend reads `jev-api-key` from Key Vault using its managed identity. A direct call requires Dan's authenticated request, an addressed high-confidence action, no confirmation flag, a registered `reflexSafe` tool, validated arguments, and available audit storage. Safe tool results become trusted handoff instructions so the main model acknowledges but does not repeat the action. | Fake-provider backend tests cover classification, confidence gating, typed failures, safe target filtering, fallback, retry, handoff, and final-transcript sequencing. Live Jev/Key Vault, Danish voice routing, and Azure Voice Live remain unverified. |
 | Streaming clause reflex (P7-20/P7-24) | Voice Live deltas and parallel Azure Speech full interim hypotheses (Foundry AIServices custom subdomain; Entra managed identity; 24 kHz mono PCM) enter the same bounded stable-clause and per-turn Jev path (up to eight requests per turn), with prior executions attached. Speech recognition runs only while the mic is active and unmuted; `da-DK`/`en-GB` use fixed phrase hints plus up to 20 running-project names. Only high-confidence, complete partial actions (currently pause, allow-listed Edge launch, and HTTP(S) open/navigation) execute early. Unsafe and confirmation-requiring actions wait for the Voice Live final. That final remains the source of truth: it replaces an early message, reconciles the in-memory ledger and attempts supported undo on contradiction. No audio or interim hypotheses are stored; Speech failure logs `voice.partials_unavailable` and leaves final-transcript reflexes working. Browser launch/navigation uses the existing PC bridge `pc_open` executor pending P7-17. | Fake-recognizer and fake-stream tests cover action-before-final, duplicate suppression, confirmation gating, contradiction undo, final message replacement, Speech failure fallback and mute stop. `voice.reflex_metrics` records Voice Live delta count, Speech hypothesis count, stable-clause count, first-action latency, speech-stopped-to-first-transcript-word, and speech-stopped-to-first-output-audio. These are offline fake timings, not live acoustic measurements. Live account RBAC, Speech delivery, Jev latency, first spoken-word timing and Danish/English PC action timing remain coordinator acceptance. |
 | Live partial Speech STT (P7-24) | Azure Speech continuous recognition reuses the Foundry AIServices account's custom subdomain and backend managed identity; the existing separate Speech F0 account remains for Teams text-to-speech. Voice phrases are Jarvis, Google, København, Chrome, GitHub, Copilot, Codex and Teams, plus bounded running-project names. Recognition ends on mute, voice end or disconnect; no key or audio is stored. | Fake recognizer lifecycle tests and local backend/web checks pass. Azure retail price API reference dated 5 October 2026: Azure Speech-to-text S1 is $1.00 per audio hour; this is a list-price reference, not a verified account meter. Live Danish/English recognition and managed-identity authorization remain unverified. |
 | English end-of-turn detection (P7-04) | Voice Live uses `azure_semantic_vad_en`, threshold `0.5`, 300 ms prefix padding, 700 ms silence duration, and `create_response: false`; after the final transcription, the relay reconciles the turn ledger and explicitly requests the voice response. | Relay tests verify semantic VAD settings and response ordering. Live Voice Live support/latency remains unverified. |

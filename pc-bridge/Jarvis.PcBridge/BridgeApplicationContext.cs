@@ -72,14 +72,16 @@ public sealed class BridgeApplicationContext : ApplicationContext
             _browserToggle.Enabled = true;
             _controlToggle.Enabled = true;
             _extensionPort = new NativeMessagingBrowserPort();
+            var keyboardExecutor = new KeyboardExecutor(new WindowsKeyboardProvider());
             _browserExecutor = new BrowserExecutor(() => _settings?.BrowserEnabled == true,
                 WindowsCommandExecutor.ReadActiveWindowTitle,
-                extensionPort: _extensionPort);
+                extensionPort: _extensionPort,
+                keyboardExecutor: keyboardExecutor);
             _tokenProvider = await BridgeTokenProvider.CreateAsync(settings, _stopping.Token);
             var client = new BridgeClient(
                 settings,
                 _tokenProvider,
-                new WindowsCommandExecutor(),
+                new WindowsCommandExecutor(keyboardExecutor),
                 _browserExecutor,
                 () => _settings?.ControlPaused == true);
             _bridgeClient = client;

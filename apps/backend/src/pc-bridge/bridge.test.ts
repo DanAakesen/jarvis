@@ -84,7 +84,7 @@ async function connectBridge(url: string, token = bridgeToken): Promise<WebSocke
 
 async function callTool(
   app: ReturnType<typeof buildApp>,
-  tool: 'pc_open' | 'codex_prompt' | 'pc_media' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
+  tool: 'pc_open' | 'codex_prompt' | 'pc_close' | 'pc_media' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
   payload: Record<string, unknown>,
 ) {
   return app.inject({
@@ -231,6 +231,35 @@ describe('authenticated PC bridge protocol', () => {
     },
   );
 
+  it('closes an app by name through the bridge and refuses when no window matches', async () => {
+    const runConfirmed = vi.fn(async (_summary: string, operation: () => Promise<unknown>) => operation());
+    const { app, record } = fixture({ runConfirmed });
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const commands: Array<Record<string, unknown>> = [];
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      commands.push(command);
+      const name = (command.arguments as Record<string, unknown>).app;
+      bridge.send(JSON.stringify(name === 'Notepad'
+        ? { id: command.id, type: 'error', error: 'not_found' }
+        : { id: command.id, type: 'result', result: { closing: true, windows: 1 } }));
+    });
+
+    const closed = await callTool(app, 'pc_close', { app: 'Visual Studio Code - Insiders' });
+    expect(closed.json()).toMatchObject({ outcome: 'ok', result: { closing: true, windows: 1 } });
+    const missing = await callTool(app, 'pc_close', { app: 'Notepad' });
+    expect(missing.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'No open window of that app was found; nothing was closed.' },
+    });
+    expect(commands).toMatchObject([
+      { command: 'close_app', arguments: { app: 'Visual Studio Code - Insiders' } },
+      { command: 'close_app', arguments: { app: 'Notepad' } },
+    ]);
+    expect(runConfirmed).not.toHaveBeenCalled();
+    expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['ok', 'refused']);
+  });
   it('runs pc_act through the authenticated bridge and redacts its audit and step activity', async () => {
     const onPcActStep = vi.fn();
     const planner: PcActPlanner = {
@@ -487,6 +516,67 @@ describe('authenticated PC bridge protocol', () => {
       ]);
       expect(record.mock.calls.map(([call]) => call.result)).toEqual([
         { redacted: true }, { redacted: true }, { redacted: true }, { redacted: true },
+      ]);
+    });
+
+    it('routes keyboard and focused-text actions through the bridge with confirmation only when irreversible', async () => {
+      const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+      const { app, record } = fixture({ runConfirmed });
+      const url = await listen(app);
+      const bridge = await connectBridge(url);
+      const commands: Array<Record<string, unknown>> = [];
+      bridge.on('message', (data) => {
+        const command = JSON.parse(data.toString()) as Record<string, unknown>;
+        commands.push(command);
+        const action = (command.arguments as Record<string, unknown>).action;
+        bridge.send(JSON.stringify({
+          id: command.id,
+          type: 'result',
+          result: { acted: true, action },
+        }));
+      });
+
+      const keys = await callTool(app, 'pc_browser_act', {
+        tabId: 'tab_1',
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        action: 'keys',
+        keys: ['Ctrl+Enter'],
+        closeIntent: false,
+        requiresConfirmation: true,
+      });
+      const typed = await callTool(app, 'pc_browser_act', {
+        tabId: 'tab_1',
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        action: 'type_focused',
+        text: 'Daft Punk',
+      });
+
+      expect(keys.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'keys' } });
+      expect(typed.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'type_focused' } });
+      expect(runConfirmed).toHaveBeenCalledWith(
+        'Send an irreversible keyboard action in Chrome.',
+        expect.any(Function),
+        expect.any(AbortSignal),
+      );
+      expect(commands.map(({ arguments: arguments_ }) => arguments_)).toEqual([
+        {
+          tabId: 'tab_1',
+          snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+          action: 'keys',
+          keys: ['Ctrl+Enter'],
+          closeIntent: false,
+          confirmed: true,
+        },
+        {
+          tabId: 'tab_1',
+          snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+          action: 'type_focused',
+          text: 'Daft Punk',
+        },
+      ]);
+      expect(record.mock.calls.map(([call]) => call.arguments)).toEqual([
+        { redacted: true },
+        { redacted: true },
       ]);
     });
 

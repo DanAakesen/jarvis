@@ -1,5 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
+import type { KeySequence } from '../core/keyboard-actions.js';
 import {
   createJevPcActPlanner,
   runPcAct,
@@ -22,12 +23,18 @@ function request(principal: 'agent' | 'other' = 'agent'): FastifyRequest {
   } as unknown as FastifyRequest;
 }
 
-function decision(operation: PcActDecision['operation'], targetIndex?: number, text?: string): PcActDecision {
+function decision(
+  operation: PcActDecision['operation'],
+  targetIndex?: number,
+  text?: string,
+  keys?: KeySequence,
+): PcActDecision {
   return {
     operation,
     confidence: 0.99,
     ...(targetIndex === undefined ? {} : { targetIndex }),
     ...(text === undefined ? {} : { text }),
+    ...(keys === undefined ? {} : { keys }),
   };
 }
 
@@ -51,7 +58,6 @@ describe('pc_act Jev planner', () => {
       operation: { type: 'choice', choice: 'type', confidence: 0.99 },
       target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
       text_value: { type: 'choice', choice: 'value_0', confidence: 0.99 },
-      confidence: { type: 'score', score: 0.99 },
     }));
     const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
 
@@ -72,6 +78,7 @@ describe('pc_act Jev planner', () => {
     expect(body.model).toBe('jev-latest');
     expect(JSON.stringify(body)).toContain('Jarvis issue 205');
     expect(JSON.stringify(body)).not.toContain('value:');
+    expect(body.questions).not.toHaveProperty('confidence');
     expect(init?.redirect).toBe('error');
   });
 
@@ -93,6 +100,125 @@ describe('pc_act Jev planner', () => {
     }, new AbortController().signal);
 
     expect(result).toEqual({ operation: 'type', confidence: 0.99, targetIndex: 0, text: prompt });
+  });
+
+  it.each([
+    [402, 'billing'],
+    [401, 'auth'],
+    [429, 'rate_limited'],
+    [503, 'http_503'],
+  ] as const)('returns typed Jev HTTP failure %s as %s', async (status, failure) => {
+    const planner = createJevPcActPlanner(async () => 'fake-key', async () => new Response(null, { status }));
+
+    await expect(planner.decide({
+      goal: 'Click the open button',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ failure });
+  });
+
+  it('uses operation and target Choice confidence for the PC confidence gate', async () => {
+    const planner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+      operation: { type: 'choice', choice: 'click', confidence: 0.99 },
+      target: { type: 'choice', choice: 'element_0', confidence: 0.89 },
+    }));
+
+    await expect(planner.decide({
+      goal: 'Click the open button',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'click', confidence: 0.89,
+    });
+  });
+
+  it('returns invalid_answer for an unlisted text Choice', async () => {
+    const planner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+      operation: { type: 'choice', choice: 'type', confidence: 0.99 },
+      target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
+      text_value: { type: 'choice', choice: 'value_9', confidence: 0.99 },
+    }));
+
+    await expect(planner.decide({
+      goal: 'Enter "Jarvis issue 205"',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ failure: 'invalid_answer' });
+  });
+
+  it('maps a closed-set keyboard Choice and includes app-specific shortcut hints', async () => {
+    const fetcher = vi.fn(async () => jevResponse({
+      operation: { type: 'choice', choice: 'keys', confidence: 0.99 },
+      key_sequence: { type: 'choice', choice: 'keys_0', confidence: 0.97 },
+    }));
+    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+
+    await expect(planner.decide({
+      goal: 'Use Ctrl+P to open a file',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'keys', confidence: 0.97, keys: ['Ctrl+P'],
+    });
+    const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)) as {
+      state: { commonShortcuts: string[] };
+      questions: { key_sequence: { criteria: Record<string, string> } };
+    };
+    expect(body.state.commonShortcuts).toContain('Ctrl+P opens Quick Open');
+    expect(body.questions.key_sequence.criteria.keys_0).toBe('Ctrl+P');
+
+    const laterChoicePlanner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+      operation: { type: 'choice', choice: 'keys', confidence: 0.99 },
+      key_sequence: { type: 'choice', choice: 'keys_10', confidence: 0.99 },
+    }));
+    await expect(laterChoicePlanner.decide({
+      goal: 'Press Escape',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toMatchObject({ operation: 'keys', keys: ['Escape'] });
+  });
+
+  it('maps type_focused only to an exact quoted non-sensitive Choice value', async () => {
+    const planner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+      operation: { type: 'choice', choice: 'type_focused', confidence: 0.99 },
+      text_value: { type: 'choice', choice: 'value_0', confidence: 0.98 },
+    }));
+
+    await expect(planner.decide({
+      goal: 'Type "Daft Punk" in the focused search box',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'type_focused', confidence: 0.98, text: 'Daft Punk',
+    });
+  });
+
+  it('logs typed PC planner failures without the goal or Jev key', async () => {
+    const log = { info: vi.fn() };
+    const req = {
+      ...request(),
+      log,
+      routeOptions: { url: '/conversation/:sessionId/messages' },
+    } as unknown as FastifyRequest;
+
+    await expect(runPcAct(
+      { goal: 'Open this private project' },
+      req,
+      new AbortController().signal,
+      bridge(),
+      { planner: { decide: vi.fn(async () => ({ failure: 'auth' as const })) } },
+    )).rejects.toThrow(/valid PC decision/u);
+    expect(log.info).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'chat',
+      reason: 'auth',
+    }), 'reflex.decision');
+    expect(JSON.stringify(log.info.mock.calls)).not.toContain('private project');
   });
 
   it('refuses sensitive goals and missing Jev keys without making a request', async () => {
@@ -234,6 +360,61 @@ describe('pc_act bounded Windows control loop', () => {
       confirmed: false,
     }), expect.any(AbortSignal));
     expect(runConfirmed).not.toHaveBeenCalled();
+  });
+
+  it('confirms irreversible keyboard chords and keeps chord/text content out of step logs', async () => {
+    const pcBridge = bridge();
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('keys', undefined, undefined, ['Ctrl+Enter']))
+      .mockResolvedValueOnce(decision('done')) };
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const onStep = vi.fn();
+
+    const result = await runPcAct(
+      { goal: 'Send the message with Ctrl+Enter' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, runConfirmed, onStep },
+    );
+
+    expect(result.status).toBe('completed');
+    expect(runConfirmed).toHaveBeenCalledWith(
+      'Send an irreversible keyboard action in vscode.',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+    expect(pcBridge.act).toHaveBeenCalledWith({
+      snapshotId: snapshot.snapshotId,
+      action: 'keys',
+      keys: ['Ctrl+Enter'],
+      confirmed: true,
+      closeIntent: false,
+    }, expect.any(AbortSignal));
+    expect(JSON.stringify(onStep.mock.calls)).not.toMatch(/Ctrl\+Enter|message/iu);
+  });
+
+  it('types explicitly quoted text into the focused Windows control without logging its value', async () => {
+    const pcBridge = bridge();
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('type_focused', undefined, 'Daft Punk'))
+      .mockResolvedValueOnce(decision('done')) };
+    const onStep = vi.fn();
+
+    await runPcAct(
+      { goal: 'Type "Daft Punk" in the focused search field' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, onStep },
+    );
+
+    expect(pcBridge.act).toHaveBeenCalledWith({
+      snapshotId: snapshot.snapshotId,
+      action: 'type_focused',
+      text: 'Daft Punk',
+    }, expect.any(AbortSignal));
+    expect(JSON.stringify(onStep.mock.calls)).not.toContain('Daft Punk');
   });
 
   it('does not confirm reversible submit, remove, or replace controls', async () => {
@@ -384,6 +565,16 @@ describe('pc_act bounded Windows control loop', () => {
       { planner: { decide: vi.fn().mockResolvedValue(decision('type', 0, 'new title')) } },
     )).rejects.toThrow(/approval service is unavailable/u);
     expect(typeBridge.act).not.toHaveBeenCalled();
+
+    const keysBridge = bridge();
+    await expect(runPcAct(
+      { goal: 'Send the message with Ctrl+Enter' },
+      request(),
+      new AbortController().signal,
+      keysBridge,
+      { planner: { decide: vi.fn().mockResolvedValue(decision('keys', undefined, undefined, ['Ctrl+Enter'])) } },
+    )).rejects.toThrow(/approval service is unavailable/u);
+    expect(keysBridge.act).not.toHaveBeenCalled();
   });
 
   it('refuses injected text that was not explicitly quoted and refuses unverified callers', async () => {

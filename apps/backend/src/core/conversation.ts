@@ -15,8 +15,10 @@ import {
   logReflexDecision,
   type ReflexClassifier,
   type ReflexActionResult,
+  type ReflexClassification,
   type ReflexTarget,
 } from './reflex.js';
+import { isJevFailure } from './jev.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const chatReflexBudgetMs = 800;
@@ -161,8 +163,9 @@ async function runChatReflex(
   const classificationSignal = AbortSignal.any([signal, budgetController.signal]);
   const startedAt = performance.now();
   let attempted = false;
-  let classification: Awaited<ReturnType<ReflexClassifier['classify']>> = null;
+  let classification: ReflexClassification | null = null;
   let action: ReflexActionResult | null = null;
+  let failureReason: string | undefined;
   try {
     const targetsStartedAt = performance.now();
     let targets: ReflexTarget[];
@@ -183,7 +186,8 @@ async function runChatReflex(
         classificationSignal,
       );
       if (result === undefined) return null;
-      classification = result;
+      if (isJevFailure(result)) failureReason = result.failure;
+      else classification = result;
     } finally {
       logChatLatency(request, 'jev', jevStartedAt);
     }
@@ -194,7 +198,9 @@ async function runChatReflex(
     // Reflex is best effort; the agent stream owns the chat response.
     return null;
   } finally {
-    if (attempted) logReflexDecision(request, classification, 'chat', startedAt, classificationSignal, action);
+    if (attempted) {
+      logReflexDecision(request, classification, 'chat', startedAt, classificationSignal, action, failureReason);
+    }
     clearTimeout(timeout);
   }
 }

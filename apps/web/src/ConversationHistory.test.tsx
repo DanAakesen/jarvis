@@ -28,7 +28,9 @@ vi.mock('./voice-client', () => ({
     constructor(private readonly options: VoiceClientOptions) { voiceSessions.push(options); }
     start() { this.options.onStatus('ready', 'Microphone is off.'); }
     stop() { this.options.onStatus('stopped', 'Voice is off.'); this.options.onSessionEnded?.(); }
-    enableMicrophone = vi.fn(async () => {});
+    retryMicrophone = vi.fn(async () => {});
+    playbackLevel = () => 0;
+    inputLevel = () => 0;
     setMuted = vi.fn();
   },
 }));
@@ -902,12 +904,13 @@ describe('ConversationHistory', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
 
     act(() => {
+      voice.onMicrophoneState?.('live');
       voice.onStatus('speaking', 'Jarvis is speaking.');
-      voice.onStatus('listening', 'Listening after interruption.');
+      voice.onStatus('listening', 'Listening for your voice.');
     });
     const statusLabel = screen.getByText('Listening');
     expect(statusLabel.closest('[role="status"]')?.getAttribute('aria-atomic')).toBe('true');
-    expect(screen.getByText('Listening after interruption.')).not.toBeNull();
+    expect(screen.getByText('Listening for your voice.')).not.toBeNull();
     expect(onVoiceActiveChange).toHaveBeenCalledTimes(1);
 
     const menu = document.createElement('details');
