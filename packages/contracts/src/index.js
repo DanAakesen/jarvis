@@ -1,10 +1,11 @@
 export const generatedViewVersion = 1;
 export const generatedViewRenderers = Object.freeze([
-  'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image',
+  'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
 ]);
 export const generatedViewActionTypes = Object.freeze(['open-route', 'open-link', 'call-tool', 'window']);
 
 const maxBytes = 256 * 1024;
+export const htmlArtifactByteLimit = 512 * 1024;
 const rowLimit = 500;
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const dateTime = { type: 'string', format: 'date-time' };
@@ -72,7 +73,7 @@ const listItem = object({
   action: { oneOf: [routeActionSchema, externalLinkActionSchema] },
 }, ['title']);
 const sourceSchema = object({
-  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation'] },
+  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'research'] },
   status: { type: 'string', enum: ['complete', 'partial', 'unavailable'] },
   updatedAt: dateTime,
   reason: string(500),
@@ -88,6 +89,37 @@ const webResearchSourceSchema = object({
   url: { type: 'string', format: 'uri', maxLength: 2_048, pattern: '^https://' },
   retrievedAt: dateTime,
 });
+const htmlArtifactSourceSchema = object({
+  title: string(200, 1),
+  url: { type: 'string', format: 'uri', maxLength: 2_048, pattern: '^https://' },
+});
+export const htmlArtifactSchema = Object.freeze(object({
+  id: { type: 'string', format: 'uuid' },
+  kind: { const: 'html' },
+  title: string(200, 1),
+  html: string(htmlArtifactByteLimit, 1),
+  sources: array(htmlArtifactSourceSchema, 50),
+  createdAt: dateTime,
+  pinned: { type: 'boolean' },
+}));
+const htmlArtifactFrameSchemaValue = object({
+  widthPx: { type: 'integer', minimum: 1, maximum: 8192 },
+  heightPx: { type: 'integer', minimum: 1, maximum: 8192 },
+  device: { enum: ['desktop', 'phone'] },
+  theme: { enum: ['dark', 'light'] },
+  reducedMotion: { type: 'boolean' },
+  density: { enum: ['compact', 'comfortable', 'spacious'] },
+  designTokens: {
+    type: 'object',
+    propertyNames: { pattern: '^--[a-z][a-z0-9-]{0,63}$' },
+    additionalProperties: string(200, 1),
+    maxProperties: 64,
+  },
+  fonts: object({ body: string(120, 1), heading: string(120, 1), mono: string(120, 1) }),
+  layout: { enum: ['tiled', 'layered'] },
+  pinned: { type: 'boolean' },
+});
+export const htmlArtifactFrameSchema = Object.freeze(htmlArtifactFrameSchemaValue);
 export const webResearchResultSchema = Object.freeze(object({
   answer: string(20_000, 1),
   sources: array(webResearchSourceSchema, 10),
@@ -134,6 +166,7 @@ const dataSchemas = {
       alt: string(500, 1),
     }), 10),
   }),
+  'html-app': object({ artifactId: { type: 'string', format: 'uuid' } }),
 };
 
 export const generatedViewSchema = Object.freeze({
@@ -263,7 +296,7 @@ function validAction(value, registeredTools) {
 }
 
 function validSource(source) {
-  if (!isObject(source) || !['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation'].includes(source.id) ||
+  if (!isObject(source) || !['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'research'].includes(source.id) ||
     !['complete', 'partial', 'unavailable'].includes(source.status) ||
     Object.keys(source).some((key) => !['id', 'status', 'updatedAt', 'reason', 'page'].includes(key))) return false;
   if (source.updatedAt !== undefined && (typeof source.updatedAt !== 'string' || Number.isNaN(Date.parse(source.updatedAt)))) return false;
@@ -351,6 +384,10 @@ function validData(renderer, data, trustedBlobHost) {
         data.images.length <= 10 && data.images.every((image) => isObject(image) &&
           Object.keys(image).every((key) => ['url', 'alt'].includes(key)) &&
           safeHttpsUrl(image.url, imageHosts, trustedBlobHost) && boundedString(image.alt, 500, 1));
+    case 'html-app':
+      return Object.keys(data).length === 1 && Object.keys(data)[0] === 'artifactId' &&
+        typeof data.artifactId === 'string' &&
+        /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(data.artifactId);
     default:
       return false;
   }
@@ -404,6 +441,79 @@ export function isWebResearchResult(value) {
       return false;
     }
   });
+}
+
+function validHtml(value) {
+  if (!boundedString(value, htmlArtifactByteLimit, 1) ||
+      new TextEncoder().encode(value).byteLength > htmlArtifactByteLimit ||
+      /<base\b/i.test(value) || /<script\b[^>]*\bsrc\s*=/i.test(value)) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (next < 0xdc00 || next > 0xdfff) return false;
+      index += 1;
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function validIsoDateTime(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
+    Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+}
+
+export function isHtmlArtifact(value) {
+  if (!isObject(value) || Object.keys(value).some((key) =>
+    !['id', 'kind', 'title', 'html', 'sources', 'createdAt', 'pinned'].includes(key)) ||
+    !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value.id) ||
+    value.kind !== 'html' || !boundedString(value.title, 200, 1) ||
+    value.title !== value.title.trim() || !validHtml(value.html) ||
+    !Array.isArray(value.sources) || value.sources.length > 50 ||
+    !validIsoDateTime(value.createdAt) ||
+    typeof value.pinned !== 'boolean') return false;
+  const urls = new Set();
+  return value.sources.every((source) => {
+    if (!isObject(source) || Object.keys(source).some((key) => !['title', 'url'].includes(key)) ||
+        !boundedString(source.title, 200, 1) || source.title !== source.title.trim() ||
+        !boundedString(source.url, 2_048, 1) || source.url !== source.url.trim()) return false;
+    try {
+      const url = new URL(source.url);
+      if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.port ||
+          urls.has(url.href)) return false;
+      urls.add(url.href);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+export function isHtmlArtifactFrame(value) {
+  if (!isObject(value) ||
+      Object.keys(value).some((key) => ![
+        'widthPx', 'heightPx', 'device', 'theme', 'reducedMotion', 'density',
+        'designTokens', 'fonts', 'layout', 'pinned',
+      ].includes(key)) ||
+      !Number.isInteger(value.widthPx) || value.widthPx < 1 || value.widthPx > 8192 ||
+      !Number.isInteger(value.heightPx) || value.heightPx < 1 || value.heightPx > 8192 ||
+      !['desktop', 'phone'].includes(value.device) || !['dark', 'light'].includes(value.theme) ||
+      typeof value.reducedMotion !== 'boolean' ||
+      !['compact', 'comfortable', 'spacious'].includes(value.density) ||
+      !isObject(value.designTokens) || Object.keys(value.designTokens).length > 64 ||
+      Object.entries(value.designTokens).some(([key, token]) =>
+        !/^--[a-z][a-z0-9-]{0,63}$/.test(key) || !boundedString(token, 200, 1)) ||
+      !isObject(value.fonts) || Object.keys(value.fonts).length !== 3 ||
+      !['body', 'heading', 'mono'].every((key) => boundedString(value.fonts[key], 120, 1)) ||
+      Object.keys(value.fonts).some((key) => !['body', 'heading', 'mono'].includes(key)) ||
+      !['tiled', 'layered'].includes(value.layout) || typeof value.pinned !== 'boolean') return false;
+  return true;
+}
+
+export function isValidHtmlArtifactHtml(value) {
+  return validHtml(value);
 }
 
 export function isWorkspaceCommand(value, options = {}) {

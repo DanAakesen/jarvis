@@ -1,7 +1,8 @@
 export const generatedViewVersion: 1;
 export const generatedViewRenderers: readonly [
-  'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image',
+  'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
 ];
+export const htmlArtifactByteLimit: 524288;
 export const generatedViewActionTypes: readonly ['open-route', 'open-link', 'call-tool', 'window'];
 
 export type GeneratedViewRenderer = typeof generatedViewRenderers[number];
@@ -15,7 +16,7 @@ export interface GeneratedViewPage {
 }
 
 export interface GeneratedViewSource {
-  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation';
+  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation' | 'research';
   status: 'complete' | 'partial' | 'unavailable';
   updatedAt?: string;
   reason?: string;
@@ -96,7 +97,36 @@ export type GeneratedView =
     renderer: 'status';
     data: { label: string; value?: string; state: 'ok' | 'warning' | 'error' | 'unknown' };
   })
-  | (GeneratedViewBase & { renderer: 'image'; data: { images: { url: string; alt: string }[] } });
+  | (GeneratedViewBase & { renderer: 'image'; data: { images: { url: string; alt: string }[] } })
+  | (GeneratedViewBase & { renderer: 'html-app'; data: { artifactId: string } });
+
+export interface HtmlArtifactSource {
+  title: string;
+  url: string;
+}
+
+export interface HtmlArtifact {
+  id: string;
+  kind: 'html';
+  title: string;
+  html: string;
+  sources: HtmlArtifactSource[];
+  createdAt: string;
+  pinned: boolean;
+}
+
+export interface HtmlArtifactFrame {
+  widthPx: number;
+  heightPx: number;
+  device: 'desktop' | 'phone';
+  theme: 'dark' | 'light';
+  reducedMotion: boolean;
+  density: 'compact' | 'comfortable' | 'spacious';
+  designTokens: Record<string, string>;
+  fonts: { body: string; heading: string; mono: string };
+  layout: 'tiled' | 'layered';
+  pinned: boolean;
+}
 
 export interface WorkspaceSnapshot {
   windows: readonly { viewId: string; title: string }[];
@@ -148,6 +178,11 @@ export type JarvisActivityEvent =
 export function isJarvisActivityEvent(value: unknown): value is JarvisActivityEvent;
 
 export const generatedViewSchema: Readonly<Record<string, unknown>>;
+export const htmlArtifactSchema: Readonly<Record<string, unknown>>;
+export const htmlArtifactFrameSchema: Readonly<Record<string, unknown>>;
+export function isHtmlArtifact(value: unknown): value is HtmlArtifact;
+export function isHtmlArtifactFrame(value: unknown): value is HtmlArtifactFrame;
+export function isValidHtmlArtifactHtml(value: unknown): value is string;
 export function isGeneratedView(
   value: unknown,
   options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },

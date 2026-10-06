@@ -4,7 +4,13 @@ import {
   generatedViewActionTypes,
   generatedViewRenderers,
   generatedViewSchema,
+  htmlArtifactByteLimit,
+  htmlArtifactFrameSchema,
+  htmlArtifactSchema,
+  isHtmlArtifact,
+  isHtmlArtifactFrame,
   isGeneratedView,
+  isValidHtmlArtifactHtml,
   isJarvisActivityEvent,
   isWebResearchResult,
   isWorkspaceCommand,
@@ -73,6 +79,46 @@ test('web research result schema and validator accept bounded source-linked resu
   }), false);
 });
 
+test('HTML artifacts and frames enforce the shared bounded security contract', () => {
+  const artifact = {
+    id: '12345678-1234-4234-8234-123456789abc',
+    kind: 'html',
+    title: 'Research report',
+    html: '<!doctype html><h1>Findings</h1><script>parent.postMessage({type:"pin"},"*")</script>',
+    sources: [{ title: 'Primary source', url: 'https://example.com/report' }],
+    createdAt: '2026-10-06T11:00:00.000Z',
+    pinned: false,
+  };
+  const frame = {
+    widthPx: 640,
+    heightPx: 480,
+    device: 'desktop',
+    theme: 'dark',
+    reducedMotion: false,
+    density: 'comfortable',
+    designTokens: { '--surface': '#101721', '--text': '#f3fff9' },
+    fonts: { body: 'system-ui, sans-serif', heading: 'system-ui, sans-serif', mono: 'monospace' },
+    layout: 'tiled',
+    pinned: false,
+  };
+
+  assert.deepEqual(htmlArtifactSchema.required, ['id', 'kind', 'title', 'html', 'sources', 'createdAt', 'pinned']);
+  assert.deepEqual(htmlArtifactFrameSchema.required, Object.keys(frame));
+  assert.equal(isHtmlArtifact(artifact), true);
+  assert.equal(isValidHtmlArtifactHtml('é'.repeat(htmlArtifactByteLimit / 2)), true);
+  assert.equal(isValidHtmlArtifactHtml('é'.repeat(htmlArtifactByteLimit / 2 + 1)), false);
+  assert.equal(isValidHtmlArtifactHtml('<script src="https://example.com/x.js"></script>'), false);
+  assert.equal(isValidHtmlArtifactHtml('<base href="https://example.com/">'), false);
+  assert.equal(isHtmlArtifact({ ...artifact, sources: Array.from({ length: 51 }, () => artifact.sources[0]) }), false);
+  assert.equal(isHtmlArtifact({
+    ...artifact, sources: [{ title: 'Unsafe', url: 'https://user@example.com/report' }],
+  }), false);
+  assert.equal(isHtmlArtifact({ ...artifact, createdAt: 'October 6, 2026' }), false);
+  assert.equal(isHtmlArtifactFrame(frame), true);
+  assert.equal(isHtmlArtifactFrame({ ...frame, designTokens: { 'background-image': 'url(https://evil)' } }), false);
+  assert.equal(isHtmlArtifactFrame({ ...frame, widthPx: Number.POSITIVE_INFINITY }), false);
+});
+
 test('rejects malformed activity and any extra payload that could carry private data', () => {
   const activity = { type: 'thinking', activityId: '12345678-1234-4234-8234-123456789abc', source: 'chat' };
   assert.equal(isJarvisActivityEvent({ ...activity, message: 'private transcript' }), false);
@@ -112,6 +158,7 @@ test('accepts each allowlisted renderer and action without interpreting its cont
     { renderer: 'task-card', data: { id: '42', title: 'Task', state: 'Running' } },
     { renderer: 'status', data: { label: 'Backend', state: 'ok' } },
     { renderer: 'image', data: { images: [{ url: 'https://github.com/example/task.png', alt: 'Task' }] } },
+    { renderer: 'html-app', data: { artifactId: '12345678-1234-4234-8234-123456789abc' } },
   ];
   for (const view of views) assert.equal(isGeneratedView(listView(view)), true, view.renderer);
   assert.equal(isGeneratedView(listView({
