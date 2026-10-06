@@ -1,5 +1,5 @@
 import { isWebResearchResult, type WebResearchResult, type WebResearchSource } from '@jarvis/contracts';
-import type { FoundryClient } from '../foundry/client.js';
+import type { CodexToolName, FoundryClient } from '../foundry/client.js';
 import type { BackendModule } from '../modules.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
@@ -13,7 +13,7 @@ const toolTimeoutMs = 305_000;
 const pollIntervalMs = 1_000;
 const cleanupTimeoutMs = 5_000;
 
-type WebResearchClient = Pick<FoundryClient, 'startCodexTool' | 'status' | 'cancel' | 'deleteSession'>;
+export type WebResearchClient = Pick<FoundryClient, 'startCodexTool' | 'status' | 'cancel' | 'deleteSession'>;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -63,15 +63,18 @@ async function cleanup(client: WebResearchClient, invocationId: string, sessionI
   await client.deleteSession(sessionId, { signal }).catch(() => undefined);
 }
 
-async function runResearch(
+export async function runCodexToolResult<T>(
   client: WebResearchClient,
+  tool: CodexToolName,
   query: string,
   model: string,
   signal: AbortSignal,
   timeoutMs: number,
   pollInterval: number,
-) {
-  const accepted = await client.startCodexTool('web_research', query, model, { signal });
+  parse: (value: unknown) => T,
+): Promise<T> {
+  const name = tool === 'web_research' ? 'Web research' : 'HTML report generation';
+  const accepted = await client.startCodexTool(tool, query, model, { signal });
   const deadline = Date.now() + timeoutMs;
   let terminal = false;
   try {
@@ -80,19 +83,19 @@ async function runResearch(
       const snapshot = await client.status(accepted.invocationId, { signal });
       if (snapshot.status === 'completed') {
         terminal = true;
-        if (snapshot.result === null) throw new ToolFailure('Web research completed without a result.');
-        return resultFrom(snapshot.result);
+        if (snapshot.result === null) throw new ToolFailure(`${name} completed without a result.`);
+        return parse(snapshot.result);
       }
       if (['failed', 'cancelled', 'interrupted', 'needs_attention', 'unknown'].includes(snapshot.status)) {
         terminal = true;
         if (snapshot.error === 'Codex usage limit reached') {
           throw new ToolRefusal('Codex usage limit reached.');
         }
-        throw new ToolFailure('Web research could not complete.');
+        throw new ToolFailure(`${name} could not complete.`);
       }
       await delay(Math.min(pollInterval, deadline - Date.now()), signal);
     }
-    throw new ToolFailure('Web research timed out.');
+    throw new ToolFailure(`${name} timed out.`);
   } finally {
     await cleanup(client, accepted.invocationId, accepted.sessionId, !terminal);
   }
@@ -120,7 +123,9 @@ export function createWebResearchModule(
           throw new ToolFailure('A valid web research query is required.');
         }
         try {
-          return await runResearch(clientFor(), input.query, model, signal, timeoutMs, pollInterval);
+          return await runCodexToolResult(
+            clientFor(), 'web_research', input.query, model, signal, timeoutMs, pollInterval, resultFrom,
+          );
         } catch (error) {
           if (error instanceof ToolFailure || error instanceof ToolRefusal) throw error;
           if (signal.aborted) throw error;
