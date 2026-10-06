@@ -54,6 +54,9 @@ public static class BridgeProtocol
         return response;
     }
 
+    public static byte[] ControlState(bool paused) =>
+        JsonSerializer.SerializeToUtf8Bytes(new { type = "status", controlPaused = paused }, JsonOptions);
+
     public static byte[] Failure(string id, string error) =>
         JsonSerializer.SerializeToUtf8Bytes(new BridgeResponse(id, "error", Error: error), JsonOptions);
 }

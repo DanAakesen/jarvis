@@ -51,7 +51,6 @@ describe('pc_act Jev planner', () => {
       operation: { type: 'choice', choice: 'type', confidence: 0.99 },
       target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
       text_value: { type: 'choice', choice: 'value_0', confidence: 0.99 },
-      confidence: { type: 'score', score: 0.99 },
     }));
     const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
 
@@ -72,7 +71,77 @@ describe('pc_act Jev planner', () => {
     expect(body.model).toBe('jev-latest');
     expect(JSON.stringify(body)).toContain('Jarvis issue 205');
     expect(JSON.stringify(body)).not.toContain('value:');
+    expect(body.questions).not.toHaveProperty('confidence');
     expect(init?.redirect).toBe('error');
+  });
+
+  it.each([
+    [402, 'billing'],
+    [401, 'auth'],
+    [429, 'rate_limited'],
+    [503, 'http_503'],
+  ] as const)('returns typed Jev HTTP failure %s as %s', async (status, failure) => {
+    const planner = createJevPcActPlanner(async () => 'fake-key', async () => new Response(null, { status }));
+
+    await expect(planner.decide({
+      goal: 'Click the open button',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ failure });
+  });
+
+  it('uses operation and target Choice confidence for the PC confidence gate', async () => {
+    const planner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+      operation: { type: 'choice', choice: 'click', confidence: 0.99 },
+      target: { type: 'choice', choice: 'element_0', confidence: 0.89 },
+    }));
+
+    await expect(planner.decide({
+      goal: 'Click the open button',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({
+      operation: 'click', confidence: 0.89,
+    });
+  });
+
+  it('returns invalid_answer for an unlisted text Choice', async () => {
+    const planner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+      operation: { type: 'choice', choice: 'type', confidence: 0.99 },
+      target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
+      text_value: { type: 'choice', choice: 'value_9', confidence: 0.99 },
+    }));
+
+    await expect(planner.decide({
+      goal: 'Enter "Jarvis issue 205"',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toEqual({ failure: 'invalid_answer' });
+  });
+
+  it('logs typed PC planner failures without the goal or Jev key', async () => {
+    const log = { info: vi.fn() };
+    const req = {
+      ...request(),
+      log,
+      routeOptions: { url: '/conversation/:sessionId/messages' },
+    } as unknown as FastifyRequest;
+
+    await expect(runPcAct(
+      { goal: 'Open this private project' },
+      req,
+      new AbortController().signal,
+      bridge(),
+      { planner: { decide: vi.fn(async () => ({ failure: 'auth' as const })) } },
+    )).rejects.toThrow(/valid PC decision/u);
+    expect(log.info).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'chat',
+      reason: 'auth',
+    }), 'reflex.decision');
+    expect(JSON.stringify(log.info.mock.calls)).not.toContain('private project');
   });
 
   it('refuses sensitive goals and missing Jev keys without making a request', async () => {
@@ -172,7 +241,77 @@ describe('pc_act bounded Windows control loop', () => {
     expect(JSON.stringify(onStep.mock.calls)).not.toMatch(/Open project|Jarvis|goal|text/iu);
   });
 
-  it('requires the existing approval flow for risky actions and retries the same observed target', async () => {
+  it('searches and plays in a non-allow-listed foreground app without asking for confirmation', async () => {
+    const spotifySnapshots: PcActSnapshot[] = [
+      { ...snapshot, application: 'spotify', elements: [{ index: 0, role: 'edit', name: 'Search Spotify' }] },
+      { ...snapshot, application: 'spotify', elements: [{ index: 0, role: 'button', name: 'Search' }] },
+      { ...snapshot, application: 'spotify', elements: [{ index: 0, role: 'button', name: 'Play Daft Punk' }] },
+      { ...snapshot, application: 'spotify', elements: [] },
+    ];
+    const pcBridge = bridge({
+      observe: vi.fn()
+        .mockResolvedValueOnce(spotifySnapshots[0])
+        .mockResolvedValueOnce(spotifySnapshots[1])
+        .mockResolvedValueOnce(spotifySnapshots[2])
+        .mockResolvedValueOnce(spotifySnapshots[3]),
+    });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('type', 0, 'Daft Punk'))
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+
+    const result = await runPcAct(
+      { goal: 'Search Spotify for "Daft Punk" and play the result' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, runConfirmed },
+    );
+
+    expect(result.status).toBe('completed');
+    expect(pcBridge.act).toHaveBeenNthCalledWith(1, {
+      snapshotId: snapshot.snapshotId,
+      elementIndex: 0,
+      action: 'type',
+      confirmed: false,
+      text: 'Daft Punk',
+    }, expect.any(AbortSignal));
+    expect(pcBridge.act).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      action: 'click',
+      confirmed: false,
+    }), expect.any(AbortSignal));
+    expect(runConfirmed).not.toHaveBeenCalled();
+  });
+
+  it('does not confirm reversible submit, remove, or replace controls', async () => {
+    for (const name of ['Submit', 'Remove', 'Replace']) {
+      const pcBridge = bridge({
+        observe: vi.fn(async () => ({
+          ...snapshot,
+          elements: [{ index: 0, role: 'button', name }],
+        })),
+      });
+      const planner = { decide: vi.fn()
+        .mockResolvedValueOnce(decision('click', 0))
+        .mockResolvedValueOnce(decision('done')) };
+      const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+
+      await runPcAct(
+        { goal: `Click ${name}` },
+        request(),
+        new AbortController().signal,
+        pcBridge,
+        { planner, runConfirmed },
+      );
+
+      expect(runConfirmed).not.toHaveBeenCalled();
+      expect(pcBridge.act).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }), expect.any(AbortSignal));
+    }
+  });
+
+  it('requires the existing approval flow for irreversible actions and retries the same observed target', async () => {
     const pcBridge = bridge({
       act: vi.fn()
         .mockResolvedValueOnce({
@@ -267,8 +406,13 @@ describe('pc_act bounded Windows control loop', () => {
     }, expect.any(AbortSignal));
   });
 
-  it('never executes a risky action if the approval service is unavailable', async () => {
-    const pcBridge = bridge();
+  it('never executes an irreversible action if the approval service is unavailable', async () => {
+    const pcBridge = bridge({
+      observe: vi.fn(async () => ({
+        ...snapshot,
+        elements: [{ index: 0, role: 'button', name: 'Delete project' }],
+      })),
+    });
     const planner = { decide: vi.fn().mockResolvedValue(decision('click', 0)) };
 
     await expect(runPcAct(

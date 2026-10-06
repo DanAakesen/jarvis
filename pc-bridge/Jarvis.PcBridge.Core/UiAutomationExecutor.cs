@@ -159,7 +159,7 @@ public static partial class UiAutomationPolicy
     private static partial Regex SensitiveNumericPattern();
 
     [GeneratedRegex(
-        @"\b(?:send|submit|delete|remove|erase|overwrite|replace|discard|reset|clear|format|reformat|drop|pay|payment|purchase|post|push|transfer)\b",
+        @"\b(?:send|sending|delete|deletion|pay|paid|payment|purchase|post|posting|push|pushing|overwrite|overwriting)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DestructiveControlPattern();
 

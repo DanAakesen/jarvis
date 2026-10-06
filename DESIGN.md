@@ -202,6 +202,11 @@ sign-in; the header wraps on narrow screens.
   tray context menu as an explicit, persistent on/off check item. Its label
   states the current setting; the disabled default must be unmistakable. This is
   a native companion control, not a new web page or a browser-injected overlay.
+- **PC bridge control pause (P7-32):** Keep **Pause Jarvis control** in the same
+  tray context menu as a persistent check item whose label states on/off. The
+  checked state means PC control is paused; failures to save or report the state
+  remain visible in the tray status. This is a native companion control, not a
+  new web page.
 - **Area pages:** the Software Factory has its own Tasks and Projects
   navigation. Unbuilt task and release pages explain what is unavailable.
   Project management is implemented below; record pages link back to their list.

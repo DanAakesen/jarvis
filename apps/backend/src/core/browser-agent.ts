@@ -4,6 +4,14 @@ import type { BackendModule } from '../modules.js';
 import { FOUNDRY_SCOPE } from '../foundry/client.js';
 import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import {
+  isJevFailure,
+  jevChoiceConfidenceThreshold,
+  jevFailureFromStatus,
+  logJevFailure,
+  reflexSourceForRequest,
+  type JevFailure,
+} from './jev.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -20,7 +28,6 @@ const jevEndpoint = 'https://api.typesafe.ai/v1/systemone';
 const jevModel = 'jev-latest';
 const jevTimeoutMs = 1_200;
 const maxResponseBytes = 256 * 1024;
-const confidenceThreshold = 0.9;
 const maxSteps = 20;
 const maxRunMs = 30_000;
 const foundryModel = 'gpt-5.6-luna';
@@ -66,7 +73,7 @@ export interface BrowserDecisionInput {
 }
 
 export interface BrowserJevPlanner {
-  decide(input: BrowserDecisionInput, signal: AbortSignal): Promise<BrowserDecision | null>;
+  decide(input: BrowserDecisionInput, signal: AbortSignal): Promise<BrowserDecision | JevFailure | null>;
 }
 
 export interface BrowserTextModel {
@@ -302,7 +309,6 @@ function createJevQuestions(
     target_scroll: { type: 'choice', instructions: 'Choose the observed target for scroll, or none.', criteria: elementChoices },
     target_wait: { type: 'choice', instructions: 'Choose an observed target for wait, or none.', criteria: elementChoices },
     selection_value: { type: 'choice', instructions: 'Choose the exact quoted user-provided value to select, or none.', criteria: selectionChoices },
-    confidence: { type: 'score', instructions: 'How confidently does the selected operation and target satisfy the request?', criteria: ['uncertain', 'certain'] },
   };
 }
 
@@ -337,8 +343,9 @@ export function createJevBrowserPlanner(
         questions: createJevQuestions(input.snapshot.elements, quotedSelections(input.goal)),
       });
       if (Buffer.byteLength(body) > 512 * 1024) return null;
+      let response: Response;
       try {
-        const response = await fetcher(jevEndpoint, {
+        response = await fetcher(jevEndpoint, {
           method: 'POST',
           redirect: 'error',
           headers: {
@@ -349,69 +356,86 @@ export function createJevBrowserPlanner(
           body,
           signal: requestSignal,
         });
-        if (!response.ok || !response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
-          await response.body?.cancel().catch(() => {});
-          return null;
-        }
-        const payload = await readBoundedJson(response);
-        if (!isRecord(payload) || !isRecord(payload.answers)) return null;
-        const answers = payload.answers;
-        const operation = readChoice(answers.operation);
-        const score = isRecord(answers.confidence) && answers.confidence.type === 'score'
-          ? answers.confidence.score : undefined;
-        const allowedOperations: readonly BrowserOperation[] =
-          ['click', 'type', 'select', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked'];
-        if (!operation || !allowedOperations.includes(operation.choice as BrowserOperation) ||
-            !validProbability(score)) return null;
-        const selectedOperation = operation.choice as BrowserOperation;
-        const confidence = Math.min(operation.confidence, score);
-        if (confidence < confidenceThreshold) return { operation: selectedOperation, confidence };
-        if (selectedOperation === 'done' || selectedOperation === 'blocked') {
-          return { operation: selectedOperation, confidence };
-        }
+      } catch {
+        if (signal.aborted) return null;
+        return requestSignal.aborted ? { failure: 'timeout' } : { failure: 'network_error' };
+      }
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => {});
+        return jevFailureFromStatus(response.status);
+      }
+      if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+        await response.body?.cancel().catch(() => {});
+        return { failure: 'invalid_answer' };
+      }
+      let payload: unknown;
+      try {
+        payload = await readBoundedJson(response);
+      } catch {
+        if (signal.aborted) return null;
+        return requestSignal.aborted ? { failure: 'timeout' } : { failure: 'invalid_answer' };
+      }
+      if (!isRecord(payload) || !isRecord(payload.answers)) return { failure: 'invalid_answer' };
+      const answers = payload.answers;
+      const operation = readChoice(answers.operation);
+      const allowedOperations: readonly BrowserOperation[] =
+        ['click', 'type', 'select', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked'];
+      if (!operation || !allowedOperations.includes(operation.choice as BrowserOperation)) {
+        return { failure: 'invalid_answer' };
+      }
+      const selectedOperation = operation.choice as BrowserOperation;
+      const confidence = operation.confidence;
+      if (confidence < jevChoiceConfidenceThreshold) return { operation: selectedOperation, confidence };
+      if (selectedOperation === 'done' || selectedOperation === 'blocked') {
+        return { operation: selectedOperation, confidence };
+      }
 
-        const targetAnswerName = {
-          click: 'target_click',
-          type: 'target_type',
-          select: 'target_select',
-          scroll_up: 'target_scroll',
-          scroll_down: 'target_scroll',
-          wait: 'target_wait',
-        }[selectedOperation];
-        const target = readChoice(answers[targetAnswerName]);
-        if (!target || target.confidence < confidenceThreshold || target.choice === 'none') {
-          return { operation: selectedOperation, confidence: Math.min(confidence, target?.confidence ?? 0) };
-        }
-        const targetMatch = /^element_(\d{1,3})$/u.exec(target.choice);
-        const targetIndex = targetMatch ? Number(targetMatch[1]) : -1;
-        if (!input.snapshot.elements.some((element) => element.index === targetIndex)) return null;
+      const targetAnswerName = {
+        click: 'target_click',
+        type: 'target_type',
+        select: 'target_select',
+        scroll_up: 'target_scroll',
+        scroll_down: 'target_scroll',
+        wait: 'target_wait',
+      }[selectedOperation];
+      const target = readChoice(answers[targetAnswerName]);
+      if (!target) return { failure: 'invalid_answer' };
+      if (target.confidence < jevChoiceConfidenceThreshold || target.choice === 'none') {
+        return { operation: selectedOperation, confidence: Math.min(confidence, target.confidence) };
+      }
+      const targetMatch = /^element_(\d{1,3})$/u.exec(target.choice);
+      const targetIndex = targetMatch ? Number(targetMatch[1]) : -1;
+      if (!input.snapshot.elements.some((element) => element.index === targetIndex)) {
+        return { failure: 'invalid_answer' };
+      }
 
-        if (selectedOperation === 'select') {
-          const selection = readChoice(answers.selection_value);
-          const selections = quotedSelections(input.goal);
-          const selectionMatch = selection && /^selection_(\d{1,1})$/u.exec(selection.choice);
-          const selectionIndex = selectionMatch ? Number(selectionMatch[1]) : -1;
-          if (!selection || selection.confidence < confidenceThreshold ||
-              selectionIndex < 0 || selectionIndex >= selections.length) {
-            return { operation: selectedOperation, confidence: Math.min(confidence, target.confidence, selection?.confidence ?? 0) };
-          }
-          const selectionValue = selections[selectionIndex];
-          if (!selectionValue) return null;
-          return {
-            operation: selectedOperation,
-            confidence: Math.min(confidence, target.confidence, selection.confidence),
-            targetIndex,
-            selectionValue,
-          };
+      if (selectedOperation === 'select') {
+        const selection = readChoice(answers.selection_value);
+        const selections = quotedSelections(input.goal);
+        const selectionMatch = selection && /^selection_(\d{1,1})$/u.exec(selection.choice);
+        const selectionIndex = selectionMatch ? Number(selectionMatch[1]) : -1;
+        if (!selection) return { failure: 'invalid_answer' };
+        if (selection.choice === 'none') {
+          return { operation: selectedOperation, confidence: Math.min(confidence, target.confidence, selection.confidence) };
         }
+        if (selectionIndex < 0 || selectionIndex >= selections.length) return { failure: 'invalid_answer' };
+        if (selection.confidence < jevChoiceConfidenceThreshold) {
+          return { operation: selectedOperation, confidence: Math.min(confidence, target.confidence, selection.confidence) };
+        }
+        const selectionValue = selections[selectionIndex];
+        if (!selectionValue) return { failure: 'invalid_answer' };
         return {
           operation: selectedOperation,
-          confidence: Math.min(confidence, target.confidence),
+          confidence: Math.min(confidence, target.confidence, selection.confidence),
           targetIndex,
+          selectionValue,
         };
-      } catch {
-        return null;
       }
+      return {
+        operation: selectedOperation,
+        confidence: Math.min(confidence, target.confidence),
+        targetIndex,
+      };
     },
   };
 }
@@ -886,13 +910,19 @@ export function createBrowserAgent(
     if (!runtime) await reportClause(request, tab.id, step, 'observe', undefined, 'Reading the current page.', signal);
     try {
       const snapshot = await executor.snapshot(tab.id, signal);
-      const decision = await planner.decide({
+      const jevStartedAt = performance.now();
+      const result = await planner.decide({
         goal: input.goal.trim(),
         step,
         previousActions: runtime?.previousActions ?? input.previousActions ?? [],
         snapshot,
       }, signal);
-      if (!decision || decision.confidence < confidenceThreshold) {
+      if (isJevFailure(result)) {
+        logJevFailure(request, reflexSourceForRequest(request), jevStartedAt, result.failure);
+        throw new ToolRefusal('Jev could not return a valid browser decision. Please try again.');
+      }
+      const decision = result;
+      if (!decision || decision.confidence < jevChoiceConfidenceThreshold) {
         throw new ToolRefusal('Jev is not confident enough to choose the next browser action. Please clarify the goal or ask Jarvis to continue.');
       }
       if (decision.operation === 'blocked') {

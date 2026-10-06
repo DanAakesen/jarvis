@@ -7,7 +7,8 @@ public sealed record BridgeSettings(
     string TenantId,
     string ApiClientId,
     string BridgeClientId,
-    bool BrowserEnabled = false)
+    bool BrowserEnabled = false,
+    bool ControlPaused = false)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
