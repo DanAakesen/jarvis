@@ -188,7 +188,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     fields.events = input.events;
   }
   if (input.msg === 'conversation.reply_failed' || input.msg === 'voice.upstream_error' ||
-      input.msg === 'voice.upstream_event_error' ||
+      input.msg === 'voice.upstream_event_error' || input.msg === 'voice.partials_unavailable' ||
       input.msg === 'voice.upstream_closed' || input.msg === 'voice.connection_failed') {
     // Short, fixed-vocabulary diagnostics only: our own error messages and upstream close reasons.
     if (typeof input.failure === 'string' && /^[A-Za-z0-9 .:,'()_-]{1,120}$/.test(input.failure)) {
