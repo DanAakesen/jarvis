@@ -1101,7 +1101,7 @@ export function createBrowserAgentModule(agent: BrowserAgent): BackendModule {
     tools: [
       {
         name: 'browser_do',
-        description: 'Use Jev for website navigation and bounded tasks in Dan’s Chrome, opening requested URLs in a foreground tab. Use only fresh, observed elements; high-impact clicks require Dan’s confirmation. Stops on unsafe input, low confidence, time or step limits.',
+        description: 'Use Jev for website navigation and bounded tasks in Dan’s Chrome, opening requested URLs in a foreground tab. Use only fresh, observed elements; irreversible clicks require Dan’s confirmation. Stops on unsafe input, low confidence, time or step limits.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1138,7 +1138,7 @@ export function createBrowserAgentModule(agent: BrowserAgent): BackendModule {
       },
       {
         name: 'browser_do_shared',
-        description: 'When Dan asks you to act on the page he is sharing, use the current shared-screen context already supplied for this turn. Provide only the goal and, if Dan explicitly named a tab in this message, its exact title. It matches listed Chrome tabs, asks Dan to choose if ambiguous, and runs the bounded Jev browser agent on the match. Risky actions still require Dan’s confirmation.',
+        description: 'When Dan asks you to act on the page he is sharing, use the current shared-screen context already supplied for this turn. Provide only the goal and, if Dan explicitly named a tab in this message, its exact title. It matches listed Chrome tabs, asks Dan to choose if ambiguous, and runs the bounded Jev browser agent on the match. Irreversible actions still require Dan’s confirmation.',
         inputSchema: {
           type: 'object',
           properties: {

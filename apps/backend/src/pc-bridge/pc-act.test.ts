@@ -117,6 +117,30 @@ describe('pc_act Jev planner', () => {
 });
 
 describe('pc_act bounded Windows control loop', () => {
+  it('controls any bounded foreground app and does not confirm reversible settings actions', async () => {
+    const appSnapshot: PcActSnapshot = { ...snapshot, application: 'SystemSettings' };
+    const pcBridge = bridge({ observe: vi.fn(async () => appSnapshot) });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+
+    const result = await runPcAct(
+      { goal: 'Open Settings' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, runConfirmed },
+    );
+
+    expect(result.status).toBe('completed');
+    expect(runConfirmed).not.toHaveBeenCalled();
+    expect(pcBridge.act).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'click',
+      confirmed: false,
+    }), expect.any(AbortSignal));
+  });
+
   it('uses one Jev decision for each fresh snapshot and logs only redacted step metadata', async () => {
     const pcBridge = bridge();
     const planner = { decide: vi.fn()

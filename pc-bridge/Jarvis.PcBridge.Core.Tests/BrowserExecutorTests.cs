@@ -5,6 +5,29 @@ namespace Jarvis.PcBridge.Core.Tests;
 
 public sealed class BrowserExecutorTests
 {
+    [Theory]
+    [InlineData("Send message")]
+    [InlineData("Delete file")]
+    [InlineData("Pay now")]
+    [InlineData("Purchase")]
+    [InlineData("Publish post")]
+    [InlineData("Push changes")]
+    [InlineData("Overwrite file")]
+    public void Requires_confirmation_for_irreversible_browser_actions(string name)
+    {
+        Assert.True(BrowserActionPolicy.RequiresConfirmation("click", name));
+    }
+
+    [Theory]
+    [InlineData("Settings")]
+    [InlineData("Sign in")]
+    [InlineData("Search")]
+    [InlineData("Clear search")]
+    public void Does_not_require_confirmation_for_reversible_browser_actions(string name)
+    {
+        Assert.False(BrowserActionPolicy.RequiresConfirmation("click", name));
+    }
+
     [Fact]
     public async Task Opens_urls_in_the_connected_extension_and_only_falls_back_when_it_is_disconnected()
     {
@@ -126,7 +149,7 @@ public sealed class BrowserExecutorTests
     }
 
     [Fact]
-    public async Task Requires_confirmation_for_risky_clicks_and_blocks_code_or_card_like_text()
+    public async Task Requires_confirmation_for_irreversible_clicks_and_blocks_code_or_card_like_text()
     {
         await using (var target = await FakeCdpTarget.StartAsync(name: "Send message"))
         using (var executor = new BrowserExecutor(() => true, () => null, targetsUri: target.TargetsUri))
@@ -139,6 +162,16 @@ public sealed class BrowserExecutorTests
             var approved = await Execute(executor, "browser_act", action.Replace(
                 "\"confirmed\":false", "\"confirmed\":true", StringComparison.Ordinal));
             Assert.Equal(true, approved.GetType().GetProperty("acted")!.GetValue(approved));
+        }
+
+        await using (var target = await FakeCdpTarget.StartAsync(name: "Settings"))
+        using (var executor = new BrowserExecutor(() => true, () => null, targetsUri: target.TargetsUri))
+        {
+            var snapshot = await Execute(executor, "browser_snapshot", """{"tabId":"tab_1"}""");
+            var id = (string)snapshot.GetType().GetProperty("SnapshotId")!.GetValue(snapshot)!;
+            var action = await Execute(executor, "browser_act",
+                $$"""{"tabId":"tab_1","snapshotId":"{{id}}","elementIndex":0,"action":"click","confirmed":false}""");
+            Assert.Equal(true, action.GetType().GetProperty("acted")!.GetValue(action));
         }
 
         await using (var target = await FakeCdpTarget.StartAsync("textbox", "Search"))

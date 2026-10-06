@@ -446,6 +446,15 @@ export async function executeReflexAction(
   };
 }
 
+function isSafeAppOpenTarget(target: ReflexTarget | null | undefined): boolean {
+  if (target?.tool.name !== 'pc_open' || target.arguments.target !== 'app' ||
+      typeof target.arguments.value !== 'string') return false;
+  const appName = target.arguments.value.trim();
+  const normalized = appName.toLowerCase().replace(/[^a-z0-9]/gu, '');
+  return appName.length > 0 && appName.length <= 128 &&
+    !['edge', 'microsoftedge', 'msedge'].includes(normalized);
+}
+
 function reflexSkipReason(
   classification: ReflexClassification | null,
   request: FastifyRequest,
@@ -455,13 +464,15 @@ function reflexSkipReason(
   const target = classification?.target;
   const partialSafe = target?.tool.name === 'workspace_command' && workspaceReflexSafe(target) ||
     target?.tool.name === 'pause_task' && target.tool.reflexSafe === true ||
-    target?.tool.name === 'pc_open' && target.arguments.target === 'app' &&
-      target.arguments.value === 'chrome' ||
+    isSafeAppOpenTarget(target) ||
+    target?.tool.name === 'pc_media' && target.tool.reflexSafe === true &&
+      ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'].includes(String(target.arguments.action)) ||
     target?.tool.name === 'pc_open' && target.arguments.target === 'url' &&
       typeof target.arguments.value === 'string' && safeHttpUrl(target.arguments.value);
   const modeSafe = mode === 'partial' ? partialSafe
     : mode === 'undo' ? target?.tool.name === 'resume_task'
-      : target?.tool.reflexSafe === true || target?.tool.name === 'workspace_command' && workspaceReflexSafe(target);
+      : target?.tool.reflexSafe === true || target?.tool.name === 'workspace_command' && workspaceReflexSafe(target) ||
+        isSafeAppOpenTarget(target);
   if (signal.aborted) return 'cancelled';
   if (!classification) return 'unavailable';
   if (!classification.addressed) return 'not_addressed';
@@ -601,11 +612,32 @@ export function createReflexTargets(
   taskIds: readonly string[] = [],
   browserGoal?: string,
   workspace?: WorkspaceSnapshot,
+  appName = requestedAppName(browserGoal),
 ): ReflexTarget[] {
   const targets: ReflexTarget[] = [];
   for (const tool of tools) {
     if (tool.name === 'workspace_command' && workspace) {
       targets.push(...createWorkspaceReflexTargets(tool, workspace));
+      continue;
+    }
+    if (tool.name === 'pc_open') {
+      if (appName && !isEdgeAppName(appName)) {
+        targets.push({
+          choice: `target_${targets.length}`,
+          tool,
+          arguments: { target: 'app', value: appName },
+        });
+      }
+      continue;
+    }
+    if (tool.name === 'pc_media' && tool.reflexSafe === true) {
+      for (const action of ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute']) {
+        targets.push({
+          choice: `target_${targets.length}`,
+          tool,
+          arguments: { action },
+        });
+      }
       continue;
     }
     if (!tool.reflexSafe) continue;
@@ -634,6 +666,26 @@ export function createReflexTargets(
     }
   }
   return targets;
+}
+
+function requestedAppName(text: string | undefined): string | undefined {
+  if (!text || text.length > 4_000) return undefined;
+  const match = /^(?:jarvis[,\s]+)?(?:(?:please|can you)\s+)?(?:open|launch|start|åbn)\s+(?:the\s+)?(.+?)\s*[.!?]*$/iu
+    .exec(text.trim());
+  if (!match) return undefined;
+  const name = match[1]!.replace(/\s+(?:please|now|for me|tak|nu)$/iu, '').trim();
+  if (!name || name.length > 128 || /[/:\\]/u.test(name) ||
+      /\b(?:and|then|search|navigate|website|webpage|tab|browser)\b/iu.test(name) ||
+      /\b[a-z0-9-]+\.[a-z]{2,}\b/iu.test(name) ||
+      Array.from(name).some(character => {
+        const code = character.charCodeAt(0);
+        return code < 32 || code === 127;
+      })) return undefined;
+  return name;
+}
+
+function isEdgeAppName(value: string): boolean {
+  return ['edge', 'microsoftedge', 'msedge'].includes(value.toLowerCase().replace(/[^a-z0-9]/gu, ''));
 }
 
 export function createBrowserUrlTargets(tool: RegisteredTool | undefined, text: string): ReflexTarget[] {

@@ -665,13 +665,21 @@ to `/pc-bridge/connect` with subprotocol `jarvis.pc.v1`; it opens no listener or
 firewall port and retries after disconnect. Entra app-only identities, other
 delegated apps, and users other than Dan are rejected at the route boundary.
 
-The backend registers `pc_open` and `pc_active_window` in its existing tool
-registry. Protocol messages are bounded to 64 KiB, correlate UUID command IDs,
-cap in-flight work, and time out after 15 seconds. Both backend validation and
-the companion's portable core enforce the fixed allow-list: HTTP(S) URLs, VS
-Code, Edge, File Explorer, Windows Terminal, folders below `C:\Repo` opened in
-VS Code, active-window title reads, and exact-title window focus. URL commands
-are routed through the browser executor: if the extension is connected and
+The backend registers `pc_open`, `pc_media`, and `pc_active_window` in its
+existing tool registry. Protocol messages are bounded to 64 KiB, correlate UUID
+command IDs, cap in-flight work, and time out after 15 seconds. Both backend
+validation and the companion's portable core bound app names and validate the
+fixed command shapes. App lookup searches the current user's and common
+`Programs` Start-menu trees for `.lnk` shortcuts and enumerates
+`shell:AppsFolder` for packaged apps; matching is case-insensitive and fuzzy,
+and ambiguous matches return a bounded candidate list instead of launching.
+Edge shortcuts/package identities are excluded, including shortcuts targeting
+`msedge.exe`; unknown names are refused. Shortcuts launch through Windows shell
+resolution and packaged apps through their AppsFolder identity. There is no
+raw shell or arbitrary command execution tool. `pc_media` accepts only
+play/pause, next, previous, volume up/down, and mute, and sends the corresponding
+fixed Windows media virtual key. URL commands are routed through the browser
+executor: if the extension is connected and
 Chrome automation is enabled, it opens the URL in Dan's normal Chrome; if the
 extension is disconnected, the current companion launches the installed Chrome
 executable directly and identifies that fallback in the tool result. Websites
@@ -698,8 +706,8 @@ remain unverified.
 The backend registers the sensitive `pc_act` tool only when the existing Jev
 client is configured. It reuses the authenticated PC bridge and its bounded
 `uia_snapshot`/`uia_act` commands; no new route, credential, persistence, or
-migration is added. Only the foreground VS Code (`code`) and File Explorer
-(`explorer`) windows are eligible. The Windows provider traverses at most 1,000
+migration is added. Any bounded foreground Windows process identifier is
+eligible. The Windows provider traverses at most 1,000
 controls and depth 12, checking a one-second traversal budget and cancellation
 between traversal batches. The portable policy returns at most
 100 enabled, visible, actionable controls with only role and accessible name.
@@ -715,7 +723,8 @@ are exposed. Jev makes one decision per fresh snapshot, for at most 20 steps or
 planner and bridge. Typed content must be an exact, non-sensitive value quoted
 in Dan's request. Risky intents and destructive control names use the existing
 P7-03 `computer_use` approval flow and retry the same observed element only
-after approval; missing approval refuses the action. The approval identifies
+after approval; only irreversible actions require approval, and missing
+approval refuses the action. The approval identifies
 clicks and text replacements using a bounded control role/name, without
 including the goal or typed text. Browser tasks remain on P7-17–P7-19's
 Chrome-only path, and this tool does not use Foundry computer-use.
@@ -764,8 +773,9 @@ operations; the bridge never accepts or evaluates a model-provided script.
 
 Password, payment-card and one-time-code fields are omitted from values and
 refuse typing; code-like numeric and Luhn-valid card-number text is also
-refused. Submit/send/delete/sign-in/payment-style clicks return a confirmation
-request without acting. The backend uses the existing P7-03 `computer_use`
+refused. Only irreversible submit/send/delete/payment/publish/push/overwrite-style clicks
+return a confirmation request without acting; reversible settings and sign-in
+clicks do not. The backend uses the existing P7-03 `computer_use`
 approval path and retries the same indexed action only after approval; without
 confirmation service it refuses. Browser tools are marked sensitive so their
 arguments and results (including typed text, tab URLs and page content) are

@@ -79,8 +79,16 @@ function actionSignature(target: ReflexTarget): string {
 function partialSafeTarget(target: ReflexTarget): boolean {
   if (workspaceReflexSafe(target)) return true;
   if (target.tool.name === 'pause_task') return target.tool.reflexSafe === true;
+  if (target.tool.name === 'pc_media') {
+    return target.tool.reflexSafe === true &&
+      ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'].includes(String(target.arguments.action));
+  }
   if (target.tool.name !== 'pc_open') return false;
-  if (target.arguments.target === 'app' && target.arguments.value === 'edge') return true;
+  if (target.arguments.target === 'app' && typeof target.arguments.value === 'string') {
+    const name = target.arguments.value.trim().toLowerCase().replace(/[^a-z0-9]/gu, '');
+    return target.arguments.value.length <= 128 && name.length > 0 &&
+      !['edge', 'microsoftedge', 'msedge'].includes(name);
+  }
   if (target.arguments.target !== 'url' || typeof target.arguments.value !== 'string') return false;
   try {
     const url = new URL(target.arguments.value);
@@ -93,6 +101,13 @@ function partialSafeTarget(target: ReflexTarget): boolean {
 
 function reflexSummary(target: ReflexTarget, outcome: ReflexActionResult['outcome']): string {
   if (target.tool.name === 'workspace_command') return `${target.description ?? 'workspace action'} (${outcome})`;
+  if (target.tool.name === 'pc_media' && typeof target.arguments.action === 'string') {
+    return `${outcome === 'ok' ? 'controlled' : 'could not control'} media: ${target.arguments.action} (${outcome})`;
+  }
+  if (target.tool.name === 'pc_open' && target.arguments.target === 'app' &&
+      typeof target.arguments.value === 'string') {
+    return `${outcome === 'ok' ? 'opened' : 'could not open'} ${target.arguments.value} (${outcome})`;
+  }
   if (target.tool.name === 'pc_open' && target.arguments.target === 'url' &&
       typeof target.arguments.value === 'string') {
     try {
