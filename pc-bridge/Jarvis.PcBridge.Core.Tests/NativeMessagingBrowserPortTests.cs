@@ -36,6 +36,35 @@ public sealed class NativeMessagingBrowserPortTests
     }
 
     [Fact]
+    public async Task Focuses_the_Jarvis_tab_through_the_extension_and_refuses_unsafe_urls()
+    {
+        var pipeName = $"Jarvis.PcBridge.Test.{Guid.NewGuid():N}";
+        await using var port = new NativeMessagingBrowserPort(pipeName);
+        await using var extension = new NamedPipeClientStream(
+            ".",
+            pipeName,
+            PipeDirection.InOut,
+            PipeOptions.Asynchronous);
+        await extension.ConnectAsync(5000);
+        await WaitUntilConnectedAsync(port);
+
+        var focusTask = port.FocusJarvisTabAsync("https://jarvis.example.test", CancellationToken.None);
+        using (var request = await ReadMessageAsync(extension))
+        {
+            Assert.Equal("focus_jarvis_tab", request.RootElement.GetProperty("type").GetString());
+            Assert.Equal("https://jarvis.example.test/", request.RootElement.GetProperty("url").GetString());
+            await RespondAsync(extension, request.RootElement.GetProperty("id").GetString()!,
+                """{"opened":false,"focused":true}""");
+        }
+        Assert.False(await focusTask);
+
+        await Assert.ThrowsAsync<BrowserActionRefusedException>(() =>
+            port.FocusJarvisTabAsync("http://jarvis.example.test", CancellationToken.None));
+        await Assert.ThrowsAsync<BrowserActionRefusedException>(() =>
+            port.FocusJarvisTabAsync("javascript:alert(1)", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Correlates_tab_cdp_and_detach_messages_with_a_fake_extension_port()
     {
         var pipeName = $"Jarvis.PcBridge.Test.{Guid.NewGuid():N}";

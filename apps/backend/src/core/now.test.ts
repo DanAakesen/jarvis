@@ -375,6 +375,11 @@ describe('Now feed API', () => {
       expect(activityChunk).toContain('event: jarvis-activity');
       expect(activityChunk).toContain(JSON.stringify(activity));
       expect(activityChunk).not.toMatch(/arguments|result|transcript|secret/iu);
+      const wake = { type: 'voice.wake', at: '2026-10-06T14:24:37.078Z' } as const;
+      const wakeFrame = reader.read();
+      app.jarvisActivityHub.publish(wake);
+      const wakeChunk = new TextDecoder().decode((await wakeFrame).value);
+      expect(wakeChunk).toBe(`event: voice-wake\ndata: ${JSON.stringify(wake)}\n\n`);
     } finally {
       controller.abort();
       await reader.cancel().catch(() => {});

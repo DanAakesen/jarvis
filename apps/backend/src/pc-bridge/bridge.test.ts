@@ -700,6 +700,83 @@ describe('authenticated PC bridge protocol', () => {
     }
   });
 
+  it('publishes voice.wake once per authenticated bridge wake word and logs it without content', async () => {
+    const { app, records } = fixture({ logLevel: 'info' });
+    const url = await listen(app);
+    const published: unknown[] = [];
+    app.jarvisActivityHub.subscribe((event) => { published.push(event); });
+
+    for (const token of [danToken, agentToken]) {
+      const denied = await app.inject({
+        url: '/pc-bridge/connect',
+        headers: { authorization: ['Bearer', token].join(' ') },
+      });
+      expect(denied.statusCode).toBe(403);
+    }
+    const bridge = await connectBridge(url);
+    bridge.send(JSON.stringify({ type: 'wake_word', at: '2026-10-06T14:24:37.078Z' }));
+    await vi.waitFor(() => expect(published).toHaveLength(1));
+    expect(published).toEqual([{ type: 'voice.wake', at: '2026-10-06T14:24:37.078Z' }]);
+    const wakeLogs = records.map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((record) => record.msg === 'pc_bridge.wake_word');
+    expect(wakeLogs).toHaveLength(1);
+    expect(Object.keys(wakeLogs[0]!).sort()).toEqual(['level', 'msg', 'reqId', 'service', 'time'].sort());
+
+    const closed = new Promise<number>((resolve) => bridge.once('close', (code) => resolve(code)));
+    bridge.send(JSON.stringify({ type: 'wake_word', at: '2026-10-06T14:24:37.078Z', audio: 'AAAA' }));
+    expect(await closed).toBe(1007);
+    expect(published).toHaveLength(1);
+  });
+
+  it('rejects malformed wake word timestamps', async () => {
+    const { app } = fixture();
+    const url = await listen(app);
+    const published: unknown[] = [];
+    app.jarvisActivityHub.subscribe((event) => { published.push(event); });
+    for (const at of ['2026-13-06T14:24:37.078Z', 'now', 42]) {
+      const bridge = await connectBridge(url);
+      const closed = new Promise<number>((resolve) => bridge.once('close', (code) => resolve(code)));
+      bridge.send(JSON.stringify({ type: 'wake_word', at }));
+      expect(await closed).toBe(1007);
+    }
+    expect(published).toEqual([]);
+  });
+
+  it('tells a wake-word bridge when a Jarvis voice session starts and ends', async () => {
+    const { app } = fixture();
+    const url = await listen(app);
+    const legacy = await connectBridge(url);
+    const legacyMessages: unknown[] = [];
+    legacy.on('message', (data) => legacyMessages.push(JSON.parse(data.toString())));
+    legacy.send(JSON.stringify({ type: 'status', controlPaused: false }));
+    const voiceId = '11111111-1111-4111-8111-111111111111';
+    app.jarvisActivityHub.publish({ type: 'listening', activityId: voiceId, source: 'voice' });
+    app.jarvisActivityHub.publish({ type: 'ended', activityId: voiceId, source: 'voice' });
+    const legacyClosed = new Promise<void>((resolve) => legacy.once('close', () => resolve()));
+    legacy.close();
+    await legacyClosed;
+    expect(legacyMessages).toEqual([]);
+
+    const bridge = await connectBridge(url);
+    const messages: unknown[] = [];
+    bridge.on('message', (data) => messages.push(JSON.parse(data.toString())));
+    bridge.send(JSON.stringify({ type: 'status', controlPaused: false, wakeWord: true }));
+    await vi.waitFor(() => expect(messages).toEqual([{ type: 'voice_state', active: false }]));
+
+    app.jarvisActivityHub.publish({ type: 'listening', activityId: voiceId, source: 'chat' });
+    app.jarvisActivityHub.publish({ type: 'listening', activityId: voiceId, source: 'voice' });
+    app.jarvisActivityHub.publish({ type: 'speaking', activityId: voiceId, source: 'voice' });
+    app.jarvisActivityHub.publish({
+      type: 'interrupted', activityId: '22222222-2222-4222-8222-222222222222', source: 'voice',
+    });
+    app.jarvisActivityHub.publish({ type: 'ended', activityId: voiceId, source: 'voice' });
+    await vi.waitFor(() => expect(messages).toEqual([
+      { type: 'voice_state', active: false },
+      { type: 'voice_state', active: true },
+      { type: 'voice_state', active: false },
+    ]));
+  });
+
   it('sanitizes bridge timeouts and ignores responses with unknown command IDs', async () => {
     const { app } = fixture({ timeoutMs: 30 });
     const url = await listen(app);
