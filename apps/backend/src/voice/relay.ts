@@ -73,6 +73,23 @@ interface PartialTranscript {
   reflexRequests: number;
 }
 
+interface VoiceToolTiming {
+  readonly name: string;
+  readonly startedMs: number;
+  finishedMs: number | null;
+  outcome: 'ok' | 'refused' | 'error' | 'interrupted';
+}
+
+interface VoiceTurnTiming {
+  readonly id: string;
+  readonly startedAt: number;
+  transcriptCompletedMs: number | null;
+  jevDecisionMs: number | null;
+  firstAudioDeltaMs: number | null;
+  responseDoneMs: number | null;
+  readonly tools: VoiceToolTiming[];
+}
+
 function actionSignature(target: ReflexTarget): string {
   return reflexActionSignature(target);
 }
@@ -372,6 +389,23 @@ function registerVoiceRoute(
     let speechToFirstWordMs: number | undefined;
     let speechToFirstAudioMs: number | undefined;
     let metricsLogged = false;
+    let turnTiming: VoiceTurnTiming | undefined;
+    const finishTurnTiming = () => {
+      const timing = turnTiming;
+      if (!timing) return;
+      turnTiming = undefined;
+      request.log.info({
+        turnId: timing.id,
+        transcriptCompletedMs: timing.transcriptCompletedMs,
+        jevDecisionMs: timing.jevDecisionMs,
+        tools: timing.tools,
+        firstAudioDeltaMs: timing.firstAudioDeltaMs,
+        responseDoneMs: timing.responseDoneMs,
+      }, 'voice.turn_timing');
+    };
+    const elapsedSinceSpeechStopped = (timing = turnTiming) => timing
+      ? Number(Math.max(0, performance.now() - timing.startedAt).toFixed(2))
+      : undefined;
     const sessionReady = store.createSession({ channel: 'voice', language })
       .then((session) => { sessionId = session.id; });
 
@@ -668,6 +702,7 @@ function registerVoiceRoute(
 
     const handleVoiceEndOfTurn = async (itemId: string, text: string) => {
       if (reflexedItems.has(itemId) || reflexedItems.size >= MAX_TRANSCRIPTS_PER_SESSION) return;
+      const timing = turnTiming;
       reflexedItems.add(itemId);
       partialTranscripts.delete(itemId);
       disabledPartialItems.delete(itemId);
@@ -703,6 +738,7 @@ function registerVoiceRoute(
               final: true,
             },
           );
+          if (timing) timing.jevDecisionMs = elapsedSinceSpeechStopped(timing) ?? null;
           if (isJevFailure(result)) {
             reason = result.failure;
           } else {
@@ -906,6 +942,7 @@ function registerVoiceRoute(
 
     const close = (code: number, reason: string) => {
       logReflexMetrics();
+      finishTurnTiming();
       finishActiveToolActivities();
       if (!activityFinished) {
         publishActivity(code === 1000 || activityState === 'reconnecting' ? 'ended' : 'failed');
@@ -1000,6 +1037,16 @@ function registerVoiceRoute(
       seenCallIds.add(call.call_id);
       pendingToolCalls += 1;
       toolCallsInResponse = true;
+      const toolTurnTiming = turnTiming;
+      const toolTiming: VoiceToolTiming | undefined = toolTurnTiming
+        ? {
+          name: call.name,
+          startedMs: elapsedSinceSpeechStopped(toolTurnTiming) ?? 0,
+          finishedMs: null,
+          outcome: 'interrupted',
+        }
+        : undefined;
+      if (toolTiming) toolTurnTiming?.tools.push(toolTiming);
       const toolActivityId = randomUUID();
       const sharedBrowserCall = call.name === 'browser_do_shared' ||
         (call.name === 'browser_do' && request.requireSharedScreenContext === true);
@@ -1040,11 +1087,13 @@ function registerVoiceRoute(
       });
       toolQueue = toolQueue.then(async () => {
         if (controller.signal.aborted) {
+          if (toolTiming) toolTiming.finishedMs = elapsedSinceSpeechStopped(toolTurnTiming) ?? toolTiming.startedMs;
           finishToolActivity('interrupted');
           return;
         }
         await transcriptQueue;
         if (controller.signal.aborted) {
+          if (toolTiming) toolTiming.finishedMs = elapsedSinceSpeechStopped(toolTurnTiming) ?? toolTiming.startedMs;
           finishToolActivity('interrupted');
           return;
         }
@@ -1063,6 +1112,10 @@ function registerVoiceRoute(
               outcome = response.outcome;
             }
           } catch { /* The fallback is an error outcome. */ }
+          if (toolTiming) {
+            toolTiming.finishedMs = elapsedSinceSpeechStopped(toolTurnTiming) ?? toolTiming.startedMs;
+            toolTiming.outcome = outcome;
+          }
           finishToolActivity('tool-call-finished', outcome);
           sendUpstream({
             type: 'conversation.item.create',
@@ -1072,6 +1125,10 @@ function registerVoiceRoute(
           delete request.jarvisConversationMessage;
         }
       }).catch(() => {
+        if (toolTiming) {
+          toolTiming.finishedMs = elapsedSinceSpeechStopped(toolTurnTiming) ?? toolTiming.startedMs;
+          toolTiming.outcome = controller.signal.aborted ? 'interrupted' : 'error';
+        }
         finishToolActivity(controller.signal.aborted ? 'interrupted' : 'failed');
         close(1011, 'Voice connection failed');
       }).finally(() => {
@@ -1186,6 +1243,7 @@ function registerVoiceRoute(
       queued.push({ data, binary });
     });
     browser.once('close', (code) => {
+      finishTurnTiming();
       finishActiveToolActivities();
       if (!activityFinished) {
         publishActivity(code === 1000 || activityState === 'reconnecting' ? 'ended' : 'failed');
@@ -1198,6 +1256,7 @@ function registerVoiceRoute(
       void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
     });
     browser.once('error', () => {
+      finishTurnTiming();
       finishActiveToolActivities();
       publishActivity('failed');
       stopPartialRecognition();
@@ -1265,8 +1324,18 @@ function registerVoiceRoute(
             partialSpeechStopped = false;
           }
           if (event?.type === 'input_audio_buffer.speech_stopped') {
+            finishTurnTiming();
             userSpeaking = false;
             speechStoppedAt = performance.now();
+            turnTiming = {
+              id: randomUUID(),
+              startedAt: speechStoppedAt,
+              transcriptCompletedMs: null,
+              jevDecisionMs: null,
+              firstAudioDeltaMs: null,
+              responseDoneMs: null,
+              tools: [],
+            };
             partialSpeechStopped = true;
             if (activePartialItemId && !pendingPartialItemIds.includes(activePartialItemId)) {
               pendingPartialItemIds.push(activePartialItemId);
@@ -1286,12 +1355,20 @@ function registerVoiceRoute(
               speechStoppedAt !== undefined && speechToFirstAudioMs === undefined) {
             speechToFirstAudioMs = performance.now() - speechStoppedAt;
           }
+          if ((event?.type === 'response.audio.delta' || event?.type === 'response.output_audio.delta') &&
+              typeof event.delta === 'string' && event.delta && turnTiming?.firstAudioDeltaMs === null) {
+            turnTiming.firstAudioDeltaMs = elapsedSinceSpeechStopped() ?? null;
+          }
           if (event?.type === 'response.created') {
             assistantResponding = true;
             if (microphoneActive) publishActivity('thinking');
           }
           if (event?.type === 'response.done') {
             assistantResponding = false;
+            if (turnTiming && !toolCallsInResponse) {
+              turnTiming.responseDoneMs = elapsedSinceSpeechStopped() ?? null;
+              finishTurnTiming();
+            }
             if (browserProgressResponse) browserProgressResponse = false;
             if (!toolCallsInResponse) {
               delete request.sharedScreenContext;
@@ -1318,6 +1395,10 @@ function registerVoiceRoute(
             typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id)
               ? resolveFinalItemId(event.item_id)
               : undefined;
+          if ((event?.type === 'conversation.item.input_audio_transcription.completed' ||
+               event?.type === 'user.message') && turnTiming?.transcriptCompletedMs === null) {
+            turnTiming.transcriptCompletedMs = elapsedSinceSpeechStopped() ?? null;
+          }
           if (event) persistTranscript(event, finalTurnItemId);
           if (english && event?.type === 'conversation.item.input_audio_transcription.completed' &&
               typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
