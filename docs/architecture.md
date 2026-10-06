@@ -52,6 +52,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   existing state ownership; P8-16 still owns tool-activity events. Motion reuses
   the P8-20 tokens and hidden-tab/reduced-motion rules. No event plumbing,
   persistence or service contract changes.
+- P8-36 replaces the orb status and button group with the compact luminous-glass
+  voice bar: `VoiceBarStatus` (formerly `VoiceOrb`) renders the same P5-04
+  status, and the shared `ConversationMoreMenu` holds the Language flyout plus
+  voice actions in both the bar and the composer. Language still flows through
+  `ConversationHistory` state into the next session. No event, persistence or
+  service contract changes.
 - P8-31 applies the selected smoky glass to existing shell, conversation,
   temporary-workspace, contextual-panel, Factory and Settings surfaces through
   the light/dark semantic tokens in `apps/web/src/styles.css`. Shared headings
