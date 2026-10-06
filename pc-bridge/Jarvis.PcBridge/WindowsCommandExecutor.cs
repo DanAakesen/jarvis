@@ -90,7 +90,9 @@ public sealed class WindowsCommandExecutor
             : new ProcessStartInfo(match.Target) { UseShellExecute = true };
         if (match.IsPackaged) start.ArgumentList.Add($@"shell:AppsFolder\{match.Target}");
         using var process = Process.Start(start);
-        if (process is not null) AllowForeground(process);
+        // The app has launched at this point; foreground permission is best-effort because the
+        // background bridge may not be allowed to grant it (L109).
+        if (process is not null) _ = AllowSetForegroundWindow((uint)process.Id);
         return new { opened = true, app = match.Name };
     }
 
@@ -377,11 +379,26 @@ public sealed class WindowsCommandExecutor
         public InputUnion Data;
     }
 
+    // INPUT must be 40 bytes on 64-bit Windows: the union is sized by MOUSEINPUT. With only the
+    // keyboard member it was 32 bytes and SendInput rejected every media key (error 87; L109).
     [StructLayout(LayoutKind.Explicit)]
     private struct InputUnion
     {
         [FieldOffset(0)]
         public KeyboardInput Keyboard;
+        [FieldOffset(0)]
+        public MouseInput Mouse;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseInput
+    {
+        public int X;
+        public int Y;
+        public uint Data;
+        public uint Flags;
+        public uint Time;
+        public UIntPtr ExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
