@@ -217,11 +217,10 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
         ? (payload as Record<string, unknown>).to
         : undefined;
       if (event.type !== 'state_changed' || typeof nextState !== 'string' ||
-        !['Ready', 'Running', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'].includes(nextState) ||
-        !app.teamsNotifications) return;
+        !['Ready', 'Running', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'].includes(nextState)) return;
       try {
         const kind = nextState === 'NeedsAttention' ? 'warning' : nextState === 'Done' ? 'success' : 'info';
-        await app.teamsNotifications.notify(kind, `Task ${event.taskId} is now ${nextState}.`);
+        await app.teamsNotifications?.notify(kind, `Task ${event.taskId} is now ${nextState}.`);
       } catch {
         app.log.warn('away_mode.task_notification_failed');
       }

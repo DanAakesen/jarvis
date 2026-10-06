@@ -13,7 +13,7 @@ vi.mock('applicationinsights', () => ({
 
 describe('structured log export', () => {
   it.each([
-    'away_mode.presence_poll_failed', 'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
+    'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
     'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',
     'dispatcher.operation_failed', 'github.checks_loop_recovery_failed', 'pc_bridge.status_update_failed',
     'google.refresh_token_expired_alert_unavailable', 'google.refresh_token_expired_alert_persistence_failed',

@@ -164,10 +164,12 @@ function allowedOwnerActivity(
 export interface TeamsNotificationOptions {
   readonly ownerObjectId: string;
   readonly tenantId: string;
-  readonly publicOrigin: string;
+  readonly publicOrigin?: string;
   readonly store: TeamsNotificationStore;
-  readonly connector: TeamsConnector;
-  readonly audioStore: EphemeralAudioStore;
+  readonly connector?: TeamsConnector;
+  readonly audioStore?: EphemeralAudioStore;
+  readonly onWebNotification?: (kind: NotificationKind, text: string) => Promise<void>;
+  readonly onConfirmationPending?: () => void;
   readonly isAway?: () => Promise<boolean>;
   readonly onConfirmationsChanged?: () => void;
   readonly speech?: SpeechSynthesizer;
@@ -180,6 +182,8 @@ export function createTeamsNotificationService({
   store,
   connector,
   audioStore,
+  onWebNotification,
+  onConfirmationPending,
   isAway = async () => true,
   onConfirmationsChanged = () => {},
   speech,
@@ -188,6 +192,7 @@ export function createTeamsNotificationService({
   const browserConfirmations = new Map<string, BrowserConfirmation>();
 
   async function send(reference: ConversationReference, activity: ActivityLike): Promise<void> {
+    if (!connector) throw new ToolRefusal('Teams notifications are unavailable.');
     try {
       await connector.send(reference, activity);
     } catch {
@@ -196,7 +201,7 @@ export function createTeamsNotificationService({
   }
 
   async function sendVoiceNote(reference: ConversationReference, text: string): Promise<void> {
-    if (!speech) return;
+    if (!speech || !audioStore || !publicOrigin) return;
     let bytes: Uint8Array | null;
     try { bytes = await speech.synthesize(text, AbortSignal.timeout(12_000)); }
     catch { return; }
@@ -221,6 +226,7 @@ export function createTeamsNotificationService({
   }
 
   async function getConversation(): Promise<ConversationReference> {
+    if (!connector) throw new ToolRefusal('Teams notifications are unavailable.');
     let reference: ConversationReference | null;
     try { reference = await store.getConversation(ownerObjectId); }
     catch { throw new ToolRefusal('Teams notifications are unavailable.'); }
@@ -274,7 +280,7 @@ export function createTeamsNotificationService({
     }
     signal?.throwIfAborted();
     let away: boolean;
-    try { away = await isAway(); }
+    try { away = connector ? await isAway() : false; }
     catch { throw new ToolRefusal('Confirmation routing is unavailable.'); }
     if (!away && browserConfirmations.size >= maxPendingBrowserConfirmations) {
       throw new ToolRefusal('There are too many pending browser confirmations.');
@@ -320,6 +326,7 @@ export function createTeamsNotificationService({
         expiresAt: new Date(Date.now() + confirmationLifetimeSeconds * 1000).toISOString(),
       });
       onConfirmationsChanged();
+      onConfirmationPending?.();
     }
     try {
       signal?.throwIfAborted();
@@ -372,6 +379,11 @@ export function createTeamsNotificationService({
     },
     async notify(kind, text, actions) {
       if (!notificationKinds.has(kind) || !validText(text)) throw new TypeError('Invalid notification');
+      if (!connector) {
+        if (!onWebNotification) throw new ToolRefusal('Jarvis notifications are unavailable.');
+        await onWebNotification(kind, text);
+        return;
+      }
       const cardActions = validateActions(actions);
       const reference = await getConversation();
       if (cardActions.length) {

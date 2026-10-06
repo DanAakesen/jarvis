@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAwayModeStore } from './away-mode-store.js';
 
 describe('SQL away-mode store', () => {
-  it('skips SQL when a cached presence observation leaves state unchanged', async () => {
+  it('reads legacy Teams presence state as manual away state', async () => {
     const state = {
-      away: false,
-      source: null,
-      changedAt: null,
+      away: true,
+      source: 'teams_presence',
+      changedAt: '2026-10-06T12:00:00.000Z',
       presenceAwaySince: '2026-10-06T12:00:00.000Z',
     };
     const query = vi.fn(async () => ({ recordset: [{ value: JSON.stringify(state) }] }));
@@ -16,8 +16,11 @@ describe('SQL away-mode store', () => {
     const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
     const store = createAwayModeStore(pool);
 
-    await store.read();
-    await expect(store.observePresence(true, new Date('2026-10-06T12:01:00.000Z'))).resolves.toEqual(state);
+    await expect(store.read()).resolves.toEqual({
+      away: true,
+      source: null,
+      changedAt: '2026-10-06T12:00:00.000Z',
+    });
 
     expect(pool.request).toHaveBeenCalledOnce();
     expect(query).toHaveBeenCalledOnce();
