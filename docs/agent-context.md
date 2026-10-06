@@ -225,7 +225,7 @@ backend with `/health`, safe structured logs, ESLint, Vitest and a Dockerfile.
 Python runtime remains in its planned tasks. Issue #7 adds the database connection and startup migration infrastructure; P1-01 (#15) adds the first domain tables (groups 1–3), and P2-01 (#27) adds sandbox and operations groups 4 and 6.
 P0-04 adds the Bicep template; its first Azure deployment is P0-16. Bicep sets backend `KEY_VAULT_URI`; the backend uses its managed identity to read `github-app-webhook-secret`. Locally, the URI can be omitted; webhook requests then fail with 503. The secret is cached in memory after a successful lookup and requires a backend restart to rotate.
 P7-04 reads the Jev API key `jev-api-key` from the same Key Vault with the backend identity. Dan provisions it after merge with the coordinator's `set-jev-key.ps1` outside this repository; agents must not run that script or access the live key. The reflex uses the configured `jev-latest` model. Live Jev latency and Voice Live behavior are not covered by offline tests.
-P7-19 reuses that existing key and P7-18's default-off Chrome toggle; it adds no secret, environment variable, or setup command. Dan's live shared-form, Jev/Foundry, Voice Live, and confirmation checks remain post-merge work.
+P7-07 and P7-19 reuse that existing Jev key; P7-19 also uses P7-18's default-off Chrome toggle. They add no secret, environment variable, or setup command. Dan's live Windows UI Automation, shared-form, Jev/Foundry, Voice Live, Chrome, and confirmation checks remain post-merge work.
 
 Use Node.js 22.23.3 (`.nvmrc`), npm 10.9.9 (`packageManager`), TypeScript 6.0.3,
 and Python 3.12.14 (`.python-version`, for future Python work). Install from the
@@ -834,11 +834,14 @@ the companion on Dan's PC:
    Run the main Deploy workflow so Bicep configures `ENTRA_PC_BRIDGE_CLIENT_ID`
    in the backend. Agents do not have Azure/tenant access.
 2. Get `backendFqdn` from the `jarvis-infra` deployment output. On Dan's Windows
-   PC, publish the self-contained app to a temporary directory:
+   PC, publish the self-contained app for the PC's architecture (Dan's PC is ARM64)
+   to a temporary directory. The installer replaces every earlier install file except
+   the loaded Chrome extension folder:
 
    ```powershell
+   $rid = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'win-arm64' } else { 'win-x64' }
    dotnet publish .\pc-bridge\Jarvis.PcBridge\Jarvis.PcBridge.csproj `
-     --configuration Release --runtime win-x64 --self-contained true `
+     --configuration Release --runtime $rid --self-contained true `
      --output "$env:TEMP\jarvis-pc-bridge"
    ```
 
@@ -865,9 +868,12 @@ the companion on Dan's PC:
    refresh cache with Windows DPAPI. Re-running the installer updates the files
    without deleting that token cache. The bridge connects outbound and creates no
    inbound firewall rule.
-4. Confirm the tray reports Online, then ask Jarvis to open an HTTP(S) URL or an
-   allow-listed app. Check the authenticated Now feed for online/offline status.
-   Verify active-window reads and exact-title focus with Dan present at the PC.
+4. Confirm the tray reports Online, then ask Jarvis to open an HTTP(S) URL and
+   verify it opens in foreground Chrome—through the extension when connected and
+   enabled, or the direct Chrome executable fallback when disconnected, never
+   Edge. Open an allow-listed app as a separate check. Check the authenticated Now
+   feed for online/offline status; verify active-window reads and exact-title
+   focus with Dan present at the PC.
 
 The app allows only HTTP(S) URLs, VS Code, Edge, File Explorer, Windows Terminal,
 folders below `C:\Repo` in VS Code, active-window title, and exact-title focus.

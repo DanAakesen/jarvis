@@ -43,6 +43,37 @@ public static class CommandPolicy
                 arguments.TryGetProperty("tabId", out var tabId) &&
                 IsTabId(tabId),
             "browser_act" => IsBrowserAction(arguments),
+            "uia_snapshot" => !arguments.EnumerateObject().Any(),
+            "uia_act" => IsUiAutomationAction(arguments),
+            _ => false,
+        };
+    }
+
+    private static bool IsUiAutomationAction(JsonElement arguments)
+    {
+        if (!arguments.TryGetProperty("snapshotId", out var snapshotId) ||
+            snapshotId.ValueKind != JsonValueKind.String ||
+            !Guid.TryParseExact(snapshotId.GetString(), "D", out _) ||
+            !arguments.TryGetProperty("elementIndex", out var elementIndex) ||
+            !elementIndex.TryGetInt32(out var index) || index is < 0 or >= 100 ||
+            !arguments.TryGetProperty("action", out var action) ||
+            action.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        var common = new[] { "snapshotId", "elementIndex", "action" };
+        return action.GetString() switch
+        {
+            "click" => HasOnly(arguments, common.Append("confirmed").ToArray()) &&
+                arguments.TryGetProperty("confirmed", out var confirmed) &&
+                (confirmed.ValueKind is JsonValueKind.True or JsonValueKind.False),
+            "type" => HasOnly(arguments, common.Append("text").Append("confirmed").ToArray()) &&
+                arguments.TryGetProperty("confirmed", out var confirmed) &&
+                (confirmed.ValueKind is JsonValueKind.True or JsonValueKind.False) &&
+                HasBoundedString(arguments, "text", 4_096) &&
+                UiAutomationPolicy.IsSafeText(arguments.GetProperty("text").GetString()!),
+            "scroll_up" or "scroll_down" => HasOnly(arguments, common),
             _ => false,
         };
     }

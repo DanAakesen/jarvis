@@ -26,6 +26,7 @@ const events = new Set([
   'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
   'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
   'voice.partials_unavailable', 'chat.latency', 'memory.embedding',
+  'pc_act.step',
   'reflex.decision',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error',
@@ -100,6 +101,14 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
         input.durationMs >= 0 && input.durationMs <= 600_000) {
       fields.durationMs = input.durationMs;
     }
+  }
+  if (input.msg === 'pc_act.step') {
+    if (Number.isSafeInteger(input.step) && Number(input.step) >= 1 && Number(input.step) <= 20) {
+      fields.step = input.step;
+    }
+    if (['click', 'type', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked']
+      .includes(String(input.action))) fields.action = input.action;
+    if (['completed', 'refused', 'error'].includes(String(input.outcome))) fields.outcome = input.outcome;
   }
   if (input.msg === 'sandbox_heartbeat.decision') {
     if (typeof input.sandboxSessionId === 'string' && /^[1-9]\d{0,18}$/.test(input.sandboxSessionId)) {

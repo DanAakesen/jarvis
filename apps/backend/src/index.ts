@@ -45,6 +45,7 @@ import { createArmContainerAppScaler } from './operations/container-app-scale.js
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
 import { FoundryClient, FoundryClientError } from './foundry/client.js';
+import { createJevPcActPlanner } from './pc-bridge/pc-act.js';
 import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
 import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
@@ -250,6 +251,7 @@ try {
     return jevApiKeyRequest;
   };
   const reflexClassifier = createJevReflexClassifier(getJevApiKey);
+  const pcActPlanner = jevSecretClient ? createJevPcActPlanner(getJevApiKey) : undefined;
   const browserAgent = jevSecretClient && config.foundryProjectEndpoint && credential
     ? createBrowserAgent(
       createJevBrowserPlanner(getJevApiKey),
@@ -479,6 +481,10 @@ try {
       } : {}),
     }),
     createPcBridgeModule({
+      ...(pcActPlanner ? {
+        pcActPlanner,
+        onPcActStep: (activity) => logger.info(activity, 'pc_act.step'),
+      } : {}),
       ...(pcBridgeStatusStore ? { onStatusChange: (online) => pcBridgeStatusStore.setStatus(online) } : {}),
       ...(teamsNotifications ? {
         runConfirmed: (summary, action, signal) =>
