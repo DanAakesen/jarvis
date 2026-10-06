@@ -71,11 +71,11 @@ The table is a derived cache of the private GitHub vault, not an authoritative
 store; the paired down migration removes only this index table.
 
 P7-37 adds `dbo.workspace_html_artifacts` in
-`0026_workspace_html_artifacts.sql`, separate from the image artifact table. It
+`0025_workspace_html_artifacts.sql`, separate from the image artifact table. It
 stores the report HTML, UTF-8 size, bounded JSON source list, title, creation
 time and pin state under Dan's Entra object ID. Application validation enforces
 the 512 KiB HTML and 50-source contract; the HTML is consumed only by P8-41's
-sandboxed `html-app` renderer. `0027_workspace_html_artifact_history.sql` adds
+sandboxed `html-app` renderer. `0026_workspace_html_artifact_history.sql` adds
 version numbers, a repair-attempt flag and version history. Artifacts do not
 reference a conversation or task; workspace windows remain memory-only.
 

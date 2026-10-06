@@ -16,7 +16,7 @@ export interface GeneratedViewPage {
 }
 
 export interface GeneratedViewSource {
-  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation' | 'research';
+  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation' | 'html_generation' | 'research';
   status: 'complete' | 'partial' | 'unavailable';
   updatedAt?: string;
   reason?: string;

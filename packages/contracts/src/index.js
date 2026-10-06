@@ -73,7 +73,7 @@ const listItem = object({
   action: { oneOf: [routeActionSchema, externalLinkActionSchema] },
 }, ['title']);
 const sourceSchema = object({
-  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'research'] },
+  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'html_generation', 'research'] },
   status: { type: 'string', enum: ['complete', 'partial', 'unavailable'] },
   updatedAt: dateTime,
   reason: string(500),
@@ -166,7 +166,12 @@ const dataSchemas = {
       alt: string(500, 1),
     }), 10),
   }),
-  'html-app': object({ artifactId: { type: 'string', format: 'uuid' } }),
+  'html-app': object({
+    artifactId: {
+      type: 'string',
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    },
+  }),
 };
 
 export const generatedViewSchema = Object.freeze({
@@ -296,7 +301,7 @@ function validAction(value, registeredTools) {
 }
 
 function validSource(source) {
-  if (!isObject(source) || !['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'research'].includes(source.id) ||
+  if (!isObject(source) || !['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'html_generation', 'research'].includes(source.id) ||
     !['complete', 'partial', 'unavailable'].includes(source.status) ||
     Object.keys(source).some((key) => !['id', 'status', 'updatedAt', 'reason', 'page'].includes(key))) return false;
   if (source.updatedAt !== undefined && (typeof source.updatedAt !== 'string' || Number.isNaN(Date.parse(source.updatedAt)))) return false;
@@ -385,9 +390,9 @@ function validData(renderer, data, trustedBlobHost) {
           Object.keys(image).every((key) => ['url', 'alt'].includes(key)) &&
           safeHttpsUrl(image.url, imageHosts, trustedBlobHost) && boundedString(image.alt, 500, 1));
     case 'html-app':
-      return Object.keys(data).length === 1 && Object.keys(data)[0] === 'artifactId' &&
+      return Object.keys(data).length === 1 &&
         typeof data.artifactId === 'string' &&
-        /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(data.artifactId);
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(data.artifactId);
     default:
       return false;
   }

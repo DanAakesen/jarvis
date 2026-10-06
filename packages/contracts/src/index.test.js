@@ -189,6 +189,19 @@ test('accepts each allowlisted renderer and action without interpreting its cont
   }), { registeredTools: ['list_tasks'] }), false);
 });
 
+test('accepts HTML app views only as references to bounded UUID artifacts', () => {
+  const view = {
+    version: generatedViewVersion,
+    title: 'Research app',
+    renderer: 'html-app',
+    source: { id: 'html_generation', status: 'complete' },
+    data: { artifactId: '56a2b0bd-af47-46b5-8e15-c6e9a718ae93' },
+  };
+  assert.equal(isGeneratedView(view), true);
+  assert.equal(isGeneratedView({ ...view, data: { artifactId: 'not-an-id' } }), false);
+  assert.equal(isGeneratedView({ ...view, data: { ...view.data, html: '<script>alert(1)</script>' } }), false);
+});
+
 test('rejects malformed, unsupported, extra-field, and invalid-action payloads', () => {
   assert.equal(isGeneratedView(listView({ data: { items: [{ title: 42 }] } })), false);
   assert.equal(isGeneratedView(listView({ version: 2 })), false);

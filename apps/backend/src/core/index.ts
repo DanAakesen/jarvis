@@ -86,7 +86,11 @@ export const coreModule: BackendModule = {
       name, description, inputSchema,
     })));
     for (const tool of app.jarvisTools.list()) {
-      app.post(`/tools/${tool.name}`, { config: { jarvisAgent: true }, schema: { body: tool.inputSchema } }, async (request, reply) => {
+      app.post(`/tools/${tool.name}`, {
+        config: { jarvisAgent: true },
+        ...(tool.bodyLimit ? { bodyLimit: tool.bodyLimit } : {}),
+        schema: { body: tool.inputSchema },
+      }, async (request, reply) => {
         const messageHeader = request.headers['x-jarvis-message-id'];
         const voiceItemHeader = request.headers['x-jarvis-voice-item-id'];
         const phoneSessionHeader = request.headers['x-jarvis-phone-session-id'];

@@ -98,6 +98,8 @@ import { createPhoneCallModule } from './phone/calls.js';
 import { parsePhoneAllowlist } from './phone/caller.js';
 import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
+import { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
+import { createHtmlViewModule } from './core/html-view.js';
 
 try {
   const config = loadConfig();
@@ -594,6 +596,7 @@ try {
       model: config.codexImageModel,
     }));
   }
+  if (database) modules.push(createHtmlViewModule(new WorkspaceHtmlArtifactStore(database.pool)));
   let visionWatch: VisionWatchService | undefined;
   if (database && settingsStore && screenVisionModel) {
     const visionUsage = createScreenFrameUsageStore(database.pool);
