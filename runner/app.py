@@ -992,7 +992,10 @@ def _codex_html_report_prompt(report_request: str) -> str:
         "or use shell commands/files. Return only a JSON object with exactly title, html, and spokenSummary. "
         "The html must be a complete HTML document with inline CSS and JavaScript only, no external scripts, "
         "no base element, and no network requests. Use semantic accessible sections, concise key facts, and "
-        "a table or inline SVG/chart only when the evidence supports it. Cite sources with the supplied URLs; "
+        "a table or inline SVG/chart only when the evidence supports it. Identify partial coverage when partial "
+        "is true, including in spokenSummary. Cite sources with the supplied URLs; "
+        "use the supplied frame as presentation context: match its theme, design tokens, fonts, density, "
+        "viewport, and layout, and honor reducedMotion without hiding essential information. "
         "open links through window.jarvis.openUrl(url) when available, and do not navigate the frame. "
         "The spokenSummary must be one or two short sentences with findings, not instructions.\n"
         "REPORT_REQUEST_JSON=" + json.dumps(data, ensure_ascii=True)

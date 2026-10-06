@@ -12,11 +12,19 @@ import {
   type WebResearchResult,
 } from '@jarvis/contracts';
 import { parse } from 'parse5';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { runCodexToolResult, type WebResearchClient } from './web-research.js';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    announceResearchCompletion?: (
+      result: { status: 'complete'; summary: string } | { status: 'failed' },
+    ) => void;
+  }
+}
 
 const inputSchema = Object.freeze({
   type: 'object',
@@ -112,6 +120,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 32 || code === 127;
+  });
+}
+
 function parseReport(value: unknown, sources: readonly HtmlArtifactSource[]): ResearchReport {
   let data: unknown = value;
   if (typeof value === 'string') {
@@ -125,17 +140,26 @@ function parseReport(value: unknown, sources: readonly HtmlArtifactSource[]): Re
       typeof data.title !== 'string' || !data.title.trim() || data.title.length > 200 ||
       typeof data.html !== 'string' || !isValidHtmlArtifactHtml(data.html) ||
       typeof data.spokenSummary !== 'string' || !data.spokenSummary.trim() || data.spokenSummary.length > 600 ||
+      hasControlCharacter(data.spokenSummary) ||
       Buffer.byteLength(JSON.stringify(data), 'utf8') > maxReportBytes) {
     throw new ToolFailure('The report generator returned an invalid or oversized report.');
   }
 
-  const document = parse(data.html) as unknown as HtmlNode;
+  const parseErrors: unknown[] = [];
+  const document = parse(data.html, { onParseError: (error) => parseErrors.push(error) }) as unknown as HtmlNode;
   const tags = new Set<string>();
-  const trustedSources = new Set(sources.map(({ url }) => url));
+  const trustedSources = new Set<string>();
   let titleFound = false;
   let bodyFound = false;
   let doctypeFound = false;
   let invalid = false;
+  for (const source of sources) {
+    try {
+      trustedSources.add(new URL(source.url).href);
+    } catch {
+      throw new ToolFailure('The report sources are invalid.');
+    }
+  }
   const visit = (node: HtmlNode) => {
     if (node.nodeName === '#documentType') doctypeFound = true;
     if (node.tagName) {
@@ -168,7 +192,8 @@ function parseReport(value: unknown, sources: readonly HtmlArtifactSource[]): Re
     for (const child of node.childNodes ?? []) visit(child);
   };
   visit(document);
-  if (!doctypeFound || !tags.has('html') || !tags.has('head') || !titleFound || !bodyFound || invalid) {
+  if (parseErrors.length > 0 || !doctypeFound || !tags.has('html') || !tags.has('head') ||
+      !titleFound || !bodyFound || invalid) {
     throw new ToolFailure('The generated HTML failed the self-contained report checks.');
   }
   return {
@@ -184,6 +209,17 @@ function reportFrame(snapshot: ReturnType<FastifyInstance['workspaceCommands']['
     throw new ToolRefusal('The workspace display settings are not available yet.');
   }
   return { ...frame, pinned: false };
+}
+
+function notifyCompletion(
+  notify: FastifyRequest['announceResearchCompletion'],
+  result: { status: 'complete'; summary: string } | { status: 'failed' },
+): void {
+  try {
+    notify?.(result);
+  } catch {
+    return;
+  }
 }
 
 function createProgressView(
@@ -263,11 +299,12 @@ async function sendProgress(
 function reportRequest(
   topic: string,
   depth: 'quick' | 'deep',
+  partial: boolean,
   frame: HtmlArtifactFrame,
   findings: { query: string; answer: string }[],
   sources: HtmlArtifactSource[],
 ): string {
-  return JSON.stringify({ topic, depth, frame, findings, sources });
+  return JSON.stringify({ topic, depth, partial, frame, findings, sources });
 }
 
 export function createHtmlResearchModule(
@@ -297,6 +334,7 @@ export function createHtmlResearchModule(
             request.principal?.objectId.toLowerCase() !== ownerId.toLowerCase()) {
           throw new ToolRefusal('Research requires an authenticated workspace owner.');
         }
+        const announceCompletion = request.announceResearchCompletion;
         for (const [id, job] of jobs) {
           if (job.done) jobs.delete(id);
         }
@@ -362,10 +400,11 @@ export function createHtmlResearchModule(
             const snapshot = app.workspaceCommands.snapshot(ownerId);
             const frame = reportFrame(snapshot);
             const reportSources = sources().slice(0, maxReportSources);
+            const partial = searches.some((search) => search.status === 'failed');
             const result = await runCodexToolResult(
               clientFor(),
               'html_report',
-              reportRequest(topic, input.depth as 'quick' | 'deep', frame, findings, reportSources),
+              reportRequest(topic, input.depth as 'quick' | 'deep', partial, frame, findings, reportSources),
               model,
               jobSignal,
               invocationTimeoutMs,
@@ -380,7 +419,7 @@ export function createHtmlResearchModule(
               renderer: 'html-app',
               source: {
                 id: 'research',
-                status: searches.some((search) => search.status === 'failed') ? 'partial' : 'complete',
+                status: partial ? 'partial' : 'complete',
                 updatedAt: new Date().toISOString(),
               },
               data: { artifactId: artifact.id },
@@ -390,6 +429,7 @@ export function createHtmlResearchModule(
               throw new ToolFailure('The report did not pass workspace validation.');
             }
             await app.workspaceCommands.execute(ownerId, command, jobSignal);
+            notifyCompletion(announceCompletion, { status: 'complete', summary: result.spokenSummary });
           } catch (error) {
             if (!controller.signal.aborted) {
               const reason = error instanceof ToolRefusal
@@ -407,6 +447,7 @@ export function createHtmlResearchModule(
                 reason,
               )
                 .catch(() => undefined);
+              notifyCompletion(announceCompletion, { status: 'failed' });
             }
           } finally {
             job.done = true;

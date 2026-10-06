@@ -151,6 +151,11 @@ describe('background interactive research', () => {
     const gate = deferred();
     const runner = makeRunner(reportHtml(), gate.promise);
     const { app, commands, artifacts, artifactStore } = fixture(runner);
+    const completion = vi.fn();
+    app.addHook('preHandler', (request, _reply, done) => {
+      request.announceResearchCompletion = completion;
+      done();
+    });
     const response = await startResearch(app);
 
     expect(response.statusCode).toBe(200);
@@ -173,11 +178,20 @@ describe('background interactive research', () => {
       operation: 'update',
       view: { renderer: 'html-app', data: { artifactId: artifacts[0]!.id } },
     });
+    expect(completion).toHaveBeenCalledWith({
+      status: 'complete',
+      summary: 'The research found a supported result.',
+    });
   });
 
   it('rejects unsafe generated citations and updates the progress window with failure', async () => {
     const runner = makeRunner(reportHtml('https://untrusted.example/forged'));
     const { app, commands, artifactStore } = fixture(runner);
+    const completion = vi.fn();
+    app.addHook('preHandler', (request, _reply, done) => {
+      request.announceResearchCompletion = completion;
+      done();
+    });
     const response = await startResearch(app);
 
     expect(response.json()).toMatchObject({ outcome: 'ok' });
@@ -192,5 +206,6 @@ describe('background interactive research', () => {
         expect.objectContaining({ title: 'Research could not be completed' }),
       );
     }
+    expect(completion).toHaveBeenCalledWith({ status: 'failed' });
   });
 });

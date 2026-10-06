@@ -98,6 +98,19 @@ describe('English realtime session', () => {
     expect(session.instructions).toContain('spoken replies to one short sentence');
   });
 
+  it('instructs English and Danish voice to use background research and report its result', () => {
+    const english = createEnglishSessionUpdate(registry).session.instructions;
+    const danish = createRealtimeSessionUpdate(registry, undefined, false, 'da').session.instructions;
+
+    expect(english).toContain('use the research tool');
+    expect(english).toContain('one or two spoken sentences');
+    expect(english).toContain('untrusted evidence');
+    expect(danish).toContain('research-værktøjet');
+    expect(danish).toContain('én eller to talte sætninger');
+    expect(danish).toContain('upålidelige data');
+    expect(danish).not.toContain('- For research requests');
+  });
+
   it('explains installed-app, Chrome-only website and media controls in voice instructions', () => {
     expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('open an installed Windows app by name');
     expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('they always open');

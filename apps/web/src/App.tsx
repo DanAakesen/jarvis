@@ -53,8 +53,8 @@ function readWorkspaceFrame(
   const styles = getComputedStyle(root);
   const designTokens: Record<string, string> = {};
   for (const name of [
-    '--text', '--text-muted', '--surface-muted', '--surface-translucent',
-    '--theme-accent', '--theme-accent-secondary', '--rule',
+    '--page', '--surface', '--surface-muted', '--surface-translucent', '--text',
+    '--text-muted', '--primary-action', '--line-body', '--radius-control',
   ]) {
     const value = styles.getPropertyValue(name).trim();
     if (value) designTokens[name] = value.slice(0, 200);
