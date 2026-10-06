@@ -21,7 +21,6 @@ export function summarizeNowFeed(feed: NowFeedSnapshot): string {
     countPhrase(visible.items.filter((item) => item.category === 'release').length, 'release or deployment update', 'release or deployment updates'),
     countPhrase(visible.items.filter((item) => item.category === 'credential').length, 'credential warning', 'credential warnings'),
     countPhrase(visible.items.filter((item) => item.category === 'alert').length, 'alert', 'alerts'),
-    countPhrase(visible.items.filter((item) => item.category === 'mode').length, 'mode update', 'mode updates'),
   ];
   return `The Now feed shows ${counts.join(', ')}.`;
 }

@@ -16,6 +16,7 @@ import re
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -44,8 +45,9 @@ Speech recognition can mishear names: "Jarvis" may arrive as "Jarvi" or "Javis",
 Task ids may be spoken as numbers; use the matching id from the supplied context or tool results.
 
 Rules:
-- Use set_away_mode when Dan says he is leaving or back. Current mode is included
-  with session settings.
+- Use set_presence_mode for heading out (away), driving (on_the_move), or coming back
+  (present). This reversible change needs no confirmation; announce it. Current mode and its
+  instruction are included with session settings.
 - Vault questions: use vault_search or vault_read and rely only on returned note content.
   Include a returned GitHub link.
   If there is no match or search fails, say so plainly.
@@ -149,20 +151,41 @@ def _model_settings(value: Any) -> ModelSettings:
         raise ValueError("invalid Jarvis settings")
     model = value.get("model")
     reasoning_effort = value.get("reasoningEffort")
-    away_mode = value.get("awayMode", False)
+    mode = value.get("mode")
+    if mode is None:
+        mode = "away" if value.get("awayMode", False) else "present"
+    changed_at = value.get("changedAt")
+    away_mode = value.get("awayMode", mode != "present")
+    valid_changed_at = changed_at is None
+    if isinstance(changed_at, str):
+        try:
+            datetime.fromisoformat(changed_at.replace("Z", "+00:00"))
+            valid_changed_at = len(changed_at) <= 100 and not any(
+                ord(character) < 32 for character in changed_at
+            )
+        except ValueError:
+            pass
     personality = value.get("personality", {})
     if not isinstance(personality, dict):
         raise ValueError("invalid Jarvis settings")
     tone = personality.get("tone", "british_butler")
     response_style = personality.get("responseStyle", "concise")
     custom_instructions = personality.get("customInstructions", "")
+    mode_instructions = personality.get(
+        "modeInstructions", {"present": "", "away": "", "on_the_move": ""}
+    )
     if (
         not isinstance(model, str)
         or not model.strip()
         or len(model) > 100
         or any(ord(character) < 32 or ord(character) == 127 for character in model)
+        or not isinstance(reasoning_effort, str)
         or reasoning_effort not in {"none", "low", "medium", "high"}
+        or not isinstance(mode, str)
+        or mode not in {"present", "away", "on_the_move"}
         or not isinstance(away_mode, bool)
+        or away_mode != (mode != "present")
+        or not valid_changed_at
         or not isinstance(tone, str)
         or tone not in {"british_butler", "warm", "direct", "playful"}
         or not isinstance(response_style, str)
@@ -173,10 +196,25 @@ def _model_settings(value: Any) -> ModelSettings:
             ord(character) < 32 and character not in "\n\r\t"
             for character in custom_instructions
         )
+        or not isinstance(mode_instructions, dict)
+        or set(mode_instructions) != {"present", "away", "on_the_move"}
+        or any(
+            not isinstance(instruction, str)
+            or len(instruction) > 2_000
+            or any(ord(character) < 32 and character not in "\n\r\t" for character in instruction)
+            for instruction in mode_instructions.values()
+        )
     ):
         raise ValueError("invalid Jarvis settings")
     return ModelSettings(
-        model, reasoning_effort, tone, response_style, custom_instructions, away_mode
+        model=model,
+        reasoning_effort=reasoning_effort,
+        tone=tone,
+        response_style=response_style,
+        custom_instructions=custom_instructions,
+        mode=mode,
+        changed_at=changed_at,
+        mode_instructions=mode_instructions,
     )
 
 

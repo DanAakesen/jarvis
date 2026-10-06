@@ -145,28 +145,31 @@ describe('committed domain schema (groups 1-8)', () => {
     await expect(createTaskStore(pool, createEventHub<TaskEventMessage>())
       .transition(task.id, 'Cancelled')).resolves.toMatchObject({ kind: 'ok' });
   });
-  it('persists manual away mode across store recreation', async () => {
+  it('persists presence modes across store recreation and publishes each transition once', async () => {
     const changedAt = new Date('2026-10-04T12:00:00.000Z');
     const firstStore = createAwayModeStore(pool);
-    await firstStore.set(true, changedAt);
+    await firstStore.set('away', 'manual', changedAt);
 
     const onModeChanged = vi.fn();
     const restartedStore = createAwayModeStore(pool, onModeChanged);
     expect(await restartedStore.read()).toEqual({
-      away: true,
+      mode: 'away',
       source: 'manual',
       changedAt: changedAt.toISOString(),
     });
 
-    await restartedStore.set(false, new Date(changedAt.getTime() + 1));
-    expect(await createAwayModeStore(pool).read()).toMatchObject({ away: false, source: 'manual' });
+    await restartedStore.set('on_the_move', 'jarvis', new Date(changedAt.getTime() + 1));
+    expect(await createAwayModeStore(pool).read()).toMatchObject({ mode: 'on_the_move', source: 'jarvis' });
+    await restartedStore.set('present', 'manual', new Date(changedAt.getTime() + 2));
+    expect(await createAwayModeStore(pool).read()).toMatchObject({ mode: 'present', source: 'manual' });
     expect((await pool.request().query<{ kind: string; title: string }>(
       `SELECT kind, title FROM dbo.activity WHERE area = N'core' ORDER BY id;`,
     )).recordset).toEqual([
       { kind: 'away_mode', title: 'Away mode is on' },
-      { kind: 'away_mode', title: 'Away mode is off' },
+      { kind: 'away_mode', title: 'On the move mode is on' },
+      { kind: 'away_mode', title: 'Present mode is on' },
     ]);
-    expect(onModeChanged).toHaveBeenCalledTimes(1);
+    expect(onModeChanged).toHaveBeenCalledTimes(2);
   });
 
   it('retains source-linked memory across sessions and store restarts, then forgets without deleting sources', async () => {
@@ -422,13 +425,14 @@ describe('committed domain schema (groups 1-8)', () => {
     expect((await tasks.transition(running.id, 'Running')).kind).toBe('ok');
     expect((await tasks.transition(needsAttention.id, 'Running')).kind).toBe('ok');
     expect((await tasks.transition(needsAttention.id, 'NeedsAttention')).kind).toBe('ok');
-    await pool.request().query(`UPDATE dbo.activity
-      SET at = DATEADD(day, 1, SYSUTCDATETIME())
+    // Each task event has an activity row; a shared timestamp makes id the deterministic tie-breaker.
+    await pool.request().query(`DECLARE @attentionAt datetime2(7) = DATEADD(day, 1, SYSUTCDATETIME());
+      UPDATE dbo.activity SET at = @attentionAt
       WHERE area = N'factory' AND link = N'task:${needsAttention.id}';`);
     const attentionActivity = await pool.request().query<{ id: string }>(`SELECT TOP (1)
-      CAST(id AS varchar(19)) AS id FROM dbo.activity
-      WHERE area = N'factory' AND link = N'task:${needsAttention.id}'
-      ORDER BY at DESC, id DESC;`);
+      CAST(a.id AS varchar(19)) AS id FROM dbo.activity AS a
+      WHERE a.area = N'factory' AND a.link = N'task:${needsAttention.id}'
+      ORDER BY a.at DESC, a.id DESC;`);
     const attentionActivityId = attentionActivity.recordset[0]?.id;
     if (!attentionActivityId) throw new Error('Now feed attention activity was not created');
 
@@ -445,6 +449,7 @@ describe('committed domain schema (groups 1-8)', () => {
     expect((await tasks.transition(needsAttention.id, 'Running')).kind).toBe('ok');
     expect((await tasks.transition(needsAttention.id, 'Cancelled')).kind).toBe('ok');
     expect(initial.items.length).toBeLessThanOrEqual(100);
+    expect(initial.items.map((item) => item.category)).not.toContain('mode');
     expect(initial.items.map((item) => item.at)).toEqual(
       [...initial.items].map((item) => item.at).sort((left, right) => right.localeCompare(left)),
     );

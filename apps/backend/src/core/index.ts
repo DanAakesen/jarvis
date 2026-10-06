@@ -8,7 +8,7 @@ import { setThemeTool } from './theme.js';
 import { registerNowRoutes } from './now.js';
 import { registerUsageRoutes } from './usage.js';
 import { setJarvisModelTool } from './model-tools.js';
-import { setAwayModeTool } from './away-mode.js';
+import { setAwayModeTool, setPresenceModeTool } from './away-mode.js';
 import { getStatusSummaryTool } from './status.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspace-commands.js';
@@ -46,7 +46,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setThemeTool, setJarvisModelTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool],
+  tools: [setThemeTool, setJarvisModelTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerNowRoutes(app);

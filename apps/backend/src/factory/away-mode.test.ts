@@ -23,10 +23,10 @@ describe('away-mode task stream', () => {
   it('withholds live task events from an already-open browser stream while away', async () => {
     let away = false;
     const awayModeStore = {
-      read: vi.fn(async () => ({ away, source: away ? 'manual' : 'browser', changedAt: null })),
+      read: vi.fn(async () => ({ mode: away ? 'away' as const : 'present' as const, source: away ? 'manual' as const : 'browser' as const, changedAt: null })),
       markPresent: vi.fn(async () => {
         away = false;
-        return { away, source: 'browser', changedAt: null };
+        return { mode: 'present', source: 'browser', changedAt: null };
       }),
       set: vi.fn(),
     } as unknown as AwayModeStore;

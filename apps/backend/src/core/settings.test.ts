@@ -196,6 +196,7 @@ describe('settings API', () => {
       tone: 'warm',
       responseStyle: 'detailed',
       customInstructions,
+      modeInstructions: { present: '', away: '', on_the_move: '' },
     });
     expect(values).toEqual({
       'personality.tone': '"warm"',
@@ -224,6 +225,7 @@ describe('settings API', () => {
       tone: 'british_butler',
       responseStyle: 'concise',
       customInstructions: '',
+      modeInstructions: { present: '', away: '', on_the_move: '' },
     });
   });
 
@@ -238,6 +240,46 @@ describe('settings API', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().settings.personality.customInstructions).toHaveLength(2_000);
+  });
+
+  it('persists bounded per-mode instructions as distinct settings', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const modeInstructions = { present: 'Stay concise.', away: 'Use Teams.', on_the_move: 'Keep me safe.' };
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/settings',
+      headers: authorization,
+      payload: { settings: { personality: { modeInstructions } } },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().settings.personality.modeInstructions).toEqual(modeInstructions);
+    expect(values).toMatchObject({
+      'personality.modeInstructions.present': '"Stay concise."',
+      'personality.modeInstructions.away': '"Use Teams."',
+      'personality.modeInstructions.on_the_move': '"Keep me safe."',
+    });
+    expect((await app.inject({ url: '/settings', headers: authorization })).json().settings.personality.modeInstructions)
+      .toEqual(modeInstructions);
+  });
+
+  it.each([
+    { modeInstructions: { away: 'x'.repeat(2_001) } },
+    { modeInstructions: { present: '\u0000' } },
+    { modeInstructions: { unknown: 'not allowed' } },
+  ])('rejects invalid per-mode instructions: %j', async (personality) => {
+    const { store } = createStore();
+    const write = vi.spyOn(store, 'write');
+    const app = fixture(store);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/settings',
+      headers: authorization,
+      payload: { settings: { personality } },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(write).not.toHaveBeenCalled();
   });
 
   it('saves and reads New projects defaults', async () => {
@@ -323,10 +365,11 @@ describe('settings API', () => {
         tone: 'direct',
         responseStyle: 'balanced',
         customInstructions: 'Prefer plain language.',
+        modeInstructions: { on_the_move: 'Keep directions short.' },
       },
     });
     const awayModeStore = {
-      read: vi.fn(async () => ({ away: true, source: 'manual', changedAt: null })),
+      read: vi.fn(async () => ({ mode: 'on_the_move', source: 'manual', changedAt: '2026-10-06T12:30:00.000Z' })),
       set: vi.fn(),
       markPresent: vi.fn(),
     } as unknown as AwayModeStore;
@@ -346,8 +389,11 @@ describe('settings API', () => {
         tone: 'direct',
         responseStyle: 'balanced',
         customInstructions: 'Prefer plain language.',
+        modeInstructions: { present: '', away: '', on_the_move: 'Keep directions short.' },
       },
       awayMode: true,
+      mode: 'on_the_move',
+      changedAt: '2026-10-06T12:30:00.000Z',
     });
   });
 

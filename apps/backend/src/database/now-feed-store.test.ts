@@ -22,3 +22,20 @@ describe('Now feed notifications', () => {
     expect(onNotificationCreated).toHaveBeenCalledOnce();
   });
 });
+
+describe('Now feed activity query', () => {
+  it('does not include persisted presence transitions as feed activity', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ recordset: [] })
+      .mockResolvedValueOnce({ recordset: [] });
+    const request = { query };
+    const pool = { request: () => request } as unknown as sql.ConnectionPool;
+
+    await createNowFeedStore(pool).read();
+
+    const activityQuery = query.mock.calls[1]?.[0];
+    expect(activityQuery).toContain("N'attention' AS category");
+    expect(activityQuery).not.toContain("N'mode' AS category");
+    expect(activityQuery).not.toContain("kind = N'away_mode'");
+  });
+});

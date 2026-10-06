@@ -3,13 +3,14 @@ import type { FastifyInstance } from 'fastify';
 import type { EventHub } from './event-hub.js';
 import type { JarvisActivityHub } from './activity.js';
 import { defaultAwayModeState } from './away-mode.js';
+import { presenceModes, type PresenceMode } from './away-mode.js';
 import type { BrowserConfirmation } from '../teams/service.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
 
-export type NowActivityCategory = 'attention' | 'release' | 'credential' | 'alert' | 'mode';
+export type NowActivityCategory = 'attention' | 'release' | 'credential' | 'alert';
 
 export interface NowRunningTask {
   id: string;
@@ -48,7 +49,7 @@ export type NowFeedStatusKind = 'pull_request_ready' | 'deployment_failed' | 'ap
 
 export type NowFeedUpdate =
   | { type: 'refresh' }
-  | { type: 'mode_changed'; away: boolean }
+  | { type: 'mode_changed'; mode: PresenceMode; away: boolean }
   | { type: 'status'; kind: NowFeedStatusKind };
 
 export type NowFeedEventHub = EventHub<NowFeedUpdate>;
@@ -70,13 +71,39 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 }
 
 export function registerNowRoutes(app: FastifyInstance) {
+  app.get('/presence', async (request, reply) => {
+    if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    if (!app.awayModeStore) return reply.code(503).send({ error: 'Presence mode unavailable' });
+    reply.header('Cache-Control', 'no-store');
+    return app.awayModeStore.read();
+  });
+
+  app.put<{ Body: { mode: PresenceMode } }>('/presence', {
+    schema: {
+      body: {
+        type: 'object',
+        properties: { mode: { type: 'string', enum: [...presenceModes] } },
+        required: ['mode'],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    if (!app.awayModeStore) return reply.code(503).send({ error: 'Presence mode unavailable' });
+    return app.awayModeStore.set(request.body.mode, 'manual');
+  });
+
   app.post('/now/present', async (request, reply) => {
     if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
     if (!app.awayModeStore) return reply.code(503).send({ error: 'Away mode unavailable' });
     const state = await app.awayModeStore.markPresent();
-    return { away: state.away };
+    return { away: state.mode !== 'present' };
   });
 
   app.get('/now', async (_request, reply) => {
@@ -89,7 +116,7 @@ export function registerNowRoutes(app: FastifyInstance) {
     const confirmations = app.teamsNotifications?.pendingBrowserConfirmations() ?? [];
     return sendBounded(reply, {
       ...feed,
-      awayMode: awayMode.away,
+      awayMode: awayMode.mode !== 'present',
       confirmations,
     });
   });

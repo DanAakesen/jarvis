@@ -202,7 +202,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     void (async () => {
       let away: boolean;
       try {
-        away = (await app.awayModeStore?.read())?.away ?? false;
+        away = ((await app.awayModeStore?.read())?.mode ?? 'present') !== 'present';
       } catch {
         app.log.warn('away_mode.task_route_failed');
         return;

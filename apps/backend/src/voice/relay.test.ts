@@ -13,6 +13,7 @@ import { createLogger } from '../logging.js';
 import { coreModule } from '../core/index.js';
 import type { ConversationStore } from '../core/conversation-store.js';
 import type { SettingsStore } from '../core/settings.js';
+import type { AwayModeStore, AwayModeState } from '../core/away-mode.js';
 import type { ToolCallStore } from '../core/tool-calls.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { ReflexClassifier } from '../core/reflex.js';
@@ -98,7 +99,7 @@ function appFor(
   } satisfies ConversationStore,
   settingsStore?: SettingsStore,
   reflexClassifier?: ReflexClassifier,
-  services: Pick<BuildAppOptions, 'taskStore' | 'taskController' | 'toolCallStore'> = {},
+  services: Pick<BuildAppOptions, 'taskStore' | 'taskController' | 'toolCallStore' | 'awayModeStore'> = {},
   logLevel: 'info' | 'silent' = 'silent',
   createPartialRecognizer?: PartialSpeechRecognizerFactory,
   visionWatch?: VoiceRelayOptions['visionWatch'],
@@ -1745,6 +1746,55 @@ describe('backend-relayed Voice Live WebSocket', () => {
       `wss://resource.services.ai.azure.com/api/projects/jarvis/agents/${DANISH_VOICE_AGENT_NAME}/endpoint/protocols/voice?api-version=v1&agent_session_id=session_1`,
     );
     expect(() => createDanishVoiceAgentEndpoint(projectEndpoint, 'bad session')).toThrow(TypeError);
+  });
+
+  it('updates realtime instructions when presence changes during a voice session', async () => {
+    const received: Record<string, unknown>[] = [];
+    let presence: AwayModeState = {
+      mode: 'present',
+      source: 'browser',
+      changedAt: '2026-10-06T12:00:00.000Z',
+    };
+    const awayModeStore: AwayModeStore = {
+      read: vi.fn(async () => presence),
+      set: vi.fn(async () => presence),
+      markPresent: vi.fn(async () => presence),
+    };
+    const settingsStore = {
+      read: vi.fn(async () => ({
+        'personality.modeInstructions.on_the_move': JSON.stringify('Keep directions short.'),
+      })),
+      write: vi.fn(async () => {}),
+    } as unknown as SettingsStore;
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+      });
+    });
+    const connect = (token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') },
+      signal,
+    });
+    const { app } = appFor(connect, undefined, [], [], undefined, undefined, settingsStore, undefined, { awayModeStore });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'session.update')).toHaveLength(1));
+
+    presence = {
+      mode: 'on_the_move',
+      source: 'manual',
+      changedAt: '2026-10-06T12:15:00.000Z',
+    };
+    app.nowEventHub.publish({ type: 'mode_changed', mode: presence.mode, away: true });
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'session.update')).toHaveLength(2));
+
+    const updates = received.filter((event) => event.type === 'session.update');
+    const instructions = (updates[1]?.session as { instructions: string }).instructions;
+    expect(instructions).toContain("Dan's current mode: On the move since 2026-10-06T12:15:00.000Z.");
+    expect(instructions).toContain(JSON.stringify('Keep directions short.'));
   });
 
   it('relays Danish sessions through gpt-realtime with a Danish session update', async () => {
