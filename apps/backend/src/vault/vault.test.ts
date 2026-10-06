@@ -1,9 +1,13 @@
 import type { FastifyRequest } from 'fastify';
-import { describe, expect, it, vi } from 'vitest';
-import type { MemoryStore, VaultIndexStore, VaultIndexedChunk, VaultSearchHit } from '../database/memory-store.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { MemoryRecord, MemoryStore, MemoryVersion, VaultIndexStore, VaultIndexedChunk, VaultSearchHit } from '../database/memory-store.js';
 import type { MemoryEmbedder } from '../core/memory-embeddings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './github-client.js';
 import { createVaultModule } from './index.js';
+import { buildApp } from '../app.js';
+import { loadConfig } from '../config.js';
+import type { TokenVerifier } from '../auth/verify.js';
+import type { TeamsNotificationService } from '../teams/service.js';
 
 const sha = (character: string) => character.repeat(40);
 const signal = () => new AbortController().signal;
@@ -34,6 +38,13 @@ function fakeGitHub(initial: Record<string, RemoteFile> = {}, conflicts = 0) {
         tree: [...files].map(([path, file]) => ({ path, sha: file.sha, type: 'blob', mode: '100644' })),
       });
     }
+    if (parsed.pathname === `/repos/${VAULT_REPOSITORY}/commits`) {
+      const file = files.get(parsed.searchParams.get('path') ?? '');
+      return response(file ? [{
+        sha: file.sha,
+        commit: { committer: { date: '2026-10-06T12:00:00.000Z' }, message: 'Update note' },
+      }] : []);
+    }
     const contentPrefix = `/repos/${VAULT_REPOSITORY}/contents/`;
     if (!parsed.pathname.startsWith(contentPrefix)) throw new Error(`Unexpected GitHub request ${url}`);
     const path = decodeURIComponent(parsed.pathname.slice(contentPrefix.length));
@@ -44,6 +55,11 @@ function fakeGitHub(initial: Record<string, RemoteFile> = {}, conflicts = 0) {
         type: 'file', path, sha: file.sha, encoding: 'base64',
         content: Buffer.from(file.content).toString('base64'),
       });
+    }
+    if (method === 'DELETE' && body && typeof body.sha === 'string') {
+      if (files.get(path)?.sha !== body.sha) return response({ message: 'Conflict' }, 409);
+      files.delete(path);
+      return response({ commit: { sha: sha('d') } });
     }
     if (method !== 'PUT' || !body || typeof body.content !== 'string') {
       throw new Error(`Unexpected GitHub request ${url}`);
@@ -112,6 +128,7 @@ function moduleFor(options: {
   readonly source?: string;
   readonly embedder?: MemoryEmbedder;
   readonly conflicts?: number;
+  readonly apiMemoryStore?: MemoryStore;
 } = {}) {
   const github = fakeGitHub(options.remote, options.conflicts);
   const indexStore = options.index ?? new FakeIndexStore();
@@ -122,7 +139,13 @@ function moduleFor(options: {
     getSourceMessage: vi.fn(async (messageId: string) =>
       messageId === '42' ? { messageId, text: sourceText } : null),
   } as Pick<MemoryStore, 'getSourceMessage'>;
-  const module = createVaultModule({ client, indexStore, memoryStore, ...(options.embedder ? { embedder: options.embedder } : {}) });
+  const module = createVaultModule({
+    client,
+    indexStore,
+    memoryStore,
+    ...(options.apiMemoryStore ? { apiMemoryStore: options.apiMemoryStore } : {}),
+    ...(options.embedder ? { embedder: options.embedder } : {}),
+  });
   return { github, indexStore, module, tokenIssuer, memoryStore };
 }
 
@@ -137,6 +160,61 @@ function tool(module: ReturnType<typeof createVaultModule>, name: string) {
   if (!match) throw new Error(`Missing ${name} tool`);
   return match;
 }
+
+const apiConfig = { ...loadConfig({}), logLevel: 'silent' as const };
+const apiApps: ReturnType<typeof buildApp>[] = [];
+afterEach(async () => { await Promise.all(apiApps.splice(0).map((app) => app.close())); });
+
+function apiMemoryStore(): { store: MemoryStore; record: MemoryRecord; version: MemoryVersion } {
+  const record: MemoryRecord = {
+    id: '17',
+    category: 'preference',
+    key: 'editor',
+    content: 'Dan prefers VS Code.',
+    sourceMessageId: '42',
+    sourceText: 'I prefer VS Code.',
+    sourceTextTruncated: false,
+    revision: 2,
+    updatedAt: new Date('2026-10-06T12:00:00.000Z'),
+  };
+  const version: MemoryVersion = { ...record, changedAt: record.updatedAt };
+  const store: MemoryStore = {
+    initialize: async () => {},
+    supportsVectorSearch: () => false,
+    getSourceMessage: async () => ({ messageId: '42', text: 'I prefer VS Code.' }),
+    save: async () => ({ memory: record, created: false, changed: false }),
+    correct: vi.fn(async (_id, input) => ({
+      memory: { ...record, ...input, revision: record.revision + 1, updatedAt: new Date() },
+      created: false,
+      changed: true,
+    })),
+    list: vi.fn(async (limit) => ({ memories: [record].slice(0, limit), hasMore: false })),
+    history: vi.fn(async () => [version]),
+    forget: vi.fn(async () => ({ category: record.category, key: record.key })),
+    searchByVector: async () => [record],
+    searchByFullText: vi.fn(async () => ({ method: 'fulltext', memories: [record] })),
+  };
+  return { store, record, version };
+}
+
+function memoryApiApp(
+  module: ReturnType<typeof createVaultModule>,
+  options: { auth?: TokenVerifier; teamsNotifications?: TeamsNotificationService } = {},
+) {
+  const app = buildApp(apiConfig, undefined, {
+    modules: [module],
+    auth: options.auth ?? (async () => ({
+      objectId: apiConfig.auth.ownerObjectId,
+      tenantId: apiConfig.auth.tenantId,
+      displayName: 'Dan',
+    })),
+    ...(options.teamsNotifications ? { teamsNotifications: options.teamsNotifications } : {}),
+  });
+  apiApps.push(app);
+  return app;
+}
+
+const apiAuthorization = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
 
 describe('GitHub vault', () => {
   it('indexes added and changed Markdown, deletes removed notes, and skips excluded paths and binaries', async () => {
@@ -305,5 +383,169 @@ describe('GitHub vault', () => {
       path: 'General/large.md', append: 'More.', reason: 'capture',
     }, request, signal())).rejects.toThrow('limited to 256 KB');
     expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+  });
+
+  it('lists memory and vault notes, exposes history/status, and corrects or forgets durable memories', async () => {
+    const { store } = apiMemoryStore();
+    const { module } = moduleFor({
+      apiMemoryStore: store,
+      remote: { 'People/Alex.md': { sha: sha('a'), content: '# Alex\n\nEngineer.' } },
+    });
+    await module.synchronize(signal());
+    const app = memoryApiApp(module);
+
+    expect((await app.inject({ url: '/memory' })).statusCode).toBe(401);
+    const forbidden = memoryApiApp(module, {
+      auth: async () => ({
+        objectId: 'not-dan',
+        tenantId: apiConfig.auth.tenantId,
+        displayName: 'Other',
+      }),
+    });
+    expect((await forbidden.inject({ url: '/memory', headers: apiAuthorization })).statusCode).toBe(403);
+    const firstPage = await app.inject({ url: '/memory?limit=1', headers: apiAuthorization });
+    expect(firstPage.statusCode).toBe(200);
+    expect(firstPage.json()).toMatchObject({
+      items: [{ id: '17', type: 'memory', folder: 'General', title: 'editor', source: { messageId: '42' } }],
+      hasMore: true,
+    });
+    const secondPage = await app.inject({ url: '/memory?offset=1&limit=1', headers: apiAuthorization });
+    expect(secondPage.json().items).toMatchObject([{
+      type: 'vault_note',
+      path: 'People/Alex.md',
+      folder: 'People',
+      source: { type: 'github', url: 'https://github.com/DanAakesen/vault/blob/master/People/Alex.md' },
+    }]);
+
+    const details = await app.inject({ url: '/memory/17', headers: apiAuthorization });
+    expect(details.json()).toMatchObject({
+      id: '17',
+      content: 'Dan prefers VS Code.',
+      history: [{ revision: 2, content: 'Dan prefers VS Code.' }],
+    });
+    const status = await app.inject({ url: '/memory/status', headers: apiAuthorization });
+    expect(status.json()).toMatchObject({
+      notesByFolder: { People: 1, Work: 0, Personal: 0, General: 0 },
+      lastIndexOutcome: { outcome: 'ok', added: 1 },
+    });
+    expect(status.json().lastVaultSyncAt).toEqual(expect.any(String));
+
+    const corrected = await app.inject({
+      method: 'PATCH', url: '/memory/17', headers: apiAuthorization, payload: { text: 'Prefer Cursor and VS Code.' },
+    });
+    expect(corrected.statusCode).toBe(200);
+    expect(store.correct).toHaveBeenCalledWith('17', expect.objectContaining({
+      content: 'Prefer Cursor and VS Code.',
+      sourceMessageId: '42',
+    }), expect.any(AbortSignal));
+    const forgotten = await app.inject({ method: 'DELETE', url: '/memory/17', headers: apiAuthorization });
+    expect(forgotten.statusCode).toBe(204);
+    expect(store.forget).toHaveBeenCalledWith('17', '42', expect.any(AbortSignal));
+    expect((await app.inject({
+      method: 'PATCH', url: '/memory/17', headers: apiAuthorization,
+      payload: { text: 'api_key: abcdefghijklmnopqrstuvwxyz123456' },
+    })).statusCode).toBe(400);
+    expect((await app.inject({
+      method: 'PATCH', url: '/memory/17', headers: apiAuthorization,
+      payload: { text: 'Health diagnosis details.' },
+    })).statusCode).toBe(400);
+    expect((await app.inject({
+      method: 'PATCH', url: '/memory/17', headers: apiAuthorization,
+      payload: { text: 'x'.repeat(2_001) },
+    })).statusCode).toBe(400);
+    expect((await app.inject({ url: '/memory?folder=Secrets', headers: apiAuthorization })).statusCode).toBe(400);
+  });
+
+  it('uses vector search before the existing full-text fallback for API queries', async () => {
+    const { store } = apiMemoryStore();
+    store.supportsVectorSearch = () => true;
+    const vectorSearch = vi.fn(async () => [] as MemoryRecord[]);
+    store.searchByVector = vectorSearch;
+    const index = new FakeIndexStore(true);
+    index.setRankedHits([{ path: 'People/Alex.md', heading: 'Alex', content: 'Engineer.' }]);
+    const embedder = { embed: vi.fn(async () => [0.5]) };
+    const { module } = moduleFor({
+      apiMemoryStore: store,
+      remote: { 'People/Alex.md': { sha: sha('a'), content: '# Alex\n\nEngineer.' } },
+      index,
+      embedder,
+    });
+    await module.synchronize(signal());
+
+    const response = await memoryApiApp(module).inject({
+      url: '/memory?query=Alex&limit=10',
+      headers: apiAuthorization,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(embedder.embed).toHaveBeenCalledWith('Alex', expect.any(AbortSignal));
+    expect(vectorSearch).toHaveBeenCalledOnce();
+    expect(store.searchByFullText).toHaveBeenCalledOnce();
+    expect(index.vectorSearch).toHaveBeenCalledOnce();
+    expect(response.json()).toMatchObject({
+      method: 'fulltext',
+      items: expect.arrayContaining([expect.objectContaining({ type: 'vault_note', path: 'People/Alex.md' })]),
+    });
+  });
+
+  it('redacts credential-like content from memory detail and history responses', async () => {
+    const { store, version } = apiMemoryStore();
+    const credentialVersion = { ...version, content: 'password: never-return-this-value' };
+    store.history = vi.fn(async () => [credentialVersion]);
+    const { module } = moduleFor({ apiMemoryStore: store });
+
+    const response = await memoryApiApp(module).inject({ url: '/memory/17', headers: apiAuthorization });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().content).toBe('[redacted]');
+    expect(response.json().history[0].content).toBe('[redacted]');
+    expect(response.body).not.toContain('never-return-this-value');
+  });
+
+  it('commits vault corrections and holds vault deletion behind browser approval', async () => {
+    const { store } = apiMemoryStore();
+    const { github, module } = moduleFor({
+      apiMemoryStore: store,
+      remote: {
+        'AGENTS.md': { sha: sha('a'), content: '# Routing\nPeople/ Work/ Personal/ General/' },
+        '.github/agent-state/routing.md': {
+          sha: sha('b'), content: 'Route notes to People/, Work/, Personal/ or General/.',
+        },
+        'People/Alex.md': { sha: sha('c'), content: '# Alex\n\nEngineer.' },
+      },
+    });
+    const path = 'People/Alex.md';
+    const id = `vault_${Buffer.from(path, 'utf8').toString('base64url')}`;
+    let approve: (() => Promise<unknown>) | undefined;
+    const runConfirmed = vi.fn((_kind: unknown, _summary: unknown, action: () => Promise<unknown>) =>
+      new Promise<unknown>((resolve, reject) => {
+        approve = async () => {
+          try { resolve(await action()); } catch (error) { reject(error); }
+        };
+      }));
+    const notifications = { runConfirmed } as unknown as TeamsNotificationService;
+    const app = memoryApiApp(module, { teamsNotifications: notifications });
+
+    const correction = await app.inject({
+      method: 'PATCH', url: `/memory/${id}`, headers: apiAuthorization,
+      payload: { text: '# Alex\n\nSenior engineer.' },
+    });
+    expect(correction.statusCode).toBe(200);
+    expect(correction.json().commitUrl).toBe(`https://github.com/DanAakesen/vault/commit/${sha('f')}`);
+    expect(github.calls.find(({ method }) => method === 'PUT')?.body).toMatchObject({
+      branch: 'master',
+      message: expect.stringContaining('correct memory note'),
+    });
+
+    const deletion = await app.inject({ method: 'DELETE', url: `/memory/${id}`, headers: apiAuthorization });
+    expect(deletion.statusCode).toBe(202);
+    expect(deletion.json()).toEqual({ status: 'approval_pending', message: 'approval pending in Jarvis' });
+    expect(runConfirmed).toHaveBeenCalledWith('delete', expect.stringContaining(path), expect.any(Function), expect.any(AbortSignal));
+    expect(github.calls.some(({ method }) => method === 'DELETE')).toBe(false);
+    const repeated = await app.inject({ method: 'DELETE', url: `/memory/${id}`, headers: apiAuthorization });
+    expect(repeated.statusCode).toBe(202);
+    expect(runConfirmed).toHaveBeenCalledTimes(1);
+
+    await approve!();
+    expect(github.calls.some(({ method }) => method === 'DELETE')).toBe(true);
+    expect(github.files.has(path)).toBe(false);
   });
 });

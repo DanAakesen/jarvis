@@ -1140,6 +1140,30 @@ The repository is private and was unavailable for live validation; Dan must
 install the existing GitHub App on `DanAakesen/vault` with Contents read/write
 before indexing and writes can succeed.
 
+P7-42 adds a Dan-only Settings API; there are no `apps/web` changes. `GET
+/memory` returns durable SQL memories followed by indexed vault notes, with
+`query`, `folder` (`People`, `Work`, `Personal`, `General`), `limit` (1–50) and
+`offset` (0–10,000) filters. Durable memories are grouped under General. Search
+uses the existing vector retrieval and falls back to full-text/term search.
+Memory IDs are their decimal SQL IDs; vault IDs are opaque `vault_`-prefixed
+base64url paths, and each vault result also includes its validated `path`.
+Conversation sources link to authenticated conversation history; vault sources
+link to the GitHub blob on `master`.
+
+`GET /memory/{id}` returns the current item and up to ten versions. `PATCH
+/memory/{id}` accepts only `{ "text": ... }`; durable-memory edits use the
+existing SQL history, while vault-note edits commit to `master` with a clear
+Jarvis commit message and return `commitUrl`. `DELETE /memory/{id}` immediately
+forgets a durable SQL memory (204); vault-note deletion returns 202 with
+`approval pending in Jarvis`, then waits for the existing browser `runConfirmed`
+approval before deleting the GitHub file. Vault deletion is refused while Jarvis
+is away, when approval is unavailable, or for any path outside the four note
+folders. `GET /memory/status` reports the latest sync attempt, indexed note
+counts per folder, and the last `vault.index` outcome. API responses are
+uncached, bounded, and redact credential-like text; no database migration is
+needed. Durable-memory edits are capped at 2,000 characters; vault-note edits
+are capped at 256 KiB, and note history is response-size bounded.
+
 ### New project creation (P3-12)
 
 The `create_project` tool accepts only a repository name and description. It reads

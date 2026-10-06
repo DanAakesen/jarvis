@@ -35,6 +35,7 @@ const maxVaultChunks = 512;
 const maxMemoryApiResults = 50;
 const maxMemoryApiOffset = 10_000;
 const maxMemoryApiHistory = 10;
+const maxMemoryApiHistoryBytes = 512 * 1024;
 const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
 const sensitivePattern = /\b(?:bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b/iu;
 const secretPattern = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{20,})\b|(?:password|client[_ -]?secret|api[_ -]?key|access[_ -]?token)\s*[:=]\s*["']?[^\s"']{8,}/iu;
@@ -91,7 +92,7 @@ function safeFolder(path: string): string | undefined {
 
 function isRoutedNotePath(path: string): boolean {
   try {
-    return safeFolder(validatePath(path)) !== undefined;
+    return safeFolder(validatePath(path)) !== undefined && !shouldRedact(path);
   } catch {
     return false;
   }
@@ -195,7 +196,7 @@ function vaultPathFromId(id: string): string | undefined {
     const encoded = id.slice('vault_'.length);
     const path = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(encoded, 'base64url'));
     if (Buffer.from(path, 'utf8').toString('base64url') !== encoded) return undefined;
-    return validatePath(path);
+    return isRoutedNotePath(path) ? validatePath(path) : undefined;
   } catch {
     return undefined;
   }
@@ -206,7 +207,7 @@ function conversationUrl(messageId: string): string {
 }
 
 function memoryApiItem(record: MemoryRecord): MemoryApiItem {
-  const redacted = secretPattern.test(`${record.key}\n${record.content}`);
+  const redacted = shouldRedact(`${record.key}\n${record.content}`);
   return {
     id: record.id,
     type: 'memory',
@@ -223,7 +224,7 @@ function memoryApiItem(record: MemoryRecord): MemoryApiItem {
 }
 
 function memoryHistoryItem(version: MemoryVersion) {
-  const redacted = secretPattern.test(`${version.key}\n${version.content}`);
+  const redacted = shouldRedact(`${version.key}\n${version.content}`);
   return {
     id: version.id,
     category: version.category,
@@ -240,7 +241,7 @@ function memoryHistoryItem(version: MemoryVersion) {
 }
 
 function vaultApiItem(path: string, content: string, updatedAt: Date): MemoryApiItem {
-  const redacted = secretPattern.test(content);
+  const redacted = shouldRedact(content);
   const filename = path.slice(path.lastIndexOf('/') + 1);
   return {
     id: vaultItemId(path),
@@ -252,6 +253,10 @@ function vaultApiItem(path: string, content: string, updatedAt: Date): MemoryApi
     updatedAt: updatedAt.toISOString(),
     source: { type: 'github', url: noteUrl(path) },
   };
+}
+
+function shouldRedact(value: string): boolean {
+  return credentialPattern.test(value) || secretPattern.test(value);
 }
 
 function queryTerms(value: string): string[] {
@@ -435,13 +440,14 @@ export function createVaultModule(options: {
     readonly content?: string;
     readonly append?: string;
     readonly reason: string;
-  }, source: string, signal: AbortSignal): Promise<{ path: string; commit: string }> {
+  }, source: string, signal: AbortSignal, requireExisting = false): Promise<{ path: string; commit: string }> {
     const rules = await loadRoutingRules(signal);
     if (!rules.folders.has(safeFolder(path) ?? '')) {
       throw new ToolRefusal('That folder is not allowed by the vault routing rules. Nothing was written.');
     }
     let current = await options.client.read(path, signal);
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (requireExisting && !current) throw new ToolRefusal('The vault note no longer exists. Nothing was written.');
       const next = value.content !== undefined
         ? value.content
         : `${current?.content ?? ''}${current?.content && !current.content.endsWith('\n') ? '\n' : ''}${value.append ?? ''}`;
@@ -702,7 +708,8 @@ export function createVaultModule(options: {
           const terms = memorySearchTerms(query);
           if (terms.length > 0) {
             let embedding: readonly number[] | undefined;
-            if (options.embedder && store.supportsVectorSearch()) {
+            if (options.embedder &&
+                (store.supportsVectorSearch() || options.indexStore.supportsVectorSearch())) {
               try {
                 embedding = await options.embedder.embed(query, signal);
               } catch (error) {
@@ -743,9 +750,10 @@ export function createVaultModule(options: {
           const notes = noteFiles.filter(({ path }) => isRoutedNotePath(path) &&
             (folder === undefined || safeFolder(path) === folder));
           const eligibleMemories = folder === undefined || folder === 'General' ? memories : [];
-          const pageItems: MemoryApiItem[] = eligibleMemories.map(memoryApiItem);
+          const memoryItems = eligibleMemories.slice(offset, offset + limit + 1).map(memoryApiItem);
+          const pageItems: MemoryApiItem[] = [...memoryItems];
           const noteOffset = Math.max(0, offset - eligibleMemories.length);
-          const noteLimit = Math.max(0, limit + 1 - Math.max(0, eligibleMemories.length - offset));
+          const noteLimit = Math.max(0, limit + 1 - memoryItems.length);
           const notePage = notes.slice(noteOffset, noteOffset + noteLimit);
           for (const file of notePage) {
             const note = await options.client.read(file.path, signal);
@@ -753,7 +761,7 @@ export function createVaultModule(options: {
             const [commit] = await options.client.history(file.path, 1, signal);
             pageItems.push(vaultApiItem(note.path, note.content, commit?.updatedAt ?? new Date(0)));
           }
-          const items = pageItems.slice(offset < eligibleMemories.length ? offset : 0, limit + 1);
+          const items = pageItems.slice(0, limit + 1);
           return {
             items: items.slice(0, limit),
             count: Math.min(items.length, limit),
@@ -808,8 +816,8 @@ export function createVaultModule(options: {
           return {
             ...memoryApiItem(current),
             category: current.category,
-            key: secretPattern.test(`${current.key}\n${current.content}`) ? '[redacted]' : current.key,
-            content: secretPattern.test(`${current.key}\n${current.content}`) ? '[redacted]' : current.content,
+            key: shouldRedact(`${current.key}\n${current.content}`) ? '[redacted]' : current.key,
+            content: shouldRedact(`${current.key}\n${current.content}`) ? '[redacted]' : current.content,
             history: versions.slice(0, maxMemoryApiHistory).map(memoryHistoryItem),
             mayHaveMore: versions.length > maxMemoryApiHistory,
           };
@@ -820,13 +828,17 @@ export function createVaultModule(options: {
         if (!note) return reply.code(404).send({ error: 'Memory not found' });
         const commits = await options.client.history(path, maxMemoryApiHistory, signal);
         const history = [];
+        let historyBytes = 0;
         for (const commit of commits) {
           const version = await options.client.read(path, signal, commit.sha);
           if (!version) continue;
-          const redacted = secretPattern.test(version.content);
+          const contentBytes = Buffer.byteLength(version.content, 'utf8');
+          if (historyBytes + contentBytes > maxMemoryApiHistoryBytes) break;
+          historyBytes += contentBytes;
+          const redacted = shouldRedact(version.content);
           history.push({
             updatedAt: commit.updatedAt.toISOString(),
-            message: secretPattern.test(commit.message) ? '[redacted]' : commit.message,
+            message: shouldRedact(commit.message) ? '[redacted]' : commit.message,
             url: commitUrl(commit.sha),
             content: redacted ? '[redacted]' : version.content,
           });
@@ -834,9 +846,9 @@ export function createVaultModule(options: {
         const [latest] = commits;
         return {
           ...vaultApiItem(path, note.content, latest?.updatedAt ?? new Date(0)),
-          content: secretPattern.test(note.content) ? '[redacted]' : note.content,
+          content: shouldRedact(note.content) ? '[redacted]' : note.content,
           history,
-          mayHaveMore: commits.length === maxMemoryApiHistory,
+          mayHaveMore: history.length < commits.length || commits.length === maxMemoryApiHistory,
         };
       });
 
@@ -860,13 +872,14 @@ export function createVaultModule(options: {
         if (!ownerOnly(request, reply) || !apiStore(reply)) return;
         const text = request.body.text.trim();
         if (!text || Buffer.byteLength(text, 'utf8') > MAX_VAULT_FILE_BYTES ||
-            credentialPattern.test(text) || secretPattern.test(text)) {
-          return reply.code(400).send({ error: 'Memory text is invalid or contains a secret' });
+            credentialPattern.test(text) || secretPattern.test(text) || sensitivePattern.test(text)) {
+          return reply.code(400).send({ error: 'Memory text is invalid or contains restricted sensitive content' });
         }
         const signal = AbortSignal.timeout(30_000);
         const id = request.params.id;
         if (/^[1-9][0-9]{0,18}$/u.test(id)) {
           if (BigInt(id) > maxSqlMessageId) return reply.code(400).send({ error: 'Invalid memory ID' });
+          if (text.length > 2_000) return reply.code(400).send({ error: 'Durable memory text exceeds 2,000 characters' });
           const versions = await options.apiMemoryStore!.history(id, 1, signal);
           const current = versions[0];
           if (!current) return reply.code(404).send({ error: 'Memory not found' });
@@ -892,9 +905,10 @@ export function createVaultModule(options: {
         }
         const current = await options.client.read(path, signal);
         if (!current) return reply.code(404).send({ error: 'Memory not found' });
-        const result = await write(path, { content: text, reason: 'correct memory note' }, '', signal);
+        const result = await write(path, { content: text, reason: 'correct memory note' }, '', signal, true);
+        const [latestCommit] = await options.client.history(path, 1, signal);
         return {
-          item: vaultApiItem(path, text, new Date()),
+          item: vaultApiItem(path, text, latestCommit?.updatedAt ?? new Date()),
           commitUrl: commitUrl(result.commit),
         };
       });
@@ -941,6 +955,7 @@ export function createVaultModule(options: {
         void service.runConfirmed('delete', `Permanently delete vault note ${path}.`, async () => {
           const latest = await options.client.read(path, AbortSignal.timeout(15_000));
           if (!latest) return;
+          if (latest.sha !== note.sha) throw new VaultWriteConflictError();
           const commit = await options.client.delete(
             path,
             latest.sha,
