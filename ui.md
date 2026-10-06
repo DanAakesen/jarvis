@@ -647,3 +647,17 @@ Dan supplied screenshots of Listening overlapping End voice/long language feedba
 Keep the selected material, scene and core identity, Jarvis-only mounting, shared themes, window/tab continuity, default-off minimise preference, drafts and steering/queue. Reduced motion retains a clear steady state; adaptive tiers and rendering fallback remain. #398 owns the separate shell/input/message-window work; coordinate shared files rather than duplicate it. #417 requires relevant behavior checks, desktop/narrow-phone layout evidence and an observed motion sequence; still images alone do not validate the animation. Live microphone/provider/device/GPU results must be distinguished from fixtures.
 
 PR #419 reviewer evidence: [desktop voice](docs/ui/screenshots/p8-40-review-desktop-listening.png), [phone voice](docs/ui/screenshots/p8-40-review-phone-listening.png), and [browser report](docs/ui/screenshots/p8-40-review-browser-report.json). The real browser client used scratch authentication/voice protocol and a fake microphone device. Listening sits beneath the orb, the compact bar has only More/End voice, and ending returns typing. These checks do not establish live provider or physical-device behavior.
+
+
+## Voice UI hotfix — 6 October 2026 (#435)
+
+Dan requested one direct hotfix after reviewing the implemented voice interface:
+
+- Replace the menu-overlay guidance and text leaking into the composer with bottom-right notification toasts.
+- Enable starting and stopping screen/camera sharing from voice More, with browser permission and on-request inspection.
+- Remove the under-orb status background and colored dot; use bright white text with a subtle light effect.
+- Keep the approved wake effect. Dormant/waiting should retain lighting and subtle motion; increase orange-core movement when awake and gently while dormant.
+
+These changes retain the same room, mirror, transparent orb identity, microphone lifecycle, themes, adaptive rendering and reduced-motion support. #398/#418 still own the separate shell/input/message-window redesign. No new prototype or additional split issue is needed.
+
+Local implementation evidence: [dormant orb](docs/ui/screenshots/p8-43-dormant.png), [awake status](docs/ui/screenshots/p8-43-awake.png), [bottom-right toast](docs/ui/screenshots/p8-43-toast.png), [phone](docs/ui/screenshots/p8-43-phone.png), [typing after permission failure](docs/ui/screenshots/p8-43-typing-after-error.png), and [browser report](docs/ui/screenshots/p8-43-browser-report.json). Native media devices and backend/socket responses were fixtures; live-provider and hardware results remain unverified.

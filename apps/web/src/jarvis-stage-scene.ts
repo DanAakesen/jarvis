@@ -533,7 +533,7 @@ function createJarvisStageSceneWithRenderer(
     const scale = pixelRadius * (-cameraDepth) * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) /
       height / 1.12;
     // The surge expands then settles; listening breathes and speech swells the shell slightly.
-    const pulse = 1 + live.surge * 0.085 + live.listen * (breath - 0.5) * 0.022 + speechLight * 0.04 -
+    const pulse = 1 + (1 - live.awake) * (breath - 0.5) * 0.012 + live.surge * 0.085 + live.listen * (breath - 0.5) * 0.022 + speechLight * 0.04 -
       live.think * 0.012;
     orbRig.scale.setScalar(scale * pulse);
     orbLight.position.copy(orbWorld);
@@ -542,7 +542,7 @@ function createJarvisStageSceneWithRenderer(
     wallLight.target.position.set(orbWorld.x * 0.72, orbWorld.y * 0.8 + 0.7, -14.5);
 
     const toolFlicker = current.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(time * 9.5);
-    const power = (0.24 + 0.68 * live.awake + live.surge * 0.75 + live.waveStrength * 0.18 +
+    const power = (0.34 + (1 - live.awake) * 0.04 * breath + 0.58 * live.awake + live.surge * 0.75 + live.waveStrength * 0.18 +
       live.listen * (0.04 + 0.06 * breath + live.input * 0.12) + live.think * 0.03 +
       live.tool * (0.06 + 0.08 * toolFlicker) + live.speak * 0.08 + speechLight * 0.55) * palette.glow;
     themeColors.current.copy(themeColors.orb);
@@ -550,7 +550,7 @@ function createJarvisStageSceneWithRenderer(
     orbVisual.update(time, live);
     orbLight.color.copy(orbVisual.uniforms.uColor.value);
     orbLight.intensity = 100 * power;
-    amberLight.intensity = 3 + 16 * live.ignite + 14 * live.surge + 7 * live.think + 16 * speechLight;
+    amberLight.intensity = 5 + (1 - live.awake) * 1.5 * breath + 14 * live.ignite + 14 * live.surge + 7 * live.think + 16 * speechLight;
     wallLight.color.copy(orbVisual.uniforms.uColor.value);
     wallLight.intensity = 100 * power;
     particleUniforms.uTime.value = time;

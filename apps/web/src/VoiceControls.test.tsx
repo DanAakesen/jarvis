@@ -217,15 +217,62 @@ describe('VoiceControls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Language', 'Mute microphone', 'Look at screen', 'Look at camera',
+      'Language', 'Mute microphone', 'Look at screen', 'Stop sharing screen', 'Turn on camera',
     ]);
     expect(screen.getByRole('menuitem', { name: 'Look at screen' }).getAttribute('aria-disabled')).toBeNull();
-    const cameraItem = screen.getByRole('menuitem', { name: 'Look at camera' });
-    expect(cameraItem.getAttribute('aria-disabled')).toBe('true');
-    expect(cameraItem.getAttribute('title')).toBe('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
+    const cameraItem = screen.getByRole('menuitem', { name: 'Turn on camera' });
+    expect(cameraItem.getAttribute('aria-disabled')).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Look at screen' }));
     expect(screen.queryByRole('menu')).toBeNull();
     expect(screenShare.inspect).toHaveBeenCalledWith('42');
+  });
+
+  it('starts screen and camera capture from More without inspecting a frame, then offers stop controls', async () => {
+    const capture = () => ({ sharing: false, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(async () => ({ description: 'A desk.' })) });
+    const screenShare = capture();
+    const camera = capture();
+    const props = { client: {} as PublicClientApplication, config, screenShare, camera };
+    const { rerender } = render(<VoiceControls {...props} />);
+    const { options, listen } = startVoice();
+    act(() => options.onSessionReady('42'));
+    listen();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Share screen' }));
+    expect(screenShare.start).toHaveBeenCalledOnce();
+    expect(screenShare.inspect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Turn on camera' }));
+    expect(camera.start).toHaveBeenCalledOnce();
+    expect(camera.inspect).not.toHaveBeenCalled();
+    rerender(<VoiceControls {...props} screenShare={{ ...screenShare, sharing: true }} camera={{ ...camera, sharing: true }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Stop sharing screen' }));
+    expect(screenShare.stop).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Turn off camera' }));
+    expect(camera.stop).toHaveBeenCalledOnce();
+  });
+
+  it('portals permission failures outside the menu and composer, even after voice ends', () => {
+    const camera = { sharing: false, starting: false, inspecting: false, error: '',
+      start: vi.fn(async (onError?: (message: string) => void) => {
+        onError?.('Camera access was not started. Allow camera access and try again.');
+      }), stop: vi.fn(), inspect: vi.fn() };
+    const { container } = render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
+    startVoice().listen();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Turn on camera' }));
+    const toast = screen.getByRole('alert').closest('.conversation-toast');
+    expect(toast?.parentElement).toBe(document.body);
+    expect(container.contains(toast)).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByRole('menu').contains(toast)).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'End voice' }));
+    expect(container.querySelector('.voice-screen-error')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Start voice' })).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('closes an open menu with Escape before Escape ends voice', () => {

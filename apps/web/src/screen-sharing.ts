@@ -12,7 +12,7 @@ export interface ScreenShareController {
   readonly starting: boolean;
   readonly inspecting: boolean;
   readonly error: string;
-  start(): Promise<void>;
+  start(onError?: (message: string) => void): Promise<void>;
   stop(): void;
   inspect(sessionId: string): Promise<VisionContext>;
 }
@@ -116,15 +116,16 @@ function useVisionCapture(
     setStarting(false);
   }, []);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (onError?: (message: string) => void) => {
     setError('');
+    const fail = (message: string) => { setError(message); onError?.(message); };
     if (streamRef.current || startPendingRef.current) return;
     if (source === 'camera' && !navigator.mediaDevices?.getUserMedia) {
-      setError('Camera access is not available in this browser.');
+      fail('Camera access is not available in this browser.');
       return;
     }
     if (source === 'screen' && !navigator.mediaDevices?.getDisplayMedia) {
-      setError('Screen sharing is not available in this browser.');
+      fail('Screen sharing is not available in this browser.');
       return;
     }
 
@@ -145,7 +146,7 @@ function useVisionCapture(
       const track = stream.getVideoTracks().find(({ readyState }) => readyState === 'live');
       if (!track) {
         for (const streamTrack of stream.getTracks()) streamTrack.stop();
-        setError(`No live ${label} video is available.`);
+        fail(`No live ${label} video is available.`);
         return;
       }
       streamRef.current = stream;
@@ -154,7 +155,7 @@ function useVisionCapture(
       setSharing(true);
     } catch {
       if (requestId === startRequestRef.current) {
-        setError(source === 'camera'
+        fail(source === 'camera'
           ? 'Camera access was not started. Allow camera access and try again.'
           : 'Screen sharing was not started. Choose a window or screen and try again.');
       }
