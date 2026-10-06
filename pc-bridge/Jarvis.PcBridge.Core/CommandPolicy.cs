@@ -45,6 +45,9 @@ public static class CommandPolicy
         };
     }
 
+    public static bool IsControlAction(string command) => command is
+        "open_url" or "open_app" or "open_folder" or "focus_window" or "uia_act" or "browser_act";
+
     public static bool IsMediaAction(string? action) => TryGetMediaVirtualKey(action, out _);
 
     public static bool TryGetMediaVirtualKey(string? action, out ushort virtualKey)

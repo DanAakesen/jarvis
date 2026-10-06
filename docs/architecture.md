@@ -694,17 +694,27 @@ companion never logs tokens, device codes, command arguments, URLs, paths, windo
 titles, or message content.
 
 Online/offline changes update one existing Now-feed activity row keyed by
-`pc_bridge_status`; status writes are serialized and the feed refresh happens
-after commit. This uses `activity.alert_key` and requires no migration. The
+`pc_bridge_status`; the same row reports whether Jarvis control is active or
+paused. Status writes are serialized and the feed refresh happens after commit.
+The tray's persisted **Pause Jarvis control** toggle reports its state over the
+authenticated WebSocket, and the bridge refuses app opening, navigation, focus,
+UI Automation actions, and browser actions while paused. Read-only window/tab
+inspection remains available. This uses `activity.alert_key` and requires no
+migration. The
 portable policy tests, backend protocol tests with a fake WebSocket bridge, and
 Linux Windows-target build run in backend CI. Real device-code sign-in, Windows
 process/window behavior, SQL production writes and the live PC opening flow
 remain unverified.
 
-### Windows UI Automation app control (P7-07)
+### Windows UI Automation app control (P7-07, expanded by P7-32)
 
 The backend registers the sensitive `pc_act` tool only when the existing Jev
 client is configured. It reuses the authenticated PC bridge and its bounded
+`uia_snapshot`/`uia_act` commands; no new route, credential, or migration is
+added. Any foreground Windows app is eligible; application names are bounded
+and validated but not allow-listed. The Windows provider traverses at most
+1,000 controls and depth 12, checking a one-second traversal budget and
+cancellation between traversal batches. The portable policy returns at most
 `uia_snapshot`/`uia_act` commands; no new route, credential, persistence, or
 migration is added. Any bounded foreground Windows process identifier is
 eligible. The Windows provider traverses at most 1,000
@@ -721,6 +731,14 @@ supported control pattern. Only fixed click, type, and small-scroll operations
 are exposed. Jev makes one decision per fresh snapshot, for at most 20 steps or
 30 seconds, with a 1.2-second request timeout; cancellation reaches both the
 planner and bridge. Typed content must be an exact, non-sensitive value quoted
+in Dan's request. Send, delete, pay/payment, purchase, post, push, and overwrite
+actions use the existing P7-03 `computer_use` approval flow and retry the same
+observed element only after approval; missing approval refuses the action.
+Reversible submit, remove, replace, and other controls do not require approval.
+The approval identifies the clicked control or text replacement using a
+bounded app/control label, without including the goal or typed text. Website
+tasks remain on P7-17–P7-19's Chrome-only path, and this tool does not use
+Foundry computer-use.
 in Dan's request. Risky intents and destructive control names use the existing
 P7-03 `computer_use` approval flow and retry the same observed element only
 after approval; only irreversible actions require approval, and missing
@@ -732,8 +750,9 @@ Chrome-only path, and this tool does not use Foundry computer-use.
 Generic tool auditing records only the outcome for this sensitive tool. The
 `pc_act.step` telemetry allow-list exports only step number, fixed action name,
 and outcome—never goals, control labels, typed text, screenshots, or UIA
-values. Fake-tree and backend tests cover the policy and protocol; the backend
-lint/build and Linux Windows-target build pass. A cancellation token cannot
+values. Fake-tree and backend tests cover non-allow-listed-app control, pause/status,
+approval and the protocol; all 92 .NET core tests, 31 focused backend tests,
+backend lint/build and the Linux Windows-target build pass. A cancellation token cannot
 preempt an individual synchronous UI Automation COM call. Live Jev calls,
 Windows UIA responsiveness/cancellation, physical approval delivery, and Dan's
 end-to-end app task remain unverified.
@@ -773,6 +792,8 @@ operations; the bridge never accepts or evaluates a model-provided script.
 
 Password, payment-card and one-time-code fields are omitted from values and
 refuse typing; code-like numeric and Luhn-valid card-number text is also
+refused. Only send/delete/pay/payment/purchase/post/push/overwrite clicks return a confirmation
+request without acting. The backend uses the existing P7-03 `computer_use`
 refused. Only irreversible submit/send/delete/payment/publish/push/overwrite-style clicks
 return a confirmation request without acting; reversible settings and sign-in
 clicks do not. The backend uses the existing P7-03 `computer_use`
@@ -806,9 +827,9 @@ visible control table. That request chooses the operation and speculative
 indexed targets for click, type, select, scroll, and wait. The backend accepts
 only a high-confidence choice present in that snapshot; the selected index and
 snapshot ID go unchanged to `pc_browser_act`, where the PC bridge rechecks the
-same DOM node, freshness, visibility and occlusion. Clicks that the bridge
-identifies as submit/send/delete/sign-in/payment actions still require the
-existing P7-03 approval flow. The Foundry `gpt-5.6-luna` chat deployment with
+same DOM node, freshness, visibility and occlusion. Clicks on controls named
+send/delete/pay/payment/purchase/post/push/overwrite still require the existing
+P7-03 approval flow. The Foundry `gpt-5.6-luna` chat deployment with
 reasoning disabled writes a small validated JSON text value only for TYPE; a
 separate JSON check independently verifies Jev's DONE decision against a fresh
 snapshot.
@@ -848,8 +869,8 @@ calls bind the captured context to the authenticated session request; even if th
 model chooses generic `browser_do`, that request routes through shared-tab
 resolution instead of the focused tab. Saying “stop” cancels either shared
 browser tool route. Each action still uses a new P7-18 node-indexed
-snapshot and its freshness/visibility/occlusion checks. P7-03 confirmation,
-sensitive-field blocking, the 20-step/30-second bound, and the transient P8-15
+snapshot and its freshness/visibility/occlusion checks. P7-03 confirmation for
+irreversible actions, sensitive-field blocking, the 20-step/30-second bound, and the transient P8-15
 workspace progress remain unchanged. Voice speaks one fixed progress phrase after
 a tab is resolved; the exact “stop” transcript aborts the active browser tool.
 Fake tests cover current-context handoff, shared-tab resolution/pagination,

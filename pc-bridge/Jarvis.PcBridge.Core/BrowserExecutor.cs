@@ -749,7 +749,7 @@ public sealed class BrowserExecutor : IDisposable
 public static class BrowserActionPolicy
 {
     public const string IrreversibleActionPattern =
-        @"\b(?:send|submit|delete|erase|overwrite|replace|remove|purchase|buy|pay|payment|post|publish|push|transfer|donate|format|reset)\b|\bclear\s+(?:all|history|data|account)\b";
+        @"\b(?:send|sending|delete|deletion|erase|overwrite|overwriting|purchase|buy|pay|paid|payment|post|posting|publish|push|pushing|transfer|donate)\b|\bclear\s+(?:all|history|data|account)\b";
 
     public static bool RequiresConfirmation(string action, string name, string context = "") =>
         action == "click" && Regex.IsMatch(
