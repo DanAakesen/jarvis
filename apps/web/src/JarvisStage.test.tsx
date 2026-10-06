@@ -88,7 +88,10 @@ describe('JarvisStage', () => {
     expect((await screen.findByRole('status')).textContent)
       .toBe('The 3D room is unavailable. Chat and voice controls are still available.');
     expect(container.querySelector('.jarvis-stage')?.getAttribute('data-failed')).toBe('true');
-    expect(screen.getByRole('button', { name: 'Send message' })).not.toBeNull();
+    const notice = screen.getByRole('status');
+    const send = screen.getByRole('button', { name: 'Send message' });
+    expect(send).not.toBeNull();
+    expect(notice.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('keeps a lost renderer available for context restoration and clears its fallback', async () => {

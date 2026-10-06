@@ -120,8 +120,8 @@ export function JarvisStage({
   return (
     <PlaybackAudioLevelContext.Provider value={setAudioLevel}>
       <div ref={host} className="jarvis-stage" data-ready="false" data-failed="false" aria-hidden="true" />
-      {children}
       {failure && <p className="jarvis-stage-fallback" role="status">{failure}</p>}
+      {children}
     </PlaybackAudioLevelContext.Provider>
   );
 }
