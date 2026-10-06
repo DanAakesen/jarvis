@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Jarvis.PcBridge;
 
@@ -8,8 +9,13 @@ public sealed record BridgeSettings(
     string ApiClientId,
     string BridgeClientId,
     bool BrowserEnabled = false,
-    bool ControlPaused = false)
+    bool ControlPaused = false,
+    string? WakeWordModelPath = null,
+    bool? WakeWordEnabled = null,
+    string? WebUrl = null)
 {
+    public const string ProductionWebUrl = "https://ambitious-mushroom-0161f9503.2.azurestaticapps.net/";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -28,13 +34,31 @@ public sealed record BridgeSettings(
             !Guid.TryParse(settings.TenantId, out _) ||
             !Guid.TryParse(settings.ApiClientId, out _) ||
             !Guid.TryParse(settings.BridgeClientId, out _) ||
-            !TryBackendUri(settings.BackendUrl, out var backendUri))
+            !TryBackendUri(settings.BackendUrl, out var backendUri) ||
+            settings.WebUrl is not null && !TryBackendUri(settings.WebUrl, out _))
         {
             throw new InvalidOperationException("The PC bridge configuration is missing or invalid.");
         }
 
         return settings with { BackendUrl = backendUri!.GetLeftPart(UriPartial.Authority) };
     }
+
+    // Speech Studio keyword model (.table) for "Wake up Jarvis"; null when it is not configured or missing.
+    [JsonIgnore]
+    public string? ResolvedWakeWordModelPath =>
+        !string.IsNullOrWhiteSpace(WakeWordModelPath) &&
+        Path.IsPathFullyQualified(WakeWordModelPath) &&
+        string.Equals(Path.GetExtension(WakeWordModelPath), ".table", StringComparison.OrdinalIgnoreCase) &&
+        File.Exists(WakeWordModelPath)
+            ? WakeWordModelPath
+            : null;
+
+    // The wake word defaults to on once a keyword model is configured.
+    [JsonIgnore]
+    public bool IsWakeWordOn => ResolvedWakeWordModelPath is not null && WakeWordEnabled != false;
+
+    [JsonIgnore]
+    public string JarvisWebUrl => WebUrl ?? ProductionWebUrl;
 
     public void Save()
     {

@@ -49,24 +49,31 @@ class FakeStream:
         return iterate()
 
 
-def test_chat_instructions_ground_note_answers_in_search_results() -> None:
+def test_chat_instructions_ground_vault_answers_in_search_results() -> None:
     for instructions in CHAT_INSTRUCTIONS.values():
-        assert "notes_search" in instructions
-        assert "returned snippets" in instructions
-        assert "returned note link" in instructions
+        assert "vault_search" in instructions
+        assert "returned note content" in instructions
+        assert "returned GitHub link" in instructions
 
 
-def test_personalized_instructions_include_current_away_mode_and_brief_speech() -> None:
+def test_personalized_instructions_include_mode_instructions_and_brief_speech() -> None:
     away = personalize_instructions(
-        "base", ModelSettings("gpt-5.6-luna", "none", away_mode=True)
+        "base",
+        ModelSettings(
+            "gpt-5.6-luna", "none", custom_instructions="Base instruction.",
+            mode="away", changed_at="2026-10-06T12:00:00Z",
+            mode_instructions={"present": "", "away": "Use Teams.", "on_the_move": ""},
+        ),
     )
     present = personalize_instructions(
-        "base", ModelSettings("gpt-5.6-luna", "none", away_mode=False)
+        "base", ModelSettings("gpt-5.6-luna", "none", mode="present")
     )
 
-    assert "Current away mode: on" in away
+    assert "Dan's current mode: Away since 2026-10-06T12:00:00Z." in away
+    assert '"Base instruction."' in away
+    assert '"Use Teams."' in away
     assert "spoken replies use one short sentence" in away
-    assert "Current away mode: off" in present
+    assert "Dan's current mode: Present since an unknown time." in present
 
 
 class FakeItem(SimpleNamespace):

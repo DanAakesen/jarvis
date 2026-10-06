@@ -142,6 +142,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
         .input('language', sql.NVarChar(8), input.language ?? null)
         .input('interrupted', sql.Bit, input.interrupted ?? false)
         .input('sourceItemId', sql.NVarChar(128), input.sourceItemId ?? null)
+        .input('allowEndedSession', sql.Bit, input.allowEndedSession ?? false)
         .query<MessageRow>(`INSERT INTO dbo.messages
             (jarvis_session_id, role, text, model, language, interrupted, source_item_id)
           OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
@@ -149,7 +150,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
             INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at
           SELECT id, @role, @text, @model, @language, @interrupted, @sourceItemId
           FROM dbo.jarvis_sessions
-          WHERE id = @sessionId AND ended_at IS NULL;`);
+          WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1);`);
       const row = result.recordset[0];
       return row ? messageFromRow(row) : null;
     },
@@ -176,6 +177,22 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
           WHERE source_item_id = @sourceItemId AND role = N'dan'
           ORDER BY id DESC;`);
       return result.recordset[0]?.id ?? null;
+    },
+
+    async getMessageSessionId(messageId) {
+      const result = await databaseReadRequest(pool)
+        .input('messageId', sql.BigInt, BigInt(messageId))
+        .query<{ session_id: string }>(`SELECT CONVERT(varchar(20), jarvis_session_id) AS session_id
+          FROM dbo.messages WHERE id = @messageId AND role = N'dan';`);
+      return result.recordset[0]?.session_id ?? null;
+    },
+
+    async getLatestDanMessageText(sessionId) {
+      const result = await databaseReadRequest(pool)
+        .input('sessionId', sql.BigInt, BigInt(sessionId))
+        .query<{ text: string }>(`SELECT TOP (1) text FROM dbo.messages
+          WHERE jarvis_session_id = @sessionId AND role = N'dan' ORDER BY id DESC;`);
+      return result.recordset[0]?.text ?? null;
     },
 
     async getHistory({ limit, before }) {

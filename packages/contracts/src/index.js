@@ -476,3 +476,11 @@ export function isJarvisActivityEvent(value) {
       ['type', 'activityId', 'source', 'toolName', 'outcome'].includes(key)) &&
       ['ok', 'refused', 'error'].includes(value.outcome);
 }
+
+const wakeTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+export function isJarvisVoiceWakeEvent(value) {
+  return isObject(value) && Object.keys(value).length === 2 && value.type === 'voice.wake' &&
+    typeof value.at === 'string' && wakeTimestampPattern.test(value.at) &&
+    Number.isFinite(Date.parse(value.at)) && new Date(value.at).toISOString() === value.at;
+}

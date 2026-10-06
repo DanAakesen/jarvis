@@ -70,6 +70,7 @@ export interface DispatcherOptions {
   now?: () => number;
   onError?: (error: unknown) => void;
   onReconciliation?: (decision: TaskReconciliationDecision) => void;
+  onStartFailure?: (failure: { taskId: string; reason: string }) => void;
   recoveryStore?: TaskRecoveryStore;
   workspaceFor?: (task: TaskRecord) => Promise<TaskWorkspace | null>;
   verifyDelivery?: (
@@ -174,6 +175,7 @@ export class TaskDispatcher implements TaskController {
   private readonly now: () => number;
   private readonly onError: (error: unknown) => void;
   private readonly onReconciliation: (decision: TaskReconciliationDecision) => void;
+  private readonly onStartFailure: NonNullable<DispatcherOptions['onStartFailure']>;
   private readonly recoveryStore: TaskRecoveryStore | undefined;
   private readonly workspaceFor: DispatcherOptions['workspaceFor'];
   private readonly verifyDelivery: DispatcherOptions['verifyDelivery'];
@@ -202,6 +204,7 @@ export class TaskDispatcher implements TaskController {
     this.now = options.now ?? Date.now;
     this.onError = options.onError ?? (() => {});
     this.onReconciliation = options.onReconciliation ?? (() => {});
+    this.onStartFailure = options.onStartFailure ?? (() => {});
     this.recoveryStore = options.recoveryStore;
     this.workspaceFor = options.workspaceFor;
     this.verifyDelivery = options.verifyDelivery;
@@ -520,6 +523,7 @@ export class TaskDispatcher implements TaskController {
         await this.clientFor(agentName(claim)).deleteSession(accepted.sessionId).catch(this.onError);
       }
       await this.store.failStart(this.owner, claim, null, 'recovery_start_failed').catch(this.onError);
+      this.onStartFailure({ taskId: claim.taskId, reason: 'recovery_start_failed' });
       this.onError(error);
       return { kind: 'failed' };
     }
@@ -639,6 +643,7 @@ export class TaskDispatcher implements TaskController {
         await this.store.deferClaim(this.owner, task, firstRetryDelayMs);
       } else if (isCredentialFailure(kind)) {
         await this.store.failStart(this.owner, task, null, 'credential_unavailable');
+        this.onStartFailure({ taskId: task.taskId, reason: 'credential_unavailable' });
       } else {
         await this.store.deferClaim(this.owner, task, firstRetryDelayMs);
       }
@@ -669,6 +674,7 @@ export class TaskDispatcher implements TaskController {
       try { await this.clientFor(runnerName).deleteSession(accepted.sessionId); }
       catch (cleanupError) { this.onError(cleanupError); }
       await this.store.failStart(this.owner, task, null, 'session_persistence_failed');
+      this.onStartFailure({ taskId: task.taskId, reason: 'session_persistence_failed' });
       this.onError(error);
       return;
     }
@@ -723,9 +729,15 @@ export class TaskDispatcher implements TaskController {
       const delay = Math.min(firstRetryDelayMs * 2 ** (task.attemptCount - 1), maxRetryDelayMs);
       const retryAt = new Date(this.now() + delay).toISOString();
       await this.store.failStart(this.owner, task, retryAt, 'foundry_start_rejected');
+      this.onStartFailure({ taskId: task.taskId, reason: 'foundry_start_rejected' });
       this.schedule(retryAt);
     } else {
-      await this.store.failStart(this.owner, task, null, 'foundry_start_failed');
+      const refused = error instanceof FoundryClientError &&
+        (error.kind === 'auth' || (error.kind === 'http' && error.statusCode !== undefined &&
+          error.statusCode >= 400 && error.statusCode < 500 && error.statusCode !== 408));
+      const reason = refused ? 'foundry_start_rejected' : 'foundry_start_failed';
+      await this.store.failStart(this.owner, task, null, reason);
+      this.onStartFailure({ taskId: task.taskId, reason });
     }
     this.onError(error);
   }

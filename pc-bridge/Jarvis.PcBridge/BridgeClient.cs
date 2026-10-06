@@ -10,7 +10,9 @@ public sealed class BridgeClient(
     BridgeTokenProvider tokens,
     WindowsCommandExecutor executor,
     BrowserExecutor browserExecutor,
-    Func<bool> isControlPaused)
+    Func<bool> isControlPaused,
+    Func<bool>? isWakeWordOn = null,
+    Action<bool>? voiceSessionChanged = null)
 {
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
     private readonly SemaphoreSlim _sendGate = new(1, 1);
@@ -21,6 +23,15 @@ public sealed class BridgeClient(
         var socket = _socket;
         if (socket is null || socket.State != WebSocketState.Open) return;
         await SendControlStateAsync(socket, cancellationToken).ConfigureAwait(false);
+    }
+
+    // Sends one wake_word event; returns false when the backend connection is offline.
+    public async Task<bool> SendWakeWordAsync(DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var socket = _socket;
+        if (socket is null || socket.State != WebSocketState.Open) return false;
+        await SendMessageAsync(socket, () => BridgeProtocol.WakeWord(at), cancellationToken).ConfigureAwait(false);
+        return true;
     }
 
     public async Task RunAsync(Action<string> statusChanged, CancellationToken cancellationToken)
@@ -70,6 +81,8 @@ public sealed class BridgeClient(
         finally
         {
             _socket = null;
+            // Without the backend no voice session can be observed; resume local wake-word listening.
+            voiceSessionChanged?.Invoke(false);
             statusChanged("Offline — reconnecting");
             if (socket.State == WebSocketState.Open)
             {
@@ -103,6 +116,11 @@ public sealed class BridgeClient(
                 } while (!result.EndOfMessage);
 
                 var payload = message.GetBuffer().AsSpan(0, checked((int)message.Length));
+                if (BridgeProtocol.TryReadVoiceState(payload, out var voiceActive))
+                {
+                    voiceSessionChanged?.Invoke(voiceActive);
+                    continue;
+                }
                 if (!BridgeProtocol.TryReadCommand(payload, out var command) || command is null)
                 {
                     throw new InvalidDataException("Invalid bridge protocol message.");
@@ -144,6 +162,10 @@ public sealed class BridgeClient(
                 {
                     response = BridgeProtocol.Failure(command.Id, exception.Code);
                 }
+                catch (WindowCaptureRefusedException exception)
+                {
+                    response = BridgeProtocol.Failure(command.Id, exception.Code);
+                }
                 catch
                 {
                     response = BridgeProtocol.Failure(command.Id, "failed");
@@ -160,7 +182,10 @@ public sealed class BridgeClient(
 
     private async Task SendControlStateAsync(ClientWebSocket socket, CancellationToken cancellationToken)
     {
-        await SendMessageAsync(socket, () => BridgeProtocol.ControlState(isControlPaused()), cancellationToken)
+        // The wakeWord field is sent only while listening, so a backend without wake-word support keeps working.
+        await SendMessageAsync(socket, () => isWakeWordOn?.Invoke() == true
+                ? BridgeProtocol.ControlState(isControlPaused(), wakeWord: true)
+                : BridgeProtocol.ControlState(isControlPaused()), cancellationToken)
             .ConfigureAwait(false);
     }
 

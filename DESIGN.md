@@ -96,15 +96,15 @@ P8-33 implementation is in draft PR #391. Quality begins with DPR capped at 1.0/
 
 Scratch Chromium inspected dark/light stage captures at 390×844, short 844×390 landscape voice, 320×568 unavailable-WebGL fallback, and 390×844 context-loss fallback; the menu remained inside 390×844 and 320×568 bounds, and End voice remained in the landscape viewport. The same voice fixture stayed Ready through forced loss and restoration; unavailable WebGL retained chat and voice controls. Simulated 390×520 keyboard height and 1.5× page scaling kept the composer in bounds. Browser acceptance also exercised reduced motion, hide/resume and route teardown/re-entry; these are local fixtures, not live-provider integration. Software Chromium used ANGLE SwiftShader: after reaching quality tier 2 (backing scale ≈0.70), 90 RAF intervals averaged 327ms (p50 333ms, p95 350ms) at 1440×900 and 151ms (p50 150ms, p95 167ms) at 390×844. These are RAF cadence measurements, not GPU timer queries, and remain far below a smooth interaction target. Hardware-GPU/battery performance, physical phone/keyboard, Safari, live English/Danish provider audio and normal-rate flicker acceptance remain unverified. Captures are in [`docs/ui/screenshots/p8-33-*`](docs/ui/screenshots).
 
-### Compact luminous-glass voice bar (P8-36)
+### Compact luminous-glass voice bar (P8-36; refined by P8-40)
 
-Dan selected the last Luminous Glass component-family image ([handoff](https://github.com/DanAakesen/jarvis/blob/7f45b836a4635c9cf17d3d6a3e12a173995a0f80/docs/ui/chat-voice/README.md), published with draft PR #400). Voice controls are now one compact pill: **More** (•••) on the left, an understated state glyph with a readable runtime label, then **End voice** on the right. The large status disc, heading and duplicate microphone/screen/camera button group are removed. Mute/Unmute microphone, Look at screen and Look at camera move into the More menu. Disabled items explain why they are unavailable. Enable microphone stays a separate explicit action in the bar while voice is ready.
+Dan selected the last Luminous Glass component-family image ([handoff](https://github.com/DanAakesen/jarvis/blob/7f45b836a4635c9cf17d3d6a3e12a173995a0f80/docs/ui/chat-voice/README.md), published with draft PR #400). P8-40 keeps voice controls in one compact pill: **More** (•••), a divider and **End voice**. The bright white runtime label and recovery detail sit beneath the orb, without a background or colored glyph, following its centre, left or phone-docked position. The large status disc, heading and duplicate microphone/screen/camera button group are removed. Mute/Unmute microphone and screen/camera start, on-request inspection and stop controls live in the More menu. Disabled items explain why they are unavailable. Start voice requests permission and prepares audio; capture begins after the authenticated handshake. Exceptional Retry microphone belongs in More.
 
 - **Shared More menu:** `ConversationMoreMenu` is used in the voice bar and the composer, replacing the DA/EN buttons. It has a globe Language row that opens a Danish/English flyout, with a check on the current choice. Arrow keys, Home/End, Right/Left (flyout), Tab, outside click and Escape work as expected. The first Escape closes the flyout, the next closes the menu, and only then does Escape end voice.
 - **Truthful status:** the transport owns connecting, reconnecting, stopping and failure. Runtime thinking, tool and speaking activity cannot overwrite them. Listening appears only while the microphone is open. A routine detail line is visually hidden but still announced; a non-routine detail (for example, microphone denied) is shown.
-- **Language during voice:** changing language mid-session updates chat and the next voice session. The bar then states which language the current session continues in, rather than implying a live switch.
+- **Language during voice:** changing language mid-session updates chat and the next voice session. The Language flyout states which language the current session continues in; the note stays out of the control bar.
 - **Shared tokens:** `--glass-edge-cool`/`--glass-edge-warm` reuse the stage orb cyan and amber, and `--glass-refraction` draws the fine refracted edge for the shared `.luminous-glass` surface on smoky `--surface-translucent`. No second palette is introduced. Reduced motion stops the glyph and menu entry animations.
-- **Placement:** the bar sits bottom centre (640px) without windows, and under the left orb column with windows. On phone it docks 12px from the edges and publishes its height for the existing dock. Flyouts stack above their menu at 700px and below.
+- **Placement:** the bar sits bottom centre (640px) without windows, and under the left orb column with windows. On phone it publishes its height for the docked orb and separate status; foreground content ends above that dock. Flyouts stack above their menu at 700px and below.
 
 Scratch Chromium fixtures (stubbed auth, voice client and API) covered 1440×900 dark and light, 390×844 dark and light, and 320×640 dark with reduced motion. Each had no horizontal overflow. Menus and flyouts stayed in the viewport, and every bar control and menu item measured at least 44px. The Escape order held (flyout, then menu, then end voice), reconnecting read "Reconnecting", and there were no console errors. Bar label contrast on the glass surface measured 18.65:1 (dark) and 14.97:1 (light). Fixing the overlay also removed the composer's backdrop filter during voice; that filter had made the composer the containing block for the fixed voice overlay. Captures are in [`docs/ui/screenshots/p8-36-*`](docs/ui/screenshots). They are compared with the handoff image by layout, not pixel-matched; the room renders through SwiftShader. Live voice, physical audio, devices, Safari and hardware-GPU rendering were not verified.
 
@@ -149,8 +149,8 @@ visual direction. The header contains the Jarvis home link, area navigation
 surface fill and full outline, never a lone edge. Navigation appears only after
 sign-in; the header wraps on narrow screens.
 
-- **Database wake (P1-14):** one shared, polite status message above the page
-  content reads “Waking Jarvis…” while the backend reports a resume wait.
+- **Database wake (P1-14):** one shared, polite status message in the top bar
+  (P8-37) reads “Waking Jarvis…” while the backend reports a resume wait.
   Keep the current page and pending controls visible; do not infer this state
   from elapsed time or replace it with an invented progress indicator.
 
@@ -224,6 +224,14 @@ and loading, recovery, and unavailable actions remain explicit. Credentials show
 values; manual renewal and reseed controls remain disabled with an explanation.
 The Voice section includes a labelled “Minimise all windows when starting voice”
 checkbox, off by default, saved with the other settings.
+Task recipes use a separate Settings section with compact rows showing the app
+or site, normalized goal and step count. Refresh and per-row Delete act immediately,
+independently of Save settings, with local pending, error/retry and success feedback.
+The section reuses existing surfaces, focus styles and responsive settings layout.
+P7-35 was checked in Chromium at 1280×900 and 390×844 with normal/reduced motion:
+loading, refresh/error/retry, delete pending/error/retry/success, empty state and
+keyboard focus. Buttons measured 44 px; no overflow, clipping or page/console errors.
+These were local auth/API fixtures, not live backend or PC acceptance.
 The sleep control also remains disabled until its owning workflow exists; no
 new visual direction or palette is introduced. Checked in Chromium at
 390 and 1280 px with mock auth/settings: no horizontal overflow, controls at
@@ -552,8 +560,8 @@ workspace, not the phone voice layout owned by P8-11.
 
 [ui.md](ui.md) records the confirmed structure, open questions, feature-placement
 proposals and eight static wireframes. P8-04 routes the existing pages through a
-thin left icon rail, expandable area navigation, a top bar, the currently implemented bottom status bar, and a
-toggleable contextual panel. Consolidated P8-37 (#398) removes that bottom bar from the selected design. The top bar spans edge to edge above the shell;
+thin left icon rail, expandable area navigation, a top bar and a
+toggleable contextual panel. P8-04's former bottom status bar was removed in P8-37 (#398). The top bar spans edge to edge above the shell;
 its height matches the area rail's width, and the rail begins beneath it.
 Settings stays at the top-right. Camera is a working toggle with an accessible
 pressed state, visible desktop On/Off label, and a narrow-phone state indicator;
@@ -562,7 +570,7 @@ Screen share remains disabled in the top bar because its active control remains
 in the conversation workflow. The top bar remains one line at phone and desktop
 widths. Other suggested top-bar controls remain out of scope.
 
-The currently implemented bottom bar carries database-wake status when configured; Consolidated P8-37 (#398) removes the bar and relocates the same truthful accessible feedback into compact top-bar status. The
+Database-wake status, when configured, is a compact top-bar status pill (P8-37 removed the former bottom bar). The
 context panel has an honest empty state until P8-08 supplies contextual content.
 The existing neutral theme remains; the specific placement and responsive
 proportions above are confirmed while other shell styling and the contents of
@@ -669,11 +677,20 @@ Use a shared More menu with an icon plus Language row and Danish/English flyout,
 
 Dan selected the last/third shell styling image. [The refined reference](docs/ui/shell-styling/README.md#refined-approved-reference) defines the graphite/smoked-glass framing, dimensional depth, restrained cyan/amber refraction and readable hierarchy. Keep the agreed top bar, rail, left navigation, main tabs/workspace, right contextual panel and top-right Settings. Remove the separate bottom app-shell bar and its reserved layout space; move existing database-waking feedback into compact top-bar status. Chat input and voice-session controls remain.
 
-Remove human and Jarvis avatar icons from the message content as well as the previously removed top-left header orb/title and separator. Preserve author roles via alignment/text and accessible semantics; keep the scene orb and small input voice-start orb. P8-37 (#398) now implements the shell, composer and message-window changes together; former P8-38 (#399) and P8-39 (#401) are retired separate allocations. Reuse P8-36 material/menu work and existing theme, runtime and window contracts. These are accepted requirements awaiting implementation, not descriptions of changed production behavior.
+Remove human and Jarvis avatar icons from the message content as well as the previously removed top-left header orb/title and separator. Preserve author roles via alignment/text and accessible semantics; keep the scene orb and small input voice-start orb. P8-37 (#398) now implements the shell, composer and message-window changes together; former P8-38 (#399) and P8-39 (#401) are retired separate allocations. Reuse P8-36 material/menu work and existing theme, runtime and window contracts. P8-37 implements these requirements; see the implementation note below.
 
 ## Unified implementation scope — 6 October 2026
 
 Dan requested one issue and one implementation PR for the shell, input and messages. P8-37 (#398) absorbs all acceptance criteria and retained prerequisites of former P8-38 (#399) and P8-39 (#401). The selected visuals and behavior are unchanged. P8-36 (#397) is the completed voice-bar/shared-menu prerequisite, merged in PR #403; reuse its existing components and tokens. Closing the superseded issues does not mean those surfaces have been implemented. CI runs for the combined PR and its updates.
+
+### P8-37 implementation note
+
+- **Shell:** the footer row is removed from the grid (`--rail-size` + one content row; rail spans `2 / -1`). Selected rail, sidebar, Settings and phone view-switcher items use `--glass-selected` with `--glass-selected-glow` — a complete illuminated surface and ring, not an edge accent. Rail, sidebar and context pane gain a faint `--glass-shell-sheen` over the existing translucent surfaces.
+- **Status:** `DatabaseWakeStatus` renders a compact `.topbar-status` pill first in the top-bar actions; phones show the pulsing mark with the label kept for assistive technology and as a tooltip. Reduced motion stops the pulse.
+- **Composer:** one `luminous-glass` pill (radius 30px) holding orb │ paperclip │ multiline text │ More │ Send (paper-plane). Neutral `--rule` hairline dividers separate groups. The paperclip reuses `ConversationMoreMenu` with no Language row for the existing screen/camera visual-context actions.
+- **Message window:** the shared workspace window for view `conversation`, styled `luminous-glass` with a visually hidden title and round borderless controls. Tiled, it sits bottom-centred above the composer at up to `min(860px, 100%)` wide and `min(44vh, 460px)` tall (phones `min(46dvh, 420px)`). Maximise, minimise tabs, layered drag/resize and focus are the workspace's own behavior. Typing-mode Jarvis now stacks the workspace above the composer, so workspace windows are visible on desktop as well as phones. No title, orb, separator or avatars. Dan's messages sit right with a warm `--message-dan-tint`; Jarvis replies sit left with the existing `--surface-translucent` plus `--message-jarvis-tint`; both are limited to `min(88%, 62ch)`. Author names remain in visually hidden text and `data-speaker`.
+- **Errors:** turn failures stay `role="alert"` text inside the conversation window, and a new failure restores a closed or minimised window. Voice and capture failures use the dismissible bottom-right toast introduced in #435, outside the composer and above its measured bounds. Older `p8-37-*-voice-error-*` captures show the superseded inline layout; the integration captures document the current toast behavior. Failed-turn captures remain applicable.
+- **Evidence:** fixture Chromium/SwiftShader captures `docs/ui/screenshots/p8-37-*` at 1440×1000 and 390×844, dark/light. They use scratch auth/API fixtures, not live provider, physical-device or hardware-GPU evidence. The final `p8-37-integration-*` captures/report exercise the real browser voice client with fake media and socket: shared window controls, voice minimise/restore, draft continuity, capture and toast feedback. App tests also cover commands, snapshots, an in-flight reply and the FIFO queue. Phone window controls use 44px targets. The compact voice bar, white under-orb status and living stage retain #419/#437's behavior.
 
 ## Voice status beneath the orb and stronger live behavior — 6 October 2026
 
@@ -682,3 +699,14 @@ Dan requested one issue and one implementation PR for the shell, input and messa
 Start voice includes microphone activation, subject to native permission and real session readiness; remove the normal Enable microphone button. Earlier descriptions of microphone-off readiness document the existing implementation and are superseded requirements. Keep explicit user start, mute, cancellation, truthful recovery and resource cleanup; visual awakening alone never requests capture.
 
 Reuse the approved cyan exterior, transparent open amber core, live room and mirror. Make wake-up a pronounced staged nonlinear sequence: core ignition, energy spreading through the shell, a controlled expansion/light surge, then active settling. Keep action handling immediate and transitions interruptible. Use attentive listening breath/ripples, inward/core-flow thinking, directed real tool-work movement and a strong speech envelope synchronized with actual playback. These are state cues rather than arbitrary decoration. Room/reflection lighting follows orb light; room/camera/platform do not jump. Keep state legible at reduced motion and lower rendering quality. Validate actual motion as well as desktop/phone composition; a separate prototype is not a prerequisite.
+
+### Voice status and expressive orb implementation (P8-40)
+
+PR #419 implements the approved refinement on the existing stage. Wake lasts about 1.05 seconds at normal frame cadence: amber core ignition, an outward cyan-shell wave, then expansion/light surge and settling. Listening has breathing ripples; thinking draws energy inward; tool work uses travelling arcs; speaking uses the decoded audio currently playing with attack/release smoothing. Mic input only modulates listening. Reduced motion uses steady forms. The camera, room and platform remain fixed, and reflected light follows orb output.
+
+Copilot reported fixture browser layout checks at desktop, 390/320/280px, short landscape, both themes and reduced motion. Its motion frame observations used software WebGL at about 4 fps; they do not establish normal-rate animation quality or live microphone/provider behavior. Hardware-GPU, physical devices and live voice remain acceptance checks after deployment.
+
+
+## Voice UI hotfix — 6 October 2026 (#435)
+
+Use unframed white status text beneath the orb, with soft light and a dark contrast shadow; preserve recovery text and responsive placement. Bottom-right smoky-glass toasts hold transient feedback with a dismiss control, a ten-second lifetime paused while hovered or focused, and an offset above the measured composer or voice controls at every width. They render outside the composer and menu. Dormancy has a restrained cyan breath and visible stirring amber core; awake core filaments and sparks move more strongly without filling the transparent core. Preserve the wake sequence, fixed room/camera/platform, mirror and runtime-driven states. Canonical component styles remain in `VoiceControls.css` and `ConversationToast.css`; scene motion remains in `JarvisStageOrb.ts` and `jarvis-stage-scene.ts`.

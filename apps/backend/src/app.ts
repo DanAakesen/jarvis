@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import cors from '@fastify/cors';
 import type { Logger } from 'pino';
-import type { JarvisActivityEvent } from '@jarvis/contracts';
+import type { JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
 import { localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
@@ -26,6 +26,7 @@ import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
 import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js';
 import type { CredentialStatusStore } from './credentials/credential-status.js';
+import type { runCodexRenewalOnce } from './credentials/codex-renewal.js';
 import type { UsageStore } from './core/usage.js';
 import type { SandboxHeartbeat } from './factory/heartbeat.js';
 import type { ContainerAppScaler } from './operations/container-app-scale.js';
@@ -33,7 +34,9 @@ import { createSleepModule } from './operations/sleep.js';
 import type { TeamsNotificationService } from './teams/service.js';
 import type { AwayModeStore } from './core/away-mode.js';
 import type { PhoneSessionStore } from './database/phone-session-store.js';
+import type { TaskStatusNotificationStore } from './database/task-status-notification-store.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
+import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
 
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
@@ -51,11 +54,13 @@ export interface BuildAppOptions {
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
   readonly credentialStatusStore?: CredentialStatusStore;
+  readonly renewCodexCredential?: () => ReturnType<typeof runCodexRenewalOnce>;
   readonly usageStore?: UsageStore;
   readonly nowFeedStore?: NowFeedStore;
   readonly nowEventHub?: NowFeedEventHub;
   readonly jarvisActivityHub?: JarvisActivityHub;
   readonly conversationStore?: ConversationStore;
+  readonly onConversationSessionEnded?: (sessionId: string) => void;
   readonly sandboxHeartbeat?: SandboxHeartbeat;
   readonly conversationAgent?: ConversationAgent;
   readonly reflexClassifier?: ReflexClassifier;
@@ -64,6 +69,7 @@ export interface BuildAppOptions {
   readonly teamsNotifications?: TeamsNotificationService | null;
   readonly awayModeStore?: AwayModeStore | null;
   readonly phoneSessionStore?: PhoneSessionStore | null;
+  readonly taskStatusNotificationStore?: TaskStatusNotificationStore | null;
   readonly workspaceCommands?: WorkspaceCommandBroker;
 }
 
@@ -83,11 +89,13 @@ declare module 'fastify' {
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
     credentialStatusStore: CredentialStatusStore | null;
+    renewCodexCredential: (() => ReturnType<typeof runCodexRenewalOnce>) | null;
     usageStore: UsageStore | null;
     nowFeedStore: NowFeedStore | null;
     nowEventHub: NowFeedEventHub;
     jarvisActivityHub: JarvisActivityHub;
     conversationStore: ConversationStore | null;
+    onConversationSessionEnded: (sessionId: string) => void;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
     reflexClassifier: ReflexClassifier | null;
@@ -95,6 +103,7 @@ declare module 'fastify' {
     teamsNotifications: TeamsNotificationService | null;
     awayModeStore: AwayModeStore | null;
     phoneSessionStore: PhoneSessionStore | null;
+    taskStatusNotificationStore: TaskStatusNotificationStore | null;
     workspaceCommands: WorkspaceCommandBroker;
   }
 }
@@ -158,43 +167,14 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
-  app.decorate('jarvisActivityHub', options.jarvisActivityHub ?? createEventHub<JarvisActivityEvent>());
+  app.decorate('jarvisActivityHub', options.jarvisActivityHub ?? createEventHub<JarvisActivityEvent | JarvisVoiceWakeEvent>());
+  app.decorate('onConversationSessionEnded', options.onConversationSessionEnded ?? (() => {}));
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);
   app.addHook('onClose', async () => { workspaceCommands.dispose(); });
-  const unsubscribeTaskEvents = app.eventHub.subscribe((event) => {
-    void (async () => {
-      let state: Awaited<ReturnType<AwayModeStore['read']>> | undefined;
-      try {
-        state = await app.awayModeStore?.read();
-      } catch {
-        app.log.warn('away_mode.task_route_failed');
-        return;
-      }
-      const away = state?.away ?? false;
-      if (!away) {
-        app.nowEventHub.publish({ type: 'refresh' });
-        return;
-      }
-
-      const payload = event.payload;
-      const nextState = typeof payload === 'object' && payload !== null && !Array.isArray(payload)
-        ? (payload as Record<string, unknown>).to
-        : undefined;
-      if (event.type !== 'state_changed' || typeof nextState !== 'string' ||
-        !['Ready', 'Running', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'].includes(nextState) ||
-        !app.teamsNotifications) return;
-      try {
-        const kind = nextState === 'NeedsAttention' ? 'warning' : nextState === 'Done' ? 'success' : 'info';
-        await app.teamsNotifications.notify(kind, `Task ${event.taskId} is now ${nextState}.`);
-      } catch {
-        app.log.warn('away_mode.task_notification_failed');
-      }
-    })();
-  });
-  app.addHook('onClose', async () => { unsubscribeTaskEvents(); });
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
+  app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);
   app.decorate('usageStore', options.usageStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
   app.decorate('sandboxHeartbeat', options.sandboxHeartbeat ?? null);
@@ -206,6 +186,47 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('browserAgent', options.browserAgent ?? null);
   app.decorate('teamsNotifications', options.teamsNotifications ?? null);
   app.decorate('phoneSessionStore', options.phoneSessionStore ?? null);
+  app.decorate('taskStatusNotificationStore', options.taskStatusNotificationStore ?? null);
+  const notifyTaskStatus = app.taskStatusNotificationStore && app.taskStore &&
+    app.conversationStore && app.awayModeStore
+    ? createTaskStatusNotificationHandler({
+      tasks: app.taskStore,
+      conversations: app.conversationStore,
+      awayMode: app.awayModeStore,
+      teams: app.teamsNotifications,
+      notifications: app.taskStatusNotificationStore,
+      onError: () => app.log.warn('task_status_notification.failed'),
+    })
+    : undefined;
+  const unsubscribeTaskEvents = app.eventHub.subscribe((event) => {
+    void (async () => {
+      let away: boolean;
+      try {
+        away = ((await app.awayModeStore?.read())?.mode ?? 'present') !== 'present';
+      } catch {
+        app.log.warn('away_mode.task_route_failed');
+        return;
+      }
+      if (!away) app.nowEventHub.publish({ type: 'refresh' });
+
+      const handled = await notifyTaskStatus?.(event, away) ?? false;
+      if (!away || handled) return;
+
+      const payload = event.payload;
+      const nextState = typeof payload === 'object' && payload !== null && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>).to
+        : undefined;
+      if (event.type !== 'state_changed' || typeof nextState !== 'string' ||
+        !['Ready', 'Running', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'].includes(nextState)) return;
+      try {
+        const kind = nextState === 'NeedsAttention' ? 'warning' : nextState === 'Done' ? 'success' : 'info';
+        await app.teamsNotifications?.notify(kind, `Task ${event.taskId} is now ${nextState}.`);
+      } catch {
+        app.log.warn('away_mode.task_notification_failed');
+      }
+    })();
+  });
+  app.addHook('onClose', async () => { unsubscribeTaskEvents(); });
   registerModules(app, options.modules ?? [
     coreModule,
     conversationModule,

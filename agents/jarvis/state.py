@@ -92,7 +92,13 @@ class ModelSettings:
     tone: str = "british_butler"
     response_style: str = "concise"
     custom_instructions: str = ""
-    away_mode: bool = False
+    mode: str = "present"
+    changed_at: str | None = None
+    mode_instructions: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def away_mode(self) -> bool:
+        return self.mode != "present"
 
 
 DEFAULT_MODEL_SETTINGS = ModelSettings("gpt-5.6-luna", "none")

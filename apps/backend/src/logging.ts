@@ -19,17 +19,43 @@ export async function createTelemetry(connectionString?: string): Promise<Teleme
   return client;
 }
 
+const failureEvents = new Set([
+  'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
+  'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',
+  'project_policy.recheck_failed',
+  'dispatcher.operation_failed', 'github.checks_loop_recovery_failed', 'pc_bridge.status_update_failed',
+  'google.refresh_token_expired_alert_unavailable', 'google.refresh_token_expired_alert_persistence_failed',
+  'telemetry.close_failed',
+]);
+const errorKinds = new Set(['http', 'auth', 'timeout', 'aborted', 'transport', 'protocol', 'internal']);
+
+export function safeErrorFields(error: unknown): { kind: string; statusCode?: number } {
+  const details = error !== null && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const kind = typeof details.kind === 'string' && errorKinds.has(details.kind)
+    ? details.kind
+    : details.name === 'TimeoutError' ? 'timeout' : details.name === 'AbortError' ? 'aborted' : 'internal';
+  const statusCode = details.statusCode ?? details.status;
+  return {
+    kind,
+    ...(typeof statusCode === 'number' && Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599
+      ? { statusCode } : {}),
+  };
+}
+
 const events = new Set([
+  ...failureEvents,
   'request.started', 'request.completed', 'request.failed', 'request.origin_denied', 'request.auth_denied',
   'server.listening', 'server.stopping', 'server.stopped', 'server.failed',
   'database.ready', 'database.not_configured',
-  'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
+  'telemetry.stdout_only', 'telemetry.export_failed',
   'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
-  'voice.partials_unavailable', 'chat.latency', 'memory.embedding',
+  'voice.partials_unavailable', 'chat.latency', 'memory.embedding', 'vault.index', 'vault.write',
   'pc_act.step',
   'reflex.decision',
+  'vision.watch',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
-  'voice.upstream_event_error',
+  'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
+  'credentials.codex_renewal', 'dispatcher.start_failed',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -57,6 +83,7 @@ const reconciliationDecisions = new Set([
 ]);
 const chatLatencyPhases = new Set([
   'reflex_targets', 'jev', 'agent_first_byte', 'turn_first_token', 'turn_complete',
+  'recipe_select', 'recipe_verify', 'recipe_plan', 'recipe_run',
 ]);
 const reflexReasons = new Set([
   'executed', 'unavailable', 'cancelled', 'not_addressed', 'not_action', 'incomplete_command',
@@ -67,6 +94,13 @@ const reflexReasons = new Set([
 ]);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (typeof input.msg === 'string' && failureEvents.has(input.msg)) {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.kind === 'string' && errorKinds.has(input.kind)) fields.kind = input.kind;
+    if (typeof input.statusCode === 'number' && Number.isInteger(input.statusCode) &&
+        input.statusCode >= 100 && input.statusCode <= 599) fields.statusCode = input.statusCode;
+    return fields;
+  }
   const fields: Record<string, unknown> = {};
   if (typeof input.reqId === 'string' && /^[\da-f-]{36}$/i.test(input.reqId)) fields.reqId = input.reqId;
   if (typeof input.method === 'string' && /^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$/.test(input.method)) fields.method = input.method;
@@ -90,6 +124,24 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   for (const key of ['statusCode', 'responseTime', 'port']) {
     if (typeof input[key] === 'number' && Number.isFinite(input[key])) fields[key] = input[key];
   }
+  if (input.msg === 'credentials.codex_renewal') {
+    if (['skipped', 'fresh', 'renewed', 'failed', 'uncertain'].includes(String(input.outcome))) {
+      fields.outcome = input.outcome;
+    }
+    if (['http', 'auth', 'timeout', 'aborted', 'transport', 'protocol', 'internal'].includes(String(input.kind))) {
+      fields.kind = input.kind;
+    }
+    if (!Number.isInteger(input.statusCode) || Number(input.statusCode) < 100 || Number(input.statusCode) > 599) {
+      delete fields.statusCode;
+    }
+  }
+  if (input.msg === 'dispatcher.start_failed') {
+    if (typeof input.taskId === 'string' && /^[1-9]\d{0,18}$/.test(input.taskId)) fields.taskId = input.taskId;
+    if (['credential_unavailable', 'session_persistence_failed', 'foundry_start_rejected',
+      'foundry_start_failed', 'recovery_start_failed'].includes(String(input.reason))) {
+      fields.reason = input.reason;
+    }
+  }
   if (input.msg === 'chat.latency') {
     if (typeof input.phase === 'string' && chatLatencyPhases.has(input.phase)) fields.phase = input.phase;
     if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
@@ -106,6 +158,30 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       fields.durationMs = input.durationMs;
     }
   }
+  if (input.msg === 'vault.index') {
+    if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    for (const key of ['added', 'changed', 'removed']) {
+      const value = input[key];
+      if (Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 10_000) fields[key] = value;
+    }
+    if (Array.isArray(input.folders)) {
+      fields.folders = [...new Set(input.folders.filter((folder) =>
+        ['People', 'Work', 'Personal', 'General'].includes(String(folder))))].slice(0, 4);
+    }
+  }
+  if (input.msg === 'vault.write') {
+    if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    if (['People', 'Work', 'Personal', 'General'].includes(String(input.folder))) fields.folder = input.folder;
+  }
+  if (input.msg === 'vision.watch') {
+    if (input.source === 'screen' || input.source === 'camera') fields.source = input.source;
+    for (const key of ['noteworthy', 'spoke']) {
+      if (typeof input[key] === 'boolean') fields[key] = input[key];
+    }
+    for (const key of ['latencyMs', 'cost']) {
+      if (typeof input[key] === 'number' && Number.isFinite(input[key]) && input[key] >= 0) fields[key] = input[key];
+    }
+  }
   if (input.msg === 'pc_act.step') {
     if (Number.isSafeInteger(input.step) && Number(input.step) >= 1 && Number(input.step) <= 20) {
       fields.step = input.step;
@@ -113,6 +189,47 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (['click', 'type', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked']
       .includes(String(input.action))) fields.action = input.action;
     if (['completed', 'refused', 'error'].includes(String(input.outcome))) fields.outcome = input.outcome;
+  }
+  if (input.msg === 'voice.turn_timing') {
+    if (typeof input.turnId === 'string' && /^[\da-f-]{36}$/iu.test(input.turnId)) {
+      fields.turnId = input.turnId;
+    }
+    for (const key of ['transcriptCompletedMs', 'jevDecisionMs', 'firstAudioDeltaMs', 'responseDoneMs']) {
+      const value = input[key];
+      if (value === null || (typeof value === 'number' && Number.isFinite(value) &&
+          value >= 0 && value <= 600_000)) {
+        fields[key] = value;
+      }
+    }
+    if (Array.isArray(input.tools)) {
+      fields.tools = input.tools.slice(0, 1_000).flatMap((tool) => {
+        if (tool === null || typeof tool !== 'object' || Array.isArray(tool)) return [];
+        const item = tool as Record<string, unknown>;
+        if (typeof item.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(item.name) ||
+            typeof item.startedMs !== 'number' || !Number.isFinite(item.startedMs) ||
+            item.startedMs < 0 || item.startedMs > 600_000 ||
+            !(item.finishedMs === null || (typeof item.finishedMs === 'number' &&
+              Number.isFinite(item.finishedMs) && item.finishedMs >= item.startedMs &&
+              item.finishedMs <= 600_000)) ||
+            !['ok', 'refused', 'error', 'interrupted'].includes(String(item.outcome))) return [];
+        return [{
+          name: item.name,
+          startedMs: item.startedMs,
+          finishedMs: item.finishedMs,
+          outcome: item.outcome,
+        }];
+      });
+    }
+  }
+  if (input.msg === 'pc_bridge.command_timing') {
+    if (typeof input.command === 'string' && /^[a-z][a-z0-9_]{0,63}$/u.test(input.command)) {
+      fields.command = input.command;
+    }
+    if (['ok', 'refused', 'error'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    if (typeof input.roundTripMs === 'number' && Number.isFinite(input.roundTripMs) &&
+        input.roundTripMs >= 0 && input.roundTripMs <= 600_000) {
+      fields.roundTripMs = input.roundTripMs;
+    }
   }
   if (input.msg === 'sandbox_heartbeat.decision') {
     if (typeof input.sandboxSessionId === 'string' && /^[1-9]\d{0,18}$/.test(input.sandboxSessionId)) {
@@ -147,7 +264,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     fields.events = input.events;
   }
   if (input.msg === 'conversation.reply_failed' || input.msg === 'voice.upstream_error' ||
-      input.msg === 'voice.upstream_event_error' ||
+      input.msg === 'voice.upstream_event_error' || input.msg === 'voice.partials_unavailable' ||
       input.msg === 'voice.upstream_closed' || input.msg === 'voice.connection_failed') {
     // Short, fixed-vocabulary diagnostics only: our own error messages and upstream close reasons.
     if (typeof input.failure === 'string' && /^[A-Za-z0-9 .:,'()_-]{1,120}$/.test(input.failure)) {

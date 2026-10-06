@@ -5,22 +5,13 @@ import { loadAuthConfig } from './auth/config.js';
 describe('backend configuration', () => {
   it('defaults to the infrastructure port and offline logs', () => {
     expect(loadConfig({})).toEqual({
-      port: 3000, logLevel: 'info', notesFolderPath: '/Jarvis/Notes', codexToolModel: 'gpt-5.5',
+      port: 3000, logLevel: 'info', codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
       auth: loadAuthConfig({}),
     });
   });
-  it('accepts a configured OneDrive notes folder and rejects unsafe paths', () => {
-    expect(loadConfig({ JARVIS_NOTES_FOLDER_PATH: '/Work Notes/Research/' }).notesFolderPath)
-      .toBe('/Work Notes/Research');
-    for (const JARVIS_NOTES_FOLDER_PATH of [
-      '', '/', 'Jarvis/Notes', '/Jarvis//Notes', '/Jarvis/../Private', '/Jarvis\\Notes',
-      '/Jarvis/Notes?token=secret', '/Jarvis/Notes#fragment', '/Jarvis/Notes\u0000',
-    ]) {
-      expect(() => loadConfig({ JARVIS_NOTES_FOLDER_PATH })).toThrow(
-        /^JARVIS_NOTES_FOLDER_PATH must be an absolute OneDrive folder path$/,
-      );
-    }
+  it('does not configure an external OneDrive notes folder', () => {
+    expect(loadConfig({ JARVIS_NOTES_FOLDER_PATH: '/obsolete/path' })).not.toHaveProperty('notesFolderPath');
   });
   it('accepts only a secure Key Vault origin', () => {
     expect(loadConfig({ KEY_VAULT_URI: 'https://kv-jarvis.vault.azure.net/' }).keyVaultUri)
@@ -43,7 +34,6 @@ describe('backend configuration', () => {
       FOUNDRY_RUNNER_AGENT_NAME: 'jarvis-runner-node-1x2',
     })).toEqual({
       auth: loadAuthConfig({}), port: 4000, logLevel: 'debug', staticWebAppOrigin: 'https://fixture.azurestaticapps.net', applicationInsightsConnectionString: connectionString,
-      notesFolderPath: '/Jarvis/Notes',
       foundryEndpoints: {
         admin: foundryAdminEndpoint,
         runtime: foundryRuntimeEndpoint,

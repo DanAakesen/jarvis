@@ -28,7 +28,9 @@ vi.mock('./voice-client', () => ({
     constructor(private readonly options: VoiceClientOptions) { voiceSessions.push(options); }
     start() { this.options.onStatus('ready', 'Microphone is off.'); }
     stop() { this.options.onStatus('stopped', 'Voice is off.'); this.options.onSessionEnded?.(); }
-    enableMicrophone = vi.fn(async () => {});
+    retryMicrophone = vi.fn(async () => {});
+    playbackLevel = () => 0;
+    inputLevel = () => 0;
     setMuted = vi.fn();
   },
 }));
@@ -902,12 +904,13 @@ describe('ConversationHistory', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
 
     act(() => {
+      voice.onMicrophoneState?.('live');
       voice.onStatus('speaking', 'Jarvis is speaking.');
-      voice.onStatus('listening', 'Listening after interruption.');
+      voice.onStatus('listening', 'Listening for your voice.');
     });
     const statusLabel = screen.getByText('Listening');
     expect(statusLabel.closest('[role="status"]')?.getAttribute('aria-atomic')).toBe('true');
-    expect(screen.getByText('Listening after interruption.')).not.toBeNull();
+    expect(screen.getByText('Listening for your voice.')).not.toBeNull();
     expect(onVoiceActiveChange).toHaveBeenCalledTimes(1);
 
     const menu = document.createElement('details');
@@ -1023,5 +1026,63 @@ describe('ConversationHistory', () => {
     expect(reply?.querySelector('time')?.getAttribute('datetime')).toBe(message.at);
     expect(reply?.querySelector('time')?.getAttribute('title')).toBe(new Date(message.at).toLocaleString());
     expect(screen.getByText('Sure.').closest('li')?.getAttribute('data-speaker')).toBe('dan');
+  });
+
+  const historyPair = [
+    { ...message, id: '43', role: 'dan' as const, text: 'Hello Jarvis', toolCalls: [] },
+    { ...message, id: '44', channel: 'chat' as const, text: 'I am ready.', toolCalls: [] },
+  ];
+
+  it('keeps Dan’s reading position until he returns to the latest message', async () => {
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    renderConversation();
+    await screen.findByText('I am ready.');
+    const transcript = screen.getByLabelText('Conversation history');
+    Object.defineProperty(transcript, 'scrollHeight', { configurable: true, value: 1200 });
+    Object.defineProperty(transcript, 'clientHeight', { configurable: true, value: 300 });
+
+    transcript.scrollTop = 100;
+    fireEvent.scroll(transcript);
+    const jump = await screen.findByRole('button', { name: 'Jump to latest' });
+    fireEvent.click(jump);
+
+    expect(transcript.scrollTop).toBe(1200);
+    expect(document.activeElement).toBe(transcript);
+    expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull();
+  });
+
+  it('keeps author roles for assistive technology without visible avatars or name headings', async () => {
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    renderConversation();
+    const reply = (await screen.findByText('I am ready.')).closest('li');
+
+    expect(reply?.getAttribute('data-speaker')).toBe('jarvis');
+    expect(reply?.querySelector('.message-author')?.textContent).toBe('Jarvis');
+    expect(reply?.querySelector('.message-author')?.classList.contains('visually-hidden')).toBe(true);
+    expect(reply?.querySelector('img, .message-avatar')).toBeNull();
+  });
+
+  it('offers visual context from the composer attachment menu only when a source is shared', async () => {
+    const camera: CameraController = {
+      sharing: true,
+      starting: false,
+      inspecting: false,
+      error: '',
+      start: vi.fn(async () => {}),
+      stop: vi.fn(),
+      inspect: vi.fn(async () => ({ description: 'A red mug.' })),
+    };
+    renderConversation(0, camera);
+    await screen.findByRole('heading', { name: 'What’s on your mind?' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Attach visual context' }));
+    const screenItem = screen.getByRole('menuitem', { name: 'Look at screen' });
+    expect(screenItem.getAttribute('aria-disabled')).toBe('true');
+    expect(screenItem.getAttribute('title')).toBe('Share your screen from Activity, sharing and backend first.');
+    expect(screen.queryByRole('menuitem', { name: 'Language' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Look at camera' }));
+
+    await waitFor(() => expect(camera.inspect).toHaveBeenCalledWith(session.id));
+    expect((await screen.findByText(/Camera context is ready for the next message/)).getAttribute('role')).toBe('status');
   });
 });

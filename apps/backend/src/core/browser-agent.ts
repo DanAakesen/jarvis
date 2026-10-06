@@ -5,6 +5,12 @@ import { FOUNDRY_SCOPE } from '../foundry/client.js';
 import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import {
+  createRecipeSession,
+  recipeSiteKey,
+  type RecipeRuntime,
+  type RecipeSession,
+} from './task-recipes.js';
+import {
   isJevFailure,
   jevChoiceConfidenceThreshold,
   jevFailureFromStatus,
@@ -12,6 +18,16 @@ import {
   reflexSourceForRequest,
   type JevFailure,
 } from './jev.js';
+import {
+  closeIntentFor,
+  commonShortcutsFor,
+  isIrreversibleKeySequence,
+  isSafeKeySequence,
+  keySequenceChoiceOptions,
+  keySequenceFromChoice,
+  keySequencesFor,
+  type KeySequence,
+} from './keyboard-actions.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -56,13 +72,15 @@ export interface BrowserSnapshot {
 }
 
 export type BrowserOperation =
-  | 'click' | 'type' | 'select' | 'scroll_up' | 'scroll_down' | 'wait' | 'done' | 'blocked';
+  | 'click' | 'type' | 'type_focused' | 'keys' | 'select' | 'scroll_up' | 'scroll_down' | 'wait' | 'done' | 'blocked';
 
 export interface BrowserDecision {
   readonly operation: BrowserOperation;
   readonly confidence: number;
   readonly targetIndex?: number;
   readonly selectionValue?: string;
+  readonly keys?: KeySequence;
+  readonly text?: string;
 }
 
 export interface BrowserDecisionInput {
@@ -94,16 +112,55 @@ export interface BrowserExecutor {
   act(input: BrowserActionInput, signal: AbortSignal): Promise<void>;
 }
 
-export interface BrowserActionInput {
-  readonly tabId: string;
-  readonly snapshotId: string;
-  readonly elementIndex: number;
-  readonly action: 'click' | 'type' | 'select' | 'scroll' | 'wait';
-  readonly text?: string;
-  readonly value?: string;
-  readonly direction?: 'up' | 'down';
-  readonly waitMs?: number;
-}
+export type BrowserActionInput =
+  | {
+    readonly tabId: string;
+    readonly snapshotId: string;
+    readonly elementIndex: number;
+    readonly action: 'click';
+  }
+  | {
+    readonly tabId: string;
+    readonly snapshotId: string;
+    readonly elementIndex: number;
+    readonly action: 'type';
+    readonly text: string;
+  }
+  | {
+    readonly tabId: string;
+    readonly snapshotId: string;
+    readonly elementIndex: number;
+    readonly action: 'select';
+    readonly value: string;
+  }
+  | {
+    readonly tabId: string;
+    readonly snapshotId: string;
+    readonly elementIndex: number;
+    readonly action: 'scroll';
+    readonly direction: 'up' | 'down';
+  }
+  | {
+    readonly tabId: string;
+    readonly snapshotId: string;
+    readonly elementIndex: number;
+    readonly action: 'wait';
+    readonly waitMs: number;
+  }
+  | {
+    readonly tabId: string;
+    readonly snapshotId: string;
+    readonly action: 'keys';
+    readonly keys: KeySequence;
+    readonly closeIntent: boolean;
+    readonly requiresConfirmation: boolean;
+  }
+  | {
+    readonly tabId: string;
+    readonly snapshotId: string;
+    readonly action: 'type_focused';
+    readonly text: string;
+  };
 
 export interface BrowserClauseInput {
   readonly goal: string;
@@ -145,6 +202,7 @@ export interface BrowserAgent {
 export interface BrowserAgentLimits {
   readonly maxSteps?: number;
   readonly maxRunMs?: number;
+  readonly recipes?: RecipeRuntime;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -276,6 +334,8 @@ function readChoice(answer: unknown): { choice: string; confidence: number } | u
 function createJevQuestions(
   elements: readonly BrowserElement[],
   selectionValues: readonly string[],
+  keyboardOptions: readonly KeySequence[],
+  focusedTextValues: readonly string[],
 ): Record<string, unknown> {
   const elementChoices = Object.fromEntries([
     ['none', 'No suitable observed element.'],
@@ -295,6 +355,8 @@ function createJevQuestions(
       criteria: {
         click: 'Activate a matching observed control.',
         type: 'Enter non-sensitive text into a matching observed field.',
+        type_focused: 'Type one exact, quoted, non-sensitive value into the currently focused control.',
+        keys: 'Send one listed keyboard sequence to the focused Chrome window.',
         select: 'Choose a quoted option in a matching observed control.',
         scroll_up: 'Scroll upward on a matching observed element.',
         scroll_down: 'Scroll downward on a matching observed element.',
@@ -309,6 +371,22 @@ function createJevQuestions(
     target_scroll: { type: 'choice', instructions: 'Choose the observed target for scroll, or none.', criteria: elementChoices },
     target_wait: { type: 'choice', instructions: 'Choose an observed target for wait, or none.', criteria: elementChoices },
     selection_value: { type: 'choice', instructions: 'Choose the exact quoted user-provided value to select, or none.', criteria: selectionChoices },
+    key_sequence: {
+      type: 'choice',
+      instructions: 'Choose one listed keyboard sequence, or none. Never invent a key or sequence.',
+      criteria: {
+        none: 'No listed keyboard sequence is a safe next step.',
+        ...keySequenceChoiceOptions(keyboardOptions),
+      },
+    },
+    focused_text: {
+      type: 'choice',
+      instructions: 'Choose one exact, non-sensitive value quoted in the user goal, or none.',
+      criteria: Object.fromEntries([
+        ['none', 'No safe, explicitly quoted value is available.'],
+        ...focusedTextValues.map((value, index) => [`value_${index}`, `Exact user-provided value "${value}".`]),
+      ]),
+    },
   };
 }
 
@@ -318,7 +396,8 @@ export function createJevBrowserPlanner(
 ): BrowserJevPlanner {
   return {
     async decide(input, signal) {
-      if (!input.goal.trim() || input.goal.length > maxGoalLength || signal.aborted) return null;
+      if (!input.goal.trim() || input.goal.length > maxGoalLength || signal.aborted ||
+          secretRequest(input.goal)) return null;
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(jevTimeoutMs)]);
       let apiKey: string | undefined;
       try {
@@ -328,19 +407,29 @@ export function createJevBrowserPlanner(
       }
       if (!apiKey || !apiKey.trim() || apiKey.length > 10_000 || /[\r\n]/u.test(apiKey) || requestSignal.aborted) return null;
 
+      const keyboardOptions = keySequencesFor('chrome', input.goal);
+      const focusedTextValues = quotedSelections(input.goal)
+        .filter(value => !secretRequest(value) && !oneTimeCode(value) && !luhnCardNumber(value));
       const body = JSON.stringify({
         model: jevModel,
         state: {
           goal: input.goal,
           step: input.step,
           previousActions: input.previousActions,
+          application: 'chrome',
+          commonShortcuts: commonShortcutsFor('chrome'),
           page: {
             title: input.snapshot.title,
             url: input.snapshot.url,
             elements: input.snapshot.elements.map(({ index, role, name, value }) => ({ index, role, name, value })),
           },
         },
-        questions: createJevQuestions(input.snapshot.elements, quotedSelections(input.goal)),
+        questions: createJevQuestions(
+          input.snapshot.elements,
+          quotedSelections(input.goal),
+          keyboardOptions,
+          focusedTextValues,
+        ),
       });
       if (Buffer.byteLength(body) > 512 * 1024) return null;
       let response: Response;
@@ -379,7 +468,7 @@ export function createJevBrowserPlanner(
       const answers = payload.answers;
       const operation = readChoice(answers.operation);
       const allowedOperations: readonly BrowserOperation[] =
-        ['click', 'type', 'select', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked'];
+        ['click', 'type', 'type_focused', 'keys', 'select', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked'];
       if (!operation || !allowedOperations.includes(operation.choice as BrowserOperation)) {
         return { failure: 'invalid_answer' };
       }
@@ -388,6 +477,36 @@ export function createJevBrowserPlanner(
       if (confidence < jevChoiceConfidenceThreshold) return { operation: selectedOperation, confidence };
       if (selectedOperation === 'done' || selectedOperation === 'blocked') {
         return { operation: selectedOperation, confidence };
+      }
+      if (selectedOperation === 'keys') {
+        const choice = readChoice(answers.key_sequence);
+        if (!choice) return { failure: 'invalid_answer' };
+        const keys = keySequenceFromChoice(choice.choice, keyboardOptions);
+        if (!keys || !isSafeKeySequence(keys, closeIntentFor(input.goal))) {
+          return choice.choice === 'none'
+            ? { operation: selectedOperation, confidence: Math.min(confidence, choice.confidence) }
+            : { failure: 'invalid_answer' };
+        }
+        return {
+          operation: selectedOperation,
+          confidence: Math.min(confidence, choice.confidence),
+          keys,
+        };
+      }
+      if (selectedOperation === 'type_focused') {
+        const choice = readChoice(answers.focused_text);
+        if (!choice) return { failure: 'invalid_answer' };
+        if (choice.choice === 'none') {
+          return { operation: selectedOperation, confidence: Math.min(confidence, choice.confidence) };
+        }
+        const match = /^value_(\d{1,1})$/u.exec(choice.choice);
+        const text = match ? focusedTextValues[Number(match[1])] : undefined;
+        if (!text) return { failure: 'invalid_answer' };
+        return {
+          operation: selectedOperation,
+          confidence: Math.min(confidence, choice.confidence),
+          text,
+        };
       }
 
       const targetAnswerName = {
@@ -869,6 +988,7 @@ export function createBrowserAgent(
     ? Math.min(maxRunMs, limits.maxRunMs!)
     : maxRunMs;
   const clauseWindows = new Map<string, { viewId: string; created: { value: boolean } }>();
+  type RunRecipe = { initialized: boolean; key: string | undefined; session?: RecipeSession; drifted: boolean };
 
   async function reportClause(
     request: FastifyRequest,
@@ -899,7 +1019,7 @@ export function createBrowserAgent(
     input: BrowserClauseInput,
     request: FastifyRequest,
     signal: AbortSignal,
-    runtime?: { step: number; previousActions: readonly string[]; tab?: BrowserTab },
+    runtime?: { step: number; previousActions: readonly string[]; tab?: BrowserTab; recipe: RunRecipe },
   ): Promise<BrowserClauseResult> {
     validateClause(input);
     if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for browser actions.');
@@ -910,19 +1030,52 @@ export function createBrowserAgent(
     if (!runtime) await reportClause(request, tab.id, step, 'observe', undefined, 'Reading the current page.', signal);
     try {
       const snapshot = await executor.snapshot(tab.id, signal);
+      const recipe = runtime?.recipe;
+      const key = recipeSiteKey(snapshot.url);
+      if (recipe && !recipe.initialized) {
+        recipe.initialized = true;
+        recipe.key = key;
+        if (key) {
+          recipe.session = await withAbort(createRecipeSession(
+            limits.recipes, 'browser', key, input.goal.trim(), request, signal,
+          ), signal);
+        }
+      } else if (recipe && recipe.key !== key) {
+        recipe.drifted = true;
+      }
+      const proposal = recipe?.session
+        ? await withAbort(recipe.session.propose(key ?? '', snapshot.elements, signal, {
+          title: snapshot.title,
+          url: snapshot.url,
+          previousActions: runtime?.previousActions ?? input.previousActions ?? [],
+        }), signal)
+        : undefined;
       const jevStartedAt = performance.now();
-      const result = await planner.decide({
-        goal: input.goal.trim(),
-        step,
-        previousActions: runtime?.previousActions ?? input.previousActions ?? [],
-        snapshot,
-      }, signal);
+      let result: BrowserDecision | JevFailure | null | undefined = proposal;
+      if (!proposal) {
+        try {
+          result = await planner.decide({
+            goal: input.goal.trim(),
+            step,
+            previousActions: runtime?.previousActions ?? input.previousActions ?? [],
+            snapshot,
+          }, signal);
+        } finally {
+          if (limits.recipes && runtime) {
+            request.log.info({
+              phase: 'recipe_plan',
+              durationMs: Math.min(600_000, Math.max(0, performance.now() - jevStartedAt)),
+            }, 'chat.latency');
+          }
+        }
+      }
       if (isJevFailure(result)) {
         logJevFailure(request, reflexSourceForRequest(request), jevStartedAt, result.failure);
         throw new ToolRefusal('Jev could not return a valid browser decision. Please try again.');
       }
       const decision = result;
-      if (!decision || decision.confidence < jevChoiceConfidenceThreshold) {
+      if (!decision || !validProbability(decision.confidence) ||
+          decision.confidence < jevChoiceConfidenceThreshold) {
         throw new ToolRefusal('Jev is not confident enough to choose the next browser action. Please clarify the goal or ask Jarvis to continue.');
       }
       if (decision.operation === 'blocked') {
@@ -930,7 +1083,9 @@ export function createBrowserAgent(
       }
       if (decision.operation === 'done') {
         const current = await executor.snapshot(tab.id, signal);
+        if (recipe && recipe.key !== recipeSiteKey(current.url)) recipe.drifted = true;
         const complete = await textModel.verifyCompletion({ goal: input.goal, snapshot: current }, signal);
+        if (signal.aborted) throw signal.reason;
         if (!runtime) {
           await reportClause(
             request, tab.id, step, 'verify completion', undefined,
@@ -939,6 +1094,7 @@ export function createBrowserAgent(
           );
         }
         if (complete) {
+          if (!recipe?.drifted) recipe?.session?.record('done');
           return {
             tabId: tab.id, step, operation: 'done', completed: true,
             detail: 'Goal independently verified from the current page.',
@@ -949,17 +1105,46 @@ export function createBrowserAgent(
           detail: 'Completion could not be independently verified; continuing.',
         };
       }
-      if (decision.targetIndex === undefined) {
-        throw new ToolRefusal('Jev did not select an observed browser element. Please clarify the goal.');
-      }
-      const target = snapshot.elements.find(({ index }) => index === decision.targetIndex);
-      if (!target) throw new ToolRefusal('The selected browser element is no longer in the current page snapshot.');
-      const targetLabel = `${cleanDisplay(target.role)} "${cleanDisplay(target.name)}"`;
       const actionLabel = operationLabel(decision);
-      if (!runtime) await reportClause(request, tab.id, step, actionLabel, targetLabel, 'Action selected.', signal);
-
+      let targetLabel: string | undefined;
+      let recipeTarget: Pick<BrowserElement, 'role' | 'name'> | undefined;
       let action: BrowserActionInput;
-      if (decision.operation === 'type') {
+      if (decision.operation === 'keys') {
+        if (!decision.keys || !isSafeKeySequence(decision.keys, closeIntentFor(input.goal))) {
+          throw new ToolRefusal('Jev did not choose a safe, listed keyboard sequence.');
+        }
+        action = {
+          tabId: tab.id,
+          snapshotId: snapshot.snapshotId,
+          action: 'keys',
+          keys: decision.keys,
+          closeIntent: closeIntentFor(input.goal),
+          requiresConfirmation: isIrreversibleKeySequence(decision.keys) ||
+            /\b(?:send|sending|delete|deletion|pay|paid|payment|purchase|post|posting|push|pushing|overwrite|overwriting)\b/iu.test(input.goal),
+        };
+      } else if (decision.operation === 'type_focused') {
+        const allowedValues = quotedSelections(input.goal)
+          .filter(value => !secretRequest(value) && !oneTimeCode(value) && !luhnCardNumber(value));
+        if (secretRequest(input.goal) || !decision.text || !allowedValues.includes(decision.text)) {
+          throw new ToolRefusal('Jarvis can type only an explicit, non-sensitive value quoted in the request.');
+        }
+        action = {
+          tabId: tab.id,
+          snapshotId: snapshot.snapshotId,
+          action: 'type_focused',
+          text: decision.text,
+        };
+      } else {
+        if (decision.targetIndex === undefined) {
+          throw new ToolRefusal('Jev did not select an observed browser element. Please clarify the goal.');
+        }
+        const target = snapshot.elements.find(({ index }) => index === decision.targetIndex);
+        if (!target) throw new ToolRefusal('The selected browser element is no longer in the current page snapshot.');
+        recipeTarget = { role: target.role, name: target.name };
+        targetLabel = `${cleanDisplay(target.role)} "${cleanDisplay(target.name)}"`;
+        if (!runtime) await reportClause(request, tab.id, step, actionLabel, targetLabel, 'Action selected.', signal);
+
+        if (decision.operation === 'type') {
         if (secretRequest(input.goal) || sensitiveTarget(target)) {
           throw new ToolRefusal('BLOCKED: Jarvis never types passwords, payment-card numbers, or one-time codes. Please complete that step yourself.');
         }
@@ -971,26 +1156,38 @@ export function createBrowserAgent(
           throw new ToolRefusal('BLOCKED: Jarvis never types passwords, payment-card numbers, or one-time codes. Please complete that step yourself.');
         }
         action = { ...snapshotAction(snapshot, tab.id, target.index, 'type'), text };
-      } else if (decision.operation === 'select') {
-        if (!decision.selectionValue) throw new ToolRefusal('Jev did not select a quoted option. Please clarify the choice.');
-        action = { ...snapshotAction(snapshot, tab.id, target.index, 'select'), value: decision.selectionValue };
-      } else if (decision.operation === 'scroll_up' || decision.operation === 'scroll_down') {
-        action = {
-          ...snapshotAction(snapshot, tab.id, target.index, 'scroll'),
-          direction: decision.operation === 'scroll_up' ? 'up' : 'down',
-        };
-      } else if (decision.operation === 'wait') {
-        action = { ...snapshotAction(snapshot, tab.id, target.index, 'wait'), waitMs: 250 };
-      } else {
-        action = snapshotAction(snapshot, tab.id, target.index, 'click');
+        } else if (decision.operation === 'select') {
+          if (!decision.selectionValue || !quotedSelections(input.goal).includes(decision.selectionValue)) {
+            throw new ToolRefusal('Jev did not select a quoted option. Please clarify the choice.');
+          }
+          action = { ...snapshotAction(snapshot, tab.id, target.index, 'select'), value: decision.selectionValue };
+        } else if (decision.operation === 'scroll_up' || decision.operation === 'scroll_down') {
+          action = {
+            ...snapshotAction(snapshot, tab.id, target.index, 'scroll'),
+            direction: decision.operation === 'scroll_up' ? 'up' : 'down',
+          };
+        } else if (decision.operation === 'wait') {
+          action = { ...snapshotAction(snapshot, tab.id, target.index, 'wait'), waitMs: 250 };
+        } else {
+          action = snapshotAction(snapshot, tab.id, target.index, 'click');
+        }
       }
+      if (!runtime) await reportClause(request, tab.id, step, actionLabel, targetLabel, 'Action selected.', signal);
       await executor.act(action, signal);
+      if (signal.aborted) throw signal.reason;
+      if (!recipe?.drifted) {
+        recipe?.session?.record(decision.operation, recipeTarget, {
+          ...(action.action === 'type' || action.action === 'type_focused' ? { text: action.text } : {}),
+          ...(action.action === 'select' ? { selectionValue: action.value } : {}),
+          ...(action.action === 'keys' ? { keys: action.keys } : {}),
+        });
+      }
       if (!runtime) await reportClause(request, tab.id, step, actionLabel, targetLabel, 'Action completed.', signal);
       return {
         tabId: tab.id,
         step,
         operation: decision.operation,
-        target: targetLabel,
+        ...(targetLabel ? { target: targetLabel } : {}),
         completed: false,
         detail: 'Action completed; checking the next page state.',
       };
@@ -1014,11 +1211,13 @@ export function createBrowserAgent(
     signal: AbortSignal,
   ): Promise<BrowserTaskResult> {
     validateClause(input);
+    const runStartedAt = performance.now();
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(runLimitMs)]);
     const viewId = `browserTask_${randomUUID().replaceAll('-', '')}`;
     const created = { value: false };
     let tab: BrowserTab | undefined;
     const previousActions: string[] = [];
+    const recipe: RunRecipe = { initialized: false, key: undefined, drifted: false };
     let last = { step: 0, action: 'starting', detail: 'Connecting to Dan’s Chrome.' };
     try {
       if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for browser actions.');
@@ -1031,7 +1230,7 @@ export function createBrowserAgent(
           { goal: input.goal, tabId: tab.id, step, previousActions },
           request,
           deadline,
-          { step, previousActions, tab },
+          { step, previousActions, tab, recipe },
         );
         last = {
           step,
@@ -1041,6 +1240,15 @@ export function createBrowserAgent(
         };
         await publishProgress(request, viewId, { ...last, final: result.completed }, deadline, created);
         if (result.completed) {
+          if (!recipe.drifted && recipe.session) {
+            await withAbort(recipe.session.complete(deadline), deadline);
+          }
+          if (limits.recipes) {
+            request.log.info({
+              phase: 'recipe_run',
+              durationMs: Math.min(600_000, Math.max(0, performance.now() - runStartedAt)),
+            }, 'chat.latency');
+          }
           return {
             status: 'completed',
             tabId: tab.id,
@@ -1116,12 +1324,12 @@ export function createBrowserAgent(
   return { runClause, runTask, runSharedTask };
 }
 
-function snapshotAction(
+function snapshotAction<Action extends 'click' | 'type' | 'select' | 'scroll' | 'wait'>(
   snapshot: BrowserSnapshot,
   tabId: string,
   elementIndex: number,
-  action: 'click' | 'type' | 'select' | 'scroll' | 'wait',
-): BrowserActionInput {
+  action: Action,
+): { tabId: string; snapshotId: string; elementIndex: number; action: Action } {
   return { tabId, snapshotId: snapshot.snapshotId, elementIndex, action };
 }
 

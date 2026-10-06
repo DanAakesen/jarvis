@@ -1,0 +1,93 @@
+/* Registered so the stage can read resolved pixel values for the compact phone orb dock. */
+@property --jarvis-orb-dock-bottom { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --jarvis-orb-dock-radius { syntax: "<length>"; inherits: true; initial-value: 0px; }
+
+/* Voice status beneath the orb. The stage publishes --jarvis-orb-x/-y/-radius on .jarvis-page;
+   these fallbacks mirror its layout when WebGL is unavailable or still loading. */
+.voice-controls {
+  --voice-anchor-x: 50vw;
+  --voice-anchor-y: 46vh;
+  --voice-anchor-radius: min(18vw, 18vh);
+  --voice-status-width: min(360px, calc(100vw - 24px));
+}
+
+.app-shell[data-voice-has-windows="true"] .voice-controls {
+  --voice-anchor-x: 28vw;
+  --voice-anchor-radius: min(14.4vw, 14.4vh);
+  --voice-status-width: min(360px, 40vw);
+}
+
+.voice-status-region {
+  position: absolute;
+  top: calc(var(--jarvis-orb-y, var(--voice-anchor-y)) + var(--jarvis-orb-radius, var(--voice-anchor-radius)) + 16px);
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + var(--voice-bar-height, 60px) + 12px);
+  left: var(--jarvis-orb-x, var(--voice-anchor-x));
+  display: flex;
+  width: var(--voice-status-width);
+  min-height: 0;
+  align-items: flex-start;
+  justify-content: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* White, projected text belongs to the scene, without a badge, background or status dot. */
+.voice-status {
+  display: grid;
+  max-width: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  justify-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  overflow: auto;
+  color: #fff;
+  text-align: center;
+  pointer-events: auto;
+  text-shadow: 0 2px 4px #000, 0 0 14px rgb(190 235 255 / 50%);
+}
+.voice-status-heading { display: inline-flex; align-items: center; }
+.voice-status-label {
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: .025em;
+  animation: voice-status-arrive 260ms var(--ease-standard);
+}
+.voice-status-detail { max-width: 44ch; color: #fff; font-size: var(--type-caption); line-height: 1.4; overflow-wrap: anywhere; }
+@keyframes voice-status-arrive { from { opacity: .5; } to { opacity: 1; } }
+
+.more-menu-note {
+  max-width: 240px;
+  margin: 4px 0 0;
+  padding: 6px 10px 4px;
+  color: var(--text-muted);
+  font-size: var(--type-caption);
+  line-height: 1.35;
+}
+
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .voice-controls,
+  .app-shell[data-voice-has-windows="true"] .voice-controls {
+    --voice-anchor-x: 50vw;
+    --voice-anchor-y: 46vh;
+    --voice-anchor-radius: min(28vw, 16vh);
+    --voice-status-width: calc(100vw - 24px);
+  }
+  .voice-status-region { bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + 12px); }
+  /* With a phone window open, a compact orb docks between the window and the bar with the status
+     beneath it. The stage reads these lengths to place the orb; the window ends above the orb. */
+  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] {
+    --jarvis-orb-dock-radius: clamp(22px, min(11vw, 6vh), 44px);
+    --jarvis-orb-dock-bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 24px);
+    --voice-dock-top: calc(var(--jarvis-orb-dock-bottom) + 2 * var(--jarvis-orb-dock-radius) + 8px);
+  }
+  .app-shell[data-voice-has-windows="true"] .voice-status-region { bottom: auto; }
+  .app-shell[data-voice-has-windows="true"] .voice-status { max-height: 30vh; padding: 6px 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-status-label { animation: none; }
+}
+
+:root[data-motion="reduced"] .voice-status-label { animation: none; }

@@ -17,6 +17,7 @@ interface WebhookOptions {
   readonly getSecret: () => Promise<string | undefined>;
   readonly isTrackedRepository?: (repository: string) => boolean;
   readonly onMapping?: (mapping: GithubWebhookMapping) => Promise<void>;
+  readonly readWorkflowRun?: (repository: string, runId: number) => Promise<{ workflowId: number; cancelled: boolean }>;
 }
 
 function uniqueHeader(request: { raw: { rawHeaders: string[] }; headers: Record<string, unknown> }, name: string): string | undefined {
@@ -83,9 +84,20 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
         } catch {
           return reply.code(400).send({ error: 'Invalid webhook payload' });
         }
-        const mapping = acceptedEvents.has(event) ? mapGithubWebhook(event, payload) : undefined;
+        let mapping = acceptedEvents.has(event) ? mapGithubWebhook(event, payload) : undefined;
         if (!mapping || (options.isTrackedRepository && !options.isTrackedRepository(mapping.repository))) {
           return reply.code(202).send({ status: 'ignored' });
+        }
+        if (mapping.kind === 'deployment_status' && mapping.status === 'failure' &&
+            mapping.workflowRunId && options.readWorkflowRun) {
+          try {
+            const workflow = await options.readWorkflowRun(mapping.repository, mapping.workflowRunId);
+            if (workflow.cancelled) return reply.code(202).send({ status: 'ignored' });
+            mapping = { ...mapping, workflowId: workflow.workflowId };
+          } catch {
+            request.log.error('github.webhook_workflow_unavailable');
+            return reply.code(503).send({ error: 'Webhook processing unavailable' });
+          }
         }
         const statusKind = voiceStatusKind(event, payload, mapping);
         let inserted: boolean;

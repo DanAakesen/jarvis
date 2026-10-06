@@ -1,38 +1,48 @@
 import { describe, expect, it, vi } from 'vitest';
-import { defaultAwayModeState, observeAwayPresence, presenceAwayThresholdMs, setAwayMode, setAwayModeTool } from './away-mode.js';
+import {
+  defaultAwayModeState,
+  parseAwayModeState,
+  setPresenceMode,
+  setPresenceModeTool,
+  setAwayModeTool,
+} from './away-mode.js';
 import { ToolRefusal } from './tool-registry.js';
 import type { FastifyRequest } from 'fastify';
 
 const at = new Date('2026-10-04T12:00:00.000Z');
 
-describe('away mode state', () => {
-  it('requires ten uninterrupted minutes of Away or Offline before switching on', () => {
-    const first = observeAwayPresence(defaultAwayModeState, true, at);
-    expect(first).toMatchObject({ away: false, presenceAwaySince: at.toISOString() });
-    expect(observeAwayPresence(first, true, new Date(at.getTime() + presenceAwayThresholdMs - 1)).away).toBe(false);
-    expect(observeAwayPresence(first, true, new Date(at.getTime() + presenceAwayThresholdMs)))
-      .toMatchObject({ away: true, source: 'teams_presence' });
+describe('presence mode state', () => {
+  it('migrates persisted boolean state and normalizes removed Teams presence data', () => {
+    expect(parseAwayModeState({
+      away: true,
+      source: 'teams_presence',
+      changedAt: at.toISOString(),
+      presenceAwaySince: null,
+    })).toEqual({ mode: 'away', source: 'manual', changedAt: at.toISOString() });
+    expect(parseAwayModeState({
+      away: false,
+      source: null,
+      changedAt: null,
+      presenceAwaySince: null,
+    })).toEqual({ mode: 'present', source: 'manual', changedAt: null });
   });
 
-  it('clears an interrupted presence timer without undoing an active away mode', () => {
-    const observed = observeAwayPresence(defaultAwayModeState, true, at);
-    expect(observeAwayPresence(observed, false, new Date(at.getTime() + 30_000)))
-      .toMatchObject({ away: false, presenceAwaySince: null });
-
-    const manual = setAwayMode(defaultAwayModeState, true, 'manual', at);
-    expect(observeAwayPresence(manual, false, new Date(at.getTime() + 30_000)).away).toBe(true);
+  it('changes source and timestamp only when the selected mode changes', () => {
+    const away = setPresenceMode(defaultAwayModeState, 'away', 'manual', at);
+    expect(away).toEqual({ mode: 'away', source: 'manual', changedAt: at.toISOString() });
+    expect(setPresenceMode(away, 'away', 'jarvis', new Date(at.getTime() + 1_000))).toEqual(away);
+    expect(setPresenceMode(away, 'on_the_move', 'jarvis', new Date(at.getTime() + 2_000)))
+      .toEqual({ mode: 'on_the_move', source: 'jarvis', changedAt: new Date(at.getTime() + 2_000).toISOString() });
   });
 
-  it('manual and browser changes persist an explicit mode and reset the presence timer', () => {
-    const observed = observeAwayPresence(defaultAwayModeState, true, at);
-    const manual = setAwayMode(observed, true, 'manual', new Date(at.getTime() + 1_000));
-    expect(manual).toMatchObject({ away: true, source: 'manual', presenceAwaySince: null });
-    expect(setAwayMode(manual, false, 'browser', new Date(at.getTime() + 2_000)))
-      .toMatchObject({ away: false, source: 'browser', presenceAwaySince: null });
-  });
-
-  it('validates tool input and requires a verified principal and available state store', async () => {
-    const store = { read: vi.fn(), set: vi.fn(async (away: boolean) => ({ ...defaultAwayModeState, away })) };
+  it('validates the new and compatibility tools and records Jarvis as the source', async () => {
+    const store = {
+      read: vi.fn(),
+      set: vi.fn(async (mode: 'present' | 'away' | 'on_the_move') => ({
+        ...defaultAwayModeState,
+        mode,
+      })),
+    };
     const request = {
       principal: null,
       agentPrincipal: null,
@@ -40,15 +50,16 @@ describe('away mode state', () => {
     } as unknown as FastifyRequest;
     const signal = new AbortController().signal;
 
-    await expect(setAwayModeTool.execute({ mode: 'on' }, request, signal))
+    await expect(setPresenceModeTool.execute({ mode: 'away' }, request, signal))
       .rejects.toBeInstanceOf(ToolRefusal);
     request.agentPrincipal = { kind: 'jarvis-agent', objectId: 'agent', tenantId: 'tenant' };
-    await expect(setAwayModeTool.execute({ mode: 'on', extra: true }, request, signal))
+    await expect(setPresenceModeTool.execute({ mode: 'on_the_move', extra: true }, request, signal))
       .rejects.toBeInstanceOf(ToolRefusal);
-    await expect(setAwayModeTool.execute({ mode: 'on' }, request, signal)).resolves.toMatchObject({
-      away: true,
-      message: expect.stringContaining('Teams'),
-    });
-    expect(store.set).toHaveBeenCalledWith(true);
+    await expect(setPresenceModeTool.execute({ mode: 'on_the_move' }, request, signal))
+      .resolves.toMatchObject({ mode: 'on_the_move', away: true, message: expect.stringContaining('on the move') });
+    await expect(setAwayModeTool.execute({ mode: 'on' }, request, signal))
+      .resolves.toMatchObject({ mode: 'away', away: true });
+    expect(store.set).toHaveBeenNthCalledWith(1, 'on_the_move', 'jarvis');
+    expect(store.set).toHaveBeenNthCalledWith(2, 'away', 'jarvis');
   });
 });
