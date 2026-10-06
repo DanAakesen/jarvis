@@ -85,8 +85,12 @@
 .conversation-transcript:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .conversation-input { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: var(--space-2); flex: 0 0 auto; width: 100%; max-width: 860px; margin: 0 auto; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 30px; background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
 .conversation-input:has(textarea:focus-visible) { box-shadow: var(--dialog-shadow), 0 0 0 3px var(--focus); }
-.conversation-input[data-voice-active="false"] > .conversation-actions { position: relative; padding-right: var(--space-2); }
-.conversation-input[data-voice-active="false"] > .conversation-actions::after,
+/* In typing mode the voice wrappers dissolve into the composer grid so voice errors sit in normal flow as a full-width row above it. */
+.conversation-input[data-voice-active="false"] > .conversation-actions,
+.conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] { display: contents; }
+.conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] > .action-row { position: relative; padding-right: var(--space-2); }
+.conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] > :is(.voice-error, .voice-screen-error) { position: static; order: -1; grid-column: 1 / -1; width: auto; max-width: none; margin: 0 4px; padding: 10px 14px; border: 0; border-radius: var(--radius-control); background: var(--surface); color: var(--error); font-size: var(--type-small); line-height: 1.4; overflow-wrap: anywhere; }
+.conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] > .action-row::after,
 .conversation-history .composer-attach::after,
 .conversation-history .composer-more::after { position: absolute; top: 10px; right: -1px; bottom: 10px; width: 1px; background: var(--rule); content: ""; }
 .conversation-history .composer-attach, .conversation-history .composer-more { padding-right: var(--space-2); }
@@ -280,7 +284,7 @@
   .conversation-message { padding: var(--space-3) var(--space-4); }
   .conversation-window-host > .conversation-transcript { padding: 0 var(--space-3) var(--space-3); }
   .conversation-input { border-radius: 26px; padding: 6px 8px; }
-  .conversation-input[data-voice-active="false"] > .conversation-actions { padding-right: var(--space-1); }
+  .conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] > .action-row { padding-right: var(--space-1); }
   .conversation-history .composer-attach, .conversation-history .composer-more { padding-right: 2px; }
   .conversation-history .composer { gap: var(--space-1); }
   .conversation-overview .jarvis-side { grid-template-columns: minmax(0, 1fr); }

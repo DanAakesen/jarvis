@@ -271,6 +271,15 @@ export function ConversationHistory({
     workspaceCommands.dispatch({ commandId: 'conversation-reveal', operation: 'restore', viewId: conversationViewId });
   }, [workspaceCommands]);
 
+  const shownFailure = useRef('');
+  useEffect(() => {
+    // Turn errors are shown in the history, so a new failure brings a closed or minimised window back.
+    const failure = turnError || (failedTurns.length > 0 ? `failed-${failedTurns.at(-1)!.id}` : '');
+    if (failure === shownFailure.current) return;
+    shownFailure.current = failure;
+    if (failure) revealHistory();
+  }, [failedTurns, revealHistory, turnError]);
+
   useEffect(() => {
     // Choosing Conversation in the navigation brings a closed or minimised history back.
     if (seenLocationKey.current === locationKey) return;

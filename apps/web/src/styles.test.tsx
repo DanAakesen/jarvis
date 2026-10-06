@@ -140,6 +140,17 @@ describe('shared glass tokens', () => {
     expect(styles).toContain('@media (max-width: 600px)');
   });
 
+  it('keeps typing-mode voice errors in the composer flow instead of an offset overlay', () => {
+    const styles = readFileSync('src/ConversationHistory.css', 'utf8');
+    const error = /\.conversation-input\[data-voice-active="false"\] \.voice-controls\[data-active="false"\] > :is\(\.voice-error, \.voice-screen-error\)\s*\{([^}]*)\}/;
+
+    expect(ruleDeclaration(styles, error, 'position')).toBe('static');
+    expect(ruleDeclaration(styles, error, 'grid-column')).toBe('1 / -1');
+    expect(ruleDeclaration(styles, error, 'max-width')).toBe('none');
+    expect(styles).toContain('.conversation-input[data-voice-active="false"] > .conversation-actions,\n'
+      + '.conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] { display: contents; }');
+  });
+
   it('gives Jarvis replies a readable semantic glass surface over the stage', () => {
     const styles = readFileSync('src/ConversationHistory.css', 'utf8');
     const jarvisMessage = ruleDeclaration(

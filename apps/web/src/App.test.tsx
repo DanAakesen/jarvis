@@ -555,6 +555,29 @@ describe('App shell', () => {
     expect(composer.value).toBe('Unsent draft');
   });
 
+  it('shows voice errors inside the composer and brings closed history back for a failed turn', async () => {
+    const user = userEvent.setup();
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    sendChatTurn.mockRejectedValue(new Error('Jarvis could not finish the reply. Try again.'));
+    await renderSignedIn();
+    await screen.findByText('I am ready.');
+
+    await user.click(screen.getByRole('button', { name: 'Close Conversation' }));
+    await user.type(screen.getByRole('textbox', { name: 'Message Jarvis' }), 'Will this fail?');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    const turnAlert = await screen.findByText('Jarvis could not finish the reply. Try again.');
+    expect(turnAlert.getAttribute('role')).toBe('alert');
+    expect(screen.getByRole('article', { name: 'Conversation' }).contains(turnAlert)).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: 'Start voice' }));
+    await user.click(screen.getByRole('button', { name: 'End voice' }));
+    act(() => voiceSessions.at(-1)!.options.onStatus('error', 'Audio could not start. Check your browser audio settings and try again.'));
+    const voiceAlert = screen.getByText('Audio could not start. Check your browser audio settings and try again.');
+    expect(voiceAlert.getAttribute('role')).toBe('alert');
+    expect(voiceAlert.closest('.conversation-input')).not.toBeNull();
+    expect(screen.getByRole('article', { name: 'Conversation' }).contains(voiceAlert)).toBe(false);
+  });
+
   it('restores history minimised for voice when voice ends', async () => {
     const user = userEvent.setup();
     loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
