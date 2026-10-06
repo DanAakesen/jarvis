@@ -57,6 +57,7 @@ const reconciliationDecisions = new Set([
 ]);
 const chatLatencyPhases = new Set([
   'reflex_targets', 'jev', 'agent_first_byte', 'turn_first_token', 'turn_complete',
+  'recipe_select', 'recipe_verify', 'recipe_plan', 'recipe_run',
 ]);
 const reflexReasons = new Set([
   'executed', 'unavailable', 'cancelled', 'not_addressed', 'not_action', 'incomplete_command',

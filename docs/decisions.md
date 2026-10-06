@@ -19,6 +19,14 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P7-35 (6 October 2026): reuse the existing global JSON settings store for bounded,
+value-free task recipes rather than add a table or rewrite occupied migration
+0020. Jev selects by app/site, verifies each fresh stable target, and falls back
+on drift; low confidence asks Dan. Dan's any-app access and irreversible-only
+confirmation decision also applies during replay. Deletion is available through
+Settings and a sensitive tool. Offline checks establish the contracts; real
+Windows/Chrome/Jev speedup remains live acceptance.
+
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
 | 2026-10-06 | P5-13 keeps task/PR correctness while removing idle SQL polling: acknowledge signed unsupported/untracked webhooks without storing them; retain mapped tracked events in their existing serializable transaction; skip dispatcher reconciliation and event-archive checks with no tracked sandbox; cache unchanged away-mode state in the existing process-local store. Run one startup stale-task reconciliation and resume periodic checks when work is tracked. | Source audit found webhook delivery inserts for ignored events, five-minute empty stale-task scans, hourly empty archive scans, and Graph presence persistence attempts every minute. The backend is configured for one replica, and task/project mutations update the in-memory active-repository cache. Focused tests cover the no-SQL branches; production SQL idle duration and free-tier usage still require post-deploy measurement. Delaying archival while idle preserves rows and only postpones retention work. | Implemented offline; live Azure measurement pending |

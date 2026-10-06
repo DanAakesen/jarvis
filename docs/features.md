@@ -37,6 +37,7 @@ Status as of 5 October 2026.
 | Voice transcripts | Read what was said in each voice sitting, with voice minutes | Screen | Main page | Built | P5-06 |
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built | P4-04 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built | P4-05 |
+| Task recipes | Remember successful PC/browser operation sequences without entered values; Jev selects and verifies fresh targets, falling back to planning on drift. List and delete saved recipes. | Both | Voice/chat and Settings → Task recipes | Built offline; live replay timing pending | P7-35, P7-34, P5-14 |
 | Software Factory tools | Ask Jarvis to list projects and tasks, create tasks, change the agent or model on a Ready task, and steer, pause, resume or cancel tasks | Voice/chat | Main page | Built | P4-10, P7-11 |
 | Image generation | Ask Jarvis to create an image with the existing ChatGPT/Codex subscription; open it in the workspace and inspect its saved artifact in chat history | Both | Main conversation and workspace | Built offline; live Codex and Blob acceptance pending | P7-15 |
 | Model switching by voice | Change Jarvis for the next session or a Ready task using verified provider options; running-task changes are refused | Voice/chat | Main page | Built (offline) | P7-11 |

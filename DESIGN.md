@@ -224,6 +224,14 @@ and loading, recovery, and unavailable actions remain explicit. Credentials show
 values; manual renewal and reseed controls remain disabled with an explanation.
 The Voice section includes a labelled “Minimise all windows when starting voice”
 checkbox, off by default, saved with the other settings.
+Task recipes use a separate Settings section with compact rows showing the app
+or site, normalized goal and step count. Refresh and per-row Delete act immediately,
+independently of Save settings, with local pending, error/retry and success feedback.
+The section reuses existing surfaces, focus styles and responsive settings layout.
+P7-35 was checked in Chromium at 1280×900 and 390×844 with normal/reduced motion:
+loading, refresh/error/retry, delete pending/error/retry/success, empty state and
+keyboard focus. Buttons measured 44 px; no overflow, clipping or page/console errors.
+These were local auth/API fixtures, not live backend or PC acceptance.
 The sleep control also remains disabled until its owning workflow exists; no
 new visual direction or palette is introduced. Checked in Chromium at
 390 and 1280 px with mock auth/settings: no horizontal overflow, controls at
