@@ -224,7 +224,7 @@ describe('VoiceControls', () => {
     expect(cameraItem.getAttribute('aria-disabled')).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Look at screen' }));
     expect(screen.queryByRole('menu')).toBeNull();
-    expect(screenShare.inspect).toHaveBeenCalledWith('42');
+    expect(screenShare.inspect).toHaveBeenCalledWith('42', 'caller');
   });
 
   it('starts screen and camera capture from More without inspecting a frame, then offers stop controls', async () => {
@@ -454,7 +454,7 @@ describe('VoiceControls', () => {
     act(() => options.onSessionReady('42'));
     options.onVisionRequest('camera', 'What am I holding?');
 
-    await waitFor(() => expect(camera.inspect).toHaveBeenCalledWith('42'));
+    await waitFor(() => expect(camera.inspect).toHaveBeenCalledWith('42', 'caller'));
     expect(instance.client.sendScreenContext).toHaveBeenCalledWith('A red mug.', undefined);
     act(() => options.onStatus('stopped', 'Voice is off.'));
     expect(camera.stop).toHaveBeenCalledOnce();

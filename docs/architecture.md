@@ -74,11 +74,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   envelopes. No backend protocol or persistence change is required.
 - P8-43 (#435) adds screen/camera start/stop to voice More while reusing
   `useVisionCapture` and the same authenticated frame endpoint. `start` accepts an
-  optional failure callback so its initiating control can show permission errors
-  without polling hook state. Inspection remains on request; late results from an
+  optional failure callback so its initiating control owns permission feedback,
+  without retaining a duplicate inline error. Voice inspection also opts into
+  caller-owned feedback. Inspection remains on request; late results from an
   ended/replaced voice session are discarded. `ConversationToast` portals transient
   feedback to the document body, outside transformed scene/composer ancestors,
-  with dismissal and a hover/focus-paused timeout. `VoiceOrbStatus` remains HTML
+  with dismissal, a hover/focus-paused timeout, and an offset above the actual
+  composer/voice-bar height. `VoiceOrbStatus` remains HTML
   live status with white unframed text. Existing orb shaders add a continuous
   integrated core phase and low dormant light baseline; reduced motion freezes
   time. No new dependency, backend protocol or persistence is introduced.

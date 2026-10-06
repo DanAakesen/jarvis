@@ -236,7 +236,7 @@ export function VoiceControls({
       return;
     }
     try {
-      const context = await capture.inspect(sessionId);
+      const context = await capture.inspect(sessionId, 'caller');
       if (client.current !== voice || screenSessionIdRef.current !== sessionId) return;
       voice.sendScreenContext(
         context.description,
@@ -353,7 +353,7 @@ export function VoiceControls({
           <span className="voice-start-label" aria-hidden="true">Start voice</span>
         </div>
       )}
-      {notification && <ConversationToast notification={notification} onDismiss={dismissNotification} />}
+      {notification && <ConversationToast voiceActive={active} notification={notification} onDismiss={dismissNotification} />}
     </div>
   );
 }

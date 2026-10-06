@@ -74,6 +74,7 @@ describe('camera frame capture', () => {
     render(<CameraHarness onError={onError} />);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' })); });
     expect(onError).toHaveBeenCalledWith('Camera access was not started. Allow camera access and try again.');
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('status').textContent).toBe('Camera is off');
     expect(fetchMock).not.toHaveBeenCalled();
   });

@@ -14,7 +14,7 @@ export interface ScreenShareController {
   readonly error: string;
   start(onError?: (message: string) => void): Promise<void>;
   stop(): void;
-  inspect(sessionId: string): Promise<VisionContext>;
+  inspect(sessionId: string, feedback?: 'inline' | 'caller'): Promise<VisionContext>;
 }
 
 export interface VisionContext {
@@ -118,7 +118,11 @@ function useVisionCapture(
 
   const start = useCallback(async (onError?: (message: string) => void) => {
     setError('');
-    const fail = (message: string) => { setError(message); onError?.(message); };
+    const fail = (message: string) => {
+      // The initiating control owns feedback: toast callers must not leave a second inline alert.
+      if (onError) onError(message);
+      else setError(message);
+    };
     if (streamRef.current || startPendingRef.current) return;
     if (source === 'camera' && !navigator.mediaDevices?.getUserMedia) {
       fail('Camera access is not available in this browser.');
@@ -176,7 +180,7 @@ function useVisionCapture(
     streamRef.current = null;
   }, []);
 
-  const inspect = useCallback(async (sessionId: string) => {
+  const inspect = useCallback(async (sessionId: string, feedback: 'inline' | 'caller' = 'inline') => {
     setError('');
     if (!/^[1-9]\d{0,18}$/u.test(sessionId) || BigInt(sessionId) > 9_223_372_036_854_775_807n) {
       throw new Error('An active conversation is required to inspect a visual frame.');
@@ -239,7 +243,7 @@ function useVisionCapture(
       const message = reason instanceof Error && reason.name !== 'AbortError' && reason.name !== 'TimeoutError'
         ? reason.message
         : `Jarvis could not inspect the ${label} frame. Try again.`;
-      setError(message);
+      if (feedback === 'inline') setError(message);
       throw new Error(message, { cause: reason });
     } finally {
       clearTimeout(timeout);
