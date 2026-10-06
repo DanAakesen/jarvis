@@ -551,7 +551,7 @@ export function createTaskStore(
       }
       const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
       const { recordset } = await request.query<TaskRow>(`SELECT ${taskColumns} FROM dbo.tasks ${where}
-        ORDER BY created_at DESC, id DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;`);
+        ORDER BY created_at DESC, dbo.tasks.id DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;`);
       return taskSummaries(pool, recordset.map(toTask));
     },
 
@@ -570,8 +570,8 @@ export function createTaskStore(
             CASE WHEN DATALENGTH(payload) > 4096 THEN NULL ELSE payload END AS payload,
             CAST(CASE WHEN DATALENGTH(payload) > 4096 THEN 1 ELSE 0 END AS bit) AS payloadTruncated,
             source, at
-            FROM dbo.task_events WHERE task_id = @taskId
-            ORDER BY at ASC, id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
+            FROM dbo.task_events AS e WHERE task_id = @taskId
+            ORDER BY e.at ASC, e.id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
         return {
           ...(await taskSummaries(pool, [toTask(row)]))[0]!,
           usage: await taskUsage(pool, id),
@@ -611,8 +611,8 @@ export function createTaskStore(
               CASE WHEN DATALENGTH(payload) > 4096 THEN NULL ELSE payload END AS payload,
               CAST(CASE WHEN DATALENGTH(payload) > 4096 THEN 1 ELSE 0 END AS bit) AS payloadTruncated,
               source, at
-              FROM dbo.task_events WHERE task_id = @taskId
-              ORDER BY at ASC, id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
+              FROM dbo.task_events AS e WHERE task_id = @taskId
+              ORDER BY e.at ASC, e.id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
           activeEvents = eventsResult.recordset.map((event) => ({
             ...event,
             payload: parsePayload(event.payload),
@@ -651,8 +651,8 @@ export function createTaskStore(
           CASE WHEN DATALENGTH(payload) > 4096 THEN NULL ELSE payload END AS payload,
           CAST(CASE WHEN DATALENGTH(payload) > 4096 THEN 1 ELSE 0 END AS bit) AS payloadTruncated,
           source, at
-          FROM dbo.task_events WHERE task_id = @taskId AND id > @eventId
-          ORDER BY id ASC;`);
+          FROM dbo.task_events AS e WHERE task_id = @taskId AND e.id > @eventId
+          ORDER BY e.id ASC;`);
       return result.recordset.map((event) => ({
         ...event,
         taskId,
