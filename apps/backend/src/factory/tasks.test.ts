@@ -223,7 +223,12 @@ describe('factory tasks API', () => {
   it('mints a task repository token only for its runner session', async () => {
     const issue = vi.fn(async (repository: string) =>
       repository === 'DanAakesen/jarvis-test-target' ? 'ghs_test-installation-token' : 'wrong-repository');
-    const issuer = { issue } satisfies GitHubAppTokenIssuer;
+    const issuer = {
+      issue,
+      issueForActions: vi.fn(async () => 'actions-token'),
+      issueForContents: vi.fn(async () => 'contents-token'),
+      issueForContentsWrite: vi.fn(async () => 'contents-write-token'),
+    } satisfies GitHubAppTokenIssuer;
     const runnerAuth: TokenVerifier = async () => ({
       kind: 'jarvis-runner',
       objectId: '11111111-1111-4111-8111-111111111111',

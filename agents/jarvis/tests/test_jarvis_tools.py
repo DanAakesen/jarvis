@@ -36,9 +36,9 @@ CREATE_TASK = {
         "additionalProperties": False,
     },
 }
-MEMORY_SEARCH = {
-    "name": "memory_search",
-    "description": "Find relevant source-linked memories.",
+VAULT_SEARCH = {
+    "name": "vault_search",
+    "description": "Find relevant vault notes.",
     "inputSchema": {
         "type": "object",
         "properties": {"query": {"type": "string"}},
@@ -47,10 +47,15 @@ MEMORY_SEARCH = {
     },
 }
 
-def test_notes_search_instructions_require_grounded_quotes_and_links() -> None:
-    assert "notes_search" in INSTRUCTIONS
-    assert "returned snippets" in INSTRUCTIONS
-    assert "returned note link" in INSTRUCTIONS
+def test_vault_instructions_require_grounded_answers_and_links() -> None:
+    assert "vault_search" in INSTRUCTIONS
+    assert "returned note content" in INSTRUCTIONS
+    assert "returned GitHub link" in INSTRUCTIONS
+    assert (
+        "Automatically save preferences, people, project facts, decisions and unfinished tasks"
+        in INSTRUCTIONS
+    )
+    assert "Never save secrets or credentials" in INSTRUCTIONS
 
 
 def test_voice_instructions_explain_pc_app_media_and_confirmation_rules() -> None:
@@ -307,15 +312,15 @@ async def test_phone_voice_turn_propagates_its_server_supplied_session_id() -> N
     assert request.headers["x-jarvis-phone-session-id"] == "42"
 
 
-async def test_voice_can_search_memory_without_a_persisted_source_message() -> None:
-    backend = Backend(catalogue=[CREATE_TASK, MEMORY_SEARCH])
+async def test_voice_can_search_vault_without_a_persisted_source_message() -> None:
+    backend = Backend(catalogue=[CREATE_TASK, VAULT_SEARCH])
     client = make_client(backend)
     await client.tools()
 
-    await client.call("memory_search", '{"query": "earlier decision"}', None)
+    await client.call("vault_search", '{"query": "earlier decision"}', None)
 
     request = backend.requests[-1]
-    assert request.url.path == "/tools/memory_search"
+    assert request.url.path == "/tools/vault_search"
     assert "x-jarvis-message-id" not in request.headers
     assert "x-jarvis-voice-item-id" not in request.headers
 

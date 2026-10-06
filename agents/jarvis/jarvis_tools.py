@@ -46,7 +46,8 @@ Task ids may be spoken as numbers; use the matching id from the supplied context
 Rules:
 - Use set_away_mode when Dan says he is leaving or back. Current mode is included
   with session settings.
-- Notes questions: use notes_search, quote only returned snippets, and include a returned note link.
+- Vault questions: use vault_search or vault_read and rely only on returned note content.
+  Include a returned GitHub link.
   If there is no match or search fails, say so plainly.
 - New work: create a task with the project, the agent, and Dan's request in Danish as the text.
   If Dan does not name an agent, use the project's default agent.
@@ -78,22 +79,20 @@ Action rules (strict):
 - Commands about an existing task: list the tasks if needed, then call the action tool in the
   same turn. If exactly one task matches the project or agent Dan names, act on it without asking.
 
-Memory:
-- Search saved memories when a preference, earlier decision, project fact or unfinished task is
-  relevant; use only results that include Dan's original source message and do not invent missing
-  evidence. Never dump the whole memory list into an unrelated answer.
-- Automatically remember only preferences, project facts, decisions and unfinished tasks Dan
-  clearly states. Do not infer them. Use a short stable key and update the same key when Dan
-  confirms a correction or newer fact. Ask when the memory or key is ambiguous.
-- Never remember secrets, credentials, banking or health details unless Dan's current stored
-  message explicitly contains the word "remember". Do not repeat sensitive memory content aloud.
-- Use the list/history tools to inspect a memory and its source; use memory_correct for a
-  correction and memory_forget only after identifying the exact memory. Forgetting removes the
-  memory and its saved versions, not the original conversation or source message.
-- After a successful remember/correct/forget call, briefly say the category and key that changed,
-  following the backend confirmation. If the tool refuses or fails, say nothing changed.
-- Memory writes require a stored Dan message as their source. If a voice turn cannot provide one,
-  do not claim to have remembered, corrected or forgotten anything.
+Long-term knowledge:
+- Search Dan's GitHub vault when a preference, person, project, decision or unfinished task is
+  relevant. Use returned paths, snippets and links as evidence; never invent missing facts.
+- Automatically save preferences, people, project facts, decisions and unfinished tasks Dan
+  clearly states. Do not infer them. Search for an existing note first, then use vault_write to
+  create, append or update it under People/, Work/, Personal/ or General/ according to the vault's
+  routing rules. Before writing, read AGENTS.md, .github/agent-state/routing.md and relevant
+  .github/instructions/*.instructions.md files through vault_read. Do not ask Dan to approve an
+  unambiguous durable fact.
+- Never save secrets or credentials. Save banking or health details only when Dan's current stored
+  message explicitly contains the word "remember". Do not repeat sensitive content aloud.
+- A vault write requires the stored Dan message for this turn. After a successful vault_write,
+  briefly relay its exact confirmation and commit link; if it refuses or fails, say nothing was
+  saved.
 """
 
 # Nonsecret ID of the `jarvis-api` app from infra/bootstrap.output.json.
@@ -110,7 +109,7 @@ _TOOL_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _MESSAGE_ID = re.compile(r"^[1-9][0-9]{0,18}$")
 _VOICE_ITEM_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _PHONE_SESSION_ID = re.compile(r"^[1-9][0-9]{0,18}$")
-_READ_ONLY_MEMORY_TOOLS = {"memory_search", "memory_list", "memory_history"}
+_READ_ONLY_VAULT_TOOLS = {"vault_search", "vault_read"}
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 current_conversation: contextvars.ContextVar[str] = contextvars.ContextVar(
@@ -420,7 +419,7 @@ class BackendToolClient:
     ) -> dict[str, Any]:
         """Execute one model tool call; failures are returned, never raised as success."""
         self.calls += 1
-        span_name = "memory_retrieval" if name == "memory_search" else "backend_tool_call"
+        span_name = "vault_retrieval" if name == "vault_search" else "backend_tool_call"
         with latency_span(span_name) as span:
             span.set_attribute("tool.name", name)
             result = await self._call(name, arguments_json, message_id)
@@ -452,7 +451,7 @@ class BackendToolClient:
             )
         voice_item_id = current_turn.get() if message_id is None else ""
         if message_id is None and not (
-            name in _READ_ONLY_MEMORY_TOOLS or
+            name in _READ_ONLY_VAULT_TOOLS or
             isinstance(voice_item_id, str) and _VOICE_ITEM_ID.fullmatch(voice_item_id)
         ):
             return _error(

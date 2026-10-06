@@ -265,4 +265,29 @@ describe('GitHub App installation tokens', () => {
       permissions: { contents: 'read' },
     });
   });
+
+  it('issues a contents-write-only token for vault operations', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const now = Date.parse('2026-10-04T09:00:00.000Z');
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 123 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        token: 'ghs_contents-write-token',
+        expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
+      }), { status: 201 }));
+    const issuer = createGitHubAppTokenIssuer({
+      appId: '123456',
+      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      fetch: fetchImpl,
+      now: () => now,
+    });
+
+    await issuer.issueForContentsWrite('DanAakesen/vault');
+
+    const [, tokenOptions] = fetchImpl.mock.calls[1]!;
+    expect(JSON.parse(String(tokenOptions?.body))).toEqual({
+      repositories: ['vault'],
+      permissions: { contents: 'write' },
+    });
+  });
 });

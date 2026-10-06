@@ -25,7 +25,7 @@ const events = new Set([
   'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
   'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
-  'voice.partials_unavailable', 'chat.latency', 'memory.embedding',
+  'voice.partials_unavailable', 'chat.latency', 'memory.embedding', 'vault.index', 'vault.write',
   'pc_act.step',
   'reflex.decision',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
@@ -106,6 +106,21 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
         input.durationMs >= 0 && input.durationMs <= 600_000) {
       fields.durationMs = input.durationMs;
     }
+  }
+  if (input.msg === 'vault.index') {
+    if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    for (const key of ['added', 'changed', 'removed']) {
+      const value = input[key];
+      if (Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 10_000) fields[key] = value;
+    }
+    if (Array.isArray(input.folders)) {
+      fields.folders = [...new Set(input.folders.filter((folder) =>
+        ['People', 'Work', 'Personal', 'General'].includes(String(folder))))].slice(0, 4);
+    }
+  }
+  if (input.msg === 'vault.write') {
+    if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    if (['People', 'Work', 'Personal', 'General'].includes(String(input.folder))) fields.folder = input.folder;
   }
   if (input.msg === 'pc_act.step') {
     if (Number.isSafeInteger(input.step) && Number(input.step) >= 1 && Number(input.step) <= 20) {

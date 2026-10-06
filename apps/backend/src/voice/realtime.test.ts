@@ -55,8 +55,9 @@ describe('English realtime session', () => {
       description: 'Echo a string.',
       parameters: tool.inputSchema,
     }]);
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use notes_search');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('include a note');
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use vault_search or vault_read');
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use vault_write');
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('Never save secrets or credentials');
   });
 
   it('removes untyped schema combinators that Voice Live rejects, keeping typed unions', () => {

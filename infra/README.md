@@ -40,17 +40,19 @@ reuses it. A new value would create a new account and project, so change it only
 after the account was deleted, and then to a fresh value (L2). Normal updates
 keep the existing resources; deletion is not part of routine deployment.
 
-## Notes search setup
+## GitHub vault setup
 
-P7-10 uses the `notesFolderPath` deployment parameter, defaulting to `/Jarvis/Notes`,
-and the backend identity for Microsoft Graph. Graph Search requires the tenant-wide
-`Files.Read.All` application role and does not support `Sites.Selected`. After
-reviewing and approving that permission, the coordinator can run
-[`setup-notes-search.ps1`](setup-notes-search.ps1) from an Azure CLI session
-authorized to assign Graph application roles. The script is safe to rerun. The
-backend fixes searches to Dan's OneDrive and filters both the Graph query and
-returned links to the configured folder. No Azure or OneDrive live check was
-performed by the coding agent.
+P7-40 uses Dan's private `DanAakesen/vault` repository on `master` as Jarvis's
+long-term knowledge source. Dan must install the existing Jarvis GitHub App on
+that repository and grant Contents read/write permission (the installation token
+is restricted to the vault). Select only the vault for the installation if
+GitHub offers repository selection. The App already subscribes to `push`; the
+backend verifies webhook signatures and also indexes the vault at startup.
+
+No personal access token, Microsoft Graph permission, or Azure role is needed.
+If the App is not installed on the vault, Jarvis reports that indexing and
+writes are unavailable. The vault is private and was not accessible for live
+verification by the coding agent.
 
 ## Google Calendar and Gmail setup
 
