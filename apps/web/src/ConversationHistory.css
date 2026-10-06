@@ -115,7 +115,7 @@
 .voice-bar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-height: 60px; padding: 7px; border-radius: var(--radius-pill); color: var(--text); }
 .voice-bar[data-language-note="true"] { border-radius: var(--radius-window); }
 .voice-bar-divider { flex: 0 0 1px; align-self: center; height: 24px; background: var(--rule); }
-.voice-bar-status { --voice-tone: var(--text-muted); display: flex; flex: 1 1 160px; align-items: center; gap: 10px; min-width: 0; padding: 0 6px; }
+.voice-bar-status { --voice-tone: var(--text-muted); display: flex; flex: 1 1 0; align-items: center; gap: 10px; min-width: 0; padding: 0 6px; }
 .voice-bar-status[data-state="connecting"], .voice-bar-status[data-state="listening"] { --voice-tone: var(--state-listening); }
 .voice-bar-status[data-state="thinking"], .voice-bar-status[data-state="tool-call"] { --voice-tone: var(--state-thinking); }
 .voice-bar-status[data-state="speaking"] { --voice-tone: var(--state-speaking); }
@@ -164,7 +164,7 @@
 .app-shell[data-voice-active="true"] .jarvis-page { position: absolute; inset: 0; height: 100%; min-height: 0; padding: 0; }
 .app-shell[data-voice-active="true"] .conversation-title { display: none; }
 .app-shell[data-voice-active="true"] .conversation-history { display: contents; }
-.app-shell[data-voice-active="true"] .conversation-input[data-voice-active="true"] { position: static; width: auto; max-width: none; margin: 0; padding: 0; border: 0; background: transparent; }
+.app-shell[data-voice-active="true"] .conversation-input[data-voice-active="true"] { position: static; width: auto; max-width: none; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 .app-shell[data-voice-active="true"] .voice-controls[data-active="true"] { position: fixed; inset: 0; z-index: 3; display: block; width: 100vw; height: 100vh; height: 100dvh; pointer-events: none; }
 .app-shell[data-voice-active="true"] .voice-bar { position: absolute; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; width: min(640px, calc(100vw - 32px)); transform: translateX(-50%); pointer-events: auto; }
 .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-bar { left: 25%; width: min(42vw, 520px); }

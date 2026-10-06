@@ -707,7 +707,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .more-menu[data-align="end"] .more-menu-list { right: 0; left: auto; }
 .more-menu-language { position: relative; }
 .more-menu-flyout { z-index: 1; top: -6px; left: calc(100% + 12px); min-width: 176px; }
-.more-menu[data-align="end"] .more-menu-flyout { right: calc(100% + 12px); left: auto; }
+.more-menu[data-align="end"] .more-menu-flyout { top: auto; right: calc(100% + 12px); bottom: -6px; left: auto; }
 .more-menu-item { display: flex; width: 100%; min-height: 44px; align-items: center; gap: 12px; padding: 0 12px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); text-align: left; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard); }
 .more-menu-item > svg, .more-menu-check svg { width: 20px; height: 20px; flex: 0 0 auto; }
 .more-menu-label { flex: 1 1 auto; min-width: 0; }
@@ -725,7 +725,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 }
 @media (max-width: 700px) {
   .more-menu-flyout { top: auto; bottom: calc(100% + 12px); left: -6px; }
-  .more-menu[data-align="end"] .more-menu-flyout { right: -6px; left: auto; }
+  .more-menu[data-align="end"] .more-menu-flyout { top: auto; right: -6px; bottom: calc(100% + 12px); left: auto; }
 }
 .secondary-button { min-height: 44px; padding: 0 16px; border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
 .secondary-button:hover:not(:disabled) { background: var(--disabled-surface); }

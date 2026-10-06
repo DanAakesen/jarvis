@@ -161,6 +161,8 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(historyStyles, /\.voice-bar-detail\s*\{([^}]*)\}/, 'color')).toBe('var(--text-muted)');
     expect(ruleDeclaration(historyStyles, /\.voice-bar-action, \.voice-end-control\s*\{([^}]*)\}/, 'min-height'))
       .toBe('44px');
+    const voiceInput = /\.app-shell\[data-voice-active="true"\] \.conversation-input\[data-voice-active="true"\]\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(historyStyles, voiceInput, 'backdrop-filter')).toBe('none');
   });
 
   it('defines luminous glass once as a shared surface built from canonical tokens', () => {

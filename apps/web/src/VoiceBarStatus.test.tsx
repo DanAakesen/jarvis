@@ -49,6 +49,12 @@ describe('VoiceBarStatus', () => {
 
     rerender(<VoiceBarStatus status="ready" message="Microphone access was denied." />);
     expect(screen.getByRole('status').textContent).toContain('Microphone access was denied.');
+    expect(screen.getByText('Microphone access was denied.').classList.contains('visually-hidden')).toBe(false);
+
+    const ready = 'Voice is ready. Microphone is off; enable it when you want to speak.';
+    rerender(<VoiceBarStatus status="ready" message={ready} />);
+    expect(screen.getByRole('status').textContent).toContain(ready);
+    expect(screen.getByText(ready).classList.contains('visually-hidden')).toBe(true);
   });
 
   it('shows reconnecting as its own state, never as listening', () => {

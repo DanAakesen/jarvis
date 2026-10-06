@@ -14,7 +14,12 @@ type VoiceBarState = {
 const voiceBarStates: Record<VoiceStatus | 'tool_call' | 'interrupted', VoiceBarState> = {
   stopped: { className: 'off', label: 'Voice off', glyph: 'off', routineDetail: 'Voice is off.' },
   connecting: { className: 'connecting', label: 'Connecting', glyph: 'progress', routineDetail: 'Connecting to Jarvis voice…' },
-  ready: { className: 'ready', label: 'Ready', glyph: 'microphone-off' },
+  ready: {
+    className: 'ready',
+    label: 'Ready',
+    glyph: 'microphone-off',
+    routineDetail: 'Voice is ready. Microphone is off; enable it when you want to speak.',
+  },
   stopping: { className: 'stopping', label: 'Ending voice', glyph: 'progress' },
   listening: { className: 'listening', label: 'Listening', glyph: 'listening', routineDetail: 'Listening for your voice.' },
   thinking: { className: 'thinking', label: 'Thinking', glyph: 'thinking', routineDetail: 'Jarvis is thinking.' },
