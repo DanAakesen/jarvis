@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { TaskEventArchiveBlobStore } from './task-event-archive.js';
-import { createTaskEventArchive, planArchivedTaskEvents } from './task-event-archive.js';
+import {
+  createTaskEventArchive, createTaskEventArchiveJob, planArchivedTaskEvents, type TaskEventArchive,
+} from './task-event-archive.js';
 
 class MemoryArchiveBlobStore implements TaskEventArchiveBlobStore {
   readonly blobs = new Map<string, { body: Buffer; count: number }>();
@@ -58,6 +60,7 @@ describe('task event archive reads', () => {
       eventCount: 1,
       complete: false,
     });
+
     await expect(archive.restoreArchivedEvents(plan)).resolves.toEqual([{
         id: '2', type: 'progress', summary: 'second', payload: null, payloadTruncated: true,
         source: 'runner', at: '2020-01-02T00:00:00.000Z',
@@ -77,5 +80,24 @@ describe('task event archive reads', () => {
       { name: 'task-events/42/20200101000000000000000-0000000000000000001.json', count: 1, firstOffset: 0 },
     ], 0, 1);
     await expect(archive.restoreArchivedEvents(plan)).rejects.toThrow('Task event archive blob is invalid');
+  });
+});
+
+describe('task event archive job', () => {
+  it('skips startup and recurring SQL work while no sandbox is active', async () => {
+    vi.useFakeTimers();
+    const archiveExpiredEvents = vi.fn(async () => 0);
+    const archive = { archiveExpiredEvents } as unknown as TaskEventArchive;
+    const active = { value: false };
+    const job = createTaskEventArchiveJob(archive, vi.fn(), () => active.value, 60_000);
+
+    job.start();
+    await vi.advanceTimersByTimeAsync(3 * 60_000);
+    expect(archiveExpiredEvents).not.toHaveBeenCalled();
+
+    active.value = true;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(archiveExpiredEvents).toHaveBeenCalledOnce();
+    await job.stop();
   });
 });

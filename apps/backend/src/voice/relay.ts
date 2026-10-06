@@ -365,10 +365,13 @@ function registerVoiceRoute(
       publishActivity('listening');
     };
 
-    const partialsUnavailable = () => {
+    const partialsUnavailable = (cause?: unknown) => {
       if (partialRecognitionUnavailable) return;
       partialRecognitionUnavailable = true;
-      request.log.warn('voice.partials_unavailable');
+      // Log the Speech SDK reason; without it this failure could not be diagnosed (L108).
+      const failure = (cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : 'unknown')
+        .replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').trim().slice(0, 120) || 'unknown';
+      request.log.warn({ failure, language }, 'voice.partials_unavailable');
     };
 
     const stopPartialRecognition = () => {
@@ -576,9 +579,9 @@ function registerVoiceRoute(
             language,
             phraseHints: [...VOICE_PHRASE_HINTS, ...projectNames],
             onRecognizing: receiveSpeechHypothesis,
-            onFailure: () => {
+            onFailure: (reason) => {
               if (generation !== partialRecognitionGeneration || !partialRecognitionEnabled) return;
-              partialsUnavailable();
+              partialsUnavailable(reason);
               stopPartialRecognition();
             },
           }, signal);
@@ -591,9 +594,9 @@ function registerVoiceRoute(
           for (const chunk of queuedPartialAudio) recognizer.write(chunk);
           queuedPartialAudio = [];
           queuedPartialAudioBytes = 0;
-        } catch {
+        } catch (error) {
           if (generation === partialRecognitionGeneration && partialRecognitionEnabled &&
-              !controller.signal.aborted) partialsUnavailable();
+              !controller.signal.aborted) partialsUnavailable(error);
           queuedPartialAudio = [];
           queuedPartialAudioBytes = 0;
         } finally {

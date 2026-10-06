@@ -299,6 +299,7 @@ try {
     })
     : undefined;
   const foundryClients = new Map<string, FoundryClient>();
+  const trackedRepositories = new Set<string>();
   const taskEventArchive = database && archiveStorageAccount && credential
     ? createTaskEventArchive(
       database.pool,
@@ -320,9 +321,6 @@ try {
       container: workspaceArtifactServiceClient.getContainerClient('artifacts'),
       storageAccount: archiveStorageAccount,
     })
-    : undefined;
-  const taskEventArchiveJob = taskEventArchive
-    ? createTaskEventArchiveJob(taskEventArchive, () => logger.warn('task_event_archive.failed'))
     : undefined;
   const clientFor = (agentName: string) => {
     if (!config.foundryEndpoints || !credential) throw new Error('Foundry runner is not configured');
@@ -356,6 +354,13 @@ try {
       },
     })
     : undefined;
+  const taskEventArchiveJob = taskEventArchive
+    ? createTaskEventArchiveJob(
+      taskEventArchive,
+      () => logger.warn('task_event_archive.failed'),
+      () => sandboxHeartbeat?.hasTrackedSessions() ?? false,
+    )
+    : undefined;
   const containerAppScaler = sleepResourceId && credential
     ? createArmContainerAppScaler({
       resourceId: sleepResourceId,
@@ -366,7 +371,7 @@ try {
       },
     })
     : null;
-  const projectStore = database ? createProjectStore(database.pool) : undefined;
+  const projectStore = database ? createProjectStore(database.pool, trackedRepositories) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
   const teamsAudioStore = config.teams ? createEphemeralAudioStore() : undefined;
   const teamsSpeech = config.teams && credential
@@ -473,6 +478,7 @@ try {
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
       getSecret: getWebhookSecret,
+      isTrackedRepository: (repository) => trackedRepositories.has(repository.toLowerCase()),
       ...(checksLoop || projectPolicyEvaluator ? {
         onMapping: async (mapping) => {
           await checksLoop?.handleMapping(mapping);
@@ -682,6 +688,9 @@ try {
     if (database) {
       await database.initialize();
       await memoryStore?.initialize();
+      for (const project of await projectStore?.list() ?? []) {
+        trackedRepositories.add(project.repo.toLowerCase());
+      }
       logger.info('database.ready');
     }
     await teamsNotifications?.expirePendingConfirmations();
