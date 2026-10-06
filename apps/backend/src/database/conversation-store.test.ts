@@ -12,6 +12,26 @@ function fixture(queryResult = { recordset: [], recordsets: [], rowsAffected: []
 }
 
 describe('SQL conversation store', () => {
+  it('resolves a watch instruction to its stored Dan message session', async () => {
+    const { store, input, query } = fixture({
+      recordset: [{ session_id: '42' }], recordsets: [], rowsAffected: [],
+    });
+    await expect(store.getMessageSessionId!('7')).resolves.toBe('42');
+    expect(input).toHaveBeenCalledWith('messageId', sql.BigInt, 7n);
+    expect(query.mock.calls[0]?.[0]).toContain("id = @messageId AND role = N'dan'");
+    await expect(fixture().store.getMessageSessionId!('7')).resolves.toBeNull();
+  });
+
+  it('loads only the latest Dan text in the watched session', async () => {
+    const { store, input, query } = fixture({
+      recordset: [{ text: 'Did the build finish?' }], recordsets: [], rowsAffected: [],
+    });
+    await expect(store.getLatestDanMessageText!('42')).resolves.toBe('Did the build finish?');
+    expect(input).toHaveBeenCalledWith('sessionId', sql.BigInt, 42n);
+    expect(query.mock.calls[0]?.[0]).toContain('SELECT TOP (1)');
+    expect(query.mock.calls[0]?.[0]).toContain("jarvis_session_id = @sessionId AND role = N'dan' ORDER BY id DESC");
+    await expect(fixture().store.getLatestDanMessageText!('42')).resolves.toBeNull();
+  });
   it('creates a session with the requested channel and language', async () => {
     const startedAt = new Date('2026-10-03T12:00:00Z');
     const { store, pool, input, query } = fixture({
