@@ -25,7 +25,7 @@ export interface PartialSpeechRecognizerOptions {
   readonly language: 'da' | 'en';
   readonly phraseHints: readonly string[];
   readonly onRecognizing: (text: string) => void;
-  readonly onFailure: () => void;
+  readonly onFailure: (reason?: string) => void;
 }
 
 export type PartialSpeechRecognizerFactory = (
@@ -94,7 +94,7 @@ function startRecognizer(recognizer: SpeechSDK.SpeechRecognizer, signal: AbortSi
     signal.addEventListener('abort', abort, { once: true });
     recognizer.startContinuousRecognitionAsync(
       () => finish(),
-      () => finish(new Error('Speech recognition could not start')),
+      (detail) => finish(new Error(`Speech recognition could not start: ${String(detail)}`)),
     );
     if (signal.aborted) abort();
   });
@@ -124,7 +124,9 @@ export function createAzureSpeechPartialRecognizerFactory(
       const text = event.result.text;
       if (typeof text === 'string' && text.trim()) onRecognizing(text.trim());
     };
-    recognizer.canceled = () => onFailure();
+    recognizer.canceled = (_sender, event) => onFailure(
+      `Speech canceled: ${SpeechSDK.CancellationErrorCode[event.errorCode] ?? event.errorCode}: ${event.errorDetails ?? ''}`,
+    );
 
     try {
       await startRecognizer(recognizer, signal);

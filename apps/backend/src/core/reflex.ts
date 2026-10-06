@@ -279,6 +279,8 @@ export function createJevReflexClassifier(
         state: {
           text: text.trim(),
           language,
+          // Without this, Jev judged every voice turn as "not addressed" (L105).
+          situation: 'Dan is speaking or typing directly to Jarvis in Jarvis\'s own chat or voice interface, so his requests are addressed to Jarvis unless he is clearly talking to someone else. Voice transcripts can contain background speech or noise fragments.',
           ...(context ? { already_executed: context.executed.slice(-8) } : {}),
         },
         questions,

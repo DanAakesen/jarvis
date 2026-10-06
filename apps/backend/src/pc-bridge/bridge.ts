@@ -253,7 +253,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
     tools: [
       {
         name: 'pc_open',
-        description: 'Open a folder or any installed app by name on Dan’s PC; websites always open in Chrome, never Edge. Use browser_do for website tasks.',
+        description: 'Open a website (target url with the full https address; it always opens in Dan’s Chrome, never Edge), any installed app by name (target app, e.g. spotify), a repo folder or a window on Dan’s PC. Use browser_do for work on a website.',
         inputSchema: {
           type: 'object',
           properties: {

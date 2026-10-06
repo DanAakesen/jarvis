@@ -87,13 +87,20 @@ async function handleRequest(request) {
         throw new Error("not_allowed");
       }
       const tabs = await chrome.tabs.query({});
+      // Only the active tab of the last-focused window is Dan's focused tab (L107).
+      let focusedWindowId;
+      try {
+        focusedWindowId = (await chrome.windows.getLastFocused()).id;
+      } catch {
+        focusedWindowId = undefined;
+      }
       const allTabs = tabs.slice(0, MAX_TABS).flatMap((tab) =>
         Number.isSafeInteger(tab.id)
           ? [{
               id: `tab_${tab.id}`,
               title: (tab.title || "").slice(0, 300),
               url: (tab.url || "").slice(0, 2048),
-              focused: Boolean(tab.active),
+              focused: Boolean(tab.active) && (focusedWindowId === undefined || tab.windowId === focusedWindowId),
             }]
           : []);
       const result = allTabs.slice(request.offset, request.offset + request.limit);
