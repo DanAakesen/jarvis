@@ -254,8 +254,15 @@ export function ConversationHistory({
 
   useEffect(() => {
     // Closing the history window must leave typing usable: focus returns to the composer, not the page.
+    // The workspace may first focus its own heading, which only blurs once the empty workspace hides
+    // during the next rendering update, so check after that update.
     if (!hosted || conversationWindow?.element) return;
-    if (!document.activeElement || document.activeElement === document.body) input.current?.focus({ preventScroll: true });
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        if (!document.activeElement || document.activeElement === document.body) input.current?.focus({ preventScroll: true });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [conversationWindow?.element, hosted]);
 
   const revealHistory = useCallback(() => {
