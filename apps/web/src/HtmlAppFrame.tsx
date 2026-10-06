@@ -95,11 +95,11 @@ export function HtmlAppFrame({
         case 'unpin':
           if (keys.length === 1) {
             void Promise.resolve(onPinChange(event.data.type === 'pin')).catch(() => {
-             setLoadState({
-               key: requestKey, status: 'error',
-               message: 'The workspace HTML app could not be pinned. Try again.',
-             });
-           });
+              setLoadState({
+                key: requestKey, status: 'error',
+                message: 'The workspace HTML app could not be pinned. Try again.',
+              });
+            });
           }
           break;
         case 'resize':
