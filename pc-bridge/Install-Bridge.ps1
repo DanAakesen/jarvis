@@ -51,6 +51,11 @@ for ($attempt = 1; $attempt -le $copyAttempts; $attempt++) {
     Get-Process -Name 'Jarvis.PcBridge' -ErrorAction SilentlyContinue |
         Stop-Process -Force -ErrorAction SilentlyContinue
     try {
+        # Remove files from earlier publishes (a different runtime or architecture breaks startup);
+        # the loaded Chrome extension folder is overwritten in place instead.
+        Get-ChildItem -LiteralPath $installDirectory -Force |
+            Where-Object { $_.Name -ne 'chrome-extension' } |
+            Remove-Item -Recurse -Force -ErrorAction Stop
         Copy-Item -Path (Join-Path $source '*') -Destination $installDirectory -Recurse -Force -ErrorAction Stop
         break
     }
