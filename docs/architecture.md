@@ -1411,7 +1411,7 @@ The table separates SQL from external/network-only activity:
 | Teams/Graph presence | The Graph client polls every 60 seconds; every observation entered a SQL transaction and read persisted away state, even if unchanged (up to 60 SQL checks/hour). | Graph polling remains every 60 seconds, but cached observations skip SQL when the state is unchanged. A real presence transition or the ten-minute away threshold still persists normally. |
 | Sandbox heartbeat | The backend loads active sessions once at startup; each active invocation is polled about once/minute and its valid result updates SQL. | Unchanged: active work remains monitored, while no tracked session means no recurring heartbeat SQL. |
 | Board SSE and Project plan sync | SSE replay queries SQL on connection; its 25-second keepalive is network-only. The GitHub Project plan-status workflow reads/writes GitHub and `PLAN.md`, not Azure SQL. | Unchanged; no recurring SQL is caused by SSE keepalives or plan-status sync. |
-| Codex renewal and budget monitor | Codex renewal starts on backend readiness and retries daily, using SQL lease/status operations; the budget monitor reads ARM every 15 minutes and writes SQL only when a new threshold alert is due. | Unchanged deliberate maintenance checks; they can still cause isolated SQL accesses while idle. |
+| Codex renewal and budget monitor | Codex renewal starts on backend readiness and checks daily, using SQL lease/status operations; uncertain runs retry after 15 minutes with doubling backoff capped at one hour. The budget monitor reads ARM every 15 minutes and writes SQL only when a new threshold alert is due. | Deliberate maintenance checks; they can still cause isolated SQL accesses while idle. |
 
 Tracked webhook rows and mapped PR/run/release/deployment status changes are
 already batched per delivery in the same serializable transaction; no volatile
@@ -1574,7 +1574,12 @@ live provider selection remains unverified.
 - P2-08 adds a daily backend Codex renewal check, status dates in Settings, and
   a SQL lease shared with Codex task starts. The backend renews at three days or
   less, refreshes the lease while polling, and leaves uncertain invocations
-  leased until expiry. `TaskStore.transition` refuses Codex starts during a
+  leased until expiry without changing credential status or dates. P6-15 retries
+  uncertainty after 15 minutes with doubling backoff capped at one hour; a known
+  outcome resets the daily schedule. `credentials.codex_renewal` logs only outcomes,
+  fixed error kinds and HTTP status codes; `dispatcher.start_failed` logs task IDs
+  and fixed failure reasons, never provider bodies or tokens.
+  `TaskStore.transition` refuses Codex starts during a
   renewal or while credential status is failed; P2-05 dispatch must use this
   transition contract. Live Key Vault/Codex proof remains pending P0-16 and
   Dan's credential setup. P2-09 prepends task-branch commit/push instructions

@@ -309,9 +309,10 @@ the last-release field is explicitly unavailable rather than inferred.
 
 The backend checks Codex daily and renews only when the access token has three
 days or less remaining and no Codex task is running. Credential dates and
-status are non-secret Key Vault metadata; failed renewal is visible as
-"Action needed". Manual renewal and re-seed controls remain disabled until an
-operator workflow is available.
+status are non-secret Key Vault metadata; definitive failed renewal is visible as
+"Action needed". Uncertain runs preserve the previous credential state and retry
+after 15 minutes, doubling the delay up to one hour. Manual renewal and re-seed
+controls remain disabled until an operator workflow is available.
 
 The settings API validates choices against the server's available-model catalog.
 The coding-agent catalog currently offers only each provider's default. P2-11
