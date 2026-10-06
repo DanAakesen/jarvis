@@ -115,6 +115,16 @@ describe("Foundry runner wire contract", () => {
     });
   });
 
+  it("starts a bounded Codex HTML report invocation without adding a provider", async () => {
+    const { client, fetch } = setup({ ...(fixtures["task_start"] as object), agent: "codex" });
+    const query = JSON.stringify({ topic: "A topic", findings: [{ answer: "Evidence" }] });
+    const accepted = await client.startCodexTool("html_report", query, "gpt-5.5");
+    expect(accepted.agent).toBe("codex");
+    expect(request(fetch).body).toEqual({
+      agent: "codex", mode: "codex-tool", tool: "html_report", query, model: "gpt-5.5",
+    });
+  });
+
   it.each([
     ["unsupported tool", "shell" as never, "query", "gpt-5.5"],
     ["empty query", "web_research", " ", "gpt-5.5"],
@@ -123,6 +133,14 @@ describe("Foundry runner wire contract", () => {
   ])("rejects invalid Codex tool request: %s", async (_name, tool, query, model) => {
     const { client, fetch, getToken } = setup();
     await expect(client.startCodexTool(tool, query, model)).rejects.toBeInstanceOf(TypeError);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(getToken).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized HTML report request before making a network call", async () => {
+    const { client, fetch, getToken } = setup();
+    await expect(client.startCodexTool("html_report", "q".repeat(48_001), "gpt-5.5"))
+      .rejects.toBeInstanceOf(TypeError);
     expect(fetch).not.toHaveBeenCalled();
     expect(getToken).not.toHaveBeenCalled();
   });

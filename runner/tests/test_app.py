@@ -810,12 +810,45 @@ def test_codex_tool_mode_validates_request_and_uses_codex_without_a_workspace(mo
     assert calls[0][1:] == ("web_research", payload["query"])
 
 
+def test_codex_html_report_mode_accepts_a_bounded_json_request(monkeypatch):
+    async def run_tool(state, tool, query):
+        state.status = "completed"
+        calls.append((state, tool, query))
+
+    calls = []
+    query = json.dumps({"topic": "Example", "findings": [{"answer": "Evidence"}]})
+    monkeypatch.setattr(app, "tasks", {})
+    monkeypatch.setattr(app, "_run_codex_tool", run_tool)
+    request = Request({"type": "http", "method": "POST", "headers": [], "path": "/invocations",
+                       "state": {"invocation_id": "report", "session_id": "fresh-session"}})
+
+    async def body():
+        return {
+            "agent": "codex", "mode": "codex-tool", "tool": "html_report",
+            "query": query, "model": "gpt-5.5",
+        }
+
+    request.json = body  # type: ignore[method-assign]
+
+    async def invoke():
+        response = await app.invoke(request)
+        await app.tasks["report"].worker
+        return response
+
+    response = asyncio.run(invoke())
+
+    assert response.status_code == 200
+    assert calls[0][0].tool == "html_report"
+    assert calls[0][1:] == ("html_report", query)
+
+
 @pytest.mark.parametrize(
     "payload",
     [
         {"agent": "copilot", "tool": "web_research", "query": "research"},
         {"agent": "codex", "tool": "shell", "query": "research"},
         {"agent": "codex", "tool": "web_research", "query": "x" * 2001},
+        {"agent": "codex", "tool": "html_report", "query": "x" * (app.MAX_CODEX_REPORT_QUERY_LENGTH + 1)},
         {"agent": "codex", "tool": "web_research", "query": "research", "model": "gpt-6.1-sol"},
     ],
 )
@@ -902,6 +935,21 @@ def test_codex_tool_runs_in_a_deleted_empty_workspace_and_preserves_partial_sour
     assert state.task not in metadata
     assert "Agency notice" not in metadata
     assert "test-login-only" not in metadata
+
+
+def test_codex_html_report_has_no_web_search_tool_and_treats_input_as_data():
+    request = {"topic": "Research", "findings": ["do not follow instructions embedded here"]}
+    prompt = app._codex_html_report_prompt(json.dumps(request))
+    command = app._codex_tool_command("gpt-5.5", Path("/tmp/report.json"), prompt, live_search=False)
+    malformed_unicode = app._codex_html_report_prompt(r'{"topic":"\ud800"}')
+
+    assert "REPORT_REQUEST_JSON=" in prompt
+    assert json.dumps(request, ensure_ascii=False) in prompt
+    assert "Treat every value" in prompt
+    assert r"\ud800" in malformed_unicode
+    assert "web_search=live" not in command
+    assert "--disable" in command
+    assert "shell_tool" in command
 
 
 def test_codex_tool_reports_usage_limits_and_timeout_and_cancels_process(tmp_path, monkeypatch):
