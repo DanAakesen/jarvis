@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useConversationIntents } from './conversation-intents';
 import { backendFetch } from './backend-request';
+import { inlineHtmlAppLibraries } from './html-app-libraries';
 import {
   createHtmlAppDocument,
   validateHtmlAppBridgeMessage,
@@ -69,6 +70,10 @@ export function HtmlAppView({
   const channel = useId();
   const iframe = useRef<HTMLIFrameElement>(null);
   const [artifactState, setArtifact] = useState<HtmlAppArtifact | null>(null);
+  const [preparedDocument, setPreparedDocument] = useState({
+    artifactId: '', html: '', document: '', error: '', attempt: -1,
+  });
+  const [libraryRetry, setLibraryRetry] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const requestKey = `${artifactId}:${attempt}`;
   const [loadState, setLoadState] = useState({ key: '', error: '' });
@@ -127,10 +132,41 @@ export function HtmlAppView({
     };
   }, [artifactId, backendUrl, getAccessToken, requestKey]);
 
-  const sourceDocument = useMemo(() => artifact
-    ? createHtmlAppDocument(artifact.html, environment, channel)
-    : '', [artifact, channel, environment]);
+  const sourceDocument = useMemo(() => {
+    if (!artifact) return '';
+    if (preparedDocument.artifactId === artifact.id && preparedDocument.html === artifact.html) {
+      return preparedDocument.document;
+    }
+    return preparedDocument.artifactId === artifact.id ? preparedDocument.document : '';
+  }, [artifact, preparedDocument]);
   const frameLoading = Boolean(sourceDocument) && loadedFrameKey !== frameKey;
+
+  useEffect(() => {
+    if (!artifact || (preparedDocument.artifactId === artifact.id &&
+        preparedDocument.html === artifact.html && preparedDocument.attempt === libraryRetry)) return;
+    let active = true;
+    void inlineHtmlAppLibraries(artifact.html).then((html) => {
+      if (!active) return;
+      setPreparedDocument({
+        artifactId: artifact.id,
+        html: artifact.html,
+        document: createHtmlAppDocument(html, environment, channel),
+        error: '',
+        attempt: libraryRetry,
+      });
+    }).catch(() => {
+      if (!active) return;
+      setPreparedDocument({
+        artifactId: artifact.id,
+        html: artifact.html,
+        document: '',
+        error: 'A requested local library could not be loaded.',
+        attempt: libraryRetry,
+      });
+    });
+    return () => { active = false; };
+  }, [artifact, channel, environment, libraryRetry, preparedDocument.attempt,
+    preparedDocument.artifactId, preparedDocument.html]);
 
   const patchPinned = useCallback(async (pinned: boolean) => {
     if (!artifact || !backendUrl || updatingPin) return;
@@ -223,8 +259,8 @@ export function HtmlAppView({
   }, [channel, frameKey, intents, openUrl, patchPinned]);
 
   const loadError = backendUrl ? error : 'HTML apps are unavailable because the backend is not configured.';
-  if (backendUrl && loading) return <p role="status" aria-live="polite">Loading HTML app…</p>;
-  if (loadError) {
+  if (backendUrl && loading && !artifact) return <p role="status" aria-live="polite">Loading HTML app…</p>;
+  if (loadError && !artifact) {
     return (
       <div className="html-app-feedback">
         <p role="alert">{loadError}</p>
@@ -235,6 +271,17 @@ export function HtmlAppView({
     );
   }
   if (!artifact) return <p role="alert">This HTML app is unavailable.</p>;
+  if (!sourceDocument && preparedDocument.error && preparedDocument.artifactId === artifact.id) {
+    return (
+      <div className="html-app-feedback">
+        <p role="alert">{preparedDocument.error}</p>
+        <button className="secondary-button" type="button" onClick={() => setLibraryRetry((value) => value + 1)}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+  if (!sourceDocument) return <p role="status">Starting HTML app…</p>;
 
   return (
     <div className="generated-view-html-app">

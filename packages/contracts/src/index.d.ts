@@ -3,9 +3,11 @@ export const generatedViewRenderers: readonly [
   'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
 ];
 export const generatedViewActionTypes: readonly ['open-route', 'open-link', 'call-tool', 'window'];
+export const htmlAppLibraries: readonly ['chart', 'd3', 'mermaid', 'three', 'leaflet-offline', 'katex'];
 
 export type GeneratedViewRenderer = typeof generatedViewRenderers[number];
 export type GeneratedViewActionType = typeof generatedViewActionTypes[number];
+export type HtmlAppLibrary = typeof htmlAppLibraries[number];
 
 export interface GeneratedViewPage {
   limit: number;
