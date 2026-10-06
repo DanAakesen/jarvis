@@ -23,12 +23,12 @@ function cameraStream() {
   };
 }
 
-function CameraHarness() {
+function CameraHarness({ onError }: { onError?: (message: string) => void } = {}) {
   const camera = useCamera(config, async () => 'fixture-token');
   const [description, setDescription] = useState('');
   return (
     <section>
-      <button type="button" onClick={() => void camera.start()} disabled={camera.starting}>
+      <button type="button" onClick={() => void camera.start(onError)} disabled={camera.starting}>
         {camera.sharing ? 'Turn camera off' : 'Turn camera on'}
       </button>
       <button type="button" onClick={() => void camera.inspect('42').then(({ description }) => setDescription(description), () => {})}
@@ -64,6 +64,21 @@ afterEach(() => {
 });
 
 describe('camera frame capture', () => {
+  it('reports a denied permission to the caller without starting or sending capture', async () => {
+    const onError = vi.fn();
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
+      getUserMedia: vi.fn(async () => { throw new DOMException('Denied', 'NotAllowedError'); }),
+    } });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<CameraHarness onError={onError} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' })); });
+    expect(onError).toHaveBeenCalledWith('Camera access was not started. Allow camera access and try again.');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('Camera is off');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('captures only on request and sends the frame through the authenticated screen vision bridge', async () => {
     const { track, stream } = cameraStream();
     const getUserMedia = vi.fn(async () => stream);
