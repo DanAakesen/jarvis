@@ -31,6 +31,7 @@ describe('HTML app iframe bridge', () => {
     expect(document).toContain("connect-src 'none'");
     expect(document).toContain("base-uri 'none'");
     expect(document).toContain("form-action 'none'");
+    expect(document).toContain("frame-src 'none'");
     expect(document).toContain('--jarvis-page:#101820');
     expect(document).toContain('color-scheme:dark');
     expect(document).toContain('<main>untrusted app</main>');

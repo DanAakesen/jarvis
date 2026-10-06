@@ -29,7 +29,7 @@ const tokenFallbacks: Readonly<Record<string, string>> = {
   '--line-body': '1.55',
   '--radius-control': '10px',
 };
-const csp = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; navigate-to 'none'";
+const csp = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'";
 
 function safeToken(value: string, fallback: string): string {
   const normalized = value.trim();
