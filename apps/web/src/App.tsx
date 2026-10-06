@@ -19,7 +19,7 @@ import { SettingsPage } from './SettingsPage';
 import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
 import { backendFetch } from './backend-request';
-import { Workspace, type WorkspaceController } from './Workspace';
+import { Workspace, PHONE_LAYOUT_MEDIA_QUERY, type WorkspaceController } from './Workspace';
 import { WorkspaceCommandContext } from './workspace-command-state';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { readVoiceWorkspacePreference } from './voice-workspace-preference';
@@ -141,7 +141,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
   }, []);
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
-  const [phone, setPhone] = useState(() => window.matchMedia?.('(max-width: 700px)').matches ?? false);
+  const [phone, setPhone] = useState(() => window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false);
   const workspaceCommands = useMemo(() => ({
     snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen },
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
@@ -193,7 +193,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
   </>;
 
   useEffect(() => {
-    const media = window.matchMedia?.('(max-width: 700px)');
+    const media = window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY);
     if (!media) return;
     const update = () => setPhone(media.matches);
     media.addEventListener('change', update);
@@ -293,7 +293,7 @@ function ShellLayout({ signedIn, config, session, camera }: {
           <nav aria-label={activeArea?.label ?? 'Jarvis'}>
             {navigationItems.map((item) => (
               <NavLink key={item.path} className="sidebar-link" to={item.path} end={item.path === '/'} onClick={() => {
-                if (window.matchMedia?.('(max-width: 700px)').matches) closeNavigation();
+                if (window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches) closeNavigation();
               }}>
                 {item.label}
               </NavLink>

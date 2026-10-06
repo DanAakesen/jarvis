@@ -1259,7 +1259,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .factory-composer .secondary-button { grid-column: 2; }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .app-shell { --rail-size: 52px; height: auto; grid-template-columns: var(--rail-size) minmax(0, 1fr); grid-template-rows: var(--rail-size) minmax(0, 1fr) auto; }
   .area-rail { grid-row: 2 / 4; padding: 6px 4px; }
   .rail-button, .rail-link { width: 44px; min-width: 44px; }

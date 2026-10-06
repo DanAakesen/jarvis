@@ -25,6 +25,7 @@ export interface WorkspaceController {
   snapshot?: WorkspaceSnapshot;
 }
 
+export const PHONE_LAYOUT_MEDIA_QUERY = '(max-width: 700px), (max-height: 500px) and (pointer: coarse)';
 type Arrangement = 'tiled' | 'layered';
 type Geometry = { x: number; y: number; width: number; height: number; columns: number; rows: number };
 type PendingFocus = { target: 'tab' | 'window'; viewId: string } | { target: 'workspace' };
@@ -86,7 +87,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [maximizedViewId, setMaximizedViewId] = useState<string | null>(null);
   const [foregroundViewId, setForegroundViewId] = useState<string | null>(null);
   const [phone, setPhone] = useState(() => (
-    typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 700px)').matches
+    typeof window.matchMedia === 'function' && window.matchMedia(PHONE_LAYOUT_MEDIA_QUERY).matches
   ));
   const [announcement, setAnnouncement] = useState('');
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
@@ -123,7 +124,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   }, []);
 
   useEffect(() => {
-    const media = window.matchMedia?.('(max-width: 700px)');
+    const media = window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY);
     if (!media) return;
     const update = () => {
       swipe.current = null;

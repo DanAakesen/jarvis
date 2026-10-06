@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRef, useMemo, useRef, useState } from 'react';
-import { Workspace, type WorkspaceController, type WorkspaceView } from './Workspace';
+import { PHONE_LAYOUT_MEDIA_QUERY, Workspace, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { useWorkspaceCommands, WorkspaceCommandContext } from './workspace-command-state';
 import { readFileSync } from 'node:fs';
 
@@ -60,6 +60,21 @@ function JarvisWorkspaceRequest() {
 }
 
 describe('Workspace', () => {
+  it('uses the one-view phone workspace on short coarse-pointer landscape screens', () => {
+    const matchMedia = vi.fn((query: string) => ({
+      matches: query === PHONE_LAYOUT_MEDIA_QUERY,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    vi.stubGlobal('matchMedia', matchMedia);
+
+    render(<Workspace views={views} />);
+
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.getByRole('navigation', { name: 'Switch foreground view' })).not.toBeNull();
+    expect(matchMedia).toHaveBeenCalledWith(PHONE_LAYOUT_MEDIA_QUERY);
+  });
+
   it('bounds retained agent-closed windows and invalidates retained content when an ID is reused', () => {
     const controller = createRef<WorkspaceController>();
     render(<Workspace ref={controller} views={[]} />);

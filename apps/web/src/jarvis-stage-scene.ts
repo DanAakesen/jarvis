@@ -4,6 +4,11 @@ import { Reflector } from 'three/addons/objects/Reflector.js';
 import type { JarvisActivityEvent } from '@jarvis/contracts';
 import type { ThemeMode } from './theme-preference-context';
 import { createJarvisStageOrb } from './JarvisStageOrb';
+import {
+  nextJarvisStageQualityLevel,
+  resolveJarvisStageQuality,
+  type JarvisStageQualityLevel,
+} from './jarvis-stage-quality';
 
 export type JarvisStageOptions = {
   theme: ThemeMode;
@@ -39,7 +44,18 @@ type ThemeColor = Exclude<keyof ThemePalette, 'reflector' | 'exposure' | 'glow'>
 
 function readStagePalette(): ThemePalette {
   const style = window.getComputedStyle(document.documentElement);
-  const color = (role: ThemeColor | 'reflector') => style.getPropertyValue(`--stage-${role}`).trim();
+  const colorContext = document.createElement('canvas').getContext('2d');
+  const color = (role: ThemeColor | 'reflector') => {
+    const value = style.getPropertyValue(`--stage-${role}`).trim();
+    if (!colorContext || !CSS.supports('color', value)) return value;
+    colorContext.fillStyle = '#000000';
+    colorContext.fillStyle = value;
+    const resolved = colorContext.fillStyle;
+    const channels = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*[\d.]+)?\)$/i.exec(resolved);
+    if (!channels) return resolved;
+    return `#${channels.slice(1, 4).map((channel) => Math.round(Number(channel) * 255)
+      .toString(16).padStart(2, '0')).join('')}`;
+  };
   const number = (role: 'exposure' | 'glow', fallback: number) => {
     const value = Number.parseFloat(style.getPropertyValue(`--stage-${role}`));
     return Number.isFinite(value) ? value : fallback;
@@ -75,6 +91,7 @@ export function createJarvisStageScene(
     activityState: null,
     audioLevel: 0,
   },
+  onContextRestored: () => void = () => {},
 ) {
   const renderer = new THREE.WebGLRenderer({
     alpha: true,
@@ -83,7 +100,7 @@ export function createJarvisStageScene(
   });
   const lifecycle = { removeListeners: () => {} };
   try {
-    return createJarvisStageSceneWithRenderer(host, onContextLost, initialOptions, renderer, lifecycle);
+    return createJarvisStageSceneWithRenderer(host, onContextLost, initialOptions, renderer, lifecycle, onContextRestored);
   } catch (error) {
     lifecycle.removeListeners();
     renderer.dispose();
@@ -99,9 +116,8 @@ function createJarvisStageSceneWithRenderer(
   initialOptions: JarvisStageOptions,
   renderer: THREE.WebGLRenderer,
   lifecycle: { removeListeners: () => void },
+  onContextRestored: () => void,
 ) {
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, window.innerWidth < 700 ? 1 : 1.2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1;
@@ -114,12 +130,17 @@ function createJarvisStageSceneWithRenderer(
   scene.add(anchor);
 
   let disposed = false;
+  let contextLost = false;
   let animationFrame = 0;
   let animating = false;
   let elapsed = 0;
   let previous = performance.now();
-  let lastFrame = previous - 1000 / 30;
   let current = initialOptions;
+  let qualityLevel: JarvisStageQualityLevel = renderer.capabilities.maxTextureSize < 4096 ? 1 : 0;
+  let qualityFrameCount = 0;
+  let qualityFrameTime = 0;
+  let qualityWindowStarted = performance.now();
+  let smoothQualityWindows = 0;
   let voicePosition = 0;
   let voiceVelocity = 0;
   let windowPosition = 0;
@@ -347,6 +368,7 @@ function createJarvisStageSceneWithRenderer(
   const particleGeometry = new THREE.BufferGeometry();
   particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   particleGeometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+  particleGeometry.setDrawRange(0, particleCount);
   const particleUniforms = {
     uTime: { value: 0 },
     uOrb: { value: new THREE.Vector3() },
@@ -404,26 +426,39 @@ function createJarvisStageSceneWithRenderer(
     themeColors.orb.set(palette.orb);
   }
 
-  function resize() {
-    const width = Math.max(1, window.innerWidth);
-    const height = Math.max(1, window.innerHeight);
+  function resize(redraw = true) {
+    const bounds = host.getBoundingClientRect();
+    const width = Math.max(1, Math.round(bounds.width || window.innerWidth));
+    const height = Math.max(1, Math.round(bounds.height || window.innerHeight));
     camera.aspect = width / height;
     camera.position.set(0, 4.5, 19);
     camera.lookAt(0, 3, 0);
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld(true);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, width < 700 ? 1 : 1.2));
-    renderer.setSize(width, height);
-    const reflectionSize = width < 700 ? 512 : 768;
+    const quality = resolveJarvisStageQuality(
+      width,
+      height,
+      window.devicePixelRatio || 1,
+      renderer.capabilities.maxTextureSize,
+      qualityLevel,
+    );
+    renderer.setPixelRatio(quality.pixelRatio);
+    renderer.setSize(width, height, false);
+    particleGeometry.setDrawRange(0, Math.floor(particleCount * quality.particleScale));
     const target = reflection.getRenderTarget();
-    if (target.width !== reflectionSize || target.height !== reflectionSize) target.setSize(reflectionSize, reflectionSize);
-    if (!disposed) draw(0);
+    if (target.width !== quality.reflectionSize || target.height !== quality.reflectionSize) {
+      target.setSize(quality.reflectionSize, quality.reflectionSize);
+    }
+    if (redraw && !disposed && !contextLost && !document.hidden) draw(0);
   }
 
   function draw(delta: number) {
-    const width = Math.max(1, window.innerWidth);
-    const height = Math.max(1, window.innerHeight);
-    const mobile = width <= 700;
+    if (contextLost) return;
+    const bounds = host.getBoundingClientRect();
+    const width = Math.max(1, Math.round(bounds.width || window.innerWidth));
+    const height = Math.max(1, Math.round(bounds.height || window.innerHeight));
+    const mobile = width <= 700 ||
+      (height <= 500 && (window.matchMedia?.('(pointer: coarse)').matches ?? false));
     camera.aspect = width / height;
     camera.position.set(0, 4.5, 19);
     camera.lookAt(0, 3, 0);
@@ -508,10 +543,12 @@ function createJarvisStageSceneWithRenderer(
   }
 
   function startAnimation() {
-    if (disposed || animating || current.reducedMotion || document.hidden) return;
+    if (disposed || contextLost || animating || current.reducedMotion || document.hidden) return;
     animating = true;
     previous = performance.now();
-    lastFrame = previous - 1000 / 30;
+    qualityWindowStarted = previous;
+    qualityFrameCount = 0;
+    qualityFrameTime = 0;
     animationFrame = window.requestAnimationFrame(frame);
   }
 
@@ -524,24 +561,43 @@ function createJarvisStageSceneWithRenderer(
 
   function frame(now: number) {
     if (disposed || !animating) return;
-    if (document.hidden || current.reducedMotion) {
+    if (document.hidden || current.reducedMotion || contextLost) {
       stopAnimation();
-      draw(0);
+      if (!contextLost && !document.hidden) draw(0);
       return;
     }
-    if (now - lastFrame < 1000 / 30) {
-      animationFrame = window.requestAnimationFrame(frame);
-      return;
-    }
-    const delta = Math.max(0, Math.min((now - previous) / 1000, 0.12));
+    const frameInterval = Math.max(0, now - previous);
+    const delta = Math.max(0, Math.min(frameInterval / 1000, 0.12));
     previous = now;
-    lastFrame = now;
     elapsed += delta;
     draw(delta);
+    qualityFrameCount += 1;
+    qualityFrameTime += Math.min(frameInterval, 1000);
+    if (now - qualityWindowStarted >= 1000 && qualityFrameCount > 0) {
+      const nextQuality = nextJarvisStageQualityLevel(qualityLevel, qualityFrameTime / qualityFrameCount);
+      if (nextQuality > qualityLevel) {
+        qualityLevel = nextQuality;
+        smoothQualityWindows = 0;
+        resize(false);
+      } else if (nextQuality < qualityLevel) {
+        smoothQualityWindows += 1;
+        if (smoothQualityWindows >= 3) {
+          qualityLevel = nextQuality;
+          smoothQualityWindows = 0;
+          resize(false);
+        }
+      } else if (qualityFrameTime / qualityFrameCount >= 17) {
+        smoothQualityWindows = 0;
+      }
+      qualityFrameCount = 0;
+      qualityFrameTime = 0;
+      qualityWindowStarted = now;
+    }
     animationFrame = window.requestAnimationFrame(frame);
   }
 
   const onResize = () => resize();
+  const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(onResize) : null;
   const onVisibilityChange = () => {
     if (document.hidden) {
       stopAnimation();
@@ -552,17 +608,40 @@ function createJarvisStageSceneWithRenderer(
   };
   const onWebGlContextLost = (event: Event) => {
     event.preventDefault();
-    dispose();
+    if (contextLost || disposed) return;
+    contextLost = true;
+    stopAnimation();
     onContextLost();
+  };
+  const onWebGlContextRestored = () => {
+    if (!contextLost || disposed) return;
+    contextLost = false;
+    setTheme();
+    resize(false);
+    if (document.hidden) {
+      onContextRestored();
+      return;
+    }
+    if (current.reducedMotion) draw(0);
+    else startAnimation();
+    onContextRestored();
   };
   lifecycle.removeListeners = () => {
     renderer.domElement.removeEventListener('webglcontextlost', onWebGlContextLost);
+    renderer.domElement.removeEventListener('webglcontextrestored', onWebGlContextRestored);
     window.removeEventListener('resize', onResize);
+    window.removeEventListener('orientationchange', onResize);
+    window.visualViewport?.removeEventListener('resize', onResize);
     document.removeEventListener('visibilitychange', onVisibilityChange);
+    resizeObserver?.disconnect();
   };
   renderer.domElement.addEventListener('webglcontextlost', onWebGlContextLost);
+  renderer.domElement.addEventListener('webglcontextrestored', onWebGlContextRestored);
   window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
+  window.visualViewport?.addEventListener('resize', onResize);
   document.addEventListener('visibilitychange', onVisibilityChange);
+  resizeObserver?.observe(host);
 
   let disposedOnce = false;
   const dispose = () => {
@@ -596,11 +675,10 @@ function createJarvisStageSceneWithRenderer(
       setTheme();
       if (options.reducedMotion) {
         stopAnimation();
-        draw(0);
+        if (!document.hidden) draw(0);
       } else {
         startAnimation();
       }
-      if (options.reducedMotion) draw(0);
     },
     setAudioLevel(level: number) {
       if (disposed) return;

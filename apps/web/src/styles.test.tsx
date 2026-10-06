@@ -149,6 +149,18 @@ describe('shared glass tokens', () => {
     expect(jarvisMessage).toBe('var(--surface-translucent)');
   });
 
+  it('keeps fallback and voice status readable over the stage on narrow screens', () => {
+    const stageStyles = readFileSync('src/JarvisStage.css', 'utf8');
+    const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');
+
+    expect(ruleDeclaration(stageStyles, /\.jarvis-stage-fallback\s*\{([^}]*)\}/, 'position')).toBe('relative');
+    expect(stageStyles).toContain('@media (max-height: 500px) and (pointer: coarse)');
+    expect(stageStyles).toContain('.app-shell[data-voice-active="true"] .voice-orb-copy');
+    expect(stageStyles).toContain('background: var(--surface-translucent);');
+    expect(historyStyles).toContain('@media (max-width: 360px) {\n  .composer-language button { min-width: 24px; padding-inline: 0; font-size: 11px; }');
+    expect(historyStyles).not.toContain('.composer-language { grid-row: 2;');
+  });
+
   it('keeps theme-aware stage materials in the shared semantic CSS source', () => {
     const source = readFileSync('src/styles.css', 'utf8');
 
