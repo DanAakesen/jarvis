@@ -5,7 +5,7 @@ describe('Azure Speech endpoint', () => {
   it('uses the custom subdomain universal Speech endpoint of the Foundry resource', () => {
     expect(createAzureSpeechEndpoint(
       'https://jarvis-resource.cognitiveservices.azure.com/api/projects/jarvis',
-    ).href).toBe('wss://jarvis-resource.cognitiveservices.azure.com/speech/universal/v2');
+    ).href).toBe('wss://jarvis-resource.cognitiveservices.azure.com/stt/speech/universal/v2');
   });
 
   it.each([
