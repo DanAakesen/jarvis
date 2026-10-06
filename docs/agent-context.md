@@ -832,11 +832,14 @@ the companion on Dan's PC:
    Run the main Deploy workflow so Bicep configures `ENTRA_PC_BRIDGE_CLIENT_ID`
    in the backend. Agents do not have Azure/tenant access.
 2. Get `backendFqdn` from the `jarvis-infra` deployment output. On Dan's Windows
-   PC, publish the self-contained app to a temporary directory:
+   PC, publish the self-contained app for the PC's architecture (Dan's PC is ARM64)
+   to a temporary directory. The installer replaces every earlier install file except
+   the loaded Chrome extension folder:
 
    ```powershell
+   $rid = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'win-arm64' } else { 'win-x64' }
    dotnet publish .\pc-bridge\Jarvis.PcBridge\Jarvis.PcBridge.csproj `
-     --configuration Release --runtime win-x64 --self-contained true `
+     --configuration Release --runtime $rid --self-contained true `
      --output "$env:TEMP\jarvis-pc-bridge"
    ```
 
