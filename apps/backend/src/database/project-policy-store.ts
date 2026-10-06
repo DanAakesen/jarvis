@@ -10,7 +10,8 @@ export function createProjectPolicyStore(pool: sql.ConnectionPool): ProjectPolic
         .input('repository', sql.NVarChar(140), repository)
         .input('number', sql.Int, number)
         .query<PolicyPullRequest>(`SELECT CONVERT(varchar(19), t.id) AS taskId, t.state AS taskState,
-          p.repo AS repository, p.policy, pr.number, pr.state, pr.checks, pr.head_sha AS headSha
+          p.repo AS repository, p.policy, pr.number, pr.state, pr.checks, pr.head_sha AS headSha,
+          CONVERT(varchar(23), pr.opened_at, 126) + 'Z' AS openedAt
           FROM dbo.pull_requests AS pr
           INNER JOIN dbo.projects AS p ON p.id = pr.project_id
           INNER JOIN dbo.tasks AS t ON t.id = pr.task_id

@@ -12,6 +12,7 @@ export interface PolicyPullRequest {
   readonly state: 'open' | 'merged' | 'closed';
   readonly checks: 'pending' | 'passed' | 'failed';
   readonly headSha: string;
+  readonly openedAt: string;
 }
 
 export interface ProjectPolicyStore {
@@ -28,6 +29,7 @@ interface ProjectPolicyOptions {
   readonly tokenIssuer: GitHubAppTokenIssuer;
   readonly runConfirmed?: <T>(summary: string, action: () => Promise<T>) => Promise<T>;
   readonly onConfirmationError?: () => void;
+  readonly onError?: (error: unknown) => void;
   readonly fetch?: typeof fetch;
 }
 
@@ -165,7 +167,11 @@ function pullRequestSnapshot(value: Record<string, unknown>): PullRequestSnapsho
   };
 }
 
-async function checksAreGreen(fetchImpl: typeof fetch, repository: string, sha: string, token: string): Promise<boolean> {
+type CheckStatus = 'passed' | 'none' | 'blocked';
+
+const noChecksGracePeriodMs = 2 * 60_000;
+
+async function checkStatus(fetchImpl: typeof fetch, repository: string, sha: string, token: string): Promise<CheckStatus> {
   const encodedRepository = repository.split('/').map(encodeURIComponent).join('/');
   const [checkRuns, combinedStatus] = await Promise.all([
     requestJson(fetchImpl, `/repos/${encodedRepository}/commits/${sha}/check-runs?per_page=100`, token),
@@ -177,14 +183,14 @@ async function checksAreGreen(fetchImpl: typeof fetch, repository: string, sha: 
   const totalStatuses = combinedStatus.total_count;
   if (!Array.isArray(runs) || !Number.isSafeInteger(totalRuns) || totalRuns !== runs.length ||
     !Array.isArray(statuses) || !Number.isSafeInteger(totalStatuses) || totalStatuses !== statuses.length ||
-    (statuses.length > 0 && combinedStatus.state !== 'success')) return false;
-  if (runs.length === 0 && statuses.length === 0) return false;
+    (statuses.length > 0 && combinedStatus.state !== 'success')) return 'blocked';
+  if (runs.length === 0 && statuses.length === 0) return 'none';
   const latestRuns = new Map<string, { id: number; status: unknown; conclusion: unknown }>();
   for (const value of runs) {
     const run = object(value);
     const appId = object(run?.app)?.id;
     if (!run || !Number.isSafeInteger(run.id) || typeof run.name !== 'string' ||
-      !Number.isSafeInteger(appId)) return false;
+      !Number.isSafeInteger(appId)) return 'blocked';
     const key = `${appId}:${run.name}`;
     if ((latestRuns.get(key)?.id ?? 0) < (run.id as number)) {
       latestRuns.set(key, { id: run.id as number, status: run.status, conclusion: run.conclusion });
@@ -193,7 +199,7 @@ async function checksAreGreen(fetchImpl: typeof fetch, repository: string, sha: 
   const latestStatuses = new Map<string, { id: number; state: unknown }>();
   for (const value of statuses) {
     const status = object(value);
-    if (!status || typeof status.context !== 'string' || !Number.isSafeInteger(status.id)) return false;
+    if (!status || typeof status.context !== 'string' || !Number.isSafeInteger(status.id)) return 'blocked';
     if ((latestStatuses.get(status.context)?.id ?? 0) < (status.id as number)) {
       latestStatuses.set(status.context, { id: status.id as number, state: status.state });
     }
@@ -201,7 +207,9 @@ async function checksAreGreen(fetchImpl: typeof fetch, repository: string, sha: 
   return Array.from(latestRuns.values()).every((run) =>
     run.status === 'completed' &&
     (run.conclusion === 'success' || run.conclusion === 'neutral' || run.conclusion === 'skipped')) &&
-    Array.from(latestStatuses.values()).every((status) => status.state === 'success');
+    Array.from(latestStatuses.values()).every((status) => status.state === 'success')
+    ? 'passed'
+    : 'blocked';
 }
 
 function pullRequestNumbers(mapping: GithubWebhookMapping): readonly number[] {
@@ -220,9 +228,48 @@ export function createProjectPolicyEvaluator({
   tokenIssuer,
   runConfirmed,
   onConfirmationError,
+  onError,
   fetch: fetchImpl = fetch,
 }: ProjectPolicyOptions) {
   const pendingMerges = new Set<string>();
+  const noChecksRechecks = new Map<string, ReturnType<typeof setTimeout>>();
+  let stopped = false;
+
+  function pullRequestKey(candidate: PolicyPullRequest): string {
+    return `${candidate.repository}:${candidate.number}`;
+  }
+
+  function clearNoChecksRecheck(candidate: PolicyPullRequest): void {
+    const key = pullRequestKey(candidate);
+    const timer = noChecksRechecks.get(key);
+    if (timer) clearTimeout(timer);
+    noChecksRechecks.delete(key);
+  }
+
+  function scheduleNoChecksRecheck(candidate: PolicyPullRequest, retryDelayMs?: number): boolean {
+    const key = pullRequestKey(candidate);
+    if (stopped) return false;
+    if (noChecksRechecks.has(key)) return true;
+    const openedAt = Date.parse(candidate.openedAt);
+    if (!Number.isFinite(openedAt)) return false;
+    const delay = retryDelayMs ?? Math.max(0, openedAt + noChecksGracePeriodMs - Date.now());
+    const timer = setTimeout(() => {
+      noChecksRechecks.delete(key);
+      void store.getPullRequest(candidate.repository, candidate.number)
+        .then(async (latest) => { if (latest) await evaluate(latest); })
+        .catch((error: unknown) => {
+          onError?.(error);
+          if (retryDelayMs === undefined) scheduleNoChecksRecheck(candidate, 30_000);
+        });
+    }, delay);
+    noChecksRechecks.set(key, timer);
+    return true;
+  }
+
+  function noChecksGraceElapsed(candidate: PolicyPullRequest): boolean {
+    const openedAt = Date.parse(candidate.openedAt);
+    return Number.isFinite(openedAt) && Date.now() >= openedAt + noChecksGracePeriodMs;
+  }
 
   async function recordReason(taskId: string, reason: string): Promise<void> {
     await tasks.recordEvent({
@@ -234,11 +281,21 @@ export function createProjectPolicyEvaluator({
     });
   }
 
-  async function markDone(candidate: PolicyPullRequest): Promise<void> {
+  async function markDone(candidate: PolicyPullRequest, withoutChecks = false): Promise<void> {
     if (candidate.taskState !== 'Running' && candidate.taskState !== 'NeedsAttention') return;
-    await store.withActiveTask(candidate.taskId, async () => {
+    const result = await store.withActiveTask(candidate.taskId, async () => {
       await tasks.transition(candidate.taskId, 'Done', true);
     });
+    clearNoChecksRecheck(candidate);
+    if (result.kind === 'active' && withoutChecks) {
+      await tasks.recordEvent({
+        taskId: candidate.taskId,
+        type: 'project_policy_completed_without_checks',
+        summary: 'No CI configured; completed without checks',
+        payload: { reason: 'no_ci_configured', pullRequest: candidate.number },
+        source: 'backend',
+      });
+    }
   }
 
   async function requestConfirmedMerge(
@@ -295,21 +352,28 @@ export function createProjectPolicyEvaluator({
   }
 
   async function evaluate(candidate: PolicyPullRequest): Promise<void> {
-    if (candidate.taskState === 'Done' || candidate.taskState === 'Cancelled') return;
+    if (candidate.taskState === 'Done' || candidate.taskState === 'Cancelled') {
+      clearNoChecksRecheck(candidate);
+      return;
+    }
     if (candidate.state === 'closed') {
+      clearNoChecksRecheck(candidate);
       await recordReason(candidate.taskId, 'The pull request was closed without a merge.');
       return;
     }
     if (candidate.taskState !== 'Running' && candidate.taskState !== 'NeedsAttention') {
+      clearNoChecksRecheck(candidate);
       await recordReason(candidate.taskId, 'The task state does not permit automatic policy completion.');
       return;
     }
 
-    if (candidate.checks !== 'passed') {
+    if (candidate.checks === 'failed') {
+      clearNoChecksRecheck(candidate);
       await recordReason(candidate.taskId, 'Recorded GitHub checks are not green.');
       return;
     }
     if (!safeRepository(candidate.repository)) {
+      clearNoChecksRecheck(candidate);
       await recordReason(candidate.taskId, 'The project repository is invalid.');
       return;
     }
@@ -325,8 +389,22 @@ export function createProjectPolicyEvaluator({
       }
       if (candidate.state === 'merged') {
         if (pullRequest.state !== 'closed' || !pullRequest.merged || pullRequest.draft ||
-          pullRequest.headSha.toLowerCase() !== candidate.headSha.toLowerCase() ||
-          !await checksAreGreen(fetchImpl, candidate.repository, pullRequest.headSha, token)) {
+          pullRequest.headSha.toLowerCase() !== candidate.headSha.toLowerCase()) {
+          await recordReason(candidate.taskId, 'The merged pull request or its green checks could not be verified.');
+          return;
+        }
+        const checks = await checkStatus(fetchImpl, candidate.repository, pullRequest.headSha, token);
+        if (checks === 'none') {
+          if (!noChecksGraceElapsed(candidate)) {
+            if (!scheduleNoChecksRecheck(candidate)) {
+              await recordReason(candidate.taskId, 'The pull request opening time could not be verified.');
+            }
+            return;
+          }
+          await markDone(candidate, true);
+          return;
+        }
+        if (checks !== 'passed' || candidate.checks !== 'passed') {
           await recordReason(candidate.taskId, 'The merged pull request or its green checks could not be verified.');
           return;
         }
@@ -346,13 +424,26 @@ export function createProjectPolicyEvaluator({
         await recordReason(candidate.taskId, 'The pull request head differs from the recorded GitHub state.');
         return;
       }
-      if (!await checksAreGreen(fetchImpl, candidate.repository, pullRequest.headSha, token)) {
+      const checks = await checkStatus(fetchImpl, candidate.repository, pullRequest.headSha, token);
+      let noChecksConfigured = false;
+      if (checks === 'none') {
+        if (!noChecksGraceElapsed(candidate)) {
+          if (!scheduleNoChecksRecheck(candidate)) {
+            await recordReason(candidate.taskId, 'The pull request opening time could not be verified.');
+          }
+          return;
+        }
+        noChecksConfigured = true;
+      } else if (checks !== 'passed') {
         await recordReason(candidate.taskId, 'GitHub reports pending or failed pull request checks.');
+        return;
+      } else if (candidate.checks !== 'passed') {
+        await recordReason(candidate.taskId, 'Recorded GitHub checks are not green.');
         return;
       }
 
       if (candidate.policy === 'deliver_pr') {
-        await markDone(candidate);
+        await markDone(candidate, noChecksConfigured);
         return;
       }
 
@@ -383,10 +474,16 @@ export function createProjectPolicyEvaluator({
 
   return {
     async handle(mapping: GithubWebhookMapping): Promise<void> {
+      if (stopped) return;
       for (const number of pullRequestNumbers(mapping)) {
         const candidate = await store.getPullRequest(mapping.repository, number);
         if (candidate) await evaluate(candidate);
       }
+    },
+    stop(): void {
+      stopped = true;
+      noChecksRechecks.forEach(clearTimeout);
+      noChecksRechecks.clear();
     },
   };
 }
