@@ -9,11 +9,15 @@ const maxRunMs = 30_000;
 const requestTimeoutMs = 1_200;
 const maxResponseBytes = 256 * 1024;
 const confidenceThreshold = 0.9;
-const approvalSummary = 'Activate a potentially destructive Windows control.';
+const uiRoles = new Set([
+  'button', 'checkbox', 'combobox', 'edit', 'listitem', 'menuitem', 'radio', 'tab', 'treeitem', 'control',
+]);
 const sensitiveRequestPattern =
-  /\b(?:pass(?:word|phrase|code)s?|one[- ]time (?:code|password)|verification code|security code|otp|(?:credit|debit)[ -]card(?: number)?|card number|cvv|cvc)\b/iu;
+  /\b(?:pass(?:word|phrase|code)s?|one[- ]time (?:code|password)|verification code|security code|otp|(?:credit|debit)[ -]card(?: number)?|card number|cvv|cvc|ssn|social security(?: number)?|passport(?: number)?|national id(?:entification)?(?: number)?|driver'?s? license(?: number)?|tax(?:payer)? id(?:entification)?(?: number)?)\b/iu;
+const sensitiveIdentifierPattern = /(?<!\d)\d{3}[- ]?\d{2}[- ]?\d{4}(?!\d)/u;
+const sensitiveNumericPattern = /(?<!\d)\d{4,8}(?!\d)/u;
 const riskyActionPattern =
-  /\b(?:send|submit|delete|remove|pay|payment|purchase|post|transfer|system settings|settings|confirm)\b/iu;
+  /\b(?:send|submit|delete|remove|erase|overwrite|replace|discard|reset|clear|format|reformat|drop|revert|pay|payment|purchase|post|transfer|system settings|settings|confirm)\b/iu;
 
 export interface PcActElement {
   readonly index: number;
@@ -173,8 +177,7 @@ function quotedValues(goal: string): string[] {
     .slice(0, 8);
 }
 
-function sensitiveText(value: string): boolean {
-  if (sensitiveRequestPattern.test(value) || /(?<!\d)\d{4,8}(?!\d)/u.test(value)) return true;
+function hasLuhnCardNumber(value: string): boolean {
   for (const match of value.matchAll(/(?:\d[ -]?){13,19}/gu)) {
     const digits = match[0].replace(/\D/gu, '');
     if (digits.length < 13 || digits.length > 19) continue;
@@ -194,6 +197,21 @@ function sensitiveText(value: string): boolean {
   return false;
 }
 
+function sensitiveLabel(value: string): boolean {
+  return sensitiveRequestPattern.test(value) ||
+    sensitiveIdentifierPattern.test(value) ||
+    sensitiveNumericPattern.test(value) ||
+    hasLuhnCardNumber(value);
+}
+
+function sensitiveGoal(value: string): boolean {
+  return sensitiveLabel(value) || sensitiveNumericPattern.test(value);
+}
+
+function sensitiveText(value: string): boolean {
+  return sensitiveGoal(value);
+}
+
 function validSnapshot(value: unknown): value is PcActSnapshot {
   return isRecord(value) && Object.keys(value).length === 3 &&
     typeof value.snapshotId === 'string' &&
@@ -202,9 +220,10 @@ function validSnapshot(value: unknown): value is PcActSnapshot {
     Array.isArray(value.elements) && value.elements.length <= 100 &&
     value.elements.every((element, index) => isRecord(element) &&
       Object.keys(element).length === 3 && element.index === index &&
-      typeof element.role === 'string' && element.role.length <= 64 &&
+      typeof element.role === 'string' && uiRoles.has(element.role) &&
       typeof element.name === 'string' && element.name.length <= 256 &&
-      !hasControlCharacters(element.name));
+      !hasControlCharacters(element.name) &&
+      !sensitiveLabel(element.name));
 }
 
 function validActed(value: unknown, action: string): boolean {
@@ -214,6 +233,19 @@ function validActed(value: unknown, action: string): boolean {
 
 function needsApproval(goal: string, target: PcActElement): boolean {
   return riskyActionPattern.test(goal) || riskyActionPattern.test(`${target.role} ${target.name}`);
+}
+
+function approvalSummary(
+  operation: 'click' | 'type',
+  application: PcActSnapshot['application'],
+  target: PcActElement,
+): string {
+  const appName = application === 'vscode' ? 'VS Code' : 'File Explorer';
+  const targetName = target.name.replace(/[^\p{L}\p{N} .,:'/-]/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, 80);
+  const description = targetName ? `${target.role} "${targetName}"` : target.role;
+  return operation === 'type'
+    ? `Replace text in the ${description} in ${appName}.`
+    : `Click the ${description} in ${appName}.`;
 }
 
 function authorizedDan(request: FastifyRequest): boolean {
@@ -241,7 +273,7 @@ export function createJevPcActPlanner(
   return {
     async decide(input, signal) {
       if (!input.goal.trim() || input.goal.length > maxGoalLength || signal.aborted ||
-          sensitiveRequestPattern.test(input.goal)) return null;
+          sensitiveGoal(input.goal)) return null;
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
       let apiKey: string | undefined;
       try {
@@ -377,8 +409,8 @@ export async function runPcAct(
     throw new ToolRefusal(`Provide a PC goal between 1 and ${maxGoalLength} characters.`);
   }
   if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for PC actions.');
-  if (sensitiveRequestPattern.test(input.goal)) {
-    throw new ToolRefusal('Jarvis will not handle passwords, payment-card numbers, or one-time codes.');
+  if (sensitiveGoal(input.goal)) {
+    throw new ToolRefusal('Jarvis will not handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.');
   }
 
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(maxRunMs)]);
@@ -442,24 +474,29 @@ export async function runPcAct(
           snapshotId: snapshot.snapshotId,
           elementIndex: target.index,
           action: operation as 'click' | 'type' | 'scroll_up' | 'scroll_down',
-          ...(operation === 'click' ? { confirmed } : {}),
+          ...(operation === 'click' || operation === 'type' ? { confirmed } : {}),
           ...(operation === 'type' ? { text: decision.text } : {}),
         }, deadline);
         if (validActed(result, operation)) return;
         if (isRecord(result) && Object.keys(result).length === 3 &&
             result.confirmationRequired === true && result.actionKind === 'computer_use' &&
-            result.summary === approvalSummary) {
-          throw new ConfirmationNeeded();
+            result.summary === 'Activate a potentially destructive Windows control.' &&
+            (operation === 'click' || operation === 'type')) {
+          throw new ConfirmationNeeded(approvalSummary(operation, snapshot.application, target));
         }
         throw new ToolFailure('The Windows control action did not complete.');
       };
 
       try {
-        if (operation === 'click' && needsApproval(goal, target)) {
+        if ((operation === 'click' || operation === 'type') && needsApproval(goal, target)) {
           if (!options.runConfirmed) {
             throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
           }
-          await options.runConfirmed(approvalSummary, () => action(true), deadline);
+          await options.runConfirmed(
+            approvalSummary(operation, snapshot.application, target),
+            () => action(true),
+            deadline,
+          );
         } else {
           await action(false);
         }
@@ -468,7 +505,7 @@ export async function runPcAct(
         if (!options.runConfirmed) {
           throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
         }
-        await options.runConfirmed(approvalSummary, () => action(true), deadline);
+        await options.runConfirmed(error.summary, () => action(true), deadline);
       }
 
       logStep(options.onStep, step, operation, 'completed');
@@ -488,4 +525,8 @@ export async function runPcAct(
   throw new ToolRefusal('PC task stopped after 20 steps without Jev confirming completion.');
 }
 
-class ConfirmationNeeded extends Error {}
+class ConfirmationNeeded extends Error {
+  constructor(readonly summary: string) {
+    super();
+  }
+}

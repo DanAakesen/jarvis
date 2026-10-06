@@ -119,7 +119,8 @@ public sealed class UiAutomationExecutor(IUiAutomationProvider provider)
             throw new UiAutomationRefusedException("stale");
         }
 
-        if (action == UiAutomationAction.Click && UiAutomationPolicy.IsDestructiveControl(current.Name) && !confirmed)
+        if ((action is UiAutomationAction.Click or UiAutomationAction.Type) &&
+            UiAutomationPolicy.IsDestructiveControl(current.Name) && !confirmed)
             return false;
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -153,24 +154,34 @@ public static partial class UiAutomationPolicy
     };
 
     [GeneratedRegex(
-        @"\b(?:pass(?:word|phrase|code)s?|one[- ]time (?:code|password)|verification code|security code|otp|(?:credit|debit)[ -]card(?: number)?|card number|cvv|cvc)\b",
+        @"\b(?:pass(?:word|phrase|code)s?|one[- ]time (?:code|password)|verification code|security code|otp|(?:credit|debit)[ -]card(?: number)?|card number|cvv|cvc|ssn|social security(?: number)?|passport(?: number)?|national id(?:entification)?(?: number)?|driver'?s? license(?: number)?|tax(?:payer)? id(?:entification)?(?: number)?)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SensitiveControlPattern();
 
+    [GeneratedRegex(@"(?<!\d)\d{3}[- ]?\d{2}[- ]?\d{4}(?!\d)", RegexOptions.CultureInvariant)]
+    private static partial Regex SensitiveIdentifierPattern();
+
+    [GeneratedRegex(@"(?<!\d)\d{4,8}(?!\d)", RegexOptions.CultureInvariant)]
+    private static partial Regex SensitiveNumericPattern();
+
     [GeneratedRegex(
-        @"\b(?:send|submit|delete|remove|pay|payment|purchase|post|transfer|system settings|settings|confirm)\b",
+        @"\b(?:send|submit|delete|remove|erase|overwrite|replace|discard|reset|clear|format|reformat|drop|revert|pay|payment|purchase|post|transfer|system settings|settings|confirm)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DestructiveControlPattern();
 
     public static bool IsAllowedApplication(string application) => AllowedApplications.Contains(application);
 
-    public static bool IsSensitiveControl(string name) => SensitiveControlPattern().IsMatch(name);
+    public static bool IsSensitiveControl(string name) =>
+        SensitiveControlPattern().IsMatch(name) ||
+        SensitiveIdentifierPattern().IsMatch(name) ||
+        SensitiveNumericPattern().IsMatch(name);
 
     public static bool IsDestructiveControl(string name) => DestructiveControlPattern().IsMatch(name);
 
     public static bool IsSafeText(string value) =>
         value.Length is > 0 and <= 4_096 &&
         !value.Any(char.IsControl) &&
+        !SensitiveIdentifierPattern().IsMatch(value) &&
         !Regex.IsMatch(value, @"(?<!\d)\d{4,8}(?!\d)", RegexOptions.CultureInvariant) &&
         !HasLuhnCardNumber(value);
 

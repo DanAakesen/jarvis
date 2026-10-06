@@ -11,6 +11,9 @@ public sealed class UiAutomationExecutorTests
         [
             Control("save", "button", "Save"),
             Control("password", "edit", "Password", sensitive: true, canClick: false, canType: true),
+            Control("ssn", "edit", "SSN", canClick: false, canType: true),
+            Control("ssn", "edit", "Social Security Number", canClick: false, canType: true),
+            Control("otp", "edit", "123456", canClick: false, canType: true),
             Control("hidden", "button", "Hidden", offscreen: true),
             Control("disabled", "button", "Disabled", enabled: false),
         ]));
@@ -39,6 +42,40 @@ public sealed class UiAutomationExecutorTests
             executor.Act(snapshot.SnapshotId, 0, UiAutomationAction.Click, null, true, CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData("Overwrite file")]
+    [InlineData("Discard changes")]
+    [InlineData("Reset all settings")]
+    [InlineData("Format drive")]
+    public void Destructive_controls_require_confirmation(string name)
+    {
+        var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1",
+        [
+            Control("destructive", "button", name),
+        ]));
+        var executor = new UiAutomationExecutor(provider);
+        var snapshot = executor.Observe(CancellationToken.None);
+
+        Assert.False(executor.Act(snapshot.SnapshotId, 0, UiAutomationAction.Click, null, false, CancellationToken.None));
+        Assert.Empty(provider.Actions);
+    }
+
+    [Fact]
+    public void Typing_into_a_destructive_control_requires_confirmation()
+    {
+        var provider = new FakeUiAutomationProvider(new UiAutomationView("vscode", "window-1",
+        [
+            Control("overwrite", "edit", "Overwrite existing content", canClick: false, canType: true),
+        ]));
+        var executor = new UiAutomationExecutor(provider);
+        var snapshot = executor.Observe(CancellationToken.None);
+
+        Assert.False(executor.Act(snapshot.SnapshotId, 0, UiAutomationAction.Type, "replacement", false, CancellationToken.None));
+        Assert.Empty(provider.Actions);
+        Assert.True(executor.Act(snapshot.SnapshotId, 0, UiAutomationAction.Type, "replacement", true, CancellationToken.None));
+        Assert.Single(provider.Actions);
+    }
+
     [Fact]
     public void Refuses_stale_controls_and_disallowed_foreground_apps()
     {
@@ -61,6 +98,8 @@ public sealed class UiAutomationExecutorTests
 
     [Theory]
     [InlineData("123456")]
+    [InlineData("123-45-6789")]
+    [InlineData("123456789")]
     [InlineData("4111 1111 1111 1111")]
     [InlineData("Line one\nLine two")]
     public void Refuses_one_time_codes_payment_cards_and_control_characters(string value)

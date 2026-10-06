@@ -68,7 +68,9 @@ public static class CommandPolicy
             "click" => HasOnly(arguments, common.Append("confirmed").ToArray()) &&
                 arguments.TryGetProperty("confirmed", out var confirmed) &&
                 (confirmed.ValueKind is JsonValueKind.True or JsonValueKind.False),
-            "type" => HasOnly(arguments, common.Append("text").ToArray()) &&
+            "type" => HasOnly(arguments, common.Append("text").Append("confirmed").ToArray()) &&
+                arguments.TryGetProperty("confirmed", out var confirmed) &&
+                (confirmed.ValueKind is JsonValueKind.True or JsonValueKind.False) &&
                 HasBoundedString(arguments, "text", 4_096) &&
                 UiAutomationPolicy.IsSafeText(arguments.GetProperty("text").GetString()!),
             "scroll_up" or "scroll_down" => HasOnly(arguments, common),

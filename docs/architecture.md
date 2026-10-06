@@ -696,9 +696,10 @@ are exposed. Jev makes one decision per fresh snapshot, for at most 20 steps or
 planner and bridge. Typed content must be an exact, non-sensitive value quoted
 in Dan's request. Risky intents and destructive control names use the existing
 P7-03 `computer_use` approval flow and retry the same observed element only
-after approval; missing approval refuses the action. Browser tasks remain on
-P7-17–P7-19's Chrome-only path, and this tool does not use Foundry
-computer-use.
+after approval; missing approval refuses the action. The approval identifies
+clicks and text replacements using a bounded control role/name, without
+including the goal or typed text. Browser tasks remain on P7-17–P7-19's
+Chrome-only path, and this tool does not use Foundry computer-use.
 
 Generic tool auditing records only the outcome for this sensitive tool. The
 `pc_act.step` telemetry allow-list exports only step number, fixed action name,

@@ -77,7 +77,7 @@ describe('pc_act Jev planner', () => {
 
   it('refuses sensitive goals and missing Jev keys without making a request', async () => {
     const fetcher = vi.fn();
-    const planner = createJevPcActPlanner(async () => undefined, fetcher);
+    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
 
     await expect(planner.decide({
       goal: 'Type my password into the field',
@@ -86,6 +86,27 @@ describe('pc_act Jev planner', () => {
       snapshot,
     }, new AbortController().signal)).resolves.toBeNull();
     await expect(planner.decide({
+      goal: 'Review this record: 123-45-6789',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toBeNull();
+    await expect(planner.decide({
+      goal: 'Enter my SSN',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toBeNull();
+    await expect(planner.decide({
+      goal: 'Use this reference number: 123456',
+      step: 1,
+      previousActions: [],
+      snapshot,
+    }, new AbortController().signal)).resolves.toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+
+    const withoutKey = createJevPcActPlanner(async () => undefined, fetcher);
+    await expect(withoutKey.decide({
       goal: 'Click the open button',
       step: 1,
       previousActions: [],
@@ -152,12 +173,74 @@ describe('pc_act bounded Windows control loop', () => {
 
     expect(result.status).toBe('completed');
     expect(runConfirmed).toHaveBeenCalledWith(
-      'Activate a potentially destructive Windows control.',
+      'Click the button "Open project" in VS Code.',
       expect.any(Function),
       expect.any(AbortSignal),
     );
     expect(pcBridge.act).toHaveBeenNthCalledWith(1, expect.objectContaining({ confirmed: false }), expect.any(AbortSignal));
     expect(pcBridge.act).toHaveBeenNthCalledWith(2, expect.objectContaining({ confirmed: true }), expect.any(AbortSignal));
+  });
+
+  it('pre-approves overwrite controls and identifies the exact action target', async () => {
+    const overwriteSnapshot: PcActSnapshot = {
+      ...snapshot,
+      elements: [{ index: 0, role: 'button', name: 'Overwrite file' }],
+    };
+    const pcBridge = bridge({ observe: vi.fn(async () => overwriteSnapshot) });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('click', 0))
+      .mockResolvedValueOnce(decision('done')) };
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+
+    const result = await runPcAct(
+      { goal: 'Save the file' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, runConfirmed },
+    );
+
+    expect(result.status).toBe('completed');
+    expect(runConfirmed).toHaveBeenCalledWith(
+      'Click the button "Overwrite file" in VS Code.',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+    expect(pcBridge.act).toHaveBeenNthCalledWith(1, expect.objectContaining({ confirmed: true }), expect.any(AbortSignal));
+  });
+
+  it('requires approval before replacing text when the goal is destructive', async () => {
+    const fieldSnapshot: PcActSnapshot = {
+      ...snapshot,
+      elements: [{ index: 0, role: 'edit', name: 'Search' }],
+    };
+    const pcBridge = bridge({ observe: vi.fn(async () => fieldSnapshot) });
+    const planner = { decide: vi.fn()
+      .mockResolvedValueOnce(decision('type', 0, 'new title'))
+      .mockResolvedValueOnce(decision('done')) };
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+
+    const result = await runPcAct(
+      { goal: 'Overwrite the current title with "new title"' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner, runConfirmed },
+    );
+
+    expect(result.status).toBe('completed');
+    expect(runConfirmed).toHaveBeenCalledWith(
+      'Replace text in the edit "Search" in VS Code.',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+    expect(pcBridge.act).toHaveBeenNthCalledWith(1, {
+      snapshotId: snapshot.snapshotId,
+      elementIndex: 0,
+      action: 'type',
+      confirmed: true,
+      text: 'new title',
+    }, expect.any(AbortSignal));
   });
 
   it('never executes a risky action if the approval service is unavailable', async () => {
@@ -172,6 +255,16 @@ describe('pc_act bounded Windows control loop', () => {
       { planner },
     )).rejects.toThrow(/approval service is unavailable/u);
     expect(pcBridge.act).not.toHaveBeenCalled();
+
+    const typeBridge = bridge();
+    await expect(runPcAct(
+      { goal: 'Overwrite the current title with "new title"' },
+      request(),
+      new AbortController().signal,
+      typeBridge,
+      { planner: { decide: vi.fn().mockResolvedValue(decision('type', 0, 'new title')) } },
+    )).rejects.toThrow(/approval service is unavailable/u);
+    expect(typeBridge.act).not.toHaveBeenCalled();
   });
 
   it('refuses injected text that was not explicitly quoted and refuses unverified callers', async () => {
@@ -195,6 +288,57 @@ describe('pc_act bounded Windows control loop', () => {
       { planner },
     )).rejects.toThrow(/verified Dan session/u);
     expect(pcBridge.observe).toHaveBeenCalledOnce();
+  });
+
+  it('refuses sensitive identifier goals and sensitive labels returned by the bridge', async () => {
+    const pcBridge = bridge();
+    const planner = { decide: vi.fn().mockResolvedValue(decision('click', 0)) };
+
+    await expect(runPcAct(
+      { goal: 'Review this record: 123-45-6789' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner },
+    )).rejects.toThrow(/will not handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers/u);
+    expect(pcBridge.observe).not.toHaveBeenCalled();
+
+    await expect(runPcAct(
+      { goal: 'Use this reference number: 123456' },
+      request(),
+      new AbortController().signal,
+      pcBridge,
+      { planner },
+    )).rejects.toThrow(/sensitive identity numbers/u);
+    expect(pcBridge.observe).not.toHaveBeenCalled();
+
+    const sensitiveSnapshot: PcActSnapshot = {
+      ...snapshot,
+      elements: [{ index: 0, role: 'edit', name: 'Social Security Number' }],
+    };
+    const bridgeWithSensitiveSnapshot = bridge({ observe: vi.fn(async () => sensitiveSnapshot) });
+    await expect(runPcAct(
+      { goal: 'Open the project' },
+      request(),
+      new AbortController().signal,
+      bridgeWithSensitiveSnapshot,
+      { planner },
+    )).rejects.toThrow(/safely observed/u);
+    expect(planner.decide).not.toHaveBeenCalled();
+
+    const numericSnapshot: PcActSnapshot = {
+      ...snapshot,
+      elements: [{ index: 0, role: 'edit', name: '123456' }],
+    };
+    const bridgeWithNumericSnapshot = bridge({ observe: vi.fn(async () => numericSnapshot) });
+    await expect(runPcAct(
+      { goal: 'Open the project' },
+      request(),
+      new AbortController().signal,
+      bridgeWithNumericSnapshot,
+      { planner },
+    )).rejects.toThrow(/safely observed/u);
+    expect(planner.decide).not.toHaveBeenCalled();
   });
 
   it('stops before observing when cancelled', async () => {

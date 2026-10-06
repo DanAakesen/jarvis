@@ -50,7 +50,8 @@ public sealed class WindowsCommandExecutor
             arguments.GetProperty("elementIndex").GetInt32(),
             action,
             action == UiAutomationAction.Type ? arguments.GetProperty("text").GetString() : null,
-            action == UiAutomationAction.Click && arguments.GetProperty("confirmed").GetBoolean(),
+            (action is UiAutomationAction.Click or UiAutomationAction.Type) &&
+                arguments.GetProperty("confirmed").GetBoolean(),
             cancellationToken);
         return acted
             ? new { acted = true, action = actionName }

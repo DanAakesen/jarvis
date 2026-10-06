@@ -167,6 +167,7 @@ describe('authenticated PC bridge protocol', () => {
     expect(commands.map(command => command.command)).toEqual([
       'uia_snapshot', 'uia_act', 'uia_snapshot',
     ]);
+    expect(commands[1]!.arguments).toMatchObject({ action: 'click', confirmed: false });
     expect(planner.decide).toHaveBeenCalledTimes(2);
     expect(onPcActStep.mock.calls.map(([event]) => event)).toEqual([
       { step: 1, action: 'click', outcome: 'completed' },
