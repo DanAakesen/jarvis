@@ -212,7 +212,7 @@ export class TaskDispatcher implements TaskController {
     if (this.started) return;
     this.started = true;
     this.unsubscribe = this.events.subscribe((event) => this.onTaskEvent(event));
-    this.scheduleReconciliation(0);
+    this.scheduleReconciliation(0, true);
     this.wake();
   }
 
@@ -228,8 +228,8 @@ export class TaskDispatcher implements TaskController {
     await Promise.all([this.pumping, this.reconciling]);
   }
 
-  private scheduleReconciliation(delayMs: number): void {
-    if (!this.started) return;
+  private scheduleReconciliation(delayMs: number, allowIdle = false): void {
+    if (!this.started || this.reconciliationTimer || (!allowIdle && !this.heartbeat.hasTrackedSessions())) return;
     this.reconciliationTimer = setTimeout(() => {
       this.reconciliationTimer = undefined;
       this.reconciling = this.reconcileStaleTasks().catch(this.onError).finally(() => {
@@ -379,6 +379,7 @@ export class TaskDispatcher implements TaskController {
           return { kind: 'invalid-transition' };
         }
         this.heartbeat.track({ ...target, invocationId: accepted.invocationId });
+        this.scheduleReconciliation(this.reconciliationIntervalMs);
         return { kind: 'ok', task };
       } catch {
         if (accepted) await this.clientFor(target.agentName).cancel(accepted.invocationId).catch(this.onError);
@@ -417,6 +418,7 @@ export class TaskDispatcher implements TaskController {
         );
         const running = await this.store.recordResumedTurn(target, accepted);
         this.heartbeat.track(running);
+        this.scheduleReconciliation(this.reconciliationIntervalMs);
         return { kind: 'ok', task: resumed.task };
       } catch {
         if (accepted) await this.clientFor(target.agentName).cancel(accepted.invocationId).catch(this.onError);
@@ -511,6 +513,7 @@ export class TaskDispatcher implements TaskController {
         agentName: runnerName,
         invocationId: accepted.invocationId,
       });
+      this.scheduleReconciliation(this.reconciliationIntervalMs);
       return { kind: 'ok', task: { ...task, state: 'Running' } };
     } catch (error) {
       if (accepted) {
@@ -675,6 +678,7 @@ export class TaskDispatcher implements TaskController {
       agentName: runnerName,
       invocationId: accepted.invocationId,
     });
+    this.scheduleReconciliation(this.reconciliationIntervalMs);
   }
 
   private async taskRequest(

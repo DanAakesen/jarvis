@@ -73,6 +73,7 @@ function harness(
   })),
   taskRecord: TaskRecord = controlTask,
   options: DispatcherOptions = {},
+  hasTrackedSessions = false,
 ) {
   const events: TaskEventHub = createEventHub<TaskEventMessage>();
   const transition = vi.fn(async (
@@ -96,10 +97,13 @@ function harness(
   const settings: SettingsStore = { read: vi.fn(async () => ({
     'codex.model': '"gpt-5.5"', 'codex.reasoning_effort': '"medium"',
   })), write: vi.fn(async () => {}) };
-  const track = vi.fn();
-  const untrack = vi.fn();
+  const tracked = { value: hasTrackedSessions };
+  const track = vi.fn(() => { tracked.value = true; });
+  const untrack = vi.fn(() => { tracked.value = false; });
   const setCompletionHandler = vi.fn();
-  const heartbeat = { track, untrack, setCompletionHandler } as unknown as SandboxHeartbeat;
+  const heartbeat = {
+    track, untrack, setCompletionHandler, hasTrackedSessions: () => tracked.value,
+  } as unknown as SandboxHeartbeat;
   const steer = vi.fn(async () => ({
     invocationId: 'invocation-steer', sessionId: 'session-1', status: 'queued' as const, agent: 'codex' as const,
   }));
@@ -195,7 +199,7 @@ function reconciliationHarness(
       branch: controlTarget.branch,
     })),
     verifyDelivery,
-  });
+  }, true);
   test.status.mockResolvedValue(invocationSnapshot(status));
   return { ...test, store, staleTask, verifyDelivery };
 }
@@ -203,6 +207,21 @@ function reconciliationHarness(
 afterEach(() => { vi.useRealTimers(); });
 
 describe('task dispatcher', () => {
+  it('runs one startup reconciliation but skips recurring SQL scans while no sandbox is tracked', async () => {
+    vi.useFakeTimers();
+    const store = idleStore();
+    const test = harness(store, undefined, controlTask, { reconciliationIntervalMs: 60_000 });
+    test.dispatcher.start();
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.listStaleRunning).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(store.listStaleRunning).toHaveBeenCalledOnce();
+
+    await test.dispatcher.stop();
+    vi.useRealTimers();
+  });
+
   it('does not start a task twice when two dispatcher instances compete for its lease', async () => {
     let claimed = false;
     const startTask = vi.fn(async () => ({
