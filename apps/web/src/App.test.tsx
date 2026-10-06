@@ -487,13 +487,72 @@ describe('App shell', () => {
     expect(historyWindow.className).not.toContain('workspace-window-minimized');
     expect(screen.getByRole('button', { name: 'End voice' })).not.toBeNull();
     expect(screen.getByLabelText('Conversation history')).toBe(transcript);
+    const voiceControls = screen.getByRole('button', { name: 'End voice' });
+    expect(historyWindow.contains(voiceControls)).toBe(false);
+    await user.click(within(historyWindow).getByRole('button', { name: 'Maximise Conversation' }));
+    await user.click(within(historyWindow).getByRole('button', { name: 'Minimise Conversation' }));
+    expect(await workspace.command('voice-close-history', 'close')).toMatchObject({ applied: true });
+    expect(await workspace.command('voice-restore-history', 'restore')).toMatchObject({ applied: true });
+    expect(screen.getByRole('article', { name: 'Conversation' }).contains(screen.getByText('I am ready.'))).toBe(true);
+    expect(voiceSessions).toHaveLength(1);
+    expect(shell.getAttribute('data-voice-active')).toBe('true');
+    expect(screen.getByRole('button', { name: 'End voice' })).toBe(voiceControls);
 
     await user.click(screen.getByRole('button', { name: 'End voice' }));
     expect(shell.getAttribute('data-voice-active')).toBe('false');
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
-    expect(screen.getByRole('article', { name: 'Conversation' })).toBe(historyWindow);
-    expect(historyWindow.hasAttribute('inert')).toBe(false);
-    expect(screen.getByLabelText('Conversation history')).toBe(transcript);
+    expect(screen.getByRole('article', { name: 'Conversation' }).hasAttribute('inert')).toBe(false);
+    expect(screen.getByLabelText('Conversation history').contains(screen.getByText('I am ready.'))).toBe(true);
+  });
+
+  it('keeps an in-flight reply, draft and queue while history is minimised, closed and restored', async () => {
+    const user = userEvent.setup();
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    let finish = () => {};
+    sendChatTurn.mockImplementation(async (...args: unknown[]) => {
+      (args[4] as (message: Record<string, unknown>) => void)({
+        id: '70', sessionId: '41', channel: 'chat', language: 'en', role: 'dan', text: 'Long task',
+        model: null, voiceMinutes: null, at: '2026-10-03T12:02:00.000Z', toolCalls: [],
+      });
+      (args[5] as (delta: string) => void)('Working on');
+      return await new Promise((resolve) => {
+        finish = () => resolve({
+          id: '71', sessionId: '41', channel: 'chat', language: 'en', role: 'jarvis', text: 'Finished the task.',
+          model: null, voiceMinutes: null, at: '2026-10-03T12:03:00.000Z', toolCalls: [],
+        });
+      });
+    });
+    await renderSignedIn();
+    await screen.findByText('I am ready.');
+    const composer = screen.getByRole('textbox', { name: 'Message Jarvis' }) as HTMLTextAreaElement;
+    const historyWindow = screen.getByRole('article', { name: 'Conversation' });
+
+    await user.type(composer, 'Long task');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(historyWindow.contains(await screen.findByText('Working on'))).toBe(true);
+    await user.type(composer, 'Queued next');
+    fireEvent.keyDown(composer, { key: 'Enter', ctrlKey: true });
+    expect(screen.getByText('1 message queued')).not.toBeNull();
+    await user.type(composer, 'Unsent draft');
+
+    await user.click(within(historyWindow).getByRole('button', { name: 'Minimise Conversation' }));
+    await user.click(screen.getByRole('button', { name: 'Restore Conversation' }));
+    await user.click(within(historyWindow).getByRole('button', { name: 'Close Conversation' }));
+    expect(screen.queryByRole('article', { name: 'Conversation' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(composer);
+    expect(composer.value).toBe('Unsent draft');
+    expect(sendChatTurn).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getAllByRole('link', { name: 'Conversation' })[0]!);
+    const reopened = await screen.findByRole('article', { name: 'Conversation' });
+    expect(reopened.contains(screen.getByText('Working on'))).toBe(true);
+    expect(screen.getByText('1 message queued')).not.toBeNull();
+
+    act(() => finish());
+    expect(reopened.contains(await screen.findByText('Finished the task.'))).toBe(true);
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
+    expect(sendChatTurn.mock.calls[1]![3]).toBe('Queued next');
+    expect(composer.value).toBe('Unsent draft');
   });
 
   it('restores history minimised for voice when voice ends', async () => {
