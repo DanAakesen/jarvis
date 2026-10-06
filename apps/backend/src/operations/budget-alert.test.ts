@@ -74,4 +74,22 @@ describe('Azure budget alerts', () => {
     expect(requestSignal?.aborted).toBe(true);
     expect(onError).not.toHaveBeenCalled();
   });
+
+  it('passes bounded HTTP failure metadata to the monitor error callback', async () => {
+    const reader = createArmBudgetReader({
+      resourceId,
+      getToken: async () => 'fake-token',
+      fetcher: vi.fn(async () => new Response('private provider body', { status: 403 })),
+    });
+    const onError = vi.fn();
+    const stop = startBudgetAlertMonitor(reader, { record: vi.fn(async () => true) }, onError);
+    try {
+      await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
+      const error = onError.mock.calls[0]![0];
+      expect(error).toMatchObject({ message: 'Azure budget request failed', kind: 'http', statusCode: 403 });
+      expect(JSON.stringify(error)).not.toContain('private');
+    } finally {
+      await stop();
+    }
+  });
 });

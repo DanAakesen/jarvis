@@ -27,7 +27,7 @@ export function startGraphPresenceMonitor(
   graph: GraphClient,
   ownerObjectId: string,
   store: AwayModeStore,
-  onError: () => void,
+  onError: (error: unknown) => void,
   intervalMs = 60_000,
 ): () => Promise<void> {
   if (!ownerIdPattern.test(ownerObjectId)) throw new TypeError('Invalid Graph presence owner');
@@ -46,7 +46,7 @@ export function startGraphPresenceMonitor(
         presence === null ? null : presence === 'away',
       ))
       .then(() => undefined)
-      .catch(() => { if (!activeController.signal.aborted) onError(); })
+      .catch((error: unknown) => { if (!activeController.signal.aborted) onError(error); })
       .finally(() => {
         if (controller === activeController) controller = undefined;
         running = undefined;

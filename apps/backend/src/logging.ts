@@ -19,11 +19,34 @@ export async function createTelemetry(connectionString?: string): Promise<Teleme
   return client;
 }
 
+const failureEvents = new Set([
+  'away_mode.presence_poll_failed', 'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
+  'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',
+  'dispatcher.operation_failed', 'github.checks_loop_recovery_failed', 'pc_bridge.status_update_failed',
+  'google.refresh_token_expired_alert_unavailable', 'google.refresh_token_expired_alert_persistence_failed',
+  'telemetry.close_failed',
+]);
+const errorKinds = new Set(['http', 'auth', 'timeout', 'aborted', 'transport', 'protocol', 'internal']);
+
+export function safeErrorFields(error: unknown): { kind: string; statusCode?: number } {
+  const details = error !== null && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const kind = typeof details.kind === 'string' && errorKinds.has(details.kind)
+    ? details.kind
+    : details.name === 'TimeoutError' ? 'timeout' : details.name === 'AbortError' ? 'aborted' : 'internal';
+  const statusCode = details.statusCode ?? details.status;
+  return {
+    kind,
+    ...(typeof statusCode === 'number' && Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599
+      ? { statusCode } : {}),
+  };
+}
+
 const events = new Set([
+  ...failureEvents,
   'request.started', 'request.completed', 'request.failed', 'request.origin_denied', 'request.auth_denied',
   'server.listening', 'server.stopping', 'server.stopped', 'server.failed',
   'database.ready', 'database.not_configured',
-  'telemetry.stdout_only', 'telemetry.export_failed', 'telemetry.close_failed',
+  'telemetry.stdout_only', 'telemetry.export_failed',
   'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
   'voice.partials_unavailable', 'chat.latency', 'memory.embedding', 'vault.index', 'vault.write',
   'pc_act.step',
@@ -70,6 +93,13 @@ const reflexReasons = new Set([
 ]);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (typeof input.msg === 'string' && failureEvents.has(input.msg)) {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.kind === 'string' && errorKinds.has(input.kind)) fields.kind = input.kind;
+    if (typeof input.statusCode === 'number' && Number.isInteger(input.statusCode) &&
+        input.statusCode >= 100 && input.statusCode <= 599) fields.statusCode = input.statusCode;
+    return fields;
+  }
   const fields: Record<string, unknown> = {};
   if (typeof input.reqId === 'string' && /^[\da-f-]{36}$/i.test(input.reqId)) fields.reqId = input.reqId;
   if (typeof input.method === 'string' && /^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$/.test(input.method)) fields.method = input.method;

@@ -83,7 +83,7 @@ export function createArmBudgetReader({
       });
       if (response.redirected || !response.ok) {
         await response.body?.cancel().catch(() => undefined);
-        throw new Error('Azure budget request failed');
+        throw Object.assign(new Error('Azure budget request failed'), { kind: 'http', statusCode: response.status });
       }
       const result = await readJson(response);
       if (!object(result) || !object(result.properties)) throw new Error('Azure budget response was incomplete');
@@ -122,7 +122,7 @@ export async function recordBudgetThresholdIfReached(
 export function startBudgetAlertMonitor(
   reader: BudgetReader,
   alerts: AlertActivityStore,
-  onError: () => void,
+  onError: (error: unknown) => void,
   intervalMs = 15 * 60_000,
 ): () => Promise<void> {
   let stopped = false;
@@ -135,7 +135,7 @@ export function startBudgetAlertMonitor(
     const activeController = controller;
     running = recordBudgetThresholdIfReached(reader, alerts, activeController.signal)
       .then(() => undefined)
-      .catch(() => { if (!activeController.signal.aborted) onError(); })
+      .catch((error: unknown) => { if (!activeController.signal.aborted) onError(error); })
       .finally(() => {
         if (controller === activeController) controller = undefined;
         running = undefined;

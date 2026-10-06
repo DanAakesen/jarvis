@@ -176,7 +176,7 @@ type BrowserActionRequest =
 export interface PcBridgeConnectionOptions {
   readonly timeoutMs?: number;
   readonly onStatusChange?: (online: boolean, controlPaused?: boolean) => void | Promise<void>;
-  readonly onStatusError?: () => void;
+  readonly onStatusError?: (error: unknown) => void;
 }
 
 export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
@@ -448,12 +448,12 @@ export class PcBridgeConnection {
     try {
       const update = this.options.onStatusChange?.(online, paused);
       if (update) {
-        this.statusUpdate = Promise.all([this.statusUpdate, update]).then(() => {}).catch(() => {
-          this.options.onStatusError?.();
+        this.statusUpdate = Promise.all([this.statusUpdate, update]).then(() => {}).catch((error: unknown) => {
+          this.options.onStatusError?.(error);
         });
       }
-    } catch {
-      this.options.onStatusError?.();
+    } catch (error) {
+      this.options.onStatusError?.(error);
     }
   }
 }

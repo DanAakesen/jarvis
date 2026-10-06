@@ -345,6 +345,14 @@ configuration or secret fails webhook requests with 503, not an unsigned fallbac
 The server generates request IDs and records only approved event names, methods,
 route templates, statuses and timings. A final output allowlist covers child
 logger bindings as well as log arguments, dropping request/provider secrets.
+Background failure events retain their emitted names for presence, sandbox
+heartbeat, budget checks, task-event archival, project-policy confirmations,
+dispatcher operations, checks-loop recovery, PC bridge status, Google expiry
+alerts and telemetry shutdown. These events export only a fixed error-kind
+vocabulary and integer HTTP status codes (100–599), never error messages,
+bodies, tokens or URLs. Error callbacks preserve caught errors until the logging
+boundary; Graph authentication/transport/HTTP failures and budget HTTP failures
+carry safe metadata without provider responses.
 
 The factory module exposes authenticated `POST /factory/tasks`, filtered and
 paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event
