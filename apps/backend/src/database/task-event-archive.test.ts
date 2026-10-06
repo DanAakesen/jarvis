@@ -84,6 +84,16 @@ describe('task event archive reads', () => {
 });
 
 describe('task event archive job', () => {
+  it('passes the caught failure to its error callback', async () => {
+    const error = new Error('archive unavailable');
+    const archive = { archiveExpiredEvents: vi.fn(async () => { throw error; }) } as unknown as TaskEventArchive;
+    const onError = vi.fn();
+    const job = createTaskEventArchiveJob(archive, onError);
+    job.start();
+    await job.stop();
+    expect(onError).toHaveBeenCalledExactlyOnceWith(error);
+  });
+
   it('skips startup and recurring SQL work while no sandbox is active', async () => {
     vi.useFakeTimers();
     const archiveExpiredEvents = vi.fn(async () => 0);

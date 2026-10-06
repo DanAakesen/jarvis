@@ -28,7 +28,7 @@ interface ProjectPolicyOptions {
   readonly tasks: Pick<TaskStore, 'transition' | 'recordEvent'>;
   readonly tokenIssuer: GitHubAppTokenIssuer;
   readonly runConfirmed?: <T>(summary: string, action: () => Promise<T>) => Promise<T>;
-  readonly onConfirmationError?: () => void;
+  readonly onConfirmationError?: (error: unknown) => void;
   readonly onError?: (error: unknown) => void;
   readonly fetch?: typeof fetch;
 }
@@ -343,12 +343,12 @@ export function createProjectPolicyEvaluator({
           ? 'GitHub refused the approved squash merge because merge rules or branch protection prevent it.'
           : 'Dan rejected the merge or its approval expired; no merge was attempted.';
         try { await recordReason(candidate.taskId, reason); }
-        catch { onConfirmationError?.(); }
+        catch (error) { onConfirmationError?.(error); }
       } finally {
         pendingMerges.delete(key);
       }
     };
-    void process().catch(() => onConfirmationError?.());
+    void process().catch((error: unknown) => onConfirmationError?.(error));
   }
 
   async function evaluate(candidate: PolicyPullRequest): Promise<void> {

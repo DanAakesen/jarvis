@@ -1,6 +1,6 @@
 import { Writable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { createLogger, createTelemetry } from './logging.js';
+import { createLogger, createTelemetry, safeErrorFields } from './logging.js';
 
 const sdk = vi.hoisted(() => ({
   config: { enableUseDiskRetryCaching: true }, initialize: vi.fn(),
@@ -12,6 +12,57 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it.each([
+    'away_mode.presence_poll_failed', 'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
+    'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',
+    'dispatcher.operation_failed', 'github.checks_loop_recovery_failed', 'pc_bridge.status_update_failed',
+    'google.refresh_token_expired_alert_unavailable', 'google.refresh_token_expired_alert_persistence_failed',
+    'telemetry.close_failed',
+  ])('exports %s with only bounded failure diagnostics', (event) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.warn({
+      kind: 'http', statusCode: 403, body: 'body-secret', token: 'token-secret',
+      url: 'https://example.com/url-secret', err: new Error('error-secret'),
+      operation: 'operation-secret', method: 'GET', port: 3000, responseTime: 42,
+    }, event);
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: event, kind: 'http', statusCode: 403,
+    });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: event, properties: { service: 'jarvis-backend', kind: 'http', statusCode: 403 },
+    }));
+    for (const statusCode of [99, 600, 403.5, '403', null, Infinity, NaN]) {
+      logger.warn({ kind: 'kind-secret', statusCode }, event);
+      expect(JSON.parse(records.at(-1)!)).toEqual({
+        level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: event,
+      });
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        message: event, properties: { service: 'jarvis-backend' },
+      }));
+    }
+    expect(records.join('')).not.toContain('secret');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('secret');
+  });
+
+  it.each(['http', 'auth', 'timeout', 'aborted', 'transport', 'protocol', 'internal'])(
+    'retains the safe error kind %s and HTTP status boundaries', (kind) => {
+      expect(safeErrorFields({ kind, statusCode: 100, message: 'message-secret' })).toEqual({ kind, statusCode: 100 });
+      expect(safeErrorFields({ kind, status: 599, body: 'body-secret' })).toEqual({ kind, statusCode: 599 });
+    },
+  );
+
+  it('classifies unknown errors without exporting their names, messages or invalid status codes', () => {
+    for (const error of [null, undefined, 'secret', new Error('secret'),
+      { kind: 'secret', name: 'secret', statusCode: 999 }, { statusCode: '403' }, { statusCode: 403.5 }]) {
+      expect(safeErrorFields(error)).toEqual({ kind: 'internal' });
+    }
+    expect(safeErrorFields(new DOMException('secret', 'TimeoutError'))).toEqual({ kind: 'timeout' });
+    expect(safeErrorFields(new DOMException('secret', 'AbortError'))).toEqual({ kind: 'aborted' });
+  });
+
   it.each(['skipped', 'fresh', 'renewed', 'failed', 'uncertain'])(
     'exports the %s renewal outcome and bounded diagnostics without provider details',
     (outcome) => {

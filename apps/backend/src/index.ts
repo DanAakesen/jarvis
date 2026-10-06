@@ -4,7 +4,7 @@ import { CallAutomationClient } from '@azure/communication-call-automation';
 import { buildApp } from './app.js';
 import { BlobServiceClient } from '@azure/storage-blob';
 import { ConfigurationError, loadConfig } from './config.js';
-import { createLogger, createTelemetry } from './logging.js';
+import { createLogger, createTelemetry, safeErrorFields } from './logging.js';
 import { shutdown } from './shutdown.js';
 import { loadDatabaseConfig } from './database/config.js';
 import { createDatabase, registerDatabase } from './database/lifecycle.js';
@@ -45,7 +45,7 @@ import {
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
-import { FoundryClient, FoundryClientError } from './foundry/client.js';
+import { FoundryClient } from './foundry/client.js';
 import { createJevPcActPlanner } from './pc-bridge/pc-act.js';
 import { createJevRecipePlanner } from './core/task-recipes.js';
 import { createRecipeModule } from './core/recipe-management.js';
@@ -193,8 +193,8 @@ try {
               link: null,
             } as const;
             if (await alertActivityStore.record(alert)) notifyAlert(alertNotifier, alert);
-          } catch {
-            logger.warn('google.refresh_token_expired_alert_persistence_failed');
+          } catch (error) {
+            logger.warn(safeErrorFields(error), 'google.refresh_token_expired_alert_persistence_failed');
           }
         },
       }),
@@ -366,18 +366,13 @@ try {
   const sandboxHeartbeat = database && config.foundryEndpoints
     ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub, alertNotifier), clientFor, {
       onDecision: (decision) => logger.info(decision, 'sandbox_heartbeat.decision'),
-      onError: (error) => {
-        const details = error instanceof FoundryClientError
-          ? { kind: error.kind, statusCode: error.statusCode, operation: error.operation }
-          : { kind: 'internal' };
-        logger.warn(details, 'sandbox_heartbeat.poll_failed');
-      },
+      onError: (error) => logger.warn(safeErrorFields(error), 'sandbox_heartbeat.poll_failed'),
     })
     : undefined;
   const taskEventArchiveJob = taskEventArchive
     ? createTaskEventArchiveJob(
       taskEventArchive,
-      () => logger.warn('task_event_archive.failed'),
+      (error) => logger.warn(safeErrorFields(error), 'task_event_archive.failed'),
       () => sandboxHeartbeat?.hasTrackedSessions() ?? false,
     )
     : undefined;
@@ -434,8 +429,8 @@ try {
       ...(teamsNotifications ? {
         runConfirmed: (summary, action) => teamsNotifications.runConfirmed('merge', summary, action),
       } : {}),
-      onConfirmationError: () => logger.warn('project_policy.confirmation_failed'),
-      onError: () => logger.warn('project_policy.recheck_failed'),
+      onConfirmationError: (error) => logger.warn(safeErrorFields(error), 'project_policy.confirmation_failed'),
+      onError: (error) => logger.warn(safeErrorFields(error), 'project_policy.recheck_failed'),
     })
     : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
@@ -451,7 +446,7 @@ try {
       sandboxHeartbeat,
       eventHub,
       {
-        onError: () => logger.warn('dispatcher.operation_failed'),
+        onError: (error) => logger.warn(safeErrorFields(error), 'dispatcher.operation_failed'),
         onReconciliation: (decision) => logger.info(decision, 'task_reconciliation.decision'),
         onStartFailure: (failure) => logger.warn(failure, 'dispatcher.start_failed'),
         recoveryStore: createTaskRecoveryStore(database.pool, eventHub),
@@ -491,7 +486,7 @@ try {
       settings: settingsStore,
       tasks: taskStore,
       controller: dispatcher,
-      onError: () => logger.warn('github.checks_loop_recovery_failed'),
+      onError: (error) => logger.warn(safeErrorFields(error), 'github.checks_loop_recovery_failed'),
     })
     : undefined;
   const screenVisionModel = config.foundryProjectEndpoint && credential
@@ -544,7 +539,7 @@ try {
         runConfirmed: (summary, action, signal) =>
           teamsNotifications.runConfirmed('computer_use', summary, action, signal),
       } : {}),
-      onStatusError: () => logger.warn('pc_bridge.status_update_failed'),
+      onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
     }),
   ];
   const phoneCallModule = config.phone && phoneSessionStore && phoneSecretClient && credential &&
@@ -679,7 +674,7 @@ try {
       stopBudgetMonitor = startBudgetAlertMonitor(
         budgetReader,
         budgetAlertStore,
-        () => logger.warn('budget_alert.check_failed'),
+        (error) => logger.warn(safeErrorFields(error), 'budget_alert.check_failed'),
       );
     });
   }
@@ -691,7 +686,7 @@ try {
         graphClient,
         config.auth.ownerObjectId,
         awayModeStore,
-        () => logger.warn('away_mode.presence_poll_failed'),
+        (error) => logger.warn(safeErrorFields(error), 'away_mode.presence_poll_failed'),
       );
     });
   }
@@ -718,7 +713,7 @@ try {
       await taskEventArchiveJob?.stop();
       await shutdown(app, telemetry);
     }
-    catch { logger.error('telemetry.close_failed'); process.exitCode = 1; }
+    catch (error) { logger.error(safeErrorFields(error), 'telemetry.close_failed'); process.exitCode = 1; }
     // Enforce the shutdown deadline even if an SDK/network handle remains open.
     process.exit(process.exitCode ?? 0);
   };
