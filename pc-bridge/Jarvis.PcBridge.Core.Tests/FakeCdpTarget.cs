@@ -19,6 +19,7 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
         Name = name;
         Type = type;
         Sensitive = sensitive;
+        FocusedSensitive = sensitive;
         using var probe = new TcpListener(IPAddress.Loopback, 0);
         probe.Start();
         _port = ((IPEndPoint)probe.LocalEndpoint).Port;
@@ -32,6 +33,7 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
     public string Name { get; }
     public string Type { get; }
     public bool Sensitive { get; }
+    public bool FocusedSensitive { get; set; }
     public string? ActionStatus { get; set; }
     public List<string> Methods { get; } = [];
     public List<JsonElement> Calls { get; } = [];
@@ -105,8 +107,13 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
             var method = root.GetProperty("method").GetString()!;
             Methods.Add(method);
             Calls.Add(root.Clone());
+            var isFocusedProbe = method == "Runtime.evaluate" &&
+                root.GetProperty("params").GetProperty("expression").GetString()!.Contains(
+                    "document.activeElement", StringComparison.Ordinal);
             var result = method switch
             {
+                "Runtime.evaluate" when isFocusedProbe =>
+                    new { result = new { type = "boolean", value = FocusedSensitive } },
                 "Runtime.evaluate" => new { result = new { type = "object", objectId = "array_1" } },
                 "Runtime.getProperties" => GetProperties(root.GetProperty("params").GetProperty("objectId").GetString()!),
                 "Runtime.callFunctionOn" => CallFunction(root.GetProperty("params")),

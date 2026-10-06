@@ -38,6 +38,7 @@ public sealed class BrowserExecutor : IDisposable
     private readonly bool _ownsHttpClient;
     private readonly Uri _targetsUri;
     private readonly IExtensionBrowserPort? _extensionPort;
+    private readonly KeyboardExecutor? _keyboardExecutor;
     private readonly ConcurrentDictionary<string, TargetSession> _sessions = new(StringComparer.Ordinal);
 
     public BrowserExecutor(
@@ -45,11 +46,13 @@ public sealed class BrowserExecutor : IDisposable
         Func<string?> focusedWindowTitle,
         HttpClient? httpClient = null,
         Uri? targetsUri = null,
-        IExtensionBrowserPort? extensionPort = null)
+        IExtensionBrowserPort? extensionPort = null,
+        KeyboardExecutor? keyboardExecutor = null)
     {
         _isEnabled = isEnabled;
         _focusedWindowTitle = focusedWindowTitle;
         _extensionPort = extensionPort;
+        _keyboardExecutor = keyboardExecutor;
         if (_extensionPort is not null) _extensionPort.TabRemoved += OnExtensionTabRemoved;
         _httpClient = httpClient ?? new HttpClient(new HttpClientHandler
         {
@@ -230,8 +233,9 @@ public sealed class BrowserExecutor : IDisposable
     {
         var tabId = arguments.GetProperty("tabId").GetString()!;
         var snapshotId = arguments.GetProperty("snapshotId").GetString()!;
-        var index = arguments.GetProperty("elementIndex").GetInt32();
         var action = arguments.GetProperty("action").GetString()!;
+        var keyboardAction = action is "keys" or "type_focused";
+        var index = keyboardAction ? -1 : arguments.GetProperty("elementIndex").GetInt32();
         var target = await FindTargetAsync(tabId, cancellationToken).ConfigureAwait(false);
         var session = await GetSessionAsync(target, cancellationToken).ConfigureAwait(false);
         var keepAttached = false;
@@ -240,9 +244,19 @@ public sealed class BrowserExecutor : IDisposable
             var snapshot = session.Snapshot;
             if (snapshot is null || snapshot.Id != snapshotId ||
                 DateTimeOffset.UtcNow - snapshot.CreatedAt > SnapshotLifetime ||
-                index >= snapshot.Elements.Count)
+                (!keyboardAction && index >= snapshot.Elements.Count))
             {
                 throw new BrowserActionRefusedException("stale");
+            }
+
+            if (keyboardAction)
+            {
+                if (!_isEnabled()) throw new BrowserActionRefusedException("browser_off");
+                if (_keyboardExecutor is null) throw new BrowserActionRefusedException("not_allowed");
+                if (!IsFocused(target.Title, _focusedWindowTitle()) ||
+                    await IsSensitiveFocusedAsync(session, cancellationToken).ConfigureAwait(false))
+                    throw new BrowserActionRefusedException("blocked");
+                return _keyboardExecutor.Execute(action, arguments, cancellationToken);
             }
 
             var observed = snapshot.Elements[index];
@@ -320,6 +334,23 @@ public sealed class BrowserExecutor : IDisposable
         "scroll" => arguments.GetProperty("direction").GetString(),
         _ => null,
     };
+
+    private static async Task<bool> IsSensitiveFocusedAsync(
+        TargetSession session,
+        CancellationToken cancellationToken)
+    {
+        using var response = await session.SendAsync("Runtime.evaluate", new
+        {
+            expression = FocusedSensitiveExpression,
+            returnByValue = true,
+            awaitPromise = false,
+        }, cancellationToken).ConfigureAwait(false);
+        var result = response.RootElement.GetProperty("result");
+        if (result.TryGetProperty("exceptionDetails", out _)) return true;
+        return !result.TryGetProperty("result", out var value) ||
+            !value.TryGetProperty("value", out var sensitive) ||
+            sensitive.ValueKind != JsonValueKind.False;
+    }
 
     private async Task<CdpTarget> FindTargetAsync(string id, CancellationToken cancellationToken)
     {
@@ -487,6 +518,19 @@ public sealed class BrowserExecutor : IDisposable
         _sessions.Clear();
         if (_ownsHttpClient) _httpClient.Dispose();
     }
+
+    private const string FocusedSensitiveExpression = """
+        (() => {
+          const e = document.activeElement;
+          if (!e || e.tagName === 'IFRAME') return true;
+          const text = [e.type, e.autocomplete, e.name, e.id, e.getAttribute('aria-label'),
+            e.getAttribute('placeholder'), e.labels && Array.from(e.labels).map(label => label.textContent).join(' ')].join(' ');
+          return e.type === 'password' ||
+            /password|one-time-code|cc-|card|cvc|cvv|security.?code|verification.?code|otp/i.test(text) ||
+            /\b\d{3}[- ]?\d{2}[- ]?\d{4}\b/.test(text) ||
+            /\b\d{4,8}\b/.test(text);
+        })()
+        """;
 
     private const string SnapshotExpression = """
         (() => {
