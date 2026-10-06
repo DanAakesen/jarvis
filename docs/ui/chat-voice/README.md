@@ -1,5 +1,7 @@
 # Approved unified shell and conversation controls
 
+**Latest voice refinement:** [#417](https://github.com/DanAakesen/jarvis/issues/417) moves state below the orb, removes the normal Enable microphone step and makes waking/live states more expressive. Its approved requirements supersede the in-bar status and separate microphone activation shown by the original reference/P8-36 scope below. Keep the selected glass, More/Language and End voice treatment. No separate prototype is required.
+
 Dan selected the Luminous Glass component family and the last Architectural Glass shell. The [refined selected image](../shell-styling/README.md#refined-approved-reference) removes both human/Jarvis message avatars, the top-left window header orb/title and separator above messages. The separate bottom app-shell/footer bar is removed; preserve its database-waking feedback in compact top-bar status. Keep the large scene orb, small input voice-start orb and compact voice-session bar.
 
 The original voice/composer comparison below remains the shared material reference; its message avatars are superseded by the refined image. The illustration shows voice and typing controls together for comparison, not simultaneous production modes. Example content is illustrative.

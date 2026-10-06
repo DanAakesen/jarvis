@@ -219,3 +219,13 @@ Existing chat, voice, safe Markdown, queue/steering, workspace tools and shared 
 | Architectural Glass shell | Selected dimensional graphite/glass framing, existing navigation and context; remove separate bottom bar/layout track, retaining compact accessible database-waking status in the top bar | Shared shell; large room/orb on Jarvis only | Planned; consolidated with composer/messages | P8-37 (#398) |
 
 [Refined selected reference](ui/shell-styling/README.md#refined-approved-reference). The bottom composer and voice bar remain; P8-37 owns the shell, composer and avatar-free message-window update in one PR. Existing shell/voice/window/data capabilities remain implemented with their recorded validation limits.
+
+## Approved voice/orb follow-up (6 October 2026)
+
+These accepted changes are planned together in P8-40 [#417](https://github.com/DanAakesen/jarvis/issues/417); the current two-step microphone activation and in-bar state remain until implementation. No separate prototype is required. P8-37 (#398) retains the separate shell/composer/messages scope.
+
+| Feature | Behaviour | Surface | Status | Tasks |
+| --- | --- | --- | --- | --- |
+| Under-orb voice status | Accessible session state/recovery follows the orb; compact More/End voice controls have no overlapping state or long language note | Jarvis browser voice | Planned | P8-40 (#417) |
+| Microphone on voice start | Explicit voice start requests native permission and begins capture after session readiness; no normal Enable microphone button; preserve mute, recovery and cleanup | Jarvis browser voice | Planned | P8-40 (#417) |
+| Expressive awakening and live orb | Pronounced core/shell wake, distinct listening/thinking/tool-work motion and audible-playback-driven speech/light/reflection; interruptible and reduced-motion safe | Same Jarvis scene in typing/voice | Planned | P8-40 (#417) |
