@@ -1842,7 +1842,7 @@ Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The 
 
 ### GitHub App
 
-[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, issues read access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline.
+[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02 and P3-03; repository metadata read is GitHub's required baseline.
 
 The backend reads `github-app-private-key` from Key Vault with its managed identity
 and uses the configured `GITHUB_APP_ID` to mint one-hour installation tokens
@@ -1861,7 +1861,9 @@ persists the newly started Foundry session.
 
 P7-45 uses a one-hour installation token scoped to one selected repository. File
 reads and code search request only `contents: read`; issue/PR summaries request
-`contents: read`, `issues: read`, and `pull_requests: read`. Neither token nor
+`contents: read` and `pull_requests: read`. The installation has no Issues
+permission; public repository issues are readable with that token, so private
+repository issues stay unavailable until Dan grants Issues read. Neither token nor
 provider response metadata is returned to Jarvis. The tools cap list/search/read
 results, reject traversal, oversized files and binary content, and return links
 alongside content framed as untrusted. `repo_overview` caches by repository and

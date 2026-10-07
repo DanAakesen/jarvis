@@ -332,7 +332,7 @@ describe('GitHub App installation tokens', () => {
     const [, tokenOptions] = fetchImpl.mock.calls[1]!;
     expect(JSON.parse(String(tokenOptions?.body))).toEqual({
       repositories: ['repo'],
-      permissions: { contents: 'read', issues: 'read', pull_requests: 'read' },
+      permissions: { contents: 'read', pull_requests: 'read' },
     });
   });
 
