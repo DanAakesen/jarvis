@@ -98,7 +98,7 @@ describe('SQL screen and watch usage store', () => {
     const nextDay = new Date('2026-10-07T00:00:00.000Z');
     await store.recordTokens({
       sessionId: frame.sessionId, eventId: frame.eventId, inputTokens: 0, outputTokens: 0,
-      costDkk: null, at: nextDay,
+      costDkk: null, costUsd: null, costStatus: 'unverified', model: 'gpt-6-luna', at: nextDay,
     });
     expect(request.query.mock.calls[0]![0]).toContain('SET cost_dkk = COALESCE(@costDkk, cost_dkk)');
     expect(request.query.mock.calls[0]![0]).not.toContain('DELETE');
@@ -141,7 +141,8 @@ describe('SQL screen and watch usage store', () => {
     request.query.mockRejectedValue(new Error('private SQL connection details'));
     await expect(store.reserveWatchFrame(frame)).rejects.toThrow('Watch usage could not be reserved');
     await expect(store.recordTokens({
-      sessionId: frame.sessionId, eventId: frame.eventId, inputTokens: 5, outputTokens: 2, costDkk: 0.001, at,
+      sessionId: frame.sessionId, eventId: frame.eventId, inputTokens: 5, outputTokens: 2,
+      costDkk: 0.001, costUsd: 0.000152, costStatus: 'estimated', model: 'gpt-6-luna', at,
     })).rejects.toThrow('Screen usage could not be recorded');
     expect(transaction.rollback).toHaveBeenCalledTimes(2);
     expect(transaction.commit).not.toHaveBeenCalled();
@@ -207,6 +208,8 @@ describe('SQL screen and watch usage store', () => {
     const { request, transaction, store } = fixture();
     await store.recordTokens({
       sessionId: frame.sessionId, eventId: frame.eventId, inputTokens: 5, outputTokens: 2, costDkk,
+      costUsd: costDkk === null ? null : 0.0018, costStatus: costDkk === null ? 'unverified' : 'estimated',
+      model: 'gpt-6-luna',
       at: new Date('2026-10-07T00:00:00.000Z'),
     });
     const query = request.query.mock.calls[0]![0] as string;
@@ -214,8 +217,11 @@ describe('SQL screen and watch usage store', () => {
     expect(query).toContain("N'jarvis.screen-frame-cap:' + CONVERT(nvarchar(10), @frameAt, 23)");
     expect(query).toContain('sys.sp_getapplock');
     expect(query).toContain('SET cost_dkk = COALESCE(@costDkk, cost_dkk)');
+    expect(query).toContain('cost_usd = COALESCE(@costUsd, cost_usd)');
+    expect(query).toContain('role = N\'vision\', model = @model');
     expect(query).toContain('jarvis_session_id = @sessionId');
     expect(request.input).toHaveBeenCalledWith('costDkk', expect.anything(), costDkk);
+    expect(request.input).toHaveBeenCalledWith('costUsd', expect.anything(), costDkk === null ? null : 0.0018);
     expect(request.input.mock.calls.filter(([key]) => key === 'eventId').map(([, , value]) => value))
       .toEqual([`screen:${frame.eventId}`, `screen:${frame.eventId}`, `screen:${frame.eventId}`]);
     expect(request.query).toHaveBeenCalledTimes(3);
@@ -225,7 +231,10 @@ describe('SQL screen and watch usage store', () => {
   it('rejects missing frame reservations and skips zero token rows', async () => {
     const { request, transaction, store } = fixture();
     request.query.mockResolvedValueOnce({ recordset: [], rowsAffected: [0] });
-    const tokens = { sessionId: '42', eventId: 'frame', inputTokens: 0, outputTokens: 0, costDkk: null, at };
+    const tokens = {
+      sessionId: '42', eventId: 'frame', inputTokens: 0, outputTokens: 0,
+      costDkk: null, costUsd: null, costStatus: 'unverified' as const, model: 'gpt-6-luna', at,
+    };
     await expect(store.recordTokens(tokens)).rejects.toThrow('Screen usage could not be recorded');
     expect(transaction.rollback).toHaveBeenCalledOnce();
     await store.recordTokens(tokens);

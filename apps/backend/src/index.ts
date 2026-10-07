@@ -119,6 +119,7 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  const usageStore = database ? createUsageStore(database.pool) : undefined;
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
   const htmlArtifactStore = database ? new HtmlArtifactStore(database.pool) : undefined;
   const vaultIndexStore = database ? createVaultIndexStore(database.pool) : undefined;
@@ -328,6 +329,11 @@ try {
       memoryStore,
       apiMemoryStore: memoryStore,
       ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
+      ...(usageStore ? { usageStore } : {}),
+      ...(config.foundryMemoryEmbeddingDeploymentName ? {
+        embeddingModel: config.foundryMemoryEmbeddingDeploymentName,
+      } : {}),
+      onUsageRecordFailure: () => logger.warn('usage.embedding_tokens_unavailable'),
       log: (event, fields) => logger.info({ msg: event, ...fields }, event),
       logEmbedding: (fields) => logger.info({ msg: 'memory.embedding', ...fields }, 'memory.embedding'),
     })
@@ -673,7 +679,7 @@ try {
       ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),
       ...(dispatcher ? { taskController: dispatcher } : {}),
       nowFeedStore,
-      usageStore: createUsageStore(database.pool),
+      ...(usageStore ? { usageStore } : {}),
     } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),

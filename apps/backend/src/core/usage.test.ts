@@ -17,8 +17,12 @@ const entry: UsageEntry = {
   agent: 'codex',
   source: 'codex',
   metric: 'turns',
+  role: null,
+  model: null,
   quantity: 2,
+  costUsd: null,
   costDkk: null,
+  costStatus: 'unverified',
   at: to.toISOString(),
   estimated: false,
 };
@@ -59,6 +63,14 @@ describe('usage report API', () => {
       entries: [entry],
       totalEntries: '1',
       dailyToolUsage: { date: to.toISOString().slice(0, 10), tools: [] },
+      dailyCostTotals: [],
+      monthlyCostTotals: [],
+      toolCalls: [],
+      roleCoverage: expect.arrayContaining([
+        { role: 'chat', usageStatus: 'measured', costStatus: 'estimated', note: expect.any(String) },
+        { role: 'research', usageStatus: 'unverified', costStatus: 'unverified', note: expect.any(String) },
+        { role: 'embeddings', usageStatus: 'measured', costStatus: 'unverified', note: expect.any(String) },
+      ]),
       truncated: false,
     });
     expect(store.list).toHaveBeenCalledWith(from, to);
@@ -129,5 +141,39 @@ describe('usage report API', () => {
     expect((await app.inject({ url: '/usage' })).statusCode).toBe(401);
     expect(store.list).not.toHaveBeenCalled();
     expect((await fixture(null).inject({ url: '/usage', headers })).statusCode).toBe(503);
+  });
+
+  it('accepts bounded Foundry usage only from the Jarvis agent identity', async () => {
+    const recordFoundryUsage = vi.fn(async () => {});
+    const store: UsageStore = {
+      list: vi.fn(async () => ({ entries: [], totalEntries: '0' })),
+      recordFoundryUsage,
+    };
+    const agentAuth: TokenVerifier = async () => ({
+      kind: 'jarvis-agent',
+      objectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+    });
+    const payload = {
+      role: 'chat',
+      model: 'gpt-5.6-luna',
+      inputTokens: 123,
+      outputTokens: 45,
+      eventId: 'a2a01070-225e-4d8b-b882-f925cf177603',
+    };
+
+    const denied = await fixture(store).inject({ method: 'POST', url: '/usage/foundry', headers, payload });
+    const response = await fixture(store, agentAuth).inject({
+      method: 'POST', url: '/usage/foundry', headers, payload,
+    });
+    const invalid = await fixture(store, agentAuth).inject({
+      method: 'POST', url: '/usage/foundry', headers, payload: { ...payload, inputTokens: 10_000_001 },
+    });
+
+    expect(denied.statusCode).toBe(403);
+    expect(response.statusCode).toBe(204);
+    expect(invalid.statusCode).toBe(400);
+    expect(recordFoundryUsage).toHaveBeenCalledOnce();
+    expect(recordFoundryUsage).toHaveBeenCalledWith(payload);
   });
 });

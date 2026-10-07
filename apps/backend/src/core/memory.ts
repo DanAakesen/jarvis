@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
 import {
   type MemoryCategory,
@@ -7,6 +8,7 @@ import {
   VectorSearchUnavailableError,
 } from '../database/memory-store.js';
 import { embeddingFailureStatus, type MemoryEmbedder } from './memory-embeddings.js';
+import type { UsageStore } from './usage.js';
 import { ToolRefusal } from './tool-registry.js';
 
 const MAX_MEMORY_RESULTS = 5;
@@ -26,6 +28,8 @@ declare module 'fastify' {
 export interface MemoryModuleOptions {
   readonly store: MemoryStore;
   readonly embedder?: MemoryEmbedder;
+  readonly embeddingModel?: string;
+  readonly usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
 }
 
 interface MemorySearchResult {
@@ -152,6 +156,20 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         durationMs: Math.max(0, performance.now() - startedAt),
         ...(embedded.inputTokens !== undefined ? { inputTokens: embedded.inputTokens } : {}),
       }, 'memory.embedding');
+      if (embedded.inputTokens !== undefined && options.embeddingModel &&
+          options.usageStore?.recordFoundryUsage) {
+        try {
+          await options.usageStore.recordFoundryUsage({
+            role: 'embeddings',
+            model: options.embeddingModel,
+            inputTokens: embedded.inputTokens,
+            outputTokens: 0,
+            eventId: randomUUID(),
+          });
+        } catch {
+          request.log.warn('usage.embedding_tokens_unavailable');
+        }
+      }
       return { value: embedded.embedding, unavailable: false };
     } catch (error) {
       request.log.info({

@@ -57,11 +57,12 @@ describe('committed SQL manifest', () => {
       '0026_workspace_html_artifact_history.sql',
       '0027_vault_knowledge_graph.sql',
       '0028_json_embeddings_without_vector.sql',
+      '0030_foundry_usage_cost_coverage.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
   it('stores JSON embeddings only when SQL vector support is unavailable', async () => {
-    const migration = (await readMigrations()).at(-1);
+    const migration = (await readMigrations()).find(({ name }) => name === '0028_json_embeddings_without_vector.sql');
     expect(migration?.sql).toContain("IF TYPE_ID(N'vector') IS NULL");
     expect(migration?.sql).toContain("ALTER TABLE dbo.memories ADD embedding_json nvarchar(max) NULL");
     expect(migration?.sql).toContain("ALTER TABLE dbo.vault_chunks ADD embedding_json nvarchar(max) NULL");

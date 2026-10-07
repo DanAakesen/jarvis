@@ -1254,6 +1254,19 @@ when present; P5-06 remains the writer. Route/store/web contract tests pass, but
 Chromium inspection at 390/1280 px verifies local mocked interactions.
 Live Azure SQL and provider/voice report data remain unverified.
 
+P9-23 adds an agent-only `POST /usage/foundry` ingestion route for token counts
+reported on completed Foundry chat and voice model responses. Screen vision
+records its provider-reported token counts and model; successful memory and vault
+embeddings record only the provider's input-token count, not the text. Migration
+`0030_foundry_usage_cost_coverage.sql` adds model, role, USD, DKK and cost-status
+fields. Known Foundry list rates are estimates converted using 6.5785 DKK/USD;
+unknown deployment rates and subscription-backed research/image-generation costs
+remain explicitly unverified. `/usage` returns daily UTC and monthly UTC cost
+totals plus research, web-research and image-generation tool-call counts. All-time
+daily totals are bounded to the latest 90 days; monthly totals cover the selected
+period. Provider-reported chat/voice tokens, SQL collection and live billing have
+not been verified against a deployed service or invoice.
+
 P6-03's backend job checks for events older than 90 days hourly while a sandbox
 is active, in bounded SQL batches, and uploads deterministic per-task blobs
 before deleting each batch in the same SQL transaction. While idle, it skips

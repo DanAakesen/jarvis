@@ -17,6 +17,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import {
   embeddingFailureStatus, MemoryEmbeddingHttpError, type MemoryEmbedder,
 } from '../core/memory-embeddings.js';
+import type { UsageStore } from '../core/usage.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import type { TeamsNotificationService } from '../teams/service.js';
@@ -463,6 +464,9 @@ export function createVaultModule(options: {
   readonly memoryStore: Pick<MemoryStore, 'getSourceMessage'>;
   readonly apiMemoryStore?: MemoryStore;
   readonly embedder?: MemoryEmbedder;
+  readonly embeddingModel?: string;
+  readonly usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
+  readonly onUsageRecordFailure?: () => void;
   readonly log?: (event: 'vault.index' | 'vault.write', fields: VaultLogFields) => void;
   readonly logEmbedding?: (fields: MemoryEmbeddingLogFields) => void;
 }): VaultModule {
@@ -549,6 +553,20 @@ export function createVaultModule(options: {
             durationMs: Math.max(0, performance.now() - startedAt),
             ...(embedded.inputTokens !== undefined ? { inputTokens: embedded.inputTokens } : {}),
           });
+          if (embedded.inputTokens !== undefined && options.embeddingModel &&
+              options.usageStore?.recordFoundryUsage) {
+            try {
+              await options.usageStore.recordFoundryUsage({
+                role: 'embeddings',
+                model: options.embeddingModel,
+                inputTokens: embedded.inputTokens,
+                outputTokens: 0,
+                eventId: randomUUID(),
+              });
+            } catch {
+              options.onUsageRecordFailure?.();
+            }
+          }
         } catch (error) {
           options.logEmbedding?.({
             outcome: signal.aborted ? 'cancelled' : 'fallback',

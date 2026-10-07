@@ -104,7 +104,7 @@ Status as of 6 October 2026.
 | Personality preferences | Choose a tone and response style, and add bounded instructions for new chat and voice sessions | Both | Settings, chat and voice | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 | Credentials status | See credential expiry and renewal status (never values) | Screen | Settings | Built | P2-08 |
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |
-| Usage and cost | Sandbox, model, voice, Codex and Copilot usage per task, project, period, plus the current UTC-day web-research call count | Screen | Usage | Built offline | P2-12, P6-01, P7-14 |
+| Usage and cost | Per-model and per-role Foundry tokens; daily/monthly USD and DKK totals; research and image-generation call counts, with estimated and unverified costs identified | Screen | Usage API; UI integration pending | Backend implemented offline; live provider billing unverified | P2-12, P6-01, P7-14, P9-23 |
 | Event archive | Old task events move to Blob and load on demand; idle checks skip SQL until a sandbox is active | Background | Task detail | Built offline | P6-03, P5-13 |
 | Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Now + email | Main page; email-only Azure Monitor action group | Built (offline; live Azure delivery unverified) | P6-02 |
 | Backup drill | Database restore documented | Background | — | Planned | P6-04 |

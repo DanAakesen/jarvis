@@ -458,7 +458,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-20 | [#514](https://github.com/DanAakesen/jarvis/issues/514) | System status page, including the PC bridge | Backend + UI session | — | Not started |
 | P9-21 | [#515](https://github.com/DanAakesen/jarvis/issues/515) | Watch mode on screen and camera sharing | UI session | — | In progress |
 | P9-22 | [#516](https://github.com/DanAakesen/jarvis/issues/516) | Phone calling: verify and surface | Backend | — | Not started |
-| P9-23 | [#517](https://github.com/DanAakesen/jarvis/issues/517) | Complete cost coverage | Backend | — | Not started |
+| P9-23 | [#517](https://github.com/DanAakesen/jarvis/issues/517) | Complete cost coverage | Backend | — | Implemented offline; UI integration and live billing validation pending |
 | P9-24 | [#518](https://github.com/DanAakesen/jarvis/issues/518) | Conversation search | Backend | — | Not started |
 | P9-25 | [#519](https://github.com/DanAakesen/jarvis/issues/519) | Folio: everything Jarvis pulled up, findable again | Backend + UI session | — | Not started |
 | P9-26 | [#520](https://github.com/DanAakesen/jarvis/issues/520) | Calendar update and delete | Backend | — | Complete |

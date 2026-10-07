@@ -4,7 +4,8 @@ import type { BackendModule } from '../modules.js';
 import type { ConversationStore } from '../core/conversation-store.js';
 import { readSettings } from '../core/settings.js';
 import { ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
-import { DKK_PER_USD, VISION_MODEL_DEPLOYMENT } from './foundry-model.js';
+import { DKK_PER_USD } from '../core/usage-pricing.js';
+import { VISION_MODEL_DEPLOYMENT } from './foundry-model.js';
 import {
   decodeFrame, SCREEN_FRAME_BODY_LIMIT, ScreenVisionError, validSessionId,
   type ScreenFrameUsageStore, type ScreenVisionModel,
@@ -185,7 +186,10 @@ export class VisionWatchService {
       // Charge even an invalid observation; the provider has already processed the frame.
       await this.usage.recordTokens({
         sessionId: input.sessionId, eventId, inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens, costDkk: result.costDkk, at,
+        outputTokens: result.outputTokens, costDkk: result.costDkk,
+        costUsd: result.costUsd ?? null,
+        costStatus: result.costUsd !== undefined ? 'estimated' : 'unverified',
+        model: VISION_MODEL_DEPLOYMENT, at,
       });
       const observation = parseObservation(result.description);
       const usedDkk = await this.usage.readWatchBudget(new Date(this.now()));

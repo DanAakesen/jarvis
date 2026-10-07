@@ -13,6 +13,7 @@ export interface ScreenVisionResult {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly costDkk?: number;
+  readonly costUsd?: number;
 }
 
 export interface ScreenVisionModel {
@@ -43,6 +44,9 @@ export interface ScreenFrameUsageStore {
     readonly inputTokens: number;
     readonly outputTokens: number;
     readonly costDkk: number | null;
+    readonly costUsd: number | null;
+    readonly costStatus: 'estimated' | 'unverified';
+    readonly model: string;
     readonly at: Date;
   }): Promise<void>;
 }
@@ -103,7 +107,9 @@ export class ScreenVisionService {
           !Number.isSafeInteger(result.inputTokens) || result.inputTokens < 0 ||
           !Number.isSafeInteger(result.outputTokens) || result.outputTokens < 0 ||
           (result.costDkk !== undefined &&
-            (!Number.isFinite(result.costDkk) || result.costDkk < 0))) {
+            (!Number.isFinite(result.costDkk) || result.costDkk < 0)) ||
+          (result.costUsd !== undefined &&
+            (!Number.isFinite(result.costUsd) || result.costUsd < 0))) {
         throw new Error('Invalid screen description response');
       }
       await this.usage.recordTokens({
@@ -112,6 +118,9 @@ export class ScreenVisionService {
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         costDkk: result.costDkk ?? null,
+        costUsd: result.costUsd ?? null,
+        costStatus: result.costDkk !== undefined && result.costUsd !== undefined ? 'estimated' : 'unverified',
+        model: input.model,
         at,
       });
       return {
