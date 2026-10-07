@@ -11,7 +11,7 @@ import type {
   VaultIndexedChunk,
   VaultSearchHit,
 } from '../database/memory-store.js';
-import type { MemoryEmbedder } from '../core/memory-embeddings.js';
+import { MemoryEmbeddingHttpError, type MemoryEmbedder } from '../core/memory-embeddings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './github-client.js';
 import { createVaultModule } from './index.js';
 import { buildApp } from '../app.js';
@@ -439,6 +439,26 @@ describe('GitHub vault', () => {
     expect(embedder.embedWithUsage).toHaveBeenCalledOnce();
     expect(index.entry('People/Alex.md')?.chunks[0]?.embedding).toEqual([1, 0]);
     expect(logEmbedding).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'ok', inputTokens: 12 }));
+  });
+
+  it('waits out embedding throttling during indexing instead of storing a null vector', async () => {
+    const remote = { 'People/Alex.md': { sha: sha('a'), content: '# Alex\n\nEngineer.' } };
+    const index = new FakeIndexStore();
+    const embedWithUsage = vi.fn()
+      .mockRejectedValueOnce(new MemoryEmbeddingHttpError(429, 0))
+      .mockResolvedValueOnce({ embedding: [1, 0] });
+    const throttled = createVaultModule({
+      client: createGitHubVaultClient({
+        tokenIssuer: { issueForContentsWrite: async () => 'installation-token' },
+        fetcher: fakeGitHub(remote).fetcher,
+      }),
+      indexStore: index,
+      memoryStore: { getSourceMessage: async () => null },
+      embedder: { embedWithUsage, embed: vi.fn() },
+    });
+    await throttled.synchronize(signal());
+    expect(embedWithUsage).toHaveBeenCalledTimes(2);
+    expect(index.entry('People/Alex.md')?.chunks[0]?.embedding).toEqual([1, 0]);
   });
 
   it('reads links from indexed note text when no link rows were stored', async () => {

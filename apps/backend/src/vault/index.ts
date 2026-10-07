@@ -13,7 +13,10 @@ import {
   type VaultSearchHit,
 } from '../database/memory-store.js';
 import { isGeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
-import { embeddingFailureStatus, type MemoryEmbedder } from '../core/memory-embeddings.js';
+import { setTimeout as sleep } from 'node:timers/promises';
+import {
+  embeddingFailureStatus, MemoryEmbeddingHttpError, type MemoryEmbedder,
+} from '../core/memory-embeddings.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import type { TeamsNotificationService } from '../teams/service.js';
@@ -39,6 +42,8 @@ const maxRoutingBytes = 512 * 1024;
 const maxInstructionFiles = 32;
 const maxVaultChunks = 512;
 const maxBackfillEmbeddingsPerSync = 4_096;
+const maxThrottledEmbeddingAttempts = 4;
+const maxThrottleDelayMs = 15_000;
 const maxMemoryApiResults = 50;
 const maxMemoryApiOffset = 10_000;
 const maxMemoryApiHistory = 10;
@@ -510,6 +515,24 @@ export function createVaultModule(options: {
     return routingRules;
   }
 
+  // Background indexing waits out Foundry throttling instead of storing a null vector.
+  async function embedThrottled(embedder: MemoryEmbedder, text: string, signal: AbortSignal) {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return embedder.embedWithUsage
+          ? await embedder.embedWithUsage(text, signal)
+          : { embedding: await embedder.embed(text, signal) };
+      } catch (error) {
+        if (!(error instanceof MemoryEmbeddingHttpError) || error.status !== 429 ||
+            attempt >= maxThrottledEmbeddingAttempts) {
+          throw error;
+        }
+        const delay = Math.min(error.retryAfterMs ?? 2_000 * attempt, maxThrottleDelayMs);
+        await sleep(delay, undefined, { signal });
+      }
+    }
+  }
+
   async function makeChunks(file: VaultFile, signal: AbortSignal): Promise<VaultIndexedChunk[]> {
     const sections = chunkMarkdown(file.content);
     if (sections.length > maxVaultChunks) throw new Error('Vault note has too many index chunks');
@@ -519,9 +542,7 @@ export function createVaultModule(options: {
       if (options.embedder) {
         const startedAt = performance.now();
         try {
-          const embedded = options.embedder.embedWithUsage
-            ? await options.embedder.embedWithUsage(`${section.heading}\n${section.content}`, signal)
-            : { embedding: await options.embedder.embed(`${section.heading}\n${section.content}`, signal) };
+          const embedded = await embedThrottled(options.embedder, `${section.heading}\n${section.content}`, signal);
           embedding = embedded.embedding;
           options.logEmbedding?.({
             outcome: 'ok',

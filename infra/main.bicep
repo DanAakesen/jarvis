@@ -402,8 +402,8 @@ resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deploym
   ]
   sku: {
     name: 'GlobalStandard'
-    // Memory capture and search embed in bursts (L91).
-    capacity: 20
+    // Memory capture, search and vault backfills embed in bursts (L91, L119); billing is per token.
+    capacity: 150
   }
   properties: {
     model: {
