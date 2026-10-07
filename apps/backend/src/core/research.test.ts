@@ -3,8 +3,8 @@ import type { InvocationAccepted, InvocationSnapshot } from '../foundry/client.j
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { BackendModule } from '../modules.js';
-import { isHtmlArtifact, type HtmlArtifact, type HtmlArtifactFrame, type WorkspaceCommand } from '@jarvis/contracts';
-import { createHtmlResearchModule } from './research.js';
+import { isBackgroundJob, isHtmlArtifact, isHtmlArtifactFrame, type BackgroundJob, type HtmlArtifact, type HtmlArtifactFrame, type WorkspaceCommand } from '@jarvis/contracts';
+import { createHtmlResearchModule, defaultReportFrame, reportFrame, researchWindowTitle } from './research.js';
 import { coreModule } from './index.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
 import type { WebResearchClient } from './web-research.js';
@@ -147,11 +147,29 @@ async function startResearch(app: ReturnType<typeof buildApp>) {
 }
 
 describe('background interactive research', () => {
+  it('keeps window titles to a few words', () => {
+    expect(researchWindowTitle(undefined, 'Microsoft Foundry IQ: what it is, core architecture, and how it compares. Present the findings as a visual cited report with diagrams'))
+      .toBe('Research: Microsoft Foundry IQ');
+    expect(researchWindowTitle('Foundry IQ overview', 'anything')).toBe('Research: Foundry IQ overview');
+    expect(researchWindowTitle('Research Azure pricing', 'x')).toBe('Research Azure pricing');
+    expect(researchWindowTitle(undefined, 'one two three four five six seven eight')).toBe('Research: one two three four five six');
+    expect(researchWindowTitle(undefined, 'a'.repeat(120)).length).toBeLessThanOrEqual('Research: '.length + 48);
+  });
+
+  it('falls back to a valid default frame until the web app reports its window', () => {
+    expect(isHtmlArtifactFrame(defaultReportFrame)).toBe(true);
+    expect(reportFrame(undefined)).toEqual(defaultReportFrame);
+    expect(reportFrame({ windows: [], contextPanelOpen: false })).toEqual(defaultReportFrame);
+    expect(reportFrame({ windows: [], contextPanelOpen: false, frame: { ...frame, pinned: true } })).toEqual({ ...frame, pinned: false });
+  });
+
   it('returns after opening progress, then stores a valid report and replaces that view', async () => {
     const gate = deferred();
     const runner = makeRunner(reportHtml(), gate.promise);
     const { app, commands, artifacts, artifactStore } = fixture(runner);
     const completion = vi.fn();
+    const jobEvents: BackgroundJob[] = [];
+    app.jarvisActivityHub.subscribe((event) => { if (event.type === 'job') jobEvents.push(event.job); });
     app.addHook('preHandler', (request, _reply, done) => {
       request.announceResearchCompletion = completion;
       done();
@@ -182,6 +200,10 @@ describe('background interactive research', () => {
       status: 'complete',
       summary: 'The research found a supported result.',
     });
+    expect(jobEvents[0]).toMatchObject({ kind: 'research', status: 'running', step: 0, steps: 3 });
+    expect(jobEvents.every((job) => isBackgroundJob(job))).toBe(true);
+    expect(jobEvents.at(-1)).toMatchObject({ status: 'done', step: 3, viewId: (commands.at(-1) as { viewId: string }).viewId });
+    expect(app.backgroundJobs.list()[0]).toMatchObject({ status: 'done' });
   });
 
   it('rejects unsafe generated citations and updates the progress window with failure', async () => {

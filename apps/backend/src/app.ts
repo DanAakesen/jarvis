@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import cors from '@fastify/cors';
 import type { Logger } from 'pino';
-import type { JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
+import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
 import { localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
@@ -10,6 +10,7 @@ import type { TokenVerifier } from './auth/verify.js';
 import { coreModule } from './core/index.js';
 import { createEventHub } from './core/event-hub.js';
 import type { JarvisActivityHub } from './core/activity.js';
+import { BackgroundJobRegistry } from './core/jobs.js';
 import type { ToolCallStore } from './core/tool-calls.js';
 import { conversationModule } from './core/conversation.js';
 import type { ConversationStore } from './core/conversation-store.js';
@@ -105,6 +106,7 @@ declare module 'fastify' {
     phoneSessionStore: PhoneSessionStore | null;
     taskStatusNotificationStore: TaskStatusNotificationStore | null;
     workspaceCommands: WorkspaceCommandBroker;
+    backgroundJobs: BackgroundJobRegistry;
   }
 }
 
@@ -167,7 +169,9 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
-  app.decorate('jarvisActivityHub', options.jarvisActivityHub ?? createEventHub<JarvisActivityEvent | JarvisVoiceWakeEvent>());
+  app.decorate('jarvisActivityHub', options.jarvisActivityHub ??
+    createEventHub<JarvisActivityEvent | JarvisVoiceWakeEvent | BackgroundJobEvent>());
+  app.decorate('backgroundJobs', new BackgroundJobRegistry(app.jarvisActivityHub));
   app.decorate('onConversationSessionEnded', options.onConversationSessionEnded ?? (() => {}));
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);

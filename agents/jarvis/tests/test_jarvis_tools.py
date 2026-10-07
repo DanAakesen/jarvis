@@ -431,6 +431,24 @@ async def test_backend_refusals_are_reported_as_errors(status: int, expected: st
     assert all(request.url.host == "backend.example" for request in backend.requests)
 
 
+@pytest.mark.parametrize(("name", "read_timeout"), [("web_research", 320.0), ("create_task", 30.0)])
+async def test_long_running_tools_get_a_longer_read_timeout(name: str, read_timeout: float) -> None:
+    seen: list[dict[str, float | None]] = []
+
+    def record(request: httpx.Request) -> httpx.Response:
+        seen.append(request.extensions["timeout"])
+        return httpx.Response(200, json={"tool": name, "outcome": "ok", "result": "done"})
+
+    backend = Backend(call=record)
+    backend.catalogue = [{**CREATE_TASK, "name": name}]
+    client = make_client(backend)
+    await client.tools()
+
+    await client.call(name, "{}", "42")
+
+    assert seen[0]["read"] == read_timeout
+    assert seen[0]["connect"] == 30.0
+
 @pytest.mark.parametrize(
     ("failure", "expected"),
     [

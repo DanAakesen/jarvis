@@ -30,6 +30,7 @@ const inputSchema = Object.freeze({
   type: 'object',
   properties: {
     topic: { type: 'string', minLength: 1, maxLength: 2_000 },
+    title: { type: 'string', minLength: 1, maxLength: 80 },
     depth: { enum: ['quick', 'deep'] },
   },
   required: ['topic', 'depth'],
@@ -104,6 +105,18 @@ function safeTopic(value: unknown): string {
     throw new ToolFailure('A valid research topic is required.');
   }
   return value.trim();
+}
+
+const maxWindowTitleWords = 6;
+const maxWindowTitleLength = 48;
+
+/** A 3-6 word window and tab title; the full prompt stays in the report itself. */
+export function researchWindowTitle(title: unknown, topic: string): string {
+  const source = typeof title === 'string' && title.trim() ? title.trim() : topic.trim();
+  const firstClause = source.split(/[:\n.;,?!(]| - | \u2013 /u)[0]?.trim() || source;
+  let short = firstClause.split(/\s+/u).filter(Boolean).slice(0, maxWindowTitleWords).join(' ');
+  if (short.length > maxWindowTitleLength) short = `${short.slice(0, maxWindowTitleLength - 1).trimEnd()}\u2026`;
+  return /^research\b/iu.test(short) ? short : `Research: ${short}`;
 }
 
 function boundedQuery(topic: string, suffix: string): string {
@@ -203,12 +216,30 @@ function parseReport(value: unknown, sources: readonly HtmlArtifactSource[]): Re
   };
 }
 
-function reportFrame(snapshot: ReturnType<FastifyInstance['workspaceCommands']['snapshot']>): HtmlArtifactFrame {
+// Used until the web app reports its real window frame; matches the dark glass shell on a desktop.
+export const defaultReportFrame: HtmlArtifactFrame = {
+  widthPx: 1100,
+  heightPx: 760,
+  device: 'desktop',
+  theme: 'dark',
+  reducedMotion: false,
+  density: 'comfortable',
+  designTokens: {
+    '--background': '#07090f',
+    '--surface': '#111622',
+    '--text': '#e8ecf4',
+    '--muted': '#9aa3b5',
+    '--accent': '#d7a67a',
+    '--border': '#2a3142',
+  },
+  fonts: { body: 'system-ui, sans-serif', heading: 'system-ui, sans-serif', mono: 'ui-monospace, monospace' },
+  layout: 'tiled',
+  pinned: false,
+};
+
+export function reportFrame(snapshot: ReturnType<FastifyInstance['workspaceCommands']['snapshot']>): HtmlArtifactFrame {
   const frame = snapshot?.frame;
-  if (!isHtmlArtifactFrame(frame)) {
-    throw new ToolRefusal('The workspace display settings are not available yet.');
-  }
-  return { ...frame, pinned: false };
+  return isHtmlArtifactFrame(frame) ? { ...frame, pinned: false } : defaultReportFrame;
 }
 
 function notifyCompletion(
@@ -223,7 +254,7 @@ function notifyCompletion(
 }
 
 function createProgressView(
-  topic: string,
+  windowTitle: string,
   searches: readonly SearchProgress[],
   sources: readonly HtmlArtifactSource[],
   status: 'complete' | 'partial' | 'unavailable',
@@ -254,7 +285,7 @@ function createProgressView(
   }
   return {
     version: 1,
-    title: `Research: ${topic}`.slice(0, 200),
+    title: windowTitle,
     renderer: 'list',
     source: {
       id: 'research',
@@ -278,7 +309,7 @@ async function sendProgress(
   app: FastifyInstance,
   ownerId: string,
   viewId: string,
-  topic: string,
+  windowTitle: string,
   searches: readonly SearchProgress[],
   sources: readonly HtmlArtifactSource[],
   signal: AbortSignal,
@@ -288,7 +319,7 @@ async function sendProgress(
   const command = workspaceCommand(
     'update',
     viewId,
-    createProgressView(topic, searches, sources, status, reason),
+    createProgressView(windowTitle, searches, sources, status, reason),
   );
   if (!isWorkspaceCommand(command, generatedViewValidationOptions(app))) {
     throw new ToolFailure('Research progress did not pass workspace validation.');
@@ -321,7 +352,8 @@ export function createHtmlResearchModule(
     id: 'html-research',
     tools: [{
       name: 'research',
-      description: 'Research a topic in the background and open an interactive cited HTML report in the workspace.',
+      description: 'Research a topic in the background and open an interactive cited HTML report in the workspace. ' +
+        'Set title to a short 3-6 word window title such as "Microsoft Foundry IQ"; put the full request in topic.',
       inputSchema,
       sensitive: true,
       execute: async (input, request, signal) => {
@@ -329,6 +361,7 @@ export function createHtmlResearchModule(
           throw new ToolFailure('Choose a research depth of quick or deep.');
         }
         const topic = safeTopic(input.topic);
+        const windowTitle = researchWindowTitle(input.title, topic);
         const ownerId = request.server.ownerObjectId;
         if (!request.agentPrincipal &&
             request.principal?.objectId.toLowerCase() !== ownerId.toLowerCase()) {
@@ -350,7 +383,7 @@ export function createHtmlResearchModule(
           query: boundedQuery(topic, suffix),
           status: 'pending',
         }));
-        const initialView = createProgressView(topic, searches, [], 'partial');
+        const initialView = createProgressView(windowTitle, searches, [], 'partial');
         const initialCommand = workspaceCommand('create', viewId, initialView);
         if (!isWorkspaceCommand(initialCommand, generatedViewValidationOptions(request.server))) {
           throw new ToolFailure('Research progress did not pass workspace validation.');
@@ -360,6 +393,9 @@ export function createHtmlResearchModule(
         const controller = new AbortController();
         const job: ResearchJob = { controller, promise: Promise.resolve(), done: false };
         jobs.set(jobId, job);
+        const tracker = request.server.backgroundJobs.start(
+          'research', windowTitle, searches.length + 1, () => controller.abort(), 'Starting research',
+        );
         job.promise = Promise.resolve().then(async () => {
           const timeoutSignal = AbortSignal.timeout(jobTimeoutMs);
           const jobSignal = AbortSignal.any([controller.signal, timeoutSignal]);
@@ -368,10 +404,14 @@ export function createHtmlResearchModule(
           const app = request.server;
           const sources = () => [...sourcesByUrl.values()].slice(0, 50);
           try {
-            for (const search of searches) {
+            // Progress windows are best effort: a tab that misses one update must not stop the research.
+            const progress = () => sendProgress(app, ownerId, viewId, windowTitle, searches, sources(), jobSignal)
+              .catch(() => { jobSignal.throwIfAborted(); });
+            for (const [index, search] of searches.entries()) {
               jobSignal.throwIfAborted();
               search.status = 'searching';
-              await sendProgress(app, ownerId, viewId, topic, searches, sources(), jobSignal);
+              tracker.progress(index, `Searching: ${search.label}`);
+              await progress();
               try {
                 const result = await runCodexToolResult(
                   clientFor(),
@@ -394,13 +434,15 @@ export function createHtmlResearchModule(
                 if (jobSignal.aborted) throw error;
                 search.status = 'failed';
               }
-              await sendProgress(app, ownerId, viewId, topic, searches, sources(), jobSignal);
+              tracker.progress(index + 1, search.status === 'failed' ? `Search failed: ${search.label}` : `Found: ${search.label}`);
+              await progress();
             }
             if (findings.length === 0) throw new ToolFailure('No research searches completed successfully.');
             const snapshot = app.workspaceCommands.snapshot(ownerId);
             const frame = reportFrame(snapshot);
             const reportSources = sources().slice(0, maxReportSources);
             const partial = searches.some((search) => search.status === 'failed');
+            tracker.progress(searches.length, 'Writing the report');
             const result = await runCodexToolResult(
               clientFor(),
               'html_report',
@@ -415,7 +457,7 @@ export function createHtmlResearchModule(
             if (!isHtmlArtifact(artifact)) throw new ToolFailure('The report failed artifact validation.');
             const view: GeneratedView = {
               version: 1,
-              title: artifact.title,
+              title: windowTitle,
               renderer: 'html-app',
               source: {
                 id: 'research',
@@ -428,18 +470,26 @@ export function createHtmlResearchModule(
             if (!isWorkspaceCommand(command, generatedViewValidationOptions(app))) {
               throw new ToolFailure('The report did not pass workspace validation.');
             }
-            await app.workspaceCommands.execute(ownerId, command, jobSignal);
+            try {
+              await app.workspaceCommands.execute(ownerId, command, jobSignal);
+            } catch (error) {
+              // No open tab still has the progress window (reloaded or closed): open the report fresh.
+              if (!(error instanceof ToolRefusal)) throw error;
+              await app.workspaceCommands.execute(ownerId, workspaceCommand('create', viewId, view), jobSignal);
+            }
+            tracker.done(viewId, partial ? 'Ready with partial findings' : 'Report ready');
             notifyCompletion(announceCompletion, { status: 'complete', summary: result.spokenSummary });
           } catch (error) {
             if (!controller.signal.aborted) {
               const reason = error instanceof ToolRefusal
                 ? 'Research was refused. Check workspace access and try again.'
                 : 'Research could not be completed. Try again shortly.';
+              tracker.fail(reason);
               await sendProgress(
                 app,
                 ownerId,
                 viewId,
-                topic,
+                windowTitle,
                 searches,
                 sources(),
                 AbortSignal.timeout(5_000),

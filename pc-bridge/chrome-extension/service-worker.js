@@ -13,6 +13,8 @@ const detachTimers = new Map();
 let nativePort;
 let reconnectTimer;
 let reconnectDelay = 1_000;
+// The host answers host_unavailable when the bridge is down or already serves another host.
+const UNAVAILABLE_RETRY_MS = 5 * 60_000;
 
 function isRequest(value) {
   return value !== null &&
@@ -252,6 +254,10 @@ function connectNativeHost() {
   }
   nativePort = port;
   port.onMessage.addListener((request) => {
+    if (request?.type === "host_unavailable") {
+      reconnectDelay = Math.max(reconnectDelay, UNAVAILABLE_RETRY_MS);
+      return;
+    }
     reconnectDelay = 1_000;
     void handleRequest(request);
   });
@@ -265,7 +271,7 @@ function connectNativeHost() {
 function scheduleReconnect() {
   if (reconnectTimer) return;
   const delay = reconnectDelay;
-  reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+  reconnectDelay = Math.min(reconnectDelay * 2, Math.max(30_000, reconnectDelay));
   reconnectTimer = setTimeout(() => {
     reconnectTimer = undefined;
     connectNativeHost();
@@ -294,7 +300,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // MV3 suspends idle service workers and their reconnect timers. Wake periodically and on
 // browser start so the bridge link comes back after a bridge restart or Chrome relaunch.
 function ensureNativeHost() {
-  if (!nativePort) connectNativeHost();
+  if (!nativePort && !reconnectTimer) connectNativeHost();
 }
 
 chrome.runtime.onStartup.addListener(ensureNativeHost);

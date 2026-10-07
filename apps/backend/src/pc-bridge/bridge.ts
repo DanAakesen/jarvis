@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import websocket from '@fastify/websocket';
 import WebSocket, { type RawData } from 'ws';
-import type { JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
+import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import {
@@ -229,8 +229,8 @@ export class PcBridgeConnection {
   }
 
   // The bridge pauses its wake-word listener while any Jarvis voice session is active.
-  observeActivity(event: JarvisActivityEvent | JarvisVoiceWakeEvent): void {
-    if (event.type === 'voice.wake' || event.source !== 'voice') return;
+  observeActivity(event: JarvisActivityEvent | JarvisVoiceWakeEvent | BackgroundJobEvent): void {
+    if (event.type === 'voice.wake' || event.type === 'job' || event.source !== 'voice') return;
     const wasActive = this.activeVoiceSessions.size > 0;
     if (event.type === 'ended' || event.type === 'failed') {
       this.activeVoiceSessions.delete(event.activityId);

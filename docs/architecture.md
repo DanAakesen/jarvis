@@ -153,9 +153,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `WorkspaceController` dispatch through `WorkspaceCommandContext` to the active
   page. P8-14 supplies bounded declarative view data and fixed React renderers.
 - P8-15 registers one sensitive `workspace_command` Jarvis tool with the shared
-  generated-view/operation schema. An in-memory broker binds each command to the
-  active owner's authenticated `/now/events` session, bounds pending work and
-  deduplicates command IDs. The event carries only validated JSON; the browser
+  generated-view/operation schema. An in-memory broker delivers each command to
+  every open, owner-authenticated `/now/events` session (every signed-in tab,
+  7 October), bounds pending work and deduplicates command IDs. The first tab to
+  apply a command settles it; the command is refused only when every tab refuses or
+  disconnects. Hijacked event streams copy the Fastify reply headers so CORS survives. The event carries only validated JSON; the browser
   dispatches through the current `WorkspaceCommandContext` controller and posts
   an owner-authenticated acknowledgement to
   `POST /now/workspace/commands/:commandId/ack` after applying or refusing it.
@@ -176,10 +178,21 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   window therefore uses the shared tabs, geometry, focus, snapshot and Jarvis
   commands. Voice entry minimises it, voice exit restores it, and sending or
   Conversation navigation restores it after Close.
-- P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
+- Background jobs (7 October): slow work that ends in a workspace window (research
+  today; images and HTML apps next) registers with the in-memory
+  `BackgroundJobRegistry` (`apps/backend/src/core/jobs.ts`). Every change publishes a
+  contract-valid `BackgroundJob` (`packages/contracts`: `jobId`, `kind`, a 3-6 word
+  `title`, `status` running/done/failed/cancelled, `step`/`steps`, optional `detail`,
+  and `viewId` once done) as `event: job` on `/now/events`. `GET /jobs` lists current
+  and recently finished jobs (kept 10 minutes, at most 20) so a reloaded tab can
+  rebuild its job chip, and `POST /jobs/:jobId/cancel` (owner only) aborts a running
+  job. Research progress windows are best effort, so a missed update no longer stops
+  the job, and the final report falls back to `create` when no open tab still has the
+  progress window.- P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
   and IDs, including minimised windows, plus context-panel visibility) through
-  owner-authenticated `POST /now/workspace/state`. The broker accepts only its
-  active `/now/events` session and drops the snapshot on disconnect/reconnect;
+  owner-authenticated `POST /now/workspace/state`. The broker keeps one snapshot per
+  open `/now/events` session, uses the most recently reported one, and drops a
+  tab's snapshot when that tab disconnects;
   no view content or workspace state is persisted. Jev selects fixed
   `workspace_command` targets for show/focus/minimise/restore/close, a large
   resize, tiled/layered layout and context-panel visibility. A context-panel

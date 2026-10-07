@@ -1,0 +1,140 @@
+import { randomUUID } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
+import { isBackgroundJob, type BackgroundJob, type BackgroundJobKind } from '@jarvis/contracts';
+import type { JarvisActivityHub } from './activity.js';
+
+const maxJobs = 20;
+const finishedRetentionMs = 10 * 60_000;
+
+function bounded(text: string, maximum: number): string {
+  const clean = Array.from(text.trim()).filter((character) => {
+    const code = character.charCodeAt(0);
+    return code >= 32 && code !== 127;
+  }).join('');
+  return clean.length > maximum ? `${clean.slice(0, maximum - 1).trimEnd()}\u2026` : clean;
+}
+
+export interface BackgroundJobHandle {
+  readonly jobId: string;
+  progress(step: number, detail?: string): void;
+  done(viewId: string, detail?: string): void;
+  fail(detail: string): void;
+}
+
+interface TrackedJob {
+  job: BackgroundJob;
+  cancel?: () => void;
+  finishedAt?: number;
+}
+
+/** In-memory registry of slow Jarvis work; every change is published to the shell's job chip. */
+export class BackgroundJobRegistry {
+  private readonly jobs = new Map<string, TrackedJob>();
+
+  constructor(private readonly hub: JarvisActivityHub, private readonly now: () => number = Date.now) {}
+
+  start(kind: BackgroundJobKind, title: string, steps: number, cancel?: () => void, detail?: string): BackgroundJobHandle {
+    this.prune();
+    const at = new Date(this.now()).toISOString();
+    const jobId = randomUUID();
+    const tracked: TrackedJob = {
+      job: {
+        jobId,
+        kind,
+        title: bounded(title, 80) || 'Background task',
+        status: 'running',
+        step: 0,
+        steps: Math.min(Math.max(Math.trunc(steps), 1), 20),
+        ...(detail ? { detail: bounded(detail, 120) } : {}),
+        startedAt: at,
+        updatedAt: at,
+      },
+      ...(cancel ? { cancel } : {}),
+    };
+    this.jobs.set(jobId, tracked);
+    this.publish(tracked.job);
+    const update = (change: Partial<BackgroundJob>) => {
+      const current = this.jobs.get(jobId);
+      if (!current || current.job.status !== 'running') return;
+      const { detail: nextDetail, ...rest } = change;
+      const job: BackgroundJob = { ...current.job, ...rest, updatedAt: new Date(this.now()).toISOString() };
+      if (nextDetail === undefined) delete job.detail;
+      else job.detail = bounded(nextDetail, 120);
+      if (job.status !== 'running') current.finishedAt = this.now();
+      current.job = job;
+      this.publish(job);
+    };
+    return {
+      jobId,
+      progress: (step, stepDetail) => update({
+        step: Math.min(Math.max(Math.trunc(step), 0), tracked.job.steps),
+        ...(stepDetail ? { detail: stepDetail } : {}),
+      }),
+      done: (viewId, doneDetail) => update({
+        status: 'done',
+        step: tracked.job.steps,
+        viewId,
+        ...(doneDetail ? { detail: doneDetail } : {}),
+      }),
+      fail: (failDetail) => update({ status: 'failed', detail: failDetail }),
+    };
+  }
+
+  list(): BackgroundJob[] {
+    this.prune();
+    return [...this.jobs.values()].map(({ job }) => job)
+      .sort((left, right) => right.startedAt.localeCompare(left.startedAt));
+  }
+
+  cancel(jobId: string): 'cancelled' | 'not-found' | 'finished' | 'not-cancellable' {
+    const tracked = this.jobs.get(jobId);
+    if (!tracked) return 'not-found';
+    if (tracked.job.status !== 'running') return 'finished';
+    if (!tracked.cancel) return 'not-cancellable';
+    tracked.job = { ...tracked.job, status: 'cancelled', updatedAt: new Date(this.now()).toISOString() };
+    tracked.finishedAt = this.now();
+    this.publish(tracked.job);
+    tracked.cancel();
+    return 'cancelled';
+  }
+
+  private publish(job: BackgroundJob): void {
+    if (isBackgroundJob(job)) this.hub.publish({ type: 'job', job });
+  }
+
+  private prune(): void {
+    const cutoff = this.now() - finishedRetentionMs;
+    for (const [jobId, tracked] of this.jobs) {
+      if (tracked.finishedAt !== undefined && tracked.finishedAt < cutoff) this.jobs.delete(jobId);
+    }
+    while (this.jobs.size >= maxJobs) {
+      const oldestFinished = [...this.jobs].find(([, tracked]) => tracked.job.status !== 'running')?.[0];
+      if (!oldestFinished) break;
+      this.jobs.delete(oldestFinished);
+    }
+  }
+}
+
+const jobIdSchema = { type: 'string', pattern: '^[0-9a-fA-F-]{36}$' };
+
+export function registerJobRoutes(app: FastifyInstance): void {
+  const isOwner = (objectId: string | undefined) =>
+    objectId !== undefined && objectId.toLowerCase() === app.ownerObjectId.toLowerCase();
+
+  app.get('/jobs', async (request, reply) => {
+    if (!isOwner(request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
+    reply.header('Cache-Control', 'no-store');
+    return { jobs: app.backgroundJobs.list() };
+  });
+
+  app.post<{ Params: { jobId: string } }>('/jobs/:jobId/cancel', {
+    schema: { params: { type: 'object', properties: { jobId: jobIdSchema }, required: ['jobId'] } },
+  }, async (request, reply) => {
+    if (!isOwner(request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
+    const result = app.backgroundJobs.cancel(request.params.jobId);
+    if (result === 'not-found') return reply.code(404).send({ error: 'Job not found' });
+    if (result === 'finished') return reply.code(409).send({ error: 'Job already finished' });
+    if (result === 'not-cancellable') return reply.code(409).send({ error: 'Job cannot be cancelled' });
+    return reply.code(202).send({ status: 'cancelled' });
+  });
+}

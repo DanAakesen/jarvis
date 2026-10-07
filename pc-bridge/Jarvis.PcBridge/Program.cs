@@ -3,16 +3,16 @@ namespace Jarvis.PcBridge;
 static class Program
 {
     [STAThread]
-    static void Main(string[] args)
+    static int Main(string[] args)
     {
         if (args.Contains("--native-messaging-host", StringComparer.Ordinal) ||
             args.Any(argument => argument.StartsWith("--parent-window=", StringComparison.Ordinal)))
         {
-            NativeMessagingHost.RunAsync().GetAwaiter().GetResult();
-            return;
+            return NativeMessagingHost.RunAsync().GetAwaiter().GetResult();
         }
 
         ApplicationConfiguration.Initialize();
         Application.Run(new BridgeApplicationContext());
+        return 0;
     }
 }
