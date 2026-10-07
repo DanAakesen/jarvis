@@ -203,7 +203,7 @@ describe('background interactive research', () => {
     expect(jobEvents[0]).toMatchObject({ kind: 'research', status: 'running', step: 0, steps: 3 });
     expect(jobEvents.every((job) => isBackgroundJob(job))).toBe(true);
     expect(jobEvents.at(-1)).toMatchObject({ status: 'done', step: 3, viewId: (commands.at(-1) as { viewId: string }).viewId });
-    expect(app.backgroundJobs.list()[0]).toMatchObject({ status: 'done' });
+    expect((await app.backgroundJobs.list())[0]).toMatchObject({ status: 'done' });
   });
 
   it('rejects unsafe generated citations and updates the progress window with failure', async () => {

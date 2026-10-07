@@ -1,0 +1,86 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createArmModelCatalogueReader, fallbackModelCatalogue, isRoleModelSupported, modelsForRole } from './model-catalog.js';
+
+const resourceId = '/subscriptions/12345678-1234-1234-1234-123456789abc/resourceGroups/rg-jarvis/providers/Microsoft.CognitiveServices/accounts/jarvis-prod';
+
+const armDeployment = {
+  name: 'gpt-6-luna',
+  sku: { name: 'GlobalStandard', capacity: 50 },
+  properties: {
+    model: {
+      name: 'gpt-6-luna',
+      version: '2026-09-22',
+      capabilities: { chatCompletion: 'true', vision: 'true', reasoningEfforts: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] },
+    },
+  },
+};
+
+describe('Foundry model catalogue', () => {
+  it('reads live ARM deployments and caches the normalized result for five minutes', async () => {
+    let time = 1_000;
+    const getToken = vi.fn(async () => 'managed-identity-token');
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ value: [armDeployment] })));
+    const reader = createArmModelCatalogueReader({
+      resourceId,
+      getToken,
+      fetcher,
+      now: () => time,
+    });
+
+    const catalogue = await reader.read();
+    expect(catalogue).toEqual({
+      source: 'arm',
+      deployments: [{
+        name: 'gpt-6-luna',
+        model: 'gpt-6-luna',
+        version: '2026-09-22',
+        sku: 'GlobalStandard',
+        capacity: 50,
+        capabilities: ['chat', 'responses', 'image'],
+        reasoningEfforts: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
+      }],
+    });
+    expect(getToken).toHaveBeenCalledWith('https://management.azure.com/.default', expect.any(AbortSignal));
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get('Authorization'))
+      .toContain('managed-identity-token');
+    await reader.read();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    time += 5 * 60_000;
+    await reader.read();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns configured deployment defaults and a fallback source when ARM is unavailable', async () => {
+    const reader = createArmModelCatalogueReader({
+      resourceId,
+      getToken: async () => 'managed-identity-token',
+      fetcher: vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 403 })),
+    });
+
+    const catalogue = await reader.read();
+    expect(catalogue.source).toBe('fallback');
+    expect(catalogue.reason).toContain('configured model defaults');
+    expect(catalogue.deployments).toEqual(fallbackModelCatalogue().deployments);
+    expect(modelsForRole(catalogue, 'chat')).toContain('gpt-6-luna');
+    expect(isRoleModelSupported(catalogue, 'chat', 'gpt-6-luna', 'high')).toBe(true);
+    expect(isRoleModelSupported(catalogue, 'chat', 'gpt-6-luna', 'xhigh')).toBe(true);
+    expect(isRoleModelSupported(catalogue, 'chat', 'gpt-5.6-luna', 'xhigh')).toBe(false);
+  });
+
+  it('rejects unsafe account IDs and pagination targets', async () => {
+    expect(() => createArmModelCatalogueReader({
+      resourceId: 'https://attacker.example/deployments',
+      getToken: async () => 'token',
+    })).toThrow('Invalid Foundry account resource ID');
+    const reader = createArmModelCatalogueReader({
+      resourceId,
+      getToken: async () => 'managed-identity-token',
+      fetcher: vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+        value: [armDeployment],
+        nextLink: 'https://attacker.example/next',
+      }))),
+    });
+    expect((await reader.read()).source).toBe('fallback');
+  });
+});

@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
 import { readSettings } from '../core/settings.js';
-import { VISION_MODEL_DEPLOYMENT } from './foundry-model.js';
 
 export const MAX_SCREEN_FRAME_BYTES = 1_000_000;
 const MAX_SCREEN_FRAME_BASE64_BYTES = Math.ceil(MAX_SCREEN_FRAME_BYTES / 3) * 4;
@@ -20,6 +19,7 @@ export interface ScreenVisionModel {
   describe(input: {
     readonly image: Buffer;
     readonly model: string;
+    readonly reasoningEffort?: string;
     readonly signal: AbortSignal;
     readonly watch?: {
       readonly source: 'screen' | 'camera';
@@ -72,6 +72,7 @@ export class ScreenVisionService {
     readonly sessionId: string;
     readonly image: Buffer;
     readonly model: string;
+    readonly reasoningEffort?: string;
     readonly dailyCap: number;
     readonly signal: AbortSignal;
   }): Promise<ScreenVisionResult> {
@@ -101,6 +102,7 @@ export class ScreenVisionService {
       const result = await this.model.describe({
         image: input.image,
         model: input.model,
+        ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
         signal: input.signal,
       });
       if (!result.description.trim() || result.description.length > MAX_SCREEN_DESCRIPTION_CHARACTERS ||
@@ -214,11 +216,12 @@ export function createScreenVisionModule(service: ScreenVisionService): BackendM
         request.raw.once('aborted', abortOnRequest);
         reply.raw.once('close', abortOnClose);
         try {
-          const settings = await readSettings(app.settingsStore);
+          const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
           const result = await service.describe({
             sessionId,
             image,
-            model: VISION_MODEL_DEPLOYMENT,
+            model: settings.roles.vision.model,
+            reasoningEffort: settings.roles.vision.reasoningEffort,
             dailyCap: settings.global.screenShareDailyFrameCap,
             signal: controller.signal,
           });

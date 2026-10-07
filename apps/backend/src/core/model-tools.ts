@@ -1,18 +1,12 @@
 import type { JarvisTool } from './tool-registry.js';
 import { ToolRefusal } from './tool-registry.js';
-import { readSettings, settingsOptions } from './settings.js';
+import { readSettings } from './settings.js';
+import { isRoleModelSupported, modelsForRole, reasoningForModel } from './model-catalog.js';
+import type { ReasoningEffort } from '@jarvis/contracts';
 
 interface SetJarvisModelInput {
   model?: string;
   reasoning?: string;
-}
-
-function isOption(value: string, options: readonly string[]): boolean {
-  return options.includes(value);
-}
-
-function optionsList(options: readonly string[]): string {
-  return options.join(', ');
 }
 
 export const setJarvisModelTool: JarvisTool = {
@@ -29,25 +23,30 @@ export const setJarvisModelTool: JarvisTool = {
   },
   execute: async (input, request) => {
     const { model, reasoning } = input as SetJarvisModelInput;
-    if (model !== undefined && !isOption(model, settingsOptions.jarvisModels)) {
-      throw new ToolRefusal(`Unsupported Jarvis model. Valid models: ${optionsList(settingsOptions.jarvisModels)}.`);
-    }
-    if (reasoning !== undefined && !isOption(reasoning, settingsOptions.reasoningEfforts)) {
-      throw new ToolRefusal(`Unsupported Jarvis reasoning. Valid reasoning levels: ${optionsList(settingsOptions.reasoningEfforts)}.`);
-    }
-
     const store = request.server.settingsStore;
     if (!store) throw new Error('Settings unavailable');
-    await store.write({
-      jarvis: {
-        ...(model !== undefined ? { model } : {}),
-        ...(reasoning !== undefined ? { reasoning } : {}),
-      },
-    });
-    const settings = await readSettings(store);
+    const catalogue = await request.server.modelCatalogue.read();
+    const settings = await readSettings(store, catalogue);
+    const next = {
+      model: model ?? settings.roles.chat.model,
+      reasoningEffort: reasoning ?? settings.roles.chat.reasoningEffort,
+    };
+    const modelOptions = modelsForRole(catalogue, 'chat');
+    if (model !== undefined && !modelOptions.includes(model)) {
+      throw new ToolRefusal(`Unsupported Jarvis model. Valid models: ${modelOptions.join(', ')}.`);
+    }
+    const effortOptions = reasoningForModel(catalogue, 'chat', next.model);
+    if (reasoning !== undefined && !effortOptions.includes(reasoning as ReasoningEffort)) {
+      throw new ToolRefusal(`Unsupported Jarvis reasoning. Valid reasoning levels: ${effortOptions.join(', ')}.`);
+    }
+    if (!isRoleModelSupported(catalogue, 'chat', next.model, next.reasoningEffort)) {
+      throw new ToolRefusal(`Unsupported Jarvis model or reasoning. Valid reasoning levels: ${effortOptions.join(', ')}.`);
+    }
+    await store.write({ roles: { chat: { ...next, reasoningEffort: next.reasoningEffort as ReasoningEffort } } });
+    const updated = await readSettings(store, catalogue);
     return {
-      model: settings.jarvis.model,
-      reasoning: settings.jarvis.reasoning,
+      model: updated.roles.chat.model,
+      reasoning: updated.roles.chat.reasoningEffort,
       applies: 'next session',
     };
   },

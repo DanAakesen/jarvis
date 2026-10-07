@@ -1,6 +1,7 @@
 import { isWebResearchResult, type WebResearchResult, type WebResearchSource } from '@jarvis/contracts';
 import type { CodexToolName, FoundryClient } from '../foundry/client.js';
 import type { BackendModule } from '../modules.js';
+import { readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
 const inputSchema = Object.freeze({
@@ -117,14 +118,20 @@ export function createWebResearchModule(
       inputSchema,
       sensitive: true,
       publicAllowedOnPhone: true,
-      execute: async (input, _request, signal) => {
+      execute: async (input, request, signal) => {
         if (!isObject(input) || typeof input.query !== 'string' || !input.query.trim() ||
             input.query.length > 2_000) {
           throw new ToolFailure('A valid web research query is required.');
         }
         try {
+          const selectedModel = request.server?.settingsStore && request.server.modelCatalogue
+            ? (await readSettings(
+              request.server.settingsStore,
+              await request.server.modelCatalogue.read(),
+            )).roles.research.model
+            : model;
           return await runCodexToolResult(
-            clientFor(), 'web_research', input.query, model, signal, timeoutMs, pollInterval, resultFrom,
+            clientFor(), 'web_research', input.query, selectedModel, signal, timeoutMs, pollInterval, resultFrom,
           );
         } catch (error) {
           if (error instanceof ToolFailure || error instanceof ToolRefusal) throw error;

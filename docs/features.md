@@ -22,7 +22,7 @@ The complete list of what Jarvis does or will do, for UI design and planning. Ea
 | **Phone** | Away from the browser: Teams app or phone |
 | **Background** | Runs without Dan; shows only its effects |
 
-Status as of 6 October 2026.
+Status as of 7 October 2026.
 
 ## Jarvis: conversation and voice
 
@@ -36,6 +36,7 @@ Status as of 6 October 2026.
 | Language toggle | Switch Danish/English from the shared More → Language menu in the composer and voice bar; during voice the change applies to chat and the next voice session, and the bar says so | Both | Main page, Settings | Built | P5-05, P8-36 |
 | Voice transcripts | Read what was said in each voice sitting, with voice minutes | Screen | Main page | Built | P5-06 |
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built | P4-04 |
+| Background jobs | See research and other slow work in the workspace; current status, step history and result-window links persist across reloads and replicas for 30 days; interrupted work is marked failed at startup | Both | `/jobs`, `event: job`, `list_jobs`, `cancel_job` | Built offline; SQL Server/live multi-replica behavior unverified | P9-14 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built | P4-05 |
 | Task recipes | Remember successful PC/browser operation sequences without entered values; Jev selects and verifies fresh targets, falling back to planning on drift. List and delete saved recipes. | Both | Voice/chat and Settings → Task recipes | Built offline; live replay timing pending | P7-35, P7-34, P5-14 |
 | Software Factory tools | Ask Jarvis to list projects and tasks, create tasks, change the agent or model on a Ready task, steer, pause, resume or cancel tasks, retry an eligible failed start, and inspect releases and deploy status | Voice/chat | Main page | Backend tools implemented offline; live GitHub access unverified | P4-10, P7-11, P9-29 |
@@ -101,6 +102,7 @@ Status as of 6 October 2026.
 | --- | --- | --- | --- | --- | --- |
 | Settings | Jarvis, voice and coding-agent defaults; global limits; app-wide light/dark appearance | Screen | Settings | Built | P1-11, P8-13 |
 | Jarvis model per session | Model and reasoning for new Jarvis sessions | Both | Settings; by voice with P7-11 | Built | P4-07 |
+| Model catalogue and per-role settings | List live Foundry deployments and configure model/reasoning effort for chat, vision, research, voice, transcription, embeddings, Codex and Copilot; unavailable ARM reads identify the fallback catalogue | Backend API | Settings API and the corresponding chat, task, research, vision and voice jobs | Backend built offline; live ARM and model-selection acceptance pending | P9-01 |
 | Personality preferences | Choose a tone and response style, and add bounded instructions for new chat and voice sessions | Both | Settings, chat and voice | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 | Credentials status | See credential expiry and renewal status (never values) | Screen | Settings | Built | P2-08 |
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |

@@ -9,6 +9,10 @@ import {
   htmlArtifactSchema,
   isHtmlArtifact,
   isHtmlArtifactFrame,
+  isModelCatalogue,
+  modelCapabilities,
+  modelRoles,
+  reasoningEfforts,
   isGeneratedView,
   isValidHtmlArtifactHtml,
   isJarvisActivityEvent,
@@ -30,6 +34,30 @@ const listView = (overrides = {}) => ({
   source,
   data: { items: [{ title: 'Ship the contract', details: [{ label: 'Project', value: 'Jarvis' }] }] },
   ...overrides,
+});
+
+test('model catalogue contracts restrict roles, capabilities and reasoning efforts', () => {
+  assert.deepEqual(modelRoles, ['chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot']);
+  assert.deepEqual(reasoningEfforts, ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+  assert.deepEqual(modelCapabilities, ['chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image']);
+  const catalogue = {
+    source: 'arm',
+    deployments: [{
+      name: 'gpt-6-luna',
+      model: 'gpt-6-luna',
+      version: '2026-09-22',
+      sku: 'GlobalStandard',
+      capacity: 50,
+      capabilities: ['chat', 'responses', 'image'],
+      reasoningEfforts: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
+    }],
+  };
+  assert.equal(isModelCatalogue(catalogue), true);
+  assert.equal(isModelCatalogue({ ...catalogue, source: 'live' }), false);
+  assert.equal(isModelCatalogue({
+    ...catalogue,
+    deployments: [{ ...catalogue.deployments[0], reasoningEfforts: ['unbounded'] }],
+  }), false);
 });
 
 test('renderer and action identifiers match the JSON schema allowlists', () => {
