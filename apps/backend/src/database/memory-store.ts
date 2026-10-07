@@ -94,7 +94,12 @@ export interface VaultGraphData {
     readonly score: number;
   }[];
   readonly embeddings: readonly { readonly path: string; readonly embedding: readonly number[] }[];
+  /** Indexed chunk text per note, so links resolve without re-indexing unchanged notes. */
+  readonly contents?: readonly { readonly path: string; readonly content: string }[];
 }
+
+/** Mean note embeddings of related notes typically score 0.4-0.6; 0.35 keeps real neighbours only. */
+export const vaultSimilarityThreshold = 0.35;
 
 export interface VaultIndexStore {
   initialize(): Promise<void>;
@@ -632,7 +637,7 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         .input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(hashes))
         .input('linkTake', sql.Int, 8_001)
         .input('paths', sql.NVarChar(sql.MAX), JSON.stringify(paths))
-        .input('similarityThreshold', sql.Float, 0.75);
+        .input('similarityThreshold', sql.Float, vaultSimilarityThreshold);
       const similarityQuery = vectorSearchAvailable
         ? `CREATE TABLE #vault_note_vectors (path nvarchar(1024) NOT NULL, embedding vector(1536) NOT NULL);
           ;WITH mean_components AS (
@@ -671,8 +676,13 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
           FROM dbo.vault_links
           WHERE source_path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes))
           ORDER BY source_path_hash, target_path;
-        ${similarityQuery}`));
+        ${similarityQuery}
+        SELECT TOP (20000) chunk.path, chunk.content
+          FROM dbo.vault_chunks AS chunk
+          INNER JOIN OPENJSON(@paths) AS selected ON selected.value = chunk.path
+          ORDER BY chunk.path, chunk.chunk_index;`));
       const links = result.recordsets[0] as Array<{ source_path_hash: string; target_path: string }> | undefined;
+      const contents = result.recordsets[2] as Array<{ path: string; content: string }> | undefined;
       const similarities = result.recordsets[1] as Array<{
         source_path: string;
         target_path: string;
@@ -684,12 +694,13 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
           return sourcePath ? [{ sourcePath, targetPath: target_path }] : [];
         }),
         similarities: (similarities ?? []).flatMap(({ source_path, target_path, score }) => {
-          const sourcePath = pathsByHash.get(source_path.toLowerCase());
-          return sourcePath && pathSet.has(target_path) && Number.isFinite(score)
-            ? [{ sourcePath, targetPath: target_path, score: Number(score) }]
+          // Similarity rows carry paths, not hashes.
+          return pathSet.has(source_path) && pathSet.has(target_path) && Number.isFinite(score)
+            ? [{ sourcePath: source_path, targetPath: target_path, score: Number(score) }]
             : [];
         }),
         embeddings: [],
+        contents: (contents ?? []).filter(({ path }) => pathSet.has(path)),
       };
     },
 
