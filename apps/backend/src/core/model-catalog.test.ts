@@ -54,6 +54,20 @@ describe('Foundry model catalogue', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it('invalidates the live deployment cache after a deployment change', async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ value: [armDeployment] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        value: [{ ...armDeployment, name: 'gpt-6-luna-new' }],
+      })));
+    const reader = createArmModelCatalogueReader({ resourceId, getToken: async () => 'managed-identity-token', fetcher });
+
+    expect((await reader.read()).deployments[0]?.name).toBe('gpt-6-luna');
+    reader.invalidate?.();
+    expect((await reader.read()).deployments[0]?.name).toBe('gpt-6-luna-new');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it('returns configured deployment defaults and a fallback source when ARM is unavailable', async () => {
     const reader = createArmModelCatalogueReader({
       resourceId,

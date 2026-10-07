@@ -50,6 +50,19 @@ to the existing Bicep deployment chain without a settings migration. Offline
 runtime and runner tests cover these paths; deployed Azure interoperability and
 billed cost remain unverified.
 
+P9-07 (7 October 2026): manage model deployments only from models present in the
+live Foundry account catalogue. Generate deployment names from model and version;
+require the existing one-time `model_deployment` Now confirmation for both
+create and delete, including the chat/voice tool. Recheck every resolved role
+setting after approval before deletion and refuse deployments still in use.
+Return 202 from Dan-only deployment routes while confirmation is pending. Grant
+the backend identity Cognitive Services Contributor scoped to the Foundry
+account. Keep deployment state in ARM without a migration. Use explicit
+Incremental Bicep deployments: runtime-created deployments absent from the
+template remain untouched, while Bicep-declared deployments continue to be
+reconciled. Offline ARM/route/tool tests verify the contract; live role
+propagation and Foundry provisioning remain unverified.
+
 P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
 365 or Teams. Keep away mode manual and do not read Graph presence. Route
 notifications and confirmations through the web app and active browser voice
