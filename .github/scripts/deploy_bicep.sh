@@ -65,7 +65,7 @@ else
 fi
 
 az deployment group create --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" \
-  --subscription "$SUBSCRIPTION_ID" --template-file infra/main.bicep \
+  --subscription "$SUBSCRIPTION_ID" --mode Incremental --template-file infra/main.bicep \
   --parameters @infra/main.parameters.json --parameters "@$budget_parameters" --parameters "${parameters[@]}" \
   --output none --only-show-errors
 az deployment group show --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" \

@@ -40,6 +40,7 @@ import type { PhoneSessionStore } from './database/phone-session-store.js';
 import type { TaskStatusNotificationStore } from './database/task-status-notification-store.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
+import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
 
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
@@ -57,6 +58,7 @@ export interface BuildAppOptions {
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
   readonly modelCatalogue?: ModelCatalogueReader;
+  readonly modelDeploymentWorkflow?: ModelDeploymentWorkflow | null;
   readonly credentialStatusStore?: CredentialStatusStore;
   readonly renewCodexCredential?: () => ReturnType<typeof runCodexRenewalOnce>;
   readonly usageStore?: UsageStore;
@@ -95,6 +97,7 @@ declare module 'fastify' {
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
     modelCatalogue: ModelCatalogueReader;
+    modelDeploymentWorkflow: ModelDeploymentWorkflow | null;
     credentialStatusStore: CredentialStatusStore | null;
     renewCodexCredential: (() => ReturnType<typeof runCodexRenewalOnce>) | null;
     usageStore: UsageStore | null;
@@ -188,6 +191,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.addHook('onClose', async () => { workspaceCommands.dispose(); });
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('modelCatalogue', options.modelCatalogue ?? { read: async () => fallbackModelCatalogue() });
+  app.decorate('modelDeploymentWorkflow', options.modelDeploymentWorkflow ?? null);
   app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
   app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);
   app.decorate('usageStore', options.usageStore ?? null);

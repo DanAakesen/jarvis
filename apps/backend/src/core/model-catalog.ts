@@ -38,6 +38,7 @@ const fallback: ModelDeployment[] = [
 
 export interface ModelCatalogueReader {
   read(): Promise<ModelCatalogue>;
+  invalidate?(): void;
 }
 
 interface ArmModelCatalogueOptions {
@@ -191,6 +192,7 @@ export function createArmModelCatalogueReader({
   let cached: ModelCatalogue | undefined;
   let cachedAt = 0;
   let inFlight: Promise<ModelCatalogue> | undefined;
+  let cacheGeneration = 0;
 
   async function fetchCatalogue(): Promise<ModelCatalogue> {
     const signal = AbortSignal.timeout(requestTimeoutMs);
@@ -230,22 +232,33 @@ export function createArmModelCatalogueReader({
       const currentTime = now();
       if (cached && currentTime - cachedAt < 5 * 60_000) return cached;
       if (inFlight) return inFlight;
+      const generation = cacheGeneration;
       inFlight = (async () => {
+        let result: ModelCatalogue;
         try {
-          cached = await fetchCatalogue();
+          result = await fetchCatalogue();
         } catch {
-          cached = {
+          result = {
             source: 'fallback',
             deployments: structuredClone(fallback),
             reason: 'Foundry ARM is unavailable; configured model defaults are shown.',
           };
         } finally {
-          cachedAt = now();
-          inFlight = undefined;
+          if (generation === cacheGeneration) {
+            cachedAt = now();
+            inFlight = undefined;
+          }
         }
-        return cached!;
+        if (generation === cacheGeneration) cached = result;
+        return result;
       })();
       return inFlight;
+    },
+    invalidate() {
+      cacheGeneration += 1;
+      cached = undefined;
+      cachedAt = 0;
+      inFlight = undefined;
     },
   };
 }

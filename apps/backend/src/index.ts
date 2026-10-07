@@ -45,6 +45,7 @@ import {
 } from './voice/relay.js';
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
 import { createArmModelCatalogueReader, fallbackModelCatalogue } from './core/model-catalog.js';
+import { createArmModelDeploymentClient, createModelDeploymentWorkflow } from './core/model-deployments.js';
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
 import { FoundryClient } from './foundry/client.js';
@@ -685,10 +686,28 @@ try {
       },
     })
     : undefined;
+  const modelDeploymentWorkflow = config.foundryAccountResourceId && credential && settingsStore && teamsNotifications
+    ? createModelDeploymentWorkflow({
+      catalogue: modelCatalogue,
+      settings: settingsStore,
+      client: createArmModelDeploymentClient({
+        resourceId: config.foundryAccountResourceId,
+        getToken: async (scope, signal) => {
+          const token = await credential.getToken(scope, { abortSignal: signal });
+          if (!token) throw new Error('Foundry deployment identity unavailable');
+          return token.token;
+        },
+      }),
+      confirm: (actionKind, summary, action, signal) =>
+        teamsNotifications.runConfirmed(actionKind, summary, action, signal),
+      onChanged: () => nowEventHub.publish({ type: 'refresh' }),
+    })
+    : undefined;
   let activeEmbeddingReindex: { readonly controller: AbortController; readonly pending: Promise<void> } | undefined;
   const app = buildApp(config, logger, {
     modules,
     modelCatalogue,
+    ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
     ...(jevSecretClient ? { reflexClassifier } : {}),
     ...(browserAgent ? { browserAgent } : {}),
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),

@@ -359,6 +359,19 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `JARVIS_CODEX_TOOL_MODEL` remains specific to isolated Codex
   research and image-generation tools. Provider/account availability and live
   Azure selection remain unverified.
+  available. ARM/live Azure selection remains unverified.
+  P9-07 adds Dan-only `POST /models/deployments` and
+  `DELETE /models/deployments/:name`, backed by the same Foundry account
+  catalogue and ARM API. Creation accepts only a model already present in the
+  live catalogue and derives the deployment name from model plus version.
+  Deletion checks the resolved settings for every model role both before and
+  after approval, and refuses any deployment in use. Both routes return 202
+  while the existing Now confirmation is pending; `manage_model_deployment`
+  uses that same one-time confirmation in chat and voice. ARM catalogue cache
+  is invalidated after a successful request. The browser/API operation remains
+  in process while pending and is not resumed after a backend restart. The
+  implementation reuses the existing settings/catalogue contracts and adds no
+  database migration.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
@@ -2153,7 +2166,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 - Calendar creation, movement, updates to title/time/location/attendees/description, deletion, reply drafts, and sending are staged in process memory for ten minutes. The backend executes only after a different, later persisted Dan message exactly matches the returned `confirm <8-digit-code>` phrase. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
-- The backend identity has `Foundry User` on the Foundry project for the Danish voice relay and `Cognitive Services User` on the Foundry AIServices account for parallel Azure Speech partial recognition. It also retains `Cognitive Services Speech User` on the separate F0 Speech resource used for Teams voice notes.
+- The backend identity has `Foundry User` on the Foundry project for the Danish voice relay, `Cognitive Services User` on the Foundry AIServices account for parallel Azure Speech partial recognition, and account-scoped `Cognitive Services Contributor` for model deployment management. It also retains `Cognitive Services Speech User` on the separate F0 Speech resource used for Teams voice notes.
 - P7-10's Microsoft Graph `Files.Read.All` app role is assigned separately by an administrator; Graph Search does not support `Sites.Selected`. The notes tool uses Dan's fixed object ID and the configured folder path, and validates result links before returning snippets.
 - Secrets only in Key Vault; none in code, images, environment variables, or logs.
 
@@ -2191,6 +2204,8 @@ P7-13 added a sequential Global Standard `text-embedding-3-small` deployment aft
 by Bicep. Its current capacity is 20. It is used for conversation and vault-index
 embeddings; a model or vector capability failure falls back to lexical retrieval.
 Normal Bicep deployment is idempotent and does not require a portal step.
+
+The deploy script explicitly uses ARM **Incremental** mode. In that mode, resources omitted from a deployment template are left unchanged, so runtime-created Foundry deployments not declared in Bicep are preserved. Bicep continues to reconcile its explicitly declared model deployments.
 
 `sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, and `budgetStartDate` to `2026-10-01T00:00:00Z`. Budget notification emails are required through `budgetContactEmails`; actual cost is interpreted in the subscription billing currency, which remains to be confirmed as DKK.
 

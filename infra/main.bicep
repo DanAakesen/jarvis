@@ -52,6 +52,7 @@ var costManagementReaderRoleId = '72fafb9e-0641-4937-9268-a91bfd8191a3'
 var backendAppScaleRoleId = '985158cb-2c3c-5b9b-bd65-897ed9be3e36'
 var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 var cognitiveServicesUserRoleId = 'a97b65f3-24c7-4388-baec-2e87135dc908'
+var cognitiveServicesContributorRoleId = '25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68'
 var foundryDeploymentReaderRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var backendAppName = 'ca-jarvis-backend-${suffix}'
@@ -335,6 +336,16 @@ resource backendFoundryDeploymentReaderAssignment 'Microsoft.Authorization/roleA
   scope: foundryAccount
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', foundryDeploymentReaderRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource backendFoundryDeploymentContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryAccount.id, backendIdentity.id, cognitiveServicesContributorRoleId)
+  scope: foundryAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesContributorRoleId)
     principalId: backendIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
@@ -821,6 +832,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
     taskEventsContainer
     backendFoundrySpeechUserAssignment
     backendFoundryDeploymentReaderAssignment
+    backendFoundryDeploymentContributorAssignment
   ]
 }
 
