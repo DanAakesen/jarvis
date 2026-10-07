@@ -259,3 +259,15 @@ export const backgroundJobKinds: readonly BackgroundJobKind[];
 export const backgroundJobStatuses: readonly BackgroundJobStatus[];
 export function isBackgroundJob(value: unknown): value is BackgroundJob;
 export function isBackgroundJobEvent(value: unknown): value is BackgroundJobEvent;
+
+export type PhoneCallOutcome = 'in_progress' | 'ended' | 'failed';
+export interface PhoneCallHistoryEntry {
+  startedAt: string;
+  durationSeconds: number;
+  outcome: PhoneCallOutcome;
+}
+export interface PhoneStatus {
+  configured: boolean;
+  historyAvailable: boolean;
+  recentCalls: readonly PhoneCallHistoryEntry[];
+}
