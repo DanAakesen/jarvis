@@ -368,10 +368,17 @@ def test_key_vault_probe_accepts_deployment_payload_without_task(monkeypatch):
     assert set(body) == {"key_vault_access", "session_id"}
 
 
-def test_agent_command_passes_copilot_model_without_changing_codex_command():
+def test_agent_command_passes_copilot_model_and_reasoning_without_changing_codex_command():
     assert app._agent_command("copilot") == ["copilot", "--acp", "--stdio", "--allow-all"]
+    assert app._agent_command("copilot", "gpt-5.4", "none") == [
+        "copilot", "--acp", "--stdio", "--allow-all", "--model", "gpt-5.4",
+    ]
     assert app._agent_command("copilot", "gpt-5.4") == [
         "copilot", "--acp", "--stdio", "--allow-all", "--model", "gpt-5.4",
+    ]
+    assert app._agent_command("copilot", "gpt-5.4", "high") == [
+        "copilot", "--acp", "--stdio", "--allow-all", "--model", "gpt-5.4",
+        "--reasoning-effort", "high",
     ]
     assert app._agent_command("codex") == ["codex-acp"]
 
@@ -747,13 +754,36 @@ def test_optional_model_config_rejects_invalid_values(payload):
         app._optional_config(payload, "model", 100)
 
 
-def test_invoke_accepts_effective_provider_options(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("agent", "effort", "expected"),
+    [
+        ("codex", "xhigh", "xhigh"),
+        ("copilot", "high", "high"),
+        ("copilot", "none", "none"),
+        ("copilot", "default", None),
+    ],
+)
+def test_optional_reasoning_config(agent, effort, expected):
+    assert app._optional_reasoning({"reasoning": effort}, agent) == expected
+
+
+@pytest.mark.parametrize(("agent", "effort"), [("codex", "bogus"), ("copilot", "xhigh")])
+def test_optional_reasoning_config_rejects_unsupported_choices(agent, effort):
+    with pytest.raises(ValueError):
+        app._optional_reasoning({"reasoning": effort}, agent)
+
+
+@pytest.mark.parametrize(
+    ("agent", "model", "reasoning"),
+    [("codex", "gpt-5.4", "high"), ("copilot", "claude-sonnet-4.6", "high")],
+)
+def test_invoke_accepts_effective_provider_options(tmp_path, monkeypatch, agent, model, reasoning):
     monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     monkeypatch.setattr(app, "tasks", {})
     monkeypatch.setattr(app, "tasks_lock", asyncio.Lock())
     monkeypatch.setattr(app.asyncio, "create_task", lambda coroutine: coroutine.close())
     payload = {
-        "agent": "codex", "task": "Work", "task_id": "42", "model": "gpt-5.4", "reasoning": "high",
+        "agent": agent, "task": "Work", "task_id": "42", "model": model, "reasoning": reasoning,
         "repository": "owner/project", "defaultBranch": "main", "branch": "jarvis/task-42",
     }
     body = json.dumps(payload).encode()
@@ -774,8 +804,8 @@ def test_invoke_accepts_effective_provider_options(tmp_path, monkeypatch):
     response = asyncio.run(app.invoke(request))
 
     assert response.status_code == 200
-    assert app.tasks["inv"].model == "gpt-5.4"
-    assert app.tasks["inv"].reasoning == "high"
+    assert app.tasks["inv"].model == model
+    assert app.tasks["inv"].reasoning == reasoning
     assert app.tasks["inv"].task_id == "42"
 
 
@@ -1643,7 +1673,7 @@ def test_failed_acp_initialize_stops_the_spawned_process(tmp_path, monkeypatch, 
         return {"github_token": "not-a-real-token", "copilot_token": "not-a-real-seat-token"}
 
     monkeypatch.setattr(app, "_credentials_for", credentials)
-    monkeypatch.setattr(app, "_agent_command", lambda agent, model=None: [sys.executable, str(fixture)])
+    monkeypatch.setattr(app, "_agent_command", lambda agent, model=None, reasoning=None: [sys.executable, str(fixture)])
     state = app.TaskState("failed-init", "s", "copilot", "task")
 
     async def exercise():
@@ -1697,7 +1727,7 @@ def test_codex_usage_limit_failure_is_reported_distinctly(
         return {"github_token": "not-a-real-token", "codex_login": "{}"}
 
     monkeypatch.setattr(app, "_credentials_for", credentials)
-    monkeypatch.setattr(app, "_agent_command", lambda agent, model=None: [sys.executable, str(fixture)])
+    monkeypatch.setattr(app, "_agent_command", lambda agent, model=None, reasoning=None: [sys.executable, str(fixture)])
     state = app.TaskState("codex-limit", "s", "codex", "task")
 
     asyncio.run(app._run_task(state))
@@ -1716,7 +1746,7 @@ def test_cancel_during_credential_fetch_never_starts_provider(tmp_path, monkeypa
     state = app.TaskState("cancel-fetch", "s", "copilot", "task")
     monkeypatch.setattr(app, "tasks", {state.invocation_id: state})
     provider_started = []
-    monkeypatch.setattr(app, "_agent_command", lambda agent: provider_started.append(agent))
+    monkeypatch.setattr(app, "_agent_command", lambda agent, model=None, reasoning=None: provider_started.append(agent))
 
     async def exercise():
         fetching = asyncio.Event()
@@ -1748,7 +1778,7 @@ def test_cancel_queued_turn_prevents_work_after_session_lock(tmp_path, monkeypat
     state = app.TaskState("cancel-queued", "s", "copilot", "task")
     monkeypatch.setattr(app, "tasks", {state.invocation_id: state})
     provider_started = []
-    monkeypatch.setattr(app, "_agent_command", lambda agent: provider_started.append(agent))
+    monkeypatch.setattr(app, "_agent_command", lambda agent, model=None, reasoning=None: provider_started.append(agent))
 
     async def exercise():
         lock = asyncio.Lock()

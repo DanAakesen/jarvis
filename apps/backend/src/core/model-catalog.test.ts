@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createArmModelCatalogueReader, fallbackModelCatalogue, isRoleModelSupported, modelsForRole,
+  codexModels, copilotModels, createArmModelCatalogueReader, fallbackModelCatalogue, isRoleModelSupported,
+  modelsForRole, reasoningForModel,
   visionModelRatesDkkPerMillionTokens,
 } from './model-catalog.js';
 
@@ -98,6 +99,21 @@ describe('Foundry model catalogue', () => {
     };
     expect(modelsForRole({ ...catalogue, deployments: [...catalogue.deployments, unpricedVision] }, 'vision'))
       .not.toContain('unpriced-vision');
+  });
+
+  it('offers provider-supported coding models and their reasoning efforts independently of Foundry deployments', () => {
+    const catalogue = fallbackModelCatalogue();
+
+    expect(modelsForRole(catalogue, 'codex')).toEqual(codexModels);
+    expect(modelsForRole(catalogue, 'codex')).toContain('gpt-5.3-codex');
+    expect(modelsForRole(catalogue, 'copilot')).toEqual(copilotModels);
+    expect(modelsForRole(catalogue, 'copilot')).toContain('claude-sonnet-4.6');
+    expect(reasoningForModel(catalogue, 'codex', 'gpt-5.5'))
+      .toEqual(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+    expect(reasoningForModel(catalogue, 'copilot', 'gpt-5.4')).toEqual(['none', 'low', 'medium', 'high']);
+    expect(reasoningForModel(catalogue, 'copilot', 'unsupported-model')).toEqual([]);
+    expect(isRoleModelSupported(catalogue, 'copilot', 'gpt-5.4', 'high')).toBe(true);
+    expect(isRoleModelSupported(catalogue, 'copilot', 'gpt-5.4', 'xhigh')).toBe(false);
   });
 
   it('rejects unsafe account IDs and pagination targets', async () => {

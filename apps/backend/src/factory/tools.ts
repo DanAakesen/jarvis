@@ -64,6 +64,14 @@ function taskModelOptions(agent: TaskRecord['agent'], catalogue: ModelCatalogue)
   return modelsForRole(catalogue, agent);
 }
 
+function taskReasoningOptions(
+  agent: TaskRecord['agent'],
+  model: string,
+  catalogue: ModelCatalogue,
+): readonly string[] {
+  return [...(agent === 'codex' ? ['default'] : []), ...reasoningForModel(catalogue, agent, model)];
+}
+
 function assertSqlBigInt(value: string): void {
   if (!/^[1-9][0-9]{0,18}$/.test(value) || BigInt(value) > maxSqlBigInt) {
     throw new Error('Invalid identifier');
@@ -297,9 +305,13 @@ export const factoryTools: readonly JarvisTool[] = [
       if (model !== undefined && !isOption(model, modelOptions)) {
         throw new ToolRefusal(`Unsupported coding-agent model. Valid models: ${optionsList(modelOptions)}.`);
       }
-      const codexEfforts = ['default', ...reasoningForModel(catalogue, 'codex', model ?? 'default')];
-      if (reasoning !== undefined && (agent !== 'codex' || !isOption(reasoning, codexEfforts))) {
-        throw new ToolRefusal(`Unsupported reasoning. Specify Codex and use one of the valid Codex reasoning levels: ${optionsList(codexEfforts)}.`);
+      const reasoningOptions = agent
+        ? taskReasoningOptions(agent, model ?? 'default', catalogue)
+        : taskReasoningOptions('codex', model ?? 'default', catalogue);
+      if (reasoning !== undefined && (
+        agent === undefined || !isOption(reasoning, reasoningOptions)
+      )) {
+        throw new ToolRefusal(`Unsupported reasoning. Specify a coding agent and use one of its valid reasoning levels: ${optionsList(reasoningOptions)}.`);
       }
       const store = requireStore(request.server.taskStore, 'Task service');
       const task = await store.create({
@@ -350,12 +362,9 @@ export const factoryTools: readonly JarvisTool[] = [
       if (model !== undefined && !isOption(model, modelOptions)) {
         throw new ToolRefusal(`Unsupported ${agent} model. Valid models: ${optionsList(modelOptions)}.`);
       }
-      const codexEfforts = [
-        'default',
-        ...reasoningForModel(catalogue, 'codex', model ?? current.modelOverride ?? 'default'),
-      ];
-      if (reasoning !== undefined && (agent !== 'codex' || !isOption(reasoning, codexEfforts))) {
-        throw new ToolRefusal(`Unsupported ${agent} reasoning. Valid Codex reasoning levels: ${optionsList(codexEfforts)}.`);
+      const reasoningOptions = taskReasoningOptions(agent, model ?? current.modelOverride ?? 'default', catalogue);
+      if (reasoning !== undefined && !isOption(reasoning, reasoningOptions)) {
+        throw new ToolRefusal(`Unsupported ${agent} reasoning. Valid ${agent} reasoning levels: ${optionsList(reasoningOptions)}.`);
       }
 
       const changedAgent = agent !== current.agent;

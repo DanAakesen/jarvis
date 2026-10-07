@@ -274,6 +274,19 @@ export const defaultRoleModels: Readonly<Record<ModelRole, string>> = Object.fre
   copilot: 'default',
 });
 
+export const codexModels = ['default', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex'] as const;
+export const copilotModels = [
+  'default',
+  'gpt-5-mini', 'gpt-5.3-codex', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5.5',
+  'gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-6-astra', 'gpt-6-luna', 'gpt-6-sol', 'gpt-6.1-sol',
+  'claude-fable-5', 'claude-fable-5.1', 'claude-haiku-4.5', 'claude-haiku-5.5',
+  'claude-opus-4.8', 'claude-opus-5', 'claude-opus-5.5',
+  'claude-sonnet-4.6', 'claude-sonnet-5', 'claude-sonnet-5.5',
+  'gemini-3.7-flash', 'gemini-3.8-flash', 'mai-code-1.1-flash', 'kimi-k3',
+  'grok-4.5', 'grok-4.6', 'grok-4.7',
+] as const;
+const copilotReasoningEfforts: readonly ReasoningEffort[] = ['none', 'low', 'medium', 'high'];
+
 export const voiceLiveModels = ['gpt-realtime-2.1', 'gpt-realtime-2.1-mini'] as const;
 export const visionModelRatesDkkPerMillionTokens: ReadonlyMap<string, { input: number; output: number }> = new Map([
   ['gpt-5.6-luna', { input: 1.3157, output: 7.8941 }],
@@ -290,7 +303,8 @@ const roleCapabilities: Partial<Record<ModelRole, readonly ModelCapability[]>> =
 };
 
 export function modelsForRole(catalogue: ModelCatalogue, role: ModelRole): string[] {
-  if (role === 'codex' || role === 'copilot') return ['default'];
+  if (role === 'codex') return [...codexModels];
+  if (role === 'copilot') return [...copilotModels];
   if (role === 'transcription') return ['mai-transcribe'];
   if (role === 'voice') {
     return voiceLiveModels.filter((model) =>
@@ -315,8 +329,13 @@ export function reasoningForModel(
   role: ModelRole,
   model: string,
 ): readonly ReasoningEffort[] {
-  if (role === 'copilot' || role === 'voice' || role === 'transcription' || role === 'embedding') return ['none'];
-  if (role === 'codex' && model === 'default') return reasoningEfforts;
+  if (role === 'codex') {
+    return codexModels.includes(model as typeof codexModels[number]) ? reasoningEfforts : [];
+  }
+  if (role === 'copilot') {
+    return copilotModels.includes(model as typeof copilotModels[number]) ? copilotReasoningEfforts : [];
+  }
+  if (role === 'voice' || role === 'transcription' || role === 'embedding') return ['none'];
   return catalogue.deployments.find((deployment) => deployment.name === model)?.reasoningEfforts ?? [];
 }
 

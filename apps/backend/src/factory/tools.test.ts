@@ -269,7 +269,7 @@ describe('Software Factory Jarvis tools', () => {
     });
     expect(invalid.json()).toMatchObject({
       outcome: 'refused',
-      result: { refused: 'Unsupported copilot model. Valid models: default.' },
+      result: { refused: expect.stringContaining('Unsupported copilot model.') },
     });
     expect(taskStore.updateModelConfig).not.toHaveBeenCalled();
 
@@ -299,6 +299,22 @@ describe('Software Factory Jarvis tools', () => {
     });
     expect(taskStore.updateModelConfig).toHaveBeenCalledWith('42', {
       agent: 'codex', modelOverride: null, reasoningOverride: 'high',
+    });
+  });
+
+  it('accepts supported Copilot model and reasoning overrides for ready tasks', async () => {
+    const { app, taskStore } = fixture();
+    const response = await app.inject({
+      method: 'POST', url: '/tools/set_task_model', headers,
+      payload: { taskId: '42', agent: 'copilot', model: 'claude-sonnet-4.6', reasoning: 'high' },
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'ok',
+      result: { agent: 'copilot', model: 'claude-sonnet-4.6', reasoning: 'high', state: 'Ready' },
+    });
+    expect(taskStore.updateModelConfig).toHaveBeenCalledWith('42', {
+      agent: 'copilot', modelOverride: 'claude-sonnet-4.6', reasoningOverride: 'high',
     });
   });
 
@@ -340,9 +356,25 @@ describe('Software Factory Jarvis tools', () => {
     });
     expect(response.json()).toMatchObject({
       outcome: 'refused',
-      result: { refused: 'Unsupported coding-agent model. Valid models: default.' },
+      result: { refused: expect.stringContaining('Unsupported coding-agent model.') },
     });
     expect(taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts supported Copilot model and reasoning on task creation', async () => {
+    const { app, taskStore } = fixture();
+    const response = await app.inject({
+      method: 'POST', url: '/tools/create_task', headers,
+      payload: {
+        projectId: '7', prompt: 'Fix a bug', agent: 'copilot',
+        model: 'gpt-5.4', reasoning: 'medium',
+      },
+    });
+
+    expect(response.json()).toMatchObject({ outcome: 'ok' });
+    expect(taskStore.create).toHaveBeenCalledWith(expect.objectContaining({
+      agent: 'copilot', modelOverride: 'gpt-5.4', reasoningOverride: 'medium',
+    }));
   });
 
   it('associates a chat-created task with its originating message', async () => {
