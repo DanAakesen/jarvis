@@ -31,7 +31,19 @@ function embeddingsUrl(projectEndpoint: string): string {
       endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
     throw new TypeError('Foundry project endpoint must be a secure Azure AI project URL');
   }
-  return `${endpoint.href}/openai/v1/embeddings`;
+  // The OpenAI v1 surface lives on the account origin; the project-scoped path returns 404.
+  return `${endpoint.origin}/openai/v1/embeddings`;
+}
+
+export class MemoryEmbeddingHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`Foundry embedding request failed with HTTP ${status}`);
+    this.name = 'MemoryEmbeddingHttpError';
+  }
+}
+
+export function embeddingFailureStatus(error: unknown): { httpStatus?: number } {
+  return error instanceof MemoryEmbeddingHttpError ? { httpStatus: error.status } : {};
 }
 
 async function readResponse(response: Response): Promise<unknown> {
@@ -86,7 +98,7 @@ export function createFoundryMemoryEmbedder(options: FoundryMemoryEmbedderOption
       redirect: 'error',
       signal: requestSignal,
     });
-    if (!response.ok) throw new Error(`Foundry embedding request failed with HTTP ${response.status}`);
+    if (!response.ok) throw new MemoryEmbeddingHttpError(response.status);
     const body = await readResponse(response) as {
       data?: readonly { embedding?: unknown }[];
       usage?: { prompt_tokens?: unknown; input_tokens?: unknown };

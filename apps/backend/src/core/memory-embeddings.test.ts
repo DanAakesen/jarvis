@@ -28,7 +28,7 @@ describe('Foundry memory embeddings', () => {
 
     expect(getToken).toHaveBeenCalledWith(FOUNDRY_EMBEDDING_SCOPE, expect.any(AbortSignal));
     expect(fetcher).toHaveBeenCalledWith(
-      `${projectEndpoint}/openai/v1/embeddings`,
+      'https://jarvis.services.ai.azure.com/openai/v1/embeddings',
       expect.objectContaining({
         method: 'POST',
         headers: {
