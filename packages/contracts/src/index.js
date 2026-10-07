@@ -1,4 +1,38 @@
 export const generatedViewVersion = 1;
+export const modelRoles = Object.freeze([
+  'chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot',
+]);
+export const reasoningEfforts = Object.freeze(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+export const modelCapabilities = Object.freeze([
+  'chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image',
+]);
+
+export function isModelCatalogue(value) {
+  if (!isObject(value) || !['arm', 'fallback'].includes(value.source) ||
+      !Array.isArray(value.deployments) || value.deployments.length > 1_000 ||
+      Object.keys(value).some((key) => !['source', 'deployments', 'reason'].includes(key)) ||
+      (value.reason !== undefined && !boundedText(value.reason, 500))) return false;
+  const names = new Set();
+  return value.deployments.every((deployment) => {
+    if (!isObject(deployment) ||
+        Object.keys(deployment).some((key) =>
+          !['name', 'model', 'version', 'sku', 'capacity', 'capabilities', 'reasoningEfforts'].includes(key)) ||
+        !boundedText(deployment.name, 128) || names.has(deployment.name) ||
+        !boundedText(deployment.model, 128) || !boundedText(deployment.version, 128) ||
+        !boundedText(deployment.sku, 64) ||
+        !Number.isSafeInteger(deployment.capacity) || deployment.capacity < 0 ||
+        !Array.isArray(deployment.capabilities) ||
+        !deployment.capabilities.every((capability) => modelCapabilities.includes(capability)) ||
+        new Set(deployment.capabilities).size !== deployment.capabilities.length ||
+        !Array.isArray(deployment.reasoningEfforts) ||
+        deployment.reasoningEfforts.length === 0 ||
+        !deployment.reasoningEfforts.every((effort) => reasoningEfforts.includes(effort)) ||
+        new Set(deployment.reasoningEfforts).size !== deployment.reasoningEfforts.length) return false;
+    names.add(deployment.name);
+    return true;
+  });
+}
+
 export const generatedViewRenderers = Object.freeze([
   'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
   'knowledge-graph',

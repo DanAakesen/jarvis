@@ -25,6 +25,7 @@ import type { ReleaseGraphReader, ReleaseViewStore } from './factory/release-vie
 import type { RepositoryCreator } from './factory/new-project.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
+import { fallbackModelCatalogue, type ModelCatalogueReader } from './core/model-catalog.js';
 import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js';
 import type { CredentialStatusStore } from './credentials/credential-status.js';
 import type { runCodexRenewalOnce } from './credentials/codex-renewal.js';
@@ -54,6 +55,7 @@ export interface BuildAppOptions {
   readonly taskController?: TaskController;
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
+  readonly modelCatalogue?: ModelCatalogueReader;
   readonly credentialStatusStore?: CredentialStatusStore;
   readonly renewCodexCredential?: () => ReturnType<typeof runCodexRenewalOnce>;
   readonly usageStore?: UsageStore;
@@ -89,6 +91,7 @@ declare module 'fastify' {
     taskController: TaskController | null;
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
+    modelCatalogue: ModelCatalogueReader;
     credentialStatusStore: CredentialStatusStore | null;
     renewCodexCredential: (() => ReturnType<typeof runCodexRenewalOnce>) | null;
     usageStore: UsageStore | null;
@@ -177,6 +180,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('workspaceCommands', workspaceCommands);
   app.addHook('onClose', async () => { workspaceCommands.dispose(); });
   app.decorate('settingsStore', options.settingsStore ?? null);
+  app.decorate('modelCatalogue', options.modelCatalogue ?? { read: async () => fallbackModelCatalogue() });
   app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
   app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);
   app.decorate('usageStore', options.usageStore ?? null);

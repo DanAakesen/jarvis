@@ -159,6 +159,24 @@ def _model_settings(value: Any) -> ModelSettings:
         raise ValueError("invalid Jarvis settings")
     model = value.get("model")
     reasoning_effort = value.get("reasoningEffort")
+    roles = value.get("roles")
+    if roles is not None:
+        names = {"chat", "vision", "research", "voice", "transcription", "embedding", "codex", "copilot"}
+        if not isinstance(roles, dict) or set(roles) != names:
+            raise ValueError("invalid Jarvis settings")
+        for role_settings in roles.values():
+            if (
+                not isinstance(role_settings, dict)
+                or set(role_settings) != {"model", "reasoningEffort"}
+                or not isinstance(role_settings.get("model"), str)
+                or not role_settings["model"].strip()
+                or len(role_settings["model"]) > 128
+                or role_settings.get("reasoningEffort")
+                not in {"none", "minimal", "low", "medium", "high", "xhigh"}
+            ):
+                raise ValueError("invalid Jarvis settings")
+        model = roles["chat"]["model"]
+        reasoning_effort = roles["chat"]["reasoningEffort"]
     mode = value.get("mode")
     if mode is None:
         mode = "away" if value.get("awayMode", False) else "present"
@@ -188,7 +206,7 @@ def _model_settings(value: Any) -> ModelSettings:
         or len(model) > 100
         or any(ord(character) < 32 or ord(character) == 127 for character in model)
         or not isinstance(reasoning_effort, str)
-        or reasoning_effort not in {"none", "low", "medium", "high"}
+        or reasoning_effort not in {"none", "minimal", "low", "medium", "high", "xhigh"}
         or not isinstance(mode, str)
         or mode not in {"present", "away", "on_the_move"}
         or not isinstance(away_mode, bool)

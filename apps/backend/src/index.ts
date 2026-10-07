@@ -43,6 +43,7 @@ import {
   createVoiceRelayModule,
 } from './voice/relay.js';
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
+import { createArmModelCatalogueReader, fallbackModelCatalogue } from './core/model-catalog.js';
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
 import { FoundryClient } from './foundry/client.js';
@@ -146,7 +147,7 @@ try {
     onAlert: () => nowEventHub.publish({ type: 'refresh' }),
   }) : undefined;
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
-    config.foundryEndpoints || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
+    config.foundryEndpoints || config.foundryAccountResourceId || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -653,8 +654,19 @@ try {
       },
     })
     : undefined;
+  const modelCatalogue = config.foundryAccountResourceId && credential
+    ? createArmModelCatalogueReader({
+      resourceId: config.foundryAccountResourceId,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry catalogue identity unavailable');
+        return token.token;
+      },
+    })
+    : { read: async () => fallbackModelCatalogue() };
   const app = buildApp(config, logger, {
     modules,
+    modelCatalogue,
     ...(jevSecretClient ? { reflexClassifier } : {}),
     ...(browserAgent ? { browserAgent } : {}),
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),

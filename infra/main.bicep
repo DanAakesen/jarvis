@@ -52,6 +52,7 @@ var costManagementReaderRoleId = '72fafb9e-0641-4937-9268-a91bfd8191a3'
 var backendAppScaleRoleId = '985158cb-2c3c-5b9b-bd65-897ed9be3e36'
 var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 var cognitiveServicesUserRoleId = 'a97b65f3-24c7-4388-baec-2e87135dc908'
+var foundryDeploymentReaderRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var backendAppName = 'ca-jarvis-backend-${suffix}'
 var deployBackendApp = !empty(backendImage)
@@ -324,6 +325,16 @@ resource backendFoundrySpeechUserAssignment 'Microsoft.Authorization/roleAssignm
   scope: foundryAccount
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesUserRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource backendFoundryDeploymentReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryAccount.id, backendIdentity.id, foundryDeploymentReaderRoleId)
+  scope: foundryAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', foundryDeploymentReaderRoleId)
     principalId: backendIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
@@ -646,6 +657,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: 'https://${foundryAccount.name}.cognitiveservices.azure.com/api/projects/${foundryProject.name}'
             }
             {
+              name: 'FOUNDRY_ACCOUNT_RESOURCE_ID'
+              value: foundryAccount.id
+            }
+            {
               name: 'SQL_SERVER'
               value: sqlServer.properties.fullyQualifiedDomainName
             }
@@ -767,6 +782,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
     blobUserDelegatorAssignment
     taskEventsContainer
     backendFoundrySpeechUserAssignment
+    backendFoundryDeploymentReaderAssignment
   ]
 }
 
