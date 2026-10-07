@@ -87,6 +87,26 @@ describe('structured log export', () => {
     },
   );
 
+  it('exports only bounded embedding usage and timing metadata', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.info({
+      outcome: 'ok', durationMs: 20, inputTokens: 35,
+      text: 'private-note', embedding: [1, 2, 3],
+    }, 'memory.embedding');
+    expect(JSON.parse(records[0]!)).toMatchObject({
+      msg: 'memory.embedding', outcome: 'ok', durationMs: 20, inputTokens: 35,
+    });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'memory.embedding',
+      properties: { service: 'jarvis-backend', outcome: 'ok', durationMs: 20, inputTokens: 35 },
+    }));
+    expect(records.join('')).not.toContain('private-note');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private-note');
+  });
+
   it.each(['credential_unavailable', 'session_persistence_failed', 'foundry_start_rejected',
     'foundry_start_failed', 'recovery_start_failed'])('exports the dispatcher start failure reason %s', (reason) => {
     const records: string[] = [];

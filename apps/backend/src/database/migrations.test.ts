@@ -56,8 +56,18 @@ describe('committed SQL manifest', () => {
       '0025_workspace_html_artifacts.sql',
       '0026_workspace_html_artifact_history.sql',
       '0027_vault_knowledge_graph.sql',
+      '0028_json_embeddings_without_vector.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
+  });
+  it('stores JSON embeddings only when SQL vector support is unavailable', async () => {
+    const migration = (await readMigrations()).at(-1);
+    expect(migration?.sql).toContain("IF TYPE_ID(N'vector') IS NULL");
+    expect(migration?.sql).toContain("ALTER TABLE dbo.memories ADD embedding_json nvarchar(max) NULL");
+    expect(migration?.sql).toContain("ALTER TABLE dbo.vault_chunks ADD embedding_json nvarchar(max) NULL");
+    await expect(readDownMigration('0028_json_embeddings_without_vector.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('DROP COLUMN embedding_json'),
+    });
   });
   it('reads down scripts from down/ without treating them as forward migrations', async () => {
     const path = await directory();

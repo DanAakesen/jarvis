@@ -10,7 +10,10 @@ const projectEndpoint = 'https://jarvis.services.ai.azure.com/api/projects/jarvi
 describe('Foundry memory embeddings', () => {
   it('requests a bounded embedding with the project deployment and managed identity scope', async () => {
     const vector = Array.from({ length: MEMORY_EMBEDDING_DIMENSIONS }, (_, index) => index / 1000);
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: vector }] })));
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      data: [{ embedding: vector }],
+      usage: { prompt_tokens: 17 },
+    })));
     const getToken = vi.fn(async () => 'not-a-secret-token');
     const embedder = createFoundryMemoryEmbedder({
       projectEndpoint,
@@ -20,6 +23,8 @@ describe('Foundry memory embeddings', () => {
     });
 
     await expect(embedder.embed('A confirmed preference.', new AbortController().signal)).resolves.toEqual(vector);
+    await expect(embedder.embedWithUsage?.('A confirmed preference.', new AbortController().signal))
+      .resolves.toEqual({ embedding: vector, inputTokens: 17 });
 
     expect(getToken).toHaveBeenCalledWith(FOUNDRY_EMBEDDING_SCOPE, expect.any(AbortSignal));
     expect(fetcher).toHaveBeenCalledWith(

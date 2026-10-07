@@ -1111,8 +1111,14 @@ notes by blob SHA, skips `.obsidian/`, `.github/`, `.codex/`, `.vscode/` and
 non-text/binary files, chunks notes by heading, embeds them with the existing
 `text-embedding-3-small` deployment when available, and removes deleted notes.
 `dbo.vault_chunks` in migration `0021_vault_memory_index.sql` is only a derived
-index/cache keyed by path and blob SHA; semantic search falls back to bounded
-term matching when vectors are unavailable.
+index/cache keyed by path and blob SHA. Migration `0028_json_embeddings_without_vector.sql`
+stores nullable JSON vectors for both vault chunks and legacy SQL memories when
+SQL Server has no `vector` type. In that mode, the backend ranks stored vectors
+with cosine similarity in code, caches the bounded vault matrix until index
+changes, and retains full-text/term search as fallback. A sync backfills missing
+vault embeddings with a 4,096-call limit; successful note replacements
+persist progress for later syncs. Embedding telemetry records provider input
+tokens when the response supplies them.
 
 The backend exposes `vault_search` (up to eight ranked snippets with heading,
 path and GitHub note URL), `vault_read` (one Markdown note, at most 256 KiB),
@@ -1170,8 +1176,9 @@ notes added later can resolve without rewriting their source.
 IDs are lowercase SHA-256 hashes of vault paths. Nodes include the note path,
 title, one of the four routed folders, the last index timestamp for that note,
 and its degree. Link edges represent resolved wiki/Markdown links; similarity
-edges use the mean of a note's existing chunk embeddings, retain the three
-highest cosine scores above `0.75` per note, and include the score. The response
+edges prefer application cosine scores over the mean of each note's chunk
+embeddings, retaining the three highest scores above `0.35` per note. SQL vector
+similarities remain the fallback when application embeddings are unavailable. The response
 is limited to 2,000 path-sorted nodes and 8,000 edges, and the assembled graph is
 cached until a successful vault sync. The top-level `updatedAt` is the last
 successful vault sync time; note timestamps are SQL index timestamps, not Git
