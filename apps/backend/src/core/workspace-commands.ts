@@ -22,21 +22,24 @@ interface WorkspaceConnection {
   readonly sessionId: string;
   readonly send: WorkspaceEventSender;
   snapshot?: WorkspaceSnapshot;
+  snapshotAt?: number;
 }
 
 interface CommandRecord {
   readonly fingerprint: string;
-  readonly sessionId: string;
+  /** Every tab the command was delivered to; the first tab that applies it settles the command. */
+  readonly sessionIds: Set<string>;
+  /** Tabs that refused, failed, or disconnected; once all have, the command is refused. */
+  readonly declined: Map<string, { outcome: 'refused' | 'error'; reason: string }>;
+  readonly acknowledgements: Map<string, string>;
   readonly promise: Promise<void>;
   readonly resolve: () => void;
   readonly reject: (error: Error) => void;
   readonly signal: AbortSignal;
   state: 'pending' | 'applied' | 'refused' | 'error';
-  acknowledgement?: string;
   timer?: ReturnType<typeof setTimeout>;
   abort?: () => void;
 }
-
 type WorkspaceCommandOutcome = 'refused' | 'error';
 
 function safeReason(reason: string): boolean {
@@ -63,36 +66,51 @@ function fingerprint(command: WorkspaceCommand): string {
 }
 
 export class WorkspaceCommandBroker {
-  private readonly connections = new Map<string, WorkspaceConnection>();
+  /** Every open signed-in tab per owner; commands go to all of them. */
+  private readonly connections = new Map<string, Map<string, WorkspaceConnection>>();
   private readonly records = new Map<string, Map<string, CommandRecord>>();
+  private snapshotClock = 0;
 
   isConnected(ownerId: string): boolean {
-    return this.connections.has(ownerId);
+    return (this.connections.get(ownerId)?.size ?? 0) > 0;
   }
 
   updateSnapshot(ownerId: string, sessionId: string, snapshot: WorkspaceSnapshot): boolean {
-    const connection = this.connections.get(ownerId);
-    if (connection?.sessionId !== sessionId) return false;
+    const connection = this.connections.get(ownerId)?.get(sessionId);
+    if (!connection) return false;
     connection.snapshot = snapshot;
+    connection.snapshotAt = ++this.snapshotClock;
     return true;
   }
 
+  /** The most recently reported tab layout, which is the tab Dan is most likely looking at. */
   snapshot(ownerId: string): WorkspaceSnapshot | undefined {
-    return this.connections.get(ownerId)?.snapshot;
+    let latest: WorkspaceConnection | undefined;
+    for (const connection of this.connections.get(ownerId)?.values() ?? []) {
+      if (connection.snapshot && (!latest || (connection.snapshotAt ?? 0) > (latest.snapshotAt ?? 0))) {
+        latest = connection;
+      }
+    }
+    return latest?.snapshot;
   }
 
   connect(ownerId: string, send: WorkspaceEventSender): { sessionId: string; close: () => void } {
-    const prior = this.connections.get(ownerId);
-    if (prior) this.disconnect(ownerId, prior.sessionId);
     const sessionId = randomUUID();
-    this.connections.set(ownerId, { sessionId, send });
+    let ownerConnections = this.connections.get(ownerId);
+    if (!ownerConnections) {
+      ownerConnections = new Map();
+      this.connections.set(ownerId, ownerConnections);
+    }
+    ownerConnections.set(sessionId, { sessionId, send });
     return { sessionId, close: () => this.disconnect(ownerId, sessionId) };
   }
 
   async execute(ownerId: string, command: WorkspaceCommand, signal: AbortSignal): Promise<void> {
     if (signal.aborted) throw new ToolFailure('Workspace command was cancelled before delivery.');
-    const connection = this.connections.get(ownerId);
-    if (!connection) throw new ToolRefusal('No active signed-in workspace is connected.');
+    const ownerConnections = this.connections.get(ownerId);
+    if (!ownerConnections || ownerConnections.size === 0) {
+      throw new ToolRefusal('No active signed-in workspace is connected.');
+    }
 
     let ownerRecords = this.records.get(ownerId);
     if (!ownerRecords) {
@@ -121,7 +139,9 @@ export class WorkspaceCommandBroker {
     const promise = new Promise<void>((accept, decline) => { resolve = accept; reject = decline; });
     const record: CommandRecord = {
       fingerprint: digest,
-      sessionId: connection.sessionId,
+      sessionIds: new Set(ownerConnections.keys()),
+      declined: new Map(),
+      acknowledgements: new Map(),
       promise,
       resolve,
       reject,
@@ -142,8 +162,9 @@ export class WorkspaceCommandBroker {
     record.abort = onAbort;
     onAbort = () => {
       if (record.state !== 'pending') return;
-      const current = this.connections.get(ownerId);
-      if (current?.sessionId === record.sessionId) current.send('workspace-cancel', { commandId: command.commandId });
+      for (const sessionId of record.sessionIds) {
+        this.connections.get(ownerId)?.get(sessionId)?.send('workspace-cancel', { commandId: command.commandId });
+      }
       settleError(new ToolFailure('Workspace command was cancelled; the client may already have applied it.'), 'error');
     };
 
@@ -154,9 +175,14 @@ export class WorkspaceCommandBroker {
 
     const expiresAt = Date.now() + commandTimeoutMs;
     const frame = JSON.stringify({ command, expiresAt });
-    if (Buffer.byteLength(frame) > 300 * 1024 ||
-        !connection.send('workspace-command', { command, expiresAt })) {
+    if (Buffer.byteLength(frame) > 300 * 1024) {
       settleError(new ToolFailure('The workspace could not accept the command for delivery.'), 'error');
+      return this.waitFor(promise, signal);
+    }
+    for (const connection of [...ownerConnections.values()]) {
+      if (!connection.send('workspace-command', { command, expiresAt })) {
+        this.decline(record, connection.sessionId, 'error', 'The workspace could not accept the command for delivery.');
+      }
     }
     return this.waitFor(promise, signal);
   }
@@ -169,51 +195,59 @@ export class WorkspaceCommandBroker {
     reason?: string,
     outcome: WorkspaceCommandOutcome = 'refused',
   ): WorkspaceAcknowledgement {
-    const current = this.connections.get(ownerId);
-    if (!current || current.sessionId !== sessionId) return { status: 'stale' };
+    if (!this.connections.get(ownerId)?.has(sessionId)) return { status: 'stale' };
     const record = this.records.get(ownerId)?.get(commandId);
     if (!record) return { status: 'unknown' };
-    if (record.sessionId !== sessionId) return { status: 'stale' };
+    if (!record.sessionIds.has(sessionId)) return { status: 'stale' };
     const acknowledgement = JSON.stringify({ applied, reason: reason ?? null, outcome });
-    if (record.state !== 'pending') {
-      return record.acknowledgement === acknowledgement
-        ? { status: 'duplicate' }
-        : { status: 'stale' };
-    }
-
+    const previous = record.acknowledgements.get(sessionId);
+    if (previous !== undefined) return previous === acknowledgement ? { status: 'duplicate' } : { status: 'stale' };
     if (!applied && reason !== undefined && !safeReason(reason)) {
       return { status: 'unknown' };
     }
-    record.acknowledgement = acknowledgement;
-    record.state = applied ? 'applied' : 'refused';
-    clearTimeout(record.timer);
-    if (record.abort) record.signal.removeEventListener('abort', record.abort);
-    if (applied) record.resolve();
-    else if (outcome === 'error') record.reject(new ToolFailure(reason ?? 'The workspace failed while applying the command.'));
-    else record.reject(new ToolRefusal(reason ?? 'The workspace could not apply the command.'));
+    record.acknowledgements.set(sessionId, acknowledgement);
+    if (record.state !== 'pending') return { status: 'accepted' };
+    if (applied) {
+      record.state = 'applied';
+      clearTimeout(record.timer);
+      if (record.abort) record.signal.removeEventListener('abort', record.abort);
+      record.resolve();
+    } else {
+      this.decline(record, sessionId, outcome, reason ?? (outcome === 'error'
+        ? 'The workspace failed while applying the command.'
+        : 'The workspace could not apply the command.'));
+    }
     return { status: 'accepted' };
   }
 
   dispose(): void {
-    for (const [ownerId, connection] of this.connections) this.disconnect(ownerId, connection.sessionId);
+    for (const [ownerId, ownerConnections] of this.connections) {
+      for (const sessionId of [...ownerConnections.keys()]) this.disconnect(ownerId, sessionId);
+    }
     this.connections.clear();
   }
 
-  private disconnect(ownerId: string, sessionId: string): void {
-    const current = this.connections.get(ownerId);
-    if (!current || current.sessionId !== sessionId) return;
-    this.connections.delete(ownerId);
-    const records = this.records.get(ownerId);
-    if (!records) return;
-    for (const record of records.values()) {
-      if (record.state !== 'pending' || record.sessionId !== sessionId) continue;
-      record.state = 'error';
-      clearTimeout(record.timer);
-      if (record.abort) record.signal.removeEventListener('abort', record.abort);
-      record.reject(new ToolFailure('The active workspace disconnected before acknowledging the command; it may already have been applied.'));
-    }
+  /** One tab declined; the command fails only when every tab it went to has declined. */
+  private decline(record: CommandRecord, sessionId: string, outcome: 'refused' | 'error', reason: string): void {
+    if (record.state !== 'pending' || !record.sessionIds.has(sessionId)) return;
+    record.declined.set(sessionId, { outcome, reason });
+    if (record.declined.size < record.sessionIds.size) return;
+    const refusal = [...record.declined.values()].find((decline) => decline.outcome === 'refused');
+    record.state = refusal ? 'refused' : 'error';
+    clearTimeout(record.timer);
+    if (record.abort) record.signal.removeEventListener('abort', record.abort);
+    record.reject(refusal ? new ToolRefusal(refusal.reason) : new ToolFailure(reason));
   }
 
+  private disconnect(ownerId: string, sessionId: string): void {
+    const ownerConnections = this.connections.get(ownerId);
+    if (!ownerConnections?.delete(sessionId)) return;
+    if (ownerConnections.size === 0) this.connections.delete(ownerId);
+    for (const record of this.records.get(ownerId)?.values() ?? []) {
+      this.decline(record, sessionId, 'error',
+        'The active workspace disconnected before acknowledging the command; it may already have been applied.');
+    }
+  }
   private waitFor(promise: Promise<void>, signal: AbortSignal): Promise<void> {
     if (signal.aborted) return Promise.reject(new ToolFailure('Workspace command was cancelled.'));
     return new Promise((resolve, reject) => {
