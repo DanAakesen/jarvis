@@ -493,6 +493,12 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 | P8-18 | [#256](https://github.com/DanAakesen/jarvis/issues/256) | Confirm the initial declarative generated-view renderer/action catalogue and adjustable theme-token names/value types; keep generated HTML/JS outside the catalogue except for the separately approved sandboxed `html-app` artifact surface | Dan's 4 October allowlists remain the basis for fixed renderers; the 6 October report decision separately limits generated HTML/JS to the sandboxed iframe and validated host bridge; visual styling/preset count remains open | None | Complete |
 | P8-19 | [#267](https://github.com/DanAakesen/jarvis/issues/267) | Expose editable personality in Settings, under a Jarvis Personality section, using the backend contract from P7-16 | Dan can load, edit, save and reset personality with visible validation, pending/success/failure feedback; unsaved edits survive failed saves; keyboard and phone/desktop checks pass; explain that changes apply to new sessions | P1-11, P8-04, P7-16 | Complete |
 
+### P9 — Gap-audit follow-ups
+
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P9-26 | [#520](https://github.com/DanAakesen/jarvis/issues/520) | Add backend Calendar event updates for title, paired start/end times, location, attendees, and description, and event deletion; keep the web app unchanged | PATCH only supplied fields; allow clearing location, description, and attendees; encode event IDs; stage update/delete through the existing exact later-message confirmation; redact sensitive audits and cover fake Google requests and invalid partial times | P7-22, P7-28 | Complete offline; live Google Calendar acceptance pending |
+
 ### Confirm before P0
 
 1. Stack choices ([stack overview](docs/architecture.md#stack-overview)): all confirmed on 3 October 2026, including Fastify.

@@ -398,6 +398,154 @@ describe('Google Calendar and Gmail tools', () => {
     });
   });
 
+  it('updates selected calendar event fields only after confirmation and redacts them', async () => {
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
+      args[2].method === undefined
+        ? {
+            id: 'event-1',
+            summary: 'Planning',
+            start: { dateTime: '2026-10-04T13:00:00Z' },
+            end: { dateTime: '2026-10-04T14:00:00Z' },
+          }
+        : {});
+    const { app, records, setLatest } = appFor(request);
+    const staged = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_update_event',
+      headers: confirmHeaders('42'),
+      payload: {
+        eventId: 'event-1',
+        title: 'Private project review',
+        startDateTime: '2026-10-05T15:00:00+02:00',
+        endDateTime: '2026-10-05T16:00:00+02:00',
+        location: 'Private room',
+        attendees: ['dan@example.com'],
+        description: 'PRIVATE CALENDAR DESCRIPTION',
+      },
+    });
+    const code = staged.json().result.confirmationCode as string;
+
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[2]).not.toHaveProperty('method');
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
+    expect(JSON.stringify(records)).not.toContain('PRIVATE CALENDAR DESCRIPTION');
+
+    confirmMessage(setLatest, code);
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_confirm_change',
+      headers: confirmHeaders('43'),
+      payload: { confirmationCode: code },
+    });
+
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[2]).toMatchObject({
+      method: 'PATCH',
+      body: {
+        summary: 'Private project review',
+        start: { dateTime: '2026-10-05T13:00:00.000Z', timeZone: 'UTC' },
+        end: { dateTime: '2026-10-05T14:00:00.000Z', timeZone: 'UTC' },
+        location: 'Private room',
+        attendees: [{ email: 'dan@example.com' }],
+        description: 'PRIVATE CALENDAR DESCRIPTION',
+      },
+    });
+  });
+
+  it('allows clearing calendar location and attendees with empty values', async () => {
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
+      args[2].method === undefined
+        ? {
+            id: 'event-1',
+            summary: 'Planning',
+            start: { dateTime: '2026-10-04T13:00:00Z' },
+            end: { dateTime: '2026-10-04T14:00:00Z' },
+          }
+        : {});
+    const { app, records, setLatest } = appFor(request);
+    const staged = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_update_event',
+      headers: confirmHeaders('42'),
+      payload: { eventId: 'event-1', location: '', attendees: [] },
+    });
+    const code = staged.json().result.confirmationCode as string;
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(request).toHaveBeenCalledOnce();
+    confirmMessage(setLatest, code);
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_confirm_change',
+      headers: confirmHeaders('43'),
+      payload: { confirmationCode: code },
+    });
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[2]).toMatchObject({
+      method: 'PATCH',
+      body: { location: '', attendees: [] },
+    });
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
+  });
+
+  it('refuses calendar time updates unless both endpoints are supplied', async () => {
+    const request = vi.fn(async () => ({}));
+    const { app } = appFor(request);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_update_event',
+      headers: confirmHeaders('42'),
+      payload: { eventId: 'event-1', startDateTime: '2026-10-05T15:00:00Z' },
+    });
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'startDateTime and endDateTime must be provided together.' },
+    });
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('deletes a calendar event only after confirmation', async () => {
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
+      args[2].method === undefined ? { id: 'event/1', summary: 'Planning' } : {});
+    const { app, records, setLatest } = appFor(request);
+    const staged = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_delete_event',
+      headers: confirmHeaders('42'),
+      payload: { eventId: 'event/1' },
+    });
+    const code = staged.json().result.confirmationCode as string;
+
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[1]).toBe('/calendars/primary/events/event%2F1');
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
+
+    confirmMessage(setLatest, code);
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_confirm_change',
+      headers: confirmHeaders('43'),
+      payload: { confirmationCode: code },
+    });
+
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[1]).toBe('/calendars/primary/events/event%2F1');
+    expect(request.mock.calls[1]?.[2]).toMatchObject({ method: 'DELETE' });
+  });
+
   it('sends mail only after confirmation and never persists the message body', async () => {
     const request = vi.fn(async () => ({}));
     const { app, records, setLatest } = appFor(request);
