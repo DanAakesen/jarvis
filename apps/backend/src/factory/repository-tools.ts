@@ -260,8 +260,21 @@ async function mapLimited<T, R>(
   return results;
 }
 
+// The repo keeps docs/features.md; the container image ships it as apps/backend/feature-index.md
+// because the image must not contain a docs folder.
+const featureIndexLocations = ['../../feature-index.md', '../../../../docs/features.md'];
+
 async function featuresDocument(): Promise<string> {
-  const markdown = await readFile(new URL('../../../../docs/features.md', import.meta.url), 'utf8');
+  let markdown: string | undefined;
+  for (const location of featureIndexLocations) {
+    try {
+      markdown = await readFile(new URL(location, import.meta.url), 'utf8');
+      break;
+    } catch {
+      // Try the next location.
+    }
+  }
+  if (markdown === undefined) throw new Error('Feature index is unavailable');
   if (Buffer.byteLength(markdown) > 100 * 1024) throw new Error('Feature index is too large');
   return markdown;
 }
