@@ -351,8 +351,8 @@ export function registerModelDeploymentRoutes(app: FastifyInstance): void {
       reportPendingOperation(app, pendingOperation.name, 'create', pendingOperation.completion);
       return reply.code(202).send({ status: 'approval_pending', name: pendingOperation.name });
     } catch (error) {
-        if (!(error instanceof ModelDeploymentError)) app.log.warn('models.deployment_request_failed');
-        return reply.code(routeErrorStatus(error)).send({ error: routeErrorMessage(error) });
+      if (!(error instanceof ModelDeploymentError)) app.log.warn('models.deployment_request_failed');
+      return reply.code(routeErrorStatus(error)).send({ error: routeErrorMessage(error) });
     }
   });
 

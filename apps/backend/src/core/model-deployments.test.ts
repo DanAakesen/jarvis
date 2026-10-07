@@ -247,6 +247,14 @@ describe('Foundry model deployment manager', () => {
     expect(route.statusCode).toBe(202);
     expect(route.json()).toEqual({ status: 'approval_pending', name: 'gpt-5.6-luna-2026-12-03' });
 
+    const deletion = await app.inject({
+      method: 'DELETE',
+      url: '/models/deployments/custom-unused',
+      headers,
+    });
+    expect(deletion.statusCode).toBe(202);
+    expect(deletion.json()).toEqual({ status: 'approval_pending', name: 'custom-unused' });
+
     const denied = buildApp(config, undefined, {
       modules: [coreModule],
       auth: async () => ({ ...owner, objectId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }),
