@@ -99,12 +99,56 @@ describe('workspace command delivery', () => {
     });
     expect(create.json()).toMatchObject({ outcome: 'refused' });
     expect((await publish({ ...payload, windows: Array.from({ length: 33 }, () => payload.windows[0]!) })).statusCode).toBe(400);
+    // A second tab keeps the first tab's layout until it reports its own; the newest report wins.
     const current = broker.connect(ownerId, () => true);
+    expect(broker.snapshot(ownerId)?.windows).toEqual(payload.windows);
+    expect((await publish({ ...payload, sessionId: current.sessionId, windows: [] })).statusCode).toBe(204);
+    expect(broker.snapshot(ownerId)?.windows).toEqual([]);
+    current.close();
+    expect(broker.snapshot(ownerId)?.windows).toEqual(payload.windows);
+    connection.close();
     expect(broker.snapshot(ownerId)).toBeUndefined();
     expect((await publish()).statusCode).toBe(409);
-    expect((await publish({ ...payload, sessionId: current.sessionId, windows: [] })).statusCode).toBe(204);
-    current.close();
-    expect(broker.snapshot(ownerId)).toBeUndefined();
+  });
+
+  it('delivers every command to all open tabs and refuses only when every tab refuses', async () => {
+    const broker = new WorkspaceCommandBroker();
+    const deliveries: Array<{ tab: string; commandId: string }> = [];
+    const tab = (name: string) => {
+      const connection = broker.connect(ownerId, (event, data) => {
+        if (event === 'workspace-command') {
+          deliveries.push({ tab: name, commandId: (data as { command: WorkspaceCommand }).command.commandId });
+        }
+        return true;
+      });
+      return connection;
+    };
+    const first = tab('first');
+    const second = tab('second');
+    expect(broker.isConnected(ownerId)).toBe(true);
+
+    const shown = broker.execute(ownerId, { commandId: 'show-both', operation: 'layout', arrangement: 'tiled' },
+      new AbortController().signal);
+    expect(deliveries.filter(({ commandId }) => commandId === 'show-both').map(({ tab: name }) => name))
+      .toEqual(['first', 'second']);
+    expect(broker.acknowledge(ownerId, first.sessionId, 'show-both', false, 'Not here.').status).toBe('accepted');
+    expect(broker.acknowledge(ownerId, second.sessionId, 'show-both', true).status).toBe('accepted');
+    await expect(shown).resolves.toBeUndefined();
+
+    const refused = broker.execute(ownerId, { commandId: 'refuse-both', operation: 'show', viewId: 'missing' },
+      new AbortController().signal);
+    broker.acknowledge(ownerId, first.sessionId, 'refuse-both', false, 'View no longer exists.');
+    broker.acknowledge(ownerId, second.sessionId, 'refuse-both', false, 'View no longer exists.');
+    await expect(refused).rejects.toBeInstanceOf(ToolRefusal);
+
+    const survived = broker.execute(ownerId, { commandId: 'one-left', operation: 'layout', arrangement: 'layered' },
+      new AbortController().signal);
+    first.close();
+    expect(broker.acknowledge(ownerId, second.sessionId, 'one-left', true).status).toBe('accepted');
+    await expect(survived).resolves.toBeUndefined();
+
+    second.close();
+    expect(broker.isConnected(ownerId)).toBe(false);
   });
 
   it.each(['final', 'partial'] as const)('executes %s workspace reflexes and replays the agent action despite a new command ID', async (mode) => {
