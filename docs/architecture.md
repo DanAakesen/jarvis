@@ -1156,6 +1156,34 @@ uncached, bounded, and redact credential-like text; no database migration is
 needed. Durable-memory edits are capped at 2,000 characters; vault-note edits
 are capped at 256 KiB, and note history is response-size bounded.
 
+### Vault knowledge graph (P7-43)
+
+Migration `0027_vault_knowledge_graph.sql` stores wiki-link and Markdown-link
+targets alongside each source note's chunks and records the index timestamp.
+Replacing a note updates both chunks and links atomically; deleting a note removes
+its outgoing links in the same transaction. Links are resolved against indexed
+notes when the graph is built, so unresolved targets are omitted and links to
+notes added later can resolve without rewriting their source.
+
+`GET /knowledge/graph` and `GET /knowledge/search?q=...` are Dan-only. Graph note
+IDs are lowercase SHA-256 hashes of vault paths. Nodes include the note path,
+title, one of the four routed folders, the last index timestamp for that note,
+and its degree. Link edges represent resolved wiki/Markdown links; similarity
+edges use the mean of a note's existing chunk embeddings, retain the three
+highest cosine scores above `0.75` per note, and include the score. The response
+is limited to 2,000 path-sorted nodes and 8,000 edges, and the assembled graph is
+cached until a successful vault sync. The top-level `updatedAt` is the last
+successful vault sync time; note timestamps are SQL index timestamps, not Git
+commit dates.
+
+Search uses the vault's existing vector-first, term-fallback retrieval and maps
+up to eight unique results to graph node IDs. The `show_knowledge` chat/voice
+tool searches first, then creates or updates the `knowledge-graph` workspace
+view and focuses it through the existing workspace command broker. The shared
+`@jarvis/contracts` renderer contract allows only `{ query, highlight }`, with
+bounded query text and unique SHA-256 node IDs. This backend issue does not add
+the browser renderer; its UI implementation is a separate session.
+
 ### New project creation (P3-12)
 
 The `create_project` tool accepts only a repository name and description. It reads

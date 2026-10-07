@@ -1,13 +1,26 @@
 import type { FastifyRequest } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MemoryRecord, MemoryStore, MemoryVersion, VaultIndexStore, VaultIndexedChunk, VaultSearchHit } from '../database/memory-store.js';
+import { createHash } from 'node:crypto';
+import type {
+  MemoryRecord,
+  MemoryStore,
+  MemoryVersion,
+  VaultGraphData,
+  VaultGraphFile,
+  VaultIndexStore,
+  VaultIndexedChunk,
+  VaultSearchHit,
+} from '../database/memory-store.js';
 import type { MemoryEmbedder } from '../core/memory-embeddings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './github-client.js';
 import { createVaultModule } from './index.js';
 import { buildApp } from '../app.js';
+import { coreModule } from '../core/index.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import type { TeamsNotificationService } from '../teams/service.js';
+import { WorkspaceCommandBroker } from '../core/workspace-commands.js';
+import type { WorkspaceCommand } from '@jarvis/contracts';
 
 const sha = (character: string) => character.repeat(40);
 const signal = () => new AbortController().signal;
@@ -88,7 +101,11 @@ function fakeGitHub(initial: Record<string, RemoteFile> = {}, conflicts = 0) {
 }
 
 class FakeIndexStore implements VaultIndexStore {
-  private readonly indexed = new Map<string, { blobSha: string; chunks: VaultIndexedChunk[] }>();
+  private readonly indexed = new Map<string, {
+    blobSha: string;
+    chunks: VaultIndexedChunk[];
+    links: string[];
+  }>();
   vectorSearch = vi.fn(async (_embedding: readonly number[], limit: number) =>
     [...this.indexed.entries()].flatMap(([path, file]) => file.chunks.map((chunk) => ({
       path, heading: chunk.heading, content: chunk.content,
@@ -104,8 +121,8 @@ class FakeIndexStore implements VaultIndexStore {
   async files() {
     return [...this.indexed.entries()].map(([path, file]) => ({ path, blobSha: file.blobSha }));
   }
-  async replaceFile(path: string, blobSha: string, chunks: readonly VaultIndexedChunk[]) {
-    this.indexed.set(path, { blobSha, chunks: [...chunks] });
+  async replaceFile(path: string, blobSha: string, chunks: readonly VaultIndexedChunk[], links: readonly string[]) {
+    this.indexed.set(path, { blobSha, chunks: [...chunks], links: [...links] });
   }
   async deleteFiles(paths: readonly string[]) {
     for (const path of paths) this.indexed.delete(path);
@@ -115,6 +132,24 @@ class FakeIndexStore implements VaultIndexStore {
   }
   searchByTerms(terms: readonly string[], limit: number) {
     return this.termSearch(terms, limit);
+  }
+  async graphFiles(): Promise<VaultGraphFile[]> {
+    return [...this.indexed.entries()].map(([path, file]) => ({
+      path,
+      title: file.chunks[0]?.heading ?? '',
+      updatedAt: new Date('2026-10-07T12:00:00.000Z'),
+    }));
+  }
+  async graphData(paths: readonly string[]): Promise<VaultGraphData> {
+    const selected = new Set(paths);
+    return {
+      links: [...this.indexed.entries()].flatMap(([sourcePath, file]) =>
+        selected.has(sourcePath) ? file.links.map((targetPath) => ({ sourcePath, targetPath })) : []),
+      similarities: [],
+      embeddings: [...this.indexed.entries()].flatMap(([path, file]) =>
+        selected.has(path) ? file.chunks.flatMap((chunk) =>
+          chunk.embedding ? [{ path, embedding: chunk.embedding }] : []) : []),
+    };
   }
   entry(path: string) { return this.indexed.get(path); }
   setRankedHits(hits: readonly VaultSearchHit[]) {
@@ -251,7 +286,9 @@ describe('GitHub vault', () => {
     expect(indexStore.entry('People/Alex.md')?.blobSha).toBe(sha('f'));
     expect(indexStore.entry('General/old.md')).toBeUndefined();
     expect(indexStore.entry('General/new.md')).toBeDefined();
-    expect(module.tools.map(({ name }) => name)).toEqual(['vault_search', 'vault_read', 'vault_write']);
+    expect(module.tools.map(({ name }) => name)).toEqual([
+      'vault_search', 'show_knowledge', 'vault_read', 'vault_write',
+    ]);
   });
 
   it('returns semantic results in index ranking order with a bounded snippet and source URL', async () => {
@@ -283,6 +320,172 @@ describe('GitHub vault', () => {
         { path: 'General/notes.md', heading: 'Overview' },
       ],
     });
+  });
+
+  it('returns a cached graph with stable note IDs, persisted links, mean-vector neighbours, and degrees', async () => {
+    const remote = {
+      'People/Alex.md': {
+        sha: sha('a'),
+        content: '# Alex\n\n[[Work/Project#plan]] and [guide](../General/Guide.md) and ' +
+          '[project](https://github.com/DanAakesen/vault/blob/master/Work/Project.md#overview) ' +
+          'and [external](https://example.com/not-a-note.md).',
+      },
+      'Work/Project.md': { sha: sha('b'), content: '# Project\n\nProject notes.' },
+      'General/Guide.md': { sha: sha('c'), content: '# Guide\n\nReference.' },
+    };
+    const index = new FakeIndexStore(true);
+    const embedder = {
+      embed: vi.fn(async (text: string) => text.includes('Alex') ? [1, 0, 0] :
+        text.includes('Project') ? [0.8, 0.6, 0] : [0, 1, 0]),
+    };
+    const { module } = moduleFor({ remote, index, embedder });
+    await module.synchronize(signal());
+    const graphFiles = vi.spyOn(index, 'graphFiles');
+    const app = memoryApiApp(module);
+
+    const response = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
+    expect(response.statusCode).toBe(200);
+    const graph = response.json();
+    const alex = graph.nodes.find((node: { path: string }) => node.path === 'People/Alex.md');
+    const project = graph.nodes.find((node: { path: string }) => node.path === 'Work/Project.md');
+    const guide = graph.nodes.find((node: { path: string }) => node.path === 'General/Guide.md');
+    expect(alex).toMatchObject({
+      id: createHash('sha256').update('People/Alex.md').digest('hex'),
+      title: 'Alex',
+      folder: 'People',
+      updatedAt: '2026-10-07T12:00:00.000Z',
+      degree: 4,
+    });
+    expect(graph.edges).toEqual(expect.arrayContaining([
+      { source: alex.id, target: project.id, type: 'link' },
+      { source: alex.id, target: guide.id, type: 'link' },
+      { source: alex.id, target: project.id, type: 'similar', score: 0.8 },
+    ]));
+    expect(graph.nodes).toHaveLength(3);
+    expect(graph.edges.length).toBeLessThanOrEqual(8_000);
+
+    const second = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
+    expect(second.json()).toEqual(graph);
+    expect(graphFiles).toHaveBeenCalledOnce();
+    await module.synchronize(signal());
+    await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
+    expect(graphFiles).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds the graph to two thousand nodes and eight thousand edges', async () => {
+    const index = new FakeIndexStore();
+    const { module } = moduleFor({ index });
+    await module.synchronize(signal());
+    const seedCount = 2_005;
+    await Promise.all(Array.from({ length: seedCount }, (_, number) =>
+      index.replaceFile(`General/Note-${String(number).padStart(4, '0')}.md`, sha('a'), [
+        { index: 0, heading: `Note ${number}`, content: 'Bounded node.', embedding: [1, 0] },
+      ], number < 2_000
+        ? [`General/Note-${String((number + 1) % 2_000).padStart(4, '0')}.md`]
+        : [], signal())));
+    const app = memoryApiApp(module);
+
+    const response = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().nodes).toHaveLength(2_000);
+    expect(response.json().edges).toHaveLength(8_000);
+  });
+
+  it('maps ranked vault search hits to unique graph nodes and enforces Dan-only access', async () => {
+    const index = new FakeIndexStore(true);
+    index.setRankedHits([
+      { path: 'Work/Project.md', heading: 'Project', content: 'Top result.' },
+      { path: 'Work/Project.md', heading: 'Details', content: 'Duplicate note result.' },
+      { path: 'People/Alex.md', heading: 'Alex', content: 'Second result.' },
+      { path: 'General/missing.md', heading: 'Missing', content: 'Not in graph.' },
+    ]);
+    const { module } = moduleFor({
+      index,
+      remote: {
+        'Work/Project.md': { sha: sha('a'), content: '# Project\n\nProject details.' },
+        'People/Alex.md': { sha: sha('b'), content: '# Alex\n\nProject teammate.' },
+      },
+      embedder: { embed: async () => [1, 0, 0] },
+    });
+    await module.synchronize(signal());
+    const app = memoryApiApp(module);
+    const response = await app.inject({ url: '/knowledge/search?q=project', headers: apiAuthorization });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().hits).toEqual([
+      {
+        nodeId: createHash('sha256').update('Work/Project.md').digest('hex'),
+        score: 1,
+        snippet: 'Top result.',
+      },
+      {
+        nodeId: createHash('sha256').update('People/Alex.md').digest('hex'),
+        score: 0.75,
+        snippet: 'Second result.',
+      },
+    ]);
+    expect((await app.inject({ url: '/knowledge/graph' })).statusCode).toBe(401);
+    expect((await app.inject({ url: '/knowledge/search?q=project' })).statusCode).toBe(401);
+
+    const forbidden = memoryApiApp(module, {
+      auth: async () => ({ objectId: 'not-dan', tenantId: apiConfig.auth.tenantId, displayName: 'Other' }),
+    });
+    expect((await forbidden.inject({ url: '/knowledge/graph', headers: apiAuthorization })).statusCode).toBe(403);
+    expect((await forbidden.inject({ url: '/knowledge/search?q=project', headers: apiAuthorization })).statusCode).toBe(403);
+  });
+
+  it('opens or updates the knowledge graph through the workspace command broker', async () => {
+    const { module } = moduleFor({
+      remote: { 'General/Project.md': { sha: sha('a'), content: '# Project\n\nProject notes.' } },
+    });
+    await module.synchronize(signal());
+    const broker = new WorkspaceCommandBroker();
+    const commands: WorkspaceCommand[] = [];
+    const app = buildApp(apiConfig, undefined, {
+      modules: [coreModule, module],
+      auth: async () => ({
+        kind: 'jarvis-agent',
+        objectId: 'b331004a-777a-4e53-b7b0-40bf9ab3b9ef',
+        tenantId: apiConfig.auth.tenantId,
+      }),
+      toolCallStore: { record: async () => {} },
+      workspaceCommands: broker,
+    });
+    apiApps.push(app);
+    const connection = broker.connect(app.ownerObjectId, (event, data) => {
+      if (event === 'workspace-command') {
+        const command = (data as { command: WorkspaceCommand }).command;
+        commands.push(command);
+        broker.acknowledge(app.ownerObjectId, connection.sessionId, command.commandId, true);
+      }
+      return true;
+    });
+    broker.updateSnapshot(app.ownerObjectId, connection.sessionId, {
+      windows: [], contextPanelOpen: false,
+    });
+    const headers = {
+      authorization: ['Bearer', 'header.agent.signature'].join(' '),
+      'x-jarvis-message-id': '42',
+    };
+    const first = await app.inject({ method: 'POST', url: '/tools/show_knowledge', headers, payload: { query: 'project' } });
+    expect(first.statusCode, first.body).toBe(200);
+    expect(commands[0]).toMatchObject({
+      operation: 'create',
+      viewId: 'knowledge-graph',
+      view: {
+        renderer: 'knowledge-graph',
+        data: { query: 'project', highlight: [createHash('sha256').update('General/Project.md').digest('hex')] },
+      },
+    });
+    expect(commands[1]).toMatchObject({ operation: 'focus', viewId: 'knowledge-graph' });
+    broker.updateSnapshot(app.ownerObjectId, connection.sessionId, {
+      windows: [{ viewId: 'knowledge-graph', title: 'Knowledge graph' }],
+      contextPanelOpen: false,
+    });
+    const second = await app.inject({ method: 'POST', url: '/tools/show_knowledge', headers, payload: { query: 'project' } });
+    expect(second.statusCode).toBe(200);
+    expect(commands[2]?.operation).toBe('update');
+    expect(commands[3]).toMatchObject({ operation: 'focus', viewId: 'knowledge-graph' });
+    connection.close();
   });
 
   it('reads bounded root and hidden Markdown instruction paths', async () => {
