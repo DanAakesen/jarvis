@@ -7,6 +7,25 @@ export const modelCapabilities = Object.freeze([
   'chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image',
 ]);
 
+export const voiceTuningSettingsBounds = Object.freeze({
+  serverVadThreshold: Object.freeze({ minimum: 0, maximum: 1 }),
+  prefixPaddingMs: Object.freeze({ minimum: 0, maximum: 2_000 }),
+  silenceDurationMs: Object.freeze({ minimum: 100, maximum: 5_000 }),
+  maxSpokenReplyTokens: Object.freeze({ minimum: 1, maximum: 4_096 }),
+});
+export const voiceTuningSettingsSchema = Object.freeze({
+  type: 'object',
+  minProperties: 1,
+  additionalProperties: false,
+  properties: Object.freeze({
+    serverVadThreshold: Object.freeze({ type: 'number', ...voiceTuningSettingsBounds.serverVadThreshold }),
+    prefixPaddingMs: Object.freeze({ type: 'integer', ...voiceTuningSettingsBounds.prefixPaddingMs }),
+    silenceDurationMs: Object.freeze({ type: 'integer', ...voiceTuningSettingsBounds.silenceDurationMs }),
+    bargeInEnabled: Object.freeze({ type: 'boolean' }),
+    maxSpokenReplyTokens: Object.freeze({ type: 'integer', ...voiceTuningSettingsBounds.maxSpokenReplyTokens }),
+  }),
+});
+
 export function isModelCatalogue(value) {
   if (!isObject(value) || !['arm', 'fallback'].includes(value.source) ||
       !Array.isArray(value.deployments) || value.deployments.length > 1_000 ||

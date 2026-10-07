@@ -41,6 +41,7 @@ import type { TaskStatusNotificationStore } from './database/task-status-notific
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
 import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
+import { createSystemStatusReader, type SystemStatusReader } from './system-status.js';
 
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
@@ -79,6 +80,7 @@ export interface BuildAppOptions {
   readonly phoneSessionStore?: PhoneSessionStore | null;
   readonly taskStatusNotificationStore?: TaskStatusNotificationStore | null;
   readonly workspaceCommands?: WorkspaceCommandBroker;
+  readonly systemStatusReader?: SystemStatusReader;
 }
 
 declare module 'fastify' {
@@ -117,6 +119,7 @@ declare module 'fastify' {
     workspaceCommands: WorkspaceCommandBroker;
     backgroundJobs: BackgroundJobRegistry;
     onEmbeddingModelChanged: ((jobs: BackgroundJobRegistry) => Promise<void>) | null;
+    systemStatusReader: SystemStatusReader;
   }
 }
 
@@ -159,9 +162,13 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
       responseTime: reply.elapsedTime,
     }, 'request.completed');
   });
+  const systemStatusReader = options.systemStatusReader ??
+    createSystemStatusReader({}, process.env.JARVIS_DEPLOYED_COMMIT);
+  app.decorate('systemStatusReader', systemStatusReader);
   app.setErrorHandler((error, request, reply) => {
     const candidate = (error as { statusCode?: number }).statusCode;
     const statusCode = candidate && Number.isInteger(candidate) && candidate >= 400 && candidate < 500 ? candidate : 500;
+    systemStatusReader.recordError(request.routeOptions.url, statusCode);
     request.log.error({ statusCode }, 'request.failed');
     reply.code(statusCode).send({ error: statusCode < 500 ? 'Invalid request' : 'Internal server error' });
   });

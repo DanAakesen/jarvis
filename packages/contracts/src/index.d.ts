@@ -5,6 +5,25 @@ export const reasoningEfforts: readonly ['none', 'minimal', 'low', 'medium', 'hi
 export type ReasoningEffort = typeof reasoningEfforts[number];
 export const modelCapabilities: readonly ['chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image'];
 export type ModelCapability = typeof modelCapabilities[number];
+export interface VoiceTuningSettings {
+  serverVadThreshold: number;
+  prefixPaddingMs: number;
+  silenceDurationMs: number;
+  bargeInEnabled: boolean;
+  maxSpokenReplyTokens: number;
+}
+export const voiceTuningSettingsBounds: Readonly<{
+  serverVadThreshold: Readonly<{ minimum: 0; maximum: 1 }>;
+  prefixPaddingMs: Readonly<{ minimum: 0; maximum: 2000 }>;
+  silenceDurationMs: Readonly<{ minimum: 100; maximum: 5000 }>;
+  maxSpokenReplyTokens: Readonly<{ minimum: 1; maximum: 4096 }>;
+}>;
+export const voiceTuningSettingsSchema: Readonly<{
+  type: 'object';
+  minProperties: 1;
+  additionalProperties: false;
+  properties: Readonly<Record<keyof VoiceTuningSettings, Readonly<Record<string, unknown>>>>;
+}>;
 export interface ModelDeployment {
   name: string;
   model: string;
@@ -342,4 +361,28 @@ export interface PhoneStatus {
   configured: boolean;
   historyAvailable: boolean;
   recentCalls: readonly PhoneCallHistoryEntry[];
+}
+
+export type SystemStatusValue = 'ok' | 'degraded' | 'down' | 'unknown';
+export type SystemStatusSubsystem =
+  | 'database'
+  | 'foundry.chat'
+  | 'foundry.voice'
+  | 'foundry.embeddings'
+  | 'vault_index'
+  | 'github_app'
+  | 'google'
+  | 'pc_bridge'
+  | 'runner'
+  | 'deployed_commit'
+  | 'last_error';
+export interface SystemStatusEntry {
+  id: SystemStatusSubsystem;
+  status: SystemStatusValue;
+  checkedAt: string;
+  details?: Readonly<Record<string, string | number | boolean | null>>;
+}
+export interface SystemStatus {
+  checkedAt: string;
+  entries: readonly SystemStatusEntry[];
 }

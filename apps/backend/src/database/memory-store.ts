@@ -107,6 +107,13 @@ export interface VaultGraphFile {
   readonly updatedAt: Date;
 }
 
+export interface VaultIndexSummary {
+  readonly notes: number;
+  readonly chunks: number;
+  readonly embeddedChunks: number;
+  readonly latestIndexedAt: Date | null;
+}
+
 export interface VaultGraphData {
   readonly links: readonly { readonly sourcePath: string; readonly targetPath: string }[];
   readonly similarities: readonly {
@@ -125,6 +132,7 @@ export const vaultSimilarityThreshold = 0.35;
 export interface VaultIndexStore {
   initialize(): Promise<void>;
   supportsVectorSearch(): boolean;
+  summary(embeddingModel: string | null, signal: AbortSignal): Promise<VaultIndexSummary>;
   files(embeddingModel: string | null, signal: AbortSignal): Promise<VaultIndexedFile[]>;
   replaceFile(
     path: string,
@@ -757,6 +765,30 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
 
     supportsVectorSearch() {
       return initialized && (vectorSearchAvailable || jsonEmbeddingAvailable);
+    },
+
+    async summary(embeddingModel, signal) {
+      ensureInitialized();
+      const embeddingColumn = vectorSearchAvailable ? 'embedding' : jsonEmbeddingAvailable ? 'embedding_json' : undefined;
+      const embeddedChunks = embeddingColumn
+        ? `SUM(CASE WHEN ${embeddingColumn} IS NOT NULL AND embedding_model = @embeddingModel THEN 1 ELSE 0 END)`
+        : '0';
+      const request = databaseReadRequest(pool).input('embeddingModel', sql.NVarChar(128), embeddingModel);
+      const result = await execute(request, signal, () => request.query<{
+        notes: number;
+        chunks: number;
+        embedded_chunks: number;
+        latest_indexed_at: Date | null;
+      }>(`SELECT COUNT(DISTINCT path) AS notes, COUNT(*) AS chunks,
+          ${embeddedChunks} AS embedded_chunks, MAX(indexed_at) AS latest_indexed_at
+        FROM dbo.vault_chunks;`));
+      const row = result.recordset[0];
+      return {
+        notes: Number(row?.notes ?? 0),
+        chunks: Number(row?.chunks ?? 0),
+        embeddedChunks: Number(row?.embedded_chunks ?? 0),
+        latestIndexedAt: row?.latest_indexed_at ?? null,
+      };
     },
 
     async files(embeddingModel, signal) {

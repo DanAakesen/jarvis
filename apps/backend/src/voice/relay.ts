@@ -319,6 +319,7 @@ function registerVoiceRoute(
     let awayMode = false;
     let projects: ProjectContextEntry[] = [];
     let personality = defaultSettings.personality;
+    let voiceTuning = defaultSettings.voice;
     let voiceModel = ENGLISH_REALTIME_MODEL;
     let transcriptionModel = defaultSettings.roles.transcription.model;
     let responseCreateActive = false;
@@ -1112,7 +1113,7 @@ function registerVoiceRoute(
         presence = await app.awayModeStore!.read();
         if (app.settingsStore) personality = (await readSettings(app.settingsStore)).personality;
         sendUpstream(createRealtimeSessionUpdate(
-          app.jarvisTools, personality, presence, language, projects, transcriptionModel,
+          app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning,
         ));
       })().catch(() => request.log.warn('voice.presence_mode_update_failed'));
     });
@@ -1407,6 +1408,7 @@ function registerVoiceRoute(
           try {
             const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
             personality = settings.personality;
+            voiceTuning = settings.voice;
             voiceModel = settings.roles.voice.model;
             transcriptionModel = settings.roles.transcription.model;
           } catch {
@@ -1425,7 +1427,9 @@ function registerVoiceRoute(
         upstream = connect(token, controller.signal, undefined, voiceModel);
         upstream.once('open', () => {
           if (english) sendUpstream(
-            createRealtimeSessionUpdate(app.jarvisTools, personality, presence, language, projects, transcriptionModel),
+            createRealtimeSessionUpdate(
+              app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning,
+            ),
             flushQueued,
           );
           else flushQueued();

@@ -13,6 +13,8 @@ import {
   modelCapabilities,
   modelRoles,
   reasoningEfforts,
+  voiceTuningSettingsBounds,
+  voiceTuningSettingsSchema,
   isGeneratedView,
   isValidHtmlArtifactHtml,
   isJarvisActivityEvent,
@@ -58,6 +60,22 @@ test('model catalogue contracts restrict roles, capabilities and reasoning effor
     ...catalogue,
     deployments: [{ ...catalogue.deployments[0], reasoningEfforts: ['unbounded'] }],
   }), false);
+});
+
+test('voice tuning contracts bound persisted VAD, interruption, and reply length settings', () => {
+  assert.deepEqual(voiceTuningSettingsBounds, {
+    serverVadThreshold: { minimum: 0, maximum: 1 },
+    prefixPaddingMs: { minimum: 0, maximum: 2_000 },
+    silenceDurationMs: { minimum: 100, maximum: 5_000 },
+    maxSpokenReplyTokens: { minimum: 1, maximum: 4_096 },
+  });
+  assert.deepEqual(voiceTuningSettingsSchema.properties, {
+    serverVadThreshold: { type: 'number', minimum: 0, maximum: 1 },
+    prefixPaddingMs: { type: 'integer', minimum: 0, maximum: 2_000 },
+    silenceDurationMs: { type: 'integer', minimum: 100, maximum: 5_000 },
+    bargeInEnabled: { type: 'boolean' },
+    maxSpokenReplyTokens: { type: 'integer', minimum: 1, maximum: 4_096 },
+  });
 });
 
 test('renderer and action identifiers match the JSON schema allowlists', () => {

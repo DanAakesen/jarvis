@@ -192,6 +192,18 @@ export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
   ) => Promise<T>;
 }
 
+export interface PcBridgeStatus {
+  readonly connected: boolean;
+  readonly controlPaused: boolean | null;
+  readonly bridgeVersion: string | null;
+  readonly chromeExtensionVersion: string | null;
+  readonly wakeWordEnabled: boolean | null;
+}
+
+export interface PcBridgeModule extends BackendModule {
+  readonly connection: PcBridgeConnection;
+}
+
 type PcBridgeTimingLogger = Pick<FastifyRequest['log'], 'info'>;
 
 export class PcBridgeConnection {
@@ -200,6 +212,7 @@ export class PcBridgeConnection {
   private status: boolean | undefined;
   private controlPaused = false;
   private wakeWordListening = false;
+  private wakeWordEnabled: boolean | undefined;
   private onWakeWord: ((at: string) => void) | undefined;
   private readonly activeVoiceSessions = new Set<string>();
   private statusUpdate = Promise.resolve();
@@ -222,6 +235,7 @@ export class PcBridgeConnection {
     this.socket = socket;
     this.onWakeWord = onWakeWord;
     this.wakeWordListening = false;
+    this.wakeWordEnabled = undefined;
     socket.on('message', (data, isBinary) => this.receive(socket, data, isBinary));
     socket.once('close', () => this.detach(socket));
     socket.once('error', () => this.detach(socket));
@@ -250,6 +264,17 @@ export class PcBridgeConnection {
     this.rejectPending(new Error('PC bridge disconnected'));
     this.setStatus(false);
     await this.statusUpdate;
+  }
+
+  readStatus(): PcBridgeStatus {
+    const connected = this.socket?.readyState === WebSocket.OPEN;
+    return {
+      connected,
+      controlPaused: connected ? this.controlPaused : null,
+      bridgeVersion: null,
+      chromeExtensionVersion: null,
+      wakeWordEnabled: connected ? this.wakeWordEnabled ?? null : null,
+    };
   }
 
   async execute(
@@ -334,6 +359,7 @@ export class PcBridgeConnection {
         return;
       }
       this.wakeWordListening = response.wakeWord === true;
+      this.wakeWordEnabled = typeof response.wakeWord === 'boolean' ? response.wakeWord : undefined;
       this.setStatus(true, response.controlPaused);
       this.sendVoiceState();
       return;
@@ -432,6 +458,7 @@ export class PcBridgeConnection {
     this.socket = undefined;
     this.onWakeWord = undefined;
     this.wakeWordListening = false;
+    this.wakeWordEnabled = undefined;
     this.rejectPending(new Error('PC bridge disconnected'));
     this.setStatus(false);
   }
@@ -458,10 +485,11 @@ export class PcBridgeConnection {
   }
 }
 
-export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): BackendModule {
+export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBridgeModule {
   const bridge = new PcBridgeConnection(options);
   return {
     id: 'pc-bridge',
+    connection: bridge,
     tools: [
       {
         name: 'pc_open',
