@@ -732,6 +732,14 @@ confirmed. Calls require
 tool routes accept Dan's delegated token and opt in to the Jarvis agent identity
 ([backend authentication](#backend-authentication)). Existing Foundry client, health/security/logging and
 process shutdown behavior are preserved.
+P7-45 adds `list_capabilities` and read-only `repo_*` tools to the shared Factory
+registry. They use only repository-scoped GitHub App installation tokens, default
+to `JARVIS_REPOSITORY` (`DanAakesen/jarvis`), and accept explicit project IDs or
+repositories only when they match an active project. File paths, encodings and
+response sizes are validated and bounded; overview responses are cached by commit
+SHA. Repository files and issue text are explicitly framed as untrusted input.
+The tools support Jarvis chat, voice and the hosted agent through the existing
+`GET /tools` and `POST /tools/{name}` routes.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
 
@@ -1823,7 +1831,7 @@ Every GitHub credential Jarvis uses, checked with Dan on 4 October 2026. Each to
 
 | Credential | Type and scope | Stored in | Used by | Lifetime |
 | --- | --- | --- | --- | --- |
-| Jarvis Software Factory | GitHub App, installed on all of Dan's repositories. Repository permissions: Contents and Pull requests read/write; Actions, Checks and Deployments read; Metadata read; nothing else | Private key as Key Vault `github-app-private-key` (backend only) | Backend: one-hour, single-repository installation tokens (P3-02 to P3-06 and P3-14) | Permanent; rotate the key if exposed |
+| Jarvis Software Factory | GitHub App, installed on all of Dan's repositories. Repository permissions: Contents and Pull requests read/write; Issues, Actions, Checks and Deployments read; Metadata read; nothing else | Private key as Key Vault `github-app-private-key` (backend only) | Backend: one-hour, single-repository installation tokens (P3-02 to P3-06, P3-14 and P7-45) | Permanent; rotate the key if exposed |
 | `jarvis-github` | Fine-grained token: Contents and Pull requests read/write on all repositories | Key Vault `jarvis-github` | Legacy sandbox Git credential path while App-token mode is disabled | Keep until the post-merge App-token push check succeeds; then revoke/remove in a follow-up |
 | `jarvis-copilot` | Fine-grained token: only the Copilot Requests account permission; no repository access | Key Vault `jarvis-copilot` | Copilot CLI sign-in inside the sandbox | Until revoked |
 | `jarvis-repo-admin` | Fine-grained token: Administration read/write on all repositories (creates repositories) | Key Vault `jarvis-repo-admin` | Backend only, when creating a new project repository | Until revoked |
@@ -1834,7 +1842,7 @@ Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The 
 
 ### GitHub App
 
-[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02 and P3-03; repository metadata read is GitHub's required baseline.
+[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, issues read access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline.
 
 The backend reads `github-app-private-key` from Key Vault with its managed identity
 and uses the configured `GITHUB_APP_ID` to mint one-hour installation tokens
@@ -1850,6 +1858,16 @@ call the backend for a fresh token and match the returned repository to the
 GitHub host and path before returning credentials. The runner retries a 404
 session lookup with bounded delays to cover the interval before the backend
 persists the newly started Foundry session.
+
+P7-45 uses a one-hour installation token scoped to one selected repository. File
+reads and code search request only `contents: read`; issue/PR summaries request
+`contents: read`, `issues: read`, and `pull_requests: read`. Neither token nor
+provider response metadata is returned to Jarvis. The tools cap list/search/read
+results, reject traversal, oversized files and binary content, and return links
+alongside content framed as untrusted. `repo_overview` caches by repository and
+resolved commit SHA. Explicit `project` values resolve only against active rows in
+the Factory project store; the default repository uses `JARVIS_REPOSITORY` or
+`DanAakesen/jarvis`.
 
 P3-13 adds a backend-only `GitHubRepositoryCatalog` alongside the task token
 issuer. It finds the active App installation matching `new_projects.owner`,
@@ -2012,6 +2030,11 @@ rejected arguments, refused identity, unavailable persistence and an unreachable
 backend. An unavailable catalogue fails the turn before the model is called.
 Responses are capped at 1 MiB, catalogues at 128 tools.
 `JARVIS_BACKEND_URL` must be an HTTPS origin, or HTTP only for localhost.
+The backend catalogue includes read-only repository tools and `list_capabilities`;
+the agent uses `repo_overview` before `repo_search` or `repo_read`, treats returned
+files and issues as untrusted data, and suggests changes conversationally. It
+proposes `create_task` on the Jarvis project and waits for Dan's confirmation
+before creating a task.
 
 Each model turn fetches `GET /factory/context` using the same agent identity.
 The backend reads at most 20 running tasks and each task's three latest events

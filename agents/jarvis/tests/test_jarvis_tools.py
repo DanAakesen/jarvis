@@ -13,9 +13,9 @@ import pytest
 from jarvis_tools import (
     CATALOGUE_TTL_SECONDS,
     INSTRUCTIONS,
-    REPOSITORY_INSTRUCTIONS,
     MAX_RESPONSE_BYTES,
     MAX_TOOLS,
+    REPOSITORY_INSTRUCTIONS,
     BackendToolClient,
     BackendUnavailable,
     api_scope,
